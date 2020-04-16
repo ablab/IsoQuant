@@ -1,0 +1,9 @@
+argcomplete==1.11.1
+argh==0.26.2
+biopython==1.76
+gffutils==0.10.1
+numpy==1.18.2
+pyfaidx==0.5.8
+pysam==0.15.4
+simplejson==3.17.0
+six==1.14.0

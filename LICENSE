@@ -1,0 +1,36 @@
+IsoQuant: A tool for isoform assignment and quantification fror long and barcoded reads
+Copyright (c) 2020 Saint Petersburg State University
+
+IsoQuant is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, Version 2,
+dated June 1991, as published by the Free Software Foundation.
+
+SPAdes is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+-------------------------------------------------------------------------------
+
+IsoQuant
+A tool for isoform assignment and quantification fror long and barcoded reads
+Version: see VERSION
+
+Developed in 
+Center for Algorithmic Biotechnology, Institute of Translational Biomedicine, St. Petersburg State University and 
+Hagen Tilgner Lab, Brain and Mind Research Institute, Weill Cornell Medicine
+
+Current contributors:
+
+    Andrey Prjibelski,
+    Alla Mikheenko and
+    Hagen Tilgner
+
+Installation instructions and manual can be found on the website:
+
+Address for communication: 
+
