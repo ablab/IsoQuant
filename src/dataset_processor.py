@@ -18,6 +18,7 @@ from src.input_data_storage import *
 from src.alignment_processor import *
 from src.assignment_io import *
 from src.gene_info import *
+from src.long_read_counter import FeatureCounter
 
 logger = logging.getLogger('IsoQuant')
 
@@ -134,6 +135,9 @@ class DatasetProcessor:
                                                 assignment_checker=self.novel_assignment_checker)
         global_printer = ReadAssignmentCompositePrinter([correct_printer, unmatched_printer, alt_printer])
 
+        out_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".counts.tsv")
+        feature_counter = FeatureCounter(self.gffutils_db, out_counts_tsv)
+
         current_chromosome = ""
         for g in self.gene_clusters:
             chr_id = g[0].seqid
@@ -143,10 +147,12 @@ class DatasetProcessor:
 
             gene_info = GeneInfo(g, self.gffutils_db)
             bam_files = list(map(lambda x: x[0], sample.file_list))
-            alignment_processor = LongReadAlginmentProcessor(gene_info, bam_files, self.args, global_printer)
+            alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args, global_printer, feature_counter)
             alignment_processor.process()
 
+        feature_counter.dump()
         logger.info("Finished processing sample " + sample.label)
         logger.info("Assigned reads are stored in " + out_assigned_tsv)
         logger.info("Unmatched reads are stored in " + out_unmatched_tsv)
         logger.info("Reads with alternative structure are stored in " + out_alt_tsv)
+        logger.info("Read counts are stored in " + out_counts_tsv)

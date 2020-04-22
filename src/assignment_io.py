@@ -47,14 +47,14 @@ class AbstractAssignmentPrinter:
 
 class ReadAssignmentCompositePrinter:
     def __init__(self, printers = []):
-        self.pinters = printers
+        self.printers = printers
 
     def add_read_info(self, read_assignment, mapping_read_profile=None):
-        for p in self.pinters:
+        for p in self.printers:
             p.add_read_info(read_assignment, mapping_read_profile)
 
     def flush(self):
-        for p in self.pinters:
+        for p in self.printers:
             p.flush()
 
 
