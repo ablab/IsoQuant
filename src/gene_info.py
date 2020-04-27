@@ -36,6 +36,12 @@ class FeatureProfiles:
                 self.profiles[transcript_id][pos] = 1
                 pos += 1
 
+    def print_debug(self):
+        logger.debug(str(self.features))
+        for t in self.profiles:
+            logger.debug("Profile for isoform " + t)
+            logger.debug(self.profiles[t])
+
 
 # All gene(s) information
 class GeneInfo:
@@ -59,6 +65,18 @@ class GeneInfo:
 
         self.set_junction_profiles(all_isoforms_introns, all_isoforms_exons)
         self.detect_ambiguous()
+        self.print_debug()
+
+    def print_debug(self):
+        gene_names = []
+        for g in self.gene_db_list:
+            gene_names.append(g.id)
+        logger.debug(">>> Processing gene set:" + ", ".join(gene_names))
+        logger.debug("Split exon profiles:")
+        self.split_exon_profiles.print_debug()
+        logger.debug("Intron profiles:")
+        self.intron_profiles.print_debug()
+        logger.debug(">>> End of  gene informaiotn")
 
     # return region of overlapping gene set
     def get_gene_region(self):
