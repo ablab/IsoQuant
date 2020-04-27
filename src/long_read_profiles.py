@@ -113,6 +113,11 @@ class NonOverlappingFeaturesProfileConstructor:
                     read_pos += 1
                 else:
                     gene_pos += 1
+            elif overlaps(read_exons[read_pos], self.known_exons[gene_pos]):
+                if read_exons[read_pos][1] < self.known_exons[gene_pos][1]:
+                    read_pos += 1
+                else:
+                    gene_pos += 1
             elif left_of(read_exons[read_pos], self.known_exons[gene_pos]):
                 if gene_pos > 0 and read_profile[read_pos] == 0:
                     read_profile[read_pos] = -1
