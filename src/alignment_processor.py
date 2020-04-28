@@ -41,9 +41,11 @@ class LongReadAlignmentProcessor:
 
     def process_single_file(self, bam):
         bamfile_in = pysam.AlignmentFile(bam, "rb")
+        self.counter.add_unaligned(bamfile_in.unmapped)
 
         for alignment in bamfile_in.fetch(self.gene_info.chr_id, self.gene_info.start, self.gene_info.end):
             if alignment.reference_id == -1:
+                self.counter.add_read_info()
                 continue
             if self.params.skip_secondary and (alignment.is_secondary or alignment.is_supplementary):
                 continue
