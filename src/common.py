@@ -36,6 +36,9 @@ def rindex(l, el):
     raise ValueError(str(el) + " is not in list")
 
 
+def proper_plural_form(name, count):
+    return str(count) + " " + name + "" if count == 1 else "s"
+
 #check whether genes overlap and should be processed together
 def genes_overlap(gene_db1, gene_db2):
     if (gene_db1.seqid != gene_db2.seqid):

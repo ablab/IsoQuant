@@ -115,14 +115,15 @@ class DatasetProcessor:
         self.rest_assignment_checker = PrintOnlyFunctor([AssignmentType.empty, AssignmentType.ambiguous])
 
     def process_all_samples(self, input_data):
-        logger.info("Processing " + str(len(input_data.samples)) + " samples")
+        logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
         for sample in input_data.samples:
             self.process_sample(sample)
-        logger.info("Processed " + str(len(input_data.samples)) + " samples")
+        logger.info("Processed " + proper_plural_form("sample", len(input_data.samples)))
 
     # Run though all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
         logger.info("Processing sample " + sample.label)
+        logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(map(lambda x: x[0], sample.file_list)))
 
         out_assigned_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".assigned_reads.tsv")
         correct_printer = BasicTSVAssignmentPrinter(out_assigned_tsv, self.args,
