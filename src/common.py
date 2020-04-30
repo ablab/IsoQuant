@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import subprocess
+from Bio.Seq import Seq
 
 logger = logging.getLogger('IsoQuant')
 
@@ -232,3 +233,48 @@ def get_path_to_program(program, dirpath=None, min_version=None):
             return exe_file
     return None
 
+
+# == polyA stuff ==
+def find_polya_tail(alignment):
+    cigar_tuples = alignment.cigartuples
+    clipped_size = 0
+    # hard clipped
+    if len(cigar_tuples) > 1 and cigar_tuples[-1][0] == 5 and cigar_tuples[-2][0] == 4:
+        clipped_size = cigar_tuples[-2][1]
+    elif cigar_tuples[-1][0] == 4:
+        clipped_size = cigar_tuples[-1][1]
+
+    pos = find_polya(alignment.seq[-clipped_size:].upper())
+    if pos == -1:
+        return -1
+    return alignment.get_blocks()[-1][1] + pos + 1
+
+
+def find_polyt_head(alignment):
+    cigar_tuples = alignment.cigartuples
+    clipped_size = 0
+    # hard clipped
+    if len(cigar_tuples) > 1 and cigar_tuples[0][0] == 5 and cigar_tuples[1][0] == 4:
+        clipped_size = cigar_tuples[1][1]
+    elif cigar_tuples[0][0] == 4:
+        clipped_size = cigar_tuples[0][1]
+
+    pos = find_polya(str(Seq(alignment.seq[:clipped_size]).reverse_complement()).upper())
+    if pos == -1:
+        return -1
+    return alignment.reference_start  - pos - 1
+
+
+# poly A tail detection
+def find_polya(seq):
+    window_size = 20
+    polyA_fraction = 0.9
+    polyA_count = int(window_size * polyA_fraction)
+    i = 0
+    while i < len(seq) - window_size - 1:
+        if seq[i:i + window_size].count('A') >= polyA_count:
+            break
+        i += 1
+    if i == len(seq) - window_size - 1:
+        return -1
+    return i

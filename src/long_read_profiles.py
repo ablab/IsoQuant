@@ -21,10 +21,11 @@ class MappedReadProfile:
 
 
 class CombinedReadProfiles:
-    def __init__(self, read_intron_profile, read_split_profile, read_split_exon_profile):
+    def __init__(self, read_intron_profile, read_split_profile, read_split_exon_profile, alignment):
         self.read_intron_profile = read_intron_profile
         self.read_exon_profile = read_split_profile
         self.read_split_exon_profile = read_split_exon_profile
+        self.alignment = alignment
 
 
 #accepts sorted gapless alignment blocks
