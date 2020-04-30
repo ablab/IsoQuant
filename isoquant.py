@@ -127,8 +127,9 @@ def check_input_files(args):
                     if not os.path.isfile(in_file):
                         raise Exception("BAM file " + in_file + " does not exist")
                     bamfile_in = pysam.AlignmentFile(in_file, "rb")
-                    if not bamfile_in.has_index:
-                        raise Exception("BAM file " + in_file + " is not indexed, run samtools index")
+                    # TODO: sort and index file if needed
+                    if not bamfile_in.has_index():
+                        raise Exception("BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
                     bamfile_in.close()
 
     if args.genedb is not None:
@@ -164,7 +165,7 @@ def set_logger(args, logger_instnace):
     fh = logging.FileHandler(log_file)
     #FIXME
     fh.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler()
+    ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
