@@ -61,9 +61,6 @@ def index_reference(aligner, args):
                                                                                             threads=args.threads,
                                                                                             ref_index_name=index_name,
                                                                                             ref_name=args.reference)
-    elif aligner == "gmap":
-        pass
-
     if os.system(command) != 0:
         logger.critical("Failed indexing reference")
         exit(-1)

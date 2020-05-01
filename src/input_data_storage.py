@@ -27,10 +27,12 @@ class InputDataStorage:
         if args.fastq is not None:
             self.input_type = "fastq"
             for fq in args.fastq:
+                check_input_type(fq, self.input_type)
                 sample_files.append([[fq]])
         elif args.bam is not None:
             self.input_type = "bam"
             for bam in args.bam:
+                check_input_type(bam, self.input_type)
                 sample_files.append([[bam]])
         elif args.fastq_list is not None:
             self.input_type = "fastq"
@@ -44,7 +46,7 @@ class InputDataStorage:
 
         if args.labels is not None:
             if len(args.labels) != len(sample_files):
-                logger.critical("Number of labels is not equal to the numbe of samples")
+                logger.critical("Number of labels is not equal to the number of samples")
                 exit(-1)
             else:
                 labels = args.labels
@@ -68,6 +70,10 @@ class InputDataStorage:
 
         if len(current_sample) > 0:
             sample_files.append(current_sample)
+        for sample in sample_files:
+            for lib in sample.file_list:
+                for in_file in lib:
+                    check_input_type(in_file, self.input_type)
         return sample_files
 
     def get_labels(self, sample_files):
@@ -75,3 +81,20 @@ class InputDataStorage:
         for i in range(len(sample_files)):
             labels.append('{:02d}'.format(i) + "_" + os.path.splitext(os.path.basename(sample_files[i][0][0]))[0])
         return labels
+
+
+def check_input_type(fname, input_type):
+    basename_plus_innerext, outer_ext = os.path.splitext(fname.lower())
+    if outer_ext not in ['.zip', '.gz', '.gzip', '.bz2', '.bzip2']:
+        basename_plus_innerext, outer_ext = fname, ''  # not a supported archive
+
+    basename, fasta_ext = os.path.splitext(basename_plus_innerext)
+    if fasta_ext in ['.fastq', '.fasta', '.fa', '.fna']:
+        if input_type != 'fastq':
+            raise Exception("Wrong file extension was detected. Use only FASTQ/FASTA files with --fastq option.")
+    elif fasta_ext == '.bam':
+        if input_type != 'bam':
+            raise Exception("Wrong file extension was detected. Use only BAM files with --bam option.")
+    else:
+        raise Exception("File format " + fasta_ext + " is not supported! Supported formats: FASTQ, FASTA, BAM")
+
