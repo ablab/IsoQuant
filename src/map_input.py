@@ -16,10 +16,10 @@ from src.read_mapper import align_fasta, index_reference
 logger = logging.getLogger('IsoQuant')
 
 
-DATATYPE_TO_ALIGNER = {'assembly' : 'starlong', 'raw_long_reads' : 'minimap2', 'hq_long_reads' : 'starlong',
-                       'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
+DATATYPE_TO_ALIGNER = {'assembly' : 'starlong', 'raw_long_reads' : 'minimap2', 'hq_long_reads' : 'starlong'}
+                       #'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
 
-SUPPORTED_ALIGNERS = ['star', 'starlong', 'minimap2', 'gmap', 'hisat2']
+SUPPORTED_ALIGNERS = ['starlong', 'minimap2']
 
 
 class DataSetMapper:
@@ -65,8 +65,8 @@ def parse_args():
                                                              ' Reference genome should be provided when using raw reads')
     parser.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line '
                                                        '(two in case of paired end reads), leave empty line between samples')
-    parser.add_argument("--data_type", "-d", help="type of data to process, supported types are: "
-                                                  "assembly, raw_long_reads, hq_long_reads, barcoded_se_reads, barcoded_pe_reads", type=str)
+    parser.add_argument("--data_type", "-d", type=str,
+                        help="type of data to process, supported types are: " + " ".join(DATATYPE_TO_ALIGNER.keys()))
 
     parser.add_argument("--reference", help="reference genome in FASTA format,"
                                             "should be provided only when raw reads are used as an input", type=str)
