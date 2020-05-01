@@ -152,6 +152,7 @@ def set_logger(args, logger_instnace):
     logger_instnace.setLevel(logging.DEBUG)
     log_file = os.path.join(args.output, "isoquant.log")
     f = open(log_file, "w")
+    f.write("CMD: " + ' '.join(sys.argv) + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
     #FIXME
