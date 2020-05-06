@@ -73,8 +73,11 @@ def parse_args():
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "chosen based on data type if not set", type=str)
     add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
-    add_additional_option("--delta", help="delta for inexact splice junction comparison, "
-                                          "chosen automatically based on data type", type=int, default=None)
+    add_additional_option("--delta", type=int, default=None,
+                          help="delta for inexact splice junction comparison, chosen automatically based on data type")
+    add_additional_option("--max-exon-extension", type=int, default=None, help="set maximum length for exon elongation")
+    add_additional_option("--max-intron-shift", type=int, default=None, help="set maximum length for intron shift")
+    add_additional_option("--max-missed-exon-len", type=int, default=None, help="set maximum length for skipped exon")
 
     args = parser.parse_args()
 
@@ -172,9 +175,8 @@ def set_logger(args, logger_instnace):
 
 def set_additional_params(args):
     Strategy = namedtuple('Strategy',
-                          ('delta', 'max_exon_extension', 'max_intron_shift',
-                           'max_missed_exon_len', 'allow_extra_terminal_introns',
-                           'resolve_ambiguous', 'correct_minor_errors'))
+                          ('delta', 'max_exon_extension', 'max_intron_shift', 'max_missed_exon_len',
+                           'allow_extra_terminal_introns', 'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
         'Exact':   Strategy(0,  0,   0,   0,   False, False, False),
@@ -184,15 +186,18 @@ def set_additional_params(args):
     }
 
     strategy = strategies[args.matching_strategy]
-    logger.debug(f'Using {args.matching_strategy} strategy: {strategy}.')
 
     args.delta = args.delta or strategy.delta
-    args.max_exon_extension = strategy.max_exon_extension
-    args.max_intron_shift = strategy.max_intron_shift
-    args.max_missed_exon_len = strategy.max_missed_exon_len
+    args.max_exon_extension = args.max_exon_extension or strategy.max_exon_extension
+    args.max_intron_shift = args.max_intron_shift or strategy.max_intron_shift
+    args.max_missed_exon_len = args.max_missed_exon_len or strategy.max_missed_exon_len
     args.allow_extra_terminal_introns = strategy.allow_extra_terminal_introns
     args.resolve_ambiguous = strategy.resolve_ambiguous
     args.correct_minor_errors = strategy.correct_minor_errors
+
+    updated_strategy = Strategy(args.delta, args.max_exon_extension, args.max_intron_shift, args.max_missed_exon_len,
+                                args.allow_extra_terminal_introns, args.resolve_ambiguous, args.correct_minor_errors)
+    logger.debug(f'Using {args.matching_strategy} strategy. Updated strategy: {updated_strategy}.')
 
     # TODO proper options
     args.print_additional_info = True
