@@ -66,8 +66,8 @@ def parse_args():
     parser.add_argument("--prefix", help="prefix for output files", type=str, default="")
     parser.add_argument("--read_info", help="text file with tab-separated information about input reads, according to "
                                             "which counts are groupped, e.g. cell type, barcode, etc.", type=str)
-    parser.add_argument("--matching-strategy", choices=["Exact", "Precise", "Default", "Loose"],
-                        help="matching strategy to use from most strict to least", type=str, default="Default")
+    parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
+                        help="matching strategy to use from most strict to least", type=str, default="default")
 
     ## ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
@@ -179,10 +179,10 @@ def set_additional_params(args):
                            'allow_extra_terminal_introns', 'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'Exact':   Strategy(0,  0,   0,   0,   False, False, False),
-        'Precise': Strategy(3,  30,  30,  30,  False, False, True),
-        'Default': Strategy(6,  300, 100, 200, False, False, True),
-        'Loose':   Strategy(12, 300, 300, 300, True,  True,  True),
+        'exact':   Strategy(0,  0,   0,   0,   False, False, False),
+        'precise': Strategy(3,  30,  30,  30,  False, False, True),
+        'default': Strategy(6,  300, 100, 200, False, False, True),
+        'loose':   Strategy(12, 300, 300, 300, True,  True,  True),
     }
 
     strategy = strategies[args.matching_strategy]
