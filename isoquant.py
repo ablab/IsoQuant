@@ -11,6 +11,7 @@ import sys
 import logging
 import argparse
 from traceback import print_exc
+from collections import namedtuple
 
 import gffutils
 import pysam
@@ -65,13 +66,18 @@ def parse_args():
     parser.add_argument("--prefix", help="prefix for output files", type=str, default="")
     parser.add_argument("--read_info", help="text file with tab-separated information about input reads, according to "
                                             "which counts are groupped, e.g. cell type, barcode, etc.", type=str)
+    parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
+                        help="matching strategy to use from most strict to least", type=str, default="default")
 
     ## ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "chosen based on data type if not set", type=str)
     add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
-    add_additional_option("--delta", help="delta for inexact splice junction comparison, "
-                                          "chosen automatically based on data type", type=int, default="6")
+    add_additional_option("--delta", type=int, default=None,
+                          help="delta for inexact splice junction comparison, chosen automatically based on data type")
+    add_additional_option("--max-exon-extension", type=int, default=None, help="set maximum length for exon elongation")
+    add_additional_option("--max-intron-shift", type=int, default=None, help="set maximum length for intron shift")
+    add_additional_option("--max-missed-exon-len", type=int, default=None, help="set maximum length for skipped exon")
 
     args = parser.parse_args()
 
@@ -168,16 +174,34 @@ def set_logger(args, logger_instnace):
 
 
 def set_additional_params(args):
-    #TODO proper options
+    Strategy = namedtuple('Strategy',
+                          ('delta', 'max_exon_extension', 'max_intron_shift', 'max_missed_exon_len',
+                           'allow_extra_terminal_introns', 'resolve_ambiguous', 'correct_minor_errors'))
+
+    strategies = {
+        'exact':   Strategy(0,  0,   0,   0,   False, False, False),
+        'precise': Strategy(3,  30,  30,  30,  False, False, True),
+        'default': Strategy(6,  300, 100, 200, False, False, True),
+        'loose':   Strategy(12, 300, 300, 300, True,  True,  True),
+    }
+
+    strategy = strategies[args.matching_strategy]
+
+    args.delta = args.delta or strategy.delta
+    args.max_exon_extension = args.max_exon_extension or strategy.max_exon_extension
+    args.max_intron_shift = args.max_intron_shift or strategy.max_intron_shift
+    args.max_missed_exon_len = args.max_missed_exon_len or strategy.max_missed_exon_len
+    args.allow_extra_terminal_introns = strategy.allow_extra_terminal_introns
+    args.resolve_ambiguous = strategy.resolve_ambiguous
+    args.correct_minor_errors = strategy.correct_minor_errors
+
+    updated_strategy = Strategy(args.delta, args.max_exon_extension, args.max_intron_shift, args.max_missed_exon_len,
+                                args.allow_extra_terminal_introns, args.resolve_ambiguous, args.correct_minor_errors)
+    logger.debug(f'Using {args.matching_strategy} strategy. Updated strategy: {updated_strategy}.')
+
+    # TODO proper options
     args.print_additional_info = True
     args.skip_secondary = True
-
-    args.resolve_ambiguous = False
-    args.max_exon_extension = 300
-    args.allow_extra_terminal_introns = False
-    args.max_intron_shift = 100
-    args.max_missed_exon_len = 200
-    args.correct_minor_errors = True
 
 
 def run_pipeline(args):
