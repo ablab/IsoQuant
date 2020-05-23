@@ -111,25 +111,62 @@ class LongReadAssigner:
         self.gene_info = gene_info
         self.params = params
 
-    # === Basic functions ===
-    # match read profiles to a known isoform junction profile, hint - potential candidates
-    def match_profile(self, read_gene_profile, isoform_profiles, hint = set()):
+    def match_profile(self, read_gene_profile, isoform_profiles, hint=None):
+        """ match read profiles to a known isoform junction profile
+
+        Parameters
+        ----------
+        read_gene_profile: list of int
+        isoform_profiles: dict of str
+        hint: set, optional
+            potential candidates, all other profiles will be skipped
+
+        Returns
+        -------
+        result: List[Tuple[str, int]]
+            list of tuples (id and difference)
+        """
+        hint = hint if hint else set()
         isoforms = []
-        for isoform_id in isoform_profiles.keys():
-            if len(hint) > 0 and isoform_id not in hint:
+        for isoform_id, isoform_profile in isoform_profiles.items():
+            if hint and isoform_id not in hint:
                 continue
-            isoform_profile = isoform_profiles[isoform_id]
             diff = difference_in_present_features(isoform_profile, read_gene_profile)
             isoforms.append((isoform_id, diff))
-        return sorted(isoforms, key=lambda x:x[1])
+        return sorted(isoforms, key=lambda x: x[1])
 
-    # match read profiles to a known isoform junction profile, hint - potential candidates
-    def find_matching_isofoms(self, read_gene_profile, isoform_profiles, hint = set()):
+    def find_matching_isoforms(self, read_gene_profile, isoform_profiles, hint=None):
+        """ match read profiles to a known isoform junction profile
+
+        Parameters
+        ----------
+        read_gene_profile: list of int
+        isoform_profiles: dict of str
+        hint: set, optional
+            potential candidates, all other profiles will be skipped
+
+        Returns
+        -------
+        result: set of str
+            matching isoforms
+
+        """
         isoforms = self.match_profile(read_gene_profile, isoform_profiles, hint)
         return set(map(lambda x: x[0], filter(lambda x: x[1] == 0, isoforms)))
 
     # === Isoforom matching function ===
     def assign_to_isoform(self, read_id, combined_read_profile):
+        """ assign read to isoform according to it
+
+        Parameters
+        ----------
+        read_id: str
+        combined_read_profile: CombinedReadProfiles
+
+        Returns
+        -------
+
+        """
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
@@ -209,10 +246,10 @@ class LongReadAssigner:
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
-        intron_matched_isoforms = self.find_matching_isofoms(read_intron_profile.gene_profile,
-                                                             self.gene_info.intron_profiles.profiles)
-        exon_matched_isoforms = self.find_matching_isofoms(read_split_exon_profile.gene_profile,
-                                                           self.gene_info.split_exon_profiles.profiles)
+        intron_matched_isoforms = self.find_matching_isoforms(read_intron_profile.gene_profile,
+                                                              self.gene_info.intron_profiles.profiles)
+        exon_matched_isoforms = self.find_matching_isoforms(read_split_exon_profile.gene_profile,
+                                                            self.gene_info.split_exon_profiles.profiles)
         both_mathched_isoforms = intron_matched_isoforms.intersection(exon_matched_isoforms)
 
         logger.debug("Intron matched " + str(intron_matched_isoforms))

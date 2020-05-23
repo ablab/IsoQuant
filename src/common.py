@@ -164,15 +164,22 @@ def is_subprofile(short_isoform_profile, long_isoform_profile):
 
 
 def difference_in_present_features(profile1, profile2):
+    """ computes Hamming distance for two profiles, returns -1 if profiles have different length
+
+    Parameters
+    ----------
+    profile1: list of int
+    profile2: list of int
+
+    Returns
+    -------
+    result: int
+        number of different items in lists or -1 if profiles have different length
+
+    """
     if len(profile1) != len(profile2):
         return -1
-    d = 0
-    for i in range(len(profile1)):
-        if profile1[i] == 0 or profile2[i] == 0:
-            continue
-        if profile1[i] != profile2[i]:
-            d += 1
-    return d
+    return sum(p1 != p2 for p1, p2 in zip(profile1, profile2))
 
 
 def find_matching_positions(profile1, profile2):
