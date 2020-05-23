@@ -179,7 +179,14 @@ def difference_in_present_features(profile1, profile2):
     """
     if len(profile1) != len(profile2):
         return -1
-    return sum(p1 != p2 for p1, p2 in zip(profile1, profile2))
+    d = 0
+    for i in range(len(profile1)):
+        if profile1[i] == 0 or profile2[i] == 0:
+            continue
+        if profile1[i] != profile2[i]:
+            d += 1
+    return d
+
 
 
 def find_matching_positions(profile1, profile2):
