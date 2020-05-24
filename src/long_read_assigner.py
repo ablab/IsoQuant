@@ -570,6 +570,18 @@ class LongReadAssigner:
             return MatchingEvent.no_contradiction
 
     def detect_contradiction_type(self, read_junctions, isoform_junctions, contradictory_region_pairs):
+        """
+
+        Parameters
+        ----------
+        read_junctions: list of tuples of int
+        isoform_junctions: list of tuples of int
+        contradictory_region_pairs: list of tuples of int
+
+        Returns
+        -------
+        result: str
+        """
         contradiction_events = []
         for pair in contradictory_region_pairs:
             # classify each contradictory area separately

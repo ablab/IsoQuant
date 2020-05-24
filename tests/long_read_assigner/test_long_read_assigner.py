@@ -114,3 +114,22 @@ class TestCompareJunctions:
         assigner = LongReadAssigner(None, self.Params(delta))
         assert (MatchingEvent.intron_retention
                 == assigner.compare_junctions(read_junctions, read_region, isoform_junctions, isoform_region))
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
+                             [([(1, 50)], (1, 50), [(1, 5), (45, 49)], (45, 49), 1),
+                              ([(1, 10), (15, 50)], (15, 50), [(1, 49)], (1, 49), 1)],
+                             ids=("one_in_read_two_in_isoforms", "two_in_read_one_in_isoforms"))
+    def test_overlap(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+        assigner = LongReadAssigner(None, self.Params(delta))
+        assert (MatchingEvent.intron_retention
+                == assigner.compare_junctions(read_junctions, read_region, isoform_junctions, isoform_region))
+
+
+class TestDetectContradictionType:
+    Params = namedtuple("Params", ("delta", "max_intron_shift"))
+    IntronProfiles = namedtuple("IntronProfiles", ("features"))
+    GeneInfo = namedtuple("GeneInfo", ("intron_profiles", "start", "end"))
+
+    def test(self):
+        assigner = LongReadAssigner(self.GeneInfo(self.IntronProfiles([(1, 1)]), 1, 100), self.Params(1, 1))
+        assert "intron_shift" is assigner.detect_contradiction_type([(50, 75)], [(50, 75)], [((0, 0), (0, 0))])
