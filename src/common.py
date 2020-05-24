@@ -33,7 +33,7 @@ def rindex(l, el):
     for i in range(len(l) - 1, -1, -1):
         if l[i] == el:
             return i
-    raise ValueError(str(el) + " is not in list")
+    raise ValueError(f"{el} is not in list")
 
 
 def proper_plural_form(name, count):
@@ -186,7 +186,6 @@ def difference_in_present_features(profile1, profile2):
         if profile1[i] != profile2[i]:
             d += 1
     return d
-
 
 
 def find_matching_positions(profile1, profile2):
