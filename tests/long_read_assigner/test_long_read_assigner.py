@@ -69,7 +69,8 @@ class TestCompareJunctions:
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([(1, 10), (15,  20)], (1, 10), [(2, 10), (15,  19)], (1, 10), 1),
                               ([(1, 10), (15, 20)], (1, 10), [(1, 10), (15, 20)], (15, 20), 0),
-                              ([(1, 10), (15, 20)], (1, 10), [(1, 10), (15, 21), (25, 30)], (1, 10), 1)])
+                              ([(1, 10), (15, 20)], (1, 10), [(1, 10), (15, 21), (25, 30)], (1, 10), 1),
+                              ([(15, 20), (25, 35)], (15, 20), [(1, 10), (15, 21), (25, 34)], (1, 10), 1)])
     def test_no_contradiction(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
         assigner = LongReadAssigner(None, self.Params(delta))
         assert (MatchingEvent.no_contradiction
@@ -104,4 +105,12 @@ class TestCompareJunctions:
     def test_extra_intron_in(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
         assigner = LongReadAssigner(None, self.Params(delta))
         assert (MatchingEvent.extra_intron_out
+                == assigner.compare_junctions(read_junctions, read_region, isoform_junctions, isoform_region))
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
+                             [([(1, 5), (25,  30)], (15, 20), [(1, 5), (8, 10), (15, 19)], (15, 19), 1),
+                              ([(1, 5), (25,  30)], (15, 20), [(1, 5), (8, 10), (15, 19), (25, 30)], (15, 19), 1)])
+    def test_missed_intron_in(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+        assigner = LongReadAssigner(None, self.Params(delta))
+        assert (MatchingEvent.intron_retention
                 == assigner.compare_junctions(read_junctions, read_region, isoform_junctions, isoform_region))
