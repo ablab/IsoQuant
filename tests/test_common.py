@@ -1,6 +1,6 @@
 import pytest
 
-from src.common import difference_in_present_features, list_to_str, rindex
+from src.common import difference_in_present_features, list_to_str, rindex, equal_ranges
 
 
 class TestDifferenceInPresentFeatures:
@@ -36,3 +36,11 @@ class TestRindex:
     def test_no_such_elem(self, collection):
         with pytest.raises(ValueError, match="a is not in list"):
             rindex(collection, "a")
+
+
+class TestEqualRanges:
+    @pytest.mark.parametrize("range1, range2, delta, expected",
+                             [((1, 2), (1, 2), 0, True), ((1, 2), (2, 3), 1, True), ((1, 10), (1, 20), 5, False)],
+                             ids=("equals", "less_than_delta", "bigger_than_delta"))
+    def test(self, range1, range2, delta, expected):
+        assert expected == equal_ranges(range1, range2, delta)

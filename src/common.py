@@ -61,7 +61,7 @@ def left_of(range1, range2):
     return range1[1] < range2[0]
 
 
-def equal_ranges(range1, range2, delta = 0):
+def equal_ranges(range1, range2, delta=0):
     return abs(range1[0] - range2[0]) <= delta and abs(range1[1] - range2[1]) <= delta
 
 
@@ -230,7 +230,7 @@ def get_path_to_program(program, dirpath=None, min_version=None):
     def check_version(fpath, min_version):
         p = subprocess.Popen([fpath, '--version'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         stdout, stderr = p.communicate()
-        version_pattern = re.compile('(?P<major_version>\d+)\.(?P<minor_version>\d+)')
+        version_pattern = re.compile(r'(?P<major_version>\d+)\.(?P<minor_version>\d+)')
         v = version_pattern.search(str(stdout))
         if not v.group('major_version') or not v.group('minor_version'):
             return False

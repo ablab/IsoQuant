@@ -6,6 +6,7 @@
 
 import logging
 import copy
+from collections import namedtuple
 
 from src.common import *
 from src.gene_info import *
@@ -13,6 +14,7 @@ from src.long_read_profiles import *
 
 
 logger = logging.getLogger('IsoQuant')
+IsoformDiff = namedtuple("IsoformDiff", ("id", "diff"))
 
 
 class AssignmentType:
@@ -123,16 +125,15 @@ class LongReadAssigner:
 
         Returns
         -------
-        result: List[Tuple[str, int]]
+        result: list of IsoformDiff
             list of tuples (id and difference)
         """
-        hint = hint if hint else set()
         isoforms = []
         for isoform_id, isoform_profile in isoform_profiles.items():
             if hint and isoform_id not in hint:
                 continue
             diff = difference_in_present_features(isoform_profile, read_gene_profile)
-            isoforms.append((isoform_id, diff))
+            isoforms.append(IsoformDiff(isoform_id, diff))
         return sorted(isoforms, key=lambda x: x[1])
 
     def find_matching_isoforms(self, read_gene_profile, isoform_profiles, hint=None):
@@ -241,8 +242,20 @@ class LongReadAssigner:
                 logger.debug("+ + No, serious")
                 assignment.set_assignment_type(AssignmentType.contradictory)
 
-    # match profile when all read features are assigned
-    def match_non_contradictory(self, read_id, combined_read_profile, has_zeros = False, use_polya = True):
+    def match_non_contradictory(self, read_id, combined_read_profile, has_zeros=False, use_polya=True):
+        """ match profile when all read features are assigned
+
+        Parameters
+        ----------
+        read_id: str
+        combined_read_profile: CombinedReadProfiles
+        has_zeros: bool, optional
+        use_polya: bool, optional
+
+        Returns
+        -------
+
+        """
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
@@ -387,8 +400,22 @@ class LongReadAssigner:
         exon_matching_isoforms = self.match_profile(read_split_exon_profile.gene_profile, self.gene_info.split_exon_profiles.profiles)
         return self.detect_differences(read_id, read_intron_profile, read_split_exon_profile, intron_matching_isoforms, exon_matching_isoforms)
 
-    # compare read to closest matching isoforms
-    def detect_differences(self, read_id, read_intron_profile, read_split_exon_profile, intron_matching_isoforms, exon_matching_isoforms):
+    def detect_differences(self, read_id, read_intron_profile, read_split_exon_profile,
+                           intron_matching_isoforms, exon_matching_isoforms):
+        """ compare read to closest matching isoforms
+
+        Parameters
+        ----------
+        read_id: str
+        read_intron_profile: MappedReadProfile
+        read_split_exon_profile: MappedReadProfile
+        intron_matching_isoforms: list of IsoformDiff
+        exon_matching_isoforms: list of IsoformDiff
+
+        Returns
+        -------
+        result: ReadAssignment
+        """
         # get isoforms that have closes intron and exon profiles
         best_intron_isoform_ids = get_first_best_from_sorted(intron_matching_isoforms)
         best_exon_isoforms = list(filter(lambda x: x[0] in best_intron_isoform_ids, exon_matching_isoforms))
@@ -430,8 +457,20 @@ class LongReadAssigner:
 
         return assignment
 
-    # compare read splice junctions against similar isoform
     def compare_junctions(self, read_junctions, read_region, isoform_junctions, isoform_region):
+        """ compare read splice junctions against similar isoform
+
+        Parameters
+        ----------
+        read_junctions: list of tuple of int
+        read_region: tuple of int
+        isoform_junctions: list of tuple of int
+        isoform_region: tuple of int
+
+        Returns
+        -------
+
+        """
         if len(read_junctions) == 0:
             return MatchingEvent.unspliced
         read_pos = 0

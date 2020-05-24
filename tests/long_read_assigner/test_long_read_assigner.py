@@ -1,6 +1,8 @@
+from collections import namedtuple
+
 import pytest
 
-from src.long_read_assigner import LongReadAssigner
+from src.long_read_assigner import LongReadAssigner, MatchingEvent
 
 
 class TestMatchProfileAndFindMatchingIsoforms:
@@ -59,3 +61,47 @@ class TestMatchProfileAndFindMatchingIsoforms:
                                {"id3"}, [("id3", 0)])])  # matched
     def test_hint(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
+
+
+class TestCompareJunctions:
+    Params = namedtuple("Params", "delta")
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
+                             [([(1, 10), (15,  20)], (1, 10), [(2, 10), (15,  19)], (1, 10), 1),
+                              ([(1, 10), (15, 20)], (1, 10), [(1, 10), (15, 20)], (15, 20), 0),
+                              ([(1, 10), (15, 20)], (1, 10), [(1, 10), (15, 21), (25, 30)], (1, 10), 1)])
+    def test_no_contradiction(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+        assigner = LongReadAssigner(None, self.Params(delta))
+        assert (MatchingEvent.no_contradiction
+                == assigner.compare_junctions(read_junctions, read_region, isoform_junctions, isoform_region))
+
+    @pytest.mark.parametrize("isoform_junctions, isoform_region, delta",
+                             [([(2, 10)], (1, 10), 1),
+                              ([(1, 10), (15, 21)], (1, 10), 1)])
+    def test_unspliced(self, isoform_junctions, isoform_region, delta):
+        assigner = LongReadAssigner(None, self.Params(delta))
+        assert (MatchingEvent.unspliced == assigner.compare_junctions([], [], isoform_junctions, isoform_region))
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
+                             [([(1, 10), (15,  20)], (1, 10), [(2, 10)], (1, 10), 1),
+                              ([(1, 10), (15, 20), (25, 36)], (25, 30), [(1, 10), (15, 21)], (1, 10), 1)])
+    def test_extra_intron_out(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+        assigner = LongReadAssigner(None, self.Params(delta))
+        assert (MatchingEvent.extra_intron_out
+                == assigner.compare_junctions(read_junctions, read_region, isoform_junctions, isoform_region))
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
+                             [([(1, 10), (15,  20)], (1, 10), [(15, 19)], (15, 19), 1),
+                              ([(1, 5), (7, 10), (15, 20)], (1, 10), [(15, 19)], (15, 19), 1)],
+                              ids=("extra_intron", "two_extra_intron"))
+    def test_extra_introns_before(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+        assigner = LongReadAssigner(None, self.Params(delta))
+        assert (MatchingEvent.extra_intron_out
+                == assigner.compare_junctions(read_junctions, read_region, isoform_junctions, isoform_region))
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
+                             [([(1, 5), (8, 10), (15,  20)], (15, 20), [(1, 5), (15, 19)], (15, 19), 1)])
+    def test_extra_intron_in(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+        assigner = LongReadAssigner(None, self.Params(delta))
+        assert (MatchingEvent.extra_intron_out
+                == assigner.compare_junctions(read_junctions, read_region, isoform_junctions, isoform_region))
