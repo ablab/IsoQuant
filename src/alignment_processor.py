@@ -68,7 +68,7 @@ class LongReadAlignmentProcessor:
                 intron_profile = self.intron_profile_construnctor.construct_profile(sorted_blocks)
                 split_exon_profile = self.split_exon_profile_construnctor.construct_profile(sorted_blocks)
                 # FIXME
-                combined_profile = CombinedReadProfiles(intron_profile, None, split_exon_profile, alignment)
+                combined_profile = CombinedReadProfiles(intron_profile, None, split_exon_profile)
                 read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
                 logger.debug("=== Finished read " + read_id + " ===")
                 self.printer.add_read_info(read_assignment, combined_profile)
