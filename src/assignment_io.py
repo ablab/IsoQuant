@@ -71,9 +71,9 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if not self.assignment_checker.check(read_assignment):
             return
         assigned_transcripts = [m.assigned_transcript for m in read_assignment.isoform_matches]
-        match_events = ["+".join(m.match_subclassifications) for m in read_assignment.isoform_matches]
+        match_events = ["+".join(map(lambda x: x.name, m.match_subclassifications)) for m in read_assignment.isoform_matches]
         line = read_assignment.read_id  + "\t" + ",".join(assigned_transcripts) + "\t" \
-                + read_assignment.assignment_type + "\t" + ",".join(match_events)
+                + read_assignment.assignment_type.name + "\t" + ",".join(match_events)
         if self.params.print_additional_info:
             if combined_read_profile is None:
                 line += "\t.\t.\t."

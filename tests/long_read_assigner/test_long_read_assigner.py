@@ -81,7 +81,7 @@ class TestCompareJunctions:
                               ([(1, 10), (15, 21)], (1, 10), 1)])
     def test_unspliced(self, isoform_junctions, isoform_region, delta):
         assigner = LongReadAssigner(None, self.Params(delta))
-        assert (MatchEventSubtype.unspliced == assigner.compare_junctions([], [], isoform_junctions, isoform_region))
+        assert (MatchEventSubtype.mono_exonic == assigner.compare_junctions([], [], isoform_junctions, isoform_region))
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([(1, 10), (15,  20)], (1, 10), [(2, 10)], (1, 10), 1),

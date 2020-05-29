@@ -8,32 +8,32 @@ import logging
 import copy
 
 from src.common import *
-
+from enum import Enum
 
 logger = logging.getLogger('IsoQuant')
 
 
-class ReadAssignmentType:
-    unique = "unique"
-    empty = "empty"
-    ambiguous = "ambiguous"
-    minor = "unique_minor_difference"
-    contradictory = "unique_contradictory"
-    novel = "novel"
+class ReadAssignmentType(Enum):
+    unique = 1
+    empty = 0
+    ambiguous = 10
+    unique_minor_difference = 2
+    contradictory = 3
+    novel = 4
 
 
 # SQANTI-like
-class MatchClassification:
-    none = "undefined"
-    fsm = "full_splice_match"
-    ism = "incomplete_splice_match"
-    nic = "novel_in_catalog"
-    nnic = "novel_not_in_catalog"
-    genic = "genic"
-    antisense = "antisense"
-    fusion = "fusion"
-    intergenic = "intergenic"
-    genic_intron = "genic_intron"
+class MatchClassification(Enum):
+    undefined = 0
+    full_splice_match = 10
+    incomplete_splice_match = 11
+    novel_in_catalog = 20
+    novel_not_in_catalog = 21
+    genic = 30
+    antisense = 40
+    fusion = 50
+    intergenic = 32
+    genic_intron = 31
 
     @staticmethod
     def get_contradiction_classification_from_subtypes(match_event_subtypes):
@@ -42,7 +42,7 @@ class MatchClassification:
                       MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
                       MatchEventSubtype.exon_skipping_novel_intron, MatchEventSubtype.alternative_structure_novel]
                for me in match_event_subtypes):
-            return MatchClassification.nnic
+            return MatchClassification.novel_not_in_catalog
         elif any(me in [MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
                         MatchEventSubtype.alt_donor_site, MatchEventSubtype.alt_acceptor_site,
                         MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
@@ -50,51 +50,50 @@ class MatchClassification:
                         MatchEventSubtype.exon_skipping_known_intron, MatchEventSubtype.exon_gain_known,
                         MatchEventSubtype.alternative_structure_known]
                  for me in match_event_subtypes):
-            return MatchClassification.nic
+            return MatchClassification.novel_in_catalog
         elif any(me in [MatchEventSubtype.unspliced_genic] for me in match_event_subtypes):
             return MatchClassification.genic
-        return MatchClassification.none
+        return MatchClassification.undefined
 
-class MatchEventSubtype:
-    none = "none"
-    undefined = "undefined"
-
+class MatchEventSubtype(Enum):
+    none = 0
+    undefined = 1
     # non-contradictory
-    unspliced = "mono_exon"
-    ism_5 = "ism_5"
-    ism_3 = "ism_3"
-    ism_internal = "ism_internal"
+    mono_exonic = 10
+    ism_5 = 15
+    ism_3 = 13
+    ism_internal = 14
     # alignment artifacts
-    intron_shift = "intron_shift"
-    exon_misallignment = "small_exon_misallignment"
+    intron_shift = 21
+    exon_misallignment = 22
     # minor alternations
-    exon_elongation5 = "exon_elongation_5prime"
-    exon_elongation3 = "exon_elongation_3prime"
-    exon_elongation_both = "exon_elongation_both"
+    exon_elongation5 = 25
+    exon_elongation3 = 23
+    exon_elongation_both = 24
     # intron retentions
-    intron_retention = "intron_retention"
-    unspliced_intron_retention = "mono_exon_intron_retention"
-    unspliced_genic = "mono_exon_genic"
+    intron_retention = 31
+    unspliced_intron_retention = 32
+    unspliced_genic = 33
     # major alternation
-    alt_donor_site = "alt_donor_site"
-    alt_acceptor_site = "alt_acceptor_site"
-    alt_donor_site_novel = "alt_donor_site_novel"
-    alt_acceptor_site_novel = "alt_acceptor_site_novel"
-    extra_intron = "additional_novel_intron"
-    extra_intron_known = "additional_known_intron"
-    extra_intron_out = "additional_terminal_intron"
-    extra_exon_out = "additional_terminal_exon"
-    intron_migration = "intron_migration"
-    intron_alternation_novel = "intron_change_to_novel"
-    intron_alternation_known = "intron_change_to_known"
-    mutually_exclusive_exons_novel = "mutualy_exclusive_novel_exons"
-    mutually_exclusive_exons_known = "mutualy_exclusive_known_exons"
-    exon_skipping_known_intron = "exon_skipping_known_intron"
-    exon_skipping_novel_intron = "exon_skipping_novel_intron"
-    exon_gain_known = "gains_known_exon"
-    exon_gain_novel = "gains_novel_exon"
-    alternative_structure_novel = "alternative_structure_novel_introns"
-    alternative_structure_known = "alternative_structure_known_introns"
+    alt_donor_site = 101
+    alt_acceptor_site = 102
+    alt_donor_site_novel = 103
+    alt_acceptor_site_novel = 104
+    extra_intron = 112
+    extra_intron_known = 111
+    extra_intron_out = 113
+    extra_exon_out = 120
+    intron_migration = 114
+    intron_alternation_novel = 115
+    intron_alternation_known = 115
+    mutually_exclusive_exons_novel = 121
+    mutually_exclusive_exons_known = 122
+    exon_skipping_known_intron = 123
+    exon_skipping_novel_intron = 124
+    exon_gain_known = 125
+    exon_gain_novel = 126
+    alternative_structure_novel = 131
+    alternative_structure_known = 132
 
     @staticmethod
     def is_alignment_artifact(match_event_subtype):
@@ -111,23 +110,23 @@ class IsoformMatch:
                  match_subclassifications = None):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
-        self.match_classification = copy.deepcopy(match_classification)
+        self.match_classification = match_classification
         if match_subclassifications is None:
             self.match_subclassifications = []
         elif isinstance(match_subclassifications, list):
             self.match_subclassifications = match_subclassifications
         else:
-            self.match_subclassifications = [copy.deepcopy(match_subclassifications)]
+            self.match_subclassifications = [match_subclassifications]
         self.additional_info = {}
 
     def add_subclassification(self, match_subclassification):
-        if len(self.match_subclassifications) == 1 and self.match_subclassifications[0] == MatchClassification.none:
-            self.match_subclassifications = [copy.deepcopy(match_subclassification)]
+        if len(self.match_subclassifications) == 1 and self.match_subclassifications[0] == MatchClassification.undefined:
+            self.match_subclassifications = [match_subclassification]
         else:
-            self.match_subclassifications.append(copy.deepcopy(match_subclassification))
+            self.match_subclassifications.append(match_subclassification)
 
     def set_classification(self, classification):
-        self.match_classification = copy.deepcopy(classification)
+        self.match_classification = classification
 
     def all_subtypes_are_none(self):
         return all(el == MatchEventSubtype.none for el in self.match_subclassifications)
@@ -145,7 +144,7 @@ class IsoformMatch:
 class ReadAssignment:
     def __init__(self, read_id, assignment_type, match = None):
         self.read_id = read_id
-        self.assignment_type = copy.deepcopy(assignment_type)
+        self.assignment_type = assignment_type
         if match is None:
             self.isoform_matches = []
         elif isinstance(match, list):
@@ -157,7 +156,7 @@ class ReadAssignment:
         self.isoform_matches.append(match)
 
     def set_assignment_type(self, assignment_type):
-        self.assignment_type = copy.deepcopy(assignment_type)
+        self.assignment_type = assignment_type
 
     def merge(self, other):
         pass

@@ -49,13 +49,13 @@ class LongReadAssigner:
                 # serious exon elongation
                 match.add_subclassification(exon_elongation_type)
                 if assignment.assignment_type == ReadAssignmentType.unique or \
-                    assignment.assignment_type == ReadAssignmentType.minor:
+                    assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
                     assignment.set_assignment_type(ReadAssignmentType.contradictory)
             elif exon_elongation_type != MatchEventSubtype.none:
                 # minor exon elongation
                 match.add_subclassification(exon_elongation_type)
                 if assignment.assignment_type == ReadAssignmentType.unique:
-                    assignment.set_assignment_type(ReadAssignmentType.minor)
+                    assignment.set_assignment_type(ReadAssignmentType.unique_minor_difference)
 
     # detect exon elongation subtyp
     def categorize_exon_elongation_subtype(self, read_split_exon_profile, isoform_id):
@@ -116,7 +116,7 @@ class LongReadAssigner:
     def detect_ism_subtype(self, read_intron_profile, isoform_id):
         if len(read_intron_profile.read_profile) == 0:
             logger.debug(" + Mono exon")
-            return MatchEventSubtype.unspliced
+            return MatchEventSubtype.mono_exonic
 
         read_profile = read_intron_profile.gene_profile
         isoform_profile = self.gene_info.intron_profiles.profiles[isoform_id]
@@ -140,7 +140,7 @@ class LongReadAssigner:
                 return MatchEventSubtype.ism_3
         else:
             logger.debug(" + No ISM truncation, extra splice sites ")
-            return MatchEventSubtype.unspliced
+            return MatchEventSubtype.mono_exonic
 
     # check where it is full splice match
     def is_fsm(self, read_intron_profile, isoform_id):
@@ -196,10 +196,10 @@ class LongReadAssigner:
     def categorize_correct_splice_match(self, read_intron_profile, isoform_id):
         if self.is_fsm(read_intron_profile, isoform_id):
             logger.debug("+ + Full splice match " + isoform_id)
-            isoform_match = IsoformMatch(MatchClassification.fsm, self.get_gene_id(isoform_id), isoform_id)
+            isoform_match = IsoformMatch(MatchClassification.full_splice_match, self.get_gene_id(isoform_id), isoform_id)
         else:
             logger.debug("+ + Incomplete splice match " + isoform_id)
-            isoform_match = IsoformMatch(MatchClassification.ism, self.get_gene_id(isoform_id), isoform_id,
+            isoform_match = IsoformMatch(MatchClassification.incomplete_splice_match, self.get_gene_id(isoform_id), isoform_id,
                                          self.detect_ism_subtype(read_intron_profile, isoform_id))
         return isoform_match
 
@@ -339,7 +339,7 @@ class LongReadAssigner:
                 isoform_id = list(intron_matched_isoforms)[0]
                 logger.debug("+ + There is unique intron profile match " + isoform_id)
                 isoform_match = self.categorize_correct_splice_match(read_intron_profile, list(intron_matched_isoforms)[0])
-                read_assignment = ReadAssignment(read_id, ReadAssignmentType.minor, isoform_match)
+                read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique_minor_difference, isoform_match)
             else:
                 logger.debug("+ + There is ambiguous intron profile match")
                 isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, intron_matched_isoforms)
@@ -412,16 +412,16 @@ class LongReadAssigner:
             return self.match_contradictory(read_id, combined_read_profile)
 
         for match in assignment.isoform_matches:
-            match.set_classification(MatchClassification.nnic)
+            match.set_classification(MatchClassification.novel_not_in_catalog)
             match.add_subclassification(MatchEventSubtype.extra_intron_out)
 
         if not self.params.allow_extra_terminal_introns:
             if assignment.assignment_type == ReadAssignmentType.unique or \
-                assignment.assignment_type == ReadAssignmentType.minor:
+                assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
                 assignment.set_assignment_type(ReadAssignmentType.contradictory)
         else:
             if assignment.assignment_type == ReadAssignmentType.unique:
-                assignment.set_assignment_type(ReadAssignmentType.minor)
+                assignment.set_assignment_type(ReadAssignmentType.unique_minor_difference)
 
         return assignment
 
@@ -480,7 +480,7 @@ class LongReadAssigner:
             for m in matching_events:
                 isoform_match.add_subclassification(m)
             assignment.add_match(isoform_match)
-            logger.debug("+ + Found contradiction for " + isoform_id + ": " + " ".join(matching_events))
+            logger.debug("+ + Found contradiction for " + isoform_id + ": " + " ".join(map(lambda x: x.name, matching_events)))
 
         new_assignment_type = None
         # Change assignment from contradictory when contradictions are minor or absent
@@ -489,7 +489,7 @@ class LongReadAssigner:
             new_assignment_type = ReadAssignmentType.unique if len(best_isoform_ids) == 1 else ReadAssignmentType.ambiguous
         elif self.params.correct_minor_errors and all(m.all_subtypes_are_alignment_artifacts() for m in assignment.isoform_matches):
             # Only alignment artifacts
-            new_assignment_type = ReadAssignmentType.minor if len(best_isoform_ids) == 1 else ReadAssignmentType.ambiguous
+            new_assignment_type = ReadAssignmentType.unique_minor_difference if len(best_isoform_ids) == 1 else ReadAssignmentType.ambiguous
 
         if new_assignment_type is not None:
             # Revise all matches as correct
@@ -519,7 +519,7 @@ class LongReadAssigner:
                 else:
                     event = MatchEventSubtype.unspliced_genic
             else:
-                event = MatchEventSubtype.unspliced
+                event = MatchEventSubtype.mono_exonic
             return [event]
 
         read_pos = 0

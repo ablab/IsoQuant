@@ -25,7 +25,7 @@ class FeatureCounter:
         elif read_assignment.assignment_type == ReadAssignmentType.empty:
             self.not_assigned_reads += 1
         elif read_assignment.assignment_type == ReadAssignmentType.unique or\
-                read_assignment.assignment_type == ReadAssignmentType.minor:
+                read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
             transcript_id = read_assignment.isoform_matches[0].assigned_transcript
             gene_id = self.gene_db[transcript_id]['gene_id'][0]
             self.feature_counter[gene_id] += 1
