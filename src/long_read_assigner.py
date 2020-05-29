@@ -412,7 +412,7 @@ class LongReadAssigner:
             return self.match_contradictory(read_id, combined_read_profile)
 
         for match in assignment.isoform_matches:
-            match.set_match_classification(MatchClassification.nnic)
+            match.set_classification(MatchClassification.nnic)
             match.add_subclassification(MatchEventSubtype.extra_intron_out)
 
         if not self.params.allow_extra_terminal_introns:
