@@ -406,10 +406,10 @@ class LongReadAssigner:
             logger.warning("+ + Both terminal introns present, odd case")
 
         assignment = self.match_non_contradictory(read_id, combined_read_profile)
-
-        if not self.params.allow_extra_terminal_introns:
-            assignment.set_assignment_type(ReadAssignmentType.contradictory)
-        assignment.add_common_event(MatchEventSubtype.extra_intron_out)
+        if assignment is None:
+            # alternative isoforms made of known introns/exons or intron retention
+            logger.debug("+ + Resolving unmatched ")
+            return self.match_contradictory(read_id, combined_read_profile)
 
         for match in assignment.isoform_matches:
             match.set_match_classification(MatchClassification.nnic)
@@ -418,7 +418,7 @@ class LongReadAssigner:
         if not self.params.allow_extra_terminal_introns:
             if assignment.assignment_type == ReadAssignmentType.unique or \
                 assignment.assignment_type == ReadAssignmentType.minor:
-                assignment.set_assignment_type(ReadAssignmentType.novel)
+                assignment.set_assignment_type(ReadAssignmentType.contradictory)
         else:
             if assignment.assignment_type == ReadAssignmentType.unique:
                 assignment.set_assignment_type(ReadAssignmentType.minor)
@@ -607,16 +607,20 @@ class LongReadAssigner:
         logger.debug("+ + Isoform introns " + str(isoform_junctions))
         logger.debug("+ + Isoform region " + str(isoform_region))
 
+        matching_events = []
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
             # classify contradictions
             logger.debug("+ + Classifying contradictions")
-            return self.detect_contradiction_type(read_junctions, isoform_junctions, contradictory_region_pairs)
-        elif read_features_present[0] == 0 or read_features_present[-1] == 0:
+            matching_events = self.detect_contradiction_type(read_junctions, isoform_junctions, contradictory_region_pairs)
+
+        if read_features_present[0] == 0 or read_features_present[-1] == 0:
             logger.debug("+ + Found only extra terminal introns")
-            return [MatchEventSubtype.extra_intron_out]
-        else:
+            matching_events.append(MatchEventSubtype.extra_intron_out)
+
+        if len(matching_events) == 0:
             logger.debug("No contradition detected, odd case")
             return [MatchEventSubtype.none]
+        return matching_events
 
     def detect_contradiction_type(self, read_junctions, isoform_junctions, contradictory_region_pairs):
         """
