@@ -57,7 +57,7 @@ class ReadAssignmentCompositePrinter:
         for p in self.printers:
             p.flush()
 
-
+# TODO: reformat output, make singe file
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, format = "TSV", assignment_checker=PrintAllFunctor()):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params, format, assignment_checker)
@@ -70,9 +70,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def add_read_info(self, read_assignment, combined_read_profile = None):
         if not self.assignment_checker.check(read_assignment):
             return
-
-        line = read_assignment.read_id  + "\t" + ",".join(read_assignment.assigned_features) + "\t" \
-                + read_assignment.assignment_type + "\t" + ",".join(read_assignment.match_events)
+        assigned_transcripts = [m.assigned_transcript for m in read_assignment.isoform_matches]
+        match_events = ["+".join(m.match_subclassifications) for m in read_assignment.isoform_matches]
+        line = read_assignment.read_id  + "\t" + ",".join(assigned_transcripts) + "\t" \
+                + read_assignment.assignment_type + "\t" + ",".join(match_events)
         if self.params.print_additional_info:
             if combined_read_profile is None:
                 line += "\t.\t.\t."

@@ -53,6 +53,7 @@ class LongReadAlignmentProcessor:
     def process_single_file(self, bam):
         with pysam.AlignmentFile(bam, "rb") as bamfile_in:
             self.counter.add_unaligned(bamfile_in.unmapped)
+            processed_reads = {}
 
             for alignment in bamfile_in.fetch(self.gene_info.chr_id, self.gene_info.start, self.gene_info.end):
                 if alignment.reference_id == -1:
@@ -70,6 +71,14 @@ class LongReadAlignmentProcessor:
                 # FIXME
                 combined_profile = CombinedReadProfiles(intron_profile, None, split_exon_profile)
                 read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
+
+                #if read_id in processed_reads:
+                #    pass
+                #else:
+                #    processed_reads[read_id] = read_assignment
                 logger.debug("=== Finished read " + read_id + " ===")
                 self.printer.add_read_info(read_assignment, combined_profile)
                 self.counter.add_read_info(read_assignment)
+
+    def resolve_multimappers(self, assignment1, assignment2):
+        pass

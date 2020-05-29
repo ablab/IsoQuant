@@ -102,4 +102,3 @@ class PolyAFinder:
         logger.debug("New exon profile " + str(new_split_exon_profile))
         logger.debug("New intron profile " + str(new_intron_profile))
         return self.match_non_contradictory(read_id, combined_read_profile, use_polya=False).assigned_features
-    

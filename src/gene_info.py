@@ -65,6 +65,7 @@ class GeneInfo:
 
         self.set_junction_profiles(all_isoforms_introns, all_isoforms_exons)
         self.set_isoform_strands()
+        self.set_gene_ids()
         self.detect_ambiguous()
         self.print_debug()
 
@@ -99,6 +100,13 @@ class GeneInfo:
         for gene_db in self.gene_db_list:
             for t in self.db.children(gene_db, featuretype='transcript'):
                 self.isoform_strands[t.id] = t.strand
+
+    # set isoform_id -> gene_id map
+    def set_gene_ids(self):
+        self.gene_id_map = {}
+        for gene_db in self.gene_db_list:
+            for t in self.db.children(gene_db, featuretype='transcript'):
+                self.gene_id_map[t.id] = gene_db.id
 
     # assigns an ordered list of all known exons and introns to self.exons and self.introns
     # returns 2 maps, isoform id -> intron / exon list

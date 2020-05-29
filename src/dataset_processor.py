@@ -4,19 +4,14 @@
 # See file LICENSE for details.
 ############################################################################
 
-import os
-import sys
 import logging
-import argparse
-from traceback import print_exc
-
 import gffutils
 import pysam
-from Bio import SeqIO
 
 from src.input_data_storage import *
 from src.alignment_processor import *
 from src.assignment_io import *
+from src.isoform_assignment import *
 from src.gene_info import *
 from src.long_read_counter import FeatureCounter
 
@@ -110,9 +105,9 @@ class DatasetProcessor:
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
 
-        self.correct_assignment_checker = PrintOnlyFunctor(AssignmentType.unique)
-        self.novel_assignment_checker = PrintOnlyFunctor(AssignmentType.contradictory)
-        self.rest_assignment_checker = PrintOnlyFunctor([AssignmentType.empty, AssignmentType.ambiguous])
+        self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.minor])
+        self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)
+        self.rest_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.empty, ReadAssignmentType.ambiguous])
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))

@@ -218,6 +218,20 @@ def get_blocks_from_profile(features, profile):
     return profile_features
 
 
+# assumes there are no contradictions
+def left_truncated(read_profile, isoform_profile):
+    if 1 not in read_profile or 1 not in isoform_profile:
+        return True
+    return read_profile.index(1) > isoform_profile.index(1)
+
+
+# assumes there are no contradictions
+def right_truncated(read_profile, isoform_profile):
+    if 1 not in read_profile or 1 not in isoform_profile:
+        return True
+    return rindex(read_profile, 1) < rindex(isoform_profile, 1)
+
+
 def get_path_to_program(program, dirpath=None, min_version=None):
     """
     returns the path to an executable or None if it can't be found

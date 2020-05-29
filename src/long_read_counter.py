@@ -1,5 +1,5 @@
 from collections import defaultdict
-from src.long_read_assigner import AssignmentType
+from src.long_read_assigner import ReadAssignmentType
 
 
 class FeatureCounter:
@@ -15,17 +15,18 @@ class FeatureCounter:
         #TODO: add __alignment_not_unique / __too_low_aQual ?
         if not read_assignment:
             self.not_aligned_reads += 1
-        elif read_assignment.assignment_type == AssignmentType.ambiguous:
-            transcript_ids = read_assignment.assigned_features
+        elif read_assignment.assignment_type == ReadAssignmentType.ambiguous:
+            transcript_ids = [m.assigned_transcript for m in read_assignment.isoform_matches]
             gene_ids = [self.gene_db[t]['gene_id'][0] for t in transcript_ids]
             if set(gene_ids) == 1:  # different isoforms of same gene
                 self.feature_counter[gene_ids[0]] += 1
             else:
                 self.ambiguous_reads += 1
-        elif read_assignment.assignment_type == AssignmentType.empty:
+        elif read_assignment.assignment_type == ReadAssignmentType.empty:
             self.not_assigned_reads += 1
-        elif read_assignment.assignment_type == AssignmentType.unique:
-            transcript_id = read_assignment.assigned_features[0]
+        elif read_assignment.assignment_type == ReadAssignmentType.unique or\
+                read_assignment.assignment_type == ReadAssignmentType.minor:
+            transcript_id = read_assignment.isoform_matches[0].assigned_transcript
             gene_id = self.gene_db[transcript_id]['gene_id'][0]
             self.feature_counter[gene_id] += 1
 
