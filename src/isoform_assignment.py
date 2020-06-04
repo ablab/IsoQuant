@@ -144,6 +144,7 @@ class IsoformMatch:
 class ReadAssignment:
     def __init__(self, read_id, assignment_type, match = None):
         self.read_id = read_id
+        self.combined_profile = None
         self.assignment_type = assignment_type
         if match is None:
             self.isoform_matches = []
@@ -157,6 +158,12 @@ class ReadAssignment:
 
     def set_assignment_type(self, assignment_type):
         self.assignment_type = assignment_type
+
+    def to_str(self):
+        pass
+
+    def from_str(self, string):
+        pass
 
     def merge(self, other):
         pass

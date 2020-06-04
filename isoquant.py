@@ -203,6 +203,15 @@ def set_additional_params(args):
     args.print_additional_info = True
     args.skip_secondary = True
 
+    args.memory_efficient = False
+
+    # TODO move to options
+    args.matching_stategy = "take_best"
+    multimap_strategies = {}
+    for e in MultimapResolvingStrategy:
+        multimap_strategies[e.name] = e.value
+    args.matching_stategy = MultimapResolvingStrategy(multimap_strategies[args.matching_stategy])
+
 
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
