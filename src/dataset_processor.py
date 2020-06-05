@@ -7,6 +7,7 @@
 import logging
 import gffutils
 import pysam
+from collections import defaultdict
 
 from src.input_data_storage import *
 from src.alignment_processor import *
@@ -178,7 +179,7 @@ class DatasetProcessor:
         out_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".counts.tsv")
         feature_counter = FeatureCounter(self.gffutils_db, out_counts_tsv)
 
-        multimap_reads_assignments = {}
+        multimap_reads_assignments = defaultdict(list)
         if self.args.memory_efficient:
             assert (False)
         else:
@@ -186,8 +187,6 @@ class DatasetProcessor:
                 for read_assignment in storage:
                     read_id = read_assignment.read_id
                     if read_id in self.multimapped_reads:
-                        if read_id not in multimap_reads_assignments:
-                            multimap_reads_assignments[read_id] = []
                         multimap_reads_assignments[read_id].append(read_assignment)
                     else:
                         global_printer.add_read_info(read_assignment)

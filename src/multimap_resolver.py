@@ -6,6 +6,7 @@
 
 import logging
 from enum import Enum
+from collections import defaultdict
 
 from src.common import *
 from src.isoform_assignment import *
@@ -31,9 +32,8 @@ class MultimapResolver:
         elif self.strategy == MultimapResolvingStrategy.merge:
             return self.merge(list(filter(lambda x: x.assignment_type != ReadAssignmentType.empty, assignment_list)))
         elif self.strategy == MultimapResolvingStrategy.take_best:
-            classified_assignments = {}
-            for e in ReadAssignmentType:
-                classified_assignments[e.name] = []
+            # TODO: improve take_best strategy
+            classified_assignments = defaultdict(list)
             for ra in assignment_list:
                 if ra.assignment_type == ReadAssignmentType.empty:
                     continue
@@ -51,9 +51,9 @@ class MultimapResolver:
             raise ValueError("Unsupported multimap strategy")
 
     def merge(self, assignment_list):
-        read_id = assignment_list[0].read_id
         if len(assignment_list) == 0:
-            return ReadAssignment(read_id, ReadAssignmentType.empty)
+            return None
+        read_id = assignment_list[0].read_id
         if len(assignment_list) == 1:
             return assignment_list[0]
 

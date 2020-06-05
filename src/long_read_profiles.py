@@ -6,6 +6,7 @@
 
 import logging
 from functools import partial
+from collections import defaultdict
 
 from src.common import *
 
@@ -49,7 +50,7 @@ class OverlappingFeaturesProfileConstructor:
     def construct_profile_for_introns(self, read_introns, mapped_region = (0, 0)):
         read_profile = [0] * (len(read_introns))
         intron_profile = [0] * (len(self.known_introns))
-        matched_features = {}
+        matched_features = defaultdict(list)
 
         for i in range(len(intron_profile)):
             if contains(mapped_region, self.known_introns[i]):
@@ -65,8 +66,6 @@ class OverlappingFeaturesProfileConstructor:
             if self.comparator(read_introns[read_pos], self.known_introns[gene_pos]):
                 intron_profile[gene_pos] = 1
                 read_profile[read_pos] = 1
-                if read_pos not in matched_features:
-                    matched_features[read_pos] = []
                 matched_features[read_pos].append(gene_pos)
                 gene_pos += 1
             elif overlaps(read_introns[read_pos], self.known_introns[gene_pos]):
