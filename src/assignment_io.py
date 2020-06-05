@@ -38,7 +38,7 @@ class AbstractAssignmentPrinter:
     def __del__(self):
         self.output_file.close()
 
-    def add_read_info(self, read_assignment, combined_read_profile = None):
+    def add_read_info(self, read_assignment):
         raise NotImplementedError()
 
     def flush(self):
@@ -49,15 +49,15 @@ class ReadAssignmentCompositePrinter:
     def __init__(self, printers = []):
         self.printers = printers
 
-    def add_read_info(self, read_assignment, mapping_read_profile=None):
+    def add_read_info(self, read_assignment):
         for p in self.printers:
-            p.add_read_info(read_assignment, mapping_read_profile)
+            p.add_read_info(read_assignment)
 
     def flush(self):
         for p in self.printers:
             p.flush()
 
-
+# TODO: reformat output, make singe file
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, format = "TSV", assignment_checker=PrintAllFunctor()):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params, format, assignment_checker)
@@ -67,13 +67,18 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         self.header += "\n"
         self.output_file.write(self.header)
 
-    def add_read_info(self, read_assignment, combined_read_profile = None):
-        if not self.assignment_checker.check(read_assignment):
+    def add_read_info(self, read_assignment):
+        if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
             return
-
-        line = read_assignment.read_id  + "\t" + ",".join(read_assignment.assigned_features) + "\t" \
-                + read_assignment.assignment_type + "\t" + ",".join(read_assignment.match_events)
+        if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
+            line = read_assignment.read_id  + "\t.\t.\t."
+        else:
+            assigned_transcripts = [m.assigned_transcript for m in read_assignment.isoform_matches]
+            match_events = ["+".join(map(lambda x: x.name, m.match_subclassifications)) for m in read_assignment.isoform_matches]
+            line = read_assignment.read_id  + "\t" + ",".join(assigned_transcripts) + "\t" \
+                    + read_assignment.assignment_type.name + "\t" + ",".join(match_events)
         if self.params.print_additional_info:
+            combined_read_profile = read_assignment.combined_profile
             if combined_read_profile is None:
                 line += "\t.\t.\t."
             else:

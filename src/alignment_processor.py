@@ -25,11 +25,9 @@ class LongReadAlignmentProcessor:
     counter
     """
 
-    def __init__(self, gene_info, bams, params, printer, counter):
+    def __init__(self, gene_info, bams, params):
         self.gene_info = gene_info
         self.bams = bams
-        self.printer = printer
-        self.counter = counter
         self.params = params
 
         gene_region = (gene_info.start, gene_info.end)
@@ -46,17 +44,21 @@ class LongReadAlignmentProcessor:
             NonOverlappingFeaturesProfileConstructor(self.gene_info.split_exon_profiles.features,
                                                      comparator=partial(overlaps_at_least, delta=self.params.delta))
 
+        self.assignment_storage = []
+
     def process(self):
+        self.assignment_storage = []
         for b in self.bams:
             self.process_single_file(b)
+        return self.assignment_storage
 
     def process_single_file(self, bam):
         with pysam.AlignmentFile(bam, "rb") as bamfile_in:
-            self.counter.add_unaligned(bamfile_in.unmapped)
+            #self.counter.add_unaligned(bamfile_in.unmapped)
 
             for alignment in bamfile_in.fetch(self.gene_info.chr_id, self.gene_info.start, self.gene_info.end):
                 if alignment.reference_id == -1:
-                    self.counter.add_read_info()
+                    self.assignment_storage.append(ReadAssignment(read_id, None))
                     continue
                 if self.params.skip_secondary and (alignment.is_secondary or alignment.is_supplementary):
                     continue
@@ -68,8 +70,11 @@ class LongReadAlignmentProcessor:
                 intron_profile = self.intron_profile_construnctor.construct_profile(sorted_blocks)
                 split_exon_profile = self.split_exon_profile_construnctor.construct_profile(sorted_blocks)
                 # FIXME
-                combined_profile = CombinedReadProfiles(intron_profile, None, split_exon_profile, alignment)
+                combined_profile = CombinedReadProfiles(intron_profile, None, split_exon_profile)
                 read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
+                read_assignment.combined_profile = combined_profile
+                self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")
-                self.printer.add_read_info(read_assignment, combined_profile)
-                self.counter.add_read_info(read_assignment)
+                #self.printer.add_read_info(read_assignment, combined_profile)
+                #self.counter.add_read_info(read_assignment)
+

@@ -218,6 +218,20 @@ def get_blocks_from_profile(features, profile):
     return profile_features
 
 
+# assumes there are no contradictions
+def left_truncated(read_profile, isoform_profile):
+    if 1 not in read_profile or 1 not in isoform_profile:
+        return True
+    return read_profile.index(1) > isoform_profile.index(1)
+
+
+# assumes there are no contradictions
+def right_truncated(read_profile, isoform_profile):
+    if 1 not in read_profile or 1 not in isoform_profile:
+        return True
+    return rindex(read_profile, 1) < rindex(isoform_profile, 1)
+
+
 def get_path_to_program(program, dirpath=None, min_version=None):
     """
     returns the path to an executable or None if it can't be found
@@ -249,47 +263,3 @@ def get_path_to_program(program, dirpath=None, min_version=None):
     return None
 
 
-# == polyA stuff ==
-def find_polya_tail(alignment):
-    cigar_tuples = alignment.cigartuples
-    clipped_size = 0
-    # hard clipped
-    if len(cigar_tuples) > 1 and cigar_tuples[-1][0] == 5 and cigar_tuples[-2][0] == 4:
-        clipped_size = cigar_tuples[-2][1]
-    elif cigar_tuples[-1][0] == 4:
-        clipped_size = cigar_tuples[-1][1]
-
-    pos = find_polya(alignment.seq[-clipped_size:].upper())
-    if pos == -1:
-        return -1
-    return alignment.get_blocks()[-1][1] + pos + 1
-
-
-def find_polyt_head(alignment):
-    cigar_tuples = alignment.cigartuples
-    clipped_size = 0
-    # hard clipped
-    if len(cigar_tuples) > 1 and cigar_tuples[0][0] == 5 and cigar_tuples[1][0] == 4:
-        clipped_size = cigar_tuples[1][1]
-    elif cigar_tuples[0][0] == 4:
-        clipped_size = cigar_tuples[0][1]
-
-    pos = find_polya(str(Seq(alignment.seq[:clipped_size]).reverse_complement()).upper())
-    if pos == -1:
-        return -1
-    return alignment.reference_start  - pos - 1
-
-
-# poly A tail detection
-def find_polya(seq):
-    window_size = 20
-    polyA_fraction = 0.9
-    polyA_count = int(window_size * polyA_fraction)
-    i = 0
-    while i < len(seq) - window_size - 1:
-        if seq[i:i + window_size].count('A') >= polyA_count:
-            break
-        i += 1
-    if i == len(seq) - window_size - 1:
-        return -1
-    return i
