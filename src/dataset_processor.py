@@ -16,6 +16,7 @@ from src.isoform_assignment import *
 from src.gene_info import *
 from src.long_read_counter import *
 from src.multimap_resolver import *
+from src.read_groups import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -106,6 +107,7 @@ class DatasetProcessor:
         self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
+        self.read_groupper = create_read_grouper(args.read_group)
 
         self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])
         self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)

@@ -9,6 +9,7 @@ import pysam
 
 from src.long_read_assigner import *
 from src.long_read_profiles import *
+from src.read_groups import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -25,13 +26,14 @@ class LongReadAlignmentProcessor:
     counter
     """
 
-    def __init__(self, gene_info, bams, params):
+    def __init__(self, gene_info, bams, params, read_groupper = DefaultReadGrouper()):
         self.gene_info = gene_info
         self.bams = bams
         self.params = params
 
         gene_region = (gene_info.start, gene_info.end)
         self.assigner = LongReadAssigner(self.gene_info, self.params)
+        self.read_groupper = read_groupper
         self.intron_profile_construnctor = \
             OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features, gene_region,
                                                   comparator=partial(equal_ranges, delta=self.params.delta),
@@ -69,16 +71,16 @@ class LongReadAlignmentProcessor:
                 logger.debug("=== Processing read " + read_id + " ===")
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
                 sorted_blocks = correct_bam_coords(concat_blocks)
+
                 intron_profile = self.intron_profile_construnctor.construct_intron_profile(sorted_blocks)
                 exon_profile = self.exon_profile_construnctor.construct_exon_profile(sorted_blocks)
                 split_exon_profile = self.split_exon_profile_construnctor.construct_profile(sorted_blocks)
-                # FIXME
                 combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile)
+
                 read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
                 read_assignment.combined_profile = combined_profile
                 read_assignment.gene_info = self.gene_info
+                read_assignment.read_group = self.read_groupper.get_group_id(alignment)
                 self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")
-                #self.printer.add_read_info(read_assignment, combined_profile)
-                #self.counter.add_read_info(read_assignment)
 

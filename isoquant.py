@@ -64,8 +64,10 @@ def parse_args():
 
     parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true', default=False)
     parser.add_argument("--prefix", help="prefix for output files", type=str, default="")
-    parser.add_argument("--read_info", help="text file with tab-separated information about input reads, according to "
-                                            "which counts are groupped, e.g. cell type, barcode, etc.", type=str)
+    parser.add_argument("--read_group", help="a way to groups feature counts (no grouping by default): "
+                                             "by BAM file tag (tag:TAG),"
+                                             "using information table (file:FILE:READ_COL:GROUP_COL:DELIM),"
+                                             "using read id (read_id:DELIM)", type=str)
     parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
                         help="matching strategy to use from most strict to least", type=str, default="default")
 
