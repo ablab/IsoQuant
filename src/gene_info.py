@@ -44,6 +44,25 @@ class FeatureProfiles:
             logger.debug(self.profiles[t])
 
 
+# exon/intron info
+class FeatureInfo:
+    def __init__(self, chr_id, start, end, strand, type, gene_ids):
+        self.chr_id = chr_id
+        self.start = start
+        self.end = end
+        self.strand = strand
+        self.type = type
+        self.gene_ids = gene_ids
+        #self.id = "%s_%d_%d_%s" % (self.chr_id, self.start, self.end, self.strand)
+
+    @staticmethod
+    def header():
+        return "chr\tstart\tend\tstrand\tflags\tgene_ids"
+
+    def to_str(self):
+        return "%s\t%d\t%d\t%s\t%s\t%s" % (self.chr_id, self.start, self.end, self.strand, self.type, ",".join(self.gene_ids))
+
+
 # All gene(s) information
 class GeneInfo:
     # chr_bam_prefix: additional string used when bam files were aligned to different reference that has difference in chromosome names (e.g. 1 and chr1)
@@ -64,13 +83,15 @@ class GeneInfo:
 
         all_isoforms_introns, all_isoforms_exons = self.set_introns_and_exons()
         self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
-        self.exon_property_map = self.set_feature_properties(all_isoforms_exons, self.exon_profiles)
-        self.intron_property_map = self.set_feature_properties(all_isoforms_introns, self.intron_profiles)
 
         self.set_junction_profiles(all_isoforms_introns, all_isoforms_exons)
         self.set_isoform_strands()
         self.set_gene_ids()
         self.detect_ambiguous()
+
+        self.exon_property_map = self.set_feature_properties(all_isoforms_exons, self.exon_profiles)
+        self.intron_property_map = self.set_feature_properties(all_isoforms_introns, self.intron_profiles)
+
         self.print_debug()
 
     def print_debug(self):
@@ -161,7 +182,7 @@ class GeneInfo:
         for t in isoforms_to_feature_map.keys():
             isoform_features = isoforms_to_feature_map[t]
             if len(isoform_features) == 0:
-                break
+                continue
             elif len(isoform_features) == 1:
                 feature_to_isoform[isoform_features[0]].append((t, 'T'))
             else:
@@ -183,14 +204,23 @@ class GeneInfo:
                 # similar features
                 feature_type += "S"
             if feature in contained_features:
-                # similar features
+                # feature contained in anther one
                 feature_type += "C"
-            if len(feature_to_isoform[feature]) > 1:
-                # multiple isoforms
+
+            strands = set([self.isoform_strands[t[0]] for t in feature_to_isoform[feature]])
+            strand_str = "".join(strands)
+            gene_ids = set([self.gene_id_map[t[0]] for t in feature_to_isoform[feature]])
+
+            if len(feature_to_isoform[feature]) == 1:
+                # unique feature, appears only in one isoform
+                feature_type += "U"
+            elif len(gene_ids) > 1:
+                # multiple genes
                 feature_type += "M"
 
-            feature_properties.append(self.chr_id + "_"  + str(feature[0]) + "_"  + str(feature[1]) + "_"  + feature_type)
+            feature_properties.append(FeatureInfo(self.chr_id, feature[0], feature[1], strand_str, feature_type, list(gene_ids)))
 
+        assert (len(feature_properties) == len(feature_profiles.features))
         return feature_properties
 
     # split exons into non-overlapping covering blocks

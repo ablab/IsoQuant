@@ -1,6 +1,6 @@
 from collections import defaultdict
 from src.isoform_assignment import *
-
+from src.gene_info import *
 
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
@@ -44,11 +44,11 @@ class AssignedFeatureCounter:
             f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
 
 
-def get_gene_counter(output_file_name):
+def create_gene_counter(output_file_name):
     return AssignedFeatureCounter(output_file_name, get_assigned_gene_id)
 
 
-def get_transcript_counter(output_file_name):
+def creatre_transcript_counter(output_file_name):
     return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id)
 
 # count simple features inclusion/exclusion (exons / introns)
@@ -58,19 +58,36 @@ class ProfileFeatureCounter:
         self.exclusion_feature_counter = defaultdict(int)
         self.output_file_name = output_file_name
 
-    def add_read_info(self, gene_feature_profile, feature_property_map):
+    def add_read_info_from_profile(self, gene_feature_profile, feature_property_map):
         for i in range(len(gene_feature_profile)):
             if gene_feature_profile[i] == 1:
-                self.inclusion_feature_counter[feature_property_map[i]] += 1
+                self.inclusion_feature_counter[feature_property_map[i].to_str()] += 1
             elif gene_feature_profile[i] == -1:
-                self.exclusion_feature_counter[feature_property_map[i]] += 1
+                self.exclusion_feature_counter[feature_property_map[i].to_str()] += 1
 
     def dump(self):
         with open(self.output_file_name, "w") as f:
-            f.write("feature_id\tinclude_counts\texclude_counts\n")
+            f.write(FeatureInfo.header() + "\tinclude_counts\texclude_counts\n")
             all_features = set(self.inclusion_feature_counter.keys())
             all_features.update(self.exclusion_feature_counter.keys())
-            for feature_id in sorted(all_features):
-                f.write("%s\t%d\t%d\n" % (feature_id,
-                                          self.inclusion_feature_counter[feature_id],
-                                          self.exclusion_feature_counter[feature_id]))
+            for feature_str in sorted(all_features):
+                f.write("%s\t%d\t%d\n" % (feature_str,
+                                          self.inclusion_feature_counter[feature_str],
+                                          self.exclusion_feature_counter[feature_str]))
+
+class ExonCounter(ProfileFeatureCounter):
+    def __init__(self, output_file_name):
+        ProfileFeatureCounter.__init__(self, output_file_name)
+
+    def add_read_info(self, read_assignment):
+        self.add_read_info_from_profile(read_assignment.combined_profile.read_exon_profile.gene_profile,
+                                        read_assignment.gene_info.exon_property_map)
+
+class IntronCounter(ProfileFeatureCounter):
+    def __init__(self, output_file_name):
+        ProfileFeatureCounter.__init__(self, output_file_name)
+
+    def add_read_info(self, read_assignment):
+        self.add_read_info_from_profile(read_assignment.combined_profile.read_intron_profile.gene_profile,
+                                        read_assignment.gene_info.intron_property_map)
+

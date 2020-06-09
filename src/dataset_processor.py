@@ -137,7 +137,7 @@ class DatasetProcessor:
                 logger.info("Processing chromosome " + chr_id)
                 current_chromosome = chr_id
 
-            gene_info = GeneInfo(g, self.gffutils_db)
+            gene_info = GeneInfo(g, self.gffutils_db, self.args.delta)
             bam_files = list(map(lambda x: x[0], sample.file_list))
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args)
             assignment_storage = alignment_processor.process()
@@ -176,25 +176,24 @@ class DatasetProcessor:
                                                 assignment_checker=self.novel_assignment_checker)
         self.global_printer = ReadAssignmentCompositePrinter([correct_printer, unmatched_printer, alt_printer])
 
+        # TODO make a list of counters?
         out_gene_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".gene_counts.tsv")
-        self.gene_counter = get_gene_counter(out_gene_counts_tsv)
+        self.gene_counter = create_gene_counter(out_gene_counts_tsv)
         out_transcript_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".transcript_counts.tsv")
-        self.transcript_counter = get_transcript_counter(out_transcript_counts_tsv)
+        self.transcript_counter = creatre_transcript_counter(out_transcript_counts_tsv)
         # TODO make optional
         out_exon_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".exon_counts.tsv")
-        self.exon_counter = ProfileFeatureCounter(out_exon_counts_tsv)
+        self.exon_counter = ExonCounter(out_exon_counts_tsv)
         out_intron_counts_tsv = os.path.join(sample.out_dir,
                                                  self.args.prefix + sample.label + ".intron_counts.tsv")
-        self.intron_counter = ProfileFeatureCounter(out_intron_counts_tsv)
+        self.intron_counter = IntronCounter(out_intron_counts_tsv)
 
     def pass_to_aggregators(self, read_assignment):
         self.global_printer.add_read_info(read_assignment)
         self.gene_counter.add_read_info(read_assignment)
         self.transcript_counter.add_read_info(read_assignment)
-        self.exon_counter.add_read_info(read_assignment.combined_profile.read_exon_profile.gene_profile,
-                                        read_assignment.gene_info.exon_property_map)
-        self.intron_counter.add_read_info(read_assignment.combined_profile.read_intron_profile.gene_profile,
-                                        read_assignment.gene_info.intron_property_map)
+        self.exon_counter.add_read_info(read_assignment)
+        self.intron_counter.add_read_info(read_assignment)
 
     def finalize_aggregators(self, sample):
         self.gene_counter.dump()
