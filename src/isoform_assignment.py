@@ -145,6 +145,7 @@ class ReadAssignment:
     def __init__(self, read_id, assignment_type, match = None):
         self.read_id = read_id
         self.combined_profile = None
+        self.gene_info = None
         self.assignment_type = assignment_type
         if match is None:
             self.isoform_matches = []
@@ -167,3 +168,11 @@ class ReadAssignment:
 
     def merge(self, other):
         pass
+
+
+def get_assigned_transcript_id(match):
+    return match.assigned_transcript
+
+
+def get_assigned_gene_id(match):
+    return match.assigned_gene

@@ -46,7 +46,7 @@ class AbstractAssignmentPrinter:
 
 
 class ReadAssignmentCompositePrinter:
-    def __init__(self, printers = []):
+    def __init__(self, printers):
         self.printers = printers
 
     def add_read_info(self, read_assignment):
@@ -56,6 +56,7 @@ class ReadAssignmentCompositePrinter:
     def flush(self):
         for p in self.printers:
             p.flush()
+
 
 # TODO: reformat output, make singe file
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
@@ -87,3 +88,17 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                         list_to_str(combined_read_profile.read_split_exon_profile.gene_profile)
         line += "\n"
         self.output_file.write(line)
+
+
+
+class SqantiTSVPrinter(AbstractAssignmentPrinter):
+    def __init__(self, output_file_name, params, format = "TSV", assignment_checker=PrintAllFunctor()):
+        AbstractAssignmentPrinter.__init__(self, output_file_name, params, format, assignment_checker)
+        self.header = "#read_id\tisoform_id\tassignment_type\tassignment_events"
+        if self.params.print_additional_info:
+            self.header += "\taligned_blocks\tintron_profile\tsplit_exon_profile"
+        self.header += "\n"
+        self.output_file.write(self.header)
+
+    def add_read_info(self, read_assignment):
+        pass

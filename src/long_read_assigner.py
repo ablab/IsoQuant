@@ -34,7 +34,7 @@ class LongReadAssigner:
             OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features,
                                                   (self.gene_info.start, self.gene_info.end),
                                                   comparator = partial(equal_ranges, delta = self.params.delta))
-        selected_junctions_profile = intron_profile_constructor.construct_profile_for_introns(selected_junctions)
+        selected_junctions_profile = intron_profile_constructor.construct_profile_for_features(selected_junctions)
         logger.debug(str(selected_junctions_profile.read_profile))
         return all(el == 1 for el in selected_junctions_profile.read_profile)
 

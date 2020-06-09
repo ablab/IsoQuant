@@ -7,6 +7,7 @@
 import logging
 import gffutils
 from functools import partial
+from collections import defaultdict
 
 from src.common import *
 
@@ -46,13 +47,14 @@ class FeatureProfiles:
 # All gene(s) information
 class GeneInfo:
     # chr_bam_prefix: additional string used when bam files were aligned to different reference that has difference in chromosome names (e.g. 1 and chr1)
-    def __init__(self, gene_db_list, db):
+    def __init__(self, gene_db_list, db, delta = 0):
         # gffutils main structure
         self.db = db
         # list of genes in cluster
         self.gene_db_list = gene_db_list
         # gene region
         self.chr_id, self.start, self.end = self.get_gene_region()
+        self.delta = delta
 
         # profiles for all known isoforoms
         self.intron_profiles = FeatureProfiles()
@@ -62,6 +64,8 @@ class GeneInfo:
 
         all_isoforms_introns, all_isoforms_exons = self.set_introns_and_exons()
         self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
+        self.exon_property_map = self.set_feature_properties(all_isoforms_exons, self.exon_profiles)
+        self.intron_property_map = self.set_feature_properties(all_isoforms_introns, self.intron_profiles)
 
         self.set_junction_profiles(all_isoforms_introns, all_isoforms_exons)
         self.set_isoform_strands()
@@ -136,6 +140,58 @@ class GeneInfo:
         self.exon_profiles.set_features(sorted(list(exons)))
 
         return all_isoforms_introns, all_isoforms_exons
+
+    # set feature properties for exon/intron counts
+    def set_feature_properties(self, isoforms_to_feature_map, feature_profiles):
+        similar_features = set()
+        contained_features = set()
+        for f1 in feature_profiles.features:
+            for f2 in feature_profiles.features:
+                if f1 == f2:
+                    continue
+                if equal_ranges(f1, f2, self.delta):
+                    similar_features.add(f1)
+                    similar_features.add(f2)
+                if contains(f1, f2):
+                    contained_features.add(f2)
+                elif contains(f2, f1):
+                    contained_features.add(f1)
+
+        feature_to_isoform = defaultdict(list)
+        for t in isoforms_to_feature_map.keys():
+            isoform_features = isoforms_to_feature_map[t]
+            if len(isoform_features) == 0:
+                break
+            elif len(isoform_features) == 1:
+                feature_to_isoform[isoform_features[0]].append((t, 'T'))
+            else:
+                feature_to_isoform[isoform_features[0]].append((t, 'T'))
+                feature_to_isoform[isoform_features[-1]].append((t, 'T'))
+                for e in isoform_features[1:-1]:
+                    feature_to_isoform[e].append((t, ''))
+
+        feature_properties = []
+        for feature in feature_profiles.features:
+            if all(x[1] == 'T' for x in feature_to_isoform[feature]):
+                feature_type = "X"
+            elif any(x[1] == 'T' for x in feature_to_isoform[feature]):
+                feature_type = "T"
+            else:
+                feature_type = "I"
+
+            if feature in similar_features:
+                # similar features
+                feature_type += "S"
+            if feature in contained_features:
+                # similar features
+                feature_type += "C"
+            if len(feature_to_isoform[feature]) > 1:
+                # multiple isoforms
+                feature_type += "M"
+
+            feature_properties.append(self.chr_id + "_"  + str(feature[0]) + "_"  + str(feature[1]) + "_"  + feature_type)
+
+        return feature_properties
 
     # split exons into non-overlapping covering blocks
     def split_exons(self, exons):

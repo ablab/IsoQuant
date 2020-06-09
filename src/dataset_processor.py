@@ -14,7 +14,7 @@ from src.alignment_processor import *
 from src.assignment_io import *
 from src.isoform_assignment import *
 from src.gene_info import *
-from src.long_read_counter import FeatureCounter
+from src.long_read_counter import *
 from src.multimap_resolver import *
 
 logger = logging.getLogger('IsoQuant')
@@ -163,7 +163,7 @@ class DatasetProcessor:
                         self.processed_reads.add(read_assignment.read_id)
             self.reads_assignments.append(read_storage)
 
-    def aggregate_reads(self, sample):
+    def create_aggregators(self, sample):
         # TODO: dump into single file
         out_assigned_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".assigned_reads.tsv")
         correct_printer = BasicTSVAssignmentPrinter(out_assigned_tsv, self.args,
@@ -174,10 +174,39 @@ class DatasetProcessor:
         out_alt_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".altered_reads.tsv")
         alt_printer = BasicTSVAssignmentPrinter(out_alt_tsv, self.args,
                                                 assignment_checker=self.novel_assignment_checker)
-        global_printer = ReadAssignmentCompositePrinter([correct_printer, unmatched_printer, alt_printer])
+        self.global_printer = ReadAssignmentCompositePrinter([correct_printer, unmatched_printer, alt_printer])
 
-        out_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".counts.tsv")
-        feature_counter = FeatureCounter(self.gffutils_db, out_counts_tsv)
+        out_gene_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".gene_counts.tsv")
+        self.gene_counter = get_gene_counter(out_gene_counts_tsv)
+        out_transcript_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".transcript_counts.tsv")
+        self.transcript_counter = get_transcript_counter(out_transcript_counts_tsv)
+        # TODO make optional
+        out_exon_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".exon_counts.tsv")
+        self.exon_counter = ProfileFeatureCounter(out_exon_counts_tsv)
+        out_intron_counts_tsv = os.path.join(sample.out_dir,
+                                                 self.args.prefix + sample.label + ".intron_counts.tsv")
+        self.intron_counter = ProfileFeatureCounter(out_intron_counts_tsv)
+
+    def pass_to_aggregators(self, read_assignment):
+        self.global_printer.add_read_info(read_assignment)
+        self.gene_counter.add_read_info(read_assignment)
+        self.transcript_counter.add_read_info(read_assignment)
+        self.exon_counter.add_read_info(read_assignment.combined_profile.read_exon_profile.gene_profile,
+                                        read_assignment.gene_info.exon_property_map)
+        self.intron_counter.add_read_info(read_assignment.combined_profile.read_intron_profile.gene_profile,
+                                        read_assignment.gene_info.intron_property_map)
+
+    def finalize_aggregators(self, sample):
+        self.gene_counter.dump()
+        self.transcript_counter.dump()
+        self.exon_counter.dump()
+        self.intron_counter.dump()
+        logger.info("Finished processing sample " + sample.label)
+        logger.info("Gene counts are stored in " + self.gene_counter.output_file_name)
+        logger.info("Transcript counts are stored in " + self.transcript_counter.output_file_name)
+
+    def aggregate_reads(self, sample):
+        self.create_aggregators(sample)
 
         multimap_reads_assignments = defaultdict(list)
         if self.args.memory_efficient:
@@ -189,19 +218,12 @@ class DatasetProcessor:
                     if read_id in self.multimapped_reads:
                         multimap_reads_assignments[read_id].append(read_assignment)
                     else:
-                        global_printer.add_read_info(read_assignment)
-                        feature_counter.add_read_info(read_assignment)
+                        self.pass_to_aggregators(read_assignment)
 
         #  TODO: resolve multimappers
         multimap_resover = MultimapResolver(self.args.matching_stategy)
         for read_id in multimap_reads_assignments.keys():
             read_assignment = multimap_resover.resolve(multimap_reads_assignments[read_id])
-            global_printer.add_read_info(read_assignment)
-            feature_counter.add_read_info(read_assignment)
+            self.pass_to_aggregators(read_assignment)
 
-        feature_counter.dump()
-        logger.info("Finished processing sample " + sample.label)
-        logger.info("Assigned reads are stored in " + out_assigned_tsv)
-        logger.info("Unmatched reads are stored in " + out_unmatched_tsv)
-        logger.info("Reads with alternative structure are stored in " + out_alt_tsv)
-        logger.info("Read counts are stored in " + out_counts_tsv)
+        self.finalize_aggregators(sample)

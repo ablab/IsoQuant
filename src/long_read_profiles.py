@@ -29,31 +29,37 @@ class CombinedReadProfiles:
         self.alignment = alignment
 
 
-#accepts sorted gapless alignment blocks
+# accepts sorted gapless alignment blocks
 class OverlappingFeaturesProfileConstructor:
-    def __init__(self, known_introns, gene_region, comparator = partial(equal_ranges, delta = 0)):
-        self.known_introns = known_introns
+    # ignore_terminal -- bool flag, indicates whether to ignore leading and trailing -1s in the profile
+    def __init__(self, known_features, gene_region, comparator = partial(equal_ranges, delta = 0), delta = 0):
+        self.known_features = known_features
         self.gene_region = gene_region
         self.comparator = comparator
+        self.delta = delta
 
-    def construct_profile(self, sorted_blocks):
+    def construct_intron_profile(self, sorted_blocks):
         if len(sorted_blocks) < 2:
-            return  MappedReadProfile([0] * (len(self.known_introns)), [], [])
+            return MappedReadProfile([0] * (len(self.known_features)), [], [])
 
         read_introns = junctions_from_blocks(sorted_blocks)
         mapped_region = (sorted_blocks[0][0], sorted_blocks[-1][1])
-        return self.construct_profile_for_introns(read_introns, mapped_region)
+        return self.construct_profile_for_features(read_introns, mapped_region)
+
+    def construct_exon_profile(self, sorted_blocks):
+        mapped_region = (sorted_blocks[0][1] + self.delta, sorted_blocks[-1][0] - self.delta)
+        return self.construct_profile_for_features(sorted_blocks, mapped_region)
 
     def match_delta(self, feature1, feature2):
         return abs(feature1[0] - feature2[0]) + abs(feature1[1] - feature2[1])
 
-    def construct_profile_for_introns(self, read_introns, mapped_region = (0, 0)):
+    def construct_profile_for_features(self, read_introns, mapped_region = (0, 0)):
         read_profile = [0] * (len(read_introns))
-        intron_profile = [0] * (len(self.known_introns))
+        intron_profile = [0] * (len(self.known_features))
         matched_features = defaultdict(list)
 
         for i in range(len(intron_profile)):
-            if contains(mapped_region, self.known_introns[i]):
+            if contains(mapped_region, self.known_features[i]):
                 intron_profile[i] = -1
         for i in range(len(read_profile)):
             if contains(self.gene_region, read_introns[i]):
@@ -62,16 +68,16 @@ class OverlappingFeaturesProfileConstructor:
         gene_pos = 0
         read_pos = 0
         # TODO reduce excessive if statements
-        while gene_pos < len(self.known_introns) and read_pos < len(read_introns):
-            if self.comparator(read_introns[read_pos], self.known_introns[gene_pos]):
+        while gene_pos < len(self.known_features) and read_pos < len(read_introns):
+            if self.comparator(read_introns[read_pos], self.known_features[gene_pos]):
                 intron_profile[gene_pos] = 1
                 read_profile[read_pos] = 1
                 matched_features[read_pos].append(gene_pos)
                 gene_pos += 1
-            elif overlaps(read_introns[read_pos], self.known_introns[gene_pos]):
+            elif overlaps(read_introns[read_pos], self.known_features[gene_pos]):
                 intron_profile[gene_pos] = -1
                 gene_pos += 1
-            elif left_of(read_introns[read_pos], self.known_introns[gene_pos]):
+            elif left_of(read_introns[read_pos], self.known_features[gene_pos]):
                 if read_profile[read_pos] == 0 and gene_pos > 0:
                     read_profile[read_pos] = -1
                 read_pos += 1
@@ -80,10 +86,10 @@ class OverlappingFeaturesProfileConstructor:
                     intron_profile[gene_pos] = -1
                 gene_pos += 1
 
-        #eliminating non unique features
+        # eliminating non unique features
         for read_pos in matched_features.keys():
             if len(matched_features[read_pos]) > 1:
-                deltas = [self.match_delta(read_introns[read_pos], self.known_introns[gene_pos])
+                deltas = [self.match_delta(read_introns[read_pos], self.known_features[gene_pos])
                           for gene_pos in matched_features[read_pos]]
                 best_match = min(deltas)
                 for i in range(len(matched_features[read_pos])):
