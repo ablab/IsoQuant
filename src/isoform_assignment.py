@@ -117,7 +117,6 @@ class IsoformMatch:
             self.match_subclassifications = match_subclassifications
         else:
             self.match_subclassifications = [match_subclassifications]
-        self.additional_info = {}
 
     def add_subclassification(self, match_subclassification):
         if len(self.match_subclassifications) == 1 and self.match_subclassifications[0] == MatchClassification.undefined:
@@ -137,9 +136,6 @@ class IsoformMatch:
     def all_subtypes_are_minor_errors(self):
         return all(MatchEventSubtype.is_minor_error(el) for el in self.match_subclassifications)
 
-    def set_additional_info(self, key, value):
-        self.additional_info[key] = value
-
 
 class ReadAssignment:
     def __init__(self, read_id, assignment_type, match = None):
@@ -154,6 +150,7 @@ class ReadAssignment:
             self.isoform_matches = match
         else:
             self.isoform_matches = [match]
+        self.additional_info = {}
 
     def add_match(self, match):
         self.isoform_matches.append(match)
@@ -161,13 +158,28 @@ class ReadAssignment:
     def set_assignment_type(self, assignment_type):
         self.assignment_type = assignment_type
 
+    def chr_id(self):
+        return self.gene_info.chr_id
+
+    def start(self):
+        return self.combined_profile.read_exon_profile.read_features[0][0]
+
+    def end(self):
+        return self.combined_profile.read_exon_profile.read_features[-1][1]
+
+    def length(self):
+        return sum([x[1] - x[0] + 1 for x in self.combined_profile.read_exon_profile.read_features])
+
+    def exon_count(self):
+        return len(self.combined_profile.read_exon_profile.read_features)
+
+    def set_additional_info(self, key, value):
+        self.additional_info[key] = value
+
     def to_str(self):
         pass
 
     def from_str(self, string):
-        pass
-
-    def merge(self, other):
         pass
 
 

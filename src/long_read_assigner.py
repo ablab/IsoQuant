@@ -476,7 +476,7 @@ class LongReadAssigner:
             matching_events = self.compare_junctions(read_intron_profile.read_features, read_region,
                                                     isoform_introns, isoform_region)
             match_classification = MatchClassification.get_contradiction_classification_from_subtypes(matching_events)
-            isoform_match = IsoformMatch(match_classification, isoform_id, self.get_gene_id(isoform_id))
+            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id)
             for m in matching_events:
                 isoform_match.add_subclassification(m)
             assignment.add_match(isoform_match)

@@ -52,7 +52,8 @@ def parse_args():
                         required='--run_aligner_only' not in sys.argv)
 
     parser.add_argument("--reference", help="reference genome in FASTA format, "
-                                            "should be provided only when raw reads are used as an input", type=str)
+                                            "should be provided to compute some additional stats and"
+                                            "when raw reads are used as an input", type=str)
     parser.add_argument("--index", help="genome index for specified aligner, "
                                         "should be provided only when raw reads are used as an input", type=str)
 
@@ -206,6 +207,8 @@ def set_additional_params(args):
     args.skip_secondary = True
 
     args.memory_efficient = False
+
+    args.indel_near_splice_site_dist = 10
 
     # TODO move to options
     args.matching_stategy = "take_best"

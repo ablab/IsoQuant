@@ -81,6 +81,39 @@ class LongReadAlignmentProcessor:
                 read_assignment.combined_profile = combined_profile
                 read_assignment.gene_info = self.gene_info
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
+
+                indel_count, junctions_with_indels = self.count_indel_stats(alignment)
+                read_assignment.set_additional_info("indel_count", indel_count)
+                read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
+
                 self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")
 
+    def count_indel_stats(self, alignment):
+        cigar_event_count = len(alignment.cigartuples)
+        indel_events = [1, 2]
+        indel_count = 0
+        intron_cigar_positions = []
+        for i in range(cigar_event_count):
+            cigar = alignment.cigartuples[i]
+            if cigar[0] in indel_events:
+                indel_count += 1
+            elif cigar[0] == 3:
+                intron_cigar_positions.append(i)
+
+        junctions_with_indels = 0
+        for i in intron_cigar_positions:
+            # indel right near intron
+            if (i > 0 and alignment.cigartuples[i - 1][0] in indel_events) or \
+                (i < cigar_event_count - 1 and alignment.cigartuples[i + 1][0] in indel_events):
+                junctions_with_indels += 1
+
+            # indel separated by at most 'indel_near_splice_site_dist' matches from intron
+            if (i > 1 and alignment.cigartuples[i - 2][0] in indel_events and alignment.cigartuples[i - 1][0] == 0 and
+                alignment.cigartuples[i - 1][1] <= self.params.indel_near_splice_site_dist) or \
+                    (i < cigar_event_count - 2 and alignment.cigartuples[i + 2][0] in indel_events and
+                     alignment.cigartuples[i + 1][0] == 0 and
+                     alignment.cigartuples[i + 1][1] <= self.params.indel_near_splice_site_dist):
+                junctions_with_indels += 1
+
+        return indel_count, junctions_with_indels

@@ -294,3 +294,21 @@ class GeneInfo:
                         is_subprofile(exon_profile, self.exon_profiles.profiles[t2]):
                     self.ambiguous_isoforms.add(t)
                     break
+
+    def transcript_start(self, transcript_id):
+        return self.db[transcript_id].start
+
+    def transcript_end(self, transcript_id):
+        return self.db[transcript_id].end
+
+    def transcript_exon_count(self, transcript_id):
+        return sum([1 if e == 1 else 0 for e in self.exon_profiles.profiles[transcript_id]])
+
+    def total_transcript_length(self, transcript_id):
+        exons = self.exon_profiles.features
+        profile = self.exon_profiles.profiles[transcript_id]
+        total_length = 0
+        for i in range(len(profile)):
+            if profile[i] == 1:
+                total_length += exons[i][1] - exons[i][0] + 1
+        return total_length

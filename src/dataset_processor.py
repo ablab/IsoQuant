@@ -66,7 +66,7 @@ class OverlappingExonsGeneClusterConstructor(GeneClusterConstructor):
 
         for gene_db in gene_cluster:
             gene_exons = set()
-            for e in self.db.children(gene_db):
+            for e in self.gene_db.children(gene_db):
                 if e.featuretype == 'exon':
                     gene_exons.add((e.start, e.end))
 
@@ -177,6 +177,8 @@ class DatasetProcessor:
         alt_printer = BasicTSVAssignmentPrinter(out_alt_tsv, self.args,
                                                 assignment_checker=self.novel_assignment_checker)
         self.global_printer = ReadAssignmentCompositePrinter([correct_printer, unmatched_printer, alt_printer])
+        out_alt_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".SQANTI-like.tsv")
+        self.sqanti_printer = SqantiTSVPrinter(out_alt_tsv, self.args)
 
         # TODO make a list of counters?
         out_gene_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".gene_counts.tsv")
@@ -192,6 +194,7 @@ class DatasetProcessor:
 
     def pass_to_aggregators(self, read_assignment):
         self.global_printer.add_read_info(read_assignment)
+        self.sqanti_printer.add_read_info(read_assignment)
         self.gene_counter.add_read_info(read_assignment)
         self.transcript_counter.add_read_info(read_assignment)
         self.exon_counter.add_read_info(read_assignment)
