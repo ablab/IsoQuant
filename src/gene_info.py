@@ -81,16 +81,16 @@ class GeneInfo:
         self.split_exon_profiles = FeatureProfiles()
         self.ambiguous_isoforms = set()
 
-        all_isoforms_introns, all_isoforms_exons = self.set_introns_and_exons()
+        self.all_isoforms_introns, self.all_isoforms_exons = self.set_introns_and_exons()
         self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
 
-        self.set_junction_profiles(all_isoforms_introns, all_isoforms_exons)
+        self.set_junction_profiles(self.all_isoforms_introns, self.all_isoforms_exons)
         self.set_isoform_strands()
         self.set_gene_ids()
         self.detect_ambiguous()
 
-        self.exon_property_map = self.set_feature_properties(all_isoforms_exons, self.exon_profiles)
-        self.intron_property_map = self.set_feature_properties(all_isoforms_introns, self.intron_profiles)
+        self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
+        self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
 
         self.print_debug()
 
@@ -296,19 +296,13 @@ class GeneInfo:
                     break
 
     def transcript_start(self, transcript_id):
-        return self.db[transcript_id].start
+        return self.all_isoforms_exons[transcript_id][0][0]
 
     def transcript_end(self, transcript_id):
-        return self.db[transcript_id].end
+        return self.all_isoforms_exons[transcript_id][-1][1]
 
     def transcript_exon_count(self, transcript_id):
         return sum([1 if e == 1 else 0 for e in self.exon_profiles.profiles[transcript_id]])
 
     def total_transcript_length(self, transcript_id):
-        exons = self.exon_profiles.features
-        profile = self.exon_profiles.profiles[transcript_id]
-        total_length = 0
-        for i in range(len(profile)):
-            if profile[i] == 1:
-                total_length += exons[i][1] - exons[i][0] + 1
-        return total_length
+        return intervals_total_length(self.all_isoforms_exons[transcript_id])

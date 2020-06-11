@@ -3,10 +3,39 @@ from src.isoform_assignment import *
 from src.gene_info import *
 from src.read_groups import *
 
+
+class AbstractCounter:
+    def __init__(self, output_file_name):
+        self.output_file_name = output_file_name
+
+    def add_read_info(self, read_assignment):
+        raise NotImplementedError()
+
+    def dump(self):
+        raise NotImplementedError()
+
+
+class CompositeCounter:
+    def __init__(self, counters):
+        self.counters = counters
+
+    def add_counters(self, counters):
+        self.counters += counters
+
+    def add_read_info(self, read_assignment):
+        for p in self.counters:
+            p.add_read_info(read_assignment)
+
+    def dump(self):
+        for p in self.counters:
+            p.dump()
+
+
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
-class AssignedFeatureCounter:
+class AssignedFeatureCounter(AbstractCounter):
     def __init__(self, output_file_name, get_feature_id):
+        AbstractCounter.__init__(self, output_file_name)
         self.get_feature_id = get_feature_id
         self.all_features = set()
 
@@ -15,7 +44,6 @@ class AssignedFeatureCounter:
         self.not_aligned_reads = 0
         # group_id -> (feature_id -> count)
         self.feature_counter = defaultdict(lambda: defaultdict(int))
-        self.output_file_name = output_file_name
 
     def add_read_info(self, read_assignment=None):
         #TODO: add __alignment_not_unique / __too_low_aQual ?
@@ -55,18 +83,18 @@ def create_gene_counter(output_file_name):
     return AssignedFeatureCounter(output_file_name, get_assigned_gene_id)
 
 
-def creatre_transcript_counter(output_file_name):
+def create_transcript_counter(output_file_name):
     return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id)
 
 
 # count simple features inclusion/exclusion (exons / introns)
-class ProfileFeatureCounter:
+class ProfileFeatureCounter(AbstractCounter):
     def __init__(self, output_file_name):
+        AbstractCounter.__init__(self, output_file_name)
         # group_id -> (feature_id -> count)
         self.inclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.all_features = set()
-        self.output_file_name = output_file_name
 
     def add_read_info_from_profile(self, gene_feature_profile, feature_property_map,
                                    read_group = AbstractReadGrouper.default_group_id):

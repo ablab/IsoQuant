@@ -94,6 +94,49 @@ def range_list_to_str(range_list, element_delim=',', coord_delim='-'):
     return element_delim.join(list(map(lambda x: str(x[0]) + coord_delim + str(x[1]), range_list)))
 
 
+def intervals_total_length(sorted_range_list):
+    total_len = 0
+    for r in sorted_range_list:
+        total_len += r[1] - r[0] + 1
+    return total_len
+
+
+# sum up all inervals until pos, pos not included
+def sum_intervals_to_point(sorted_range_list, pos):
+    if pos <= sorted_range_list[0][0]:
+        return 0
+    elif pos > sorted_range_list[-1][1]:
+        return intervals_total_length(sorted_range_list)
+
+    i = 0
+    total_len = 0
+    while i < len(sorted_range_list) and sorted_range_list[i][0] < pos:
+        if pos >= sorted_range_list[i][0] and pos <= sorted_range_list[i][1]:
+            total_len += pos - sorted_range_list[i][0]
+        else:
+            total_len += sorted_range_list[i][1] - sorted_range_list[i][0] + 1
+        i += 1
+    return total_len
+
+
+# sum up all inervals from pos, pos not included
+def sum_intervals_from_point(sorted_range_list, pos):
+    if pos < sorted_range_list[0][0]:
+        return intervals_total_length(sorted_range_list)
+    elif pos > sorted_range_list[-1][1]:
+        return 0
+
+    i = len(sorted_range_list) - 1
+    total_len = 0
+    while i >= 0 and sorted_range_list[i][1] > pos:
+        if pos >= sorted_range_list[i][0] and pos <= sorted_range_list[i][1]:
+            total_len += sorted_range_list[i][1] - pos
+        else:
+            total_len += sorted_range_list[i][1] - sorted_range_list[i][0] + 1
+        i -= 1
+    return total_len
+
+
 # == working with alignment blocks ==
 def junctions_from_blocks(sorted_blocks):
     junctions = []

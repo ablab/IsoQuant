@@ -107,11 +107,11 @@ class DatasetProcessor:
         self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
-        self.read_groupper = create_read_grouper(args.read_group)
+        self.read_grouper = create_read_grouper(args.read_group)
 
-        self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])
-        self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)
-        self.rest_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.empty, ReadAssignmentType.ambiguous])
+        #self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])
+        #self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)
+        #self.rest_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.empty, ReadAssignmentType.ambiguous])
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
@@ -141,7 +141,7 @@ class DatasetProcessor:
 
             gene_info = GeneInfo(g, self.gffutils_db, self.args.delta)
             bam_files = list(map(lambda x: x[0], sample.file_list))
-            alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args)
+            alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args, self.read_grouper)
             assignment_storage = alignment_processor.process()
             self.dump_reads(assignment_storage, counter)
             counter += 1
@@ -166,45 +166,30 @@ class DatasetProcessor:
             self.reads_assignments.append(read_storage)
 
     def create_aggregators(self, sample):
-        # TODO: dump into single file
-        out_assigned_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".assigned_reads.tsv")
-        correct_printer = BasicTSVAssignmentPrinter(out_assigned_tsv, self.args,
-                                                    assignment_checker=self.correct_assignment_checker)
-        out_unmatched_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".unmatched_reads.tsv")
-        unmatched_printer = BasicTSVAssignmentPrinter(out_unmatched_tsv, self.args,
-                                                      assignment_checker=self.rest_assignment_checker)
-        out_alt_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".altered_reads.tsv")
-        alt_printer = BasicTSVAssignmentPrinter(out_alt_tsv, self.args,
-                                                assignment_checker=self.novel_assignment_checker)
-        self.global_printer = ReadAssignmentCompositePrinter([correct_printer, unmatched_printer, alt_printer])
+        out_assigned_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".read_assignments.tsv")
+        self.basic_printer = BasicTSVAssignmentPrinter(out_assigned_tsv, self.args)
         out_alt_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".SQANTI-like.tsv")
         self.sqanti_printer = SqantiTSVPrinter(out_alt_tsv, self.args)
+        self.global_printer = ReadAssignmentCompositePrinter([self.basic_printer, self.sqanti_printer])
 
-        # TODO make a list of counters?
         out_gene_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".gene_counts.tsv")
         self.gene_counter = create_gene_counter(out_gene_counts_tsv)
         out_transcript_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".transcript_counts.tsv")
-        self.transcript_counter = creatre_transcript_counter(out_transcript_counts_tsv)
-        # TODO make optional
+        self.transcript_counter = create_transcript_counter(out_transcript_counts_tsv)
+        # TODO make optional ?
         out_exon_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".exon_counts.tsv")
         self.exon_counter = ExonCounter(out_exon_counts_tsv)
         out_intron_counts_tsv = os.path.join(sample.out_dir,
                                                  self.args.prefix + sample.label + ".intron_counts.tsv")
         self.intron_counter = IntronCounter(out_intron_counts_tsv)
+        self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter, self.exon_counter, self.intron_counter])
 
     def pass_to_aggregators(self, read_assignment):
         self.global_printer.add_read_info(read_assignment)
-        self.sqanti_printer.add_read_info(read_assignment)
-        self.gene_counter.add_read_info(read_assignment)
-        self.transcript_counter.add_read_info(read_assignment)
-        self.exon_counter.add_read_info(read_assignment)
-        self.intron_counter.add_read_info(read_assignment)
+        self.global_counter.add_read_info(read_assignment)
 
     def finalize_aggregators(self, sample):
-        self.gene_counter.dump()
-        self.transcript_counter.dump()
-        self.exon_counter.dump()
-        self.intron_counter.dump()
+        self.global_counter.dump()
         logger.info("Finished processing sample " + sample.label)
         logger.info("Gene counts are stored in " + self.gene_counter.output_file_name)
         logger.info("Transcript counts are stored in " + self.transcript_counter.output_file_name)

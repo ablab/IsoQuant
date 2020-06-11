@@ -78,9 +78,12 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         else:
             assigned_transcripts = [m.assigned_transcript for m in read_assignment.isoform_matches]
             # FIXME empty match subclassification
-            match_events = ["+".join([x.name for x in m.match_subclassifications]) for m in read_assignment.isoform_matches]
+            match_events = ",".join(["+".join([x.name for x in m.match_subclassifications])
+                                     for m in read_assignment.isoform_matches])
+            if not match_events:
+                match_events = "."
             line = read_assignment.read_id  + "\t" + ",".join(assigned_transcripts) + "\t" \
-                    + read_assignment.assignment_type.name + "\t" + ",".join(match_events)
+                    + read_assignment.assignment_type.name + "\t" + match_events
         if self.params.print_additional_info:
             combined_read_profile = read_assignment.combined_profile
             if combined_read_profile is None:
@@ -142,12 +145,6 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     """
 
 class SqantiTSVPrinter(AbstractAssignmentPrinter):
-    canonical_donor_sites = ["GT", "GC", "AT"]
-    canonical_acceptor_sites = ["AG", "AC"]
-    canonical_donor_sites_rc = ["AC", "GC", "AT"]
-    canonical_acceptor_sites_rc = ["CT", "GT"]
-    upstream_region_len = 20
-
     def __init__(self, output_file_name, params):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = 'isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
@@ -157,6 +154,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
                       '\tCDS_genomic_end\tperc_A_downstreamTTS\tseq_A_downstream_TTS\tdist_to_cage_peak' \
                       '\twithin_cage_peak\tdist_to_polya_site\twithin_polya_site\tpolyA_motif\tpolyA_dist\n'
         self.output_file.write(self.header)
+        self.io_support = IOSupport()
 
     def add_read_info(self, read_assignment):
         # FIXME ambiguous matches
@@ -170,9 +168,9 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         strand = gene_info.isoform_strands[transcript_id]
 
         # FIXME not genomic distance
-        dist_to_tss = read_assignment.start() - gene_info.transcript_start(transcript_id)
-        dist_to_tts = gene_info.transcript_end(transcript_id) - read_assignment.end()
-        dist_to_gene_tss, dist_to_gene_tts = self.find_closests_tsts(read_assignment)
+        dist_to_tss = self.io_support.count_tss_dist(read_assignment, transcript_id)
+        dist_to_tts = self.io_support.count_tts_dist(read_assignment, transcript_id)
+        dist_to_gene_tss, dist_to_gene_tts = self.io_support.find_closests_tsts(read_assignment)
         if strand == '-':
             # swapping distances since 5' and 3' are now opposite
             dist_to_tss, dist_to_tts = dist_to_tts, dist_to_tss
@@ -186,16 +184,16 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
             if "indel_count" in read_assignment.additional_info.keys() else "-1"
         junctions_with_indels = read_assignment.additional_info["junctions_with_indels"] \
             if "junctions_with_indels" in read_assignment.additional_info.keys() else "-1"
-        bite = self.check_all_sites_match_reference(read_assignment)
-        ref_cds_start, ref_cds_end = self.find_ref_CDS_region(gene_info, transcript_id)
+        bite = self.io_support.check_all_sites_match_reference(read_assignment)
+        ref_cds_start, ref_cds_end = self.io_support.find_ref_CDS_region(gene_info, transcript_id)
 
         if self.params.reference:
             record_dict = SeqIO.to_dict(SeqIO.parse(self.params.reference, "fasta"))
             chr_seq = record_dict[gene_info.chr_id]
             read_introns = read_assignment.combined_read_profile.read_intron_profile.read_features
-            all_canonical = str(self.check_sites_are_canonical(read_introns, chr_seq, strand))
+            all_canonical = str(self.io_support.check_sites_are_canonical(read_introns, chr_seq, strand))
             seq_A_downstream_TTS, perc_A_downstreamTTS = \
-                self.check_downstream_polya((read_assignment.start(), read_assignment.end()), chr_seq, strand)
+                self.io_support.check_downstream_polya((read_assignment.start(), read_assignment.end()), chr_seq, strand)
             perc_A_downstreamTTS = "%0.3f" % perc_A_downstreamTTS
         else:
             all_canonical = "NA"
@@ -222,8 +220,37 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
                                         within_polya_site, polyA_motif, polyA_dist]])
         self.output_file.write(l + "\n")
 
+    def __del__(self):
+        self.output_file.close()
+
+    def flush(self):
+        self.output_file.flush()
+
+
+class IOSupport:
+    canonical_donor_sites = ["GT", "GC", "AT"]
+    canonical_acceptor_sites = ["AG", "AC"]
+    canonical_donor_sites_rc = ["AC", "GC", "AT"]
+    canonical_acceptor_sites_rc = ["CT", "GT"]
+    upstream_region_len = 20
+
+    def count_tss_dist(self, read_assignment, transcript_id):
+        transcript_start = read_assignment.gene_info.transcript_start(transcript_id)
+        read_start = read_assignment.start()
+        if  read_start < transcript_start:
+            return -sum_intervals_to_point(read_assignment.combined_profile.read_exon_profile.read_features, transcript_start)
+        else:
+            return sum_intervals_to_point(read_assignment.gene_info.all_isoforms_exons[transcript_id], read_start)
+
+    def count_tts_dist(self, read_assignment, transcript_id):
+        transcript_end = read_assignment.gene_info.transcript_end(transcript_id)
+        read_end = read_assignment.end()
+        if  read_end > transcript_end:
+            return -sum_intervals_from_point(read_assignment.combined_profile.read_exon_profile.read_features, transcript_end)
+        else:
+            return sum_intervals_from_point(read_assignment.gene_info.all_isoforms_exons[transcript_id], read_end)
+
     def find_closests_tsts(self, read_assignment):
-        # FIXME not genomic distance
         gene_info = read_assignment.gene_info
         match = read_assignment.isoform_matches[0]
         gene_id = match.assigned_gene
@@ -231,8 +258,8 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         dists_to_gene_tss = []
         dists_to_gene_tts = []
         for t in gene_info.db.children(gene_info.db[gene_id], featuretype='transcript', order_by='start'):
-            dists_to_gene_tss.append(read_assignment.start() - t.start)
-            dists_to_gene_tts.append(t.end - read_assignment.end())
+            dists_to_gene_tss.append(self.count_tss_dist(read_assignment, t.id))
+            dists_to_gene_tts.append(self.count_tts_dist(read_assignment, t.id))
         dist_to_gene_tss = dists_to_gene_tss[argmin([abs(x) for x in dists_to_gene_tss])]
         dist_to_gene_tts = dists_to_gene_tts[argmin([abs(x) for x in dists_to_gene_tts])]
         return dist_to_gene_tss, dist_to_gene_tts
@@ -270,9 +297,3 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
             seq = str(chr_seq[read_coords[0] - self.upstream_region_len - 1:read_coords[0] - 1].seq)
             a_percentage = float(seq.upper().count('T')) / float(self.upstream_region_len)
         return seq, a_percentage
-
-    def __del__(self):
-        self.output_file.close()
-
-    def flush(self):
-        self.output_file.flush()

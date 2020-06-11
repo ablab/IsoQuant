@@ -463,8 +463,8 @@ class LongReadAssigner:
 
         for isoform_id in best_isoform_ids:
             # get intron coordinates
-            isoform_introns = get_blocks_from_profile(self.gene_info.intron_profiles.features,
-                                                      self.gene_info.intron_profiles.profiles[isoform_id])
+            isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
+            # get_blocks_from_profile(self.gene_info.intron_profiles.features, self.gene_info.intron_profiles.profiles[isoform_id])
             # read start-end coordinates
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             # isoform start-end
