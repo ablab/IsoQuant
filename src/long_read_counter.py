@@ -5,7 +5,8 @@ from src.read_groups import *
 
 
 class AbstractCounter:
-    def __init__(self, output_file_name):
+    def __init__(self, output_file_name, ignore_read_groups=False):
+        self.ignore_read_groups = ignore_read_groups
         self.output_file_name = output_file_name
 
     def add_read_info(self, read_assignment):
@@ -34,8 +35,8 @@ class CompositeCounter:
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
-    def __init__(self, output_file_name, get_feature_id):
-        AbstractCounter.__init__(self, output_file_name)
+    def __init__(self, output_file_name, get_feature_id, ignore_read_groups=False):
+        AbstractCounter.__init__(self, output_file_name, ignore_read_groups)
         self.get_feature_id = get_feature_id
         self.all_features = set()
 
@@ -52,7 +53,8 @@ class AssignedFeatureCounter(AbstractCounter):
         elif read_assignment.assignment_type == ReadAssignmentType.ambiguous:
             feature_ids = [self.get_feature_id(m) for m in read_assignment.isoform_matches]
             if set(feature_ids) == 1:  # different isoforms of same gene
-                self.feature_counter[read_assignment.read_group][feature_ids[0]] += 1
+                group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+                self.feature_counter[group_id][feature_ids[0]] += 1
                 self.all_features.add(feature_ids[0])
             else:
                 self.ambiguous_reads += 1
@@ -61,7 +63,8 @@ class AssignedFeatureCounter(AbstractCounter):
         elif read_assignment.assignment_type == ReadAssignmentType.unique or\
                 read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
-            self.feature_counter[read_assignment.read_group][feature_id] += 1
+            group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+            self.feature_counter[group_id][feature_id] += 1
             self.all_features.add(feature_id)
 
     def add_unaligned(self, n_reads=1):
@@ -79,18 +82,18 @@ class AssignedFeatureCounter(AbstractCounter):
             f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
 
 
-def create_gene_counter(output_file_name):
-    return AssignedFeatureCounter(output_file_name, get_assigned_gene_id)
+def create_gene_counter(output_file_name, ignore_read_groups=False):
+    return AssignedFeatureCounter(output_file_name, get_assigned_gene_id, ignore_read_groups)
 
 
-def create_transcript_counter(output_file_name):
-    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id)
+def create_transcript_counter(output_file_name, ignore_read_groups=False):
+    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id, ignore_read_groups)
 
 
 # count simple features inclusion/exclusion (exons / introns)
 class ProfileFeatureCounter(AbstractCounter):
-    def __init__(self, output_file_name):
-        AbstractCounter.__init__(self, output_file_name)
+    def __init__(self, output_file_name, ignore_read_groups=False):
+        AbstractCounter.__init__(self, output_file_name, ignore_read_groups)
         # group_id -> (feature_id -> count)
         self.inclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
@@ -110,7 +113,7 @@ class ProfileFeatureCounter(AbstractCounter):
 
     def dump(self):
         with open(self.output_file_name, "w") as f:
-            f.write(FeatureInfo.header() + "\tinclude_counts\texclude_counts\n")
+            f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
             all_groups = set(self.inclusion_feature_counter.keys())
             all_groups.update(self.exclusion_feature_counter.keys())
             all_groups = sorted(all_groups)
@@ -123,21 +126,23 @@ class ProfileFeatureCounter(AbstractCounter):
 
 
 class ExonCounter(ProfileFeatureCounter):
-    def __init__(self, output_file_name):
-        ProfileFeatureCounter.__init__(self, output_file_name)
+    def __init__(self, output_file_name, ignore_read_groups=False):
+        ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.combined_profile.read_exon_profile.gene_profile,
                                         read_assignment.gene_info.exon_property_map,
-                                        read_assignment.read_group)
+                                        group_id)
 
 
 class IntronCounter(ProfileFeatureCounter):
-    def __init__(self, output_file_name):
-        ProfileFeatureCounter.__init__(self, output_file_name)
+    def __init__(self, output_file_name, ignore_read_groups=False):
+        ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.combined_profile.read_intron_profile.gene_profile,
                                         read_assignment.gene_info.intron_property_map,
-                                        read_assignment.read_group)
+                                        group_id)
 
