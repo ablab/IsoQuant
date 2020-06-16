@@ -130,6 +130,8 @@ class ExonCounter(ProfileFeatureCounter):
         ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
+        if read_assignment is None:
+            return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.combined_profile.read_exon_profile.gene_profile,
                                         read_assignment.gene_info.exon_property_map,
@@ -141,6 +143,8 @@ class IntronCounter(ProfileFeatureCounter):
         ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
+        if read_assignment is None:
+            return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.combined_profile.read_intron_profile.gene_profile,
                                         read_assignment.gene_info.intron_property_map,
