@@ -124,13 +124,16 @@ class ProfileFeatureCounter(AbstractCounter):
                     excl_count = self.exclusion_feature_counter[group_id][feature_id]
                     f.write("%s\t%s\t%d\t%d\n" % (feature_id, group_id, incl_count, excl_count))
 
+    @staticmethod
+    def is_valid(assignment):
+        return assignment is not None and hasattr(assignment, 'combined_profile') and hasattr(assignment, 'gene_info')
 
 class ExonCounter(ProfileFeatureCounter):
     def __init__(self, output_file_name, ignore_read_groups=False):
         ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
-        if read_assignment is None:
+        if not ProfileFeatureCounter.is_valid(read_assignment):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.combined_profile.read_exon_profile.gene_profile,
@@ -143,7 +146,7 @@ class IntronCounter(ProfileFeatureCounter):
         ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
-        if read_assignment is None:
+        if not ProfileFeatureCounter.is_valid(read_assignment):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.combined_profile.read_intron_profile.gene_profile,
