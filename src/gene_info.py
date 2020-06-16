@@ -87,6 +87,7 @@ class GeneInfo:
         self.set_junction_profiles(self.all_isoforms_introns, self.all_isoforms_exons)
         self.set_isoform_strands()
         self.set_gene_ids()
+        # FIXME: no need to run unless detect_ambiguous option is on
         self.detect_ambiguous()
 
         self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
@@ -166,6 +167,7 @@ class GeneInfo:
     def set_feature_properties(self, isoforms_to_feature_map, feature_profiles):
         similar_features = set()
         contained_features = set()
+        # FIXME: change to interval tree instead of brute forse
         for f1 in feature_profiles.features:
             for f2 in feature_profiles.features:
                 if f1 == f2:

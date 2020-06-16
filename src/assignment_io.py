@@ -28,6 +28,8 @@ class PrintOnlyFunctor:
             self.allowed_types = set([allowed_types])
 
     def check(self, assignment):
+        if assignment is None:
+            return False
         return assignment.assignment_type in self.allowed_types
 
 
@@ -157,6 +159,8 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         self.io_support = IOSupport()
 
     def add_read_info(self, read_assignment):
+        if read_assignment is None:
+            return
         # FIXME ambiguous matches
         if read_assignment.assignment_type in [ReadAssignmentType.empty, ReadAssignmentType.ambiguous]:
             return
