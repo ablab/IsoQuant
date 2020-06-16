@@ -126,7 +126,9 @@ class ProfileFeatureCounter(AbstractCounter):
 
     @staticmethod
     def is_valid(assignment):
-        return assignment is not None and hasattr(assignment, 'combined_profile') and hasattr(assignment, 'gene_info')
+        return assignment is not None and \
+               hasattr(assignment, 'combined_profile') and assignment.combined_profile is not None and \
+               hasattr(assignment, 'gene_info') and assignment.gene_info is not None
 
 class ExonCounter(ProfileFeatureCounter):
     def __init__(self, output_file_name, ignore_read_groups=False):
