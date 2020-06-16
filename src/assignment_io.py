@@ -73,6 +73,8 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         self.output_file.write(self.header)
 
     def add_read_info(self, read_assignment):
+        if read_assignment is None:
+            return
         if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
             return
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
