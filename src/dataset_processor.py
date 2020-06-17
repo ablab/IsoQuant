@@ -143,6 +143,7 @@ class DatasetProcessor:
             bam_files = list(map(lambda x: x[0], sample.file_list))
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args, self.read_grouper)
             assignment_storage = alignment_processor.process()
+
             self.dump_reads(assignment_storage, counter)
             counter += 1
 
@@ -202,7 +203,8 @@ class DatasetProcessor:
                 out_intron_grouped_counts_tsv = os.path.join(sample.out_dir,
                                                      self.args.prefix + sample.label + ".intron_grouped_counts.tsv")
                 self.intron_grouped_counter = IntronCounter(out_intron_grouped_counts_tsv)
-                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter, self.exon_grouped_counter, self.intron_grouped_counter])
+                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter,
+                                                  self.exon_grouped_counter, self.intron_grouped_counter])
             else:
                 self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 

@@ -211,6 +211,7 @@ def set_additional_params(args):
     args.memory_efficient = False
 
     args.indel_near_splice_site_dist = 10
+    args.upstream_region_len = 20
 
     # TODO move to options
     args.matching_stategy = "take_best"

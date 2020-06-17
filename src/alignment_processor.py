@@ -6,6 +6,7 @@
 
 import logging
 import pysam
+from Bio import SeqIO
 
 from src.long_read_assigner import *
 from src.long_read_profiles import *
@@ -51,8 +52,20 @@ class LongReadAlignmentProcessor:
 
     def process(self):
         self.assignment_storage = []
+        self.gene_info.all_read_region_start = self.gene_info.start
+        self.gene_info.all_read_region_end = self.gene_info.end
+
         for b in self.bams:
             self.process_single_file(b)
+
+        if not self.params.no_sqanti_output and self.params.reference:
+            record_dict = SeqIO.to_dict(SeqIO.parse(self.params.reference, "fasta"))
+            self.gene_info.all_read_region_start -= self.params.upstream_region_len
+            self.gene_info.all_read_region_end += self.params.upstream_region_len
+
+            self.gene_info.reference_region = \
+                str(record_dict[self.gene_info.chr_id][self.gene_info.all_read_region_start - 1:self.gene_info.all_read_region_end + 1].seq)
+            self.gene_info.canonical_sites = {}
         return self.assignment_storage
 
     def process_single_file(self, bam):
@@ -72,6 +85,12 @@ class LongReadAlignmentProcessor:
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
                 sorted_blocks = correct_bam_coords(concat_blocks)
 
+                if self.params.reference and not self.params.no_sqanti_output:
+                    if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
+                        self.gene_info.all_read_region_start = sorted_blocks[0][0]
+                    if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
+                        self.gene_info.all_read_region_start = sorted_blocks[-1][1]
+
                 intron_profile = self.intron_profile_construnctor.construct_intron_profile(sorted_blocks)
                 exon_profile = self.exon_profile_construnctor.construct_exon_profile(sorted_blocks)
                 split_exon_profile = self.split_exon_profile_construnctor.construct_profile(sorted_blocks)
@@ -82,9 +101,10 @@ class LongReadAlignmentProcessor:
                 read_assignment.gene_info = self.gene_info
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
 
-                indel_count, junctions_with_indels = self.count_indel_stats(alignment)
-                read_assignment.set_additional_info("indel_count", indel_count)
-                read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
+                if not self.params.no_sqanti_output:
+                    indel_count, junctions_with_indels = self.count_indel_stats(alignment)
+                    read_assignment.set_additional_info("indel_count", indel_count)
+                    read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
 
                 self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")

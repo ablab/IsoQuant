@@ -158,7 +158,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
                       '\tCDS_genomic_end\tperc_A_downstreamTTS\tseq_A_downstream_TTS\tdist_to_cage_peak' \
                       '\twithin_cage_peak\tdist_to_polya_site\twithin_polya_site\tpolyA_motif\tpolyA_dist\n'
         self.output_file.write(self.header)
-        self.io_support = IOSupport()
+        self.io_support = IOSupport(self.params)
 
     def add_read_info(self, read_assignment):
         if read_assignment is None:
@@ -193,14 +193,12 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         bite = self.io_support.check_all_sites_match_reference(read_assignment)
         ref_cds_start, ref_cds_end = self.io_support.find_ref_CDS_region(gene_info, transcript_id)
 
-        if self.params.reference:
-            record_dict = SeqIO.to_dict(SeqIO.parse(self.params.reference, "fasta"))
-            chr_seq = record_dict[gene_info.chr_id]
+        if hasattr(gene_info, 'reference_region') and gene_info.reference_region is not None:
             read_introns = read_assignment.combined_profile.read_intron_profile.read_features
-            all_canonical = str(self.io_support.check_sites_are_canonical(read_introns, chr_seq, strand))
+            all_canonical = str(self.io_support.check_sites_are_canonical(read_introns, gene_info, strand))
             seq_A_downstream_TTS, perc_A_downstreamTTS = \
-                self.io_support.check_downstream_polya((read_assignment.start(), read_assignment.end()), chr_seq, strand)
-            perc_A_downstreamTTS = "%0.3f" % perc_A_downstreamTTS
+                self.io_support.check_downstream_polya((read_assignment.start(), read_assignment.end()), gene_info, strand)
+            perc_A_downstreamTTS = "%0.2f" % perc_A_downstreamTTS
         else:
             all_canonical = "NA"
             perc_A_downstreamTTS = "NA"
@@ -238,7 +236,9 @@ class IOSupport:
     canonical_acceptor_sites = ["AG", "AC"]
     canonical_donor_sites_rc = ["AC", "GC", "AT"]
     canonical_acceptor_sites_rc = ["CT", "GT"]
-    upstream_region_len = 20
+
+    def __init__(self, params):
+        self.params = params
 
     def count_tss_dist(self, read_assignment, transcript_id):
         transcript_start = read_assignment.gene_info.transcript_start(transcript_id)
@@ -283,23 +283,32 @@ class IOSupport:
         introns_match = all(e == 1 for e in read_assignment.combined_profile.read_intron_profile.read_profile)
         return str(introns_match)
 
-    def check_sites_are_canonical(self, read_introns, chr_seq, strand):
+    def check_sites_are_canonical(self, read_introns, gene_info, strand):
         for intron in read_introns:
-            left_site = str(chr_seq[intron[0] - 1:intron[0] + 1].seq)
-            right_site = str(chr_seq[intron[1] - 1:intron[1] + 1].seq)
-            if strand == '+' and \
-                    (left_site not in self.canonical_acceptor_sites or right_site not in self.canonical_donor_sites):
+            if intron not in gene_info.canonical_sites:
+                intron_left_pos = intron[0] - gene_info.all_read_region_start
+                intron_right_pos = intron[1] - gene_info.all_read_region_start
+                left_site = gene_info.reference_region[intron_left_pos:intron_left_pos+2]
+                right_site = gene_info.reference_region[intron_right_pos - 1:intron_right_pos + 1]
+                if strand == '+':
+                    gene_info.canonical_sites[intron] = \
+                        (left_site in self.canonical_donor_sites) and (right_site in self.canonical_acceptor_sites)
+                else:
+                    gene_info.canonical_sites[intron] = \
+                        (left_site in self.canonical_acceptor_sites_rc) and (right_site in self.canonical_donor_sites_rc)
+
+            if not gene_info.canonical_sites[intron]:
                 return False
-            elif strand == '-' and \
-                    (left_site not in self.canonical_donor_sites_rc or right_site not in self.canonical_acceptor_sites_rc):
-                return False
+
         return True
 
-    def check_downstream_polya(self, read_coords, chr_seq, strand):
+    def check_downstream_polya(self, read_coords, gene_info, strand):
         if strand == '+':
-            seq = str(chr_seq[read_coords[1]:read_coords[1] + self.upstream_region_len].seq)
-            a_percentage = float(seq.upper().count('A')) / float(self.upstream_region_len)
+            read_end = read_coords[1] - gene_info.all_read_region_start + 1
+            seq = gene_info.reference_region[read_end:read_end + self.params.upstream_region_len]
+            a_percentage = float(seq.upper().count('A')) / float(self.params.upstream_region_len)
         else:
-            seq = str(chr_seq[read_coords[0] - self.upstream_region_len - 1:read_coords[0] - 1].seq)
-            a_percentage = float(seq.upper().count('T')) / float(self.upstream_region_len)
+            read_start = read_coords[0] - gene_info.all_read_region_start
+            seq = gene_info.reference_region[read_start - self.params.upstream_region_len:read_start]
+            a_percentage = float(seq.upper().count('T')) / float(self.params.upstream_region_len)
         return seq, a_percentage
