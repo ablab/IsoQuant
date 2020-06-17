@@ -71,6 +71,8 @@ def parse_args():
                                              "using read id (read_id:DELIM)", type=str)
     parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
                         help="matching strategy to use from most strict to least", type=str, default="default")
+    parser.add_argument("--no-sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=False)
+    parser.add_argument("--count-exons", help="perform exont and intron counting", action='store_true', default=False)
 
     ## ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
