@@ -27,10 +27,11 @@ class LongReadAlignmentProcessor:
     counter
     """
 
-    def __init__(self, gene_info, bams, params, read_groupper = DefaultReadGrouper()):
+    def __init__(self, gene_info, bams, params, chr_record = None, read_groupper = DefaultReadGrouper()):
         self.gene_info = gene_info
         self.bams = bams
         self.params = params
+        self.chr_record = chr_record
 
         gene_region = (gene_info.start, gene_info.end)
         self.assigner = LongReadAssigner(self.gene_info, self.params)
@@ -59,12 +60,11 @@ class LongReadAlignmentProcessor:
             self.process_single_file(b)
 
         if not self.params.no_sqanti_output and self.params.reference:
-            record_dict = SeqIO.to_dict(SeqIO.parse(self.params.reference, "fasta"))
             self.gene_info.all_read_region_start -= self.params.upstream_region_len
             self.gene_info.all_read_region_end += self.params.upstream_region_len
 
             self.gene_info.reference_region = \
-                str(record_dict[self.gene_info.chr_id][self.gene_info.all_read_region_start - 1:self.gene_info.all_read_region_end + 1].seq)
+                str(self.chr_record[self.gene_info.all_read_region_start - 1:self.gene_info.all_read_region_end + 1].seq)
             self.gene_info.canonical_sites = {}
         return self.assignment_storage
 
