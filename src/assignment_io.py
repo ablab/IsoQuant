@@ -196,7 +196,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         if self.params.reference:
             record_dict = SeqIO.to_dict(SeqIO.parse(self.params.reference, "fasta"))
             chr_seq = record_dict[gene_info.chr_id]
-            read_introns = read_assignment.combined_read_profile.read_intron_profile.read_features
+            read_introns = read_assignment.combined_profile.read_intron_profile.read_features
             all_canonical = str(self.io_support.check_sites_are_canonical(read_introns, chr_seq, strand))
             seq_A_downstream_TTS, perc_A_downstreamTTS = \
                 self.io_support.check_downstream_polya((read_assignment.start(), read_assignment.end()), chr_seq, strand)
