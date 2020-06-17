@@ -107,7 +107,7 @@ class DatasetProcessor:
         self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
         if self.args.reference:
             logger.info("Loading reference genome from " + self.args.reference)
-            self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(self.args.reference, "fasta"))
+            self.reference_record_dict = SeqIO.index(self.args.reference, "fasta")
         else:
             self.reference_record_dict = None
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
@@ -143,11 +143,12 @@ class DatasetProcessor:
             if chr_id != current_chromosome:
                 logger.info("Processing chromosome " + chr_id)
                 current_chromosome = chr_id
+                current_chr_record = self.reference_record_dict[chr_id]
 
             gene_info = GeneInfo(g, self.gffutils_db, self.args.delta)
             bam_files = list(map(lambda x: x[0], sample.file_list))
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
-                                                             self.reference_record_dict[chr_id], self.read_grouper)
+                                                             current_chr_record, self.read_grouper)
             assignment_storage = alignment_processor.process()
 
             self.dump_reads(assignment_storage, counter)
