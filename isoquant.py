@@ -160,16 +160,16 @@ def create_output_dirs(args):
 
 
 def set_logger(args, logger_instnace):
-    logger_instnace.setLevel(logging.DEBUG)
+    logger_instnace.setLevel(logging.INFO)
     log_file = os.path.join(args.output, "isoquant.log")
     f = open(log_file, "w")
     f.write("CMD: " + ' '.join(sys.argv) + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
     #FIXME
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(logging.INFO)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     fh.setFormatter(formatter)
@@ -184,10 +184,10 @@ def set_additional_params(args):
                            'allow_extra_terminal_introns', 'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   Strategy(0,  0,   0,   0,   False, False, False),
-        'precise': Strategy(3,  30,  30,  30,  False, False, True),
-        'default': Strategy(6,  300, 100, 200, False, False, True),
-        'loose':   Strategy(12, 300, 300, 300, True,  True,  True),
+        'exact':   Strategy(0,  0,   0,   0,   ExonAmbiguityResolvingMethod.mono_exonic_only, False, False),
+        'precise': Strategy(3,  30,  30,  30,  ExonAmbiguityResolvingMethod.mono_exonic_only, False, True),
+        'default': Strategy(6,  300, 100, 200, ExonAmbiguityResolvingMethod.mono_exonic_only, False, True),
+        'loose':   Strategy(12, 300, 300, 300, ExonAmbiguityResolvingMethod.all,  True,  True),
     }
 
     strategy = strategies[args.matching_strategy]

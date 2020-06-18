@@ -144,6 +144,8 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
     pos2 = 0
     included1 = [0 for i in range(len(sorted_range_list1))]
     included2 = [0 for i in range(len(sorted_range_list2))]
+    logger.debug(sorted_range_list1)
+    logger.debug(sorted_range_list2)
 
     while pos1 < len(sorted_range_list1) and pos2 < len(sorted_range_list2):
         block1 = sorted_range_list1[pos1]
@@ -190,6 +192,7 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
         pos2 += 1
 
     assert (union != 0)
+    logger.debug("Similarity = %f " % (float(intersection) / float(union)))
     return float(intersection) / float(union)
 
 
