@@ -16,6 +16,16 @@ logger = logging.getLogger('IsoQuant')
 IsoformDiff = namedtuple("IsoformDiff", ("id", "diff"))
 
 
+class ExonAmbiguityResolvingMethod(Enum):
+    none = 0
+    mono_exonic_only = 1
+    complete_splice_matches_only = 2
+    all = 3
+
+    minimal_jacard_similarity = 0.5
+    top_scored_factor = 1.2
+
+
 class LongReadAssigner:
 
     def __init__(self, gene_info, params):
@@ -288,102 +298,111 @@ class LongReadAssigner:
 
         """
         read_intron_profile = combined_read_profile.read_intron_profile
-        read_split_exon_profile = combined_read_profile.read_split_exon_profile
-
         intron_matched_isoforms = self.find_matching_isoforms(read_intron_profile.gene_profile,
                                                               self.gene_info.intron_profiles.profiles)
-        exon_matched_isoforms = self.find_matching_isoforms(read_split_exon_profile.gene_profile,
-                                                            self.gene_info.split_exon_profiles.profiles)
-        both_mathched_isoforms = intron_matched_isoforms.intersection(exon_matched_isoforms)
-
         logger.debug("Intron matched " + str(intron_matched_isoforms))
-        logger.debug("Exon matched " + str(exon_matched_isoforms))
-        logger.debug("Both matched " + str(both_mathched_isoforms))
 
         read_assignment = None
-        if len(both_mathched_isoforms) == 1:
+        if len(intron_matched_isoforms) == 1 and len(read_intron_profile.read_features) > 0:
             # unique intersection
-            isoform_id = list(both_mathched_isoforms)[0]
+            isoform_id = list(intron_matched_isoforms)[0]
 
-            logger.debug("+ + UNIQUE match found " + isoform_id)
+            logger.debug("+ + UNIQUE intron match found " + isoform_id)
             logger.debug("Exon profile: " + str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
             logger.debug("Intron profile: " + str(self.gene_info.intron_profiles.profiles[isoform_id]))
 
             isoform_match = self.categorize_correct_splice_match(read_intron_profile, isoform_id)
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match)
 
-        elif len(both_mathched_isoforms) > 1:
-            read_assignment = self.resolve_multiple_assignments(read_id, combined_read_profile, both_mathched_isoforms)
+        elif len(intron_matched_isoforms) > 1:
+            if len(read_intron_profile.read_features) > 0:
+                logger.debug("+ + Multiexonic read, trying exon resolution")
+                read_split_exon_profile = combined_read_profile.read_split_exon_profile
+                exon_matched_isoforms = self.find_matching_isoforms(read_split_exon_profile.gene_profile,
+                                                                    self.gene_info.split_exon_profiles.profiles)
+                logger.debug("Exon matched " + str(exon_matched_isoforms))
+                matched_isoforms = intron_matched_isoforms.intersection(exon_matched_isoforms)
 
-        elif len(both_mathched_isoforms) == 0:
-            logger.debug("+ + Intersection is empty ")
-            read_assignment = self.resolve_incompatible_assignments(read_id, combined_read_profile, intron_matched_isoforms)
-
-        return read_assignment
-
-    # resolve when intersection of intron and exon matched isoforms is empty
-    def resolve_incompatible_assignments(self, read_id, combined_read_profile, intron_matched_isoforms):
-        read_intron_profile = combined_read_profile.read_intron_profile
-        #read_split_exon_profile = combined_read_profile.read_split_exon_profile
-
-        # return None for contradictory
-        read_assignment = None
-        if len(intron_matched_isoforms) > 0:
-            # intron profile match, but extra exons
-            counter = 0
-            for isoform_id in intron_matched_isoforms:
-                logger.debug("+ + AMBIGUOUS match " + str(counter) + ": " + isoform_id)
-                counter += 1
-                logger.debug("Exon profile: " + str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
-                logger.debug("Intron profile: " + str(self.gene_info.intron_profiles.profiles[isoform_id]))
-
-            if len(intron_matched_isoforms) == 1:
-                isoform_id = list(intron_matched_isoforms)[0]
-                logger.debug("+ + There is unique intron profile match " + isoform_id)
-                isoform_match = self.categorize_correct_splice_match(read_intron_profile, list(intron_matched_isoforms)[0])
-                read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique_minor_difference, isoform_match)
+                if len(matched_isoforms) == 1:
+                    isoform_id = list(matched_isoforms)[0]
+                    logger.debug("+ + Unique exon match found " + isoform_id)
+                    isoform_match = self.categorize_correct_splice_match(read_intron_profile, isoform_id)
+                    read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match)
+                elif len(matched_isoforms) == 0:
+                    read_assignment = self.resolve_multiple_assignments(read_id, combined_read_profile,
+                                                                        intron_matched_isoforms)
+                else:
+                    read_assignment = self.resolve_multiple_assignments(read_id, combined_read_profile,
+                                                                        matched_isoforms)
             else:
-                logger.debug("+ + There is ambiguous intron profile match")
-                isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, intron_matched_isoforms)
-                read_assignment = ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches)
+                read_assignment = self.resolve_multiple_assignments(read_id, combined_read_profile, intron_matched_isoforms)
 
         return read_assignment
 
     # resolve case when multiple isoforms are matched
-    def resolve_multiple_assignments(self, read_id, combined_read_profile, both_mathched_isoforms):
+    def resolve_multiple_assignments(self, read_id, combined_read_profile, mathched_isoforms):
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
         counter = 0
-        for isoform_id in both_mathched_isoforms:
-            logger.debug("+ + AMBIGUOUS match " + str(counter) + ": " + isoform_id)
+        for isoform_id in mathched_isoforms:
+            logger.debug("+ + Detected match " + str(counter) + ": " + isoform_id)
             counter += 1
             logger.debug("Exon profile: " + str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
             logger.debug("Intron profile: " + str(self.gene_info.intron_profiles.profiles[isoform_id]))
 
-        if not self.params.resolve_ambiguous:
-            isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, both_mathched_isoforms)
-            read_assignment = ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches)
-        else:
-            logger.debug("+ + Resolving ambiguity ")
-            possible_isoforms = self.gene_info.ambiguous_isoforms.intersection(both_mathched_isoforms)
-            intron_matched_isoforms = \
-                self.pick_best_from_ambiguous(read_intron_profile.gene_profile, self.gene_info.intron_profiles.profiles,
-                                              possible_isoforms)
-            exon_matched_isoforms = \
-                self.pick_best_from_ambiguous(read_split_exon_profile.gene_profile,
-                                              self.gene_info.split_exon_profiles.profile, possible_isoforms)
-
-            both_mathched_isoforms = intron_matched_isoforms.intersection(exon_matched_isoforms)
-
-            if len(both_mathched_isoforms) == 1:
-                isoform_match = self.categorize_correct_splice_match(read_intron_profile, list(both_mathched_isoforms)[0])
-                read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match)
+        if len(read_intron_profile.read_features) == 0:
+            # monoexonic read
+            logger.debug("+ +  Resolving monoexonic read")
+            if self.params.resolve_ambiguous == ExonAmbiguityResolvingMethod.none:
+                read_assignment = self.unresolve_ambiguous(read_id, combined_read_profile, mathched_isoforms)
             else:
-                isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, both_mathched_isoforms)
-                read_assignment = ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches)
+                read_assignment = self.resolve_by_nucleotide_jaccard_similarity(read_id, combined_read_profile,
+                                                                                mathched_isoforms)
+        else:
+            logger.debug("+ + Resolving multiexonic read")
+
+            if self.params.resolve_ambiguous == ExonAmbiguityResolvingMethod.none or \
+                    self.params.resolve_ambiguous == ExonAmbiguityResolvingMethod.mono_exonic_only :
+                read_assignment = self.unresolve_ambiguous(read_id, combined_read_profile, mathched_isoforms)
+            else:
+                read_assignment = self.resolve_by_nucleotide_jaccard_similarity(read_id, combined_read_profile,
+                                                                                mathched_isoforms)
 
         return read_assignment
+
+    def unresolve_ambiguous(self, read_id, combined_read_profile, mathched_isoforms):
+        read_intron_profile = combined_read_profile.read_intron_profile
+        isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, mathched_isoforms)
+        return ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches)
+
+    def resolve_by_nucleotide_jaccard_similarity(self, read_id, combined_read_profile, mathched_isoforms):
+        assert(len(mathched_isoforms) > 0)
+        logger.debug("+ + + Resolving by Jaccard similarity")
+        jaccard_similarities = []
+        read_exons = combined_read_profile.read_exon_profile.read_features
+        for isoform_id in mathched_isoforms:
+            isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
+            jaccard_similarities.append((isoform_id, jaccard_similarity(read_exons, isoform_exons)))
+
+        logger.debug(jaccard_similarities)
+        best_score = max([x[1] for x in jaccard_similarities])
+        top_scored = list(filter(lambda x: x[1] * ExonAmbiguityResolvingMethod.top_scored_factor.value > best_score and
+                                 x[1] >= ExonAmbiguityResolvingMethod.minimal_jacard_similarity.value,
+                                 jaccard_similarities))
+        logger.debug("+ + + Best score = %f, total candidates = %d" % (best_score, len(top_scored)))
+
+        if len(top_scored) == 0:
+            logger.debug("+ + + No good scores, keeping as ambiguous")
+            read_assignment = self.unresolve_ambiguous(read_id, combined_read_profile, mathched_isoforms)
+        elif len(top_scored) > 1:
+            logger.debug("+ + + Too many good scores, keeping as ambiguous")
+            read_assignment = self.unresolve_ambiguous(read_id, combined_read_profile, [x[0] for x in top_scored])
+        else:
+            isoform_id = top_scored[0][0]
+            isoform_match = self.categorize_correct_splice_match(combined_read_profile.read_intron_profile, isoform_id)
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match)
+        return  read_assignment
 
     # resolve assignment ambiguities caused by identical profiles
     def pick_best_from_ambiguous(self, read_gene_profile, isoform_profiles, matched_isoforms):

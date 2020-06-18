@@ -137,6 +137,62 @@ def sum_intervals_from_point(sorted_range_list, pos):
     return total_len
 
 
+def jaccard_similarity(sorted_range_list1, sorted_range_list2):
+    union = 0
+    intersection = 0
+    pos1 = 0
+    pos2 = 0
+    included1 = [0 for i in range(len(sorted_range_list1))]
+    included2 = [0 for i in range(len(sorted_range_list2))]
+
+    while pos1 < len(sorted_range_list1) and pos2 < len(sorted_range_list2):
+        block1 = sorted_range_list1[pos1]
+        block2 = sorted_range_list2[pos2]
+        if overlaps(block1, block2):
+            assert (included2[pos2] == 0 or included1[pos1] == 0)
+
+            intersection += min(block1[1], block2[1]) - max(block1[0], block2[0]) + 1
+            if included2[pos2] == 0 and included1[pos1] == 0:
+                # both blocks were not counted
+                union += max(block1[1], block2[1]) - min(block1[0], block2[0]) + 1
+            elif included2[pos2] == 1:
+                # second block was included, take extra bite from block1
+                union += max(0, block1[1] - block2[1] + 1)
+            else:
+                # first block was included, take extra bite from block2
+                union += max(0, block2[1] - block1[1] + 1)
+
+            included1[pos1] = 1
+            included2[pos2] = 1
+            if block2[1] < block1[1]:
+                pos2 += 1
+            else:
+                pos1 += 1
+        elif left_of(block2, block1):
+            if included2[pos2] == 0:
+                union += block2[1] - block2[0] + 1
+                included2[pos2] = 1
+            pos2 += 1
+        else:
+            if included1[pos1] == 0:
+                union += block1[1] - block1[0] + 1
+                included1[pos1] = 1
+            pos1 += 1
+
+    while pos1 < len(sorted_range_list1):
+        if included1[pos1] == 0:
+            union += sorted_range_list1[pos1][1] - sorted_range_list1[pos1][0] + 1
+        pos1 += 1
+
+    while pos2 < len(sorted_range_list2):
+        if included2[pos2] == 0:
+            union += sorted_range_list2[pos2][1] - sorted_range_list2[pos2][0] + 1
+        pos2 += 1
+
+    assert (union != 0)
+    return float(intersection) / float(union)
+
+
 # == working with alignment blocks ==
 def junctions_from_blocks(sorted_blocks):
     junctions = []

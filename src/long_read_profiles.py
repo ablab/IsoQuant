@@ -22,9 +22,9 @@ class MappedReadProfile:
 
 
 class CombinedReadProfiles:
-    def __init__(self, read_intron_profile, read_split_profile, read_split_exon_profile, alignment = None):
+    def __init__(self, read_intron_profile, read_exon_profile, read_split_exon_profile, alignment = None):
         self.read_intron_profile = read_intron_profile
-        self.read_exon_profile = read_split_profile
+        self.read_exon_profile = read_exon_profile
         self.read_split_exon_profile = read_split_exon_profile
         self.alignment = alignment
 
