@@ -85,31 +85,33 @@ class LongReadAssigner:
         extra_right = read_end - isoform_end
 
         logger.debug("+ + Checking exon elongation")
-        logger.debug("Read: " + str(read_start) + "-" + str(read_end))
-        logger.debug("Isoform: " + str(read_start) + "-" + str(read_end))
+        logger.debug("+ + Read: " + str(read_start) + "-" + str(read_end))
+        logger.debug("+ + Isoform: " + str(isoform_start) + "-" + str(isoform_end))
+        logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
 
         if extra_right <= self.params.delta and extra_left <= self.params.delta:
-            logger.debug("+ + None")
+            logger.debug("+ + + None")
             return MatchEventSubtype.none
         else:
-            logger.debug("+ + Minor")
             if extra_right < self.params.max_exon_extension and extra_left < self.params.max_exon_extension:
+                logger.debug("+ + + Minor")
                 if extra_right > self.params.delta and extra_left > self.params.delta:
-                    logger.debug(" + Exctra sequence on both ends")
+                    logger.debug("+ + + Extra sequence on both ends")
                     return MatchEventSubtype.exon_elongation_both
                 elif extra_right > self.params.delta:
-                    logger.debug(" + Exctra sequence on left end")
+                    logger.debug("+ + + Extra sequence on right end")
                     if self.gene_info.isoform_strands[isoform_id] == "+":
-                        return MatchEventSubtype.exon_elongation5
+                        return MatchEventSubtype.exon_elongation3
                     else:
                         return MatchEventSubtype.exon_elongation5
                 else:
-                    logger.debug(" + Exctra sequence on right end")
+                    logger.debug("+ + + Extra sequence on left end")
                     if self.gene_info.isoform_strands[isoform_id] == "-":
-                        return MatchEventSubtype.exon_elongation5
+                        return MatchEventSubtype.exon_elongation3
                     else:
                         return MatchEventSubtype.exon_elongation5
             else:
+                logger.debug("+ + + Major")
                 return MatchEventSubtype.extra_exon_out
 
     # get incompleteness type
@@ -322,7 +324,7 @@ class LongReadAssigner:
     # resolve when intersection of intron and exon matched isoforms is empty
     def resolve_incompatible_assignments(self, read_id, combined_read_profile, intron_matched_isoforms):
         read_intron_profile = combined_read_profile.read_intron_profile
-        read_split_exon_profile = combined_read_profile.read_split_exon_profile
+        #read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
         # return None for contradictory
         read_assignment = None
