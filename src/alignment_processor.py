@@ -59,7 +59,7 @@ class LongReadAlignmentProcessor:
         for b in self.bams:
             self.process_single_file(b)
 
-        if not self.params.no_sqanti_output and self.params.reference:
+        if not self.params.no_sqanti_output and self.chr_record:
             self.gene_info.all_read_region_start -= self.params.upstream_region_len
             self.gene_info.all_read_region_end += self.params.upstream_region_len
 
