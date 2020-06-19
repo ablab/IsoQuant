@@ -11,6 +11,7 @@ from Bio import SeqIO
 from src.long_read_assigner import *
 from src.long_read_profiles import *
 from src.read_groups import *
+from src.polya_finder import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -49,6 +50,7 @@ class LongReadAlignmentProcessor:
         self.split_exon_profile_construnctor = \
             NonOverlappingFeaturesProfileConstructor(self.gene_info.split_exon_profiles.features,
                                                      comparator=partial(overlaps_at_least, delta=self.params.delta))
+        self.polya_finder = PolyAFinder()
         self.assignment_storage = []
 
     def process(self):
@@ -82,6 +84,9 @@ class LongReadAlignmentProcessor:
                     continue
 
                 logger.debug("=== Processing read " + read_id + " ===")
+
+                polya_pos = self.polya_finder.find_polya_tail(alignment)
+                polyt_pos = self.polya_finder.find_polyt_head(alignment)
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
                 sorted_blocks = correct_bam_coords(concat_blocks)
 
@@ -94,9 +99,11 @@ class LongReadAlignmentProcessor:
                 intron_profile = self.intron_profile_construnctor.construct_intron_profile(sorted_blocks)
                 exon_profile = self.exon_profile_construnctor.construct_exon_profile(sorted_blocks)
                 split_exon_profile = self.split_exon_profile_construnctor.construct_profile(sorted_blocks)
-                combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile)
+                combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
+                                                        polya_pos=polya_pos, polyt_pos=polyt_pos)
 
                 read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
+                read_assignment.polyA_found = (polya_pos != -1 or polyt_pos != -1)
                 read_assignment.combined_profile = combined_profile
                 read_assignment.gene_info = self.gene_info
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)

@@ -73,6 +73,7 @@ class MatchEventSubtype(Enum):
     undefined = 1
     # non-contradictory
     mono_exonic = 10
+    fsm = 11
     ism_5 = 15
     ism_3 = 13
     ism_internal = 14
@@ -107,6 +108,9 @@ class MatchEventSubtype(Enum):
     exon_gain_novel = 126
     alternative_structure_novel = 131
     alternative_structure_known = 132
+    # TTS and TSS
+    alternative_polya_site = 200
+    alternative_tss = 201
 
     @staticmethod
     def is_alignment_artifact(match_event_subtype):

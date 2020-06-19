@@ -12,7 +12,6 @@ from src.common import *
 
 logger = logging.getLogger('IsoQuant')
 
-# The following 2 classes are very similar, but lets keep them separately for now
 
 class MappedReadProfile:
     def __init__(self, gene_profile, read_profile, read_features):
@@ -22,13 +21,17 @@ class MappedReadProfile:
 
 
 class CombinedReadProfiles:
-    def __init__(self, read_intron_profile, read_exon_profile, read_split_exon_profile, alignment = None):
+    def __init__(self, read_intron_profile, read_exon_profile, read_split_exon_profile,
+                polya_pos = -1, polyt_pos = -1, alignment = None):
         self.read_intron_profile = read_intron_profile
         self.read_exon_profile = read_exon_profile
         self.read_split_exon_profile = read_split_exon_profile
         self.alignment = alignment
+        self.polya_pos = polya_pos
+        self.polyt_pos = polyt_pos
 
 
+# The following 2 classes are very similar, but lets keep them separately for now
 # accepts sorted gapless alignment blocks
 class OverlappingFeaturesProfileConstructor:
     # ignore_terminal -- bool flag, indicates whether to ignore leading and trailing -1s in the profile

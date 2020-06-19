@@ -209,7 +209,8 @@ class LongReadAssigner:
     def categorize_correct_splice_match(self, read_intron_profile, isoform_id):
         if self.is_fsm(read_intron_profile, isoform_id):
             logger.debug("+ + Full splice match " + isoform_id)
-            isoform_match = IsoformMatch(MatchClassification.full_splice_match, self.get_gene_id(isoform_id), isoform_id)
+            isoform_match = IsoformMatch(MatchClassification.full_splice_match, self.get_gene_id(isoform_id), isoform_id,
+                                         MatchEventSubtype.fsm)
         else:
             logger.debug("+ + Incomplete splice match " + isoform_id)
             isoform_match = IsoformMatch(MatchClassification.incomplete_splice_match, self.get_gene_id(isoform_id), isoform_id,
@@ -269,20 +270,21 @@ class LongReadAssigner:
             # none of the blocks matched
             if all(el == 0 for el in read_intron_profile.gene_profile):
                 logger.debug("EMPTY - intergenic")
-                return ReadAssignment(read_id, ReadAssignmentType.empty, IsoformMatch(MatchClassification.intergenic))
+                assignment = ReadAssignment(read_id, ReadAssignmentType.empty, IsoformMatch(MatchClassification.intergenic))
             else:
                 logger.debug("EMPTY - intronic")
-                return ReadAssignment(read_id, ReadAssignmentType.empty, IsoformMatch(MatchClassification.genic_intron))
+                assignment = ReadAssignment(read_id, ReadAssignmentType.empty, IsoformMatch(MatchClassification.genic_intron))
+            return assignment
 
         elif any(el == -1 for el in read_intron_profile.read_profile) or any(el == -1 for el in read_split_exon_profile.read_profile):
             # Read has missing exons / introns
             logger.debug("+ Has contradictory features")
-            return self.match_contradictory(read_id, combined_read_profile)
+            assignment = self.match_contradictory(read_id, combined_read_profile)
 
         elif any(el == 0 for el in read_intron_profile.read_profile) or any(el == 0 for el in read_split_exon_profile.read_profile):
             # Read has extra flanking exons / introns
             logger.debug("+ Has extra flanking features")
-            return self.match_with_extra_flanking(read_id, combined_read_profile)
+            assignment = self.match_with_extra_flanking(read_id, combined_read_profile)
 
         else:
             logger.debug("+ No contradictory features")
@@ -299,7 +301,8 @@ class LongReadAssigner:
                 # check for extra flanking sequences
                 self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
 
-            return assignment
+        self.verify_polyA(combined_read_profile, assignment)
+        return assignment
 
     def match_non_contradictory_spliced(self, read_id, combined_read_profile):
         """ match profile when all read features are assigned and read has at least one intron
@@ -774,3 +777,83 @@ class LongReadAssigner:
         else:
             event = MatchEventSubtype.unspliced_genic
         return event
+
+    # check consistency with polyA
+    def verify_polyA(self, combined_read_profile, read_assignment):
+        logger.debug("+ Validating polyA/T sites")
+        if combined_read_profile.polya_pos == -1 and combined_read_profile.polyt_pos == -1:
+            logger.debug("+ No sites found, ciao")
+            return
+
+        if read_assignment.assignment_type == ReadAssignmentType.ambiguous:
+            self.resolve_by_polyA(combined_read_profile, read_assignment)
+
+        apa_found = False
+        for isoform_match in read_assignment.isoform_matches:
+            isoform_id = isoform_match.assigned_transcript
+            logger.debug("+ Checking isoform %s" % isoform_id)
+            if self.gene_info.isoform_strands[isoform_id] == '+' and combined_read_profile.polya_pos != -1:
+                isoform_end = self.gene_info.transcript_end(isoform_id)
+                dist_to_polya = abs(isoform_end - combined_read_profile.polya_pos)
+                logger.debug("+ Distance to polyA is %d" % dist_to_polya)
+                if dist_to_polya > 2 + self.params.delta:
+                    apa_found = True
+                    logger.debug("+ Seems like APA site")
+            elif self.gene_info.isoform_strands[isoform_id] == '-' and combined_read_profile.polyt_pos != -1:
+                isoform_start = self.gene_info.transcript_start(isoform_id)
+                dist_to_polyt = abs(combined_read_profile.polyt_pos - isoform_start)
+                logger.debug("+ Distance to polyT is %d" % dist_to_polyt)
+                if dist_to_polyt > 2 + self.params.delta:
+                    apa_found = True
+                    logger.debug("+ Seems like APA site")
+
+            if apa_found:
+                isoform_match.add_subclassification(MatchEventSubtype.alternative_polya_site)
+
+        if apa_found and read_assignment.assignment_type == ReadAssignmentType.unique:
+            read_assignment.assignment_type = ReadAssignmentType.unique_minor_difference
+
+    # try to resolve when polyA position is known
+    def resolve_by_polyA(self, combined_read_profile, read_assignment):
+        logger.debug("+ + Resolving ambiguous case with polyA: " + str())
+        strands = set()
+        isoform_ids = []
+        for isoform_match in read_assignment.isoform_matches:
+            isoform_id = isoform_match.assigned_transcript
+            isoform_ids.append(isoform_id)
+            strands.add(self.gene_info.isoform_strands[isoform_id])
+        logger.debug("+ + Resolving ambiguous case with polyA: " + str(isoform_ids))
+        # we need to know strand to check polyA or polyT
+        if len(strands) > 1:
+            logger.debug("+ + Ambiguous strands")
+            return
+        strand = list(strands)[0]
+
+        if strand == "+" and combined_read_profile.polya_pos != -1:
+            # find distances to polyA site
+            distances = self.find_distances_to_pos(isoform_ids, self.gene_info.transcript_end, combined_read_profile.polya_pos)
+            best_distance = min([x[0] for x in distances])
+            # select best isoforms
+            closest_isofoms = [x[1] for x in filter(lambda y:y[0] <= 2 * best_distance, distances)]
+            logger.debug("+ + PolyA helped: " + str(closest_isofoms))
+        else:
+            distances = self.find_distances_to_pos(isoform_ids, self.gene_info.transcript_start, combined_read_profile.polyt_pos)
+            best_distance = min([x[0] for x in distances])
+            closest_isofoms = [x[1] for x in filter(lambda y:y[0] <= 2 * best_distance, distances)]
+            logger.debug("+ + PolyT helped: " + str(closest_isofoms))
+
+        closest_isofoms = set(closest_isofoms)
+        if len(closest_isofoms) < len(isoform_ids):
+            # set new matches if polyA did filter something out
+            new_matches = list(filter(lambda im:im.assigned_transcript in closest_isofoms, read_assignment.isoform_matches))
+            read_assignment.isoform_matches = new_matches
+            logger.debug("+ + Assigning new matches")
+            if len(closest_isofoms) == 1:
+                logger.debug("+ + and it's a unique match")
+                read_assignment.set_assignment_type(ReadAssignmentType.unique)
+
+    def find_distances_to_pos(self, isoform_ids, transcript_function, pos):
+        distances = []
+        for id in isoform_ids:
+            distances.append((abs(transcript_function(id) - pos), id))
+        return distances
