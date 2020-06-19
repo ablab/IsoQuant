@@ -88,7 +88,7 @@ class GeneInfo:
         self.set_isoform_strands()
         self.set_gene_ids()
         # FIXME: no need to run unless detect_ambiguous option is on
-        self.detect_ambiguous()
+        # self.detect_ambiguous()
 
         self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
         self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
@@ -293,7 +293,7 @@ class GeneInfo:
                 if t == t2:
                     continue
                 if is_subprofile(intron_profile, self.intron_profiles.profiles[t2]) and \
-                        is_subprofile(exon_profile, self.exon_profiles.profiles[t2]):
+                        is_subprofile(exon_profile, self.split_exon_profiles.profiles[t2]):
                     self.ambiguous_isoforms.add(t)
                     break
 

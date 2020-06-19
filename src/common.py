@@ -254,8 +254,7 @@ def correct_bam_coords(blocks):
 
 # == profile functions ==
 def is_subprofile(short_isoform_profile, long_isoform_profile):
-    if len(short_isoform_profile) != len(long_isoform_profile):
-        return None
+    assert len(short_isoform_profile) == len(long_isoform_profile)
 
     if all(el == -1 for el in short_isoform_profile):
         return None
@@ -275,7 +274,7 @@ def is_subprofile(short_isoform_profile, long_isoform_profile):
 
 
 def difference_in_present_features(profile1, profile2):
-    """ computes Hamming distance for two profiles, returns -1 if profiles have different length
+    """ computes Hamming distance for two profiles
 
     Parameters
     ----------
@@ -285,11 +284,10 @@ def difference_in_present_features(profile1, profile2):
     Returns
     -------
     result: int
-        number of different items in lists or -1 if profiles have different length
+        number of different items in lists
 
     """
-    if len(profile1) != len(profile2):
-        return -1
+    assert len(profile1) == len(profile2)
     d = 0
     for i in range(len(profile1)):
         if profile1[i] == 0 or profile2[i] == 0:
@@ -300,8 +298,7 @@ def difference_in_present_features(profile1, profile2):
 
 
 def find_matching_positions(profile1, profile2):
-    if len(profile1) != len(profile2):
-        return -1
+    assert len(profile1) == len(profile2)
     matches = [0 for i in range(len(profile1))]
     for i in range(len(profile1)):
         if profile1[i] == profile2[i]:
@@ -309,9 +306,17 @@ def find_matching_positions(profile1, profile2):
     return matches
 
 
+def has_overlapping_features(profile1, profile2):
+    assert len(profile1) == len(profile2)
+    for i in range(len(profile1)):
+        if profile1[i] == profile2[i] == 1:
+            return True
+    return False
+
+
 def mask_profile(read_profile, true_profile):
-    if len(read_profile) != len(true_profile):
-        return None
+    assert len(read_profile) == len(true_profile)
+
     masked_profile = []
     for i in range(len(true_profile)):
         if true_profile[i] == 1:
@@ -320,8 +325,7 @@ def mask_profile(read_profile, true_profile):
 
 
 def get_blocks_from_profile(features, profile):
-    if len(features) != len(profile):
-        return None
+    assert len(features) == len(profile)
     profile_features = []
     for i in range(len(profile)):
         if profile[i] == 1:

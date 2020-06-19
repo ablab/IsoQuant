@@ -20,6 +20,7 @@ class ReadAssignmentType(Enum):
     unique_minor_difference = 2
     contradictory = 3
     novel = 4
+    unreliable = 11
 
 
 # SQANTI-like
@@ -54,6 +55,18 @@ class MatchClassification(Enum):
         elif any(me in [MatchEventSubtype.unspliced_genic] for me in match_event_subtypes):
             return MatchClassification.genic
         return MatchClassification.undefined
+
+    @staticmethod
+    def get_mono_exon_classification_from_subtypes(match_event_subtypes):
+        if any(me == MatchEventSubtype.unspliced_genic for me in match_event_subtypes):
+            return MatchClassification.genic
+        elif any(me == MatchEventSubtype.unspliced_intron_retention for me in match_event_subtypes):
+            return MatchClassification.novel_in_catalog
+        elif any(me == MatchEventSubtype.mono_exonic for me in match_event_subtypes):
+            return MatchClassification.incomplete_splice_match
+        else:
+            assert False
+
 
 class MatchEventSubtype(Enum):
     none = 0
@@ -127,8 +140,8 @@ class IsoformMatch:
     def set_classification(self, classification):
         self.match_classification = classification
 
-    def all_subtypes_are_none(self):
-        return all(el == MatchEventSubtype.none for el in self.match_subclassifications)
+    def all_subtypes_are_none_or_monoexonic(self):
+        return all(el in [MatchEventSubtype.none, MatchEventSubtype.mono_exonic] for el in self.match_subclassifications)
 
     def all_subtypes_are_alignment_artifacts(self):
         return all(MatchEventSubtype.is_alignment_artifact(el) for el in self.match_subclassifications)
