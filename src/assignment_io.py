@@ -81,8 +81,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             line = read_assignment.read_id  + "\t.\t.\t."
         else:
             assigned_transcripts = [m.assigned_transcript for m in read_assignment.isoform_matches]
-            # FIXME empty match subclassification
-            match_events = ",".join(["+".join([x.name for x in m.match_subclassifications])
+            match_events = ",".join(["+".join([x.event_type.name for x in m.match_subclassifications])
                                      for m in read_assignment.isoform_matches])
             if not match_events:
                 match_events = "."
@@ -182,7 +181,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
             dist_to_tss, dist_to_tts = dist_to_tts, dist_to_tss
             dist_to_gene_tss, dist_to_gene_tts = dist_to_gene_tts, dist_to_gene_tss
 
-        subtypes = ";".join([x.name for x in match.match_subclassifications])
+        subtypes = ";".join([x.event_type.name for x in match.match_subclassifications])
         if not subtypes:
             subtypes = "."
 

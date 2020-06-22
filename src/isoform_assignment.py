@@ -5,10 +5,10 @@
 ############################################################################
 
 import logging
-import copy
+from enum import Enum
+from collections import namedtuple
 
 from src.common import *
-from enum import Enum
 
 logger = logging.getLogger('IsoQuant')
 
@@ -122,21 +122,26 @@ class MatchEventSubtype(Enum):
                                        MatchEventSubtype.exon_elongation_both]
 
 
+MatchEvent = namedtuple("MatchEvent", ("event_type", "position"))
+
+def make_event(event_type, position=-1):
+    return MatchEvent(event_type, position)
+
+
 class IsoformMatch:
     def __init__(self, match_classification, assigned_gene = "None", assigned_transcript = "None",
-                 match_subclassifications = None):
+                 match_subclassification = None):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
         self.match_classification = match_classification
-        if match_subclassifications is None:
+        if match_subclassification is None:
             self.match_subclassifications = []
-        elif isinstance(match_subclassifications, list):
-            self.match_subclassifications = match_subclassifications
         else:
-            self.match_subclassifications = [match_subclassifications]
+            self.match_subclassifications = [match_subclassification]
 
     def add_subclassification(self, match_subclassification):
-        if len(self.match_subclassifications) == 1 and self.match_subclassifications[0] == MatchClassification.undefined:
+        if len(self.match_subclassifications) == 1 and \
+                self.match_subclassifications[0].event_type == MatchClassification.undefined:
             self.match_subclassifications = [match_subclassification]
         else:
             self.match_subclassifications.append(match_subclassification)
@@ -145,13 +150,13 @@ class IsoformMatch:
         self.match_classification = classification
 
     def all_subtypes_are_none_or_monoexonic(self):
-        return all(el in [MatchEventSubtype.none, MatchEventSubtype.mono_exonic] for el in self.match_subclassifications)
+        return all(el.event_type in [MatchEventSubtype.none, MatchEventSubtype.mono_exonic] for el in self.match_subclassifications)
 
     def all_subtypes_are_alignment_artifacts(self):
-        return all(MatchEventSubtype.is_alignment_artifact(el) for el in self.match_subclassifications)
+        return all(MatchEventSubtype.is_alignment_artifact(el.event_type) for el in self.match_subclassifications)
 
     def all_subtypes_are_minor_errors(self):
-        return all(MatchEventSubtype.is_minor_error(el) for el in self.match_subclassifications)
+        return all(MatchEventSubtype.is_minor_error(el.event_type) for el in self.match_subclassifications)
 
 
 class ReadAssignment:

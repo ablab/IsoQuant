@@ -136,22 +136,23 @@ class LongReadAssigner:
 
         if is_left_truncated and is_right_truncated:
             logger.debug(" + Internal")
-            return MatchEventSubtype.ism_internal
+            event_type = MatchEventSubtype.ism_internal
         elif is_left_truncated:
             logger.debug(" + Truncated on the left")
             if self.gene_info.isoform_strands[isoform_id] == "+":
-                return MatchEventSubtype.ism_5
+                event_type = MatchEventSubtype.ism_5
             else:
-                return MatchEventSubtype.ism_3
+                event_type = MatchEventSubtype.ism_3
         elif is_right_truncated:
             logger.debug(" + Truncated on the right")
             if self.gene_info.isoform_strands[isoform_id] == "-":
-                return MatchEventSubtype.ism_5
+                event_type = MatchEventSubtype.ism_5
             else:
-                return MatchEventSubtype.ism_3
+                event_type = MatchEventSubtype.ism_3
         else:
             logger.debug(" + No ISM truncation ")
-            return MatchEventSubtype.none
+            event_type = MatchEventSubtype.none
+        return make_event(event_type)
 
     # check where it is full splice match
     def is_fsm(self, read_intron_profile, isoform_id):
@@ -210,7 +211,7 @@ class LongReadAssigner:
         if self.is_fsm(read_intron_profile, isoform_id):
             logger.debug("+ + Full splice match " + isoform_id)
             isoform_match = IsoformMatch(MatchClassification.full_splice_match, self.get_gene_id(isoform_id), isoform_id,
-                                         MatchEventSubtype.fsm)
+                                         make_event(MatchEventSubtype.fsm))
         else:
             logger.debug("+ + Incomplete splice match " + isoform_id)
             isoform_match = IsoformMatch(MatchClassification.incomplete_splice_match, self.get_gene_id(isoform_id), isoform_id,
@@ -228,7 +229,7 @@ class LongReadAssigner:
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
         read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
-        matching_event = [self.get_mono_exon_subtype(read_region, isoform_introns)]
+        matching_event = self.get_mono_exon_subtype(read_region, isoform_introns)
         return IsoformMatch(MatchClassification.get_mono_exon_classification_from_subtypes(matching_event),
                             self.get_gene_id(isoform_id), isoform_id, matching_event)
 
@@ -537,7 +538,7 @@ class LongReadAssigner:
             for m in matching_events:
                 isoform_match.add_subclassification(m)
             assignment.add_match(isoform_match)
-            logger.debug("+ + Found contradiction for " + isoform_id + ": " + " ".join(map(lambda x: x.name, matching_events)))
+            logger.debug("+ + Found contradiction for " + isoform_id + ": " + " ".join(map(lambda x: x.event_type.name, matching_events)))
 
         new_assignment_type = None
         # Change assignment from contradictory when contradictions are minor or absent
@@ -570,7 +571,7 @@ class LongReadAssigner:
         list of detected contradiction events
         """
         if not read_junctions:
-            return self.get_mono_exon_subtype(read_region, isoform_junctions)
+            return [self.get_mono_exon_subtype(read_region, isoform_junctions)]
 
         read_pos = 0
         isoform_pos = 0
@@ -665,11 +666,11 @@ class LongReadAssigner:
 
         if read_features_present[0] == 0 or read_features_present[-1] == 0:
             logger.debug("+ + Found only extra terminal introns")
-            matching_events.append(MatchEventSubtype.extra_intron_out)
+            matching_events.append(make_event(MatchEventSubtype.extra_intron_out))
 
         if len(matching_events) == 0:
             logger.debug("No contradition detected, odd case")
-            return [MatchEventSubtype.none]
+            return [make_event(MatchEventSubtype.none)]
         return matching_events
 
     def detect_contradiction_type(self, read_junctions, isoform_junctions, contradictory_region_pairs):
@@ -689,7 +690,7 @@ class LongReadAssigner:
         for pair in contradictory_region_pairs:
             # classify each contradictory area separately
             event = self.compare_overlapping_contradictional_regions(read_junctions, isoform_junctions, pair[0], pair[1])
-            contradiction_events.append(copy.deepcopy(event))
+            contradiction_events.append(make_event(event))
 
         return list(set(contradiction_events))
 
@@ -773,10 +774,11 @@ class LongReadAssigner:
         if not any(overlaps(read_region, rj) for rj in isoform_junctions):
             event = MatchEventSubtype.mono_exonic
         elif any(contains(read_region, rj) for rj in isoform_junctions):
+            # TODO save intron retention position
             event = MatchEventSubtype.unspliced_intron_retention
         else:
             event = MatchEventSubtype.unspliced_genic
-        return event
+        return make_event(event)
 
     # check consistency with polyA
     def verify_polyA(self, combined_read_profile, read_assignment):
@@ -808,7 +810,7 @@ class LongReadAssigner:
                     logger.debug("+ Seems like APA site")
 
             if apa_found:
-                isoform_match.add_subclassification(MatchEventSubtype.alternative_polya_site)
+                isoform_match.add_subclassification(make_event(MatchEventSubtype.alternative_polya_site))
 
         if apa_found and read_assignment.assignment_type == ReadAssignmentType.unique:
             read_assignment.assignment_type = ReadAssignmentType.unique_minor_difference
