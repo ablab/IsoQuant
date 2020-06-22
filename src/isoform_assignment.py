@@ -164,6 +164,7 @@ class ReadAssignment:
         self.read_id = read_id
         self.combined_profile = None
         self.gene_info = None
+        self.polyA_found = False
         self.read_group = "."
         self.assignment_type = assignment_type
         if match is None:
