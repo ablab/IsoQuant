@@ -225,6 +225,7 @@ def set_additional_params(args):
     args.min_reads_supporting_tsts = 3
     args.require_polyA = False
     args.require_cage_peak = False # TODO
+    args.collapse_subisoforms = True
     args.count_ambiguous = True
 
     # TODO move to options

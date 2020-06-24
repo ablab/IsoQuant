@@ -25,6 +25,40 @@ class TranscriptModel:
         self.reference_gene = reference_gene
         self.exon_blocks = exon_blocks
 
+    def get_start(self):
+        return self.exon_blocks[0][0]
+
+    def get_end(self):
+        return self.exon_blocks[1][-1]
+
+
+class GFFPrinter:
+    def __init__(self, outf_prefix, sample_name = "",print_meta_features=False):
+        self.out_gff = open(outf_prefix + "transcript_models.gff", "w")
+        self.out_gff.write("# " + sample_name + " IsoQuant generated GFF\n")
+        self.out_r2t = open(outf_prefix + "reads_transcript_map.tsv", "w")
+        self.out_r2t.write("#read_id\ttranscript_id\n")
+        # TODO implement meta features
+        self.print_meta_features = print_meta_features
+
+    def __del__(self):
+        self.out_gff.close()
+        self.out_r2t.close()
+
+    def dump(self, transcript_model_constructor):
+        for model in transcript_model_constructor.transcript_model_storage:
+            prefix_columns = "%s\tIsoQuant\texon\t" % model.chr_id
+            suffix_columns = '.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
+                             'reference_gene_id "%s"; reference_transcript_id "%s"\n' % \
+                             (model.strand, model.gene_id, model.transcript_id,
+                              model.reference_gene, model.reference_transcript)
+            for e in model.exon_blocks:
+                self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns)
+
+        for model_id in transcript_model_constructor.transcript_read_ids.keys():
+            for read_id in transcript_model_constructor.transcript_read_ids[model_id]:
+                self.out_r2t.write("%s\t%s\n" % (read_id, model_id))
+
 
 # constructor of discovered transcript models from read assignments
 class TranscriptModelConstructor:
@@ -66,6 +100,7 @@ class TranscriptModelConstructor:
             self.verify_correct_match(isoform_id, self.correct_matches[isoform_id])
 
         # construct novel trasncripts
+        candidate_model_storage = []
         for isoform_id in self.modified_isoforms_groups.keys():
             for modification in self.modified_isoforms_groups[isoform_id].keys():
                 assignments = self.modified_isoforms_groups[isoform_id][modification]
@@ -73,10 +108,12 @@ class TranscriptModelConstructor:
                              (isoform_id, len(assignments)))
                 logger.debug(", ".join(["%s: %s - %s" % (x.event_type.name, str(x.isoform_position), str(x.read_region))
                                         for x in modification]))
-                self.process_isoform_modifications(isoform_id, assignments)
+                self.process_isoform_modifications(isoform_id, assignments, candidate_model_storage)
 
-        # merge constructed transcripts TODO
-        pass
+        # merge constructed transcripts
+        self.collapse_similar_isoforms(candidate_model_storage)
+
+        # count reads
 
     def get_transcript_id(self):
         TranscriptModelConstructor.transcript_id_counter += 1
@@ -160,7 +197,7 @@ class TranscriptModelConstructor:
         return all_features_present(isoform_profile, covered_junctions)
 
     # construct a transcript from a group of reads with the same modification
-    def process_isoform_modifications(self, isoform_id, assignments):
+    def process_isoform_modifications(self, isoform_id, assignments, candidate_model_storage):
         remaining_assignments = copy.copy(assignments)
         while len(remaining_assignments) >= self.params.min_novel_supporting_reads:
             # choose the best representative
@@ -180,7 +217,8 @@ class TranscriptModelConstructor:
                          (new_transcript_model.transcript_id, str(new_transcript_model.exon_blocks)))
             # compare read junctions with novel transcript model, count them and keep only those that do not match
             remaining_assignments = self.verify_novel_model(remaining_assignments, new_transcript_model,
-                                                            representative_read_assignment.read_id)
+                                                            representative_read_assignment.read_id,
+                                                            candidate_model_storage)
 
 
     # select longest read with polyA detected
@@ -443,7 +481,7 @@ class TranscriptModelConstructor:
         novel_exons.append(exon)
         return intron[1] + 1
 
-    def verify_novel_model(self, read_assignments, transcript_model, original_read_id):
+    def verify_novel_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
         logger.debug("Verifying transcript model %s with %d reads" % (transcript_model.transcript_id, len(read_assignments)))
         model_exons = transcript_model.exon_blocks
         isoform_start = model_exons[0][0]
@@ -477,10 +515,9 @@ class TranscriptModelConstructor:
                     nearby_ends_count += 1
                 # all read introns were mapped, read is assigned
                 assigned_reads.append(assignment.read_id)
-                if all(el == 1 for el in read_profile.read_profile):
+                if all(el == 1 for el in read_profile.gene_profile):
                     # all introns of novel model are covered
                     fsm_match_count += 1
-
             else:
                 unassigned_reads.append(assignment)
 
@@ -506,7 +543,7 @@ class TranscriptModelConstructor:
             # to confirm we need at least min_novel_supporting_reads supporting reads
             # and at least min_novel_fsm_supporting_reads FSM
             logger.debug("Successfully confirmed %s" % (transcript_model.transcript_id))
-            self.transcript_model_storage.append(transcript_model)
+            candidate_model_storage.append(transcript_model)
             for read_id in assigned_reads:
                 self.transcript_read_ids[transcript_model.transcript_id].add(read_id)
             return unassigned_reads
@@ -515,4 +552,78 @@ class TranscriptModelConstructor:
             all_except_original = list(filter(lambda x:x.read_id != original_read_id, read_assignments))
             return all_except_original
 
+    def collapse_similar_isoforms(self, candidate_model_storage):
+        transcript_model_map = {}
+        for transcript in candidate_model_storage:
+            transcript_model_map[(transcript.get_start(), transcript.get_end())] = transcript
+
+        transcript_regions = sorted(transcript_model_map.keys())
+        for t1 in transcript_regions:
+            if transcript_model_map[t1] is None:
+                continue
+            for t2 in transcript_regions:
+                if transcript_model_map[t1] == transcript_model_map[t2]:
+                    continue
+                if t2[0] > t1[1]:
+                    break
+                if transcript_model_map[t2] is None:
+                    continue
+
+                if not contains(t1, t2):
+                    continue
+
+                if self.check_if_subisoform(transcript_model_map[t1], transcript_model_map[t2]):
+                    logger.debug("Detected subisoform, will collapse")
+                    for read_id in self.transcript_read_ids[transcript_model_map[t2].transcript_id]:
+                        self.transcript_read_ids[transcript_model_map[t1].transcript_id].add(read_id)
+                    del self.transcript_read_ids[transcript_model_map[t2].transcript_id]
+                    transcript_model_map[t2] = None
+
+        for k in transcript_model_map:
+            model = transcript_model_map[k]
+            if model is None:
+                continue
+            self.transcript_model_storage.append(model)
+
+    # check in one isoform can be collapes into another
+    def check_if_subisoform(self, big_transcript_model, small_transcript_model):
+        big_region = (big_transcript_model.get_start(), big_transcript_model.get_end())
+        small_region = (small_transcript_model.get_start(), small_transcript_model.get_end())
+        if not contains(big_region, small_region):
+            return False
+
+        logger.debug("Checking similarity between transcript models %s and %s" %
+                     (big_transcript_model.transcript_id, small_transcript_model.transcript_id))
+
+        if big_transcript_model.strand != small_transcript_model.strand:
+            return False
+
+        if self.params.require_polyA:
+            start_diff = small_region[0] - big_region[0]
+            end_diff = big_region[1] - small_region[1]
+            if big_transcript_model.strand == "+":
+                if end_diff > self.params.max_dist_to_isoforms_tsts:
+                    logger.debug("polyA supported ends differ significantly")
+                    return False
+            else:
+                if start_diff > self.params.max_dist_to_isoforms_tsts:
+                    logger.debug("polyT supported starts differ significantly")
+                    return False
+
+        model_exons = big_transcript_model.exon_blocks
+        model_introns = junctions_from_blocks(model_exons)
+        model_intron_profile_constructor = \
+            OverlappingFeaturesProfileConstructor(model_introns, big_region, equal_ranges)
+
+        exons_to_check = small_transcript_model.exon_blocks
+        introns_to_check = junctions_from_blocks(exons_to_check)
+        profile = model_intron_profile_constructor.construct_profile_for_features(introns_to_check, small_region)
+
+        if all(el == 1 for el in profile.read_profile):
+            # profile matches perfectly
+            if self.params.collapse_subisoforms:
+                return all(el != -1 for el in profile.gene_profile)
+            else:
+                return all(el == 1 for el in profile.gene_profile)
+        return False
 
