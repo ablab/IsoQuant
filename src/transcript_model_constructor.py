@@ -72,8 +72,6 @@ class GFFPrinter:
 
 
 
-
-
 # constructor of discovered transcript models from read assignments
 class TranscriptModelConstructor:
     transcript_id_counter = 0
@@ -324,7 +322,7 @@ class TranscriptModelConstructor:
                 current_events = modification_events_map[isoform_pos]
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, novel_exons, current_exon_start)
-                if current_exon_start < isoform_introns[isoform_pos][0]:
+                if isoform_pos < len(isoform_introns) and current_exon_start < isoform_introns[isoform_pos][0]:
                     # intron modification was processed but nothing overlapping was added =>
                     # extra intron within previous exon => add this intron as is
                     current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
@@ -347,6 +345,8 @@ class TranscriptModelConstructor:
             else:
                 novel_transcript_end = read_end
         novel_exons.append((current_exon_start, novel_transcript_end))
+
+        assert novel_exons == sorted(novel_exons)
 
         nnic = False
         for events in modification_events_map.values():
