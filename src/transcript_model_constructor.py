@@ -10,6 +10,7 @@ import copy
 
 from src.isoform_assignment import *
 from src.long_read_profiles import *
+from src.junction_comparator import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -325,7 +326,12 @@ class TranscriptModelConstructor:
                 if isoform_pos < len(isoform_introns) and current_exon_start < isoform_introns[isoform_pos][0]:
                     # intron modification was processed but nothing overlapping was added =>
                     # extra intron within previous exon => add this intron as is
-                    current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
+                    # check that is was really extra intron
+                    only_extra_intron = all(el.event_type in
+                                            {MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_known}
+                                            for el in current_events)
+                    if only_extra_intron:
+                        current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
                 isoform_pos += 1
                 while isoform_pos < len(isoform_introns) and isoform_introns[isoform_pos][0] < current_exon_start:
                     isoform_pos += 1
