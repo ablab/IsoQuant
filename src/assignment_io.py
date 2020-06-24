@@ -25,7 +25,7 @@ class PrintOnlyFunctor:
         elif isinstance(allowed_types, set):
             self.allowed_types = allowed_types
         else:
-            self.allowed_types = set([allowed_types])
+            self.allowed_types = {allowed_types}
 
     def check(self, assignment):
         if assignment is None:
@@ -81,6 +81,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             line = read_assignment.read_id  + "\t.\t.\t."
         else:
             assigned_transcripts = [m.assigned_transcript for m in read_assignment.isoform_matches]
+            for m in read_assignment.isoform_matches:
+                for x in m.match_subclassifications:
+                    if not hasattr(x, "event_type"):
+                        logger.debug(x)
             match_events = ",".join(["+".join([x.event_type.name for x in m.match_subclassifications])
                                      for m in read_assignment.isoform_matches])
             if not match_events:

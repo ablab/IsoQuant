@@ -39,7 +39,7 @@ class MatchClassification(Enum):
     @staticmethod
     def get_contradiction_classification_from_subtypes(match_event_subtypes):
         if any(me in [MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
-                      MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_out,
+                      MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_out_left, MatchEventSubtype.extra_intron_out_right,
                       MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
                       MatchEventSubtype.exon_skipping_novel_intron, MatchEventSubtype.alternative_structure_novel]
                for me in match_event_subtypes):
@@ -93,9 +93,10 @@ class MatchEventSubtype(Enum):
     alt_acceptor_site = 102
     alt_donor_site_novel = 103
     alt_acceptor_site_novel = 104
-    extra_intron = 112
-    extra_intron_known = 111
-    extra_intron_out = 113
+    extra_intron = 2012
+    extra_intron_known = 2011
+    extra_intron_out_left = 1013
+    extra_intron_out_right = 1014
     extra_exon_out = 120
     intron_migration = 114
     intron_alternation_novel = 115
@@ -124,7 +125,7 @@ class MatchEventSubtype(Enum):
 
 MatchEvent = namedtuple("MatchEvent", ("event_type", "position"))
 
-def make_event(event_type, position=-1):
+def make_event(event_type, position=None):
     return MatchEvent(event_type, position)
 
 

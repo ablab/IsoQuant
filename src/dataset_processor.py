@@ -17,6 +17,7 @@ from src.gene_info import *
 from src.long_read_counter import *
 from src.multimap_resolver import *
 from src.read_groups import *
+from src.transcript_model_constructor import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -151,6 +152,9 @@ class DatasetProcessor:
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
                                                              current_chr_record, self.read_grouper)
             assignment_storage = alignment_processor.process()
+
+            #transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
+            #transcript_generator.process()
 
             self.dump_reads(assignment_storage, counter)
             counter += 1

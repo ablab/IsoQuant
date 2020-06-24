@@ -13,6 +13,8 @@ logger = logging.getLogger('IsoQuant')
 
 # key, value
 def get_first_best_from_sorted(sorted_list_of_pairs):
+    if not sorted_list_of_pairs:
+        return []
     best_value = sorted_list_of_pairs[0][1]
     result = []
     for x in sorted_list_of_pairs:
@@ -297,6 +299,24 @@ def difference_in_present_features(profile1, profile2):
     return d
 
 
+def count_both_present_features(profile1, profile2):
+    assert len(profile1) == len(profile2)
+    d = 0
+    for i in range(len(profile1)):
+        if profile1[i] == profile2[i] == 1:
+            d += 1
+    return d
+
+
+def all_features_present(isoform_profile, read_profile):
+    assert len(isoform_profile) == len(read_profile)
+    d = 0
+    for i in range(len(isoform_profile)):
+        if isoform_profile[i] == 1 and read_profile[i] != 1:
+            return False
+    return True
+
+
 def find_matching_positions(profile1, profile2):
     assert len(profile1) == len(profile2)
     matches = [0 for i in range(len(profile1))]
@@ -321,6 +341,8 @@ def mask_profile(read_profile, true_profile):
     for i in range(len(true_profile)):
         if true_profile[i] == 1:
             masked_profile.append(read_profile[i])
+        else:
+            masked_profile.append(0)
     return masked_profile
 
 

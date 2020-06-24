@@ -160,16 +160,16 @@ def create_output_dirs(args):
 
 
 def set_logger(args, logger_instnace):
-    logger_instnace.setLevel(logging.INFO)
+    logger_instnace.setLevel(logging.DEBUG)
     log_file = os.path.join(args.output, "isoquant.log")
     f = open(log_file, "w")
     f.write("CMD: " + ' '.join(sys.argv) + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
     #FIXME
-    fh.setLevel(logging.INFO)
+    fh.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
+    ch.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     fh.setFormatter(formatter)
@@ -212,6 +212,13 @@ def set_additional_params(args):
 
     args.indel_near_splice_site_dist = 10
     args.upstream_region_len = 20
+    args.apa_delta = 20
+
+    args.min_ref_supporting_reads = 2
+    args.min_alt_supporting_reads = 4
+    args.count_ambiguous = True
+    args.report_intron_retention = True
+    args.report_apa = True
 
     # TODO move to options
     args.matching_stategy = "take_best"
