@@ -153,8 +153,8 @@ class DatasetProcessor:
                                                              current_chr_record, self.read_grouper)
             assignment_storage = alignment_processor.process()
 
-            #transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
-            #transcript_generator.process()
+            transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
+            transcript_generator.process()
 
             self.dump_reads(assignment_storage, counter)
             counter += 1

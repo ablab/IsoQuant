@@ -169,7 +169,7 @@ def set_logger(args, logger_instnace):
     #FIXME
     fh.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     fh.setFormatter(formatter)
@@ -214,11 +214,18 @@ def set_additional_params(args):
     args.upstream_region_len = 20
     args.apa_delta = 20
 
+    # trascript model construction
+    args.min_ref_fsm_supporting_reads = 1
     args.min_ref_supporting_reads = 2
-    args.min_alt_supporting_reads = 4
-    args.count_ambiguous = True
+    args.min_novel_fsm_supporting_reads = 2
+    args.min_novel_supporting_reads = 3
     args.report_intron_retention = True
-    args.report_apa = True
+    args.max_dist_to_isoforms_tsts = 20
+    args.max_dist_to_novel_tsts = 50
+    args.min_reads_supporting_tsts = 3
+    args.require_polyA = False
+    args.require_cage_peak = False # TODO
+    args.count_ambiguous = True
 
     # TODO move to options
     args.matching_stategy = "take_best"

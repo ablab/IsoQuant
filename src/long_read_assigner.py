@@ -26,12 +26,13 @@ class ExonAmbiguityResolvingMethod(Enum):
 
 
 class LongReadAssigner:
-    extra_left_mod_position = -1000000
-    extra_right_mod_position = 1000000
-
     def __init__(self, gene_info, params):
         self.gene_info = gene_info
         self.params = params
+        self.intron_profile_constructor = \
+            OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features,
+                                                  (self.gene_info.start, self.gene_info.end),
+                                                  comparator = partial(equal_ranges, delta = self.params.delta))
 
     ### ======== SUPPORT FUNCTIONS =======
     def profile_for_junctions_introns(self, junctions, region):
@@ -41,11 +42,7 @@ class LongReadAssigner:
             selected_junctions.append(junctions[i])
 
         logger.debug(str(selected_junctions))
-        intron_profile_constructor = \
-            OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features,
-                                                  (self.gene_info.start, self.gene_info.end),
-                                                  comparator = partial(equal_ranges, delta = self.params.delta))
-        selected_junctions_profile = intron_profile_constructor.construct_profile_for_features(selected_junctions)
+        selected_junctions_profile = self.intron_profile_constructor.construct_profile_for_features(selected_junctions)
         logger.debug(str(selected_junctions_profile.read_profile))
         return selected_junctions_profile
 
@@ -484,10 +481,9 @@ class LongReadAssigner:
         for match in assignment.isoform_matches:
             match.set_classification(MatchClassification.novel_not_in_catalog)
             logger.debug("+ + Found extra terminal introns " + str(read_intron_profile.read_profile))
-            if read_intron_profile.read_profile[0] == 0:
-                match.add_subclassification(make_event(MatchEventSubtype.extra_intron_out_left, self.extra_left_mod_position))
-            if read_intron_profile.read_profile[-1] == 0:
-                match.add_subclassification(make_event(MatchEventSubtype.extra_intron_out_right, self.extra_right_mod_position))
+            isoform_start = self.gene_info.transcript_start(match.assigned_transcript)
+            self.add_extra_out_exon_events(match.match_subclassifications, read_intron_profile.read_profile,
+                                           read_intron_profile.read_features, isoform_start)
 
         if not self.params.allow_extra_terminal_introns:
             if assignment.assignment_type == ReadAssignmentType.unique or \
@@ -498,6 +494,31 @@ class LongReadAssigner:
                 assignment.set_assignment_type(ReadAssignmentType.unique_minor_difference)
 
         return assignment
+
+    def add_extra_out_exon_events(self, match_events, read_intron_read_profile, read_introns, isoform_start):
+        extra_left = read_intron_read_profile[0] == 0
+        extra_right = read_intron_read_profile[-1] == 0
+
+        if all(x == 0 for x in read_intron_read_profile):
+            if read_introns[0][0] < isoform_start:
+                extra_right = False
+            else:
+                extra_left = False
+
+
+        if extra_left:
+            read_pos = 0
+            while read_pos < len(read_intron_read_profile) and read_intron_read_profile[read_pos] == 0:
+                read_pos += 1
+            match_events.append(make_event(MatchEventSubtype.extra_intron_out_left,
+                                           SupplementaryMatchConstansts.extra_left_mod_position, (0, read_pos - 1)))
+        if extra_right:
+            max_right = len(read_intron_read_profile) - 1
+            read_pos = max_right
+            while read_pos >= 0 and read_intron_read_profile[read_pos] == 0:
+                read_pos -= 1
+            match_events.append(make_event(MatchEventSubtype.extra_intron_out_right,
+                                           SupplementaryMatchConstansts.extra_right_mod_position, (read_pos + 1, max_right)))
 
     # resolve when there are -1s in read profile or when there are no exactly matching isoforms, but no -1s in read profiles
     def match_contradictory(self, read_id, combined_read_profile):
@@ -538,7 +559,6 @@ class LongReadAssigner:
         # TODO add Jaccard similarity instead of simple exon matching?
         best_exon_isoforms = list(filter(lambda x: x[0] in best_intron_isoform_ids, exon_matching_isoforms))
         best_isoform_ids = get_first_best_from_sorted(best_exon_isoforms)
-        logger.info(best_isoform_ids)
         if not best_isoform_ids:
             return ReadAssignment(read_id, ReadAssignmentType.empty)
 
@@ -643,7 +663,7 @@ class LongReadAssigner:
                 if (current_contradictory_region != (None, None)):
                     contradictory_region_pairs.append(current_contradictory_region)
                     current_contradictory_region = (None, None)
-                if read_pos > 0 or contains(read_region, isoform_junctions[isoform_pos]):
+                if read_pos > 0 or overlaps(read_region, isoform_junctions[isoform_pos]):
                     if (isoform_features_present[isoform_pos] != -1):
                         contradictory_region_pairs.append(((None, None), (isoform_pos, isoform_pos)))
                     isoform_features_present[isoform_pos] = -1
@@ -654,9 +674,9 @@ class LongReadAssigner:
                 if (current_contradictory_region != (None, None)):
                     contradictory_region_pairs.append(current_contradictory_region)
                     current_contradictory_region = (None, None)
-                if isoform_pos > 0 or contains(isoform_region, read_junctions[read_pos]):
+                if isoform_pos > 0 or overlaps(isoform_region, read_junctions[read_pos]):
                     if (read_features_present[read_pos] != -1):
-                        contradictory_region_pairs.append(((read_pos, read_pos), (None, isoform_pos - 1)))
+                        contradictory_region_pairs.append(((read_pos, read_pos), (None, isoform_pos)))
                     read_features_present[read_pos] = -1
                 read_pos += 1
 
@@ -665,16 +685,16 @@ class LongReadAssigner:
 
         # check terminating regions
         while read_pos < len(read_junctions):
-            if contains(isoform_region, read_junctions[read_pos]):
+            if overlaps(isoform_region, read_junctions[read_pos]):
                 if (read_features_present[read_pos] != -1):
-                    contradictory_region_pairs.append(((read_pos, read_pos), (None, isoform_pos - 1)))
+                    contradictory_region_pairs.append(((read_pos, read_pos), (None, isoform_pos)))
                     read_features_present[read_pos] = -1
             else:
                 break
             read_pos += 1
 
         while isoform_pos < len(isoform_junctions):
-            if contains(read_region, isoform_junctions[isoform_pos]):
+            if overlaps(read_region, isoform_junctions[isoform_pos]):
                 if (isoform_features_present[isoform_pos] != -1):
                     contradictory_region_pairs.append(((None, None), (isoform_pos, isoform_pos)))
                     isoform_features_present[isoform_pos] = -1
@@ -701,10 +721,7 @@ class LongReadAssigner:
             if all(x == 0 for x in read_features_present):
                 return [make_event(MatchEventSubtype.undefined)]
             logger.debug("+ + Found only extra terminal introns " + str(read_features_present))
-            if read_features_present[0] == 0:
-                matching_events.append(make_event(MatchEventSubtype.extra_intron_out_left, self.extra_left_mod_position))
-            if read_features_present[-1] == 0:
-                matching_events.append(make_event(MatchEventSubtype.extra_intron_out_right, self.extra_right_mod_position))
+            self.add_extra_out_exon_events(matching_events, read_features_present, read_junctions, isoform_region[0])
 
         if len(matching_events) == 0:
             logger.debug("No contradition detected, odd case")
@@ -734,12 +751,12 @@ class LongReadAssigner:
 
     def compare_overlapping_contradictional_regions(self, read_junctions, isoform_junctions, read_cregion, isoform_cregion):
         if read_cregion[0] is None:
-            return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0])
+            return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
         elif isoform_cregion[0] is None:
             #intron_start = read_junctions[read_cregion[0]]
             if self.are_known_introns(read_junctions, read_cregion):
-                return make_event(MatchEventSubtype.extra_intron_known, isoform_cregion[1])
-            return make_event(MatchEventSubtype.extra_intron, isoform_cregion[1])
+                return make_event(MatchEventSubtype.extra_intron_known, isoform_cregion[1], read_cregion)
+            return make_event(MatchEventSubtype.extra_intron, isoform_cregion[1], read_cregion)
 
         read_intron_total_len = sum(
             [read_junctions[i][1] - read_junctions[i][0] + 1 for i in range(read_cregion[0], read_cregion[1] + 1)])
@@ -774,7 +791,7 @@ class LongReadAssigner:
                 event = MatchEventSubtype.alternative_structure_known
             else:
                 event = MatchEventSubtype.alternative_structure_novel
-        return make_event(event, isoform_cregion[0])
+        return make_event(event, isoform_cregion[0], read_cregion)
 
     def classify_skipped_exons(self, isoform_junctions, isoform_cregion,
                                total_intron_len_diff, read_introns_known):
@@ -803,10 +820,10 @@ class LongReadAssigner:
         else:
             # TODO correct when strand is negative
             if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) < self.params.delta:
-                event = MatchEventSubtype.alt_acceptor_site if read_introns_known \
+                event = MatchEventSubtype.alt_acceptor_site_known if read_introns_known \
                     else MatchEventSubtype.alt_acceptor_site_novel
             elif abs(isoform_junctions[isoform_cpos][1] - read_junctions[read_cpos][1]) < self.params.delta:
-                event = MatchEventSubtype.alt_donor_site if read_introns_known \
+                event = MatchEventSubtype.alt_donor_site_known if read_introns_known \
                     else MatchEventSubtype.alt_donor_site_novel
             else:
                 event = MatchEventSubtype.intron_alternation_known if read_introns_known \

@@ -56,8 +56,8 @@ class OverlappingFeaturesProfileConstructor:
     def match_delta(self, feature1, feature2):
         return abs(feature1[0] - feature2[0]) + abs(feature1[1] - feature2[1])
 
-    def construct_profile_for_features(self, read_introns, mapped_region = (0, 0)):
-        read_profile = [0] * (len(read_introns))
+    def construct_profile_for_features(self, read_features, mapped_region = (0, 0)):
+        read_profile = [0] * (len(read_features))
         intron_profile = [0] * (len(self.known_features))
         matched_features = defaultdict(list)
 
@@ -65,22 +65,22 @@ class OverlappingFeaturesProfileConstructor:
             if contains(mapped_region, self.known_features[i]):
                 intron_profile[i] = -1
         for i in range(len(read_profile)):
-            if contains(self.gene_region, read_introns[i]):
+            if contains(self.gene_region, read_features[i]):
                 read_profile[i] = -1
 
         gene_pos = 0
         read_pos = 0
         # TODO reduce excessive if statements
-        while gene_pos < len(self.known_features) and read_pos < len(read_introns):
-            if self.comparator(read_introns[read_pos], self.known_features[gene_pos]):
+        while gene_pos < len(self.known_features) and read_pos < len(read_features):
+            if self.comparator(read_features[read_pos], self.known_features[gene_pos]):
                 intron_profile[gene_pos] = 1
                 read_profile[read_pos] = 1
                 matched_features[read_pos].append(gene_pos)
                 gene_pos += 1
-            elif overlaps(read_introns[read_pos], self.known_features[gene_pos]):
+            elif overlaps(read_features[read_pos], self.known_features[gene_pos]):
                 intron_profile[gene_pos] = -1
                 gene_pos += 1
-            elif left_of(read_introns[read_pos], self.known_features[gene_pos]):
+            elif left_of(read_features[read_pos], self.known_features[gene_pos]):
                 if read_profile[read_pos] == 0 and gene_pos > 0:
                     read_profile[read_pos] = -1
                 read_pos += 1
@@ -92,14 +92,14 @@ class OverlappingFeaturesProfileConstructor:
         # eliminating non unique features
         for read_pos in matched_features.keys():
             if len(matched_features[read_pos]) > 1:
-                deltas = [self.match_delta(read_introns[read_pos], self.known_features[gene_pos])
+                deltas = [self.match_delta(read_features[read_pos], self.known_features[gene_pos])
                           for gene_pos in matched_features[read_pos]]
                 best_match = min(deltas)
                 for i in range(len(matched_features[read_pos])):
                     if deltas[i] > best_match:
                         intron_profile[matched_features[read_pos][i]] = -1
 
-        return MappedReadProfile(intron_profile, read_profile, read_introns)
+        return MappedReadProfile(intron_profile, read_profile, read_features)
 
 #accepts sorted gapless alignment blocks
 class NonOverlappingFeaturesProfileConstructor:
