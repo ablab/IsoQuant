@@ -135,7 +135,7 @@ class DatasetProcessor:
             os.makedirs(self.tmp_dir)
 
         out_gff = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".")
-        gff_printer = GFFPrinter(out_gff)
+        gff_printer = GFFPrinter(out_gff, sample.label)
 
         current_chromosome = ""
         current_chr_record = None

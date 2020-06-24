@@ -33,17 +33,22 @@ class TranscriptModel:
 
 
 class GFFPrinter:
-    def __init__(self, outf_prefix, sample_name = "",print_meta_features=False):
+    def __init__(self, outf_prefix, sample_name,print_meta_features=False):
         self.out_gff = open(outf_prefix + "transcript_models.gff", "w")
         self.out_gff.write("# " + sample_name + " IsoQuant generated GFF\n")
         self.out_r2t = open(outf_prefix + "reads_transcript_map.tsv", "w")
         self.out_r2t.write("#read_id\ttranscript_id\n")
+        self.out_counts = open(outf_prefix + "reads_transcript_map.tsv", "w")
+        self.out_counts.write("#ID\ttranscript_id\n")
+        self.out_bed = open(outf_prefix + "mapped_reads.bed", "w")
         # TODO implement meta features
         self.print_meta_features = print_meta_features
 
     def __del__(self):
         self.out_gff.close()
         self.out_r2t.close()
+        self.out_bed.close()
+        self.out_counts.close()
 
     def dump(self, transcript_model_constructor):
         for model in transcript_model_constructor.transcript_model_storage:
@@ -55,9 +60,18 @@ class GFFPrinter:
             for e in model.exon_blocks:
                 self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns)
 
+        used_reads = set()
         for model_id in transcript_model_constructor.transcript_read_ids.keys():
             for read_id in transcript_model_constructor.transcript_read_ids[model_id]:
+                used_reads.add(read_id)
                 self.out_r2t.write("%s\t%s\n" % (read_id, model_id))
+
+        for read_assignment in transcript_model_constructor.read_assignment_storage:
+            if read_assignment.read_id not in used_reads:
+                self.out_r2t.write("%s\t%s\n" % (read_assignment.read_id, "*"))
+
+
+
 
 
 # constructor of discovered transcript models from read assignments
@@ -310,8 +324,9 @@ class TranscriptModelConstructor:
                 current_events = modification_events_map[isoform_pos]
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, novel_exons, current_exon_start)
-                if left_of(novel_exons[-1], isoform_introns[isoform_pos]):
-                    # FIXME dirty hack
+                if current_exon_start < isoform_introns[isoform_pos][0]:
+                    # intron modification was processed but nothing overlapping was added =>
+                    # extra intron within previous exon => add this intron as is
                     current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
                 isoform_pos += 1
                 while isoform_pos < len(isoform_introns) and isoform_introns[isoform_pos][0] < current_exon_start:
