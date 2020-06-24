@@ -513,6 +513,7 @@ class TranscriptModelConstructor:
         model_intron_profile_constructor = \
             OverlappingFeaturesProfileConstructor(model_introns, (model_exons[0][0], model_exons[-1][1]),
                                                   comparator = partial(equal_ranges, delta = self.params.delta))
+        intron_comparator = JunctionComparator(self.params, model_intron_profile_constructor)
 
         assigned_reads = []
         fsm_match_count = 0
@@ -520,15 +521,23 @@ class TranscriptModelConstructor:
         nearby_starts_count = 0
         nearby_ends_count = 0
         for assignment in read_assignments:
-            read_region = (self.get_read_region(strand, assignment.combined_profile))
             read_introns = assignment.combined_profile.read_intron_profile.read_features
-            read_profile = \
-                model_intron_profile_constructor.construct_profile_for_features(read_introns, read_region)
-
             read_start, read_end = self.get_read_region(strand, assignment.combined_profile)
             start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
             end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
-            profile_matches =  all(el == 1 for el in read_profile.read_profile)
+            #profile_matches =  all(el == 1 for el in read_profile.read_profile)
+
+            matching_events = \
+                intron_comparator.compare_junctions(read_introns, (read_start, read_end),
+                                                    model_introns, (isoform_start, isoform_end))
+            # check that no serious contradiction occurs
+            profile_matches = True
+            if len(matching_events) > 1 or \
+                (len(matching_events) == 1 and matching_events[0].event_type != MatchEventSubtype.none):
+                for e in matching_events:
+                    if e.event_type in nnic_event_types or e.event_type in nic_event_types:
+                        profile_matches = False
+                        break
 
             if profile_matches:
                 if start_matches:
@@ -537,7 +546,10 @@ class TranscriptModelConstructor:
                     nearby_ends_count += 1
                 # all read introns were mapped, read is assigned
                 assigned_reads.append(assignment.read_id)
-                if all(el == 1 for el in read_profile.gene_profile):
+                # since profile is not relibale due to intron shifts etc
+                # considering that there are no serious errors, covering all introns in enough
+                is_fsm = contains((read_start, read_end), (model_introns[0][0], model_introns[-1][1]))
+                if is_fsm:
                     # all introns of novel model are covered
                     fsm_match_count += 1
             else:
@@ -548,8 +560,6 @@ class TranscriptModelConstructor:
             logger.debug("Read %s" % assignment.read_id)
             logger.debug(assignment.combined_profile.read_exon_profile.read_features)
             logger.debug(read_introns)
-            logger.debug(read_profile.gene_profile)
-            logger.debug(read_profile.read_profile)
 
         # TODO remove temp assert
         assert fsm_match_count > 0

@@ -135,7 +135,7 @@ class JunctionComparator():
             self.add_extra_out_exon_events(matching_events, read_features_present, read_junctions, isoform_region[0])
 
         if len(matching_events) == 0:
-            logger.debug("No contradition detected, odd case")
+            logger.debug("No contradition detected")
             return [make_event(MatchEventSubtype.none)]
         return matching_events
 

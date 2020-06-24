@@ -184,10 +184,10 @@ def set_additional_params(args):
                            'allow_extra_terminal_introns', 'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   Strategy(0,  0,   0,   0,   ExonAmbiguityResolvingMethod.mono_exonic_only, False, False),
-        'precise': Strategy(3,  30,  30,  30,  ExonAmbiguityResolvingMethod.mono_exonic_only, False, True),
-        'default': Strategy(6,  300, 100, 200, ExonAmbiguityResolvingMethod.mono_exonic_only, False, True),
-        'loose':   Strategy(12, 300, 300, 300, ExonAmbiguityResolvingMethod.all,  True,  True),
+        'exact':   Strategy(0,  5,   0,   0,   False, ExonAmbiguityResolvingMethod.mono_exonic_only, False),
+        'precise': Strategy(3,  10,  30,  50,  False, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'default': Strategy(6,  30,  60,  200, False, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'loose':   Strategy(12, 100, 200, 300, True,  ExonAmbiguityResolvingMethod.all,  True),
     }
 
     strategy = strategies[args.matching_strategy]
