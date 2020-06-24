@@ -41,9 +41,7 @@ class LongReadAssigner:
         for i in range(region[0], region[1] + 1):
             selected_junctions.append(junctions[i])
 
-        logger.debug(str(selected_junctions))
         selected_junctions_profile = self.intron_profile_constructor.construct_profile_for_features(selected_junctions)
-        logger.debug(str(selected_junctions_profile.read_profile))
         return selected_junctions_profile
 
     def are_known_introns(self, junctions, region):
@@ -267,15 +265,15 @@ class LongReadAssigner:
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
-        logger.debug("> Read blocks" + str(read_split_exon_profile.read_features))
-        logger.debug("Gene split exons" + str(self.gene_info.split_exon_profiles.features))
-        logger.debug("Read exons profile" + str(read_split_exon_profile.read_profile))
-        logger.debug("Gene exons profile" + str(read_split_exon_profile.gene_profile))
+        #logger.debug("> Read blocks" + str(read_split_exon_profile.read_features))
+        #logger.debug("Gene split exons" + str(self.gene_info.split_exon_profiles.features))
+        #logger.debug("Read exons profile" + str(read_split_exon_profile.read_profile))
+        #logger.debug("Gene exons profile" + str(read_split_exon_profile.gene_profile))
 
-        logger.debug("< Read introns" + str(read_intron_profile.read_features))
-        logger.debug("Gene introns" + str(self.gene_info.intron_profiles.features))
-        logger.debug("Read intron profile" + str(read_intron_profile.read_profile))
-        logger.debug("Gene intron profile" + str(read_intron_profile.gene_profile))
+        #logger.debug("< Read introns" + str(read_intron_profile.read_features))
+        #logger.debug("Gene introns" + str(self.gene_info.intron_profiles.features))
+        #logger.debug("Read intron profile" + str(read_intron_profile.read_profile))
+        #logger.debug("Gene intron profile" + str(read_intron_profile.gene_profile))
 
         if all(el == 0 for el in read_split_exon_profile.read_profile) or all(el == 0 for el in read_split_exon_profile.gene_profile):
             # none of the blocks matched
@@ -340,8 +338,8 @@ class LongReadAssigner:
             isoform_id = list(intron_matched_isoforms)[0]
 
             logger.debug("+ + UNIQUE intron match found " + isoform_id)
-            logger.debug("Exon profile: " + str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
-            logger.debug("Intron profile: " + str(self.gene_info.intron_profiles.profiles[isoform_id]))
+            #logger.debug("Exon profile: " + str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
+            #logger.debug("Intron profile: " + str(self.gene_info.intron_profiles.profiles[isoform_id]))
 
             isoform_match = self.categorize_correct_splice_match(read_intron_profile, isoform_id)
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match)
@@ -351,7 +349,7 @@ class LongReadAssigner:
             read_split_exon_profile = combined_read_profile.read_split_exon_profile
             exon_matched_isoforms = self.find_matching_isoforms(read_split_exon_profile.gene_profile,
                                                                 self.gene_info.split_exon_profiles.profiles)
-            logger.debug("Exon matched " + str(exon_matched_isoforms))
+            #logger.debug("Exon matched " + str(exon_matched_isoforms))
             matched_isoforms = intron_matched_isoforms.intersection(exon_matched_isoforms)
 
             if len(matched_isoforms) == 1:
@@ -373,12 +371,12 @@ class LongReadAssigner:
         read_intron_profile = combined_read_profile.read_intron_profile
         assert read_intron_profile
 
-        counter = 0
-        for isoform_id in mathched_isoforms:
-            logger.debug("+ + Detected match " + str(counter) + ": " + isoform_id)
-            counter += 1
-            logger.debug("Exon profile: " + str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
-            logger.debug("Intron profile: " + str(self.gene_info.intron_profiles.profiles[isoform_id]))
+        #counter = 0
+        #for isoform_id in mathched_isoforms:
+        #    logger.debug("+ + Detected match " + str(counter) + ": " + isoform_id)
+        #    counter += 1
+        #    logger.debug("Exon profile: " + str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
+        #    logger.debug("Intron profile: " + str(self.gene_info.intron_profiles.profiles[isoform_id]))
 
         if self.params.resolve_ambiguous == ExonAmbiguityResolvingMethod.all or \
                 self.params.resolve_ambiguous == ExonAmbiguityResolvingMethod.full_splice_matches_only:
@@ -457,7 +455,7 @@ class LongReadAssigner:
             isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
             jaccard_similarities.append((isoform_id, jaccard_similarity(read_exons, isoform_exons)))
 
-        logger.debug(jaccard_similarities)
+        #logger.debug(jaccard_similarities)
         best_score = max([x[1] for x in jaccard_similarities])
         top_scored = list(filter(lambda x: x[1] * top_scored_factor >= best_score and
                                  x[1] >= min_similarity,
@@ -468,7 +466,6 @@ class LongReadAssigner:
     # resolve when there are 0s  at the ends of read profile
     def match_with_extra_flanking(self, read_id, combined_read_profile):
         read_intron_profile = combined_read_profile.read_intron_profile
-        logger.debug("+ + " + str(read_intron_profile.read_profile))
         if read_intron_profile.read_profile[0] == 1 and read_intron_profile.read_profile[-1] == 1:
             logger.warning("+ + Both terminal introns present, odd case")
 
@@ -565,8 +562,8 @@ class LongReadAssigner:
         assignment = ReadAssignment(read_id, ReadAssignmentType.contradictory)
         logger.debug("+ + Closest matching isoforms " + str(best_isoform_ids))
         isoform_id = best_isoform_ids[0]
-        logger.debug(str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
-        logger.debug(str(self.gene_info.intron_profiles.profiles[isoform_id]))
+        #logger.debug(str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
+        #logger.debug(str(self.gene_info.intron_profiles.profiles[isoform_id]))
 
         for isoform_id in best_isoform_ids:
             logger.debug("Checking isoform %s" % isoform_id)
@@ -703,13 +700,13 @@ class LongReadAssigner:
             isoform_pos += 1
 
         logger.debug("+ + Inspected contradictory read")
-        logger.debug("+ + Read profile " + str(read_features_present))
-        logger.debug("+ + Read introns " + str(read_junctions))
-        logger.debug("+ + Read region " + str(read_region))
+        #logger.debug("+ + Read profile " + str(read_features_present))
+        #logger.debug("+ + Read introns " + str(read_junctions))
+        #logger.debug("+ + Read region " + str(read_region))
 
-        logger.debug("+ + Isoform profile " + str(isoform_features_present))
-        logger.debug("+ + Isoform introns " + str(isoform_junctions))
-        logger.debug("+ + Isoform region " + str(isoform_region))
+        #logger.debug("+ + Isoform profile " + str(isoform_features_present))
+        #logger.debug("+ + Isoform introns " + str(isoform_junctions))
+        #logger.debug("+ + Isoform region " + str(isoform_region))
 
         matching_events = []
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
@@ -720,7 +717,7 @@ class LongReadAssigner:
         if read_features_present[0] == 0 or read_features_present[-1] == 0:
             if all(x == 0 for x in read_features_present):
                 return [make_event(MatchEventSubtype.undefined)]
-            logger.debug("+ + Found only extra terminal introns " + str(read_features_present))
+            logger.debug("+ + Found only extra terminal introns ")
             self.add_extra_out_exon_events(matching_events, read_features_present, read_junctions, isoform_region[0])
 
         if len(matching_events) == 0:

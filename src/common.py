@@ -146,8 +146,6 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
     pos2 = 0
     included1 = [0 for i in range(len(sorted_range_list1))]
     included2 = [0 for i in range(len(sorted_range_list2))]
-    logger.debug(sorted_range_list1)
-    logger.debug(sorted_range_list2)
 
     while pos1 < len(sorted_range_list1) and pos2 < len(sorted_range_list2):
         block1 = sorted_range_list1[pos1]
@@ -194,7 +192,6 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
         pos2 += 1
 
     assert (union != 0)
-    logger.debug("Similarity = %f " % (float(intersection) / float(union)))
     return float(intersection) / float(union)
 
 
@@ -236,9 +233,9 @@ def concat_gapless_blocks(blocks, cigar_tuples):
             current_block = (current_block[0], current_block[1] + cigar_tuples[cigar_index][1])
         # found match - merge blocks
         elif cigar_tuples[cigar_index][0] == 0:
-            if abs(current_block[1] - blocks[block_index][0]) > 1:
-                logger.debug("Distant blocks")
-                logger.debug(current_block, blocks[block_index])
+            #if abs(current_block[1] - blocks[block_index][0]) > 1:
+            #    logger.debug("Distant blocks")
+            #    logger.debug(current_block, blocks[block_index])
             current_block = (current_block[0], blocks[block_index][1])
 
             block_index += 1

@@ -71,7 +71,7 @@ def parse_args():
                                              "using read id (read_id:DELIM)", type=str)
     parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
                         help="matching strategy to use from most strict to least", type=str, default="default")
-    parser.add_argument("--no-sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=False)
+    parser.add_argument("--no-sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=True)
     parser.add_argument("--count-exons", help="perform exont and intron counting", action='store_true', default=False)
 
     ## ADDITIONAL OPTIONS
@@ -223,7 +223,7 @@ def set_additional_params(args):
     args.max_dist_to_isoforms_tsts = 20
     args.max_dist_to_novel_tsts = 50
     args.min_reads_supporting_tsts = 3
-    args.require_polyA = False
+    args.require_polyA = True
     args.require_cage_peak = False # TODO
     args.collapse_subisoforms = True
     args.count_ambiguous = True

@@ -302,16 +302,17 @@ class TranscriptModelConstructor:
                     break
 
                 # simply select reference isoform intron
-                exon = (current_exon_start, isoform_introns[isoform_pos][0] - 1)
-                logger.debug("Adding ref exon: %d, %d, %s" % (isoform_pos, current_exon_start, exon))
-                novel_exons.append(exon)
-                current_exon_start = isoform_introns[isoform_pos][1] + 1
+                logger.debug("Adding ref exon: %d, %d" % (isoform_pos, current_exon_start))
+                current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
                 isoform_pos += 1
 
             else:
                 current_events = modification_events_map[isoform_pos]
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, novel_exons, current_exon_start)
+                if left_of(novel_exons[-1], isoform_introns[isoform_pos]):
+                    # FIXME dirty hack
+                    current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
                 isoform_pos += 1
                 while isoform_pos < len(isoform_introns) and isoform_introns[isoform_pos][0] < current_exon_start:
                     isoform_pos += 1
