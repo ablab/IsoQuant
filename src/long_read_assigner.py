@@ -159,6 +159,7 @@ class LongReadAssigner:
 
     # check where it is full splice match
     def is_fsm(self, read_intron_profile, isoform_id):
+        # TODO include check for minor alignment errors
         read_profile = read_intron_profile.gene_profile
         if not read_intron_profile.read_profile or not all(el == 1 for el in read_intron_profile.read_profile):
             return False

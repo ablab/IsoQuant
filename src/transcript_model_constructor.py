@@ -351,7 +351,8 @@ class TranscriptModelConstructor:
                 current_events = modification_events_map[isoform_pos]
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, novel_exons, current_exon_start)
-                if isoform_pos < len(isoform_introns) and current_exon_start < isoform_introns[isoform_pos][0]:
+                if isoform_pos < len(isoform_introns) and current_exon_start < isoform_introns[isoform_pos][0] and \
+                        isoform_introns[isoform_pos][0] < read_end:
                     # intron modification was processed but nothing overlapping was added =>
                     # extra intron within previous exon => add this intron as is
                     # check that is was really extra intron
@@ -563,6 +564,9 @@ class TranscriptModelConstructor:
             matching_events = \
                 intron_comparator.compare_junctions(read_introns, (read_start, read_end),
                                                     model_introns, (isoform_start, isoform_end))
+
+            #logger.debug("Read %s, start %d, end %d, events %s" % (assignment.read_id, read_start, read_end, str(matching_events)))
+
             # check that no serious contradiction occurs
             profile_matches = True
             if len(matching_events) > 1 or \
@@ -588,12 +592,11 @@ class TranscriptModelConstructor:
             else:
                 unassigned_reads.append(assignment)
 
-        if fsm_match_count == 0:
-            logger.warning("Zero FSM for transcript model %s" % transcript_model.transcript_id)
-
         # logger.debug("Stats for %s, FSM = %d, total = %d, start = %d, end = %d" %
         #             (transcript_model.transcript_id, fsm_match_count, len(assigned_reads),
         #              nearby_starts_count, nearby_ends_count))
+        if fsm_match_count == 0:
+            logger.warning("Zero FSM for transcript model %s" % transcript_model.transcript_id)
 
         if len(assigned_reads) >= self.params.min_novel_supporting_reads and \
                 fsm_match_count >= self.params.min_novel_fsm_supporting_reads and \
