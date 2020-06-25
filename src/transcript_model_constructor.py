@@ -39,9 +39,10 @@ class GFFPrinter:
         self.out_gff.write("# " + sample_name + " IsoQuant generated GFF\n")
         self.out_r2t = open(outf_prefix + "reads_transcript_map.tsv", "w")
         self.out_r2t.write("#read_id\ttranscript_id\n")
-        self.out_counts = open(outf_prefix + "reads_transcript_map.tsv", "w")
-        self.out_counts.write("#ID\ttranscript_id\n")
+        self.out_counts = open(outf_prefix + "expression.tsv", "w")
+        self.out_counts.write("#ID\t%s\n" % sample_name)
         self.out_bed = open(outf_prefix + "mapped_reads.bed", "w")
+        self.out_bed.write("#chrom\tchromStart\tchromEnd\tname\tscore\tstrand\tblockCount\tblockSizes\tblockStarts\n")
         # TODO implement meta features
         self.print_meta_features = print_meta_features
 
@@ -87,11 +88,18 @@ class GFFPrinter:
                 strand = read_assignment.mapped_strand
             else:
                 strand = list(strands)[0]
+            chr_id = read_assignment.gene_info.chr_id
+            exon_blocks = read_assignment.combined_profile.read_exon_profile.read_features
 
-            self.out_bed.write("%s\t%d\t%d\t")
+            self.out_bed.write("%s\t%d\t%d\t%s\t0\t%s\t%d\t%s\t%s\n" %
+                               (chr_id, exon_blocks[0][0] - 1, exon_blocks[-1][1],
+                                read_assignment.read_id, strand, len(exon_blocks),
+                                ",".join([str(e[1] - e[0] + 1) for e in exon_blocks]),
+                                ",".join([str(e[0] - 1) for e in exon_blocks])))
 
-
-
+        for id in transcript_model_constructor.transcript_counts.keys():
+            counts = transcript_model_constructor.transcript_counts[id]
+            self.out_counts.write("%s\t%.2f\n" % (id, counts))
 
 
 # constructor of discovered transcript models from read assignments
@@ -147,8 +155,6 @@ class TranscriptModelConstructor:
 
         # merge constructed transcripts
         self.collapse_similar_isoforms(candidate_model_storage)
-
-        # count reads
 
     def get_transcript_id(self):
         TranscriptModelConstructor.transcript_id_counter += 1
@@ -635,6 +641,8 @@ class TranscriptModelConstructor:
             if model is None:
                 continue
             self.transcript_model_storage.append(model)
+            id = model.transcript_id
+            self.transcript_counts[id] = len(self.transcript_read_ids[id])
 
     # check in one isoform can be collapes into another
     def check_if_subisoform(self, big_transcript_model, small_transcript_model):

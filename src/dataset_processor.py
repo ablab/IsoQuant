@@ -134,8 +134,7 @@ class DatasetProcessor:
         if not os.path.isdir(self.tmp_dir):
             os.makedirs(self.tmp_dir)
 
-        out_gff = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".")
-        gff_printer = GFFPrinter(out_gff, sample.label)
+        gff_printer = GFFPrinter(sample.out_dir + "/", sample.label)
 
         current_chromosome = ""
         current_chr_record = None
@@ -166,7 +165,7 @@ class DatasetProcessor:
         logger.info("Combining output")
         self.aggregate_reads(sample)
         os.rmdir(self.tmp_dir)
-        logger.info("Transcript model file " + out_gff  + "transcript_models.gff")
+        logger.info("Transcript model file " + sample.out_dir  + "/transcript_models.gff")
         logger.info("Processed sample " + sample.label)
 
     def dump_reads(self, read_storage, gene_counter):
