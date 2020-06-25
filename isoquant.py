@@ -206,7 +206,7 @@ def set_additional_params(args):
 
     # TODO proper options
     args.print_additional_info = True
-    args.skip_secondary = True
+    args.skip_secondary = False
 
     args.memory_efficient = False
 

@@ -80,7 +80,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
             line = read_assignment.read_id  + "\t.\t.\t."
         else:
-            assigned_transcripts = [m.assigned_transcript for m in read_assignment.isoform_matches]
+            assigned_transcripts = [str(m.assigned_transcript) for m in read_assignment.isoform_matches]
             for m in read_assignment.isoform_matches:
                 for x in m.match_subclassifications:
                     if not hasattr(x, "event_type"):
@@ -174,6 +174,8 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         match = read_assignment.isoform_matches[0]
         gene_id = match.assigned_gene
         transcript_id = match.assigned_transcript
+        if transcript_id is None:
+            return
         strand = gene_info.isoform_strands[transcript_id]
 
         # FIXME not genomic distance

@@ -107,6 +107,7 @@ class LongReadAlignmentProcessor:
                 read_assignment.combined_profile = combined_profile
                 read_assignment.gene_info = self.gene_info
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
+                read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
 
                 if not self.params.no_sqanti_output:
                     indel_count, junctions_with_indels = self.count_indel_stats(alignment)

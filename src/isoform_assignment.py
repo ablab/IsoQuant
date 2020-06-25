@@ -115,12 +115,14 @@ nnic_event_types = {MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.al
                     MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_out_left,
                     MatchEventSubtype.extra_intron_out_right,MatchEventSubtype.mutually_exclusive_exons_novel,
                     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
-                    MatchEventSubtype.alternative_structure_novel}
+                    MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel}
 nic_event_types = {MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
                    MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
                    MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
                    MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
-                   MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known}
+                   MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
+                   MatchEventSubtype.intron_alternation_known}
+
 
 class SupplementaryMatchConstansts:
     extra_left_mod_position = -1000000
@@ -129,12 +131,13 @@ class SupplementaryMatchConstansts:
 
 MatchEvent = namedtuple("MatchEvent", ("event_type", "isoform_position", "read_region"))
 
+
 def make_event(event_type, isoform_position=None, read_region=None):
     return MatchEvent(event_type, isoform_position, read_region)
 
 
 class IsoformMatch:
-    def __init__(self, match_classification, assigned_gene = "None", assigned_transcript = "None",
+    def __init__(self, match_classification, assigned_gene = None, assigned_transcript = None,
                  match_subclassification = None):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
