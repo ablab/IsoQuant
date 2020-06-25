@@ -223,7 +223,7 @@ def set_additional_params(args):
     args.max_dist_to_isoforms_tsts = 20
     args.max_dist_to_novel_tsts = 50
     args.min_reads_supporting_tsts = 3
-    args.require_polyA = True
+    args.require_polyA = False
     args.require_cage_peak = False # TODO
     args.collapse_subisoforms = True
     args.count_ambiguous = True
