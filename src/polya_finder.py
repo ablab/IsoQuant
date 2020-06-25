@@ -29,6 +29,8 @@ class PolyAFinder:
             clipped_size = cigar_tuples[-1][1]
 
         seq = alignment.seq
+        if not seq:
+            return -1
         tail_len = min(clipped_size+self.window_size, len(seq))
         tail_start = len(seq) - tail_len
         pos = self.find_polya(alignment.seq[tail_start:].upper())
@@ -52,6 +54,8 @@ class PolyAFinder:
             clipped_size = cigar_tuples[0][1]
 
         seq = alignment.seq
+        if not seq:
+            return -1
         head_len = min(clipped_size+self.window_size, len(seq))
         rc_head = str(Seq.Seq(alignment.seq[:head_len]).reverse_complement()).upper()
         pos = self.find_polya(rc_head)
