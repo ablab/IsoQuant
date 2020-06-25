@@ -520,7 +520,7 @@ class TranscriptModelConstructor:
                 read_end = combined_profile.read_exon_profile.read_features[-1][1]
         else:
             read_end = combined_profile.read_exon_profile.read_features[-1][1]
-            if combined_profile.polya_pos != -1:
+            if combined_profile.polyt_pos != -1:
                 read_start = combined_profile.polyt_pos
             else:
                 read_start = combined_profile.read_exon_profile.read_features[0][0]
