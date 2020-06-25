@@ -413,7 +413,9 @@ class TranscriptModelConstructor:
             # simply skip reference intron
             return current_exon_start
 
-        assert event_tuple.read_region is not None
+        if event_tuple.read_region == (JunctionComparator.absent, JunctionComparator.absent):
+            logger.warning("Undefined read intron position for event type: %s" % event_tuple.event_type.name)
+            return current_exon_start
         read_intron = read_introns[event_tuple.read_region[0]]
         #logger.debug("Novel intron " + str(read_intron))
 
