@@ -31,17 +31,18 @@ class PolyAFinder:
         seq = alignment.seq
         if not seq:
             return -1
-        tail_len = min(clipped_size+self.window_size, len(seq))
-        tail_start = len(seq) - tail_len
-        pos = self.find_polya(alignment.seq[tail_start:].upper())
+        whole_tail_len = min(clipped_size+self.window_size, len(seq))
+        check_tail_start = len(seq) - whole_tail_len
+        check_tail_end = min(check_tail_start + 3 * self.window_size, len(seq))
+        pos = self.find_polya(alignment.seq[check_tail_start:check_tail_end].upper())
         if pos == -1:
             logger.debug("No polyA found")
             return -1
         # FIXME this does not include indels
-        ref_tail_start = alignment.reference_end + clipped_size - tail_len
+        ref_tail_start = alignment.reference_end + clipped_size - whole_tail_len
         ref_polya_start = ref_tail_start + pos + 1
         logger.debug("PolyA found at position %d" % ref_polya_start)
-        return ref_polya_start
+        return min(ref_polya_start, alignment.reference_end)
 
     def find_polyt_head(self, alignment):
         logger.debug("Detecting polyT head for %s " % alignment.query_name)
@@ -56,17 +57,20 @@ class PolyAFinder:
         seq = alignment.seq
         if not seq:
             return -1
-        head_len = min(clipped_size+self.window_size, len(seq))
-        rc_head = str(Seq.Seq(alignment.seq[:head_len]).reverse_complement()).upper()
+        whole_head_len = min(clipped_size+self.window_size, len(seq))
+        check_head_end = 0 + whole_head_len
+        check_head_start = max(check_head_end - 3 * self.window_size, 0)
+
+        rc_head = str(Seq.Seq(alignment.seq[check_head_start:check_head_end]).reverse_complement()).upper()
         pos = self.find_polya(rc_head)
         if pos == -1:
             logger.debug("No polyT found")
             return -1
         # FIXME this does not include indels
-        ref_head_end = alignment.reference_start - clipped_size + head_len
-        ref_polyt_end = ref_head_end - pos
+        ref_head_end = alignment.reference_start - clipped_size + whole_head_len
+        ref_polyt_end = max(alignment.reference_start, ref_head_end - pos)
         logger.debug("PolyA found at position %d" % ref_polyt_end)
-        return ref_polyt_end
+        return max(ref_polyt_end, alignment.reference_start)
 
     # poly A tail detection
     def find_polya(self, seq):

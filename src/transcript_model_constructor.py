@@ -595,6 +595,7 @@ class TranscriptModelConstructor:
         # logger.debug("Stats for %s, FSM = %d, total = %d, start = %d, end = %d" %
         #             (transcript_model.transcript_id, fsm_match_count, len(assigned_reads),
         #              nearby_starts_count, nearby_ends_count))
+
         if fsm_match_count == 0:
             logger.warning("Zero FSM for transcript model %s" % transcript_model.transcript_id)
 
