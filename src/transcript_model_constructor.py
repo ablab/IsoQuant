@@ -148,10 +148,10 @@ class TranscriptModelConstructor:
         for isoform_id in self.modified_isoforms_groups.keys():
             for modification in self.modified_isoforms_groups[isoform_id].keys():
                 assignments = self.modified_isoforms_groups[isoform_id][modification]
-                logger.debug("== Processing modidication cluster for isoform %s of size %d, modifications:" %
-                             (isoform_id, len(assignments)))
-                logger.debug(", ".join(["%s: %s - %s" % (x.event_type.name, str(x.isoform_position), str(x.read_region))
-                                        for x in modification]))
+                # logger.debug("== Processing modidication cluster for isoform %s of size %d, modifications:" %
+                #             (isoform_id, len(assignments)))
+                # logger.debug(", ".join(["%s: %s" % (x[0], str(x[1])) for x in modification]))
+                # TODO: if modification type is only extra introns, filter out those that have distant intron positions
                 self.process_isoform_modifications(isoform_id, assignments, candidate_model_storage)
 
         # merge constructed transcripts
@@ -177,16 +177,16 @@ class TranscriptModelConstructor:
                     significant_events = []
                     for event in match.match_subclassifications:
                         if event.event_type in self.events_to_track:
-                            significant_events.append(event)
+                            significant_events.append((event.event_type, event.isoform_position))
                     if significant_events:
                         self.modified_isoforms_groups[isoform_id][tuple(significant_events)].append(read_assignment)
 
-        logger.debug("Constructed %d correct clusters and %d clusters with modifications" %
-                     (len(self.correct_matches), len(self.modified_isoforms_groups)))
+        # logger.debug("Constructed %d correct clusters and %d clusters with modifications" %
+        #              (len(self.correct_matches), len(self.modified_isoforms_groups)))
 
     # process correctly assigned reads and for a reference-identical transcript
     def verify_correct_match(self, isoform_id, assignments):
-        logger.debug("Verifying correct match to %s, cluster size %d" % (isoform_id, len(assignments)))
+        # logger.debug("Verifying correct match to %s, cluster size %d" % (isoform_id, len(assignments)))
         unique_assignments = list(filter(lambda x:x.assignment_type in
                                                   {ReadAssignmentType.unique_minor_difference, ReadAssignmentType.unique},
                                          assignments))
@@ -211,7 +211,7 @@ class TranscriptModelConstructor:
 
         new_transcript_model = self.transcript_from_reference(isoform_id)
         self.transcript_model_storage.append(new_transcript_model)
-        logger.debug("Created transcript model %s" % new_transcript_model.transcript_id)
+        # logger.debug("Created transcript model %s" % new_transcript_model.transcript_id)
         #logger.debug(new_transcript_model.exon_blocks)
 
         assignments_to_consider = assignments if self.params.count_ambiguous else unique_assignments
@@ -258,8 +258,8 @@ class TranscriptModelConstructor:
             if not new_transcript_model:
                 #logger.debug("> No novel model was constructed")
                 return
-            logger.debug("Created new candidate transcript model %s : %s " %
-                         (new_transcript_model.transcript_id, str(new_transcript_model.exon_blocks)))
+            # logger.debug("Created new candidate transcript model %s : %s " %
+            #             (new_transcript_model.transcript_id, str(new_transcript_model.exon_blocks)))
             # compare read junctions with novel transcript model, count them and keep only those that do not match
             remaining_assignments = self.verify_novel_model(remaining_assignments, new_transcript_model,
                                                             representative_read_assignment.read_id,
@@ -301,7 +301,7 @@ class TranscriptModelConstructor:
             return read_coords_to_assignment[tss_positions[-1]]
 
     def blend_read_into_isoform(self, isoform_id, read_assignment):
-        logger.debug("Creating novel transcript model for isoform %s and read %s" % (isoform_id, read_assignment.read_id))
+        # logger.debug("Creating novel transcript model for isoform %s and read %s" % (isoform_id, read_assignment.read_id))
         modification_events_map = self.derive_significant_modifications_map(isoform_id, read_assignment)
         if not modification_events_map:
             return None
