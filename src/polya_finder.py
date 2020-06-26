@@ -31,9 +31,10 @@ class PolyAFinder:
         seq = alignment.seq
         if not seq:
             return -1
-        whole_tail_len = min(clipped_size+self.window_size, len(seq))
+        # TODO check read end, but also check that we do not clip the entire last exon
+        whole_tail_len = min(clipped_size, len(seq))
         check_tail_start = len(seq) - whole_tail_len
-        check_tail_end = min(check_tail_start + 3 * self.window_size, len(seq))
+        check_tail_end = min(check_tail_start + 2 * self.window_size, len(seq))
         pos = self.find_polya(alignment.seq[check_tail_start:check_tail_end].upper())
         if pos == -1:
             logger.debug("No polyA found")
@@ -57,9 +58,9 @@ class PolyAFinder:
         seq = alignment.seq
         if not seq:
             return -1
-        whole_head_len = min(clipped_size+self.window_size, len(seq))
+        whole_head_len = min(clipped_size, len(seq))
         check_head_end = 0 + whole_head_len
-        check_head_start = max(check_head_end - 3 * self.window_size, 0)
+        check_head_start = max(check_head_end - 2 * self.window_size, 0)
 
         rc_head = str(Seq.Seq(alignment.seq[check_head_start:check_head_end]).reverse_complement()).upper()
         pos = self.find_polya(rc_head)

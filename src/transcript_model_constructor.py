@@ -242,6 +242,7 @@ class TranscriptModelConstructor:
         remaining_assignments = copy.copy(assignments)
         while len(remaining_assignments) >= self.params.min_novel_supporting_reads:
             # choose the best representative
+            # TODO: precompute them in order
             representative_read_assignment = self.select_representative_read(isoform_id, remaining_assignments)
             if not representative_read_assignment:
                 #logger.debug("> No reliable representative read can be found")
