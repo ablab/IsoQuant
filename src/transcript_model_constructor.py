@@ -129,6 +129,7 @@ class TranscriptModelConstructor:
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(set)
         self.transcript_counts = defaultdict(float)
+        self.representative_reads = set()
         self.intron_profile_constructor = \
             OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features,
                                                   (self.gene_info.start, self.gene_info.end),
@@ -251,6 +252,8 @@ class TranscriptModelConstructor:
             #logger.debug(representative_read_assignment.combined_profile.read_exon_profile.read_features)
             #logger.debug(representative_read_assignment.combined_profile.read_intron_profile.read_features)
             # create a new transcript model
+
+            self.representative_reads.add(representative_read_assignment.read_id)
             new_transcript_model = self.blend_read_into_isoform(isoform_id, representative_read_assignment)
             if not new_transcript_model:
                 #logger.debug("> No novel model was constructed")
@@ -269,6 +272,9 @@ class TranscriptModelConstructor:
         strand = self.gene_info.isoform_strands[isoform_id]
         read_coords_to_assignment = {}
         for a in assignments:
+            if a.read_id in self.representative_reads:
+                continue
+
             logger.debug("Checking whether read is reliable")
             #logger.debug(a.combined_profile.read_exon_profile.read_features[0][0],
             #             a.combined_profile.read_exon_profile.read_features[-1][1])
