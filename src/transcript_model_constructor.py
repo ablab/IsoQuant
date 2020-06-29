@@ -191,7 +191,7 @@ class TranscriptModelConstructor:
         # logger.debug("Verifying correct match to %s, cluster size %d" % (isoform_id, len(assignments)))
         unique_assignments = list(filter(lambda x:x.assignment_type in
                                                   {ReadAssignmentType.unique_minor_difference,
-                                                   ReadAssignmentType.unique},
+                                                   ReadAssignmentType.unique, ReadAssignmentType.ambiguous},
                                          assignments))
         if len(unique_assignments) < self.params.min_ref_supporting_reads:
             logger.debug("Not enough support")
@@ -206,14 +206,18 @@ class TranscriptModelConstructor:
         fsm_count = 0
         if len(self.gene_info.all_isoforms_introns[isoform_id]) > 0:
             for a in unique_assignments:
-                for m in a.isoform_matches[0].match_subclassifications:
-                    if m.event_type == MatchEventSubtype.fsm:
+                for im in a.isoform_matches:
+                    if im.assigned_transcript != isoform_id:
+                        continue
+                    if any(m.event_type == MatchEventSubtype.fsm for m in im.match_subclassifications):
                         fsm_count += 1
         else:
             for a in unique_assignments:
-                for m in a.isoform_matches[0].match_subclassifications:
-                    if m.event_type == MatchEventSubtype.mono_exon_match:
-                        fsm_count += 1
+                # require only unique matches for monoexons
+                if len(a.isoform_matches) != 1:
+                    continue
+                if any(m.event_type == MatchEventSubtype.mono_exon_match for m in a.isoform_matches[0].match_subclassifications):
+                    fsm_count += 1
 
 
         if fsm_count < self.params.min_ref_fsm_supporting_reads:
