@@ -470,7 +470,7 @@ class LongReadAssigner:
     def match_with_extra_flanking(self, read_id, combined_read_profile):
         read_intron_profile = combined_read_profile.read_intron_profile
         if read_intron_profile.read_profile[0] == 1 and read_intron_profile.read_profile[-1] == 1:
-            logger.warning("+ + Both terminal introns present, odd case")
+            logger.debug("+ + Both terminal introns present, odd case")
 
         assignment = self.match_non_contradictory_spliced(read_id, combined_read_profile)
         if assignment is None:
