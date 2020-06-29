@@ -322,8 +322,6 @@ class TranscriptModelConstructor:
             return None
 
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
-        isoform_start = self.gene_info.transcript_start(isoform_id)
-        isoform_end = self.gene_info.transcript_end(isoform_id)
         strand = self.gene_info.isoform_strands[isoform_id]
 
         combined_profile = read_assignment.combined_profile
@@ -342,13 +340,7 @@ class TranscriptModelConstructor:
             current_exon_start = self.process_intron_related_events(events, None, isoform_introns, read_introns,
                                                                     novel_exons, current_exon_start)
         else:
-            # select optimal start
-            if (strand == "+" or combined_profile.polyt_pos == -1) and \
-                    abs(read_start - isoform_start) <= self.params.max_dist_to_isoforms_tsts:
-                #TODO check they are not separated by intron
-                current_exon_start = isoform_start
-            else:
-                current_exon_start = read_start
+            current_exon_start = read_start
 
         isoform_pos = 0
         while isoform_pos <= len(isoform_introns):
@@ -394,17 +386,13 @@ class TranscriptModelConstructor:
                                                                     novel_exons, current_exon_start)
             novel_transcript_end = read_end
         else:
-            # select optimal start
-            if (strand == "-" or combined_profile.polya_pos == -1) and \
-                    abs(read_end - isoform_end) <= self.params.max_dist_to_isoforms_tsts:
-                # TODO check they are not separated by intron
-                novel_transcript_end = isoform_end
-            else:
-                novel_transcript_end = read_end
+            novel_transcript_end = read_end
         novel_exons.append((current_exon_start, novel_transcript_end))
 
-        if novel_exons != sorted(novel_exons):
-            logger.warning("Error in novel transcript, not sorted")
+        novel_exons = self.correct_transcripts_ends(novel_exons, combined_profile, isoform_id, modification_events_map)
+
+        if not self.validate_exons(novel_exons):
+            logger.warning("Error in novel transcript, not sorted or incorrect exon coords")
             logger.info(novel_exons)
             return None
 
@@ -417,6 +405,38 @@ class TranscriptModelConstructor:
         return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
                                novel_exons)
+
+    # check that all exons are sorted and have correct coordinates
+    def validate_exons(self, novel_exons):
+        return novel_exons == sorted(novel_exons) and all(x[0] < x[1] for x in novel_exons)
+
+    # move transcripts ends to known ends if they are closed and no polyA found
+    def correct_transcripts_ends(self, novel_exons, combined_profile, isoform_id, modification_events_map):
+        isoform_end = self.gene_info.transcript_end(isoform_id)
+        strand = self.gene_info.isoform_strands[isoform_id]
+
+        if SupplementaryMatchConstansts.extra_left_mod_position not in modification_events_map and \
+                0 not in modification_events_map:
+            # change only if there are no extra introns on the left and first intron is not modified
+            novel_transcript_start = novel_exons[0][0]
+            known_isoform_start = self.gene_info.transcript_start(isoform_id)
+            if (strand == "+" or combined_profile.polyt_pos == -1) and \
+                    abs(novel_transcript_start - known_isoform_start) <= self.params.max_dist_to_isoforms_tsts and \
+                    known_isoform_start < novel_exons[0][1]:
+                novel_exons[0] = (known_isoform_start, novel_exons[0][1])
+
+        last_index = len(self.gene_info.all_isoforms_introns[isoform_id]) - 1
+        if SupplementaryMatchConstansts.extra_right_mod_position not in modification_events_map and \
+                last_index not in modification_events_map:
+            # change only if there are no extra introns on the right and last intron is not modified
+            novel_transcript_end = novel_exons[-1][1]
+            known_isoform_end = self.gene_info.transcript_end(isoform_id)
+            if (strand == "-" or combined_profile.polya_pos == -1) and \
+                    abs(novel_transcript_end - known_isoform_end) <= self.params.max_dist_to_isoforms_tsts and \
+                    known_isoform_end > novel_exons[-1][0]:
+                novel_exons[-1] = (novel_exons[-1][0], known_isoform_end)
+
+        return novel_exons
 
     # process a sorted list of events assigned to the same intron
     def process_intron_related_events(self, sorted_event_list, isoform_pos, isoform_introns, read_introns,
