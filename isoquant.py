@@ -73,6 +73,7 @@ def parse_args():
                         help="matching strategy to use from most strict to least", type=str, default="default")
     parser.add_argument("--no-sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=True)
     parser.add_argument("--count-exons", help="perform exont and intron counting", action='store_true', default=False)
+    parser.add_argument("--use-secondary", help="do not ignore secondary alignments", action='store_true', default=False)
 
     ## ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
@@ -206,7 +207,6 @@ def set_additional_params(args):
 
     # TODO proper options
     args.print_additional_info = True
-    args.skip_secondary = False
 
     args.memory_efficient = False
 

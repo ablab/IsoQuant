@@ -80,7 +80,9 @@ class LongReadAlignmentProcessor:
                 if alignment.reference_id == -1:
                     self.assignment_storage.append(ReadAssignment(read_id, None))
                     continue
-                if self.params.skip_secondary and (alignment.is_secondary or alignment.is_supplementary):
+                if alignment.is_supplementary:
+                    continue
+                if not self.params.use_secondary and alignment.is_secondary:
                     continue
 
                 logger.debug("=== Processing read " + read_id + " ===")
