@@ -15,6 +15,7 @@ class PolyAFinder:
     def __init__(self, window_size=20, min_polya_fraction = 0.8):
         self.window_size = window_size
         self.min_polya_fraction = min_polya_fraction
+        self.polyA_count = int(self.window_size * self.min_polya_fraction)
 
     # == polyA stuff ==
     def find_polya_tail(self, alignment):
@@ -36,6 +37,8 @@ class PolyAFinder:
         check_tail_start = len(seq) - whole_tail_len
         check_tail_end = min(check_tail_start + 2 * self.window_size, len(seq))
         pos = self.find_polya(alignment.seq[check_tail_start:check_tail_end].upper())
+        logger.debug("start: %d, end: %d, len: %d, pos: %d" % (check_tail_start, check_tail_end, whole_tail_len, pos))
+        logger.debug(alignment.seq[check_tail_start:check_tail_end].upper())
         if pos == -1:
             logger.debug("No polyA found")
             return -1
@@ -75,12 +78,13 @@ class PolyAFinder:
 
     # poly A tail detection
     def find_polya(self, seq):
-        polyA_count = int(self.window_size * self.min_polya_fraction)
+        if len(seq) < self.window_size:
+            return -1
         i = 0
         while i < len(seq) - self.window_size:
-            if seq[i:i + self.window_size].count('A') >= polyA_count:
+            if seq[i:i + self.window_size].count('A') >= self.polyA_count:
                 break
             i += 1
-        if i == len(seq) - self.window_size:
+        if i >= len(seq) - self.window_size:
             return -1
         return i
