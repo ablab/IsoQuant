@@ -162,7 +162,8 @@ class IsoformMatch:
         self.match_classification = classification
 
     def all_subtypes_are_none_or_monoexonic(self):
-        return all(el.event_type in [MatchEventSubtype.none, MatchEventSubtype.mono_exonic] for el in self.match_subclassifications)
+        return all(el.event_type in [MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match]
+                   for el in self.match_subclassifications)
 
     def all_subtypes_are_alignment_artifacts(self):
         return all(MatchEventSubtype.is_alignment_artifact(el.event_type) for el in self.match_subclassifications)
