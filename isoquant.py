@@ -212,7 +212,7 @@ def set_additional_params(args):
 
     args.indel_near_splice_site_dist = 10
     args.upstream_region_len = 20
-    args.apa_delta = 20
+    args.apa_delta = 100
 
     # trascript model construction
     args.min_ref_fsm_supporting_reads = 1
