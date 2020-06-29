@@ -244,7 +244,9 @@ class JunctionComparator():
         return event
 
     def get_mono_exon_subtype(self, read_region, isoform_junctions):
-        if not any(overlaps(read_region, rj) for rj in isoform_junctions):
+        if len(isoform_junctions) == 0:
+            event = MatchEventSubtype.mono_exon_match
+        elif not any(overlaps(read_region, rj) for rj in isoform_junctions):
             event = MatchEventSubtype.mono_exonic
         elif any(contains(read_region, rj) for rj in isoform_junctions):
             # TODO save intron retention position

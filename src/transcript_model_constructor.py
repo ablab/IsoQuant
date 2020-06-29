@@ -170,7 +170,9 @@ class TranscriptModelConstructor:
         for read_assignment in self.read_assignment_storage:
             for match in read_assignment.isoform_matches:
                 isoform_id = match.assigned_transcript
-                if match.match_classification in {MatchClassification.full_splice_match, MatchClassification.incomplete_splice_match}:
+                if match.match_classification in {MatchClassification.full_splice_match,
+                                                  MatchClassification.incomplete_splice_match,
+                                                  MatchClassification.mono_exon_match}:
                     self.correct_matches[isoform_id].append(read_assignment)
                     break
                 else:
@@ -188,7 +190,8 @@ class TranscriptModelConstructor:
     def verify_correct_match(self, isoform_id, assignments):
         # logger.debug("Verifying correct match to %s, cluster size %d" % (isoform_id, len(assignments)))
         unique_assignments = list(filter(lambda x:x.assignment_type in
-                                                  {ReadAssignmentType.unique_minor_difference, ReadAssignmentType.unique},
+                                                  {ReadAssignmentType.unique_minor_difference,
+                                                   ReadAssignmentType.unique},
                                          assignments))
         if len(unique_assignments) < self.params.min_ref_supporting_reads:
             logger.debug("Not enough support")
@@ -201,10 +204,18 @@ class TranscriptModelConstructor:
                 return
 
         fsm_count = 0
-        for a in unique_assignments:
-            for m in a.isoform_matches[0].match_subclassifications:
-                if m.event_type == MatchEventSubtype.fsm:
-                    fsm_count += 1
+        if len(self.gene_info.all_isoforms_introns[isoform_id]) > 0:
+            for a in unique_assignments:
+                for m in a.isoform_matches[0].match_subclassifications:
+                    if m.event_type == MatchEventSubtype.fsm:
+                        fsm_count += 1
+        else:
+            for a in unique_assignments:
+                for m in a.isoform_matches[0].match_subclassifications:
+                    if m.event_type == MatchEventSubtype.mono_exon_match:
+                        fsm_count += 1
+
+
         if fsm_count < self.params.min_ref_fsm_supporting_reads:
             logger.debug("Not enough FSM reads")
             return

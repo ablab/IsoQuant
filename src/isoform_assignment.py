@@ -27,6 +27,7 @@ class MatchClassification(Enum):
     undefined = 0
     full_splice_match = 10
     incomplete_splice_match = 11
+    mono_exon_match = 12
     novel_in_catalog = 20
     novel_not_in_catalog = 21
     genic = 30
@@ -51,6 +52,8 @@ class MatchClassification(Enum):
             return MatchClassification.genic
         elif match_event.event_type == MatchEventSubtype.unspliced_intron_retention:
             return MatchClassification.novel_in_catalog
+        elif match_event.event_type == MatchEventSubtype.mono_exon_match:
+            return MatchClassification.mono_exon_match
         elif match_event.event_type == MatchEventSubtype.mono_exonic:
             return MatchClassification.incomplete_splice_match
         else:
@@ -66,6 +69,7 @@ class MatchEventSubtype(Enum):
     ism_5 = 15
     ism_3 = 13
     ism_internal = 14
+    mono_exon_match = 15
     # alignment artifacts
     intron_shift = 21
     exon_misallignment = 22
