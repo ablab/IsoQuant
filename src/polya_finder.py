@@ -37,8 +37,8 @@ class PolyAFinder:
         check_tail_start = len(seq) - whole_tail_len
         check_tail_end = min(check_tail_start + 2 * self.window_size, len(seq))
         pos = self.find_polya(alignment.seq[check_tail_start:check_tail_end].upper())
-        logger.debug("start: %d, end: %d, len: %d, pos: %d" % (check_tail_start, check_tail_end, whole_tail_len, pos))
-        logger.debug(alignment.seq[check_tail_start:check_tail_end].upper())
+        # logger.debug("start: %d, end: %d, len: %d, pos: %d" % (check_tail_start, check_tail_end, whole_tail_len, pos))
+        # logger.debug(alignment.seq[check_tail_start:check_tail_end].upper())
         if pos == -1:
             logger.debug("No polyA found")
             return -1
