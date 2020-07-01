@@ -182,7 +182,6 @@ class TranscriptModelConstructor:
                                                   MatchClassification.incomplete_splice_match,
                                                   MatchClassification.mono_exon_match}:
                     self.correct_matches[isoform_id].append(read_assignment)
-                    break
                 else:
                     significant_events = []
                     for event in match.match_subclassifications:
