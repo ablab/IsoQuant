@@ -105,7 +105,7 @@ class GFFPrinter:
                                 ",".join([str(e[1] - e[0] + 1) for e in exon_blocks]),
                                 ",".join([str(e[0] - 1) for e in exon_blocks])))
 
-        for id in transcript_model_constructor.transcript_counts.keys():
+        for id in sorted(transcript_model_constructor.transcript_counts.keys()):
             counts = transcript_model_constructor.transcript_counts[id]
             self.out_counts.write("%s\t%.2f\n" % (id, counts))
 
@@ -148,13 +148,13 @@ class TranscriptModelConstructor:
         self.construct_isoform_groups()
 
         # check correct assignments form reference isoforms
-        for isoform_id in self.correct_matches.keys():
+        for isoform_id in sorted(self.correct_matches.keys()):
             self.verify_correct_match(isoform_id, self.correct_matches[isoform_id])
 
         # construct novel trasncripts
         candidate_model_storage = []
-        for isoform_id in self.modified_isoforms_groups.keys():
-            for modification in self.modified_isoforms_groups[isoform_id].keys():
+        for isoform_id in sorted(self.modified_isoforms_groups.keys()):
+            for modification in sorted(self.modified_isoforms_groups[isoform_id].keys()):
                 assignments = self.modified_isoforms_groups[isoform_id][modification]
                 # logger.debug("== Processing modidication cluster for isoform %s of size %d, modifications:" %
                 #             (isoform_id, len(assignments)))

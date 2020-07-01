@@ -106,6 +106,9 @@ class MatchEventSubtype(Enum):
     alternative_polya_site = 200
     alternative_tss = 201
 
+    def __lt__(self, other):
+        return self.value < other.value
+
     @staticmethod
     def is_alignment_artifact(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misallignment}

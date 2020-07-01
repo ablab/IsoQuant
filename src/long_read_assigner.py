@@ -337,7 +337,6 @@ class LongReadAssigner:
 
         read_assignment = None
         if len(intron_matched_isoforms) == 1 and len(read_intron_profile.read_features) > 0:
-            # unique intersection
             isoform_id = list(intron_matched_isoforms)[0]
 
             logger.debug("+ + UNIQUE intron match found " + isoform_id)
@@ -353,7 +352,7 @@ class LongReadAssigner:
             exon_matched_isoforms = self.find_matching_isoforms(read_split_exon_profile.gene_profile,
                                                                 self.gene_info.split_exon_profiles.profiles)
             #logger.debug("Exon matched " + str(exon_matched_isoforms))
-            matched_isoforms = intron_matched_isoforms.intersection(exon_matched_isoforms)
+            matched_isoforms = sorted(intron_matched_isoforms.intersection(exon_matched_isoforms))
 
             if len(matched_isoforms) == 1:
                 isoform_id = list(matched_isoforms)[0]
@@ -362,7 +361,7 @@ class LongReadAssigner:
                 read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match)
             elif len(matched_isoforms) == 0:
                 read_assignment = self.resolve_multiple_assignments_spliced(read_id, combined_read_profile,
-                                                                    intron_matched_isoforms)
+                                                                    sorted(intron_matched_isoforms))
             else:
                 read_assignment = self.resolve_multiple_assignments_spliced(read_id, combined_read_profile,
                                                                     matched_isoforms)
@@ -385,7 +384,7 @@ class LongReadAssigner:
                 self.params.resolve_ambiguous == ExonAmbiguityResolvingMethod.full_splice_matches_only:
             jaccard_matched_isoforms = self.resolve_by_nucleotide_jaccard_similarity(read_id, combined_read_profile,
                                                                                      mathched_isoforms)
-            jaccard_matched_isoforms = [x[0] for x in  jaccard_matched_isoforms]
+            jaccard_matched_isoforms = [x[0] for x in jaccard_matched_isoforms]
             if len(jaccard_matched_isoforms) > 1:
                 mathched_isoforms = jaccard_matched_isoforms
             elif len(jaccard_matched_isoforms) == 1:
@@ -410,7 +409,7 @@ class LongReadAssigner:
         assert overlapping_isoforms
 
         jaccard_matched_isoforms = self.resolve_by_nucleotide_jaccard_similarity(combined_read_profile,
-                                                                                 overlapping_isoforms,
+                                                                                 sorted(overlapping_isoforms),
                                                                                  min_similarity=0.0)
         reliable_isoforms = [x[0] for x in
                               filter(lambda x:x[1] >= ExonAmbiguityResolvingMethod.minimal_jacard_similarity.value,
@@ -460,7 +459,7 @@ class LongReadAssigner:
 
         #logger.debug(jaccard_similarities)
         best_score = max([x[1] for x in jaccard_similarities])
-        top_scored = list(filter(lambda x: x[1] * top_scored_factor >= best_score and
+        top_scored = sorted(filter(lambda x: x[1] * top_scored_factor >= best_score and
                                  x[1] >= min_similarity,
                                  jaccard_similarities))
         logger.debug("+ + + Best score = %f, total candidates = %d" % (best_score, len(top_scored)))
@@ -543,7 +542,7 @@ class LongReadAssigner:
         #logger.debug(str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
         #logger.debug(str(self.gene_info.intron_profiles.profiles[isoform_id]))
 
-        for isoform_id in best_isoform_ids:
+        for isoform_id in sorted(best_isoform_ids):
             logger.debug("Checking isoform %s" % isoform_id)
             # get intron coordinates
             isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
