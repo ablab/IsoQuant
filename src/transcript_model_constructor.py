@@ -74,6 +74,7 @@ class GFFPrinter:
                 self.out_r2t.write("%s\t%s\n" % (read_assignment.read_id, "*"))
 
         # write mapped reads to bed file
+        # TODO check for duplicates
         for read_assignment in transcript_model_constructor.read_assignment_storage:
             if read_assignment is None or read_assignment.assignment_type is None or \
                 not hasattr(read_assignment, "gene_info"):
