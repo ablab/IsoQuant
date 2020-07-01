@@ -408,7 +408,7 @@ class TranscriptModelConstructor:
 
     # check that all exons are sorted and have correct coordinates
     def validate_exons(self, novel_exons):
-        return novel_exons == sorted(novel_exons) and all(x[0] < x[1] for x in novel_exons)
+        return novel_exons == sorted(novel_exons) and all(x[0] <= x[1] for x in novel_exons)
 
     # move transcripts ends to known ends if they are closed and no polyA found
     def correct_transcripts_ends(self, novel_exons, combined_profile, isoform_id, modification_events_map):
