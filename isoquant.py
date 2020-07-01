@@ -217,12 +217,12 @@ def set_additional_params(args):
     # trascript model construction
     args.min_ref_fsm_supporting_reads = 1
     args.min_ref_supporting_reads = 1
-    args.min_novel_fsm_supporting_reads = 3
-    args.min_novel_supporting_reads = 4
-    args.report_intron_retention = True
+    args.min_novel_fsm_supporting_reads = 4
+    args.min_novel_supporting_reads = 8
+    args.report_intron_retention = False
     args.max_dist_to_isoforms_tsts = 30
     args.max_dist_to_novel_tsts = 100
-    args.min_reads_supporting_tsts = 3
+    args.min_reads_supporting_tsts = 5
     args.require_polyA = False
     args.require_cage_peak = False # TODO
     args.collapse_subisoforms = True
