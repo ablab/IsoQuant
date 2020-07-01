@@ -291,36 +291,55 @@ class TranscriptModelConstructor:
     # select longest read with polyA detected
     # FIXME: use CAGE data or estimate reliability by looking at other reads
     def select_representative_read(self, isoform_id, assignments):
+        if not assignments:
+            return None
+
         strand = self.gene_info.isoform_strands[isoform_id]
-        read_coords_to_assignment = {}
+        if strand == '+':
+            best_read_3prime_pos = assignments[0].combined_profile.read_exon_profile.read_features[0][0]
+            best_read_5prime_pos = assignments[0].combined_profile.read_exon_profile.read_features[-1][1]
+        else:
+            best_read_3prime_pos = assignments[0].combined_profile.read_exon_profile.read_features[-1][1]
+            best_read_5prime_pos = assignments[0].combined_profile.read_exon_profile.read_features[0][0]
+        best_reads = []
+        # read_coords_to_assignment = {}
+
         for a in assignments:
             if a.read_id in self.representative_reads:
                 continue
+            read_exon_profile = a.combined_profile.read_exon_profile
 
             logger.debug("Checking whether read is reliable")
             #logger.debug(a.combined_profile.read_exon_profile.read_features[0][0],
             #             a.combined_profile.read_exon_profile.read_features[-1][1])
             # logger.debug("%s %d %d" % (a.read_id, a.combined_profile.polya_pos, a.combined_profile.polyt_pos))
             if strand == '+':
-                tss = a.combined_profile.read_exon_profile.read_features[0][0]
-                tts = a.combined_profile.polya_pos
-                if not self.params.require_polyA or tts != -1:
-                    read_coords_to_assignment[tss] = a
+                if not self.params.require_polyA or a.combined_profile.polya_pos != -1:
+                    tss = read_exon_profile.read_features[0][0]
+                    tts = read_exon_profile.read_features[-1][1]
+                    if tss == best_read_3prime_pos:
+                        if tts == best_read_5prime_pos:
+                            best_reads.append(a)
+                        elif tts > best_read_5prime_pos:
+                            best_reads = [a]
+                    elif tss < best_read_3prime_pos:
+                        best_reads = [a]
             else:
-                tss = a.combined_profile.read_exon_profile.read_features[-1][1]
-                tts = a.combined_profile.polyt_pos
-                if not self.params.require_polyA or tts != -1:
-                    read_coords_to_assignment[tss] = a
+                if not self.params.require_polyA or a.combined_profile.polyt_pos != -1:
+                    tss = read_exon_profile.read_features[-1][1]
+                    tts = read_exon_profile.read_features[0][0]
+                    if tss == best_read_3prime_pos:
+                        if tts == best_read_5prime_pos:
+                            best_reads.append(a)
+                        elif tts < best_read_5prime_pos:
+                            best_reads = [a]
+                    elif tss > best_read_3prime_pos:
+                        best_reads = [a]
 
-        tss_positions = sorted(read_coords_to_assignment.keys())
-        if not tss_positions:
+        if not best_reads:
             logger.debug("Empty TSS array")
             return None
-
-        if strand == "+":
-            return read_coords_to_assignment[tss_positions[0]]
-        else:
-            return read_coords_to_assignment[tss_positions[-1]]
+        return sorted(best_reads, key=lambda x: x.read_id)[0]
 
     def blend_read_into_isoform(self, isoform_id, read_assignment):
         # logger.debug("Creating novel transcript model for isoform %s and read %s" % (isoform_id, read_assignment.read_id))
