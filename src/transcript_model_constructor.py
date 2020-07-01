@@ -48,15 +48,12 @@ class GFFPrinter:
         self.out_r2t.write("#read_id\ttranscript_id\n")
         self.out_counts = open(outf_prefix + "expression.tsv", "w")
         self.out_counts.write("#ID\t%s\n" % sample_name)
-        self.out_bed = open(outf_prefix + "mapped_reads.bed", "w")
-        self.out_bed.write("#chrom\tchromStart\tchromEnd\tname\tscore\tstrand\tblockCount\tblockSizes\tblockStarts\n")
         # TODO implement meta features
         self.print_meta_features = print_meta_features
 
     def __del__(self):
         self.out_gff.close()
         self.out_r2t.close()
-        self.out_bed.close()
         self.out_counts.close()
 
     def dump(self, transcript_model_constructor):
@@ -79,31 +76,6 @@ class GFFPrinter:
         for read_assignment in transcript_model_constructor.read_assignment_storage:
             if read_assignment.read_id not in used_reads:
                 self.out_r2t.write("%s\t%s\n" % (read_assignment.read_id, "*"))
-
-        # write mapped reads to bed file
-        # TODO check for duplicates
-        for read_assignment in transcript_model_constructor.read_assignment_storage:
-            if read_assignment is None or read_assignment.assignment_type is None or \
-                not hasattr(read_assignment, "gene_info"):
-                continue
-
-            strands = set()
-            for isoform_match in read_assignment.isoform_matches:
-                isoform_id = isoform_match.assigned_transcript
-                if isoform_id is not None:
-                    strands.add(read_assignment.gene_info.isoform_strands[isoform_id])
-            if len(strands) != 1:
-                strand = read_assignment.mapped_strand
-            else:
-                strand = list(strands)[0]
-            chr_id = read_assignment.gene_info.chr_id
-            exon_blocks = read_assignment.combined_profile.read_exon_profile.read_features
-
-            self.out_bed.write("%s\t%d\t%d\t%s\t0\t%s\t%d\t%s\t%s\n" %
-                               (chr_id, exon_blocks[0][0] - 1, exon_blocks[-1][1],
-                                read_assignment.read_id, strand, len(exon_blocks),
-                                ",".join([str(e[1] - e[0] + 1) for e in exon_blocks]),
-                                ",".join([str(e[0] - 1) for e in exon_blocks])))
 
         for id in sorted(transcript_model_constructor.transcript_counts.keys()):
             counts = transcript_model_constructor.transcript_counts[id]

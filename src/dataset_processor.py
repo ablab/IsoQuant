@@ -196,12 +196,14 @@ class DatasetProcessor:
     def create_aggregators(self, sample):
         out_assigned_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".read_assignments.tsv")
         self.basic_printer = BasicTSVAssignmentPrinter(out_assigned_tsv, self.args)
-        if self.args.no_sqanti_output:
-            self.global_printer = ReadAssignmentCompositePrinter([self.basic_printer])
-        else:
+        out_mapped_bed = os.path.join(sample.out_dir, "mapped_reads.bed")
+        self.bed_printer = BEDPrinter(out_mapped_bed, self.args)
+        printer_list = [self.basic_printer, self.bed_printer]
+        if not self.args.no_sqanti_output:
             out_alt_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".SQANTI-like.tsv")
             self.sqanti_printer = SqantiTSVPrinter(out_alt_tsv, self.args)
-            self.global_printer = ReadAssignmentCompositePrinter([self.basic_printer, self.sqanti_printer])
+            printer_list.append(self.sqanti_printer)
+        self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         out_gene_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".gene_counts.tsv")
         self.gene_counter = create_gene_counter(out_gene_counts_tsv, ignore_read_groups=True)
