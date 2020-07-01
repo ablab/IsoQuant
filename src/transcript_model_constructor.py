@@ -160,6 +160,7 @@ class TranscriptModelConstructor:
                         if event.event_type in self.events_to_track:
                             significant_events.append((event.event_type, event.isoform_position))
                     if significant_events:
+                        significant_events = sorted(significant_events)
                         self.modified_isoforms_groups[isoform_id][tuple(significant_events)].append(read_assignment)
 
         # logger.debug("Constructed %d correct clusters and %d clusters with modifications" %

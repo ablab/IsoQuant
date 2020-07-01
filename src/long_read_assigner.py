@@ -333,7 +333,7 @@ class LongReadAssigner:
         assert read_intron_profile
         intron_matched_isoforms = self.find_matching_isoforms(read_intron_profile.gene_profile,
                                                               self.gene_info.intron_profiles.profiles)
-        logger.debug("Intron matched " + str(intron_matched_isoforms))
+        # logger.debug("Intron matched " + str(intron_matched_isoforms))
 
         read_assignment = None
         if len(intron_matched_isoforms) == 1 and len(read_intron_profile.read_features) > 0:

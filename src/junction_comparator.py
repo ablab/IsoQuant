@@ -160,7 +160,7 @@ class JunctionComparator():
             event = self.compare_overlapping_contradictional_regions(read_junctions, isoform_junctions, pair[0], pair[1])
             contradiction_events.append(event)
 
-        return list(set(contradiction_events))
+        return contradiction_events
 
     def compare_overlapping_contradictional_regions(self, read_junctions, isoform_junctions, read_cregion, isoform_cregion):
         if read_cregion[0] == self.absent:
