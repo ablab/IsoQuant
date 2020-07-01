@@ -18,6 +18,8 @@ from src.long_read_counter import *
 from src.multimap_resolver import *
 from src.read_groups import *
 from src.transcript_model_constructor import *
+from src.stats import *
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -135,6 +137,8 @@ class DatasetProcessor:
             os.makedirs(self.tmp_dir)
 
         gff_printer = GFFPrinter(sample.out_dir + "/", sample.label)
+        read_stat_counter = EnumStats()
+        transcript_stat_counter = EnumStats()
 
         current_chromosome = ""
         current_chr_record = None
@@ -154,10 +158,14 @@ class DatasetProcessor:
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
                                                              current_chr_record, self.read_grouper)
             assignment_storage = alignment_processor.process()
+            for a in assignment_storage:
+                read_stat_counter.add(a.assignment_type)
 
             transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
             transcript_generator.process()
             gff_printer.dump(transcript_generator)
+            for t in transcript_generator.transcript_model_storage:
+                transcript_stat_counter.add(t.transcript_type)
 
             self.dump_reads(assignment_storage, counter)
             counter += 1
@@ -167,6 +175,9 @@ class DatasetProcessor:
         os.rmdir(self.tmp_dir)
         logger.info("Transcript model file " + sample.out_dir  + "/transcript_models.gff")
         logger.info("Processed sample " + sample.label)
+        read_stat_counter.print_start("Read assignment statistics")
+        transcript_stat_counter.print_start("Transcript model statistics")
+
 
     def dump_reads(self, read_storage, gene_counter):
         if self.args.memory_efficient:

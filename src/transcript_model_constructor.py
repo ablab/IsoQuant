@@ -15,9 +15,15 @@ from src.junction_comparator import *
 logger = logging.getLogger('IsoQuant')
 
 
+class TranscriptModelType(Enum):
+    known = 1
+    novel_in_catalog = 2
+    novel_not_in_catalog = 10
+
+
 # simple class for storing all information needed for GFF
 class TranscriptModel:
-    def __init__(self, chr_id, strand, transcript_id, reference_transcript, reference_gene, exon_blocks):
+    def __init__(self, chr_id, strand, transcript_id, reference_transcript, reference_gene, exon_blocks, transcript_type):
         self.chr_id = chr_id
         self.strand = strand
         self.transcript_id = transcript_id
@@ -25,6 +31,7 @@ class TranscriptModel:
         self.reference_transcript = reference_transcript
         self.reference_gene = reference_gene
         self.exon_blocks = exon_blocks
+        self.transcript_type = transcript_type
 
     def get_start(self):
         return self.exon_blocks[0][0]
@@ -241,7 +248,7 @@ class TranscriptModelConstructor:
         new_transcript_id = self.transcript_prefix + str(self.get_transcript_id()) + self.known_transcript_suffix
         return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
-                               self.gene_info.all_isoforms_exons[isoform_id])
+                               self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known)
 
     # check that all splice jusction in isoform are covered by at least one read
     def check_all_juctions_covered(self, isoform_id, read_assignments):
@@ -401,11 +408,12 @@ class TranscriptModelConstructor:
         for events in modification_events_map.values():
             nnic |= any(me.event_type in nnic_event_types for me in events)
         id_suffix = self.nnic_transcript_suffix if nnic else self.nic_transcript_suffix
+        transcript_type = TranscriptModelType.novel_not_in_catalog if nnic else TranscriptModelType.novel_in_catalog
         new_transcript_id = self.transcript_prefix + str(self.get_transcript_id()) + id_suffix
 
         return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
-                               novel_exons)
+                               novel_exons, transcript_type)
 
     # check that all exons are sorted and have correct coordinates
     def validate_exons(self, novel_exons):

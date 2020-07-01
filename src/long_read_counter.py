@@ -1,7 +1,14 @@
-from collections import defaultdict
+############################################################################
+# Copyright (c) 2020 Saint Petersburg State University
+# # All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 from src.isoform_assignment import *
 from src.gene_info import *
 from src.read_groups import *
+
+logger = logging.getLogger('IsoQuant')
 
 
 class AbstractCounter:
