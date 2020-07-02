@@ -182,6 +182,7 @@ class ReadAssignment:
         self.gene_info = None
         self.polyA_found = False
         self.read_group = "."
+        self.mapped_strand = "."
         self.assignment_type = assignment_type
         if match is None:
             self.isoform_matches = []

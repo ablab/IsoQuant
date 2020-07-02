@@ -70,7 +70,7 @@ class BEDPrinter(AbstractAssignmentPrinter):
 
     def add_read_info(self, read_assignment):
         if read_assignment is None or read_assignment.assignment_type is None or \
-                not hasattr(read_assignment, "gene_info"):
+                not hasattr(read_assignment, "gene_info") or read_assignment.gene_info is None:
             return
         if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
             return
@@ -78,7 +78,7 @@ class BEDPrinter(AbstractAssignmentPrinter):
         strands = set()
         for isoform_match in read_assignment.isoform_matches:
             isoform_id = isoform_match.assigned_transcript
-            if isoform_id is not None:
+            if read_assignment.gene_info is not None and isoform_id is not None:
                 strands.add(read_assignment.gene_info.isoform_strands[isoform_id])
         if len(strands) != 1:
             strand = read_assignment.mapped_strand
