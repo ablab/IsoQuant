@@ -224,30 +224,34 @@ def set_additional_params(args):
 
 def convert_gene_db(args):
     gtf_filename = args.genedb
+    if not os.path.isabs(gtf_filename):
+        gtf_filename = os.path.join(os.getcwd(), gtf_filename)
+
     config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
     config_path = os.path.join(config_dir, 'db_config.json')
 
     genedb_filename = os.path.join(args.output, os.path.splitext(os.path.basename(gtf_filename))[0] + ".db")
     if not os.path.exists(config_path):
-        os.makedirs(config_path, exist_ok=True)
+        os.makedirs(config_dir, exist_ok=True)
         converted_gtfs = {}
     else:
-        converted_gtfs = json.load(config_path)
+        with open(config_path, 'r') as f_in:
+            converted_gtfs = json.load(f_in)
         gtf_mtime = converted_gtfs.get(gtf_filename, {}).get('gtf_mtime')
         if os.path.getmtime(gtf_filename) == gtf_mtime:
             genedb_filename = converted_gtfs.get(gtf_filename, {}).get('genedb')
             db_mtime = converted_gtfs.get(gtf_filename, {}).get('db_mtime')
             if os.path.exists(genedb_filename) and os.path.getmtime(genedb_filename) == db_mtime:
                 logger.info("Gene annotation file was already converted to .db format")
-                logger.info("Using gene database from " + genedb_filename)
                 return genedb_filename
 
     logger.info("Converting gene annotation file to .db format (takes a while)...")
     gtf2db(gtf_filename, genedb_filename)
-    converted_gtfs[gtf_filename] = {'genedb': genedb_filename,
+    converted_gtfs[gtf_filename] = {'genedb': os.path.join(os.getcwd(),genedb_filename),
                                     'gtf_mtime': os.path.getmtime(gtf_filename),
                                     'db_mtime': os.path.getmtime(genedb_filename)}
-    json.dump(converted_gtfs, config_path)
+    with open(config_path, 'w') as f_out:
+        json.dump(converted_gtfs, f_out)
     logger.info("Gene database written to " + genedb_filename)
     logger.info("Provide this database next time to avoid excessive conversion")
     return genedb_filename
