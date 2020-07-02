@@ -13,6 +13,8 @@ logger = logging.getLogger('IsoQuant')
 
 # key, value
 def get_first_best_from_sorted(sorted_list_of_pairs):
+    if not sorted_list_of_pairs:
+        return []
     best_value = sorted_list_of_pairs[0][1]
     result = []
     for x in sorted_list_of_pairs:
@@ -144,8 +146,6 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
     pos2 = 0
     included1 = [0 for i in range(len(sorted_range_list1))]
     included2 = [0 for i in range(len(sorted_range_list2))]
-    logger.debug(sorted_range_list1)
-    logger.debug(sorted_range_list2)
 
     while pos1 < len(sorted_range_list1) and pos2 < len(sorted_range_list2):
         block1 = sorted_range_list1[pos1]
@@ -192,7 +192,6 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
         pos2 += 1
 
     assert (union != 0)
-    logger.debug("Similarity = %f " % (float(intersection) / float(union)))
     return float(intersection) / float(union)
 
 
@@ -234,9 +233,9 @@ def concat_gapless_blocks(blocks, cigar_tuples):
             current_block = (current_block[0], current_block[1] + cigar_tuples[cigar_index][1])
         # found match - merge blocks
         elif cigar_tuples[cigar_index][0] == 0:
-            if abs(current_block[1] - blocks[block_index][0]) > 1:
-                logger.debug("Distant blocks")
-                logger.debug(current_block, blocks[block_index])
+            #if abs(current_block[1] - blocks[block_index][0]) > 1:
+            #    logger.debug("Distant blocks")
+            #    logger.debug(current_block, blocks[block_index])
             current_block = (current_block[0], blocks[block_index][1])
 
             block_index += 1
@@ -297,6 +296,24 @@ def difference_in_present_features(profile1, profile2):
     return d
 
 
+def count_both_present_features(profile1, profile2):
+    assert len(profile1) == len(profile2)
+    d = 0
+    for i in range(len(profile1)):
+        if profile1[i] == profile2[i] == 1:
+            d += 1
+    return d
+
+
+def all_features_present(isoform_profile, read_profile):
+    assert len(isoform_profile) == len(read_profile)
+    d = 0
+    for i in range(len(isoform_profile)):
+        if isoform_profile[i] == 1 and read_profile[i] != 1:
+            return False
+    return True
+
+
 def find_matching_positions(profile1, profile2):
     assert len(profile1) == len(profile2)
     matches = [0 for i in range(len(profile1))]
@@ -321,6 +338,8 @@ def mask_profile(read_profile, true_profile):
     for i in range(len(true_profile)):
         if true_profile[i] == 1:
             masked_profile.append(read_profile[i])
+        else:
+            masked_profile.append(0)
     return masked_profile
 
 

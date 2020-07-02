@@ -72,8 +72,9 @@ def parse_args():
                                              "using read id (read_id:DELIM)", type=str)
     parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
                         help="matching strategy to use from most strict to least", type=str, default="default")
-    parser.add_argument("--no-sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=False)
+    parser.add_argument("--no-sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=True)
     parser.add_argument("--count-exons", help="perform exont and intron counting", action='store_true', default=False)
+    parser.add_argument("--use-secondary", help="do not ignore secondary alignments", action='store_true', default=False)
 
     ## ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
@@ -185,10 +186,10 @@ def set_additional_params(args):
                            'allow_extra_terminal_introns', 'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   Strategy(0,  0,   0,   0,   ExonAmbiguityResolvingMethod.mono_exonic_only, False, False),
-        'precise': Strategy(3,  30,  30,  30,  ExonAmbiguityResolvingMethod.mono_exonic_only, False, True),
-        'default': Strategy(6,  300, 100, 200, ExonAmbiguityResolvingMethod.mono_exonic_only, False, True),
-        'loose':   Strategy(12, 300, 300, 300, ExonAmbiguityResolvingMethod.all,  True,  True),
+        'exact':   Strategy(0,  5,   0,   0,   False, ExonAmbiguityResolvingMethod.mono_exonic_only, False),
+        'precise': Strategy(3,  10,  30,  50,  False, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'default': Strategy(6,  60,  60,  200, False, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'loose':   Strategy(12, 100, 120, 300, True,  ExonAmbiguityResolvingMethod.all,  True),
     }
 
     strategy = strategies[args.matching_strategy]
@@ -207,12 +208,26 @@ def set_additional_params(args):
 
     # TODO proper options
     args.print_additional_info = True
-    args.skip_secondary = True
 
     args.memory_efficient = False
 
     args.indel_near_splice_site_dist = 10
     args.upstream_region_len = 20
+    args.apa_delta = 100
+
+    # trascript model construction
+    args.min_ref_fsm_supporting_reads = 1
+    args.min_ref_supporting_reads = 1
+    args.min_novel_fsm_supporting_reads = 4
+    args.min_novel_supporting_reads = 8
+    args.report_intron_retention = False
+    args.max_dist_to_isoforms_tsts = 30
+    args.max_dist_to_novel_tsts = 100
+    args.min_reads_supporting_tsts = 5
+    args.require_polyA = False
+    args.require_cage_peak = False # TODO
+    args.collapse_subisoforms = True
+    args.count_ambiguous = True
 
     # TODO move to options
     args.matching_stategy = "take_best"

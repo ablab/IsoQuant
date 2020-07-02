@@ -22,12 +22,12 @@ class ReadAssignmentType(Enum):
     novel = 4
     unreliable = 11
 
-
 # SQANTI-like
 class MatchClassification(Enum):
     undefined = 0
     full_splice_match = 10
     incomplete_splice_match = 11
+    mono_exon_match = 12
     novel_in_catalog = 20
     novel_not_in_catalog = 21
     genic = 30
@@ -38,31 +38,23 @@ class MatchClassification(Enum):
 
     @staticmethod
     def get_contradiction_classification_from_subtypes(match_event_subtypes):
-        if any(me in [MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
-                      MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_out,
-                      MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
-                      MatchEventSubtype.exon_skipping_novel_intron, MatchEventSubtype.alternative_structure_novel]
-               for me in match_event_subtypes):
+        if any(me.event_type in nnic_event_types for me in match_event_subtypes):
             return MatchClassification.novel_not_in_catalog
-        elif any(me in [MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
-                        MatchEventSubtype.alt_donor_site, MatchEventSubtype.alt_acceptor_site,
-                        MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
-                        MatchEventSubtype.mutually_exclusive_exons_known,
-                        MatchEventSubtype.exon_skipping_known_intron, MatchEventSubtype.exon_gain_known,
-                        MatchEventSubtype.alternative_structure_known]
-                 for me in match_event_subtypes):
+        elif any(me.event_type in nic_event_types for me in match_event_subtypes):
             return MatchClassification.novel_in_catalog
-        elif any(me in [MatchEventSubtype.unspliced_genic] for me in match_event_subtypes):
+        elif any(me.event_type == MatchEventSubtype.unspliced_genic for me in match_event_subtypes):
             return MatchClassification.genic
         return MatchClassification.undefined
 
     @staticmethod
-    def get_mono_exon_classification_from_subtypes(match_event_subtypes):
-        if any(me == MatchEventSubtype.unspliced_genic for me in match_event_subtypes):
+    def get_mono_exon_classification_from_subtypes(match_event):
+        if match_event.event_type == MatchEventSubtype.unspliced_genic:
             return MatchClassification.genic
-        elif any(me == MatchEventSubtype.unspliced_intron_retention for me in match_event_subtypes):
+        elif match_event.event_type == MatchEventSubtype.unspliced_intron_retention:
             return MatchClassification.novel_in_catalog
-        elif any(me == MatchEventSubtype.mono_exonic for me in match_event_subtypes):
+        elif match_event.event_type == MatchEventSubtype.mono_exon_match:
+            return MatchClassification.mono_exon_match
+        elif match_event.event_type == MatchEventSubtype.mono_exonic:
             return MatchClassification.incomplete_splice_match
         else:
             assert False
@@ -77,6 +69,7 @@ class MatchEventSubtype(Enum):
     ism_5 = 15
     ism_3 = 13
     ism_internal = 14
+    mono_exon_match = 15
     # alignment artifacts
     intron_shift = 21
     exon_misallignment = 22
@@ -89,13 +82,14 @@ class MatchEventSubtype(Enum):
     unspliced_intron_retention = 32
     unspliced_genic = 33
     # major alternation
-    alt_donor_site = 101
-    alt_acceptor_site = 102
+    alt_donor_site_known = 101
+    alt_acceptor_site_known = 102
     alt_donor_site_novel = 103
     alt_acceptor_site_novel = 104
-    extra_intron = 112
-    extra_intron_known = 111
-    extra_intron_out = 113
+    extra_intron = 2012
+    extra_intron_known = 2011
+    extra_intron_out_left = 1013
+    extra_intron_out_right = 1014
     extra_exon_out = 120
     intron_migration = 114
     intron_alternation_novel = 115
@@ -112,24 +106,45 @@ class MatchEventSubtype(Enum):
     alternative_polya_site = 200
     alternative_tss = 201
 
+    def __lt__(self, other):
+        return self.value < other.value
+
     @staticmethod
     def is_alignment_artifact(match_event_subtype):
-        return match_event_subtype in [MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misallignment]
+        return match_event_subtype in {MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misallignment}
 
     @staticmethod
     def is_minor_error(match_event_subtype):
-        return match_event_subtype in [MatchEventSubtype.exon_elongation5, MatchEventSubtype.exon_elongation3,
-                                       MatchEventSubtype.exon_elongation_both]
+        return match_event_subtype in {MatchEventSubtype.exon_elongation5, MatchEventSubtype.exon_elongation3,
+                                       MatchEventSubtype.exon_elongation_both}
+
+nnic_event_types = {MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
+                    MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_out_left,
+                    MatchEventSubtype.extra_intron_out_right,MatchEventSubtype.mutually_exclusive_exons_novel,
+                    MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
+                    MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel}
+nic_event_types = {MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
+                   MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
+                   MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
+                   MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
+                   MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
+                   MatchEventSubtype.intron_alternation_known}
 
 
-MatchEvent = namedtuple("MatchEvent", ("event_type", "position"))
+class SupplementaryMatchConstansts:
+    extra_left_mod_position = -1000000
+    extra_right_mod_position = 1000000
 
-def make_event(event_type, position=-1):
-    return MatchEvent(event_type, position)
+
+MatchEvent = namedtuple("MatchEvent", ("event_type", "isoform_position", "read_region"))
+
+
+def make_event(event_type, isoform_position=None, read_region=None):
+    return MatchEvent(event_type, isoform_position, read_region)
 
 
 class IsoformMatch:
-    def __init__(self, match_classification, assigned_gene = "None", assigned_transcript = "None",
+    def __init__(self, match_classification, assigned_gene = None, assigned_transcript = None,
                  match_subclassification = None):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
@@ -150,7 +165,8 @@ class IsoformMatch:
         self.match_classification = classification
 
     def all_subtypes_are_none_or_monoexonic(self):
-        return all(el.event_type in [MatchEventSubtype.none, MatchEventSubtype.mono_exonic] for el in self.match_subclassifications)
+        return all(el.event_type in [MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match]
+                   for el in self.match_subclassifications)
 
     def all_subtypes_are_alignment_artifacts(self):
         return all(MatchEventSubtype.is_alignment_artifact(el.event_type) for el in self.match_subclassifications)
@@ -166,6 +182,7 @@ class ReadAssignment:
         self.gene_info = None
         self.polyA_found = False
         self.read_group = "."
+        self.mapped_strand = "."
         self.assignment_type = assignment_type
         if match is None:
             self.isoform_matches = []

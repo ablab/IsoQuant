@@ -118,6 +118,25 @@ def check_params(args):
         exit(-1)
 
 
+def set_logger(args, logger_instnace):
+    logger_instnace.setLevel(logging.INFO)
+    log_file = os.path.join(args.output, "isoquant_mapping.log")
+    f = open(log_file, "w")
+    f.write("CMD: " + ' '.join(sys.argv) + '\n')
+    f.close()
+    fh = logging.FileHandler(log_file)
+    #FIXME
+    fh.setLevel(logging.INFO)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+    logger_instnace.addHandler(fh)
+    logger_instnace.addHandler(ch)
+
+
 def main():
     args = parse_args()
     set_logger(args, logger)

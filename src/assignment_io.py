@@ -25,7 +25,7 @@ class PrintOnlyFunctor:
         elif isinstance(allowed_types, set):
             self.allowed_types = allowed_types
         else:
-            self.allowed_types = set([allowed_types])
+            self.allowed_types = {allowed_types}
 
     def check(self, assignment):
         if assignment is None:
@@ -62,10 +62,41 @@ class ReadAssignmentCompositePrinter:
             p.flush()
 
 
-# TODO: reformat output, make singe file
-class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
+# write mapped reads to bed file
+class BEDPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor()):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker)
+        self.output_file.write("#chrom\tchromStart\tchromEnd\tname\tscore\tstrand\tblockCount\tblockSizes\tblockStarts\n")
+
+    def add_read_info(self, read_assignment):
+        if read_assignment is None or read_assignment.assignment_type is None or \
+                not hasattr(read_assignment, "gene_info") or read_assignment.gene_info is None:
+            return
+        if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
+            return
+
+        strands = set()
+        for isoform_match in read_assignment.isoform_matches:
+            isoform_id = isoform_match.assigned_transcript
+            if read_assignment.gene_info is not None and isoform_id is not None:
+                strands.add(read_assignment.gene_info.isoform_strands[isoform_id])
+        if len(strands) != 1:
+            strand = read_assignment.mapped_strand
+        else:
+            strand = list(strands)[0]
+        chr_id = read_assignment.gene_info.chr_id
+        exon_blocks = read_assignment.combined_profile.read_exon_profile.read_features
+
+        self.output_file.write("%s\t%d\t%d\t%s\t0\t%s\t%d\t%s\t%s\n" %
+                           (chr_id, exon_blocks[0][0] - 1, exon_blocks[-1][1],
+                            read_assignment.read_id, strand, len(exon_blocks),
+                            ",".join([str(e[1] - e[0] + 1) for e in exon_blocks]),
+                            ",".join([str(e[0] - 1) for e in exon_blocks])))
+
+
+class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
+    def __init__(self, output_file_name, params):
+        AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = "#read_id\tisoform_id\tassignment_type\tassignment_events\tpolyA_found"
         if self.params.print_additional_info:
             self.header += "\taligned_blocks\tintron_profile\tsplit_exon_profile"
@@ -80,7 +111,11 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
             line = read_assignment.read_id  + "\t.\t.\t."
         else:
-            assigned_transcripts = [m.assigned_transcript for m in read_assignment.isoform_matches]
+            assigned_transcripts = [str(m.assigned_transcript) for m in read_assignment.isoform_matches]
+            for m in read_assignment.isoform_matches:
+                for x in m.match_subclassifications:
+                    if not hasattr(x, "event_type"):
+                        logger.debug(x)
             match_events = ",".join(["+".join([x.event_type.name for x in m.match_subclassifications])
                                      for m in read_assignment.isoform_matches])
             if not match_events:
@@ -170,6 +205,8 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         match = read_assignment.isoform_matches[0]
         gene_id = match.assigned_gene
         transcript_id = match.assigned_transcript
+        if transcript_id is None:
+            return
         strand = gene_info.isoform_strands[transcript_id]
 
         # FIXME not genomic distance
