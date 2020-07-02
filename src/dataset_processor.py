@@ -17,6 +17,9 @@ from src.gene_info import *
 from src.long_read_counter import *
 from src.multimap_resolver import *
 from src.read_groups import *
+from src.transcript_model_constructor import *
+from src.stats import *
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -133,6 +136,10 @@ class DatasetProcessor:
         if not os.path.isdir(self.tmp_dir):
             os.makedirs(self.tmp_dir)
 
+        gff_printer = GFFPrinter(sample.out_dir + "/", sample.label)
+        read_stat_counter = EnumStats()
+        transcript_stat_counter = EnumStats()
+
         current_chromosome = ""
         current_chr_record = None
         counter = 0
@@ -151,6 +158,14 @@ class DatasetProcessor:
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
                                                              current_chr_record, self.read_grouper)
             assignment_storage = alignment_processor.process()
+            for a in assignment_storage:
+                read_stat_counter.add(a.assignment_type)
+
+            transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
+            transcript_generator.process()
+            gff_printer.dump(transcript_generator)
+            for t in transcript_generator.transcript_model_storage:
+                transcript_stat_counter.add(t.transcript_type)
 
             self.dump_reads(assignment_storage, counter)
             counter += 1
@@ -158,7 +173,11 @@ class DatasetProcessor:
         logger.info("Combining output")
         self.aggregate_reads(sample)
         os.rmdir(self.tmp_dir)
+        logger.info("Transcript model file " + sample.out_dir  + "/transcript_models.gff")
         logger.info("Processed sample " + sample.label)
+        read_stat_counter.print_start("Read assignment statistics")
+        transcript_stat_counter.print_start("Transcript model statistics")
+
 
     def dump_reads(self, read_storage, gene_counter):
         if self.args.memory_efficient:
@@ -177,12 +196,14 @@ class DatasetProcessor:
     def create_aggregators(self, sample):
         out_assigned_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".read_assignments.tsv")
         self.basic_printer = BasicTSVAssignmentPrinter(out_assigned_tsv, self.args)
-        if self.args.no_sqanti_output:
-            self.global_printer = ReadAssignmentCompositePrinter([self.basic_printer])
-        else:
+        out_mapped_bed = os.path.join(sample.out_dir, "mapped_reads.bed")
+        self.bed_printer = BEDPrinter(out_mapped_bed, self.args)
+        printer_list = [self.basic_printer, self.bed_printer]
+        if not self.args.no_sqanti_output:
             out_alt_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".SQANTI-like.tsv")
             self.sqanti_printer = SqantiTSVPrinter(out_alt_tsv, self.args)
-            self.global_printer = ReadAssignmentCompositePrinter([self.basic_printer, self.sqanti_printer])
+            printer_list.append(self.sqanti_printer)
+        self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         out_gene_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".gene_counts.tsv")
         self.gene_counter = create_gene_counter(out_gene_counts_tsv, ignore_read_groups=True)

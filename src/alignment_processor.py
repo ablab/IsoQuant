@@ -80,15 +80,17 @@ class LongReadAlignmentProcessor:
                 if alignment.reference_id == -1:
                     self.assignment_storage.append(ReadAssignment(read_id, None))
                     continue
-                if self.params.skip_secondary and (alignment.is_secondary or alignment.is_supplementary):
+                if alignment.is_supplementary:
+                    continue
+                if not self.params.use_secondary and alignment.is_secondary:
                     continue
 
                 logger.debug("=== Processing read " + read_id + " ===")
 
-                polya_pos = self.polya_finder.find_polya_tail(alignment)
-                polyt_pos = self.polya_finder.find_polyt_head(alignment)
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
                 sorted_blocks = correct_bam_coords(concat_blocks)
+                polya_pos = self.polya_finder.find_polya_tail(alignment)
+                polyt_pos = self.polya_finder.find_polyt_head(alignment)
 
                 if self.params.reference and not self.params.no_sqanti_output:
                     if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
@@ -107,6 +109,7 @@ class LongReadAlignmentProcessor:
                 read_assignment.combined_profile = combined_profile
                 read_assignment.gene_info = self.gene_info
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
+                read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
 
                 if not self.params.no_sqanti_output:
                     indel_count, junctions_with_indels = self.count_indel_stats(alignment)

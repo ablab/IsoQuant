@@ -93,7 +93,7 @@ class GeneInfo:
         self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
         self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
 
-        self.print_debug()
+        #self.print_debug()
 
     def print_debug(self):
         gene_names = []
