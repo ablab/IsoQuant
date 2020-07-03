@@ -1,3 +1,6 @@
+![TeamCity Simple Build Status](http://chihua.cab.spbu.ru:3000/app/rest/builds/buildType:(id:IsoQuant_SimpleTest)/statusIcon)
+![Python version](https://img.shields.io/badge/python-3.7-blue)
+![License](https://img.shields.io/badge/licence-GPLv2-blue)
 # IsoQuant 0.1.0 manual
 
 1. [About IsoQuant](#sec1) </br>
