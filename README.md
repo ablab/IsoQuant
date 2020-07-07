@@ -97,7 +97,7 @@ If the installation is successful, you will find the following information at th
 ```bash
 === IsoQuant pipeline finished === 
 
-========= TEST PASSED CORRECTLY.
+=== TEST PASSED CORRECTLY ===
 ```
 
 <a name="sec3"></a>
@@ -116,7 +116,7 @@ In this case they will be aligned and converted to BAM before the main pipeline.
 
 <a name="sec3.2"></a>
 ## IsoQuant command line options
-To run SPAdes from the command line, enter IsoQuant directory
+To run IsoQuant from the command line, enter IsoQuant directory
 ```bash
 cd path/to/IsoQuant
 ```
@@ -131,7 +131,7 @@ python3 isoquant.py -d assembly --bam <alignment.bam> --genedb <genes.gtf.db> --
 `--threads` (or `-t`) Number of threads to use, 16 by default.   
 
 `--help` (or `-h`) Prints help message.  
-`--test` Runs IsoQuant on the toy data set (in progress).   
+`--test` Runs IsoQuant on the toy data set.   
 
 
 ### Input options
