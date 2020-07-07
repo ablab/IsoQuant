@@ -23,6 +23,7 @@ from src.stats import *
 
 logger = logging.getLogger('IsoQuant')
 
+
 class GeneClusterConstructor:
     def __init__(self, gene_db):
         self.gene_db = gene_db
@@ -102,6 +103,7 @@ class OverlappingExonsGeneClusterConstructor(GeneClusterConstructor):
 
         return gene_sets
 
+
 # Class for processing all samples against gene database
 class DatasetProcessor:
     def __init__(self, args):
@@ -178,7 +180,6 @@ class DatasetProcessor:
         read_stat_counter.print_start("Read assignment statistics")
         transcript_stat_counter.print_start("Transcript model statistics")
 
-
     def dump_reads(self, read_storage, gene_counter):
         if self.args.memory_efficient:
             # TODO: dump to file
@@ -194,44 +195,30 @@ class DatasetProcessor:
             self.reads_assignments.append(read_storage)
 
     def create_aggregators(self, sample):
-        out_assigned_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".read_assignments.tsv")
-        self.basic_printer = BasicTSVAssignmentPrinter(out_assigned_tsv, self.args)
-        out_mapped_bed = os.path.join(sample.out_dir, "mapped_reads.bed")
-        self.bed_printer = BEDPrinter(out_mapped_bed, self.args)
+        self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args)
+        self.bed_printer = BEDPrinter(sample.out_mapped_bed, self.args)
         printer_list = [self.basic_printer, self.bed_printer]
         if not self.args.no_sqanti_output:
-            out_alt_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".SQANTI-like.tsv")
-            self.sqanti_printer = SqantiTSVPrinter(out_alt_tsv, self.args)
+            self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args)
             printer_list.append(self.sqanti_printer)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
-        out_gene_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".gene_counts.tsv")
-        self.gene_counter = create_gene_counter(out_gene_counts_tsv, ignore_read_groups=True)
-        out_transcript_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".transcript_counts.tsv")
-        self.transcript_counter = create_transcript_counter(out_transcript_counts_tsv, ignore_read_groups=True)
+        self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, ignore_read_groups=True)
+        self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv, ignore_read_groups=True)
         if self.args.count_exons:
-            out_exon_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".exon_counts.tsv")
-            self.exon_counter = ExonCounter(out_exon_counts_tsv, ignore_read_groups=True)
-            out_intron_counts_tsv = os.path.join(sample.out_dir,
-                                                     self.args.prefix + sample.label + ".intron_counts.tsv")
-            self.intron_counter = IntronCounter(out_intron_counts_tsv, ignore_read_groups=True)
+            self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
+            self.intron_counter = IntronCounter(sample.out_intron_counts_tsv, ignore_read_groups=True)
             self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter, self.exon_counter, self.intron_counter])
         else:
             self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
 
         if self.args.read_group:
             # TODO test count grouping
-            out_gene_grouped_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".gene_grouped_counts.tsv")
-            self.gene_grouped_counter = create_gene_counter(out_gene_grouped_counts_tsv)
-            out_transcript_grouped_counts_tsv = os.path.join(sample.out_dir,
-                                                     self.args.prefix + sample.label + ".transcript_grouped_counts.tsv")
-            self.transcript_grouped_counter = create_transcript_counter(out_transcript_grouped_counts_tsv)
+            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv)
+            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv)
             if self.args.count_exons:
-                out_exon_grouped_counts_tsv = os.path.join(sample.out_dir, self.args.prefix + sample.label + ".exon_grouped_counts.tsv")
-                self.exon_grouped_counter = ExonCounter(out_exon_grouped_counts_tsv)
-                out_intron_grouped_counts_tsv = os.path.join(sample.out_dir,
-                                                     self.args.prefix + sample.label + ".intron_grouped_counts.tsv")
-                self.intron_grouped_counter = IntronCounter(out_intron_grouped_counts_tsv)
+                self.exon_grouped_counter = ExonCounter(sample.out_exon_grouped_counts_tsv)
+                self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
                 self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter,
                                                   self.exon_grouped_counter, self.intron_grouped_counter])
             else:
