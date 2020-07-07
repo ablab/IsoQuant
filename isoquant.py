@@ -26,7 +26,7 @@ from src.dataset_processor import *
 logger = logging.getLogger('IsoQuant')
 
 
-def parse_args():
+def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     show_full_help = '--full-help' in sys.argv
 
@@ -76,6 +76,7 @@ def parse_args():
     parser.add_argument("--count-exons", help="perform exont and intron counting", action='store_true', default=False)
     parser.add_argument("--use-secondary", help="do not ignore secondary alignments", action='store_true', default=False)
 
+    parser.add_argument("--test", action=TestMode, nargs=0)
     ## ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "chosen based on data type if not set", type=str)
@@ -86,7 +87,7 @@ def parse_args():
     add_additional_option("--max-intron-shift", type=int, default=None, help="set maximum length for intron shift")
     add_additional_option("--max-missed-exon-len", type=int, default=None, help="set maximum length for skipped exon")
 
-    args = parser.parse_args()
+    args = parser.parse_args(args, namespace)
 
     if os.path.exists(args.output):
         # logger is not defined yet
@@ -98,6 +99,32 @@ def parse_args():
         parser.print_usage()
         exit(-1)
     return args
+
+
+# Test mode is triggered by --test option
+class TestMode(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        options = ['--output', 'isoquant_test',
+                   '--fastq', 'tests/toy_data/MAPT.Mouse.ONT.simulated.fastq',
+                   '--reference', 'tests/toy_data/MAPT.Mouse.reference.fasta',
+                   '--genedb', 'tests/toy_data/MAPT.Mouse.genedb.gtf',
+                   '--data_type', 'raw_long_reads']
+        print('=== Running in test mode === ')
+        print('Any other option is ignored ')
+        main(options)
+        if self._check_log():
+            logger.info(' === TEST PASSED CORRECTLY === ')
+        else:
+            logger.error(' === TEST FAILED ===')
+        parser.exit()
+
+    @staticmethod
+    def _check_log():
+        with open('isoquant_test/isoquant.log', 'r') as f:
+            log = f.read()
+
+        correct_results = ['contradictory: 2', 'empty: 15', 'unique: 115', 'known: 11', 'Processed 1 sample']
+        return all([result in log for result in correct_results])
 
 
 # Check user's params
@@ -299,8 +326,8 @@ def clean_up(args):
     pass
 
 
-def main():
-    args = parse_args()
+def main(args):
+    args = parse_args(args)
     set_logger(args, logger)
     create_output_dirs(args)
     set_additional_params(args)
@@ -311,7 +338,7 @@ def main():
 if __name__ == "__main__":
     # stuff only to run when not called via 'import' here
     try:
-        main()
+        main(sys.argv[1:])
     except SystemExit:
         raise
     except:
