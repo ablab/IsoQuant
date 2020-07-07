@@ -65,7 +65,6 @@ def parse_args():
     parser.add_argument('--labels', nargs='+', type=str, help='sample names to be used')
 
     parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true', default=False)
-    parser.add_argument("--prefix", help="prefix for output files", type=str, default="")
     parser.add_argument("--read_group", help="a way to groups feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG),"
                                              "using information table (file:FILE:READ_COL:GROUP_COL:DELIM),"
