@@ -13,8 +13,9 @@ from src.long_read_assigner import *
 
 logger = logging.getLogger('IsoQuant')
 
+
 class PrintAllFunctor:
-    def check(sefl, assignment):
+    def check(self, assignment):
         return True
 
 
@@ -109,7 +110,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
             return
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
-            line = read_assignment.read_id  + "\t.\t.\t."
+            line = read_assignment.read_id + "\t.\t.\t."
         else:
             assigned_transcripts = [str(m.assigned_transcript) for m in read_assignment.isoform_matches]
             for m in read_assignment.isoform_matches:
@@ -120,7 +121,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                                      for m in read_assignment.isoform_matches])
             if not match_events:
                 match_events = "."
-            line = read_assignment.read_id  + "\t" + ",".join(assigned_transcripts) + "\t" \
+            line = read_assignment.read_id + "\t" + ",".join(assigned_transcripts) + "\t" \
                     + read_assignment.assignment_type.name + "\t" + match_events + "\t" + str(read_assignment.polyA_found)
         if self.params.print_additional_info:
             combined_read_profile = read_assignment.combined_profile
@@ -181,6 +182,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     polyA_dist: if --polyA_motif_list is given, shows the location of the last base of the hexamer. Position 0 is the putative poly(A) site. This distance is hence always negative because it is upstream.
     
     """
+
 
 class SqantiTSVPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params):
@@ -279,7 +281,7 @@ class IOSupport:
     def count_tss_dist(self, read_assignment, transcript_id):
         transcript_start = read_assignment.gene_info.transcript_start(transcript_id)
         read_start = read_assignment.start()
-        if  read_start < transcript_start:
+        if read_start < transcript_start:
             return -sum_intervals_to_point(read_assignment.combined_profile.read_exon_profile.read_features, transcript_start)
         else:
             return sum_intervals_to_point(read_assignment.gene_info.all_isoforms_exons[transcript_id], read_start)
@@ -287,7 +289,7 @@ class IOSupport:
     def count_tts_dist(self, read_assignment, transcript_id):
         transcript_end = read_assignment.gene_info.transcript_end(transcript_id)
         read_end = read_assignment.end()
-        if  read_end > transcript_end:
+        if read_end > transcript_end:
             return -sum_intervals_from_point(read_assignment.combined_profile.read_exon_profile.read_features, transcript_end)
         else:
             return sum_intervals_from_point(read_assignment.gene_info.all_isoforms_exons[transcript_id], read_end)

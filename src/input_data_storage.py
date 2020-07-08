@@ -10,11 +10,29 @@ import logging
 
 logger = logging.getLogger('IsoQuant')
 
+
 class SampleData:
     def __init__(self, file_list, label, out_dir):
         self.file_list = file_list
         self.label = label
         self.out_dir = out_dir
+        self._init_paths()
+
+    def _make_path(self, name):
+        return os.path.join(self.out_dir, name)
+
+    def _init_paths(self):
+        self.out_assigned_tsv = self._make_path(self.label + ".read_assignments.tsv")
+        self.out_mapped_bed = self._make_path("mapped_reads.bed")
+        self.out_alt_tsv = self._make_path(self.label + ".SQANTI-like.tsv")
+        self.out_gene_counts_tsv = self._make_path(self.label + ".gene_counts.tsv")
+        self.out_transcript_counts_tsv = self._make_path(self.label + ".transcript_counts.tsv")
+        self.out_exon_counts_tsv = self._make_path(self.label + ".exon_counts.tsv")
+        self.out_intron_counts_tsv = self._make_path(self.label + ".intron_counts.tsv")
+        self.out_gene_grouped_counts_tsv = self._make_path(self.label + ".gene_grouped_counts.tsv")
+        self.out_transcript_grouped_counts_tsv = self._make_path(self.label + ".transcript_grouped_counts.tsv")
+        self.out_exon_grouped_counts_tsv = self._make_path(self.label + ".exon_grouped_counts.tsv")
+        self.out_intron_grouped_counts_tsv = self._make_path(self.label + ".intron_grouped_counts.tsv")
 
 
 class InputDataStorage:
