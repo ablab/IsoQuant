@@ -38,7 +38,6 @@ class AbstractAssignmentPrinter:
     def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor()):
         self.assignment_checker = assignment_checker
         self.params = params
-        self.output_file_name = output_file_name
         self.output_file = open(output_file_name, "w")
 
     def __del__(self):
