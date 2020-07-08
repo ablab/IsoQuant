@@ -110,7 +110,7 @@ class TestMode(argparse.Action):
                    '--fastq', 'tests/toy_data/MAPT.Mouse.ONT.simulated.fastq',
                    '--reference', 'tests/toy_data/MAPT.Mouse.reference.fasta',
                    '--genedb', 'tests/toy_data/MAPT.Mouse.genedb.gtf',
-                   '--data_type', 'raw_long_reads']
+                   '--data_type', 'nanopore_raw']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
         main(options)
@@ -125,7 +125,7 @@ class TestMode(argparse.Action):
         with open('isoquant_test/isoquant.log', 'r') as f:
             log = f.read()
 
-        correct_results = ['contradictory: 2', 'empty: 15', 'unique: 115', 'known: 11', 'Processed 1 sample']
+        correct_results = ['empty: 15', 'unique: 117', 'known: 10', 'Processed 1 sample']
         return all([result in log for result in correct_results])
 
 
