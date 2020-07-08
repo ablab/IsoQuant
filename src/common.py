@@ -38,13 +38,15 @@ def rindex(l, el):
 
 
 def proper_plural_form(name, count):
-    return str(count) + " " + name + "" if count == 1 else "s"
+    return str(count) + " " + name + ("" if count == 1 else "s")
+
 
 # check whether genes overlap and should be processed together
 def genes_overlap(gene_db1, gene_db2):
     if (gene_db1.seqid != gene_db2.seqid):
         return False
     return overlaps((gene_db1.start, gene_db1.end), (gene_db2.start, gene_db2.end))
+
 
 def argmin(l):
     if len(l) == 0:
@@ -55,7 +57,7 @@ def argmin(l):
         if l[i] < min_v:
             min_v = l[i]
             min_i = i
-    return  min_i
+    return min_i
 
 # == range operations ==
 def overlaps(range1, range2):
