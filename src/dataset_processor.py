@@ -117,7 +117,7 @@ class DatasetProcessor:
             self.reference_record_dict = None
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
-        self.read_grouper = create_read_grouper(args.read_group)
+        self.read_grouper = create_read_grouper(args)
 
         #self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])
         #self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)
@@ -138,7 +138,7 @@ class DatasetProcessor:
         if not os.path.isdir(self.tmp_dir):
             os.makedirs(self.tmp_dir)
 
-        gff_printer = GFFPrinter(sample.out_dir + "/", sample.label)
+        gff_printer = GFFPrinter(sample.out_dir, sample.label)
         read_stat_counter = EnumStats()
         transcript_stat_counter = EnumStats()
 
@@ -198,7 +198,7 @@ class DatasetProcessor:
         self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args)
         self.bed_printer = BEDPrinter(sample.out_mapped_bed, self.args)
         printer_list = [self.basic_printer, self.bed_printer]
-        if not self.args.no_sqanti_output:
+        if self.args.sqanti_output:
             self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args)
             printer_list.append(self.sqanti_printer)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)

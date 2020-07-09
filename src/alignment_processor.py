@@ -61,7 +61,7 @@ class LongReadAlignmentProcessor:
         for b in self.bams:
             self.process_single_file(b)
 
-        if not self.params.no_sqanti_output and self.chr_record:
+        if self.params.sqanti_output and self.chr_record:
             self.gene_info.all_read_region_start -= self.params.upstream_region_len
             self.gene_info.all_read_region_end += self.params.upstream_region_len
 
@@ -92,7 +92,7 @@ class LongReadAlignmentProcessor:
                 polya_pos = self.polya_finder.find_polya_tail(alignment)
                 polyt_pos = self.polya_finder.find_polyt_head(alignment)
 
-                if self.params.reference and not self.params.no_sqanti_output:
+                if self.params.reference and self.params.sqanti_output:
                     if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
                         self.gene_info.all_read_region_start = sorted_blocks[0][0]
                     if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
@@ -111,7 +111,7 @@ class LongReadAlignmentProcessor:
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
                 read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
 
-                if not self.params.no_sqanti_output:
+                if self.params.sqanti_output:
                     indel_count, junctions_with_indels = self.count_indel_stats(alignment)
                     read_assignment.set_additional_info("indel_count", indel_count)
                     read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)

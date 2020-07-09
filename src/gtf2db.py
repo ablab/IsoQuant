@@ -26,7 +26,7 @@ def db2gtf(gtf, db):
 def gtf2db(gtf, db):
     logger.info("Converting gene annotation file to .db format (takes a while)...")
     gffutils.create_db(gtf, db, force=True, keep_order=True, merge_strategy='merge',
-                       sort_attribute_values=True, disable_infer_transcripts=True, disable_infer_genes=True)
+                       sort_attribute_values=True, disable_infer_transcripts=False, disable_infer_genes=False)
     logger.info("Gene database written to " + db)
     logger.info("Provide this database next time to avoid excessive conversion")
 

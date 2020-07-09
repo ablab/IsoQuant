@@ -35,53 +35,61 @@ def parse_args(args=None, namespace=None):
             kwargs['help'] = argparse.SUPPRESS
         parser.add_argument(*args, **kwargs)
 
+    # GENERAL OPTIONS
     parser.add_argument("--full-help", action='help', help="show full list of options")
+    parser.add_argument("--test", action=TestMode, nargs=0)
+    parser.add_argument("--output", "-o", help="output folder, will be created automatically [default=isoquant_output]",
+                        type=str, default="isoquant_output")
+    parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
 
+    # INPUT READS
     input_args = parser.add_mutually_exclusive_group(required=True)
     input_args.add_argument('--bam', nargs='+', type=str, help='sorted and indexed BAM file(s), '
-                                                            'each file will be treated as a separate sample')
+                                                               'each file will be treated as a separate sample')
     input_args.add_argument('--fastq', nargs='+', type=str, help='input FASTQ file(s), '
-                                                             'each file will be treated as a separate sample'
-                                                             'reference genome should be provided when using raw reads')
+                                                                 'each file will be treated as a separate sample'
+                                                                 'reference genome should be provided when using raw reads')
     input_args.add_argument('--bam_list', type=str, help='text file with list of BAM files, one file per line'
-                                                     ', leave empty line between samples')
+                                                         ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
-                                                       ', leave empty line between samples')
+                                                           ', leave empty line between samples')
     parser.add_argument("--data_type", "-d", type=str, required=True,
                         help="type of data to process, supported types are: " + " ".join(DATATYPE_TO_ALIGNER.keys()))
     parser.add_argument('--stranded',  type=str, help="reads strandedness type, supported types are: " +
                         " ".join(SUPPORTED_STRANDEDNESS), default="none")
+
+    # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils .db format or GTF/GFF format", type=str,
                         required='--run_aligner_only' not in sys.argv)
-
     parser.add_argument("--reference", help="reference genome in FASTA format, "
                                             "should be provided to compute some additional stats and"
                                             "when raw reads are used as an input", type=str)
     parser.add_argument("--index", help="genome index for specified aligner, "
                                         "should be provided only when raw reads are used as an input", type=str)
 
+    # PIPELINE AND OUTPUT
     parser.add_argument("--run_aligner_only", action="store_true", help="align reads to reference without isoform assignment")
-    parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
-    parser.add_argument("--output", "-o", help="output folder, will be created automatically [default=isoquant_output]",
-                        type=str, default="isoquant_output")
     parser.add_argument('--labels', nargs='+', type=str, help='sample names to be used')
-
-    parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true', default=False)
+    # FIXME: test read groput and enable option
     parser.add_argument("--read_group", help="a way to groups feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG),"
                                              "using information table (file:FILE:READ_COL:GROUP_COL:DELIM),"
                                              "using read id (read_id:DELIM)", type=str)
-    parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
-                        help="matching strategy to use from most strict to least", type=str, default="default")
-    parser.add_argument("--no-sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=True)
+
+    parser.add_argument("--sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=False)
     parser.add_argument("--count-exons", help="perform exont and intron counting", action='store_true', default=False)
     parser.add_argument("--use-secondary", help="do not ignore secondary alignments", action='store_true', default=False)
 
-    parser.add_argument("--test", action=TestMode, nargs=0)
-    ## ADDITIONAL OPTIONS
+    # ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "chosen based on data type if not set", type=str)
     add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
+    parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
+                        default=False)
+    # ALGORITHM
+    parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
+                        help="matching strategy to use from most strict to least", type=str, default="default")
+    # TODO: add read-type presets, transcript model contruction presets and counting
     add_additional_option("--delta", type=int, default=None,
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
     add_additional_option("--max-exon-extension", type=int, default=None, help="set maximum length for exon elongation")

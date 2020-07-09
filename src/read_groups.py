@@ -79,10 +79,11 @@ class ReadTableGrouper(AbstractReadGrouper):
         return self.read_map[alignment.query_name]
 
 
-def create_read_grouper(option=None):
-    if option is None or not option:
+def create_read_grouper(args):
+    if not hasattr(args, "read_group") or args.read_group is None:
         return DefaultReadGrouper()
 
+    option = args.read_group
     values = option.split(':')
     if len(values) == 1:
         return ReadTableGrouper(option)

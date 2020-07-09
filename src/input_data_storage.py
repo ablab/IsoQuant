@@ -23,7 +23,7 @@ class SampleData:
 
     def _init_paths(self):
         self.out_assigned_tsv = self._make_path(self.label + ".read_assignments.tsv")
-        self.out_mapped_bed = self._make_path("mapped_reads.bed")
+        self.out_mapped_bed = self._make_path(self.label + ".mapped_reads.bed")
         self.out_alt_tsv = self._make_path(self.label + ".SQANTI-like.tsv")
         self.out_gene_counts_tsv = self._make_path(self.label + ".gene_counts.tsv")
         self.out_transcript_counts_tsv = self._make_path(self.label + ".transcript_counts.tsv")
