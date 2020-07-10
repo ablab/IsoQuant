@@ -154,7 +154,7 @@ python3 isoquant.py -d assembly --bam <alignment.bam> --genedb <genes.gtf.db> --
 `--reference` or `-r`
     Reference genome in FASTA format, should be provided  when raw reads are used as an input and to compute some additional stats.
 
-#### Using alignment as input
+#### Using mapped reads as input:
 To provide aligned reads use one of the following options:
 
 `--bam`
@@ -163,7 +163,7 @@ To provide aligned reads use one of the following options:
 `--bam_list` 
     Text file with list of BAM files, one file per line, leave empty line between samples. 
 
-#### Using row read as an input:  
+#### Using raw read as an input:  
 To provide read sequences use one of the following options:
 
 `--fastq` 
@@ -186,10 +186,10 @@ To provide read sequences use one of the following options:
     Sets sample names; make sure that the number of labels is equal to the number of samples; input file names are used if not set.
 
 `--read_group`
-     Sets a way to group feature counts (e.g. by cell type). Available options are: 
-     - by BAM file read tag: set `tag:TAG`, where `TAG` is the desired tag name (e.g. `tag:RG` with use `RG` values as groups);
-     - by read name suffix: set `read_id:DELIM` where `DELIM` is the symbol/string by which the read id will be split (e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will set as `NEU`);
-     - using additional file with group information for every read: `file:FILE:READ_COL:GROUP_COL:DELIM`, where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set), `GROUP_COL` is column with group ids (1 if not set), `DELIM` is separator symbol (tab if not set).
+ Sets a way to group feature counts (e.g. by cell type). Available options are: 
+ * by BAM file read tag: set `tag:TAG`, where `TAG` is the desired tag name (e.g. `tag:RG` with use `RG` values as groups);
+ * by read name suffix: set `read_id:DELIM` where `DELIM` is the symbol/string by which the read id will be split (e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will set as `NEU`);
+ * using additional file with group information for every read: `file:FILE:READ_COL:GROUP_COL:DELIM`, where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set), `GROUP_COL` is column with group ids (1 if not set), `DELIM` is separator symbol (tab if not set).
 
 
 ### Pipeline and output options
@@ -226,11 +226,11 @@ To provide read sequences use one of the following options:
 #### Read to isoform matching:
 
 `--matching-strategy` A preset of parameters for read to isoform matching algorithm, should be one of 
-    * `exact` - delta = 0, all minor errors and exon elongations are treated as inconsistencies;  
-    * `precise` - delta = 3, only minor alignment errors and exon elongations are allowed, cutoff = 30;  
-    * `default` - delta = 6, alignment errors and exon elongations are allowed, cutoff = 100;   
-    * `loose` - delta = 12, resolve ambiguous matches based on nucleotide similarity, allow extra introns/alternative TSS/polyA sites, minor errors and exon elongation allowed, cutoff = 300.
-    Matching strategy is chosen automatically based on specified data type. However, parameters will be overridden if matching strategy is set manually.
+* `exact` - delta = 0, all minor errors and exon elongations are treated as inconsistencies;  
+* `precise` - delta = 3, only minor alignment errors and exon elongations are allowed, cutoff = 30;  
+* `default` - delta = 6, alignment errors and exon elongations are allowed, cutoff = 100;   
+* `loose` - delta = 12, resolve ambiguous matches based on nucleotide similarity, allow extra introns/alternative TSS/polyA sites, minor errors and exon elongation allowed, cutoff = 300.
+Matching strategy is chosen automatically based on specified data type. However, parameters will be overridden if matching strategy is set manually.
 
 You can manually set some of the parameters (will override options in the preset):
 `--delta` 
@@ -245,12 +245,12 @@ You can manually set some of the parameters (will override options in the preset
 #### Transcript model construction:
 
 `--model_construction_strategy` A preset of parameters for transcript model construction algorithm, should be one of 
-    * `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive; intron retention is not reported;  
-    * `default` - a just trade-off between precision and recall for usual long-read dataset, intron retention is reported;   
-    * `all` - report most of detected modification as novel transcripts, looses precition in favor of recall; intron retention is reported;
-    * `fl` - input reads are considered as full-length transcripts; intron retention is reported;
-    * `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not requires; intron retention is reported;
-    Transcript model construction strategy is chosen automatically based on specified data type. However, parameters will be overridden if set manually.
+* `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive; intron retention is not reported;  
+* `default` - a just trade-off between precision and recall for usual long-read dataset, intron retention is reported;   
+* `all` - report most of detected modification as novel transcripts, looses precition in favor of recall; intron retention is reported;
+* `fl` - input reads are considered as full-length transcripts; intron retention is reported;
+* `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not requires; intron retention is reported;
+Transcript model construction strategy is chosen automatically based on specified data type. However, parameters will be overridden if set manually.
 
 You can manually set some of the parameters (will override options in the preset):
 `--report_intron_retention` 
@@ -285,9 +285,9 @@ In case you have
 python3 isoquant.py -d assembly --bam alignment.bam --genedb genes.gtf.db --output output_dir --threads 4 
 ```
 
-* Unaligned row reads
+* Unaligned raw reads
 ```bash
-python3 isoquant.py -d raw_long_reads --fastq row_reads.fastq --reference reference.fasta --genedb genes.gtf.db --output output_dir --threads 4 
+python3 isoquant.py -d raw_long_reads --fastq raw_reads.fastq --reference reference.fasta --genedb genes.gtf.db --output output_dir --threads 4 
 ```
 
 * High-quality reads
