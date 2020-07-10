@@ -55,7 +55,7 @@ class ReadTableGrouper(AbstractReadGrouper):
         self.read_map = {}
         min_columns = max(read_id_column_index, group_id_column_index)
         logger.info("Reading")
-        for l in open(table_tsv_file, 'w'):
+        for l in open(table_tsv_file, 'r'):
             l = l.strip()
             if l.startswith('#') or not l:
                 continue
@@ -98,3 +98,6 @@ def create_read_grouper(args):
             return ReadTableGrouper(values[1], int(values[2]), int(values[3]))
         else:
             return ReadTableGrouper(values[1])
+    else:
+        logger.critical("Unsupported read groupping option")
+        return DefaultReadGrouper()

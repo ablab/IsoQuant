@@ -76,10 +76,9 @@ def parse_args(args=None, namespace=None):
 
     add_additional_option("--run_aligner_only", action="store_true",
                         help="align reads to reference without isoform assignment")
-    parser.add_argument('--labels', nargs='+', type=str, help='sample names to be used; '
-                                                              'input file names are used if not set')
-    # FIXME: test read group and enable option
-    add_additional_option("--read_group", help="a way to groups feature counts (no grouping by default): "
+    parser.add_argument('--labels', '-l', nargs='+', type=str, help='sample names to be used; '
+                                                                    'input file names are used if not set')
+    parser.add_argument("--read_group", help="a way to groups feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG), "
                                              "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM), "
                                              "using read id (read_id:DELIM)", type=str)
