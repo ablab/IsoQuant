@@ -13,6 +13,7 @@ import logging
 import argparse
 from traceback import print_exc
 from collections import namedtuple
+from shutil import rmtree
 
 import gffutils
 import pysam
@@ -28,73 +29,102 @@ logger = logging.getLogger('IsoQuant')
 
 def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    show_full_help = '--full-help' in sys.argv
+    show_full_help = '--full_help' in sys.argv
 
     def add_additional_option(*args, **kwargs):  # show command only with --full-help
         if not show_full_help:
             kwargs['help'] = argparse.SUPPRESS
         parser.add_argument(*args, **kwargs)
 
-    # GENERAL OPTIONS
-    parser.add_argument("--full-help", action='help', help="show full list of options")
-    parser.add_argument("--test", action=TestMode, nargs=0)
     parser.add_argument("--output", "-o", help="output folder, will be created automatically [default=isoquant_output]",
                         type=str, default="isoquant_output")
-    parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
+
+    # REFERENCE
+    parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
+                        required='--run_aligner_only' not in sys.argv)
+    parser.add_argument("--reference", help="reference genome in FASTA format, "
+                                            "should be provided to compute some additional stats and "
+                                            "when raw reads are used as an input", type=str)
+    parser.add_argument("--index", help="genome index for specified aligner, "
+                                        "should be provided only when raw reads are used as an input", type=str)
 
     # INPUT READS
     input_args = parser.add_mutually_exclusive_group(required=True)
     input_args.add_argument('--bam', nargs='+', type=str, help='sorted and indexed BAM file(s), '
                                                                'each file will be treated as a separate sample')
     input_args.add_argument('--fastq', nargs='+', type=str, help='input FASTQ file(s), '
-                                                                 'each file will be treated as a separate sample'
+                                                                 'each file will be treated as a separate sample; '
                                                                  'reference genome should be provided when using raw reads')
     input_args.add_argument('--bam_list', type=str, help='text file with list of BAM files, one file per line'
                                                          ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
-    parser.add_argument("--data_type", "-d", type=str, required=True,
-                        help="type of data to process, supported types are: " + " ".join(DATATYPE_TO_ALIGNER.keys()))
-    parser.add_argument('--stranded',  type=str, help="reads strandedness type, supported types are: " +
-                        " ".join(SUPPORTED_STRANDEDNESS), default="none")
-
-    # REFERENCE
-    parser.add_argument("--genedb", "-g", help="gene database in gffutils .db format or GTF/GFF format", type=str,
-                        required='--run_aligner_only' not in sys.argv)
-    parser.add_argument("--reference", help="reference genome in FASTA format, "
-                                            "should be provided to compute some additional stats and"
-                                            "when raw reads are used as an input", type=str)
-    parser.add_argument("--index", help="genome index for specified aligner, "
-                                        "should be provided only when raw reads are used as an input", type=str)
+    parser.add_argument("--data_type", "-d", type=str, required=True, choices=DATATYPE_TO_ALIGNER.keys(),
+                        help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
+    parser.add_argument('--stranded',  type=str, help="reads strandedness type, supported values are: " +
+                        ", ".join(SUPPORTED_STRANDEDNESS), default="none")
+    parser.add_argument('--has_polya', action='store_true', default=False,
+                        help="set if reads were not polyA trimmed; polyA tails will be detected and further "
+                             " required for transcript model construction")
+    parser.add_argument('--fl_data', action='store_true', default=False,
+                        help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
     # PIPELINE AND OUTPUT
-    parser.add_argument("--run_aligner_only", action="store_true", help="align reads to reference without isoform assignment")
-    parser.add_argument('--labels', nargs='+', type=str, help='sample names to be used')
-    # FIXME: test read groput and enable option
-    parser.add_argument("--read_group", help="a way to groups feature counts (no grouping by default): "
-                                             "by BAM file tag (tag:TAG),"
-                                             "using information table (file:FILE:READ_COL:GROUP_COL:DELIM),"
+    parser.add_argument("--full_help", action='help', help="show full list of options")
+    parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
+    parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
+
+    add_additional_option("--run_aligner_only", action="store_true",
+                        help="align reads to reference without isoform assignment")
+    parser.add_argument('--labels', nargs='+', type=str, help='sample names to be used; '
+                                                              'input file names are used if not set')
+    # FIXME: test read group and enable option
+    add_additional_option("--read_group", help="a way to groups feature counts (no grouping by default): "
+                                             "by BAM file tag (tag:TAG), "
+                                             "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM), "
                                              "using read id (read_id:DELIM)", type=str)
 
-    parser.add_argument("--sqanti-output", help="produce SQANTI-like TSV output (saves time)", action='store_true', default=False)
-    parser.add_argument("--count-exons", help="perform exont and intron counting", action='store_true', default=False)
-    parser.add_argument("--use-secondary", help="do not ignore secondary alignments", action='store_true', default=False)
+    parser.add_argument("--sqanti_output", help="produce SQANTI-like TSV output (requires more time)",
+                        action='store_true', default=False)
+    parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
+    add_additional_option("--use_secondary", help="do not ignore secondary alignments", action='store_true', default=False)
 
     # ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
-                                            "chosen based on data type if not set", type=str)
+                                            "; chosen based on data type if not set", type=str)
     add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
-    parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
+    add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                         default=False)
     # ALGORITHM
-    parser.add_argument("--matching-strategy", choices=["exact", "precise", "default", "loose"],
-                        help="matching strategy to use from most strict to least", type=str, default="default")
-    # TODO: add read-type presets, transcript model contruction presets and counting
+    parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
+                        help="matching strategy to use from most strict to least", type=str, default=None)
     add_additional_option("--delta", type=int, default=None,
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
-    add_additional_option("--max-exon-extension", type=int, default=None, help="set maximum length for exon elongation")
-    add_additional_option("--max-intron-shift", type=int, default=None, help="set maximum length for intron shift")
-    add_additional_option("--max-missed-exon-len", type=int, default=None, help="set maximum length for skipped exon")
+    add_additional_option("--correct_minor_errors", type=bool, default=None,
+                          help="do not treat alignment artefacts as modification events")
+    add_additional_option("--max_intron_shift", type=int, default=None,
+                          help="set maximum length for intron shift")
+    add_additional_option("--max_missed_exon_len", type=int, default=None,
+                          help="set maximum length for skipped exon")
+
+    # TODO: add read-type presets, transcript model contruction presets and counting
+    parser.add_argument("--model_construction_strategy", choices=["reliable", "default", "fl", "all", "assembly"],
+                        help="transcritp model construnction strategy to use",
+                        type=str, default=None)
+    add_additional_option("--report_intron_retention", type=bool, default=None,
+                          help="report intron retention events in transcript model files")
+    add_additional_option("--collapse_subisoforms", type=bool, default=None,
+                          help="collapse isoforms whose intron chain is a subsequence of other intron chain")
+    add_additional_option("--min_ref_fsm_supporting_reads", type=int, default=None,
+                          help="minimal number of FSM reads that support known isoform")
+    add_additional_option("--min_ref_supporting_reads", type=int, default=None,
+                          help="minimal number of reads that support known isoform")
+    add_additional_option("--min_novel_fsm_supporting_reads", type=int, default=None,
+                          help="minimal number of FSM reads that support novel isoform")
+    add_additional_option("--min_novel_supporting_reads", type=int, default=None,
+                          help="minimal number of reads that support novel isoform")
+    add_additional_option("--min_reads_supporting_tsts", type=int, default=None,
+                          help="minimal number of reads that support isoform terminal sites")
 
     args = parser.parse_args(args, namespace)
 
@@ -113,11 +143,12 @@ def parse_args(args=None, namespace=None):
 # Test mode is triggered by --test option
 class TestMode(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
+        source_dir = os.path.dirname(os.path.realpath(__file__))
         options = ['--output', 'isoquant_test',
-                   '--fastq', 'tests/toy_data/MAPT.Mouse.ONT.simulated.fastq',
-                   '--reference', 'tests/toy_data/MAPT.Mouse.reference.fasta',
-                   '--genedb', 'tests/toy_data/MAPT.Mouse.genedb.gtf',
-                   '--data_type', 'nanopore_raw']
+                   '--fastq', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.ONT.simulated.fastq'),
+                   '--reference', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.reference.fasta'),
+                   '--genedb', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.genedb.gtf'),
+                   '--data_type', 'nanopore']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
         main(options)
@@ -219,61 +250,111 @@ def set_logger(args, logger_instnace):
     logger_instnace.addHandler(ch)
 
 
-def set_additional_params(args):
-    Strategy = namedtuple('Strategy',
-                          ('delta', 'max_exon_extension', 'max_intron_shift', 'max_missed_exon_len',
-                           'allow_extra_terminal_introns', 'resolve_ambiguous', 'correct_minor_errors'))
+def set_data_dependent_options(args):
+    matching_strategies = {ASSEMBLY: "precise", PACBIO_CCS_DATA: "precise", PACBIO_DATA: "default", NANOPORE_DATA: "default"}
+    if args.matching_strategy is None:
+        args.matching_strategy = matching_strategies[args.data_type]
+
+    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default", PACBIO_DATA: "default", NANOPORE_DATA: "default"}
+    if args.model_construction_strategy is None:
+        args.model_construction_strategy = model_construction_strategies[args.data_type]
+        if args.fl_data and args.model_construction_strategy == "default":
+            args.model_construction_strategy = "fl"
+
+    args.resolve_ambiguous = ExonAmbiguityResolvingMethod.full_splice_matches_only if args.fl_data else None
+
+
+def set_matching_options(args):
+    MathcingStrategy = namedtuple('MathcingStrategy',
+                                  ('delta', 'max_exon_extension', 'max_intron_shift', 'max_missed_exon_len',
+                                   'allow_extra_terminal_introns', 'apa_delta',
+                                   'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   Strategy(0,  5,   0,   0,   False, ExonAmbiguityResolvingMethod.mono_exonic_only, False),
-        'precise': Strategy(3,  10,  30,  50,  False, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'default': Strategy(6,  60,  60,  200, False, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'loose':   Strategy(12, 100, 120, 300, True,  ExonAmbiguityResolvingMethod.all,  True),
+        'exact':   MathcingStrategy(0,  5,   0,   0,   False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
+        'precise': MathcingStrategy(3,  10,  30,  50,  False, 50, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'default': MathcingStrategy(6,  60,  60,  200, False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'loose':   MathcingStrategy(12, 100, 120, 300, True, 100, ExonAmbiguityResolvingMethod.all,  True),
     }
 
     strategy = strategies[args.matching_strategy]
 
     args.delta = args.delta or strategy.delta
-    args.max_exon_extension = args.max_exon_extension or strategy.max_exon_extension
+    args.max_exon_extension = strategy.max_exon_extension
     args.max_intron_shift = args.max_intron_shift or strategy.max_intron_shift
     args.max_missed_exon_len = args.max_missed_exon_len or strategy.max_missed_exon_len
     args.allow_extra_terminal_introns = strategy.allow_extra_terminal_introns
-    args.resolve_ambiguous = strategy.resolve_ambiguous
-    args.correct_minor_errors = strategy.correct_minor_errors
+    args.apa_delta = strategy.apa_delta
+    args.resolve_ambiguous = args.resolve_ambiguous or strategy.resolve_ambiguous
+    args.correct_minor_errors = \
+        strategy.correct_minor_errors if args.correct_minor_errors is None else args.correct_minor_errors
 
-    updated_strategy = Strategy(args.delta, args.max_exon_extension, args.max_intron_shift, args.max_missed_exon_len,
-                                args.allow_extra_terminal_introns, args.resolve_ambiguous, args.correct_minor_errors)
+    updated_strategy = MathcingStrategy(args.delta, args.max_exon_extension, args.max_intron_shift,
+                                        args.max_missed_exon_len, args.allow_extra_terminal_introns,
+                                        args.apa_delta, args.resolve_ambiguous, args.correct_minor_errors)
     logger.debug(f'Using {args.matching_strategy} strategy. Updated strategy: {updated_strategy}.')
 
-    # TODO proper options
-    args.print_additional_info = True
 
+def set_model_construction_options(args):
+    ModelConstructionStrategy = namedtuple('ModelConstructionStrategy',
+                                           ('min_ref_fsm_supporting_reads', 'min_ref_supporting_reads',
+                                            'min_novel_fsm_supporting_reads', 'min_novel_supporting_reads',
+                                            'report_intron_retention', 'max_dist_to_isoforms_tsts',
+                                            'max_dist_to_novel_tsts', 'min_reads_supporting_tsts',
+                                            'collapse_subisoforms', 'count_ambiguous'))
+
+    strategies = {
+        'reliable': ModelConstructionStrategy(2, 4, 5, 9, False, 30, 100, 8, True, True),
+        'default': ModelConstructionStrategy(1, 2, 4, 7, True, 30, 100, 5, True, True),
+        'fl': ModelConstructionStrategy(1, 2, 3, 3, True, 15, 30, 2, False, True),
+        'all': ModelConstructionStrategy(1, 1, 2, 3, True, 30, 100, 3, False, True),
+        'assembly': ModelConstructionStrategy(1, 1, 1, 1, True, 30, 60, 1, True, True)
+    }
+
+    strategy = strategies[args.model_construction_strategy]
+
+    # transcript model construction
+    args.min_ref_fsm_supporting_reads = args.min_ref_fsm_supporting_reads or strategy.min_ref_supporting_reads
+    args.min_ref_supporting_reads = args.min_ref_supporting_reads or strategy.min_ref_supporting_reads
+    args.min_novel_fsm_supporting_reads = args.min_novel_fsm_supporting_reads or strategy.min_novel_fsm_supporting_reads
+    args.min_novel_supporting_reads = args.min_novel_supporting_reads or strategy.min_novel_supporting_reads
+    args.report_intron_retention = \
+        strategy.report_intron_retention if args.report_intron_retention is None else args.report_intron_retention
+    args.max_dist_to_isoforms_tsts = strategy.max_dist_to_isoforms_tsts
+    args.max_dist_to_novel_tsts = strategy.max_dist_to_novel_tsts
+    args.min_reads_supporting_tsts = args.min_reads_supporting_tsts or strategy.min_reads_supporting_tsts
+    args.collapse_subisoforms = \
+        strategy.collapse_subisoforms if args.collapse_subisoforms is None else args.collapse_subisoforms
+    args.count_ambiguous = strategy.count_ambiguous
+
+    args.require_polyA = args.has_polya
+    args.require_cage_peak = False # TODO
+
+    updated_strategy = ModelConstructionStrategy(args.min_ref_fsm_supporting_reads, args.min_ref_supporting_reads,
+                                                 args.min_novel_fsm_supporting_reads, args.min_novel_fsm_supporting_reads,
+                                                 args.report_intron_retention, args.max_dist_to_isoforms_tsts,
+                                                 args.max_dist_to_novel_tsts, args.min_reads_supporting_tsts,
+                                                 args.require_polyA, args.require_cage_peak)
+    logger.debug(f'Using {args.model_construction_strategy} strategy. Updated strategy: {updated_strategy}.')
+
+
+def set_additional_params(args):
+    set_data_dependent_options(args)
+    set_matching_options(args)
+    set_model_construction_options(args)
+
+    args.print_additional_info = True
     args.memory_efficient = False
 
     args.indel_near_splice_site_dist = 10
     args.upstream_region_len = 20
-    args.apa_delta = 100
-
-    # trascript model construction
-    args.min_ref_fsm_supporting_reads = 1
-    args.min_ref_supporting_reads = 1
-    args.min_novel_fsm_supporting_reads = 4
-    args.min_novel_supporting_reads = 8
-    args.report_intron_retention = False
-    args.max_dist_to_isoforms_tsts = 30
-    args.max_dist_to_novel_tsts = 100
-    args.min_reads_supporting_tsts = 5
-    args.require_polyA = False
-    args.require_cage_peak = False # TODO
-    args.collapse_subisoforms = True
-    args.count_ambiguous = True
 
     # TODO move to options
-    args.matching_stategy = "take_best"
+    args.multimap_strategy = "take_best"
     multimap_strategies = {}
     for e in MultimapResolvingStrategy:
         multimap_strategies[e.name] = e.value
-    args.matching_stategy = MultimapResolvingStrategy(multimap_strategies[args.matching_stategy])
+    args.multimap_strategy = MultimapResolvingStrategy(multimap_strategies[args.multimap_strategy])
 
 
 def run_pipeline(args):
@@ -304,8 +385,8 @@ def run_pipeline(args):
 
 
 def clean_up(args):
-    # TODO
-    pass
+    if not args.keep_tmp:
+        rmtree(args.tmp_dir)
 
 
 def main(args):

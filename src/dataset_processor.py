@@ -250,7 +250,7 @@ class DatasetProcessor:
                         self.pass_to_aggregators(read_assignment)
 
         #  TODO: resolve multimappers
-        multimap_resover = MultimapResolver(self.args.matching_stategy)
+        multimap_resover = MultimapResolver(self.args.multimap_strategy)
         for read_id in multimap_reads_assignments.keys():
             read_assignment = multimap_resover.resolve(multimap_reads_assignments[read_id])
             self.pass_to_aggregators(read_assignment)

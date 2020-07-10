@@ -89,8 +89,12 @@ class LongReadAlignmentProcessor:
 
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
                 sorted_blocks = correct_bam_coords(concat_blocks)
-                polya_pos = self.polya_finder.find_polya_tail(alignment)
-                polyt_pos = self.polya_finder.find_polyt_head(alignment)
+                if self.params.has_polya:
+                    polya_pos = self.polya_finder.find_polya_tail(alignment)
+                    polyt_pos = self.polya_finder.find_polyt_head(alignment)
+                else:
+                    polya_pos = -1
+                    polyt_pos = -1
 
                 if self.params.reference and self.params.sqanti_output:
                     if sorted_blocks[0][0] < self.gene_info.all_read_region_start:

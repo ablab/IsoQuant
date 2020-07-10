@@ -11,9 +11,10 @@ logger = logging.getLogger('IsoQuant')
 
 PACBIO_DATA = 'pacbio_raw'
 PACBIO_CCS_DATA = 'pacbio_ccs'
-NANOPORE_DATA = 'nanopore_raw'
+NANOPORE_DATA = 'nanopore'
+ASSEMBLY = 'assembly'
 
-DATATYPE_TO_ALIGNER = {'assembly' : 'minimap2', PACBIO_DATA : 'minimap2', PACBIO_CCS_DATA : 'minimap2',
+DATATYPE_TO_ALIGNER = {ASSEMBLY : 'minimap2', PACBIO_DATA : 'minimap2', PACBIO_CCS_DATA : 'minimap2',
                        NANOPORE_DATA : 'minimap2'}
                        #'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
 

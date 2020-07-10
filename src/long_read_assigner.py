@@ -382,7 +382,7 @@ class LongReadAssigner:
 
         if self.params.resolve_ambiguous == ExonAmbiguityResolvingMethod.all or \
                 self.params.resolve_ambiguous == ExonAmbiguityResolvingMethod.full_splice_matches_only:
-            jaccard_matched_isoforms = self.resolve_by_nucleotide_jaccard_similarity(read_id, combined_read_profile,
+            jaccard_matched_isoforms = self.resolve_by_nucleotide_jaccard_similarity(combined_read_profile,
                                                                                      mathched_isoforms)
             jaccard_matched_isoforms = [x[0] for x in jaccard_matched_isoforms]
             if len(jaccard_matched_isoforms) > 1:
@@ -585,6 +585,8 @@ class LongReadAssigner:
 
     # check consistency with polyA
     def verify_polyA(self, combined_read_profile, read_assignment):
+        if not self.params.has_polya:
+            return
         logger.debug("+ Validating polyA/T sites")
         if combined_read_profile.polya_pos == -1 and combined_read_profile.polyt_pos == -1:
             logger.debug("+ No sites found, ciao")
