@@ -42,9 +42,9 @@ def parse_args(args=None, namespace=None):
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
                         required='--run_aligner_only' not in sys.argv)
-    parser.add_argument("--reference", help="reference genome in FASTA format, "
-                                            "should be provided to compute some additional stats and "
-                                            "when raw reads are used as an input", type=str)
+    parser.add_argument("--reference", "-r", help="reference genome in FASTA format, "
+                                                  "should be provided to compute some additional stats and "
+                                                  "when raw reads are used as an input", type=str)
     parser.add_argument("--index", help="genome index for specified aligner, "
                                         "should be provided only when raw reads are used as an input", type=str)
 
@@ -61,7 +61,7 @@ def parse_args(args=None, namespace=None):
                                                            ', leave empty line between samples')
     parser.add_argument("--data_type", "-d", type=str, required=True, choices=DATATYPE_TO_ALIGNER.keys(),
                         help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
-    parser.add_argument('--stranded',  type=str, help="reads strandedness type, supported values are: " +
+    parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
     parser.add_argument('--has_polya', action='store_true', default=False,
                         help="set if reads were not polyA trimmed; polyA tails will be detected and further "
@@ -78,7 +78,7 @@ def parse_args(args=None, namespace=None):
                         help="align reads to reference without isoform assignment")
     parser.add_argument('--labels', '-l', nargs='+', type=str, help='sample names to be used; '
                                                                     'input file names are used if not set')
-    parser.add_argument("--read_group", help="a way to groups feature counts (no grouping by default): "
+    parser.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG), "
                                              "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM), "
                                              "using read id (read_id:DELIM)", type=str)
