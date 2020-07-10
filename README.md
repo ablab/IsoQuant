@@ -230,9 +230,11 @@ To provide read sequences use one of the following options:
 * `precise` - delta = 3, only minor alignment errors and exon elongations are allowed, cutoff = 30;  
 * `default` - delta = 6, alignment errors and exon elongations are allowed, cutoff = 100;   
 * `loose` - delta = 12, resolve ambiguous matches based on nucleotide similarity, allow extra introns/alternative TSS/polyA sites, minor errors and exon elongation allowed, cutoff = 300.
+
 Matching strategy is chosen automatically based on specified data type. However, parameters will be overridden if matching strategy is set manually.
 
 You can manually set some of the parameters (will override options in the preset):
+
 `--delta` 
     Delta for inexact splice junction comparison, chosen automatically based on data type.  
 
@@ -250,9 +252,11 @@ You can manually set some of the parameters (will override options in the preset
 * `all` - report most of detected modification as novel transcripts, looses precition in favor of recall; intron retention is reported;
 * `fl` - input reads are considered as full-length transcripts; intron retention is reported;
 * `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not requires; intron retention is reported;
+
 Transcript model construction strategy is chosen automatically based on specified data type. However, parameters will be overridden if set manually.
 
 You can manually set some of the parameters (will override options in the preset):
+
 `--report_intron_retention` 
     Report intron retention events as novel transcript models.
 
@@ -277,31 +281,56 @@ You can manually set some of the parameters (will override options in the preset
 
 ### Examples
 
-In case you have 
-
-* Aligment in BAM format
+* Mapped raw PacBio reads in BAM format; not poly-A trimmed; pre-converted gene annotation:
 
 ```bash
-python3 isoquant.py -d assembly --bam alignment.bam --genedb genes.gtf.db --output output_dir --threads 4 
+isoquant.py -d pacbio_raw --has_polya --bam mapped_reads.bam --genedb annotation.db --output output_dir 
 ```
 
-* Unaligned raw reads
+* Nanopore dRNA reads; not poly-A trimmed; annotation in GTF format:
 ```bash
-python3 isoquant.py -d raw_long_reads --fastq raw_reads.fastq --reference reference.fasta --genedb genes.gtf.db --output output_dir --threads 4 
+isoquant.py -d nanopore --has_polya --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --output output_dir --threads 8
 ```
 
-* High-quality reads
+* PacBio FL reads, poly-A trimmed; annotation in GTF format:
 ```bash
-python3 isoquant.py -d hq_long_reads --fastq hq_reads.fastq --reference reference.fasta --genedb genes.gtf.db --output output_dir --threads 4 
+python3 isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir --threads 8
 ```
 
 <a name="sec3.3"></a>
 ## IsoQuant output
-IsoQuant output files will be stored in in <output_dir>, which is set by the user. If output directory was not specified the files are stored in `isoquant_output` directory.   
-Output directory will contain one folder per sample with three tsv files:  
-* <output_dir>/sample_dir/sample.altered_reads.tsv  
-* <output_dir>/sample_dir/sample.unmatched_reads.tsv  
-* <output_dir>/sample_dir/sample.assigned_reads.tsv  
+
+### Output files
+
+IsoQuant output files will be stored in in `<output_dir>`, which is set by the user. If output directory was not specified the files are stored in `isoquant_output`.   
+Output directory will contain one folder per sample with the following files:  
+
+* `SAMPLE_ID.read_assignments.tsv` - TSV file with each read to isoform assignments;
+* `SAMPLE_ID.transcript_counts.tsv` - TSV file with isoform counts;
+* `SAMPLE_ID.gene_counts.tsv` - TSV file with gene counts;
+* `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models;
+* `SAMPLE_ID.reads_transcript_model_map.tsv` - TSV file indicating which reads contributed to transcript models;
+* `SAMPLE_ID.transcript_models_counts.tsv` - counts for constructed transcript models;
+* `SAMPLE_ID.mapped_reads.bed` - coordinates of mapped reads in BED format.
+
+If `--sqanti_output` is set:
+00_ENSMUSG00000032446.SQANTI-like.tsv
+
+If `--count_exons` is set:
+* exon_counts.tsv
+* intron_counts.tsv
+
+If `--read_group` is set, the following files will be also generated:
+*.exon_grouped_counts.tsv
+.gene_grouped_counts.tsv
+.intron_grouped_counts.tsv
+.transcript_grouped_counts.tsv
+
+
+If multiple samples are provided, aggregated expression matrices will be placed in `<output_dir>`:
+* combined_gene_counts.tsv
+combined_transcript_counts.tsv
+
 
 Additionally log file will be saved to the directory.  
 * <output_dir>/isoquant.log   
@@ -309,10 +338,11 @@ Additionally log file will be saved to the directory.
 In case `--keep_tmp` option was specified output directory will also contain temporary files  
 * <output_dir>/tmp/  
 
+### Output file formats
 
 <a name="sec4"></a>
 ## Citation
-BioArxiv paper is in progress.
+Manuscript is in progress.
 
 <a name="sec5"></a>
 ## Feedback and bug reports
