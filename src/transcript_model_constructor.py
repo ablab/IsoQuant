@@ -91,17 +91,19 @@ class TranscriptModelConstructor:
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
 
-    events_to_track = {MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
-                       MatchEventSubtype.extra_intron,
-                       MatchEventSubtype.extra_intron_out_left, MatchEventSubtype.extra_intron_out_right,
-                       MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
-                       MatchEventSubtype.intron_retention, MatchEventSubtype.exon_skipping_novel_intron,
-                       MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
-                       MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
-                       MatchEventSubtype.mutually_exclusive_exons_known,
-                       MatchEventSubtype.exon_skipping_known_intron, MatchEventSubtype.exon_gain_known,
-                       MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
-                       MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known}
+    events_to_track = {
+        MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
+        MatchEventSubtype.extra_intron,
+        MatchEventSubtype.extra_intron_out_left, MatchEventSubtype.extra_intron_out_right,
+        MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
+        MatchEventSubtype.intron_retention, MatchEventSubtype.exon_skipping_novel_intron,
+        MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
+        MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
+        MatchEventSubtype.mutually_exclusive_exons_known,
+        MatchEventSubtype.exon_skipping_known_intron, MatchEventSubtype.exon_gain_known,
+        MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
+        MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known
+    }
 
     def __init__(self, gene_info, read_assignment_storage, params):
         self.gene_info = gene_info
@@ -114,7 +116,7 @@ class TranscriptModelConstructor:
         self.intron_profile_constructor = \
             OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features,
                                                   (self.gene_info.start, self.gene_info.end),
-                                                  comparator = partial(equal_ranges, delta = self.params.delta))
+                                                  comparator=partial(equal_ranges, delta=self.params.delta))
 
     def process(self):
         # split reads into clusters
@@ -124,12 +126,12 @@ class TranscriptModelConstructor:
         for isoform_id in sorted(self.correct_matches.keys()):
             self.verify_correct_match(isoform_id, self.correct_matches[isoform_id])
 
-        # construct novel trasncripts
+        # construct novel transcripts
         candidate_model_storage = []
         for isoform_id in sorted(self.modified_isoforms_groups.keys()):
             for modification in sorted(self.modified_isoforms_groups[isoform_id].keys()):
                 assignments = self.modified_isoforms_groups[isoform_id][modification]
-                # logger.debug("== Processing modidication cluster for isoform %s of size %d, modifications:" %
+                # logger.debug("== Processing modification cluster for isoform %s of size %d, modifications:" %
                 #             (isoform_id, len(assignments)))
                 # logger.debug(", ".join(["%s: %s" % (x[0], str(x[1])) for x in modification]))
                 # TODO: if modification type is only extra introns, filter out those that have distant intron positions
@@ -170,10 +172,9 @@ class TranscriptModelConstructor:
     # process correctly assigned reads and for a reference-identical transcript
     def verify_correct_match(self, isoform_id, assignments):
         # logger.debug("Verifying correct match to %s, cluster size %d" % (isoform_id, len(assignments)))
-        unique_assignments = list(filter(lambda x:x.assignment_type in
-                                                  {ReadAssignmentType.unique_minor_difference,
-                                                   ReadAssignmentType.unique, ReadAssignmentType.ambiguous},
-                                         assignments))
+        unique_assignment_types = {ReadAssignmentType.unique_minor_difference,
+                                   ReadAssignmentType.unique, ReadAssignmentType.ambiguous}
+        unique_assignments = list(filter(lambda x: x.assignment_type in unique_assignment_types, assignments))
         if len(unique_assignments) < self.params.min_ref_supporting_reads:
             logger.debug("Not enough support")
             return
@@ -200,7 +201,6 @@ class TranscriptModelConstructor:
                 if any(m.event_type == MatchEventSubtype.mono_exon_match for m in a.isoform_matches[0].match_subclassifications):
                     fsm_count += 1
 
-
         if fsm_count < self.params.min_ref_fsm_supporting_reads:
             logger.debug("Not enough FSM reads")
             return
@@ -208,7 +208,7 @@ class TranscriptModelConstructor:
         new_transcript_model = self.transcript_from_reference(isoform_id)
         self.transcript_model_storage.append(new_transcript_model)
         # logger.debug("Created transcript model %s" % new_transcript_model.transcript_id)
-        #logger.debug(new_transcript_model.exon_blocks)
+        # logger.debug(new_transcript_model.exon_blocks)
 
         assignments_to_consider = assignments if self.params.count_ambiguous else unique_assignments
         new_transcript_id = new_transcript_model.transcript_id
@@ -223,8 +223,8 @@ class TranscriptModelConstructor:
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
                                self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known)
 
-    # check that all splice jusction in isoform are covered by at least one read
-    def check_all_juctions_covered(self, isoform_id, read_assignments):
+    # check that all splice junction in isoform are covered by at least one read
+    def check_all_junctions_covered(self, isoform_id, read_assignments):
         isoform_profile = self.gene_info.intron_profiles.profiles[isoform_id]
         covered_junctions = [0 for i in range(len(isoform_profile))]
         for ra in read_assignments:
@@ -242,17 +242,17 @@ class TranscriptModelConstructor:
             # TODO: precompute them in order
             representative_read_assignment = self.select_representative_read(isoform_id, remaining_assignments)
             if not representative_read_assignment:
-                #logger.debug("> No reliable representative read can be found")
+                # logger.debug("> No reliable representative read can be found")
                 return
-            #logger.debug("> Representative read chosen: %s" % representative_read_assignment.read_id)
-            #logger.debug(representative_read_assignment.combined_profile.read_exon_profile.read_features)
-            #logger.debug(representative_read_assignment.combined_profile.read_intron_profile.read_features)
+            # logger.debug("> Representative read chosen: %s" % representative_read_assignment.read_id)
+            # logger.debug(representative_read_assignment.combined_profile.read_exon_profile.read_features)
+            # logger.debug(representative_read_assignment.combined_profile.read_intron_profile.read_features)
             # create a new transcript model
 
             self.representative_reads.add(representative_read_assignment.read_id)
             new_transcript_model = self.blend_read_into_isoform(isoform_id, representative_read_assignment)
             if not new_transcript_model:
-                #logger.debug("> No novel model was constructed")
+                # logger.debug("> No novel model was constructed")
                 return
             # logger.debug("Created new candidate transcript model %s : %s " %
             #             (new_transcript_model.transcript_id, str(new_transcript_model.exon_blocks)))
@@ -260,7 +260,6 @@ class TranscriptModelConstructor:
             remaining_assignments = self.verify_novel_model(remaining_assignments, new_transcript_model,
                                                             representative_read_assignment.read_id,
                                                             candidate_model_storage)
-
 
     # select longest read with polyA detected
     # FIXME: use CAGE data or estimate reliability by looking at other reads
@@ -284,7 +283,7 @@ class TranscriptModelConstructor:
             read_exon_profile = a.combined_profile.read_exon_profile
 
             logger.debug("Checking whether read is reliable")
-            #logger.debug(a.combined_profile.read_exon_profile.read_features[0][0],
+            # logger.debug(a.combined_profile.read_exon_profile.read_features[0][0],
             #             a.combined_profile.read_exon_profile.read_features[-1][1])
             # logger.debug("%s %d %d" % (a.read_id, a.combined_profile.polya_pos, a.combined_profile.polyt_pos))
             if strand == '+':
@@ -365,14 +364,13 @@ class TranscriptModelConstructor:
                 current_events = modification_events_map[isoform_pos]
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, novel_exons, current_exon_start)
-                if isoform_pos < len(isoform_introns) and current_exon_start < isoform_introns[isoform_pos][0] and \
-                        isoform_introns[isoform_pos][0] < read_end:
+                if isoform_pos < len(isoform_introns) \
+                        and current_exon_start < isoform_introns[isoform_pos][0] < read_end:
                     # intron modification was processed but nothing overlapping was added =>
                     # extra intron within previous exon => add this intron as is
                     # check that is was really extra intron
-                    only_extra_intron = all(el.event_type in
-                                            {MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_known}
-                                            for el in current_events)
+                    extra_intron_types = {MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_known}
+                    only_extra_intron = all(el.event_type in extra_intron_types for el in current_events)
                     if only_extra_intron:
                         current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
                 isoform_pos += 1
@@ -442,17 +440,17 @@ class TranscriptModelConstructor:
     # process a sorted list of events assigned to the same intron
     def process_intron_related_events(self, sorted_event_list, isoform_pos, isoform_introns, read_introns,
                                       novel_exons, current_exon_start):
-        #logger.debug("> Processing events for position %s: %s" % (str(isoform_pos), str(sorted_event_list)))
-        #logger.debug("> Before: %d, %s" % (current_exon_start, novel_exons))
+        # logger.debug("> Processing events for position %s: %s" % (str(isoform_pos), str(sorted_event_list)))
+        # logger.debug("> Before: %d, %s" % (current_exon_start, novel_exons))
         for event in sorted_event_list:
-            current_exon_start = self.procces_signle_event(event, isoform_pos, isoform_introns, read_introns,
+            current_exon_start = self.process_single_event(event, isoform_pos, isoform_introns, read_introns,
                                                            novel_exons, current_exon_start)
-        #logger.debug("> After: %d, %s" % (current_exon_start, novel_exons))
+        # logger.debug("> After: %d, %s" % (current_exon_start, novel_exons))
         return current_exon_start
 
     # process single event
-    def procces_signle_event(self, event_tuple, isoform_pos, isoform_introns, read_introns, novel_exons, current_exon_start):
-        #logger.debug("> > Applying event %s at position %s" % (event_tuple.event_type.name, str(isoform_pos)))
+    def process_single_event(self, event_tuple, isoform_pos, isoform_introns, read_introns, novel_exons, current_exon_start):
+        # logger.debug("> > Applying event %s at position %s" % (event_tuple.event_type.name, str(isoform_pos)))
         if event_tuple.event_type == MatchEventSubtype.intron_retention:
             # simply skip reference intron
             return current_exon_start
@@ -461,7 +459,7 @@ class TranscriptModelConstructor:
             logger.warning("Undefined read intron position for event type: %s" % event_tuple.event_type.name)
             return current_exon_start
         read_intron = read_introns[event_tuple.read_region[0]]
-        #logger.debug("Novel intron " + str(read_intron))
+        # logger.debug("Novel intron " + str(read_intron))
 
         if event_tuple.event_type == MatchEventSubtype.extra_intron:
             return self.add_intron(novel_exons, current_exon_start, read_intron)
@@ -544,10 +542,10 @@ class TranscriptModelConstructor:
             if len(modification_events_map[isoform_position]) == 1:
                 continue
             modification_events_map[isoform_position] = \
-                sorted(modification_events_map[isoform_position], key=lambda x:x.read_region)
+                sorted(modification_events_map[isoform_position], key=lambda x: x.read_region)
 
         if not modification_events_map:
-            #logger.debug("No modification events detected for " + read_assignment.read_id)
+            # logger.debug("No modification events detected for " + read_assignment.read_id)
             return None
         # logger.debug("Sorted modifications: " + ", ".join([str(x) + " - " + str(modification_events_map[x])
         #                                                    for x in sorted(modification_events_map.keys())]))
@@ -589,7 +587,7 @@ class TranscriptModelConstructor:
         strand = transcript_model.strand
         model_intron_profile_constructor = \
             OverlappingFeaturesProfileConstructor(model_introns, (model_exons[0][0], model_exons[-1][1]),
-                                                  comparator = partial(equal_ranges, delta = self.params.delta))
+                                                  comparator=partial(equal_ranges, delta=self.params.delta))
         intron_comparator = JunctionComparator(self.params, model_intron_profile_constructor)
 
         assigned_reads = []
@@ -602,18 +600,18 @@ class TranscriptModelConstructor:
             read_start, read_end = self.get_read_region(strand, assignment.combined_profile)
             start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
             end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
-            #profile_matches =  all(el == 1 for el in read_profile.read_profile)
+            # profile_matches =  all(el == 1 for el in read_profile.read_profile)
 
             matching_events = \
                 intron_comparator.compare_junctions(read_introns, (read_start, read_end),
                                                     model_introns, (isoform_start, isoform_end))
 
-            #logger.debug("Read %s, start %d, end %d, events %s" % (assignment.read_id, read_start, read_end, str(matching_events)))
+            # logger.debug("Read %s, start %d, end %d, events %s" % (assignment.read_id, read_start, read_end, str(matching_events)))
 
             # check that no serious contradiction occurs
             profile_matches = True
-            if len(matching_events) > 1 or \
-                (len(matching_events) == 1 and matching_events[0].event_type != MatchEventSubtype.none):
+            if len(matching_events) > 1 \
+                    or (len(matching_events) == 1 and matching_events[0].event_type != MatchEventSubtype.none):
                 for e in matching_events:
                     if e.event_type in nnic_event_types or e.event_type in nic_event_types:
                         profile_matches = False
@@ -626,7 +624,7 @@ class TranscriptModelConstructor:
                     nearby_ends_count += 1
                 # all read introns were mapped, read is assigned
                 assigned_reads.append(assignment.read_id)
-                # since profile is not relibale due to intron shifts etc
+                # since profile is not reliable due to intron shifts etc
                 # considering that there are no serious errors, covering all introns in enough
                 is_fsm = contains((read_start, read_end), (model_introns[0][0], model_introns[-1][1]))
                 if is_fsm:
@@ -648,14 +646,14 @@ class TranscriptModelConstructor:
                 nearby_ends_count >= self.params.min_reads_supporting_tsts:
             # to confirm we need at least min_novel_supporting_reads supporting reads
             # and at least min_novel_fsm_supporting_reads FSM
-            logger.debug("Successfully confirmed %s" % (transcript_model.transcript_id))
+            logger.debug("Successfully confirmed %s" % transcript_model.transcript_id)
             candidate_model_storage.append(transcript_model)
             for read_id in assigned_reads:
                 self.transcript_read_ids[transcript_model.transcript_id].add(read_id)
             return unassigned_reads
         else:
             logger.debug("Transcript candidate %s looks unreliable" % transcript_model.transcript_id)
-            all_except_original = list(filter(lambda x:x.read_id != original_read_id, read_assignments))
+            all_except_original = list(filter(lambda x: x.read_id != original_read_id, read_assignments))
             return all_except_original
 
     def collapse_similar_isoforms(self, candidate_model_storage):
@@ -693,7 +691,7 @@ class TranscriptModelConstructor:
             id = model.transcript_id
             self.transcript_counts[id] = len(self.transcript_read_ids[id])
 
-    # check in one isoform can be collapes into another
+    # check in one isoform can be collapsed into another
     def check_if_subisoform(self, big_transcript_model, small_transcript_model):
         big_region = (big_transcript_model.get_start(), big_transcript_model.get_end())
         small_region = (small_transcript_model.get_start(), small_transcript_model.get_end())

@@ -28,7 +28,7 @@ class LongReadAlignmentProcessor:
     counter
     """
 
-    def __init__(self, gene_info, bams, params, chr_record = None, read_groupper = DefaultReadGrouper()):
+    def __init__(self, gene_info, bams, params, chr_record=None, read_groupper=DefaultReadGrouper()):
         self.gene_info = gene_info
         self.bams = bams
         self.params = params
@@ -37,17 +37,17 @@ class LongReadAlignmentProcessor:
         gene_region = (gene_info.start, gene_info.end)
         self.assigner = LongReadAssigner(self.gene_info, self.params)
         self.read_groupper = read_groupper
-        self.intron_profile_construnctor = \
+        self.intron_profile_constructor = \
             OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features, gene_region,
                                                   comparator=partial(equal_ranges, delta=self.params.delta),
                                                   delta=self.params.delta)
         # TODO check for non split exons which do overlap
-        self.exon_profile_construnctor = \
+        self.exon_profile_constructor = \
             OverlappingFeaturesProfileConstructor(self.gene_info.exon_profiles.features, gene_region,
                                                   comparator=partial(equal_ranges, delta=self.params.delta),
                                                   delta=self.params.delta)
         # TODO think whether overlaps should be changed to contains to avoid terminal partially covered exons
-        self.split_exon_profile_construnctor = \
+        self.split_exon_profile_constructor = \
             NonOverlappingFeaturesProfileConstructor(self.gene_info.split_exon_profiles.features,
                                                      comparator=partial(overlaps_at_least, delta=self.params.delta))
         self.polya_finder = PolyAFinder()
@@ -102,9 +102,9 @@ class LongReadAlignmentProcessor:
                     if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
                         self.gene_info.all_read_region_start = sorted_blocks[-1][1]
 
-                intron_profile = self.intron_profile_construnctor.construct_intron_profile(sorted_blocks)
-                exon_profile = self.exon_profile_construnctor.construct_exon_profile(sorted_blocks)
-                split_exon_profile = self.split_exon_profile_construnctor.construct_profile(sorted_blocks)
+                intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks)
+                exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks)
+                split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks)
                 combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
                                                         polya_pos=polya_pos, polyt_pos=polyt_pos)
 
@@ -139,7 +139,7 @@ class LongReadAlignmentProcessor:
         for i in intron_cigar_positions:
             # indel right near intron
             if (i > 0 and alignment.cigartuples[i - 1][0] in indel_events) or \
-                (i < cigar_event_count - 1 and alignment.cigartuples[i + 1][0] in indel_events):
+                    (i < cigar_event_count - 1 and alignment.cigartuples[i + 1][0] in indel_events):
                 junctions_with_indels += 1
 
             # indel separated by at most 'indel_near_splice_site_dist' matches from intron

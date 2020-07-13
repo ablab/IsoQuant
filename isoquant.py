@@ -50,11 +50,11 @@ def parse_args(args=None, namespace=None):
 
     # INPUT READS
     input_args = parser.add_mutually_exclusive_group(required=True)
-    input_args.add_argument('--bam', nargs='+', type=str, help='sorted and indexed BAM file(s), '
-                                                               'each file will be treated as a separate sample')
-    input_args.add_argument('--fastq', nargs='+', type=str, help='input FASTQ file(s), '
-                                                                 'each file will be treated as a separate sample; '
-                                                                 'reference genome should be provided when using raw reads')
+    input_args.add_argument('--bam', nargs='+', type=str,
+                            help='sorted and indexed BAM file(s), each file will be treated as a separate sample')
+    input_args.add_argument('--fastq', nargs='+', type=str,
+                            help='input FASTQ file(s), each file will be treated as a separate sample; '
+                                 'reference genome should be provided when using raw reads')
     input_args.add_argument('--bam_list', type=str, help='text file with list of BAM files, one file per line'
                                                          ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
@@ -75,9 +75,9 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
 
     add_additional_option("--run_aligner_only", action="store_true",
-                        help="align reads to reference without isoform assignment")
-    parser.add_argument('--labels', '-l', nargs='+', type=str, help='sample names to be used; '
-                                                                    'input file names are used if not set')
+                          help="align reads to reference without isoform assignment")
+    parser.add_argument('--labels', '-l', nargs='+', type=str,
+                        help='sample names to be used; input file names are used if not set')
     parser.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG), "
                                              "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM), "
@@ -93,7 +93,7 @@ def parse_args(args=None, namespace=None):
                                             "; chosen based on data type if not set", type=str)
     add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
-                        default=False)
+                          default=False)
     # ALGORITHM
     parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
                         help="matching strategy to use from most strict to least", type=str, default=None)
@@ -230,14 +230,14 @@ def create_output_dirs(args):
             os.makedirs(sample_dir)
 
 
-def set_logger(args, logger_instnace):
-    logger_instnace.setLevel(logging.INFO)
+def set_logger(args, logger_instance):
+    logger_instance.setLevel(logging.INFO)
     log_file = os.path.join(args.output, "isoquant.log")
     f = open(log_file, "w")
     f.write("CMD: " + ' '.join(sys.argv) + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
-    #FIXME
+    # FIXME
     fh.setLevel(logging.INFO)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
@@ -245,8 +245,8 @@ def set_logger(args, logger_instnace):
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
-    logger_instnace.addHandler(fh)
-    logger_instnace.addHandler(ch)
+    logger_instance.addHandler(fh)
+    logger_instance.addHandler(ch)
 
 
 def set_data_dependent_options(args):
@@ -264,16 +264,16 @@ def set_data_dependent_options(args):
 
 
 def set_matching_options(args):
-    MathcingStrategy = namedtuple('MathcingStrategy',
+    MatchingStrategy = namedtuple('MatchingStrategy',
                                   ('delta', 'max_exon_extension', 'max_intron_shift', 'max_missed_exon_len',
                                    'allow_extra_terminal_introns', 'apa_delta',
                                    'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   MathcingStrategy(0,  5,   0,   0,   False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
-        'precise': MathcingStrategy(3,  10,  30,  50,  False, 50, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'default': MathcingStrategy(6,  60,  60,  200, False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'loose':   MathcingStrategy(12, 100, 120, 300, True, 100, ExonAmbiguityResolvingMethod.all,  True),
+        'exact':   MatchingStrategy(0,  5,   0,   0,   False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
+        'precise': MatchingStrategy(3,  10,  30,  50,  False, 50, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'default': MatchingStrategy(6,  60,  60,  200, False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'loose':   MatchingStrategy(12, 100, 120, 300, True, 100, ExonAmbiguityResolvingMethod.all,  True),
     }
 
     strategy = strategies[args.matching_strategy]
@@ -288,7 +288,7 @@ def set_matching_options(args):
     args.correct_minor_errors = \
         strategy.correct_minor_errors if args.correct_minor_errors is None else args.correct_minor_errors
 
-    updated_strategy = MathcingStrategy(args.delta, args.max_exon_extension, args.max_intron_shift,
+    updated_strategy = MatchingStrategy(args.delta, args.max_exon_extension, args.max_intron_shift,
                                         args.max_missed_exon_len, args.allow_extra_terminal_introns,
                                         args.apa_delta, args.resolve_ambiguous, args.correct_minor_errors)
     logger.debug('Using %s strategy. Updated strategy: %s.' % (args.matching_strategy, updated_strategy))
@@ -327,7 +327,7 @@ def set_model_construction_options(args):
     args.count_ambiguous = strategy.count_ambiguous
 
     args.require_polyA = args.has_polya
-    args.require_cage_peak = False # TODO
+    args.require_cage_peak = False  # TODO
 
     updated_strategy = ModelConstructionStrategy(args.min_ref_fsm_supporting_reads, args.min_ref_supporting_reads,
                                                  args.min_novel_fsm_supporting_reads, args.min_novel_fsm_supporting_reads,

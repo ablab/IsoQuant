@@ -11,6 +11,7 @@ import subprocess
 
 logger = logging.getLogger('IsoQuant')
 
+
 # key, value
 def get_first_best_from_sorted(sorted_list_of_pairs):
     if not sorted_list_of_pairs:
@@ -43,7 +44,7 @@ def proper_plural_form(name, count):
 
 # check whether genes overlap and should be processed together
 def genes_overlap(gene_db1, gene_db2):
-    if (gene_db1.seqid != gene_db2.seqid):
+    if gene_db1.seqid != gene_db2.seqid:
         return False
     return overlaps((gene_db1.start, gene_db1.end), (gene_db2.start, gene_db2.end))
 
@@ -59,12 +60,13 @@ def argmin(l):
             min_i = i
     return min_i
 
+
 # == range operations ==
 def overlaps(range1, range2):
     return not (range1[1] < range2[0] or range1[0] > range2[1])
 
 
-def overlaps_at_least(range1, range2, delta = 0):
+def overlaps_at_least(range1, range2, delta=0):
     cutoff = min([delta, range1[1] - range1[0] + 1, range2[1] - range2[0] + 1])
     overlap = min(range1[1], range2[1]) + 1 - max(range1[0], range2[0])
     return overlap >= cutoff
@@ -115,7 +117,7 @@ def sum_intervals_to_point(sorted_range_list, pos):
     i = 0
     total_len = 0
     while i < len(sorted_range_list) and sorted_range_list[i][0] < pos:
-        if pos >= sorted_range_list[i][0] and pos <= sorted_range_list[i][1]:
+        if sorted_range_list[i][0] <= pos <= sorted_range_list[i][1]:
             total_len += pos - sorted_range_list[i][0]
         else:
             total_len += sorted_range_list[i][1] - sorted_range_list[i][0] + 1
@@ -123,7 +125,7 @@ def sum_intervals_to_point(sorted_range_list, pos):
     return total_len
 
 
-# sum up all inervals from pos, pos not included
+# sum up all intervals from pos, pos not included
 def sum_intervals_from_point(sorted_range_list, pos):
     if pos < sorted_range_list[0][0]:
         return intervals_total_length(sorted_range_list)
@@ -133,7 +135,7 @@ def sum_intervals_from_point(sorted_range_list, pos):
     i = len(sorted_range_list) - 1
     total_len = 0
     while i >= 0 and sorted_range_list[i][1] > pos:
-        if pos >= sorted_range_list[i][0] and pos <= sorted_range_list[i][1]:
+        if sorted_range_list[i][0] <= pos <= sorted_range_list[i][1]:
             total_len += sorted_range_list[i][1] - pos
         else:
             total_len += sorted_range_list[i][1] - sorted_range_list[i][0] + 1
@@ -235,7 +237,7 @@ def concat_gapless_blocks(blocks, cigar_tuples):
             current_block = (current_block[0], current_block[1] + cigar_tuples[cigar_index][1])
         # found match - merge blocks
         elif cigar_tuples[cigar_index][0] == 0:
-            #if abs(current_block[1] - blocks[block_index][0]) > 1:
+            # if abs(current_block[1] - blocks[block_index][0]) > 1:
             #    logger.debug("Distant blocks")
             #    logger.debug(current_block, blocks[block_index])
             current_block = (current_block[0], blocks[block_index][1])

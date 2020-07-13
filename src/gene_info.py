@@ -120,7 +120,7 @@ class GeneInfo:
 
         return chr_id, start, end
 
-    #set strands
+    # set strands
     def set_isoform_strands(self):
         self.isoform_strands = {}
         for gene_db in self.gene_db_list:
@@ -167,7 +167,7 @@ class GeneInfo:
     def set_feature_properties(self, isoforms_to_feature_map, feature_profiles):
         similar_features = set()
         contained_features = set()
-        # FIXME: change to interval tree instead of brute forse
+        # FIXME: change to interval tree instead of brute force
         for f1 in feature_profiles.features:
             for f2 in feature_profiles.features:
                 if f1 == f2:
@@ -220,14 +220,15 @@ class GeneInfo:
                 # multiple genes
                 feature_type += "M"
 
-            feature_properties.append(FeatureInfo(self.chr_id, feature[0], feature[1], strand_str, feature_type, list(gene_ids)))
+            feature_properties.append(FeatureInfo(self.chr_id, feature[0], feature[1], strand_str,
+                                                  feature_type, list(gene_ids)))
 
-        assert (len(feature_properties) == len(feature_profiles.features))
+        assert len(feature_properties) == len(feature_profiles.features)
         return feature_properties
 
     # split exons into non-overlapping covering blocks
     def split_exons(self, exons):
-        exon_starts = sorted(map(lambda x:x[0], exons))
+        exon_starts = sorted(map(lambda x: x[0], exons))
         exon_ends = sorted(map(lambda x: x[1], exons))
 
         current_state = 0
@@ -250,7 +251,7 @@ class GeneInfo:
                 if last_border == -1 or current_state == 0:
                     print("Error, exon ends before the start")
 
-                if ends_pos == 0 or  exon_ends[ends_pos] >  exon_ends[ends_pos - 1]:
+                if ends_pos == 0 or exon_ends[ends_pos] > exon_ends[ends_pos - 1]:
                     cur_border = exon_ends[ends_pos]
                     exon_blocks.append((last_border, cur_border))
                     last_border = cur_border + 1

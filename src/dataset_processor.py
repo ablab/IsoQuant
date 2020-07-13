@@ -80,16 +80,16 @@ class OverlappingExonsGeneClusterConstructor(GeneClusterConstructor):
                     overlapping_sets.append(i)
 
             if len(overlapping_sets) == 0:
-                #non-overlapping gene
+                # non-overlapping gene
                 gene_sets.append([gene_db])
                 gene_exon_sets.append(gene_exons)
             elif len(overlapping_sets) == 1:
-                #overlaps with 1 gene
+                # overlaps with 1 gene
                 index = overlapping_sets[0]
                 gene_sets[index].append(gene_db)
                 gene_exon_sets[index].update(gene_exons)
             else:
-                #merge all overlapping genes
+                # merge all overlapping genes
                 new_gene_set = [gene_db]
                 new_exons_set = gene_exons
                 for index in overlapping_sets:
@@ -119,9 +119,9 @@ class DatasetProcessor:
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
         self.read_grouper = create_read_grouper(args)
 
-        #self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])
-        #self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)
-        #self.rest_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.empty, ReadAssignmentType.ambiguous])
+        # self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])
+        # self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)
+        # self.rest_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.empty, ReadAssignmentType.ambiguous])
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
@@ -184,7 +184,7 @@ class DatasetProcessor:
         if self.args.memory_efficient:
             # TODO: dump to file
             out_tmp_tsv = os.path.join(self.tmp_dir, str(gene_counter) + ".processed_reads.tsv")
-            assert (False)
+            assert False
         else:
             for read_assignment in read_storage:
                 if read_assignment.assignment_type is not None:
@@ -208,7 +208,8 @@ class DatasetProcessor:
         if self.args.count_exons:
             self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
             self.intron_counter = IntronCounter(sample.out_intron_counts_tsv, ignore_read_groups=True)
-            self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter, self.exon_counter, self.intron_counter])
+            self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter,
+                                                    self.exon_counter, self.intron_counter])
         else:
             self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
 
@@ -239,7 +240,7 @@ class DatasetProcessor:
 
         multimap_reads_assignments = defaultdict(list)
         if self.args.memory_efficient:
-            assert (False)
+            assert False
         else:
             for storage in self.reads_assignments:
                 for read_assignment in storage:
@@ -250,9 +251,9 @@ class DatasetProcessor:
                         self.pass_to_aggregators(read_assignment)
 
         #  TODO: resolve multimappers
-        multimap_resover = MultimapResolver(self.args.multimap_strategy)
+        multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         for read_id in multimap_reads_assignments.keys():
-            read_assignment = multimap_resover.resolve(multimap_reads_assignments[read_id])
+            read_assignment = multimap_resolver.resolve(multimap_reads_assignments[read_id])
             self.pass_to_aggregators(read_assignment)
 
         self.finalize_aggregators(sample)

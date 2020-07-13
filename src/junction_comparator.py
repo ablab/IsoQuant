@@ -51,7 +51,7 @@ class JunctionComparator():
                 # junctions are equal
                 read_features_present[read_pos] = 1
                 isoform_features_present[isoform_pos] = 1
-                if (current_contradictory_region != (self.absent, self.absent)):
+                if current_contradictory_region != (self.absent, self.absent):
                     contradictory_region_pairs.append(current_contradictory_region)
                     current_contradictory_region = (self.absent, self.absent)
                 read_pos += 1
@@ -66,40 +66,40 @@ class JunctionComparator():
                 else:
                     current_contradictory_region = (
                     (current_contradictory_region[0][0], read_pos), (current_contradictory_region[1][0], isoform_pos))
-                if (read_junctions[read_pos][1] < isoform_junctions[isoform_pos][1]):
+                if read_junctions[read_pos][1] < isoform_junctions[isoform_pos][1]:
                     read_pos += 1
                 else:
                     isoform_pos += 1
 
             elif left_of(isoform_junctions[isoform_pos], read_junctions[read_pos]):
                 # isoform junction is behind, move on
-                if (current_contradictory_region != (self.absent, self.absent)):
+                if current_contradictory_region != (self.absent, self.absent):
                     contradictory_region_pairs.append(current_contradictory_region)
                     current_contradictory_region = (self.absent, self.absent)
                 if read_pos > 0 or overlaps(read_region, isoform_junctions[isoform_pos]):
-                    if (isoform_features_present[isoform_pos] != -1):
+                    if isoform_features_present[isoform_pos] != -1:
                         contradictory_region_pairs.append(((self.absent, self.absent), (isoform_pos, isoform_pos)))
                     isoform_features_present[isoform_pos] = -1
                 isoform_pos += 1
 
             else:
                 # read junction is behind, move on
-                if (current_contradictory_region != (self.absent, self.absent)):
+                if current_contradictory_region != (self.absent, self.absent):
                     contradictory_region_pairs.append(current_contradictory_region)
                     current_contradictory_region = (self.absent, self.absent)
                 if isoform_pos > 0 or overlaps(isoform_region, read_junctions[read_pos]):
-                    if (read_features_present[read_pos] != -1):
+                    if read_features_present[read_pos] != -1:
                         contradictory_region_pairs.append(((read_pos, read_pos), (self.absent, isoform_pos)))
                     read_features_present[read_pos] = -1
                 read_pos += 1
 
-        if (current_contradictory_region != (self.absent, self.absent)):
+        if current_contradictory_region != (self.absent, self.absent):
             contradictory_region_pairs.append(current_contradictory_region)
 
         # check terminating regions
         while read_pos < len(read_junctions):
             if overlaps(isoform_region, read_junctions[read_pos]):
-                if (read_features_present[read_pos] != -1):
+                if read_features_present[read_pos] != -1:
                     contradictory_region_pairs.append(((read_pos, read_pos), (self.absent, isoform_pos)))
                     read_features_present[read_pos] = -1
             else:
@@ -108,7 +108,7 @@ class JunctionComparator():
 
         while isoform_pos < len(isoform_junctions):
             if overlaps(read_region, isoform_junctions[isoform_pos]):
-                if (isoform_features_present[isoform_pos] != -1):
+                if isoform_features_present[isoform_pos] != -1:
                     contradictory_region_pairs.append(((self.absent, self.absent), (isoform_pos, isoform_pos)))
                     isoform_features_present[isoform_pos] = -1
             else:
@@ -116,13 +116,13 @@ class JunctionComparator():
             isoform_pos += 1
 
         logger.debug("+ + Inspected contradictory read")
-        #logger.debug("+ + Read profile " + str(read_features_present))
-        #logger.debug("+ + Read introns " + str(read_junctions))
-        #logger.debug("+ + Read region " + str(read_region))
+        # logger.debug("+ + Read profile " + str(read_features_present))
+        # logger.debug("+ + Read introns " + str(read_junctions))
+        # logger.debug("+ + Read region " + str(read_region))
 
-        #logger.debug("+ + Isoform profile " + str(isoform_features_present))
-        #logger.debug("+ + Isoform introns " + str(isoform_junctions))
-        #logger.debug("+ + Isoform region " + str(isoform_region))
+        # logger.debug("+ + Isoform profile " + str(isoform_features_present))
+        # logger.debug("+ + Isoform introns " + str(isoform_junctions))
+        # logger.debug("+ + Isoform region " + str(isoform_region))
 
         matching_events = []
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
@@ -137,7 +137,7 @@ class JunctionComparator():
             self.add_extra_out_exon_events(matching_events, read_features_present, read_junctions, isoform_region[0])
 
         if len(matching_events) == 0:
-            logger.debug("No contradition detected")
+            logger.debug("No contradiction detected")
             return [make_event(MatchEventSubtype.none)]
         return matching_events
 
@@ -166,7 +166,7 @@ class JunctionComparator():
         if read_cregion[0] == self.absent:
             return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
         elif isoform_cregion[0] == self.absent:
-            #intron_start = read_junctions[read_cregion[0]]
+            # intron_start = read_junctions[read_cregion[0]]
             if self.are_known_introns(read_junctions, read_cregion):
                 return make_event(MatchEventSubtype.extra_intron_known, isoform_cregion[1], read_cregion)
             return make_event(MatchEventSubtype.extra_intron, isoform_cregion[1], read_cregion)
@@ -191,7 +191,8 @@ class JunctionComparator():
                 event = MatchEventSubtype.mutually_exclusive_exons_novel
 
         elif read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
-            event = self.classify_skipped_exons(isoform_junctions, isoform_cregion, total_intron_len_diff, read_introns_known)
+            event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
+                                                total_intron_len_diff, read_introns_known)
 
         elif read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
             if read_introns_known:
@@ -264,7 +265,6 @@ class JunctionComparator():
                 extra_right = False
             else:
                 extra_left = False
-
 
         if extra_left:
             read_pos = 0

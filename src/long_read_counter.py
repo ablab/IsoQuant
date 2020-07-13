@@ -54,7 +54,7 @@ class AssignedFeatureCounter(AbstractCounter):
         self.feature_counter = defaultdict(lambda: defaultdict(int))
 
     def add_read_info(self, read_assignment=None):
-        #TODO: add __alignment_not_unique / __too_low_aQual ?
+        # TODO: add __alignment_not_unique / __too_low_aQual ?
         if not read_assignment:
             self.not_aligned_reads += 1
         elif read_assignment.assignment_type == ReadAssignmentType.ambiguous:
@@ -137,6 +137,7 @@ class ProfileFeatureCounter(AbstractCounter):
                hasattr(assignment, 'combined_profile') and assignment.combined_profile is not None and \
                hasattr(assignment, 'gene_info') and assignment.gene_info is not None
 
+
 class ExonCounter(ProfileFeatureCounter):
     def __init__(self, output_file_name, ignore_read_groups=False):
         ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
@@ -146,8 +147,7 @@ class ExonCounter(ProfileFeatureCounter):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.combined_profile.read_exon_profile.gene_profile,
-                                        read_assignment.gene_info.exon_property_map,
-                                        group_id)
+                                        read_assignment.gene_info.exon_property_map, group_id)
 
 
 class IntronCounter(ProfileFeatureCounter):
@@ -159,6 +159,5 @@ class IntronCounter(ProfileFeatureCounter):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.combined_profile.read_intron_profile.gene_profile,
-                                        read_assignment.gene_info.intron_property_map,
-                                        group_id)
+                                        read_assignment.gene_info.intron_property_map, group_id)
 
