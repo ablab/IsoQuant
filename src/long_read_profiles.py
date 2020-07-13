@@ -22,13 +22,14 @@ class MappedReadProfile:
 
 class CombinedReadProfiles:
     def __init__(self, read_intron_profile, read_exon_profile, read_split_exon_profile,
-                 polya_pos=-1, polyt_pos=-1, alignment=None):
+                 polya_pos=-1, polyt_pos=-1, cage_hits=-1, alignment=None):
         self.read_intron_profile = read_intron_profile
         self.read_exon_profile = read_exon_profile
         self.read_split_exon_profile = read_split_exon_profile
         self.alignment = alignment
         self.polya_pos = polya_pos
         self.polyt_pos = polyt_pos
+        self.cage_hits = cage_hits
 
 
 # The following 2 classes are very similar, but lets keep them separately for now
