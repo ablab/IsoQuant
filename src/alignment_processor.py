@@ -96,7 +96,8 @@ class LongReadAlignmentProcessor:
                 else:
                     polya_pos = -1
                     polyt_pos = -1
-                cage_hits = self.cage_finder.find_cage_peak(alignment)
+
+                cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 
                 if self.params.reference and self.params.sqanti_output:
                     if sorted_blocks[0][0] < self.gene_info.all_read_region_start:

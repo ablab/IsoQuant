@@ -99,7 +99,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = "#read_id\tisoform_id\tassignment_type\tassignment_events\tpolyA_found"
-        if self.params.cage:
+        if self.params.cage is not None:
             self.header += "\tCAGE_peak_found"
         if self.params.print_additional_info:
             self.header += "\taligned_blocks\tintron_profile\tsplit_exon_profile"
@@ -124,8 +124,9 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             if not match_events:
                 match_events = "."
             line = read_assignment.read_id + "\t" + ",".join(assigned_transcripts) + "\t" \
-                + read_assignment.assignment_type.name + "\t" + match_events + "\t" + str(read_assignment.polyA_found) \
-                + "\t" + str(read_assignment.cage_found)
+                + read_assignment.assignment_type.name + "\t" + match_events + "\t" + str(read_assignment.polyA_found)
+            if self.params.cage is not None:
+                line += '\t' + str(read_assignment.cage_found)
         if self.params.print_additional_info:
             combined_read_profile = read_assignment.combined_profile
             if combined_read_profile is None:

@@ -94,7 +94,7 @@ def parse_args(args=None, namespace=None):
     add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
-    add_additional_option("--cage", help="bed file with CAGE peaks", type=str)
+    add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
     # ALGORITHM
@@ -212,6 +212,11 @@ def check_input_files(args):
                         print("ERROR! BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
                         exit(-1)
                     bamfile_in.close()
+
+    if args.cage is not None:
+        if not os.path.isfile(args.cage):
+            print("ERROR! Bed file with CAGE peaks " + args.cage + " does not exist")
+            exit(-1)
 
     if args.genedb is not None:
         if not os.path.isfile(args.genedb):
@@ -331,7 +336,7 @@ def set_model_construction_options(args):
     args.count_ambiguous = strategy.count_ambiguous
 
     args.require_polyA = args.has_polya
-    args.require_cage_peak = False  # TODO
+    args.require_cage_peak = args.cage is not None
 
     updated_strategy = ModelConstructionStrategy(args.min_ref_fsm_supporting_reads, args.min_ref_supporting_reads,
                                                  args.min_novel_fsm_supporting_reads, args.min_novel_fsm_supporting_reads,
