@@ -217,9 +217,6 @@ To provide read sequences use one of the following options:
 `--index`
     Reference genome index for the specified aligner, can be provided only when raw reads are used as an input (constructed automatically if not set).
 
-`--path_to_aligner`
-    Directory with the aligner binary, `$PATH` is used by default.
-
 `--run_aligner_only` 
     Align reads to reference without running IsoQuant itself.
 

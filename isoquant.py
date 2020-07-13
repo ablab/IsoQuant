@@ -95,7 +95,7 @@ def parse_args(args=None, namespace=None):
     # ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "; chosen based on data type if not set", type=str)
-    add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
+    #add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
     # ALGORITHM
