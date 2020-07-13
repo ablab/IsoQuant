@@ -191,7 +191,7 @@ To provide read sequences use one of the following options:
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
 
 `--labels` or `-l`
-    Sets sample names; make sure that the number of labels is equal to the number of samples; input file names are used if not set.
+    Sets space-separated sample names; make sure that the number of labels is equal to the number of samples; input file names are used if not set.
 
 `--read_group`
  Sets a way to group feature counts (e.g. by cell type). Available options are: 
@@ -295,9 +295,9 @@ You can manually set some of the parameters (will override options in the preset
 isoquant.py -d pacbio_raw --has_polya --bam mapped_reads.bam --genedb annotation.db --output output_dir 
 ```
 
-* Nanopore dRNA reads; not poly-A trimmed; official annotation in GTF format:
+* Nanopore dRNA reads; not poly-A trimmed; official annotation in GTF format, used sample label instead of file name:
 ```bash
-isoquant.py -d nanopore --has_polya --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --threads 8
+isoquant.py -d nanopore --has_polya --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --threads 8 --labels My_ONT
 ```
 
 * PacBio FL reads, poly-A trimmed; custom annotation in GTF format, which contains only exon features:
