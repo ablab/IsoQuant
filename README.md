@@ -24,11 +24,11 @@
 
 *   If installing manually, you will need Python3, [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pyfaidx](https://pypi.org/project/pyfaidx/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details.
   
-*   To run IsoQuant on raw FASTQ files use the following command
+*   To run IsoQuant on raw FASTQ/FASTA files use the following command
 
         python IsoQuant.py \
-        --reference /PATH/TO/reference_genome.ta --genedb /PATH/TO/gene_annotation.gtf \
-        --fastq /PATH/TO/sample1.fastq /PATH/TO/sample2.fastq \
+        --reference /PATH/TO/reference_genome.fasta --genedb /PATH/TO/gene_annotation.gtf \
+        --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz \
         --data_type (pacbio_css|pacbio_raw|nanopore) -o OUTPUT_FOLDER
 
 
@@ -43,7 +43,7 @@
 
 IsoQuant is a tool for reference-based analysis of long RNA reads, such as PacBio or Oxford Nanopores. IsoQuant maps reads to the reference genome and assigns them to the annotated isoforms based on their intron and exon structure. IsoQuant is also capable of discovering various modifications, such as intron retention, alternative splice sites, skipped exons etc. IsoQuant further performs gene, isoform, exon and intron quantification. If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. In addition, IsoQuant generates discovered transcript models, including novel ones.
 
-IsoQuant version 1.0 was released under GPLv2 on July 11th, 2020 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 1.0 was released under GPLv2 on July 12th, 2020 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 
 <a name="sec1.1"></a>
@@ -121,14 +121,6 @@ By default, each file with reads is treated as a separate sample. To group multi
 
 <a name="sec3.2"></a>
 ## IsoQuant command line options
-To run IsoQuant from the command line, enter IsoQuant directory
-```bash
-cd path/to/IsoQuant
-```
-and type
-```bash
-python3 isoquant.py -d assembly --bam <alignment.bam> --genedb <genes.gtf.db> --output <output_dir> --threads 4 
-```
 
 ### Basic options
 `--output` (or `-o`) 
@@ -313,24 +305,22 @@ Output directory will contain one folder per sample with the following files:
 * `SAMPLE_ID.transcript_models_counts.tsv` - counts for constructed transcript models;
 * `SAMPLE_ID.mapped_reads.bed` - coordinates of mapped reads in BED format.
 
-If `--sqanti_output` is set:
-00_ENSMUSG00000032446.SQANTI-like.tsv
+If `--sqanti_output` is set, IsoQuant will save read assignments in [SQANTI](https://github.com/ConesaLab/SQANTI3#class)-like format:
+* `SAMPLE_ID.SQANTI-like.tsv`
 
-If `--count_exons` is set:
-* exon_counts.tsv
-* intron_counts.tsv
+If `--count_exons` is set, exon and intron counts will be produced:
+* `SAMPLE_ID.exon_counts.tsv`
+* `SAMPLE_ID.intron_counts.tsv`
 
-If `--read_group` is set, the following files will be also generated:
-*.exon_grouped_counts.tsv
-.gene_grouped_counts.tsv
-.intron_grouped_counts.tsv
-.transcript_grouped_counts.tsv
-
+If `--read_group` is set, the per-group counts will be also computed:
+* `SAMPLE_ID.exon_grouped_counts.tsv`
+* `SAMPLE_ID.gene_grouped_counts.tsv`
+* `SAMPLE_ID.intron_grouped_counts.tsv`
+* `SAMPLE_ID.transcript_grouped_counts.tsv`
 
 If multiple samples are provided, aggregated expression matrices will be placed in `<output_dir>`:
-* combined_gene_counts.tsv
-combined_transcript_counts.tsv
-
+* `combined_gene_counts.tsv`
+* `combined_transcript_counts.tsv`
 
 Additionally log file will be saved to the directory.  
 * <output_dir>/isoquant.log   
@@ -340,9 +330,103 @@ In case `--keep_tmp` option was specified output directory will also contain tem
 
 ### Output file formats
 
+Although most of output files include headers that describe the data, a brief explanation of output files is provided below.
+
+#### Read to isoform assignment
+
+Tab-separated values, the columns are:
+
+* `read_id` - read id;
+* `isoform_id` - isoform ids from the annotation, can contain several ids separated by comma;
+* `assignment_type` - assignment type, can be:
+- `unique`;
+- `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
+- `contradictory` - read was matched with inconsistencies, closest matches are reported;
+- `ambiguous` - read was assigned to multiple isoforms equally well;
+- `empty` - reads that were not mapped onto known genes.
+* `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible inconsistencies events are:
+- `none`;
+- `mono_exonic`;
+- `fsm` - full splice match;
+- `ism_5` - incomplete splice match, truncated on 5' side;
+- `ism_3` - incomplete splice match, truncated on 3' side;
+- `ism_internal` - incomplete splice match, truncated on both sides;
+- `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
+- `intron_shift` - intron was sifted due to misalignment;
+- `exon_misallignment` - short exon was missed due to misalignment;
+- `exon_elongation5` - read goes beyond isoform 5' end;
+- `exon_elongation3` - read goes beyond isoform 3' end;
+- `exon_elongation_both` - read goes beyond isoform's both ends;
+- `intron_retention`;
+- `unspliced_intron_retention`;
+- `unspliced_genic` - mono-exonic read overlaps some introns;
+- `alt_donor_site_known` - read contains alternative annotated donor site;
+- `alt_acceptor_site_known` - read contains alternative annotated acceptor site;
+- `alt_donor_site_novel` - read contains alternative unannotated donor site;
+- `alt_acceptor_site_novel` - read contains alternative unannotated acceptor site;
+- `extra_intron_known` - read contains additional annotated intron in the middle of exon;
+- `extra_intron` - read contains additional unannotated intron in the middle of exon;
+- `extra_intron_out_left` - additional intron to the left of known isoform;
+- `extra_intron_out_right` - additional intron to the right of known isoform;
+- `intron_migration` - read contains alternative annotated intron of approximately the same length as isoform;
+- `intron_alternation_known` - read contains alternative annotated intron;
+- `intron_alternation_novel` - read contains alternative unannotated intron; 
+- `mutually_exclusive_exons_known` - read contains different exon(s) comparing to the isoform, all resulting introns are annotated;
+- `mutually_exclusive_exons_novel` - read contains different exon(s) comparing to the isoform, at least one of introns is unannotated;
+- `exon_skipping_known_intron` - read skips exon(s) comparing to the isoform, resulting intron is annotated;
+- `exon_skipping_novel_intron` - read skips exon(s) comparing to the isoform, resulting intron is unannotated;
+- `exon_gain_known` - read contains additional exon(s) comparing to the isoform, all resulting introns are annotated;
+- `exon_gain_novel` - read contains additional exon(s) comparing to the isoform, at least one of introns is unannotated;
+- `alternative_structure_known` - reads has different intron chain that does not fall into any of categories above, all read's introns are annotated;
+- `alternative_structure_novel`  - reads has different intron chain that does not fall into any of categories above, at least one of read's introns is unannotated;
+- `alternative_polya_site` - read has alternative polyadenylation site.
+* `polyA_found` - whether poly-A/T was detected at 5' end (True or False);
+* `aligned_blocks` - list of coordinates for normalized aligned blocks (1-based, indels excluded);
+* `intron_profile`, `split_exon_profile` - supplementary information intended for internal use; so called read profile, i.e. which of the gene's known introns and exons match the read.
+
+#### Gene and transcript count format
+
+Tab-separated values, the columns are:
+
+* `feature_id` - genomic feature ID;
+* `group_id` - read group if provided (NA by default);
+* `count` - number of reads that were assigned to this feature (float value);
+
+#### Exon and intron count format
+
+Tab-separated values, the columns are:
+
+* `chr` - chromosome ID;
+* `start` - feature leftmost 1-based positions;
+* `end` - feature rightmost 1-based positions;
+* `strand` - feature strand;
+* `flags` - symbolic feature flags, can contain the following characters:
+- `X` - terminal feature;
+- `I` - internal feature;
+- `T` - feature appears as both terminal and internal in different isoforms;
+- `S` - feature has similar positions to some other feature;
+- `C` - feature is contained in another feature;
+- `U` - unique feature, appears only in a single known isoform;
+- `M` - feature appear is multiple different genes.
+* `gene_ids` - list if gene ids feature belong to;
+* `group_id` - read group if provided (NA by default);
+* `include_counts` - number of reads that include this feature;
+* `exclude_counts` - number of reads that span, but do not include this feature; 
+
+#### Transcript models format
+
+Constructed transcript models are stored in usual [GTF format](https://www.ensembl.org/info/website/upload/gff.html). Currently, only exon features are listed. Metafeatures, such as genes and transcripts will be added later.
+
+Transcript ids given in the `attribute` field have the following format: `transcript_###.TYPE`, where ### is the unique number (not necessarily consecutive) and TYPE can be one of the following:
+* known - previously annotated transcripts;
+* nic - novel in catalog, new transcript that contains only annotated introns;
+* nnic - novel not in catalog, new transcript that contains unannotated introns.
+
+The `attribute` field also contains `gene_id` (matches reference gene id), `reference_gene_id` (same value) and `reference_transcript_id` - the most similar known isoform. 
+
 <a name="sec4"></a>
 ## Citation
-Manuscript is in progress.
+Manuscript is in preparation.
 
 <a name="sec5"></a>
 ## Feedback and bug reports
