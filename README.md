@@ -20,6 +20,7 @@
 **Quick start:**  
 
 *   IsoQuant can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda:
+
         conda install -c bioconda isoquant
 
     Or:
