@@ -345,41 +345,41 @@ Tab-separated values, the columns are:
 - `ambiguous` - read was assigned to multiple isoforms equally well;
 - `empty` - reads that were not mapped onto known genes.
 * `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible inconsistencies events are:
-- `none`;
-- `mono_exonic`;
-- `fsm` - full splice match;
-- `ism_5` - incomplete splice match, truncated on 5' side;
-- `ism_3` - incomplete splice match, truncated on 3' side;
-- `ism_internal` - incomplete splice match, truncated on both sides;
-- `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
-- `intron_shift` - intron was sifted due to misalignment;
-- `exon_misallignment` - short exon was missed due to misalignment;
-- `exon_elongation5` - read goes beyond isoform 5' end;
-- `exon_elongation3` - read goes beyond isoform 3' end;
-- `exon_elongation_both` - read goes beyond isoform's both ends;
-- `intron_retention`;
-- `unspliced_intron_retention`;
-- `unspliced_genic` - mono-exonic read overlaps some introns;
-- `alt_donor_site_known` - read contains alternative annotated donor site;
-- `alt_acceptor_site_known` - read contains alternative annotated acceptor site;
-- `alt_donor_site_novel` - read contains alternative unannotated donor site;
-- `alt_acceptor_site_novel` - read contains alternative unannotated acceptor site;
-- `extra_intron_known` - read contains additional annotated intron in the middle of exon;
-- `extra_intron` - read contains additional unannotated intron in the middle of exon;
-- `extra_intron_out_left` - additional intron to the left of known isoform;
-- `extra_intron_out_right` - additional intron to the right of known isoform;
-- `intron_migration` - read contains alternative annotated intron of approximately the same length as isoform;
-- `intron_alternation_known` - read contains alternative annotated intron;
-- `intron_alternation_novel` - read contains alternative unannotated intron; 
-- `mutually_exclusive_exons_known` - read contains different exon(s) comparing to the isoform, all resulting introns are annotated;
-- `mutually_exclusive_exons_novel` - read contains different exon(s) comparing to the isoform, at least one of introns is unannotated;
-- `exon_skipping_known_intron` - read skips exon(s) comparing to the isoform, resulting intron is annotated;
-- `exon_skipping_novel_intron` - read skips exon(s) comparing to the isoform, resulting intron is unannotated;
-- `exon_gain_known` - read contains additional exon(s) comparing to the isoform, all resulting introns are annotated;
-- `exon_gain_novel` - read contains additional exon(s) comparing to the isoform, at least one of introns is unannotated;
-- `alternative_structure_known` - reads has different intron chain that does not fall into any of categories above, all read's introns are annotated;
-- `alternative_structure_novel`  - reads has different intron chain that does not fall into any of categories above, at least one of read's introns is unannotated;
-- `alternative_polya_site` - read has alternative polyadenylation site.
+    - `none`;
+    - `mono_exonic`;
+    - `fsm` - full splice match;
+    - `ism_5` - incomplete splice match, truncated on 5' side;
+    - `ism_3` - incomplete splice match, truncated on 3' side;
+    - `ism_internal` - incomplete splice match, truncated on both sides;
+    - `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
+    - `intron_shift` - intron was sifted due to misalignment;
+    - `exon_misallignment` - short exon was missed due to misalignment;
+    - `exon_elongation5` - read goes beyond isoform 5' end;
+    - `exon_elongation3` - read goes beyond isoform 3' end;
+    - `exon_elongation_both` - read goes beyond isoform's both ends;
+    - `intron_retention`;
+    - `unspliced_intron_retention`;
+    - `unspliced_genic` - mono-exonic read overlaps some introns;
+    - `alt_donor_site_known` - read contains alternative annotated donor site;
+    - `alt_acceptor_site_known` - read contains alternative annotated acceptor site;
+    - `alt_donor_site_novel` - read contains alternative unannotated donor site;
+    - `alt_acceptor_site_novel` - read contains alternative unannotated acceptor site;
+    - `extra_intron_known` - read contains additional annotated intron in the middle of exon;
+    - `extra_intron` - read contains additional unannotated intron in the middle of exon;
+    - `extra_intron_out_left` - additional intron to the left of known isoform;
+    - `extra_intron_out_right` - additional intron to the right of known isoform;
+    - `intron_migration` - read contains alternative annotated intron of approximately the same length as isoform;
+    - `intron_alternation_known` - read contains alternative annotated intron;
+    - `intron_alternation_novel` - read contains alternative unannotated intron; 
+    - `mutually_exclusive_exons_known` - read contains different exon(s) comparing to the isoform, all resulting introns are annotated;
+    - `mutually_exclusive_exons_novel` - read contains different exon(s) comparing to the isoform, at least one of introns is unannotated;
+    - `exon_skipping_known_intron` - read skips exon(s) comparing to the isoform, resulting intron is annotated;
+    - `exon_skipping_novel_intron` - read skips exon(s) comparing to the isoform, resulting intron is unannotated;
+    - `exon_gain_known` - read contains additional exon(s) comparing to the isoform, all resulting introns are annotated;
+    - `exon_gain_novel` - read contains additional exon(s) comparing to the isoform, at least one of introns is unannotated;
+    - `alternative_structure_known` - reads has different intron chain that does not fall into any of categories above, all read's introns are annotated;
+    - `alternative_structure_novel`  - reads has different intron chain that does not fall into any of categories above, at least one of read's introns is unannotated;
+    - `alternative_polya_site` - read has alternative polyadenylation site.
 * `polyA_found` - whether poly-A/T was detected at 5' end (True or False);
 * `aligned_blocks` - list of coordinates for normalized aligned blocks (1-based, indels excluded);
 * `intron_profile`, `split_exon_profile` - supplementary information intended for internal use; so called read profile, i.e. which of the gene's known introns and exons match the read.
@@ -401,13 +401,13 @@ Tab-separated values, the columns are:
 * `end` - feature rightmost 1-based positions;
 * `strand` - feature strand;
 * `flags` - symbolic feature flags, can contain the following characters:
-- `X` - terminal feature;
-- `I` - internal feature;
-- `T` - feature appears as both terminal and internal in different isoforms;
-- `S` - feature has similar positions to some other feature;
-- `C` - feature is contained in another feature;
-- `U` - unique feature, appears only in a single known isoform;
-- `M` - feature appear is multiple different genes.
+    - `X` - terminal feature;
+    - `I` - internal feature;
+    - `T` - feature appears as both terminal and internal in different isoforms;
+    - `S` - feature has similar positions to some other feature;
+    - `C` - feature is contained in another feature;
+    - `U` - unique feature, appears only in a single known isoform;
+    - `M` - feature appear is multiple different genes.
 * `gene_ids` - list if gene ids feature belong to;
 * `group_id` - read group if provided (NA by default);
 * `include_counts` - number of reads that include this feature;
