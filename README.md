@@ -93,6 +93,8 @@ conda install -c bioconda isoquant
 
 If this command does not work, it means that bioconda is not updated yet. Try installing via:
 ```bash
+conda create -n isoquant python=3.7
+conda activate isoquant
 conda install -c bioconda -c conda-forge -c isoquant isoquant
 ```
 
