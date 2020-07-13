@@ -91,7 +91,7 @@ Isoquant can be installed with conda:
 conda install -c bioconda isoquant
 ```
 
-If this command does work, it means that bioconda is not updated yet. Try installing via:
+If this command does not work, it means that bioconda is not updated yet. Try installing via:
 ```bash
 conda install -c isoquant isoquant
 ```
