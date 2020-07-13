@@ -64,7 +64,7 @@ Reference genome should be provided in multi-FASTA format. When BAM files are pr
 
 Gene annotation can be provided in GFF/GTF format. In this case it will be converted to [gffutils](https://pythonhosted.org/gffutils/installation.html) database. Information on converted databases will be stored in your `~/.config/IsoQuant/db_config.json` to increase speed of future runs. You can also provide gffutils database manually. Make sure that chromosome/scaffold names are identical in FASTA file and gene annotation.
 
-Pre-constructed aligner index can be also provided to increase mapping time.
+Pre-constructed aligner index can also be provided to increase mapping time.
 
 <a name="sec2"></a>
 # Installation
@@ -223,7 +223,7 @@ To provide read sequences use one of the following options:
 * `default` - delta = 6, alignment errors and exon elongations are allowed, cutoff = 100;   
 * `loose` - delta = 12, resolve ambiguous matches based on nucleotide similarity, allow extra introns/alternative TSS/polyA sites, minor errors and exon elongation allowed, cutoff = 300.
 
-Matching strategy is chosen automatically based on specified data type. However, parameters will be overridden if matching strategy is set manually.
+Matching strategy is chosen automatically based on specified data type. However, parameters will be overridden if the matching strategy is set manually.
 
 You can manually set some of the parameters (will override options in the preset):
 
@@ -241,7 +241,7 @@ You can manually set some of the parameters (will override options in the preset
 `--model_construction_strategy` A preset of parameters for transcript model construction algorithm, should be one of 
 * `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive; intron retention is not reported;  
 * `default` - a just trade-off between precision and recall for usual long-read dataset, intron retention is reported;   
-* `all` - report most of detected modification as novel transcripts, looses precition in favor of recall; intron retention is reported;
+* `all` - report most of detected modification as novel transcripts, loses precision in favor to recall; intron retention is reported;
 * `fl` - input reads are considered as full-length transcripts; intron retention is reported;
 * `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not requires; intron retention is reported;
 
@@ -253,22 +253,22 @@ You can manually set some of the parameters (will override options in the preset
     Report intron retention events as novel transcript models.
 
 `--collapse_subisoform` 
-    Collapse isoforms whose intron chain is a subsequence of other intron chain.
+    Collapse isoforms whose intron chain is a subsequence of another intron chain.
 
 `--min_ref_fsm_supporting_reads` 
-    Set minimal number of full splice match reads that support known isoform.
+    Set a minimal number of full splice match reads that support known isoform.
 
 `--min_ref_supporting_reads` 
-    Set minimal number of matching reads that support known isoform.
+    Set a minimal number of matching reads that support known isoform.
 
 `--min_novel_fsm_supporting_reads` 
-    Set minimal number of full splice match reads that support novel isoform.
+    Set a minimal number of full splice match reads that support novel isoform.
 
 `--min_novel_supporting_reads` 
-    Set minimal number of reads that support novel isoform.
+    Set a minimal number of reads that support a novel isoform.
 
 `--min_reads_supporting_tsts` 
-    Set minimal number of reads that support isoform terminal sites.
+    Set a minimal number of reads that support isoform terminal sites.
 
 
 ### Examples
@@ -294,7 +294,7 @@ python3 isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference refere
 
 ### Output files
 
-IsoQuant output files will be stored in in `<output_dir>`, which is set by the user. If output directory was not specified the files are stored in `isoquant_output`.   
+IsoQuant output files will be stored in `<output_dir>`, which is set by the user. If the output directory was not specified the files are stored in `isoquant_output`.   
 Output directory will contain one folder per sample with the following files:  
 
 * `SAMPLE_ID.read_assignments.tsv` - TSV file with each read to isoform assignments;
@@ -322,7 +322,7 @@ If multiple samples are provided, aggregated expression matrices will be placed 
 * `combined_gene_counts.tsv`
 * `combined_transcript_counts.tsv`
 
-Additionally log file will be saved to the directory.  
+Additionally, a log file will be saved to the directory.  
 * <output_dir>/isoquant.log   
 
 In case `--keep_tmp` option was specified output directory will also contain temporary files  
@@ -330,7 +330,7 @@ In case `--keep_tmp` option was specified output directory will also contain tem
 
 ### Output file formats
 
-Although most of output files include headers that describe the data, a brief explanation of output files is provided below.
+Although most output files include headers that describe the data, a brief explanation of the output files is provided below.
 
 #### Read to isoform assignment
 
@@ -352,7 +352,7 @@ Tab-separated values, the columns are:
     - `ism_3` - incomplete splice match, truncated on 3' side;
     - `ism_internal` - incomplete splice match, truncated on both sides;
     - `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
-    - `intron_shift` - intron was sifted due to misalignment;
+    - `intron_shift` - intron was shifted due to misalignment;
     - `exon_misallignment` - short exon was missed due to misalignment;
     - `exon_elongation5` - read goes beyond isoform 5' end;
     - `exon_elongation3` - read goes beyond isoform 3' end;
@@ -407,7 +407,7 @@ Tab-separated values, the columns are:
     - `S` - feature has similar positions to some other feature;
     - `C` - feature is contained in another feature;
     - `U` - unique feature, appears only in a single known isoform;
-    - `M` - feature appear is multiple different genes.
+    - `M` - feature appears in multiple different genes.
 * `gene_ids` - list if gene ids feature belong to;
 * `group_id` - read group if provided (NA by default);
 * `include_counts` - number of reads that include this feature;
@@ -432,4 +432,5 @@ Manuscript is in preparation.
 ## Feedback and bug reports
 Your comments, bug reports, and suggestions are very welcome. They will help us to further improve IsoQuant. If you have any troubles running IsoQuant, please send us isoquant.log from the <output_dir> directory. 
 
-You can leave your comments and bug reports at our [GitHub repository tracker](https://github.com/ablab/IsoQuant/issues) or send them via e-mail: isoquant.rna@gmail.com.
+You can leave your comments and bug reports at our [GitHub repository tracker](https://github.com/ablab/IsoQuant/issues) or send them via email: isoquant.rna@gmail.com.
+
