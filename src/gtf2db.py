@@ -23,10 +23,11 @@ def db2gtf(gtf, db):
     logger.info("Gene database written to " + gtf)
 
 
-def gtf2db(gtf, db):
+def gtf2db(gtf, db, complete_db=False):
     logger.info("Converting gene annotation file to .db format (takes a while)...")
     gffutils.create_db(gtf, db, force=True, keep_order=True, merge_strategy='merge',
-                       sort_attribute_values=True, disable_infer_transcripts=False, disable_infer_genes=False)
+                       sort_attribute_values=True, disable_infer_transcripts=complete_db,
+                       disable_infer_genes=complete_db)
     logger.info("Gene database written to " + db)
     logger.info("Provide this database next time to avoid excessive conversion")
 
@@ -36,7 +37,7 @@ def convert_gtf_to_db(args):
     if not os.path.isabs(gtf_filename):
         gtf_filename = os.path.join(os.getcwd(), gtf_filename)
     genedb_filename = os.path.join(args.output, os.path.splitext(os.path.basename(gtf_filename))[0] + ".db")
-    gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, gtf2db)
+    gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, gtf2db, args.complete_genedb)
     return genedb_filename
 
 
@@ -55,7 +56,7 @@ def compare_stored_gtf(converted_gtfs, gtf_filename, genedb_filename):
             return True
 
 
-def convert_db(gtf_filename, genedb_filename, convert_fn):
+def convert_db(gtf_filename, genedb_filename, convert_fn, complete_db=False):
     config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
     config_path = os.path.join(config_dir, 'db_config.json')
 
@@ -75,7 +76,10 @@ def convert_db(gtf_filename, genedb_filename, convert_fn):
                     logger.info("Gene annotation file was already converted")
                     return converted_gtf, genedb_filename
 
-    convert_fn(gtf_filename, genedb_filename)
+    if convert_fn == gtf2db:
+        convert_fn(gtf_filename, genedb_filename, complete_db)
+    else:
+        convert_fn(gtf_filename, genedb_filename)
     converted_gtfs[gtf_filename] = {'genedb': genedb_filename,
                                     'gtf_mtime': os.path.getmtime(gtf_filename),
                                     'db_mtime': os.path.getmtime(genedb_filename)}

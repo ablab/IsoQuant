@@ -42,6 +42,10 @@ def parse_args(args=None, namespace=None):
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
                         required='--run_aligner_only' not in sys.argv)
+    parser.add_argument('--complete_genedb', action='store_true', default=False,
+                        help="use this flag if gene annotation contains transcript and gene metafeatures, "
+                             "e.g. with official annotations, such as GENCODE; "
+                             "speeds up gene database conversion")
     parser.add_argument("--reference", "-r", help="reference genome in FASTA format, "
                                                   "should be provided to compute some additional stats and "
                                                   "when raw reads are used as an input", type=str)
@@ -147,7 +151,7 @@ class TestMode(argparse.Action):
                    '--fastq', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.ONT.simulated.fastq'),
                    '--reference', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.reference.fasta'),
                    '--genedb', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.genedb.gtf'),
-                   '--data_type', 'nanopore']
+                   '--data_type', 'nanopore', '--complete_genedb']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
         main(options)

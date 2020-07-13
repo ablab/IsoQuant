@@ -1,12 +1,10 @@
 VERSION="$(cat ./VERSION)"
 TARGET_DIR=IsoQuant-$VERSION
 rm -rf $TARGET_DIR
-SRC_DIR=$TARGET_DIR/src
-TST_DIR=$TARGET_DIR/tests
-mkdir -p $SRC_DIR
+mkdir $TARGET_DIR
 
-cp -r ./src $SRC_DIR/
-cp -r ./tests $TST_DIR/
+cp -r ./src $TARGET_DIR/
+cp -r ./tests $TARGET_DIR/
 
 # cleaning .pyc and .pyo
 rm -f */*.pyc

@@ -26,7 +26,7 @@
 
         conda install -c isoquant isoquant
 
-*   If installing manually, you will need Python3, [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pyfaidx](https://pypi.org/project/pyfaidx/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details.
+*   If installing manually, you will need Python3, [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pyfaidx](https://pypi.org/project/pyfaidx/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) to be in your `$PATH` variable.
   
 *   To run IsoQuant on raw FASTQ/FASTA files use the following command
 
@@ -80,6 +80,8 @@ You will also need
 * [pyfaidx](https://pypi.org/project/pyfaidx/)
 * [pandas](https://pandas.pydata.org/)
 * [numpy](https://numpy.org/)
+* [minimap2](https://github.com/lh3/minimap2) 
+* [STAR](https://github.com/alexdobin/STAR) (optional)
 
 <a name="sec2.1"></a>
 ## Installing from conda
@@ -151,7 +153,11 @@ By default, each file with reads is treated as a separate sample. To group multi
     Type of data to process, supported types are: `assembly`, `pacbio_ccs`, `pacbio_raw`, `nanopore`. This option affects some of the algorithm parameters.
 
 `--genedb` or `-g`
-    Gene database in gffutils database format or GTF/GFF format.
+    Gene database in gffutils database format or GTF/GFF format. If you use official gene annotations we recommend to set `--complete_genedb` option.
+
+`--complete_genedb`
+    Set this flag if gene annotation contains transcript and gene metafeatures. Use this flag when providing official annotations, e.g. GENCODE. This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options, which dramatically speed up gene database conversion (see more [here](https://pythonhosted.org/gffutils/autodocs/gffutils.create_db.html?highlight=disable_infer_transcripts)).
+
 
 `--reference` or `-r`
     Reference genome in FASTA format, should be provided  when raw reads are used as an input and to compute some additional stats.
@@ -289,12 +295,12 @@ You can manually set some of the parameters (will override options in the preset
 isoquant.py -d pacbio_raw --has_polya --bam mapped_reads.bam --genedb annotation.db --output output_dir 
 ```
 
-* Nanopore dRNA reads; not poly-A trimmed; annotation in GTF format:
+* Nanopore dRNA reads; not poly-A trimmed; official annotation in GTF format:
 ```bash
-isoquant.py -d nanopore --has_polya --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --output output_dir --threads 8
+isoquant.py -d nanopore --has_polya --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --threads 8
 ```
 
-* PacBio FL reads, poly-A trimmed; annotation in GTF format:
+* PacBio FL reads, poly-A trimmed; custom annotation in GTF format, which contains only exon features:
 ```bash
 python3 isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir --threads 8
 ```
