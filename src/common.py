@@ -34,7 +34,7 @@ def rindex(l, el):
     for i in range(len(l) - 1, -1, -1):
         if l[i] == el:
             return i
-    raise ValueError(f"{el} is not in list")
+    raise ValueError(str(el) + " is not in list")
 
 
 def proper_plural_form(name, count):

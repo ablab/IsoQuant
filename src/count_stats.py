@@ -9,6 +9,7 @@ import re
 import sys
 import argparse
 from collections import defaultdict
+from traceback import print_exc
 
 import pysam
 from Bio import SeqIO
@@ -21,6 +22,10 @@ from src.common import overlaps
 
 id_pattern = re.compile("[A-Z]+\.?(\d+\.\d+)")
 
+
+# == range operations ==
+def overlaps(range1, range2):
+    return not (range1[1] < range2[0] or range1[0] > range2[1])
 
 class ReadType(Enum):
     CORRECT = 1
@@ -144,9 +149,9 @@ class StatCounter:
         return tp * 100.0 / (tp + fn)
 
     def print_stats(self, tp, fp, fn):
-        print(f"Correct {tp}, incorrect {fp}, unmapped/unassigned {fn}")
+        print("Correct %d, incorrect %d, unmapped/unassigned %d" % (tp, fp, fn))
         precision, recall = self.calc_precision(tp, fp), self.calc_recall(tp, fn)
-        print(f"Precision: {precision}, recall {recall}")
+        print("Precision: %d, recall %d" % (precision, recall))
 
 
 class DbHandler:
@@ -192,7 +197,7 @@ def compare_stats(data_a, data_b):
 
     venn2(subsets=(a, b, ab), set_labels=(label_a, label_b))
     plt.savefig("venn.png")
-    print(f"{ab} correct reads by both methods, {a} in {label_a} only and {b} in {label_b} only")
+    print("%d correct reads by both methods, %d in %s only and %d in %s only" % (ab, a, label_a, b, label_b))
     print("Venn diagram saved to venn.png")
     return
 
@@ -214,8 +219,9 @@ def compare_real_results(data_a, data_b):
             b += 1
         else:
             not_ab += 1
-    print(f'Common assignments: {ab}, different assignments: {diff_ab}, '
-          f'only {label_a} assignments: {a}, only {label_b} assignments: {b}, both not assigned: {not_ab}')
+    print('Common assignments: %d, different assignments: %d, '
+          'only %s assignments: %d, only %s assignments: %d, both not assigned: %d' %
+          (ab, diff_ab, label_a, a, label_b, b, not_ab))
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
