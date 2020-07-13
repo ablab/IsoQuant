@@ -91,7 +91,7 @@ Isoquant can be installed with conda:
 conda install -c bioconda isoquant
 ```
 
-If this command does work, it means that bioconda is not updated. Try installing via:
+If this command does work, it means that bioconda is not updated yet. Try installing via:
 ```bash
 conda install -c isoquant isoquant
 ```
@@ -108,6 +108,8 @@ Enter IsoQuant directory and install requirements:
 cd IsoQuant && pip install -r requirements.txt
 ```
 
+You also need [minimap2](https://github.com/lh3/minimap2) to be in the `$PATH` variable.
+  
 <a name="sec2.3"></a>
 ## Verifying your installation 
 To verify IsoQuant installation type
