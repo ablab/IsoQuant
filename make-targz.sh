@@ -2,14 +2,19 @@ VERSION="$(cat ./VERSION)"
 TARGET_DIR=IsoQuant-$VERSION
 rm -rf $TARGET_DIR
 SRC_DIR=$TARGET_DIR/src
+TST_DIR=$TARGET_DIR/tests
 mkdir -p $SRC_DIR
 
 cp -r ./src $SRC_DIR/
+cp -r ./tests $TST_DIR/
 
 # cleaning .pyc and .pyo
-rm -f $SRC_DIR/*.pyc
-rm -f $SRC_DIR/*.pyo
-rm -rf $SRC_DIR/__pycache__/
+rm -f */*.pyc
+rm -f */*.pyo
+rm -rf */__pycache__/
+rm -f */*/*.pyc
+rm -f */*/*.pyo
+rm -rf */*/__pycache__/
 
 cp isoquant.py $TARGET_DIR/
 cp README.md $TARGET_DIR/
