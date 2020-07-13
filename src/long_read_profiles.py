@@ -22,7 +22,7 @@ class MappedReadProfile:
 
 class CombinedReadProfiles:
     def __init__(self, read_intron_profile, read_exon_profile, read_split_exon_profile,
-                polya_pos = -1, polyt_pos = -1, alignment = None):
+                 polya_pos=-1, polyt_pos=-1, alignment=None):
         self.read_intron_profile = read_intron_profile
         self.read_exon_profile = read_exon_profile
         self.read_split_exon_profile = read_split_exon_profile
@@ -35,7 +35,7 @@ class CombinedReadProfiles:
 # accepts sorted gapless alignment blocks
 class OverlappingFeaturesProfileConstructor:
     # ignore_terminal -- bool flag, indicates whether to ignore leading and trailing -1s in the profile
-    def __init__(self, known_features, gene_region, comparator = partial(equal_ranges, delta = 0), delta = 0):
+    def __init__(self, known_features, gene_region, comparator = partial(equal_ranges, delta=0), delta=0):
         self.known_features = known_features
         self.gene_region = gene_region
         self.comparator = comparator
@@ -56,7 +56,7 @@ class OverlappingFeaturesProfileConstructor:
     def match_delta(self, feature1, feature2):
         return abs(feature1[0] - feature2[0]) + abs(feature1[1] - feature2[1])
 
-    def construct_profile_for_features(self, read_features, mapped_region = (0, 0)):
+    def construct_profile_for_features(self, read_features, mapped_region=(0, 0)):
         read_profile = [0] * (len(read_features))
         intron_profile = [0] * (len(self.known_features))
         matched_features = defaultdict(list)
@@ -101,9 +101,10 @@ class OverlappingFeaturesProfileConstructor:
 
         return MappedReadProfile(intron_profile, read_profile, read_features)
 
-#accepts sorted gapless alignment blocks
+
+# accepts sorted gapless alignment blocks
 class NonOverlappingFeaturesProfileConstructor:
-    def __init__(self, known_exons, comparator = overlaps):
+    def __init__(self, known_exons, comparator=overlaps):
         self.known_exons = known_exons
         self.comparator = comparator
 

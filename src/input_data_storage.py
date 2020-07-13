@@ -102,11 +102,11 @@ class InputDataStorage:
 
 
 def check_input_type(fname, input_type):
-    basename_plus_innerext, outer_ext = os.path.splitext(fname.lower())
+    basename_plus_inner_ext, outer_ext = os.path.splitext(fname.lower())
     if outer_ext not in ['.zip', '.gz', '.gzip', '.bz2', '.bzip2']:
-        basename_plus_innerext, outer_ext = fname, ''  # not a supported archive
+        basename_plus_inner_ext, outer_ext = fname, ''  # not a supported archive
 
-    basename, fasta_ext = os.path.splitext(basename_plus_innerext)
+    basename, fasta_ext = os.path.splitext(basename_plus_inner_ext)
     if fasta_ext in ['.fastq', '.fasta', '.fa', '.fna']:
         if input_type != 'fastq':
             raise Exception("Wrong file extension was detected. Use only FASTQ/FASTA files with --fastq option.")

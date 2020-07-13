@@ -14,9 +14,9 @@ PACBIO_CCS_DATA = 'pacbio_ccs'
 NANOPORE_DATA = 'nanopore'
 ASSEMBLY = 'assembly'
 
-DATATYPE_TO_ALIGNER = {ASSEMBLY : 'minimap2', PACBIO_DATA : 'minimap2', PACBIO_CCS_DATA : 'minimap2',
-                       NANOPORE_DATA : 'minimap2'}
-                       #'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
+DATATYPE_TO_ALIGNER = {ASSEMBLY: 'minimap2', PACBIO_DATA: 'minimap2', PACBIO_CCS_DATA: 'minimap2',
+                       NANOPORE_DATA: 'minimap2'}
+                       # 'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
 
 SUPPORTED_ALIGNERS = ['starlong', 'minimap2']
 SUPPORTED_STRANDEDNESS = ['forward', 'reverse', 'none']
@@ -126,7 +126,7 @@ def index_reference(aligner, args):
 
 
 def align_fasta(aligner, fastq_paths, args):
-    #TODO: fix paired end reads
+    # TODO: fix paired end reads
     fastq_path = fastq_paths[0]
     logger.info("Aligning %s to the reference" % fastq_path)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])

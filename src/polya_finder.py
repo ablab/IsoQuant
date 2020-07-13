@@ -12,7 +12,7 @@ logger = logging.getLogger('IsoQuant')
 
 
 class PolyAFinder:
-    def __init__(self, window_size=20, min_polya_fraction = 0.8):
+    def __init__(self, window_size=20, min_polya_fraction=0.8):
         self.window_size = window_size
         self.min_polya_fraction = min_polya_fraction
         self.polyA_count = int(self.window_size * self.min_polya_fraction)

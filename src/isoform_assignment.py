@@ -22,6 +22,7 @@ class ReadAssignmentType(Enum):
     novel = 4
     unreliable = 11
 
+
 # SQANTI-like
 class MatchClassification(Enum):
     undefined = 0
@@ -118,17 +119,23 @@ class MatchEventSubtype(Enum):
         return match_event_subtype in {MatchEventSubtype.exon_elongation5, MatchEventSubtype.exon_elongation3,
                                        MatchEventSubtype.exon_elongation_both}
 
-nnic_event_types = {MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
-                    MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_out_left,
-                    MatchEventSubtype.extra_intron_out_right,MatchEventSubtype.mutually_exclusive_exons_novel,
-                    MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
-                    MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel}
-nic_event_types = {MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
-                   MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
-                   MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
-                   MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
-                   MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
-                   MatchEventSubtype.intron_alternation_known}
+
+nnic_event_types = {
+    MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
+    MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_out_left,
+    MatchEventSubtype.extra_intron_out_right,MatchEventSubtype.mutually_exclusive_exons_novel,
+    MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
+    MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel
+}
+
+nic_event_types = {
+    MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
+    MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
+    MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
+    MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
+    MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
+    MatchEventSubtype.intron_alternation_known
+}
 
 
 class SupplementaryMatchConstansts:
@@ -144,7 +151,7 @@ def make_event(event_type, isoform_position=None, read_region=None):
 
 
 class IsoformMatch:
-    def __init__(self, match_classification, assigned_gene = None, assigned_transcript = None,
+    def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
                  match_subclassification = None):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
@@ -165,8 +172,8 @@ class IsoformMatch:
         self.match_classification = classification
 
     def all_subtypes_are_none_or_monoexonic(self):
-        return all(el.event_type in [MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match]
-                   for el in self.match_subclassifications)
+        valid_subtypes = [MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match]
+        return all(el.event_type in valid_subtypes for el in self.match_subclassifications)
 
     def all_subtypes_are_alignment_artifacts(self):
         return all(MatchEventSubtype.is_alignment_artifact(el.event_type) for el in self.match_subclassifications)
@@ -176,7 +183,7 @@ class IsoformMatch:
 
 
 class ReadAssignment:
-    def __init__(self, read_id, assignment_type, match = None):
+    def __init__(self, read_id, assignment_type, match=None):
         self.read_id = read_id
         self.combined_profile = None
         self.gene_info = None

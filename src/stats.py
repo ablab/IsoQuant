@@ -24,10 +24,10 @@ class EnumStats:
     def add(self, element):
         self.stats_dict[element] += 1
 
-    def print_start(self, header_string = ""):
+    def print_start(self, header_string=""):
         if header_string:
             logger.info(header_string)
-        for e in sorted(self.stats_dict.keys(), key=lambda x:x.name):
+        for e in sorted(self.stats_dict.keys(), key=lambda x: x.name):
             logger.info("%s: %d" % (e.name, self.stats_dict[e]))
 
 

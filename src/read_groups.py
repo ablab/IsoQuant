@@ -24,7 +24,7 @@ class DefaultReadGrouper(AbstractReadGrouper):
 
 
 class AlignmentTagReadGrouper(AbstractReadGrouper):
-    def __init__(self, tag = 'RG'):
+    def __init__(self, tag='RG'):
         self.tag = tag
 
     def get_group_id(self, alignment):
@@ -44,14 +44,14 @@ class ReadIdSplitReadGrouper(AbstractReadGrouper):
         read_id = alignment.query_name
         values = read_id.split(self.delim)
         if len(values) == 1:
-            logger.warning("Delimter %s is not present in read id %s, skipping" % (self.delim, read_id))
+            logger.warning("Delimiter %s is not present in read id %s, skipping" % (self.delim, read_id))
             return
 
         return values[-1]
 
 
 class ReadTableGrouper(AbstractReadGrouper):
-    def __init__(self, table_tsv_file, read_id_column_index = 0, group_id_column_index = 1, delim = '\t'):
+    def __init__(self, table_tsv_file, read_id_column_index=0, group_id_column_index=1, delim='\t'):
         self.read_map = {}
         min_columns = max(read_id_column_index, group_id_column_index)
         logger.info("Reading")
@@ -68,7 +68,7 @@ class ReadTableGrouper(AbstractReadGrouper):
 
             read_id = column_values[read_id_column_index]
             if read_id in self.read_map:
-                logger.warning("Duplicate information for read %s" % (read_id))
+                logger.warning("Duplicate information for read %s" % read_id)
 
             group_id = column_values[group_id_column_index]
             self.read_map[read_id] = group_id
