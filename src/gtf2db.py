@@ -34,8 +34,7 @@ def gtf2db(gtf, db, complete_db=False):
 
 def convert_gtf_to_db(args):
     gtf_filename = args.genedb
-    if not os.path.isabs(gtf_filename):
-        gtf_filename = os.path.join(os.getcwd(), gtf_filename)
+    gtf_filename = os.path.abspath(gtf_filename)
     genedb_filename = os.path.join(args.output, os.path.splitext(os.path.basename(gtf_filename))[0] + ".db")
     gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, gtf2db, args.complete_genedb)
     return genedb_filename
