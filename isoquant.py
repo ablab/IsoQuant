@@ -291,7 +291,7 @@ def set_matching_options(args):
     updated_strategy = MathcingStrategy(args.delta, args.max_exon_extension, args.max_intron_shift,
                                         args.max_missed_exon_len, args.allow_extra_terminal_introns,
                                         args.apa_delta, args.resolve_ambiguous, args.correct_minor_errors)
-    logger.debug(f'Using {args.matching_strategy} strategy. Updated strategy: {updated_strategy}.')
+    logger.debug('Using %s strategy. Updated strategy: %s.' % (args.matching_strategy, updated_strategy))
 
 
 def set_model_construction_options(args):
@@ -334,7 +334,7 @@ def set_model_construction_options(args):
                                                  args.report_intron_retention, args.max_dist_to_isoforms_tsts,
                                                  args.max_dist_to_novel_tsts, args.min_reads_supporting_tsts,
                                                  args.require_polyA, args.require_cage_peak)
-    logger.debug(f'Using {args.model_construction_strategy} strategy. Updated strategy: {updated_strategy}.')
+    logger.debug('Using %s strategy. Updated strategy: %s.' % (args.model_construction_strategy, updated_strategy))
 
 
 def set_additional_params(args):
