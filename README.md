@@ -101,13 +101,15 @@ conda install -c bioconda -c conda-forge -c isoquant isoquant
 <a name="sec2.2"></a>
 ## Manual installation and requirements
 To obtain IsoQuant you can download repository and install requirements.  
-Clone IsoQuant repository:
+Clone IsoQuant repository and switch to latest release:
 ```bash
 git clone https://github.com/ablab/IsoQuant.git
+cd IsoQuant
+git checkout latest
 ```
-Enter IsoQuant directory and install requirements:
+Iinstall requirements:
 ```bash
-cd IsoQuant && pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 You also need [minimap2](https://github.com/lh3/minimap2) to be in the `$PATH` variable.
