@@ -93,7 +93,8 @@ def convert_db(gtf_filename, genedb_filename, convert_fn, complete_db=False):
         convert_fn(gtf_filename, genedb_filename)
     converted_gtfs[gtf_filename] = {'genedb': genedb_filename,
                                     'gtf_mtime': os.path.getmtime(gtf_filename),
-                                    'db_mtime': os.path.getmtime(genedb_filename)}
+                                    'db_mtime': os.path.getmtime(genedb_filename),
+                                    'complete_db': complete_db}
     with open(config_path, 'w') as f_out:
         json.dump(converted_gtfs, f_out)
     return gtf_filename, genedb_filename
