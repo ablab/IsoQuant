@@ -40,11 +40,9 @@ class DataSetReadMapper:
             return args.index
 
         index = find_stored_index(args)
-        if index is not None:
-            return index
-
-        index = index_reference(self.aligner, args)
-        save_index(index, args.reference)
+        if index is None:
+            index = index_reference(self.aligner, args)
+            save_index(index, args.reference)
         return index
 
     def map_reads(self, args):
