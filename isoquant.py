@@ -42,6 +42,10 @@ def parse_args(args=None, namespace=None):
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
                         required='--run_aligner_only' not in sys.argv)
+    parser.add_argument('--complete_genedb', action='store_true', default=False,
+                        help="use this flag if gene annotation contains transcript and gene metafeatures, "
+                             "e.g. with official annotations, such as GENCODE; "
+                             "speeds up gene database conversion")
     parser.add_argument("--reference", "-r", help="reference genome in FASTA format, "
                                                   "should be provided to compute some additional stats and "
                                                   "when raw reads are used as an input", type=str)
@@ -91,7 +95,7 @@ def parse_args(args=None, namespace=None):
     # ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "; chosen based on data type if not set", type=str)
-    add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
+    #add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
@@ -151,7 +155,7 @@ class TestMode(argparse.Action):
                    '--reference', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.reference.fasta'),
                    '--genedb', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.genedb.gtf'),
                    '--cage', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.CAGE.bed'),
-                   '--data_type', 'nanopore']
+                   '--data_type', 'nanopore', '--complete_genedb']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
         main(options)

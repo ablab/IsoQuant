@@ -44,7 +44,7 @@ class DataSetReadMapper:
         for sample in args.input_data.samples:
             bam_files = []
             for fastq_files in sample.file_list:
-                bam_files.append([align_fasta(self.aligner, fastq_files, args)])
+                bam_files.append([align_fasta(self.aligner, fastq_files, args, sample.label, sample.out_dir)])
             samples.append(SampleData(bam_files, sample.label, sample.out_dir))
         args.input_data.samples = samples
         args.input_data.input_type = "bam"
@@ -125,14 +125,14 @@ def index_reference(aligner, args):
     return index_name
 
 
-def align_fasta(aligner, fastq_paths, args):
+def align_fasta(aligner, fastq_paths, args, label, out_dir):
     # TODO: fix paired end reads
     fastq_path = fastq_paths[0]
     logger.info("Aligning %s to the reference" % fastq_path)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
-    alignment_prefix = os.path.join(args.output, fname)
+    alignment_prefix = os.path.join(args.tmp_dir, label)
     alignment_sam_path = alignment_prefix + '.sam'
-    alignment_bam_path = alignment_prefix + '.bam'
+    alignment_bam_path = os.path.join(out_dir, label + '.bam')
 
     # if 'barcoded' in args.data_type:
     #    fastq_path = convert_fasta_with_barcodes(fastq_path, args)

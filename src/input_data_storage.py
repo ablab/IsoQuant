@@ -13,6 +13,7 @@ logger = logging.getLogger('IsoQuant')
 
 class SampleData:
     def __init__(self, file_list, label, out_dir):
+        # list of lists, since each sample may contain severa libraries, and each library may contain 2 files (paired)
         self.file_list = file_list
         self.label = label
         self.out_dir = out_dir
@@ -37,6 +38,7 @@ class SampleData:
 
 class InputDataStorage:
     def __init__(self, args):
+        # list of SampleData
         self.samples = []
         self.input_type = ""
         sample_files = []
@@ -85,11 +87,11 @@ class InputDataStorage:
                 current_sample = []
             else:
                 current_sample.append(l.strip().split())
-
         if len(current_sample) > 0:
             sample_files.append(current_sample)
+
         for sample in sample_files:
-            for lib in sample.file_list:
+            for lib in sample:
                 for in_file in lib:
                     check_input_type(in_file, self.input_type)
         return sample_files

@@ -20,9 +20,14 @@
 **Quick start:**  
 
 *   IsoQuant can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda:
+
         conda install -c bioconda isoquant
 
-*   If installing manually, you will need Python3, [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pyfaidx](https://pypi.org/project/pyfaidx/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details.
+    Or:
+
+        conda install -c bioconda -c conda-forge -c isoquant isoquant
+
+*   If installing manually, you will need Python3 (preferably 3.7), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pyfaidx](https://pypi.org/project/pyfaidx/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
   
 *   To run IsoQuant on raw FASTQ/FASTA files use the following command
 
@@ -68,7 +73,7 @@ Pre-constructed aligner index can also be provided to increase mapping time.
 
 <a name="sec2"></a>
 # Installation
-IsoQuant requires a 64-bit Linux system or Mac OS and Python (3.6 and higher) to be pre-installed on it. 
+IsoQuant requires a 64-bit Linux system or Mac OS and Python (3.7 and higher) to be pre-installed on it. 
 You will also need 
 * [gffutils](https://pythonhosted.org/gffutils/installation.html) 
 * [pysam](https://pysam.readthedocs.io/en/latest/index.html) 
@@ -76,6 +81,8 @@ You will also need
 * [pyfaidx](https://pypi.org/project/pyfaidx/)
 * [pandas](https://pandas.pydata.org/)
 * [numpy](https://numpy.org/)
+* [minimap2](https://github.com/lh3/minimap2) 
+* [STAR](https://github.com/alexdobin/STAR) (optional)
 
 <a name="sec2.1"></a>
 ## Installing from conda
@@ -83,18 +90,30 @@ Isoquant can be installed with conda:
 ```bash
 conda install -c bioconda isoquant
 ```
+
+If this command does not work, it means that bioconda is not updated yet. Try installing via:
+```bash
+conda create -n isoquant python=3.7
+conda activate isoquant
+conda install -c bioconda -c conda-forge -c isoquant isoquant
+```
+
 <a name="sec2.2"></a>
 ## Manual installation and requirements
 To obtain IsoQuant you can download repository and install requirements.  
-Clone IsoQuant repository:
+Clone IsoQuant repository and switch to latest release:
 ```bash
 git clone https://github.com/ablab/IsoQuant.git
+cd IsoQuant
+git checkout latest
 ```
-Enter IsoQuant directory and install requirements:
+Iinstall requirements:
 ```bash
-cd IsoQuant && pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
+You also need [minimap2](https://github.com/lh3/minimap2) to be in the `$PATH` variable.
+  
 <a name="sec2.3"></a>
 ## Verifying your installation 
 To verify IsoQuant installation type
@@ -141,7 +160,11 @@ By default, each file with reads is treated as a separate sample. To group multi
     Type of data to process, supported types are: `assembly`, `pacbio_ccs`, `pacbio_raw`, `nanopore`. This option affects some of the algorithm parameters.
 
 `--genedb` or `-g`
-    Gene database in gffutils database format or GTF/GFF format.
+    Gene database in gffutils database format or GTF/GFF format. If you use official gene annotations we recommend to set `--complete_genedb` option.
+
+`--complete_genedb`
+    Set this flag if gene annotation contains transcript and gene metafeatures. Use this flag when providing official annotations, e.g. GENCODE. This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options, which dramatically speed up gene database conversion (see more [here](https://pythonhosted.org/gffutils/autodocs/gffutils.create_db.html?highlight=disable_infer_transcripts)).
+
 
 `--reference` or `-r`
     Reference genome in FASTA format, should be provided  when raw reads are used as an input and to compute some additional stats.
@@ -175,7 +198,7 @@ To provide read sequences use one of the following options:
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
 
 `--labels` or `-l`
-    Sets sample names; make sure that the number of labels is equal to the number of samples; input file names are used if not set.
+    Sets space-separated sample names; make sure that the number of labels is equal to the number of samples; input file names are used if not set.
 
 `--read_group`
  Sets a way to group feature counts (e.g. by cell type). Available options are: 
@@ -200,9 +223,6 @@ To provide read sequences use one of the following options:
 
 `--index`
     Reference genome index for the specified aligner, can be provided only when raw reads are used as an input (constructed automatically if not set).
-
-`--path_to_aligner`
-    Directory with the aligner binary, `$PATH` is used by default.
 
 `--run_aligner_only` 
     Align reads to reference without running IsoQuant itself.
@@ -279,12 +299,12 @@ You can manually set some of the parameters (will override options in the preset
 isoquant.py -d pacbio_raw --has_polya --bam mapped_reads.bam --genedb annotation.db --output output_dir 
 ```
 
-* Nanopore dRNA reads; not poly-A trimmed; annotation in GTF format:
+* Nanopore dRNA reads; not poly-A trimmed; official annotation in GTF format, used sample label instead of file name:
 ```bash
-isoquant.py -d nanopore --has_polya --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --output output_dir --threads 8
+isoquant.py -d nanopore --has_polya --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --threads 8 --labels My_ONT
 ```
 
-* PacBio FL reads, poly-A trimmed; annotation in GTF format:
+* PacBio FL reads, poly-A trimmed; custom annotation in GTF format, which contains only exon features:
 ```bash
 python3 isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir --threads 8
 ```
