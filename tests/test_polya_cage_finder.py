@@ -17,6 +17,16 @@ SEQ1 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
        'GGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGCACTCCAACTGCTGCAAACCG' \
        'AAGAAGCAGGCATCGGAGACACTCCCAAACCAGGAGCGACCAAGCACTGGCGCATGTGACTCAAG'
 
+TUPLES2 = [(0, 167), (4, 30)]
+TUPLES3 = [(0, 167), (4, 30), (5, 30)]
+SEQ2 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
+       'GGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGCACTCCAACTGCTGCAAACCG' \
+       'AAGAAGCAGGCATCGGACDCCTTTTTTTTTTAGGCGCCAAAAAAAAAAAACCAAAAAAAAAAAAA'
+
+SEQ3 = 'TTTTTTTTTTTTTTTTTTTTCTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGC' \
+       'TCCCCACAGCCCCCTGCGATGGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGC' \
+       'ACTCCAACTGCTGCAAACCGAAGAAGCAGGCATCGGACDCCAAAAAAAAACCAAAAAAAAAAAAA'
+
 
 class TestPolyAFinder:
     polya_finder = PolyAFinder()
@@ -30,6 +40,23 @@ class TestPolyAFinder:
                              [PolyAAlignment('aligned_segment1', TUPLES1, SEQ1, 51054, 63535)])
     def test_no_a_tail(self, alignment):
         assert self.polya_finder.find_polya_tail(alignment) == -1
+
+    @pytest.mark.parametrize("alignment, expected",
+                             [(PolyAAlignment('aligned_segment1', TUPLES2, SEQ2, 51054, 63535), 63535),
+                              (PolyAAlignment('aligned_segment1', TUPLES3, SEQ2, 51054, 63535), 63535)])
+    def test_find_a_tail(self, alignment, expected):
+        assert self.polya_finder.find_polya_tail(alignment) == expected
+
+    @pytest.mark.parametrize("alignment",
+                             [PolyAAlignment('aligned_segment1', list(reversed(TUPLES2)), SEQ3, 51054, 63535)])
+    def test_find_t_head(self, alignment):
+        assert self.polya_finder.find_polyt_head(alignment) == 51054
+
+    @pytest.mark.parametrize("seq, expected",
+                             [('TTTATATTTTTTTTTTGCC', -1),
+                              ('AAAAAAAAAAACGAAAAAAAAAAAAAAAA', 0)])
+    def test_find_polya_pos(self, seq, expected):
+        assert self.polya_finder.find_polya(seq) == expected
 
 
 class TestCagePeakFinder:
