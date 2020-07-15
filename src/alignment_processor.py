@@ -51,7 +51,7 @@ class LongReadAlignmentProcessor:
             NonOverlappingFeaturesProfileConstructor(self.gene_info.split_exon_profiles.features,
                                                      comparator=partial(overlaps_at_least, delta=self.params.delta))
         self.polya_finder = PolyAFinder()
-        self.cage_finder = CagePeakFinder(params.cage)
+        self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
 
     def process(self):
