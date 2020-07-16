@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import json
 
 from Bio import SeqIO
 from src.common import get_path_to_program
@@ -37,7 +38,12 @@ class DataSetReadMapper:
     def create_index(self, args):
         if args.index and os.path.exists(args.index):
             return args.index
-        return index_reference(self.aligner, args)
+
+        index = find_stored_index(args)
+        if index is None:
+            index = index_reference(self.aligner, args)
+            save_index(index, args.reference)
+        return index
 
     def map_reads(self, args):
         samples = []
@@ -87,6 +93,53 @@ def get_aligner(aligner):
         logger.critical('{aligner} is not found! Make sure that {aligner} is in your PATH or use other alignment method'.format(aligner=aligner))
         exit(-1)
     return path
+
+
+def find_stored_index(args):
+    reference_filename = os.path.abspath(args.reference)
+    config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
+    config_path = os.path.join(config_dir, 'index_config.json')
+
+    if not os.path.exists(config_path):
+        os.makedirs(config_dir, exist_ok=True)
+        with open(config_path, 'w') as f_out:
+            json.dump({}, f_out)
+        return None
+
+    with open(config_path, 'r') as f_in:
+        converted_indexes = json.load(f_in)
+    return get_stored_index(converted_indexes, reference_filename)
+
+
+def get_stored_index(converted_indexes, reference_filename):
+    index_filename = converted_indexes.get(reference_filename, {}).get('index_filename')
+    logger.debug('Searching for previously created index for {}'.format(reference_filename))
+    if index_filename is None:
+        return None
+    index_mtime = converted_indexes.get(reference_filename, {}).get('index_mtime')
+    reference_mtime = converted_indexes.get(reference_filename, {}).get('reference_mtime')
+    if os.path.exists(reference_filename) and os.path.getmtime(reference_filename) == reference_mtime:
+        if os.path.exists(index_filename) and os.path.getmtime(index_filename) == index_mtime:
+            logger.debug('Index file found. Using {}'.format(index_filename))
+            return index_filename
+    return None
+
+
+def save_index(index, reference):
+    reference_filename = os.path.abspath(reference)
+    index = os.path.abspath(index)
+    config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
+    config_path = os.path.join(config_dir, 'index_config.json')
+    with open(config_path, 'r') as f_in:
+        converted_indexes = json.load(f_in)
+    converted_indexes[reference_filename] = {
+        'index_filename': index,
+        'reference_mtime': os.path.getmtime(reference_filename),
+        'index_mtime': os.path.getmtime(index)
+    }
+    with open(config_path, 'w') as f_out:
+        json.dump(converted_indexes, f_out)
+    logger.debug('New index saved to {}'.format(index))
 
 
 def index_reference(aligner, args):
