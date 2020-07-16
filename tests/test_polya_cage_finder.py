@@ -1,3 +1,4 @@
+import os
 from collections import namedtuple, Counter
 
 import pytest
@@ -13,12 +14,15 @@ CageAlignment = namedtuple('CageAlignment', ('query_name', 'reference_name', 'qu
 TUPLES1 = [(4, 2), (0, 15), (1, 1), (0, 5), (2, 1), (0, 16), (3, 4642), (0, 5), (1, 1), (0, 1), (1, 1),
            (0, 15), (2, 1), (0, 4), (1, 1), (0, 6), (2, 1), (0, 19), (1, 1), (0, 32), (1, 1), (0, 3),
            (3, 7649), (0, 25), (1, 1), (0, 13), (1, 1), (0, 29)]
+
+TUPLES2 = [(0, 167), (4, 30)]
+
+TUPLES3 = [(0, 167), (4, 30), (5, 30)]
+
 SEQ1 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
        'GGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGCACTCCAACTGCTGCAAACCG' \
        'AAGAAGCAGGCATCGGAGACACTCCCAAACCAGGAGCGACCAAGCACTGGCGCATGTGACTCAAG'
 
-TUPLES2 = [(0, 167), (4, 30)]
-TUPLES3 = [(0, 167), (4, 30), (5, 30)]
 SEQ2 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
        'GGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGCACTCCAACTGCTGCAAACCG' \
        'AAGAAGCAGGCATCGGACDCCTTTTTTTTTTAGGCGCCAAAAAAAAAAAACCAAAAAAAAAAAAA'
@@ -60,12 +64,13 @@ class TestPolyAFinder:
 
 
 class TestCagePeakFinder:
-    cage_peak_finder = CagePeakFinder('toy_data/MAPT.Mouse.CAGE.bed', 50)
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    cage_peak_finder = CagePeakFinder(os.path.join(source_dir, 'toy_data/MAPT.Mouse.CAGE.bed'), 50)
 
     @pytest.mark.parametrize("alignment",
                              [CageAlignment('aligned_segment1', 'chr11', 24, 2165, False),
                               CageAlignment('aligned_segment2', 'chr11', 0, 1296, False),
-                              CageAlignment('aligned_segment2', 'chr11', 80, 372, True)])
+                              CageAlignment('aligned_segment3', 'chr11', 80, 372, True)])
     def test_no_intersection(self, alignment):
         assert self.cage_peak_finder.find_cage_peak(alignment) == []
 
