@@ -109,7 +109,8 @@ class LongReadAlignmentProcessor:
                 exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks)
                 split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks)
                 combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
-                                                        polya_pos=polya_pos, polyt_pos=polyt_pos, cage_hits=cage_hits)
+                                                        polya_pos=polya_pos, polyt_pos=polyt_pos,
+                                                        cage_hits=cage_hits, alignment=alignment)
 
                 read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
                 read_assignment.polyA_found = (polya_pos != -1 or polyt_pos != -1)
@@ -132,8 +133,7 @@ class LongReadAlignmentProcessor:
         indel_events = [1, 2]
         indel_count = 0
         intron_cigar_positions = []
-        for i in range(cigar_event_count):
-            cigar = alignment.cigartuples[i]
+        for i, cigar in enumerate(alignment.cigartuples):
             if cigar[0] in indel_events:
                 indel_count += 1
             elif cigar[0] == 3:

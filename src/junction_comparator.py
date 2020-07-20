@@ -7,6 +7,9 @@
 import logging
 from collections import namedtuple
 
+from Bio.pairwise2 import align
+from Bio.Seq import Seq
+
 from src.isoform_assignment import *
 from src.gene_info import *
 from src.long_read_profiles import *
@@ -15,14 +18,14 @@ from src.long_read_profiles import *
 logger = logging.getLogger('IsoQuant')
 
 
-class JunctionComparator():
+class JunctionComparator:
     absent = -10
 
     def __init__(self, params, intron_profile_constructor):
         self.params = params
         self.intron_profile_constructor = intron_profile_constructor
 
-    def compare_junctions(self, read_junctions, read_region, isoform_junctions, isoform_region):
+    def compare_junctions(self, read_junctions, read_region, isoform_junctions, isoform_region, alignment=None):
         """ compare read splice junctions against similar isoform
 
         Parameters
@@ -128,7 +131,8 @@ class JunctionComparator():
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
             # classify contradictions
             logger.debug("+ + Classifying contradictions")
-            matching_events = self.detect_contradiction_type(read_junctions, isoform_junctions, contradictory_region_pairs)
+            matching_events = self.detect_contradiction_type(read_junctions, isoform_junctions,
+                                                             contradictory_region_pairs, alignment)
 
         if read_features_present[0] == 0 or read_features_present[-1] == 0:
             if all(x == 0 for x in read_features_present):
@@ -141,7 +145,7 @@ class JunctionComparator():
             return [make_event(MatchEventSubtype.none)]
         return matching_events
 
-    def detect_contradiction_type(self, read_junctions, isoform_junctions, contradictory_region_pairs):
+    def detect_contradiction_type(self, read_junctions, isoform_junctions, contradictory_region_pairs, alignment):
         """
 
         Parameters
@@ -155,14 +159,16 @@ class JunctionComparator():
         list of contradiction events
         """
         contradiction_events = []
-        for pair in contradictory_region_pairs:
+        for read_cregion, isoform_cregion in contradictory_region_pairs:
             # classify each contradictory area separately
-            event = self.compare_overlapping_contradictional_regions(read_junctions, isoform_junctions, pair[0], pair[1])
+            event = self.compare_overlapping_contradictional_regions(read_junctions, isoform_junctions,
+                                                                     read_cregion, isoform_cregion, alignment)
             contradiction_events.append(event)
 
         return contradiction_events
 
-    def compare_overlapping_contradictional_regions(self, read_junctions, isoform_junctions, read_cregion, isoform_cregion):
+    def compare_overlapping_contradictional_regions(self, read_junctions, isoform_junctions, read_cregion,
+                                                    isoform_cregion, alignment):
         if read_cregion[0] == self.absent:
             return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
         elif isoform_cregion[0] == self.absent:
@@ -192,7 +198,7 @@ class JunctionComparator():
 
         elif read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
             event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
-                                                total_intron_len_diff, read_introns_known)
+                                                total_intron_len_diff, read_introns_known, alignment=alignment)
 
         elif read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
             if read_introns_known:
@@ -208,11 +214,14 @@ class JunctionComparator():
         return make_event(event, isoform_cregion[0], read_cregion)
 
     def classify_skipped_exons(self, isoform_junctions, isoform_cregion,
-                               total_intron_len_diff, read_introns_known):
+                               total_intron_len_diff, read_introns_known, alignment=None):
         total_exon_len = sum([isoform_junctions[i + 1][0] - isoform_junctions[i][1] + 1
                               for i in range(isoform_cregion[0], isoform_cregion[1])])
 
         if total_intron_len_diff < 2 * self.params.delta and total_exon_len <= self.params.max_missed_exon_len:
+            print('exon_misaln')
+            check_misalignment(isoform_junctions, isoform_cregion,
+                               total_intron_len_diff, read_introns_known, alignment)
             event = MatchEventSubtype.exon_misallignment
         else:
             if read_introns_known:
@@ -223,6 +232,7 @@ class JunctionComparator():
 
     def classify_single_intron_alternation(self, read_junctions, isoform_junctions, read_cpos, isoform_cpos,
                                            total_intron_len_diff, read_introns_known):
+        # print('sngl intr', read_junctions, isoform_junctions, read_cpos, isoform_cpos, total_intron_len_diff, read_introns_known)
         if total_intron_len_diff <= 2 * self.params.delta:
             if read_introns_known:
                 event = MatchEventSubtype.intron_migration
@@ -292,3 +302,19 @@ class JunctionComparator():
     def are_known_introns(self, junctions, region):
         selected_junctions_profile = self.profile_for_junctions_introns(junctions, region)
         return all(el == 1 for el in selected_junctions_profile.read_profile)
+
+
+def check_misalignment(isoform_junctions, isoform_cregion, total_intron_len_diff, read_introns_known, alignment=None):
+    if alignment is None:
+        return
+
+    print('iso_junc ', isoform_junctions)
+    print('iso_creg ', isoform_cregion)
+    print('total_dif ', total_intron_len_diff)
+    print('read_intr ', read_introns_known)
+    ref_seq = Seq(alignment.get_reference_sequence())
+    seq = Seq(alignment.get_forward_sequence())
+    aligned = align.globalxx(seq, ref_seq)
+    print('Aligned ', aligned)
+
+
