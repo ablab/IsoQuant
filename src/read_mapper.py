@@ -226,7 +226,7 @@ def align_fasta(aligner, fastq_paths, args, label, out_dir):
 
     elif aligner == "minimap2":
         minimap2_path = get_aligner('minimap2')
-        additional_options = ['--MD']
+        additional_options = []
         if args.stranded == 'forward':
             additional_options.append('-uf')
         # TODO: add junction bed
