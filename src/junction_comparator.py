@@ -320,6 +320,9 @@ class MisalignmentChecker:
         iso_left, iso_right = isoform_junctions[l][0], isoform_junctions[r][1]
         exon_left, exon_right = isoform_junctions[l][1], isoform_junctions[r][0]
         if total_intron_len_diff < 2 * self.delta and total_exon_len <= self.max_missed_exon_len:
+            if alignment is None or self.reference is None:
+                return MatchEventSubtype.exon_misallignment
+
             if iso_left - self.delta <= read_left and iso_right + self.delta >= read_right:
                 seq = self.get_read_sequence(alignment, (iso_left, read_left)) \
                           + self.get_read_sequence(alignment, (read_right, iso_right))
