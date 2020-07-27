@@ -25,7 +25,8 @@ class JunctionComparator:
     def __init__(self, params, intron_profile_constructor):
         self.params = params
         self.intron_profile_constructor = intron_profile_constructor
-        self.misalignment_checker = MisalignmentChecker(params.reference, params.delta, params.max_intron_shift)
+        self.misalignment_checker = MisalignmentChecker(params.reference, params.delta, params.max_intron_shift,
+                                                        params.max_missed_exon_len)
         # self.exon_misalignment_checker = ExonMisalignmentChecker(params.reference)
 
     def compare_junctions(self, read_junctions, read_region, isoform_junctions, isoform_region, alignment=None):
@@ -201,7 +202,7 @@ class JunctionComparator:
                 event = MatchEventSubtype.mutually_exclusive_exons_novel
 
         elif read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
-            event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
+            event = self.classify_skipped_exons(isoform_junctions, isoform_cregion, read_junctions, read_cregion,
                                                 total_intron_len_diff, read_introns_known, alignment=alignment)
 
         elif read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
@@ -217,17 +218,14 @@ class JunctionComparator:
                 event = MatchEventSubtype.alternative_structure_novel
         return make_event(event, isoform_cregion[0], read_cregion)
 
-    def classify_skipped_exons(self, isoform_junctions, isoform_cregion,
+    def classify_skipped_exons(self, isoform_junctions, isoform_cregion, read_junctions, read_cregion,
                                total_intron_len_diff, read_introns_known, alignment=None):
         total_exon_len = sum([isoform_junctions[i + 1][0] - isoform_junctions[i][1] + 1
                               for i in range(isoform_cregion[0], isoform_cregion[1])])
 
-        if total_intron_len_diff < 2 * self.params.delta and total_exon_len <= self.params.max_missed_exon_len:
-            return MatchEventSubtype.exon_misallignment
-        elif read_introns_known:
-            return MatchEventSubtype.exon_skipping_known_intron
-        else:
-            return MatchEventSubtype.exon_skipping_novel_intron
+        return self.misalignment_checker.classify_skipped_exon(
+            isoform_junctions, isoform_cregion, read_junctions, read_cregion,
+            total_intron_len_diff, read_introns_known, total_exon_len, alignment)
 
     def classify_single_intron_alternation(self, read_junctions, isoform_junctions, read_cpos, isoform_cpos,
                                            total_intron_len_diff, read_introns_known, alignment=None):
@@ -235,7 +233,7 @@ class JunctionComparator:
             if read_introns_known:
                 return MatchEventSubtype.intron_migration
             else:
-                return self.misalignment_checker.intron_shift(
+                return self.misalignment_checker.classify_intron_misalignment(
                     read_junctions, isoform_junctions, read_cpos, isoform_cpos, alignment)
         else:
             # TODO correct when strand is negative
@@ -300,7 +298,7 @@ class JunctionComparator:
 
 
 class MisalignmentChecker:
-    def __init__(self, reference, delta, max_intron_shift):
+    def __init__(self, reference, delta, max_intron_shift, max_missed_exon_len):
         if reference is not None:
             if not os.path.exists(reference + '.fai'):
                 logger.info('Building fasta index with samtools')
@@ -309,9 +307,33 @@ class MisalignmentChecker:
         self.reference = reference
         self.delta = delta
         self.max_intron_shift = max_intron_shift
+        self.max_missed_exon_len = max_missed_exon_len
         self.scores = (2, -1, -1, -.2)
 
-    def intron_shift(self, read_junctions, isoform_junctions, read_cpos, isoform_cpos, alignment=None):
+    def classify_skipped_exon(self, isoform_junctions, isoform_cregion, read_junctions, read_cregion,
+                              total_intron_len_diff, read_introns_known, total_exon_len, alignment):
+        assert len(set(read_cregion)) == 1
+
+        read_cpos = read_cregion[0]
+        read_left, read_right = read_junctions[read_cpos]
+        l, r = isoform_cregion
+        iso_left, iso_right = isoform_junctions[l][0], isoform_junctions[r][1]
+        exon_left, exon_right = isoform_junctions[l][1], isoform_junctions[r][0]
+        if total_intron_len_diff < 2 * self.delta and total_exon_len <= self.max_missed_exon_len:
+            if iso_left - self.delta <= read_left and iso_right + self.delta >= read_right:
+                seq = self.get_read_sequence(alignment, (iso_left, read_left)) \
+                          + self.get_read_sequence(alignment, (read_right, iso_right))
+                ref_seq = self.reference.fetch(alignment.reference_name, exon_left, exon_right)
+                if self.sequences_match(seq, ref_seq):
+                    return MatchEventSubtype.exon_misallignment
+                else:
+                    return MatchEventSubtype.exon_skipping_novel_intron
+
+        if read_introns_known:
+            return MatchEventSubtype.exon_skipping_known_intron
+        return MatchEventSubtype.exon_skipping_novel_intron
+
+    def classify_intron_misalignment(self, read_junctions, isoform_junctions, read_cpos, isoform_cpos, alignment=None):
 
         read_left, read_right = read_junctions[read_cpos]
         iso_left, iso_right = isoform_junctions[isoform_cpos]
@@ -322,10 +344,9 @@ class MisalignmentChecker:
         if alignment is None or self.reference is None:
             if abs(read_left - iso_left) <= self.max_intron_shift:
                 return MatchEventSubtype.intron_shift
-            else:
-                return MatchEventSubtype.intron_alternation_novel
+            return MatchEventSubtype.intron_alternation_novel
 
-        read_region, ref_region = self.get_aligned_regions(read_left, read_right, iso_left, iso_right)
+        read_region, ref_region = self.get_aligned_regions_intron(read_left, read_right, iso_left, iso_right)
         seq = self.get_read_sequence(alignment, read_region)
         ref_seq = self.reference.fetch(alignment.reference_name, *ref_region)
 
@@ -342,7 +363,7 @@ class MisalignmentChecker:
         return False
 
     @staticmethod
-    def get_aligned_regions(read_left, read_right, iso_left, iso_right):
+    def get_aligned_regions_intron(read_left, read_right, iso_left, iso_right):
         if iso_left <= read_left:
             return (iso_left, read_left), (iso_right, read_right)
         return (read_right, iso_right), (read_left, iso_left)
