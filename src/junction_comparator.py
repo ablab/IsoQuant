@@ -7,8 +7,8 @@
 import logging
 from collections import namedtuple
 
-from Bio.pairwise2 import align
-from Bio.Seq import Seq
+import pysam
+from Bio import pairwise2
 
 from src.isoform_assignment import *
 from src.gene_info import *
@@ -16,6 +16,7 @@ from src.long_read_profiles import *
 
 
 logger = logging.getLogger('IsoQuant')
+pairwise2.MAX_ALIGNMENTS = 1
 
 
 class JunctionComparator:
@@ -24,6 +25,8 @@ class JunctionComparator:
     def __init__(self, params, intron_profile_constructor):
         self.params = params
         self.intron_profile_constructor = intron_profile_constructor
+        self.misalignment_checker = MisalignmentChecker(params.reference, params.delta, params.max_intron_shift)
+        # self.exon_misalignment_checker = ExonMisalignmentChecker(params.reference)
 
     def compare_junctions(self, read_junctions, read_region, isoform_junctions, isoform_region, alignment=None):
         """ compare read splice junctions against similar isoform
@@ -168,7 +171,7 @@ class JunctionComparator:
         return contradiction_events
 
     def compare_overlapping_contradictional_regions(self, read_junctions, isoform_junctions, read_cregion,
-                                                    isoform_cregion, alignment):
+                                                    isoform_cregion, alignment=None):
         if read_cregion[0] == self.absent:
             return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
         elif isoform_cregion[0] == self.absent:
@@ -186,8 +189,9 @@ class JunctionComparator:
         read_introns_known = self.are_known_introns(read_junctions, read_cregion)
 
         if read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
-            event = self.classify_single_intron_alternation(read_junctions, isoform_junctions, read_cregion[0],
-                                                           isoform_cregion[0], total_intron_len_diff, read_introns_known)
+            event = self.classify_single_intron_alternation(
+                read_junctions, isoform_junctions, read_cregion[0], isoform_cregion[0],
+                total_intron_len_diff, read_introns_known, alignment)
 
         elif read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] and \
                 total_intron_len_diff < self.params.delta:
@@ -219,40 +223,31 @@ class JunctionComparator:
                               for i in range(isoform_cregion[0], isoform_cregion[1])])
 
         if total_intron_len_diff < 2 * self.params.delta and total_exon_len <= self.params.max_missed_exon_len:
-            print('exon_misaln')
-            check_misalignment(isoform_junctions, isoform_cregion,
-                               total_intron_len_diff, read_introns_known, alignment)
-            event = MatchEventSubtype.exon_misallignment
+            return MatchEventSubtype.exon_misallignment
+        elif read_introns_known:
+            return MatchEventSubtype.exon_skipping_known_intron
         else:
-            if read_introns_known:
-                event = MatchEventSubtype.exon_skipping_known_intron
-            else:
-                event = MatchEventSubtype.exon_skipping_novel_intron
-        return event
+            return MatchEventSubtype.exon_skipping_novel_intron
 
     def classify_single_intron_alternation(self, read_junctions, isoform_junctions, read_cpos, isoform_cpos,
-                                           total_intron_len_diff, read_introns_known):
-        # print('sngl intr', read_junctions, isoform_junctions, read_cpos, isoform_cpos, total_intron_len_diff, read_introns_known)
+                                           total_intron_len_diff, read_introns_known, alignment=None):
         if total_intron_len_diff <= 2 * self.params.delta:
             if read_introns_known:
-                event = MatchEventSubtype.intron_migration
+                return MatchEventSubtype.intron_migration
             else:
-                if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) <= self.params.max_intron_shift:
-                    event = MatchEventSubtype.intron_shift
-                else:
-                    event = MatchEventSubtype.intron_alternation_novel
+                return self.misalignment_checker.intron_shift(
+                    read_junctions, isoform_junctions, read_cpos, isoform_cpos, alignment)
         else:
             # TODO correct when strand is negative
             if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) < self.params.delta:
-                event = MatchEventSubtype.alt_acceptor_site_known if read_introns_known \
+                return MatchEventSubtype.alt_acceptor_site_known if read_introns_known \
                     else MatchEventSubtype.alt_acceptor_site_novel
             elif abs(isoform_junctions[isoform_cpos][1] - read_junctions[read_cpos][1]) < self.params.delta:
-                event = MatchEventSubtype.alt_donor_site_known if read_introns_known \
+                return MatchEventSubtype.alt_donor_site_known if read_introns_known \
                     else MatchEventSubtype.alt_donor_site_novel
             else:
-                event = MatchEventSubtype.intron_alternation_known if read_introns_known \
+                return MatchEventSubtype.intron_alternation_known if read_introns_known \
                     else MatchEventSubtype.intron_alternation_novel
-        return event
 
     def get_mono_exon_subtype(self, read_region, isoform_junctions):
         if len(isoform_junctions) == 0:
@@ -304,17 +299,150 @@ class JunctionComparator:
         return all(el == 1 for el in selected_junctions_profile.read_profile)
 
 
-def check_misalignment(isoform_junctions, isoform_cregion, total_intron_len_diff, read_introns_known, alignment=None):
-    if alignment is None:
-        return
+class MisalignmentChecker:
+    def __init__(self, reference, delta, max_intron_shift):
+        if reference is not None:
+            if not os.path.exists(reference + '.fai'):
+                logger.info('Building fasta index with samtools')
+                pysam.faidx(reference)
+            reference = pysam.FastaFile(reference)
+        self.reference = reference
+        self.delta = delta
+        self.max_intron_shift = max_intron_shift
+        self.scores = (2, -1, -1, -.2)
 
-    print('iso_junc ', isoform_junctions)
-    print('iso_creg ', isoform_cregion)
-    print('total_dif ', total_intron_len_diff)
-    print('read_intr ', read_introns_known)
-    ref_seq = Seq(alignment.get_reference_sequence())
-    seq = Seq(alignment.get_forward_sequence())
-    aligned = align.globalxx(seq, ref_seq)
-    print('Aligned ', aligned)
+    def intron_shift(self, read_junctions, isoform_junctions, read_cpos, isoform_cpos, alignment=None):
 
+        read_left, read_right = read_junctions[read_cpos]
+        iso_left, iso_right = isoform_junctions[isoform_cpos]
+
+        if abs(read_left - iso_left) + abs(read_right - iso_right) <= 2 * self.delta:
+            return MatchEventSubtype.intron_shift
+
+        if alignment is None or self.reference is None:
+            if abs(read_left - iso_left) <= self.max_intron_shift:
+                return MatchEventSubtype.intron_shift
+            else:
+                return MatchEventSubtype.intron_alternation_novel
+
+        read_region, ref_region = self.get_aligned_regions(read_left, read_right, iso_left, iso_right)
+        seq = self.get_read_sequence(alignment, read_region)
+        ref_seq = self.reference.fetch(alignment.reference_name, *ref_region)
+
+        if self.sequences_match(seq, ref_seq):
+            return MatchEventSubtype.intron_shift
+        return MatchEventSubtype.intron_alternation_novel
+
+    def sequences_match(self, seq, ref_seq):
+        score, size = 0, 1
+        for a in pairwise2.align.globalms(seq, ref_seq, *self.scores):
+            score, size = a[2], a[4]
+        if score > 0.7 * size:
+            return True
+        return False
+
+    @staticmethod
+    def get_aligned_regions(read_left, read_right, iso_left, iso_right):
+        if iso_left <= read_left:
+            return (iso_left, read_left), (iso_right, read_right)
+        return (read_right, iso_right), (read_left, iso_left)
+
+    @staticmethod
+    def get_read_sequence(alignment, ref_region):
+        ref_start, ref_end = ref_region
+        seq = ''
+        last_ref_pos = 0
+        for read_pos, ref_pos in alignment.get_aligned_pairs():
+            if ref_start <= last_ref_pos <= ref_end:
+                if read_pos is not None:
+                    seq += alignment.seq[read_pos]
+            last_ref_pos = ref_pos or last_ref_pos
+        return seq
+
+
+class ExonMisalignmentChecker:
+    def __init__(self, reference, win_size=25, match=2, mismatch=-0.2, gap_open=-15, gap_extend=-0.03):
+        if reference is not None:
+            if not os.path.exists(reference + '.fai'):
+                logger.info('Building fasta index with samtools')
+                pysam.faidx(reference)
+            reference = pysam.FastaFile(reference)
+        self.reference = reference
+        self.win_size = win_size
+        self.scores = (match, mismatch, gap_open, gap_extend)
+
+    def is_exon_misalignment(self, isoform_junctions, isoform_cregion, alignment=None):
+        if alignment is None or self.reference is None:
+            return
+
+        # target reference sequence
+        ref_start, ref_end = self.get_search_region(isoform_junctions, isoform_cregion)
+        ref_seq = self.reference.fetch(alignment.reference_name, ref_start, ref_end)
+
+        seq = self.get_read_region(alignment, ref_start, ref_end)
+
+        target_junctions = self.get_target_junctions(isoform_junctions, ref_start, ref_end)
+        return self.is_misalignment(seq, ref_seq, target_junctions)
+
+    def get_search_region(self, isoform_junctions, isoform_cregion):
+        ref_search_start = isoform_junctions[max(isoform_cregion[0] - 1, 0)][0]
+        ref_search_end = isoform_junctions[min(isoform_cregion[1] + 1, len(isoform_junctions) - 1)][1]
+        return ref_search_start, ref_search_end
+
+    def get_read_region(self, alignment, ref_start, ref_end):
+        # target read sequence
+        seq = ''
+        last_ref_pos = 0
+        for read_pos, ref_pos in alignment.get_aligned_pairs():
+            if ref_start <= last_ref_pos <= ref_end:
+                if read_pos is not None:
+                    seq += alignment.seq[read_pos]
+            last_ref_pos = ref_pos or last_ref_pos
+        return seq
+
+    def get_target_junctions(self, isoform_junctions, left, right):
+        return [(a - left, b - left) for a, b in isoform_junctions if left <= a < right]
+
+    def is_misalignment(self, seq, ref_seq, target_junctions):
+        junctions = None
+        for a in pairwise2.align.globalms(seq, ref_seq, *self.scores):
+            junctions = self.get_junctions(a)
+            if self.similar_junctions(junctions, target_junctions):
+                return True
+        # print(junctions)
+        # print('Target ', target_junctions)
+        # print('seq ', seq)
+        # print('ref ', ref_seq)
+        return False
+
+    def similar_junctions(self, junctions, target_junctions):
+        if len(junctions) != len(target_junctions):
+            return False
+        for i in range(len(junctions)):
+            aligned_start, aligned_end = junctions[i]
+            target_start, target_end = target_junctions[i]
+            if not (aligned_start - self.win_size <= target_start <= aligned_start + self.win_size) \
+                    or not (aligned_end - self.win_size <= target_end <= aligned_end + self.win_size):
+                return False
+        return True
+
+    def get_junctions(self, alignment):
+        seq, ref_seq = alignment[0], alignment[1]
+        i = 0
+        gap_size = 0
+        junctions = []
+        intron_start = None
+        for base, ref_base in zip(seq, ref_seq):
+            if base == '-':
+                gap_size += 1
+                if gap_size == 10:
+                    intron_start = i - gap_size + 1
+            elif gap_size > 10:
+                junctions.append((intron_start, i))
+                intron_start = None
+                gap_size = 0
+            else:
+                gap_size = 0
+            i += 1
+        return junctions
 
