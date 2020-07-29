@@ -14,6 +14,7 @@ def test_quantification(config):
     if config.sim:
         subprocess.call(config.simulate_command, stderr=config.log_file)
         print('Simualation finished')
+    print(config.isoquant_command)
     subprocess.run(config.isoquant_command, stderr=config.log_file)
     print('Isoquant_finished')
     assert True
