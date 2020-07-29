@@ -11,8 +11,9 @@ import numpy as np
 
 
 def test_quantification(config):
-    subprocess.call(config.simulate_command, stderr=config.log_file)
-    print('Simualation finished')
+    if config.sim:
+        subprocess.call(config.simulate_command, stderr=config.log_file)
+        print('Simualation finished')
     subprocess.run(config.isoquant_command, stderr=config.log_file)
     print('Isoquant_finished')
     assert True
@@ -20,6 +21,9 @@ def test_quantification(config):
 
 class QuantificationConfig:
     def __init__(self, args):
+        # stages
+        self.sim = args.sim
+
         # nanosim params
         self.ref_genome_fa = args.ref_g or '../mouse_cdna_chr18/mus_musculus.dna.chr18.fa'
         self.ref_transcriptome_fa = args.ref_t or '../mouse_cdna_chr18/mus_musculus.GRCm38.cdna.chr18.fa'
@@ -74,6 +78,7 @@ class QuantificationConfig:
 
 def parse_args():
     parser_t = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser_t.add_argument('--sim', help='Run simulator', action='store_ture')
     parser_t.add_argument('-rt', '--ref_t', help='Input reference transcriptome', required=True)
     parser_t.add_argument('-rg', '--ref_g', help='Input reference genome, required if intron retention simulatin is on',
                           default='')
