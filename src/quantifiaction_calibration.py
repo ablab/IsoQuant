@@ -1,12 +1,14 @@
+# simulator.py transcriptome -rt Mus_musculus.GRCm38.cdna.all.fa -rg Mus_musculus.GRCm38.75.dna.fa -c mouse_cdna/training -e mouse_cdna_chr18/expression_abundance_chr18.tsv -n 100
+# python3 IsoQuant/isoquant.py --output isoqunat_errors --bam isoqunat_errors/00_Mouse.ONT.Spatial.NanoSim.EvenCoverage.chr19/00_Mouse.ONT.Spatial.NanoSim.EvenCoverage.chr19.bam --genedb IQ_data/chr19/chr19.gtf --data_type nanopore --complete_genedb --reference IQ_data/chr19/Mouse.chr19.fasta
+
+# Usage: python3 src/quantifiaction_calibration.py -rt ../mouse_rna/Mus_musculus.GRCm38.cdna.all.fa -rg ../mouse_rna/Mus_musculus.GRCm38.75.dna.fa -c ../mouse_rna/mouse_cdna/training -e ../mouse_rna/mouse_cdna_chr18/expression_abundance_chr18.tsv -n 100
+
 import subprocess
 import argparse
 
 import pandas as pd
 import numpy as np
 
-
-# simulator.py transcriptome -rt Mus_musculus.GRCm38.cdna.all.fa -rg Mus_musculus.GRCm38.75.dna.fa -c mouse_cdna/training -e mouse_cdna_chr18/expression_abundance_chr18.tsv -n 100
-# python3 IsoQuant/isoquant.py --output isoqunat_errors --bam isoqunat_errors/00_Mouse.ONT.Spatial.NanoSim.EvenCoverage.chr19/00_Mouse.ONT.Spatial.NanoSim.EvenCoverage.chr19.bam --genedb IQ_data/chr19/chr19.gtf --data_type nanopore --complete_genedb --reference IQ_data/chr19/Mouse.chr19.fasta
 
 def test_quantification(config):
     subprocess.call(config.simulate_command, stderr=config.log_file)
@@ -56,7 +58,7 @@ class QuantificationConfig:
                f'--genedb {self.training + "_added_intron_final.gff3"} ' \
                f'--data_type nanopore ' \
                f'--complete_genedb ' \
-               f'--reference {self.ref_genome_fa}'
+               f'--reference {self.ref_genome_fa}'.split()
 
     def update_abundance(self):
         df = pd.read_csv(self.expr_abundance, sep='\t')
