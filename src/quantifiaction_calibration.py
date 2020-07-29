@@ -78,7 +78,7 @@ class QuantificationConfig:
 
 def parse_args():
     parser_t = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser_t.add_argument('--sim', help='Run simulator', action='store_ture')
+    parser_t.add_argument('--sim', help='Run simulator', action='store_true')
     parser_t.add_argument('-rt', '--ref_t', help='Input reference transcriptome', required=True)
     parser_t.add_argument('-rg', '--ref_g', help='Input reference genome, required if intron retention simulatin is on',
                           default='')
