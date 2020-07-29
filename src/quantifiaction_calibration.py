@@ -59,7 +59,7 @@ class QuantificationConfig:
     def isoquant_command(self):
         return f'python3 isoquant.py ' \
                f'--output {self.iso_output} ' \
-               f'--fastq  {self.simulated_aligned_reads}' \
+               f'--fastq  {self.simulated_aligned_reads} ' \
                f'--genedb {self.training + "_added_intron_final.gff3"} ' \
                f'--data_type nanopore ' \
                f'--complete_genedb ' \
