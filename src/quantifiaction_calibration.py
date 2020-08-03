@@ -14,7 +14,6 @@ def test_quantification(config):
     if config.sim:
         subprocess.call(config.simulate_command, stderr=config.log_file)
         print('Simualation finished')
-    print(config.isoquant_command)
     subprocess.run(config.isoquant_command, stderr=config.log_file)
     print('Isoquant_finished')
     assert True
@@ -62,8 +61,8 @@ class QuantificationConfig:
                f'--fastq  {self.simulated_aligned_reads} ' \
                f'--genedb {self.training + "_added_intron_final.gff3"} ' \
                f'--data_type nanopore ' \
-               f'--complete_genedb ' \
-               f'--reference {self.ref_genome_fa}'.split()
+               f'--reference {self.ref_genome_fa} ' \
+               f'-t {self.num_threads}'.split()
 
     def update_abundance(self):
         df = pd.read_csv(self.expr_abundance, sep='\t')
@@ -72,7 +71,8 @@ class QuantificationConfig:
         df['tpm'] = df['est_counts'] * 1000000 / df['est_counts'].sum()
         return df
 
-    def compare_quantification(self, old_abundance, new_abundance):
+    @staticmethod
+    def compare_quantification(old_abundance, new_abundance):
         # TODO: more advanced check
         return old_abundance == new_abundance
 
