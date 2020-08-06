@@ -5,14 +5,17 @@
 
 import subprocess
 import argparse
+import pathlib
+
+from collections import Counter
 
 import pandas as pd
 import numpy as np
 
 
-def test_quantification(config):
+def run_quantification(config):
     if config.sim:
-        subprocess.call(config.simulate_command, stderr=config.log_file)
+        subprocess.call(config.isoseqsim_command, stderr=config.log_file)
         print('Simualation finished')
     subprocess.run(config.isoquant_command, stderr=config.log_file)
     print('Isoquant_finished')
@@ -23,28 +26,58 @@ class QuantificationConfig:
     def __init__(self, args):
         # stages
         self.sim = args.sim
-
-        # nanosim params
-        self.ref_genome_fa = args.ref_g or '../mouse_cdna_chr18/mus_musculus.dna.chr18.fa'
-        self.ref_transcriptome_fa = args.ref_t or '../mouse_cdna_chr18/mus_musculus.GRCm38.cdna.chr18.fa'
-        self.expr_abundance = args.exp or '../mouse_cdna_chr18/expression_abundance_chr18.tsv'
-        self.training = args.model_prefix or '../mouse_cdna_chr18/training'
-        self.n = args.number
         self.num_threads = args.num_threads
+        self.mode = args.mode
+        self.data_type = 'nanopore' if self.mode == 'nanosim' else 'pacbio_raw'
+
+        # output files
+        self.sim_output = args.output + '/sim_res'
+        self.iso_output = args.output + '/iso_res'
+
+        if self.mode == 'nanosim':
+            # nanosim params
+            self._init_nanosim_args(args)
+        else:
+            # isoseqsim params
+            self._init_isoseqsim_args(args)
+
+        # isoquant params
+        self.isoquant_path = str(pathlib.Path(__file__).parents[1].absolute() / 'isoquant.py')
+        self.trainscript_counts = f'{self.iso_output}/00_simulated_reads_normal/00_simulated_reads_normal.transcript_counts.tsv'
 
         # log params
         self.log_fpath = 'log_quant.txt'
         self.log_file = open(self.log_fpath, "a")
 
-        # output files
-        self.sim_output = 'sim_res/' + args.output
-        self.iso_output = 'iso_res'
-        self.simulated_aligned_reads = self.sim_output + '_aligned_reads.fasta'
+    def _init_nanosim_args(self, args):
+        self.ref_genome_fa = args.ref_g or '../mouse_cdna_chr18/mus_musculus.dna.chr18.fa'
+        self.ref_transcriptome_fa = args.ref_t or '../mouse_cdna_chr18/mus_musculus.GRCm38.cdna.chr18.fa'
+        self.expr_abundance = args.exp or '../mouse_cdna_chr18/expression_abundance_chr18.tsv'
+        self.training = args.model_prefix or '../mouse_cdna_chr18/training'
+        self.n = args.number
+        self.gff = self.training + "_added_intron_final.gff3"
+        self.simulated_reads = self.sim_output + '_aligned_reads.fasta'
         self.simulated_error_profile = self.sim_output + '_error_profile.fasta'
         self.simulated_unaligned_reads = self.sim_output + '_unaligned_reads.fasta'
 
+    def _init_isoseqsim_args(self, args):
+        self.ref_genome_fa = args.ref_g
+        self.gff = args.gff
+        self.simulated_reads = self.sim_output + '/simulated_reads_normal.fa'
+
     @property
-    def simulate_command(self):
+    def isoseqsim_command(self):
+        return f'isoseqsim -g {self.ref_genome_fa} '\
+               f'-a {self.gff} '\
+               '--c5 utilities/5_end_completeness.PacBio-P6-C4.tab ' \
+               '--c3 utilities/3_end_completeness.PacBio-P6-C4.tab ' \
+               f'-o {self.simulated_reads} ' \
+               f'-t {self.sim_output}/simulated_transcipt_normal.gpd ' \
+               f'--tempdir {self.sim_output}/temp_normal'.split()
+
+    @property
+    def nanosim_command(self):
+        # f'--fastq ' ?
         return f'simulator.py transcriptome ' \
                f'-rt {self.ref_transcriptome_fa} ' \
                f'-rg {self.ref_genome_fa} ' \
@@ -56,11 +89,12 @@ class QuantificationConfig:
 
     @property
     def isoquant_command(self):
-        return f'python3 isoquant.py ' \
+        # f'--complete_genedb ' \
+        return f'python3 {self.isoquant_path} ' \
                f'--output {self.iso_output} ' \
-               f'--fastq  {self.simulated_aligned_reads} ' \
-               f'--genedb {self.training + "_added_intron_final.gff3"} ' \
-               f'--data_type nanopore ' \
+               f'--fastq  {self.simulated_reads} ' \
+               f'--genedb {self.gff} ' \
+               f'--data_type {self.data_type} ' \
                f'--reference {self.ref_genome_fa} ' \
                f'-t {self.num_threads}'.split()
 
@@ -78,58 +112,76 @@ class QuantificationConfig:
 
 
 def parse_args():
-    parser_t = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser_t.add_argument('--sim', help='Run simulator', action='store_true')
-    parser_t.add_argument('-rt', '--ref_t', help='Input reference transcriptome', required=True)
-    parser_t.add_argument('-rg', '--ref_g', help='Input reference genome, required if intron retention simulatin is on',
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--sim', help='Run simulation stage', action='store_true')
+    parser.add_argument('-o', '--output', help='Output location and prefix for simulated reads (Default = simulated)',
+                        default="simulated")
+    parser.add_argument('-rg', '--ref_g', help='Input reference genome', required=True)
+    parser.add_argument('-t', '--num_threads', help='Number of threads for simulation (Default = 1)', type=int,
+                        default=1)
+
+    subparsers = parser.add_subparsers(help="You may run the quantification calibration in nanosim or isoseqsim mode.",
+                                       dest='mode')
+
+    parser_n = subparsers.add_parser('nanosim', help="Run nanosim for simulation stage")
+    parser_n.add_argument('-rt', '--ref_t', help='Input reference transcriptome', default=None)
+    parser_n.add_argument('-rg', '--ref_g', help='Input reference genome, required if intron retention simulatin is on',
                           default='')
-    parser_t.add_argument('-e', '--exp', help='Expression profile in the specified format as described in README',
+    parser_n.add_argument('-e', '--exp', help='Expression profile in the specified format as described in README',
                           required=True)
-    parser_t.add_argument('-c', '--model_prefix', help='Location and prefix of error profiles generated from '
+    parser_n.add_argument('-c', '--model_prefix', help='Location and prefix of error profiles generated from '
                                                        'characterization step (Default = training)',
                           default="training")
-    parser_t.add_argument('-o', '--output', help='Output location and prefix for simulated reads (Default = simulated)',
-                          default="simulated")
-    parser_t.add_argument('-n', '--number', help='Number of reads to be simulated (Default = 20000)', type=int,
-                          default=20000)
-    parser_t.add_argument('-t', '--num_threads', help='Number of threads for simulation (Default = 1)', type=int,
-                          default=1)
+    parser_n.add_argument('-n', '--number', help='Number of reads to be simulated (Default = 1000)', type=int,
+                          default=1000)
 
-    # parser_t.add_argument('-max', '--max_len', help='The maximum length for simulated reads (Default = Infinity)',
-    #                       type=int, default=float("inf"))
-    # parser_t.add_argument('-min', '--min_len', help='The minimum length for simulated reads (Default = 50)',
-    #                       type=int, default=50)
-    # parser_t.add_argument('--seed', help='Manually seeds the pseudo-random number generator', type=int, default=None)
-    # parser_t.add_argument('-k', '--KmerBias', help='Minimum homopolymer length to simulate homopolymer contraction and '
-    #                                                'expansion events in',
-    #                       type=int, default=None)
-    # parser_t.add_argument('-b', '--basecaller', help='Simulate homopolymers and/or base qualities with respect to '
-    #                                                  'chosen basecaller: albacore or guppy',
-    #                       choices=["albacore", "guppy"], default=None)
-    # parser_t.add_argument('-r', '--read_type', help='Simulate homopolymers and/or base qualities with respect to '
-    #                                                 'chosen read type: dRNA, cDNA_1D or cDNA_1D2',
-    #                       choices=["dRNA", "cDNA_1D", "cDNA_1D2"], default=None)
-    # parser_t.add_argument('-s', '--strandness', help='Proportion of sense sequences. Overrides the value '
-    #                                                  'profiled in characterization stage. Should be between 0 and 1',
-    #                       type=float, default=None)
-    # parser_t.add_argument('--no_model_ir', help='Ignore simulating intron retention events', action='store_false',
-    #                       default=True)
-    # parser_t.add_argument('--perfect', help='Ignore profiles and simulate perfect reads', action='store_true',
-    #                       default=False)
-    # parser_t.add_argument('--polya', help='Simulate polyA tails for given list of transcripts', default=None)
-    # parser_t.add_argument('--fastq', help='Output fastq files instead of fasta files', action='store_true',
-    #                       default=False)
-    # parser_t.add_argument('--uracil', help='Converts the thymine (T) bases to uracil (U) in the output fasta format',
-    #                       action='store_true', default=False)
+    parser_i = subparsers.add_parser('isoseqsim', help="Run isoseq for simulation stage")
+    parser_i.add_argument('-a', '--gff', help='Input gtf/gff')
 
-    return parser_t.parse_args()
+    return parser.parse_args()
+
+
+def print_args(config):
+    print(config.isoseqsim_command)
+    print(config.isoquant_command)
+    print(config.trainscript_counts)
+    print(config.simulated_reads)
 
 
 def main():
     args = parse_args()
+    if args.mode == 'nanosim':
+        print('Not implemented yet.')
+        return
     config = QuantificationConfig(args)
-    test_quantification(config)
+    print_args(config)
+    run_quantification(config)
+
+    compare_quant_isoseq(config.trainscript_counts, config.simulated_reads)
     print('----well done----')
+
+
+def get_simulated_isoforms(sim_reads_fpath):
+    with open(sim_reads_fpath, 'r') as f_in:
+        for line in f_in.readlines():
+            if line.startswith('>'):
+                _, isoform = line.split()
+                yield isoform
+
+
+def compare_quant_isoseq(isoquant_res_fpath, sim_reads_fpath):
+    c = Counter(get_simulated_isoforms(sim_reads_fpath))
+    df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
+    full_matches = 0
+    for isoform, row in df.iterrows():
+        n_simulated = c[isoform]
+        n_inferred = row['count']
+        if n_simulated == n_inferred:
+            full_matches += 1
+        else:
+            print(isoform, n_simulated, n_inferred)
+    print('Full match fraction:', full_matches / len(df.index.values))
+    print('Not detected: ', len(c) - len(df.index.values), len(c))
 
 
 if __name__ == '__main__':
