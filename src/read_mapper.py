@@ -221,8 +221,10 @@ def align_fasta(aligner, fastq_paths, args, label, out_dir):
         if subprocess.call(command.split(), stdout=log_file, stderr=log_file) != 0:
             logger.critical("STAR finished with errors! See " + log_fpath)
             exit(-1)
-        subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path,
-                         alignment_prefix + 'Aligned.out.bam'], stderr=log_file)
+        if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path,
+                            alignment_prefix + 'Aligned.out.bam'], stderr=log_file) != 0:
+            logger.critical("Samtools finished with errors! See " + log_fpath)
+            exit(-1)
 
     elif aligner == "minimap2":
         minimap2_path = get_aligner('minimap2')
@@ -235,8 +237,9 @@ def align_fasta(aligner, fastq_paths, args, label, out_dir):
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
             logger.critical("Minimap2 finished with errors! See " + log_fpath)
             exit(-1)
-        subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path],
-                        stderr=log_file)
+        if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path], stderr=log_file) != 0:
+            logger.critical("Samtools finished with errors! See " + log_fpath)
+            exit(-1)
     else:
         logger.critical("Aligner " + aligner + " is not supported")
         exit(-1)

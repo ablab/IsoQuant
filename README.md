@@ -82,6 +82,7 @@ You will also need
 * [pandas](https://pandas.pydata.org/)
 * [numpy](https://numpy.org/)
 * [minimap2](https://github.com/lh3/minimap2) 
+* [samtools](http://www.htslib.org/download/)) 
 * [STAR](https://github.com/alexdobin/STAR) (optional)
 
 <a name="sec2.1"></a>

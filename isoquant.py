@@ -150,7 +150,7 @@ def parse_args(args=None, namespace=None):
 class TestMode(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         source_dir = os.path.dirname(os.path.realpath(__file__))
-        options = ['--output', 'isoquant_test',
+        options = ['--output', 'isoquant_test', '--threads', '1',
                    '--fastq', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.ONT.simulated.fastq'),
                    '--reference', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.reference.fasta'),
                    '--genedb', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.genedb.gtf'),
