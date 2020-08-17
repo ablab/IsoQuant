@@ -146,9 +146,9 @@ def parse_args():
     parser_i = subparsers.add_parser('isoseqsim', help="Run isoseq for simulation stage")
     parser_i.add_argument('-a', '--gff', help='Input gtf/gff')
     parser_i.add_argument('--isoseq-path', '--isp', help='Path to IseSeqSim', default='/home/asmetanin/tools/IsoSeqSim/')
-    parser_i.add_argument('--es', type=str, default='0.017', help="Error rate for substitution.")
-    parser_i.add_argument('--ei', type=str, default='0.011', help="Error rate for insertion.")
-    parser_i.add_argument('--ed', type=str, default='0.022', help="Error rate for deletion.")
+    parser_i.add_argument('--es', type=str, default='0.0043', help="Error rate for substitution.")
+    parser_i.add_argument('--ei', type=str, default='0.0084', help="Error rate for insertion.")
+    parser_i.add_argument('--ed', type=str, default='0.0027', help="Error rate for deletion.")
     parser_i.add_argument('--nbn', type=str, default='100',
                           help="Average read count per transcript to simulate (i.e., the parameter 'n' of the Negative Binomial distribution)")
 
