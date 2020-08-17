@@ -2,6 +2,7 @@
 # python3 IsoQuant/isoquant.py --output isoqunat_errors --bam isoqunat_errors/00_Mouse.ONT.Spatial.NanoSim.EvenCoverage.chr19/00_Mouse.ONT.Spatial.NanoSim.EvenCoverage.chr19.bam --genedb IQ_data/chr19/chr19.gtf --data_type nanopore --complete_genedb --reference IQ_data/chr19/Mouse.chr19.fasta
 
 # Usage: python3 src/quantifiaction_calibration.py -rt ../mouse_rna/Mus_musculus.GRCm38.cdna.all.fa -rg ../mouse_rna/Mus_musculus.GRCm38.75.dna.fa -c ../mouse_rna/mouse_cdna/training -e ../mouse_rna/mouse_cdna_chr18/expression_abundance_chr18.tsv -n 100
+# isoseqsim usage: python3 IsoQuant/src/quantifiaction_calibration.py -o examples --ref_g IQ_data/chr19/Mouse.chr19.fasta isoseqsim --gff IQ_data/chr19/chr19.gtf
 
 import subprocess
 import argparse
@@ -62,15 +63,22 @@ class QuantificationConfig:
 
     def _init_isoseqsim_args(self, args):
         self.ref_genome_fa = args.ref_g
+        self.isoseq_path = pathlib.Path(args.isoseq_path) / 'bin' / 'isoseqsim'
+        self.isoseq_utilities = pathlib.Path(args.isoseq_path) / 'utilities'
+        self.es = args.es
+        self.ei = args.ei
+        self.ed = args.ed
+        self.nbn = args.nbn
         self.gff = args.gff
         self.simulated_reads = self.sim_output + '/simulated_reads_normal.fa'
 
     @property
     def isoseqsim_command(self):
-        return f'isoseqsim -g {self.ref_genome_fa} '\
+        return f'{self.isoseq_path} -g {self.ref_genome_fa} '\
                f'-a {self.gff} '\
-               '--c5 utilities/5_end_completeness.PacBio-P6-C4.tab ' \
-               '--c3 utilities/3_end_completeness.PacBio-P6-C4.tab ' \
+               f'--es {self.es} --ei {self.ei} --ed {self.ed} --nbn {self.nbn} ' \
+               f'--c5 {self.isoseq_utilities / "5_end_completeness.PacBio-P6-C4.tab"} ' \
+               f'--c3 {self.isoseq_utilities / "3_end_completeness.PacBio-P6-C4.tab"} ' \
                f'-o {self.simulated_reads} ' \
                f'-t {self.sim_output}/simulated_transcipt_normal.gpd ' \
                f'--tempdir {self.sim_output}/temp_normal'.split()
@@ -137,6 +145,12 @@ def parse_args():
 
     parser_i = subparsers.add_parser('isoseqsim', help="Run isoseq for simulation stage")
     parser_i.add_argument('-a', '--gff', help='Input gtf/gff')
+    parser_i.add_argument('--isoseq-path', '--isp', help='Path to IseSeqSim', default='/home/asmetanin/tools/IsoSeqSim/')
+    parser_i.add_argument('--es', type=str, default='0.017', help="Error rate for substitution.")
+    parser_i.add_argument('--ei', type=str, default='0.011', help="Error rate for insertion.")
+    parser_i.add_argument('--ed', type=str, default='0.022', help="Error rate for deletion.")
+    parser_i.add_argument('--nbn', type=str, default='100',
+                          help="Average read count per transcript to simulate (i.e., the parameter 'n' of the Negative Binomial distribution)")
 
     return parser.parse_args()
 
@@ -173,15 +187,42 @@ def compare_quant_isoseq(isoquant_res_fpath, sim_reads_fpath):
     c = Counter(get_simulated_isoforms(sim_reads_fpath))
     df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
     full_matches = 0
+    close_matches = 0
+    detected_isoforms = set()
     for isoform, row in df.iterrows():
+        detected_isoforms.add(isoform)
         n_simulated = c[isoform]
         n_inferred = row['count']
         if n_simulated == n_inferred:
             full_matches += 1
+        if n_simulated * 0.9 <= n_inferred <= n_simulated * 1.1:
+            close_matches += 1
         else:
             print(isoform, n_simulated, n_inferred)
-    print('Full match fraction:', full_matches / len(df.index.values))
-    print('Not detected: ', len(c) - len(df.index.values), len(c))
+
+
+
+    print('Corrcoef: ', np.corrcoef(a, b))
+    print('Full match fraction:', full_matches / len(c))
+    print('Close match fraction:', close_matches / len(c))
+    print('Not detected: ', len(c) - len(df.index.values), len(c) - len(df.index.values) / len(c), len(c))
+
+
+def compare_quant(isoquant_res_fpath, sim_reads_fpath):
+    c = Counter(get_simulated_isoforms(sim_reads_fpath))
+    df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
+    df['sim'] = 0
+    full_matches = 0
+    close_matches = 0
+    for isoform, count in c.items():
+        if isoform in df.index:
+            df.loc[isoform, 'sim'] = count
+            df = df.append({'count': 0, 'sim': count})
+
+    print('Corrcoef: ', np.corrcoef(df['count'], df['sim']))
+    print('Full match fraction:', full_matches / len(c))
+    print('Close match fraction:', close_matches / len(c))
+    print('Not detected: ', len(c) - len(df.index.values), len(c) - len(df.index.values) / len(c), len(c))
 
 
 if __name__ == '__main__':
