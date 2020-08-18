@@ -171,7 +171,7 @@ def main():
     print_args(config)
     run_quantification(config)
 
-    compare_quant(config.trainscript_counts, config.simulated_reads)
+    compare_quant(config.trainscript_counts, config.simulated_reads, config.iso_output)
     print('----well done----')
 
 
@@ -208,7 +208,7 @@ def compare_quant_isoseq(isoquant_res_fpath, sim_reads_fpath):
     print('Not detected: ', len(c) - len(df.index.values), len(c) - len(df.index.values) / len(c), len(c))
 
 
-def compare_quant(isoquant_res_fpath, sim_reads_fpath):
+def compare_quant(isoquant_res_fpath, sim_reads_fpath, iso_output):
     c = Counter(get_simulated_isoforms(sim_reads_fpath))
     df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
     df = df.drop('group_id', axis=1)
@@ -221,6 +221,8 @@ def compare_quant(isoquant_res_fpath, sim_reads_fpath):
         else:
             df.loc[isoform] = [0, count]
             df = df.append({'count': 0, 'sim': count})
+
+    df.to_csv(iso_output + 'final_counts.tsv')
 
     print('Corrcoef: ', np.corrcoef(df['count'], df['sim']))
     print('Full match fraction:', full_matches / len(c))
