@@ -211,12 +211,15 @@ def compare_quant_isoseq(isoquant_res_fpath, sim_reads_fpath):
 def compare_quant(isoquant_res_fpath, sim_reads_fpath):
     c = Counter(get_simulated_isoforms(sim_reads_fpath))
     df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
+    df = df.drop('group_id', axis=1)
     df['sim'] = 0
     full_matches = 0
     close_matches = 0
     for isoform, count in c.items():
         if isoform in df.index:
             df.loc[isoform, 'sim'] = count
+        else:
+            df.loc[isoform] = [0, count]
             df = df.append({'count': 0, 'sim': count})
 
     print('Corrcoef: ', np.corrcoef(df['count'], df['sim']))
