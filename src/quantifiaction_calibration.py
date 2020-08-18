@@ -212,21 +212,24 @@ def compare_quant(isoquant_res_fpath, sim_reads_fpath, iso_output):
     c = Counter(get_simulated_isoforms(sim_reads_fpath))
     df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
     df = df.drop('group_id', axis=1)
+    df = df.drop(['__ambiguous', '__no_feature', '__not_aligned'])
     df['sim'] = 0
-    full_matches = 0
-    close_matches = 0
     for isoform, count in c.items():
         if isoform in df.index:
             df.loc[isoform, 'sim'] = count
         else:
             df.loc[isoform] = [0, count]
 
-    df.to_csv(iso_output + 'final_counts.tsv')
+    df.to_csv(iso_output + 'final_counts.tsv', sep='\t')
 
-    print('Corrcoef: ', np.corrcoef(df['count'], df['sim']))
-    print('Full match fraction:', full_matches / len(c))
-    print('Close match fraction:', close_matches / len(c))
-    print('Not detected: ', len(c) - len(df.index.values), len(c) - len(df.index.values) / len(c), len(c))
+    print('Corrcoef: ', np.corrcoef([df['count'], df['sim']])[1, 0])
+    full_matches = (df['count'] == df['sim']).astype(int).sum()
+    close_matches = ((df['count'] < df['sim'] * 1.2) & (df['sim'] * 0.9 < df['count'])).astype(int).sum()
+    n_isoforms = len(df['count'])
+    print('Full matches:', full_matches, 'Fraction:', full_matches / n_isoforms)
+    print('Close matches:', close_matches - full_matches, (close_matches - full_matches) / n_isoforms)
+    not_detected = (df['count'] == 0).astype(int).sum()
+    print('Not detected:', not_detected, not_detected / n_isoforms)
 
 
 if __name__ == '__main__':
