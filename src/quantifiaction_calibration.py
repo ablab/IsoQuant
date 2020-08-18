@@ -44,6 +44,10 @@ class QuantificationConfig:
             # isoseqsim params
             self._init_isoseqsim_args(args)
 
+        self.simulated = args.simulated
+        if self.simulated:
+            self.simulated_reads = self.simulated
+
         # isoquant params
         self.isoquant_path = str(pathlib.Path(__file__).parents[1].absolute() / 'isoquant.py')
         self.transcript_counts = f'{self.iso_output}/00_simulated_reads_normal/00_simulated_reads_normal.transcript_counts.tsv'
@@ -125,7 +129,8 @@ class QuantificationConfig:
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--sim', help='Run simulation stage', action='store_true')
-    parser.add_argument('--quant', help='Run simulation stage', action='store_true')
+    parser.add_argument('--quant', help='Run isoquant stage', action='store_true')
+    parser.add_argument('--simulated', help='Use simulated reads', action='store', default=None)
     parser.add_argument('-o', '--output', help='Output location and prefix for simulated reads (Default = simulated)',
                         default="simulated")
     parser.add_argument('-rg', '--ref_g', help='Input reference genome', required=True)
