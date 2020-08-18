@@ -149,7 +149,7 @@ def parse_args():
     parser_i.add_argument('--es', type=str, default='0.0043', help="Error rate for substitution.")
     parser_i.add_argument('--ei', type=str, default='0.0084', help="Error rate for insertion.")
     parser_i.add_argument('--ed', type=str, default='0.0027', help="Error rate for deletion.")
-    parser_i.add_argument('--nbn', type=str, default='100',
+    parser_i.add_argument('--nbn', type=str, default='10',
                           help="Average read count per transcript to simulate (i.e., the parameter 'n' of the Negative Binomial distribution)")
 
     return parser.parse_args()
@@ -171,7 +171,7 @@ def main():
     print_args(config)
     run_quantification(config)
 
-    compare_quant_isoseq(config.trainscript_counts, config.simulated_reads)
+    compare_quant(config.trainscript_counts, config.simulated_reads)
     print('----well done----')
 
 
@@ -202,7 +202,7 @@ def compare_quant_isoseq(isoquant_res_fpath, sim_reads_fpath):
 
 
 
-    print('Corrcoef: ', np.corrcoef(a, b))
+    # print('Corrcoef: ', np.corrcoef(a, b))
     print('Full match fraction:', full_matches / len(c))
     print('Close match fraction:', close_matches / len(c))
     print('Not detected: ', len(c) - len(df.index.values), len(c) - len(df.index.values) / len(c), len(c))
