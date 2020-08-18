@@ -18,8 +18,9 @@ def run_quantification(config):
     if config.sim:
         subprocess.call(config.isoseqsim_command, stderr=config.log_file)
         print('Simualation finished')
-    subprocess.run(config.isoquant_command, stderr=config.log_file)
-    print('Isoquant_finished')
+    if config.quant:
+        subprocess.run(config.isoquant_command, stderr=config.log_file)
+        print('Isoquant_finished')
     assert True
 
 
@@ -27,6 +28,7 @@ class QuantificationConfig:
     def __init__(self, args):
         # stages
         self.sim = args.sim
+        self.quant = args.quant
         self.num_threads = args.num_threads
         self.mode = args.mode
         self.data_type = 'nanopore' if self.mode == 'nanosim' else 'pacbio_raw'
@@ -44,7 +46,8 @@ class QuantificationConfig:
 
         # isoquant params
         self.isoquant_path = str(pathlib.Path(__file__).parents[1].absolute() / 'isoquant.py')
-        self.trainscript_counts = f'{self.iso_output}/00_simulated_reads_normal/00_simulated_reads_normal.transcript_counts.tsv'
+        self.transcript_counts = f'{self.iso_output}/00_simulated_reads_normal/00_simulated_reads_normal.transcript_counts.tsv'
+        self.transcript_model_counts = f'{self.iso_output}/00_simulated_reads_normal/00_simulated_reads_normal.transcript_models_counts.tsv'
 
         # log params
         self.log_fpath = 'log_quant.txt'
@@ -122,6 +125,7 @@ class QuantificationConfig:
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--sim', help='Run simulation stage', action='store_true')
+    parser.add_argument('--quant', help='Run simulation stage', action='store_true')
     parser.add_argument('-o', '--output', help='Output location and prefix for simulated reads (Default = simulated)',
                         default="simulated")
     parser.add_argument('-rg', '--ref_g', help='Input reference genome', required=True)
@@ -158,7 +162,7 @@ def parse_args():
 def print_args(config):
     print(config.isoseqsim_command)
     print(config.isoquant_command)
-    print(config.trainscript_counts)
+    print(config.transcript_counts)
     print(config.simulated_reads)
 
 
@@ -171,7 +175,8 @@ def main():
     print_args(config)
     run_quantification(config)
 
-    compare_quant(config.trainscript_counts, config.simulated_reads, config.iso_output)
+    counts_path = config.transcript_counts if pathlib.Path(config.transcript_counts).exists() else config.transcript_model_counts
+    compare_quant(counts_path, config.simulated_reads, config.iso_output)
     print('----well done----')
 
 
