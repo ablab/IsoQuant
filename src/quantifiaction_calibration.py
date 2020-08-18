@@ -220,7 +220,6 @@ def compare_quant(isoquant_res_fpath, sim_reads_fpath, iso_output):
             df.loc[isoform, 'sim'] = count
         else:
             df.loc[isoform] = [0, count]
-            df = df.append({'count': 0, 'sim': count})
 
     df.to_csv(iso_output + 'final_counts.tsv')
 
