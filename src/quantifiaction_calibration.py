@@ -168,7 +168,10 @@ def parse_args():
 
 
 def print_args(config):
-    print(config.isoseqsim_command)
+    if config.mode =='nanosim':
+        print(config.nanosim_command)
+    else:
+        print(config.isoseqsim_command)
     print(config.isoquant_command)
     print(config.transcript_counts)
     print(config.simulated_reads)
