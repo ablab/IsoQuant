@@ -176,15 +176,15 @@ def print_args(config):
 
 def main():
     args = parse_args()
-    if args.mode == 'nanosim':
-        print('Not implemented yet.')
-        return
     config = QuantificationConfig(args)
     print_args(config)
     run_quantification(config)
 
     counts_path = config.transcript_counts if pathlib.Path(config.transcript_counts).exists() else config.transcript_model_counts
-    compare_quant(counts_path, config.simulated_reads, config.iso_output)
+    if config.mode == 'nanosim':
+        compare_quant_nano(counts_path, config.expr_abundance, config.iso_output)
+    else:
+        compare_quant(counts_path, config.simulated_reads, config.iso_output)
     print('----well done----')
 
 
@@ -220,6 +220,10 @@ def compare_quant_nano(nanosim_res_fpath, expr_abundance, iso_output):
     df['sim'] = 0
 
     res_df = pd.concat([df['count'], expr_df['est_counts']], axis=1)
+    res_df['sim'] = res_df['est_counts'] / res_df['est_counts'].sum()
+    res_df['count'] = res_df['count'] / res_df['count'].sum()
+    res_df = df.drop('est_counts', axis=1)
+
     res_df.to_csv(iso_output + '_final_counts.tsv', sep='\t')
     count_stats(res_df)
 
