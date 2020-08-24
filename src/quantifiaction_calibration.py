@@ -16,7 +16,10 @@ import numpy as np
 
 def run_quantification(config):
     if config.sim:
-        subprocess.call(config.isoseqsim_command, stderr=config.log_file)
+        if config.mode == 'nanosim':
+            subprocess.call(config.nanosim_command, stderr=config.log_file)
+        else:
+            subprocess.call(config.isoseqsim_command, stderr=config.log_file)
         print('Simualation finished')
     if config.quant:
         subprocess.run(config.isoquant_command, stderr=config.log_file)
@@ -142,8 +145,8 @@ def parse_args():
 
     parser_n = subparsers.add_parser('nanosim', help="Run nanosim for simulation stage")
     parser_n.add_argument('-rt', '--ref_t', help='Input reference transcriptome', default=None)
-    parser_n.add_argument('-rg', '--ref_g', help='Input reference genome, required if intron retention simulatin is on',
-                          default='')
+    # parser_n.add_argument('-rg', '--ref_g', help='Input reference genome, required if intron retention simulatin is on',
+    #                       default='')
     parser_n.add_argument('-e', '--exp', help='Expression profile in the specified format as described in README',
                           required=True)
     parser_n.add_argument('-c', '--model_prefix', help='Location and prefix of error profiles generated from '
@@ -189,33 +192,35 @@ def get_simulated_isoforms(sim_reads_fpath):
     with open(sim_reads_fpath, 'r') as f_in:
         for line in f_in.readlines():
             if line.startswith('>'):
-                _, isoform = line.split()
+                isoform, _ = line.split('_')
                 yield isoform
 
 
-def compare_quant_isoseq(isoquant_res_fpath, sim_reads_fpath):
-    c = Counter(get_simulated_isoforms(sim_reads_fpath))
-    df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
-    full_matches = 0
-    close_matches = 0
-    detected_isoforms = set()
-    for isoform, row in df.iterrows():
-        detected_isoforms.add(isoform)
-        n_simulated = c[isoform]
-        n_inferred = row['count']
-        if n_simulated == n_inferred:
-            full_matches += 1
-        if n_simulated * 0.9 <= n_inferred <= n_simulated * 1.1:
-            close_matches += 1
-        else:
-            print(isoform, n_simulated, n_inferred)
+def count_stats(df):
+    print('Corrcoef: ', round(np.corrcoef([df['count'], df['sim']])[1, 0], 3))
+    full_matches = (df['count'] == df['sim']).astype(int).sum()
+    n_isoforms = len(df['sim'])
+    print('Full matches:', full_matches, 'Fraction:', round(full_matches / n_isoforms, 3))
+    close_matches = ((df['count'] <= df['sim'] * 1.1) & (df['sim'] * 0.9 <= df['count'])).astype(int).sum()
+    print('Close matches (10% diff):', close_matches, round(close_matches / n_isoforms, 2))
+    close_matches = ((df['count'] <= df['sim'] * 1.2) & (df['sim'] * 0.8 <= df['count'])).astype(int).sum()
+    print('Close matches (20% diff):', close_matches, round(close_matches / n_isoforms, 2))
+    not_detected = (df['count'] == 0).astype(int).sum()
+    print('Not detected:', not_detected, round(not_detected / n_isoforms, 2))
+
+    false_detected = (df['sim'] == 0).astype(int).sum()
+    print('False detections:', false_detected, round(false_detected / n_isoforms, 4))
 
 
+def compare_quant_nano(nanosim_res_fpath, expr_abundance, iso_output):
+    expr_df = pd.read_csv(expr_abundance, sep='\t', index_col=0)
+    df = pd.read_csv(nanosim_res_fpath, sep='\t', index_col=0)
+    df = df.drop('group_id', axis=1)
+    df = df.drop(['__ambiguous', '__no_feature', '__not_aligned'])
+    df['sim'] = 0
 
-    # print('Corrcoef: ', np.corrcoef(a, b))
-    print('Full match fraction:', full_matches / len(c))
-    print('Close match fraction:', close_matches / len(c))
-    print('Not detected: ', len(c) - len(df.index.values), len(c) - len(df.index.values) / len(c), len(c))
+    res_df = pd.concat([df['count'], expr_df['est_counts']], axis=1)
+    count_stats(res_df)
 
 
 def compare_quant(isoquant_res_fpath, sim_reads_fpath, iso_output):
@@ -231,15 +236,7 @@ def compare_quant(isoquant_res_fpath, sim_reads_fpath, iso_output):
             df.loc[isoform] = [0, count]
 
     df.to_csv(iso_output + 'final_counts.tsv', sep='\t')
-
-    print('Corrcoef: ', np.corrcoef([df['count'], df['sim']])[1, 0])
-    full_matches = (df['count'] == df['sim']).astype(int).sum()
-    close_matches = ((df['count'] < df['sim'] * 1.2) & (df['sim'] * 0.9 < df['count'])).astype(int).sum()
-    n_isoforms = len(df['count'])
-    print('Full matches:', full_matches, 'Fraction:', full_matches / n_isoforms)
-    print('Close matches:', close_matches - full_matches, (close_matches - full_matches) / n_isoforms)
-    not_detected = (df['count'] == 0).astype(int).sum()
-    print('Not detected:', not_detected, not_detected / n_isoforms)
+    count_stats(df)
 
 
 if __name__ == '__main__':
