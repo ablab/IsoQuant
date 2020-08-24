@@ -220,6 +220,7 @@ def compare_quant_nano(nanosim_res_fpath, expr_abundance, iso_output):
     df['sim'] = 0
 
     res_df = pd.concat([df['count'], expr_df['est_counts']], axis=1)
+    res_df.to_csv(iso_output + '_final_counts.tsv', sep='\t')
     count_stats(res_df)
 
 
