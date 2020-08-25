@@ -153,7 +153,7 @@ class DatasetProcessor:
             if chr_id != current_chromosome:
                 logger.info("Processing chromosome " + chr_id)
                 current_chromosome = chr_id
-                current_chr_record = None if not self.reference_record_dict else self.reference_record_dict[chr_id]
+                current_chr_record = None if not self.reference_record_dict else self.reference_record_dict.get(chr_id)
 
             gene_info = GeneInfo(g, self.gffutils_db, self.args.delta)
             bam_files = list(map(lambda x: x[0], sample.file_list))
