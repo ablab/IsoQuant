@@ -35,6 +35,7 @@ class QuantificationConfig:
         self.quant = args.quant
         self.num_threads = args.num_threads
         self.mode = args.mode
+        self.complete = args.complete
         self.data_type = 'nanopore' if self.mode == 'nanosim' else 'pacbio_raw'
 
         # output files
@@ -109,14 +110,16 @@ class QuantificationConfig:
 
     @property
     def isoquant_command(self):
-        # f'--complete_genedb ' \
-        return f'python3 {self.isoquant_path} ' \
+        cmnd = f'python3 {self.isoquant_path} ' \
                f'--output {self.iso_output} ' \
                f'--fastq  {self.simulated_reads} ' \
                f'--genedb {self.gff} ' \
                f'--data_type {self.data_type} ' \
                f'--reference {self.ref_genome_fa} ' \
-               f'-t {self.num_threads}'.split()
+               f'-t {self.num_threads}'
+        if self.complete:
+            cmnd += f' --complete_genedb'
+        return cmnd.split()
 
     def update_abundance(self):
         df = pd.read_csv(self.expr_abundance, sep='\t')
@@ -138,6 +141,7 @@ def parse_args():
     parser.add_argument('--simulated', help='Use simulated reads', action='store', default=None)
     parser.add_argument('-o', '--output', help='Output location and prefix for simulated reads (Default = simulated)',
                         default="simulated")
+    parser.add_argument('--complete', help='Complete gene db', action='store_true')
     parser.add_argument('-rg', '--ref_g', help='Input reference genome', required=True)
     parser.add_argument('-t', '--num_threads', help='Number of threads for simulation (Default = 1)', type=int,
                         default=1)
