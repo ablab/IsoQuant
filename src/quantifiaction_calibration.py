@@ -50,21 +50,22 @@ class QuantificationConfig:
         self.simulated = args.simulated
         if self.simulated:
             self.simulated_reads = self.simulated
+        self.sim_name = self.simulated_reads.split('/')[-1]
 
         # isoquant params
         self.isoquant_path = str(pathlib.Path(__file__).parents[1].absolute() / 'isoquant.py')
-        self.transcript_counts = f'{self.iso_output}/00_simulated_reads_normal/00_simulated_reads_normal.transcript_counts.tsv'
-        self.transcript_model_counts = f'{self.iso_output}/00_simulated_reads_normal/00_simulated_reads_normal.transcript_models_counts.tsv'
+        self.transcript_counts = f'{self.iso_output}/00_{self.sim_name}/00_{self.sim_name}.transcript_counts.tsv'
+        self.transcript_model_counts = f'{self.iso_output}/00_{self.sim_name}/00_{self.sim_name}.transcript_models_counts.tsv'
 
         # log params
         self.log_fpath = 'log_quant.txt'
         self.log_file = open(self.log_fpath, "a")
 
     def _init_nanosim_args(self, args):
-        self.ref_genome_fa = args.ref_g or '../mouse_cdna_chr18/mus_musculus.dna.chr18.fa'
-        self.ref_transcriptome_fa = args.ref_t or '../mouse_cdna_chr18/mus_musculus.GRCm38.cdna.chr18.fa'
-        self.expr_abundance = args.exp or '../mouse_cdna_chr18/expression_abundance_chr18.tsv'
-        self.training = args.model_prefix or '../mouse_cdna_chr18/training'
+        self.ref_genome_fa = args.ref_g
+        self.ref_transcriptome_fa = args.ref_t
+        self.expr_abundance = args.exp
+        self.training = args.model_prefix
         self.n = args.number
         self.gff = self.training + "_added_intron_final.gff3"
         self.simulated_reads = self.sim_output + '_aligned_reads.fasta'
@@ -168,7 +169,7 @@ def parse_args():
 
 
 def print_args(config):
-    if config.mode =='nanosim':
+    if config.mode == 'nanosim':
         print(config.nanosim_command)
     else:
         print(config.isoseqsim_command)
