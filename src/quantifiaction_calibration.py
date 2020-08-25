@@ -4,6 +4,7 @@
 # Usage: python3 src/quantifiaction_calibration.py -rt ../mouse_rna/Mus_musculus.GRCm38.cdna.all.fa -rg ../mouse_rna/Mus_musculus.GRCm38.75.dna.fa -c ../mouse_rna/mouse_cdna/training -e ../mouse_rna/mouse_cdna_chr18/expression_abundance_chr18.tsv -n 100
 # isoseqsim usage: python3 IsoQuant/src/quantifiaction_calibration.py -o examples --ref_g IQ_data/chr19/Mouse.chr19.fasta isoseqsim --gff IQ_data/chr19/chr19.gtf
 
+import os
 import subprocess
 import argparse
 import pathlib
@@ -50,7 +51,7 @@ class QuantificationConfig:
         self.simulated = args.simulated
         if self.simulated:
             self.simulated_reads = self.simulated
-        self.sim_name = self.simulated_reads.split('/')[-1]
+        self.sim_name = os.path.splitext(self.simulated_reads)[0]
 
         # isoquant params
         self.isoquant_path = str(pathlib.Path(__file__).parents[1].absolute() / 'isoquant.py')
