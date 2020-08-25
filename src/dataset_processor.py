@@ -154,8 +154,8 @@ class DatasetProcessor:
                 logger.info("Processing chromosome " + chr_id)
                 current_chromosome = chr_id
                 current_chr_record = None if not self.reference_record_dict else self.reference_record_dict.get(chr_id)
-                if current_chromosome is None or not str(current_chromosome).isnumeric():
-                    continue
+            if (current_chr_record is None) or not str(current_chromosome).isnumeric():
+                continue
             gene_info = GeneInfo(g, self.gffutils_db, self.args.delta)
             bam_files = list(map(lambda x: x[0], sample.file_list))
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
