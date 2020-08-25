@@ -108,7 +108,7 @@ git clone https://github.com/ablab/IsoQuant.git
 cd IsoQuant
 git checkout latest
 ```
-Iinstall requirements:
+Install requirements:
 ```bash
 pip install -r requirements.txt
 ```
