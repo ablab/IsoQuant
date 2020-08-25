@@ -51,7 +51,7 @@ class QuantificationConfig:
         self.simulated = args.simulated
         if self.simulated:
             self.simulated_reads = self.simulated
-        self.sim_name = os.path.splitext(self.simulated_reads)[0]
+        self.sim_name = os.path.splitext(os.path.basename(self.simulated_reads))[0]
 
         # isoquant params
         self.isoquant_path = str(pathlib.Path(__file__).parents[1].absolute() / 'isoquant.py')
