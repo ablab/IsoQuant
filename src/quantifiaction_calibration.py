@@ -222,11 +222,10 @@ def compare_quant_nano(nanosim_res_fpath, expr_abundance, iso_output):
     df = pd.read_csv(nanosim_res_fpath, sep='\t', index_col=0)
     df = df.drop('group_id', axis=1)
     df = df.drop(['__ambiguous', '__no_feature', '__not_aligned'])
-    df['sim'] = 0
 
-    res_df = pd.concat([df['count'], expr_df['est_counts']], axis=1)
-    res_df['sim'] = res_df['est_counts'] / res_df['est_counts'].sum()
-    res_df['count'] = res_df['count'] / res_df['count'].sum()
+    res_df = pd.concat([df, expr_df], axis=1)
+    res_df['sim'] = 1000 * res_df['est_counts'] / res_df['est_counts'].sum()
+    res_df['count'] = 1000 * res_df['count'] / res_df['count'].sum()
     res_df = res_df.drop('est_counts', axis=1)
 
     res_df.to_csv(iso_output + '_final_counts.tsv', sep='\t')
