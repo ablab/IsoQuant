@@ -227,7 +227,7 @@ def compare_quant_nano(nanosim_res_fpath, expr_abundance, iso_output):
     res_df = pd.concat([df['count'], expr_df['est_counts']], axis=1)
     res_df['sim'] = res_df['est_counts'] / res_df['est_counts'].sum()
     res_df['count'] = res_df['count'] / res_df['count'].sum()
-    res_df = df.drop('est_counts', axis=1)
+    res_df = res_df.drop('est_counts', axis=1)
 
     res_df.to_csv(iso_output + '_final_counts.tsv', sep='\t')
     count_stats(res_df)
