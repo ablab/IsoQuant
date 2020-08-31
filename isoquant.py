@@ -156,7 +156,7 @@ class TestMode(argparse.Action):
                    '--reference', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.reference.fasta'),
                    '--genedb', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.genedb.gtf'),
                    '--cage', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.CAGE.bed'),
-                   # '--clean-start',
+                   '--clean-start',
                    '--data_type', 'nanopore', '--complete_genedb']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
