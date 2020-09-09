@@ -36,14 +36,14 @@ def convert_gtf_to_db(args):
     gtf_filename = args.genedb
     gtf_filename = os.path.abspath(gtf_filename)
     genedb_filename = os.path.join(args.output, os.path.splitext(os.path.basename(gtf_filename))[0] + ".db")
-    gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, gtf2db, args.complete_genedb)
+    gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, gtf2db, args)
     return genedb_filename
 
 
 def convert_db_to_gtf(args):
     genedb_filename = os.path.abspath(args.genedb)
     gtf_filename = os.path.join(args.output, os.path.splitext(os.path.basename(genedb_filename))[0] + ".gtf")
-    gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, db2gtf)
+    gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, db2gtf, args)
     return gtf_filename
 
 
@@ -65,37 +65,35 @@ def compare_stored_gtf(converted_gtfs, gtf_filename, genedb_filename):
             return True
 
 
-def convert_db(gtf_filename, genedb_filename, convert_fn, complete_db=False):
+def convert_db(gtf_filename, genedb_filename, convert_fn, args):
     genedb_filename = os.path.abspath(genedb_filename)
-    config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
-    config_path = os.path.join(config_dir, 'db_config.json')
 
-    if not os.path.exists(config_path):
-        os.makedirs(config_dir, exist_ok=True)
-        converted_gtfs = {}
-    else:
-        with open(config_path, 'r') as f_in:
-            converted_gtfs = json.load(f_in)
+    with open(args.db_config_path, 'r') as f_in:
+        converted_gtfs = json.load(f_in)
+
+    if not args.clean_start:
         if convert_fn == gtf2db:
             converted_db = find_coverted_db(converted_gtfs, gtf_filename)
             if converted_db is not None:
-                logger.info("Gene annotation file was already converted to " + converted_db)
+                logger.info("Gene annotation file found. Using " + converted_db)
                 return gtf_filename, converted_db
         else:
             for converted_gtf in converted_gtfs:
                 if compare_stored_gtf(converted_gtfs, converted_gtf, genedb_filename):
-                    logger.info("Gene annotation file was already converted")
+                    logger.info("Gene annotation file found. Using " + converted_gtf)
                     return converted_gtf, genedb_filename
 
     if convert_fn == gtf2db:
-        convert_fn(gtf_filename, genedb_filename, complete_db)
+        convert_fn(gtf_filename, genedb_filename, args.complete_genedb)
     else:
         convert_fn(gtf_filename, genedb_filename)
-    converted_gtfs[gtf_filename] = {'genedb': genedb_filename,
-                                    'gtf_mtime': os.path.getmtime(gtf_filename),
-                                    'db_mtime': os.path.getmtime(genedb_filename),
-                                    'complete_db': complete_db}
-    with open(config_path, 'w') as f_out:
+    converted_gtfs[gtf_filename] = {
+        'genedb': genedb_filename,
+        'gtf_mtime': os.path.getmtime(gtf_filename),
+        'db_mtime': os.path.getmtime(genedb_filename),
+        'complete_db': args.complete_genedb
+    }
+    with open(args.db_config_path, 'w') as f_out:
         json.dump(converted_gtfs, f_out)
     return gtf_filename, genedb_filename
 

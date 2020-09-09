@@ -29,20 +29,18 @@ class DataSetReadMapper:
         self.aligner = self.choose_aligner()
         self.index_fname = self.create_index(args)
 
-    def choose_aligner(self,):
-        if self.args.aligner is not None:
-            return self.args.aligner
-        else:
-            return DATATYPE_TO_ALIGNER[self.args.data_type]
+    def choose_aligner(self):
+        return self.args.aligner or DATATYPE_TO_ALIGNER[self.args.data_type]
 
     def create_index(self, args):
         if args.index and os.path.exists(args.index):
             return args.index
 
-        index = find_stored_index(args)
+        index = None if args.clean_start else find_stored_index(args)
+
         if index is None:
             index = index_reference(self.aligner, args)
-            save_index(index, args.reference)
+            store_index(index, args)
         return index
 
     def map_reads(self, args):
@@ -50,7 +48,11 @@ class DataSetReadMapper:
         for sample in args.input_data.samples:
             bam_files = []
             for fastq_files in sample.file_list:
-                bam_files.append([align_fasta(self.aligner, fastq_files, args, sample.label, sample.out_dir)])
+                bam_file = None if args.clean_start else find_stored_alignment(self.aligner, fastq_files, args)
+                if bam_file is None:
+                    bam_file = align_fasta(self.aligner, fastq_files, args, sample.label, sample.out_dir)
+                    store_alignment(bam_file, self.aligner, fastq_files, args)
+                bam_files.append([bam_file])
             samples.append(SampleData(bam_files, sample.label, sample.out_dir))
         args.input_data.samples = samples
         args.input_data.input_type = "bam"
@@ -97,21 +99,10 @@ def get_aligner(aligner):
 
 def find_stored_index(args):
     reference_filename = os.path.abspath(args.reference)
-    config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
-    config_path = os.path.join(config_dir, 'index_config.json')
 
-    if not os.path.exists(config_path):
-        os.makedirs(config_dir, exist_ok=True)
-        with open(config_path, 'w') as f_out:
-            json.dump({}, f_out)
-        return None
-
-    with open(config_path, 'r') as f_in:
+    with open(args.index_config_path, 'r') as f_in:
         converted_indexes = json.load(f_in)
-    return get_stored_index(converted_indexes, reference_filename)
 
-
-def get_stored_index(converted_indexes, reference_filename):
     index_filename = converted_indexes.get(reference_filename, {}).get('index_filename')
     logger.debug('Searching for previously created index for {}'.format(reference_filename))
     if index_filename is None:
@@ -120,26 +111,61 @@ def get_stored_index(converted_indexes, reference_filename):
     reference_mtime = converted_indexes.get(reference_filename, {}).get('reference_mtime')
     if os.path.exists(reference_filename) and os.path.getmtime(reference_filename) == reference_mtime:
         if os.path.exists(index_filename) and os.path.getmtime(index_filename) == index_mtime:
-            logger.debug('Index file found. Using {}'.format(index_filename))
+            logger.info('Index file found. Using {}'.format(index_filename))
             return index_filename
     return None
 
 
-def save_index(index, reference):
-    reference_filename = os.path.abspath(reference)
+def store_index(index, args):
+    reference_filename = os.path.abspath(args.reference)
     index = os.path.abspath(index)
-    config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
-    config_path = os.path.join(config_dir, 'index_config.json')
-    with open(config_path, 'r') as f_in:
+
+    with open(args.index_config_path, 'r') as f_in:
         converted_indexes = json.load(f_in)
     converted_indexes[reference_filename] = {
         'index_filename': index,
         'reference_mtime': os.path.getmtime(reference_filename),
         'index_mtime': os.path.getmtime(index)
     }
-    with open(config_path, 'w') as f_out:
+    with open(args.index_config_path, 'w') as f_out:
         json.dump(converted_indexes, f_out)
     logger.debug('New index saved to {}'.format(index))
+
+
+def find_stored_alignment(aligner, fastq_files, args):
+    fastq = os.path.abspath(fastq_files[0])
+    key = "_aligned_by_".join([fastq, aligner])
+    with open(args.alignment_config_path, 'r') as f_in:
+        aligned_fastq_files = json.load(f_in)
+
+    logger.debug('Searching for previously created index for {}'.format(fastq))
+    bam_fpath = aligned_fastq_files.get(key, {}).get('alignment_fpath')
+    if bam_fpath is None:
+        return None
+    fastq_mtime = aligned_fastq_files.get(key, {}).get('fastq_mtime')
+    bam_mtime = aligned_fastq_files.get(key, {}).get('bam_mtime')
+    if os.path.exists(fastq) and os.path.getmtime(fastq) == fastq_mtime:
+        if os.path.exists(bam_fpath) and os.path.getmtime(bam_fpath) == bam_mtime:
+            logger.info('Bam alignment file found. Using {}'.format(bam_fpath))
+            return bam_fpath
+    return None
+
+
+def store_alignment(bam_file, aligner, fastq_files, args):
+    fastq = os.path.abspath(fastq_files[0])
+    key = "_aligned_by_".join([fastq, aligner])
+    bam_file = os.path.abspath(bam_file)
+
+    with open(args.alignment_config_path, 'r') as f_in:
+        aligned_fastq_files = json.load(f_in)
+    aligned_fastq_files[key] = {
+        'alignment_fpath': bam_file,
+        'fastq_mtime': os.path.getmtime(fastq),
+        'bam_mtime': os.path.getmtime(bam_file)
+    }
+    with open(args.alignment_config_path, 'w') as f_out:
+        json.dump(aligned_fastq_files, f_out)
+    logger.debug('New alignment saved to {}'.format(bam_file))
 
 
 def index_reference(aligner, args):

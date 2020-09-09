@@ -51,7 +51,8 @@ def parse_args(args=None, namespace=None):
                                                   "when raw reads are used as an input", type=str)
     parser.add_argument("--index", help="genome index for specified aligner, "
                                         "should be provided only when raw reads are used as an input", type=str)
-
+    parser.add_argument('--clean-start', action='store_true', default=False,
+                        help='Do not use previously generated index, feature db or alignments.')
     # INPUT READS
     input_args = parser.add_mutually_exclusive_group(required=True)
     input_args.add_argument('--bam', nargs='+', type=str,
@@ -155,6 +156,7 @@ class TestMode(argparse.Action):
                    '--reference', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.reference.fasta'),
                    '--genedb', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.genedb.gtf'),
                    '--cage', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.CAGE.bed'),
+                   '--clean-start',
                    '--data_type', 'nanopore', '--complete_genedb']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
@@ -350,7 +352,21 @@ def set_model_construction_options(args):
     logger.debug('Using %s strategy. Updated strategy: %s.' % (args.model_construction_strategy, updated_strategy))
 
 
+def set_configs_directory(args):
+    config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
+    os.makedirs(config_dir, exist_ok=True)
+
+    args.db_config_path = os.path.join(config_dir, 'db_config.json')
+    args.index_config_path = os.path.join(config_dir, 'index_config.json')
+    args.alignment_config_path = os.path.join(config_dir, 'alignment_config.json')
+    for config_path in (args.db_config_path, args.index_config_path, args.alignment_config_path):
+        if not os.path.exists(config_path):
+            with open(config_path, 'w') as f_out:
+                json.dump({}, f_out)
+
+
 def set_additional_params(args):
+    set_configs_directory(args)
     set_data_dependent_options(args)
     set_matching_options(args)
     set_model_construction_options(args)
