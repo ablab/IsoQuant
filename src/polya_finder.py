@@ -106,12 +106,12 @@ class CagePeakFinder:
         search_size = self.shift_size if extended else self.window_size
         if alignment.is_reverse:
             strand = '-'
-            start = max(alignment.query_alignment_end - self.window_size, 0)
-            end = alignment.query_alignment_end + search_size
+            start = max(alignment.reference_end - self.window_size, 0)
+            end = alignment.reference_end + search_size
         else:
             strand = '.'
-            start = max(alignment.query_alignment_start - search_size, 0)
-            end = alignment.query_alignment_start + self.window_size
+            start = max(alignment.reference_start - search_size, 0)
+            end = alignment.reference_start + self.window_size
         return contig, start, end, strand
 
     def find_cage_peak(self, alignment):

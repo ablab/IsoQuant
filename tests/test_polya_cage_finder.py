@@ -7,8 +7,8 @@ from src.polya_finder import PolyAFinder, CagePeakFinder
 
 
 PolyAAlignment = namedtuple('PolyAAlignment', ('query_name', 'cigartuples', 'seq', 'reference_start', 'reference_end'))
-CageAlignment = namedtuple('CageAlignment', ('query_name', 'reference_name', 'query_alignment_start',
-                                             'query_alignment_end', 'is_reverse'))
+CageAlignment = namedtuple('CageAlignment', ('query_name', 'reference_name', 'reference_start',
+                                             'reference_end', 'is_reverse'))
 
 
 TUPLES1 = [(4, 2), (0, 15), (1, 1), (0, 5), (2, 1), (0, 16), (3, 4642), (0, 5), (1, 1), (0, 1), (1, 1),
