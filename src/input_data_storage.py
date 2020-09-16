@@ -34,6 +34,7 @@ class SampleData:
         self.out_transcript_grouped_counts_tsv = self._make_path(self.label + ".transcript_grouped_counts.tsv")
         self.out_exon_grouped_counts_tsv = self._make_path(self.label + ".exon_grouped_counts.tsv")
         self.out_intron_grouped_counts_tsv = self._make_path(self.label + ".intron_grouped_counts.tsv")
+        self.barcoded_contigs_assignments = self._make_path(self.label + ".barcoded_contigs_assignments.tsv")
 
 
 class InputDataStorage:

@@ -19,6 +19,7 @@ from src.multimap_resolver import *
 from src.read_groups import *
 from src.transcript_model_constructor import *
 from src.stats import *
+from src.barcoded_contigs_printer import *
 
 
 logger = logging.getLogger('IsoQuant')
@@ -202,6 +203,10 @@ class DatasetProcessor:
         if self.args.sqanti_output:
             self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args)
             printer_list.append(self.sqanti_printer)
+        if self.args.contig_10x_barcodes:
+            self.barcoded_contigs_printer = BarcodedContigsPrinter(self.args.contig_10x_barcodes,
+                                                                   sample.barcoded_contigs_assignments, self.args)
+            printer_list.append(self.barcoded_contigs_printer)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, ignore_read_groups=True)

@@ -58,12 +58,14 @@ def parse_args(args=None, namespace=None):
     input_args.add_argument('--bam', nargs='+', type=str,
                             help='sorted and indexed BAM file(s), each file will be treated as a separate sample')
     input_args.add_argument('--fastq', nargs='+', type=str,
-                            help='input FASTQ file(s), each file will be treated as a separate sample; '
+                            help='input FASTQ/FASTA file(s), each file will be treated as a separate sample; '
                                  'reference genome should be provided when using raw reads')
     input_args.add_argument('--bam_list', type=str, help='text file with list of BAM files, one file per line'
                                                          ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
+    parser.add_argument("--contig_10x_barcodes", help="TSV files containing a comma-separated list of barcodes "
+                                                      "for all contigs", type=str)
     parser.add_argument("--data_type", "-d", type=str, required=True, choices=DATATYPE_TO_ALIGNER.keys(),
                         help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
     parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
