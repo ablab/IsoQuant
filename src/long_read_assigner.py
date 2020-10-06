@@ -58,10 +58,10 @@ class LongReadAssigner:
         for match in assignment.isoform_matches:
             exon_elongation_type = self.categorize_exon_elongation_subtype(read_split_exon_profile,
                                                                            match.assigned_transcript)
-            if exon_elongation_type == MatchEventSubtype.extra_exon_out:
+            if  MatchEventSubtype.is_major_elongation(exon_elongation_type):
                 # serious exon elongation
                 match.add_subclassification(make_event(exon_elongation_type))
-                if assignment.assignment_type in (ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference):
+                if assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference}:
                     assignment.set_assignment_type(ReadAssignmentType.contradictory)
             elif exon_elongation_type != MatchEventSubtype.none:
                 # minor exon elongation
@@ -87,7 +87,7 @@ class LongReadAssigner:
                 common_last_exon = index
                 break
         if common_first_exon == -1 or common_last_exon == -1:
-            logger.debug(" + Werid case for exon elongation, no matching exons")
+            logger.warning(" + Werid case for exon elongation, no matching exons")
 
         isoform_start = split_exons[common_first_exon][0]
         isoform_end = split_exons[common_last_exon][-1]
@@ -101,30 +101,34 @@ class LongReadAssigner:
         logger.debug("+ + Isoform: " + str(isoform_start) + "-" + str(isoform_end))
         logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
 
-        if extra_right <= self.params.delta and extra_left <= self.params.delta:
-            logger.debug("+ + + None")
-            return MatchEventSubtype.none
-        else:
-            if extra_right < self.params.max_exon_extension and extra_left < self.params.max_exon_extension:
-                logger.debug("+ + + Minor")
-                if extra_right > self.params.delta and extra_left > self.params.delta:
-                    logger.debug("+ + + Extra sequence on both ends")
-                    return MatchEventSubtype.exon_elongation_both
-                elif extra_right > self.params.delta:
-                    logger.debug("+ + + Extra sequence on right end")
-                    if self.gene_info.isoform_strands[isoform_id] == "+":
-                        return MatchEventSubtype.exon_elongation3
-                    else:
-                        return MatchEventSubtype.exon_elongation5
-                else:
-                    logger.debug("+ + + Extra sequence on left end")
-                    if self.gene_info.isoform_strands[isoform_id] == "-":
-                        return MatchEventSubtype.exon_elongation3
-                    else:
-                        return MatchEventSubtype.exon_elongation5
+        elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.max_exon_extension)
+        if elongation_side > 0:
+            return elongation_types["major"][elongation_side]
+        elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.delta)
+        if elongation_side > 0:
+            return elongation_types["minor"][elongation_side]
+
+        logger.debug("+ + + None")
+        return MatchEventSubtype.none
+
+    def exon_elongation_side(self, isoform_id, extra_right, extra_left, limit):
+        logger.debug("+ + + Minor")
+        if extra_right > limit and extra_left > limit:
+            logger.debug("+ + + Extra sequence on both ends")
+            return 35
+        elif extra_right > limit:
+            logger.debug("+ + + Extra sequence on right end")
+            if self.gene_info.isoform_strands[isoform_id] == "+":
+                return 3
             else:
-                logger.debug("+ + + Major")
-                return MatchEventSubtype.extra_exon_out
+                return 5
+        elif extra_right > limit:
+            logger.debug("+ + + Extra sequence on left end")
+            if self.gene_info.isoform_strands[isoform_id] == "-":
+                return 3
+            else:
+                return 5
+        return 0
 
     # get incompleteness type
     def detect_ism_subtype(self, read_intron_profile, isoform_id):
@@ -440,7 +444,7 @@ class LongReadAssigner:
             unreliable_isoforms = [x[0] for x in jaccard_matched_isoforms]
             isoform_matches = self.categorize_multiple_mono_exon_matches(combined_read_profile, unreliable_isoforms)
             if all(im.all_subtypes_are_none_or_monoexonic() for im in isoform_matches):
-                assignment_type = ReadAssignmentType.unreliable
+                assignment_type = ReadAssignmentType.contradictory_monoexon
             else:
                 assignment_type = ReadAssignmentType.contradictory
             read_assignment = ReadAssignment(read_id, assignment_type, isoform_matches)

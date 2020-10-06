@@ -20,7 +20,7 @@ class ReadAssignmentType(Enum):
     unique_minor_difference = 2
     contradictory = 3
     novel = 4
-    unreliable = 11
+    contradictory_monoexon = 11
 
 
 # SQANTI-like
@@ -83,24 +83,35 @@ class MatchEventSubtype(Enum):
     unspliced_intron_retention = 32
     unspliced_genic = 33
     # major alternation
+    # alternative donor/acceptor sites
     alt_donor_site_known = 101
     alt_acceptor_site_known = 102
     alt_donor_site_novel = 103
     alt_acceptor_site_novel = 104
+    # additional introns in the middle
     extra_intron = 2012
     extra_intron_known = 2011
-    extra_intron_out_left = 1013
-    extra_intron_out_right = 1014
-    extra_exon_out = 120
+    # extra inrons on the sides
+    extra_intron_flanking_left = 1013
+    extra_intron_flanking_right = 1014
+    # significant exon elongation, more than allowed
+    major_exon_elongation_both = 124
+    major_exon_elongation5 = 125
+    major_exon_elongation3 = 123
+    # other intron modifications
     intron_migration = 114
     intron_alternation_novel = 115
     intron_alternation_known = 115
+    # mutually exclusive
     mutually_exclusive_exons_novel = 121
     mutually_exclusive_exons_known = 122
+    # exon skipping
     exon_skipping_known_intron = 123
     exon_skipping_novel_intron = 124
+    # exon gain
     exon_gain_known = 125
     exon_gain_novel = 126
+    # other
     alternative_structure_novel = 131
     alternative_structure_known = 132
     # TTS and TSS
@@ -119,11 +130,17 @@ class MatchEventSubtype(Enum):
         return match_event_subtype in {MatchEventSubtype.exon_elongation5, MatchEventSubtype.exon_elongation3,
                                        MatchEventSubtype.exon_elongation_both}
 
+    @staticmethod
+    def is_major_elongation(match_event_subtype):
+        return match_event_subtype in {MatchEventSubtype.major_exon_elongation5,
+                                       MatchEventSubtype.major_exon_elongation3,
+                                       MatchEventSubtype.major_exon_elongation_both}
+
 
 nnic_event_types = {
     MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
-    MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_out_left,
-    MatchEventSubtype.extra_intron_out_right,MatchEventSubtype.mutually_exclusive_exons_novel,
+    MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_flanking_left,
+    MatchEventSubtype.extra_intron_flanking_right,MatchEventSubtype.mutually_exclusive_exons_novel,
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
     MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel
 }
@@ -137,6 +154,13 @@ nic_event_types = {
     MatchEventSubtype.intron_alternation_known
 }
 
+
+elongation_types = {"major": {3: MatchEventSubtype.major_exon_elongation3,
+                              5: MatchEventSubtype.major_exon_elongation5,
+                              35: MatchEventSubtype.major_exon_elongation_both},
+                    "minor": {3: MatchEventSubtype.exon_elongation3,
+                              5: MatchEventSubtype.exon_elongation5,
+                              35: MatchEventSubtype.exon_elongation_both}}
 
 class SupplementaryMatchConstansts:
     extra_left_mod_position = -1000000

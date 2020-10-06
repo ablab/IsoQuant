@@ -270,14 +270,14 @@ class JunctionComparator():
             read_pos = 0
             while read_pos < len(read_intron_read_profile) and read_intron_read_profile[read_pos] == 0:
                 read_pos += 1
-            match_events.append(make_event(MatchEventSubtype.extra_intron_out_left,
+            match_events.append(make_event(MatchEventSubtype.extra_intron_flanking_left,
                                            SupplementaryMatchConstansts.extra_left_mod_position, (0, read_pos - 1)))
         if extra_right:
             max_right = len(read_intron_read_profile) - 1
             read_pos = max_right
             while read_pos >= 0 and read_intron_read_profile[read_pos] == 0:
                 read_pos -= 1
-            match_events.append(make_event(MatchEventSubtype.extra_intron_out_right,
+            match_events.append(make_event(MatchEventSubtype.extra_intron_flanking_right,
                                            SupplementaryMatchConstansts.extra_right_mod_position, (read_pos + 1, max_right)))
 
     def profile_for_junctions_introns(self, junctions, region):

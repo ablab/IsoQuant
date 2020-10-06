@@ -90,7 +90,7 @@ class TestCompareJunctions:
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
-        assert match_events[0].event_type == MatchEventSubtype.extra_intron_out_right
+        assert match_events[0].event_type == MatchEventSubtype.extra_intron_flanking_right
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([(1, 10), (15,  20)], (1, 10), [(15, 19)], (15, 19), 1),
@@ -101,7 +101,7 @@ class TestCompareJunctions:
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
-        assert match_events[0].event_type == MatchEventSubtype.extra_intron_out_left
+        assert match_events[0].event_type == MatchEventSubtype.extra_intron_flanking_left
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([(1, 5), (8, 10), (15,  20)], (15, 20), [(1, 5), (15, 19)], (15, 19), 1)])

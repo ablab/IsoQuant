@@ -94,7 +94,7 @@ class TranscriptModelConstructor:
     events_to_track = {
         MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
         MatchEventSubtype.extra_intron,
-        MatchEventSubtype.extra_intron_out_left, MatchEventSubtype.extra_intron_out_right,
+        MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right,
         MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
         MatchEventSubtype.intron_retention, MatchEventSubtype.exon_skipping_novel_intron,
         MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
@@ -466,8 +466,8 @@ class TranscriptModelConstructor:
         elif event_tuple.event_type == MatchEventSubtype.extra_intron_known:
             corrected_intron = self.get_closest_ref_intron(read_intron)
             return self.add_intron(novel_exons, current_exon_start, corrected_intron)
-        elif event_tuple.event_type in {MatchEventSubtype.extra_intron_out_left,
-                                        MatchEventSubtype.extra_intron_out_right}:
+        elif event_tuple.event_type in {MatchEventSubtype.extra_intron_flanking_left,
+                                        MatchEventSubtype.extra_intron_flanking_right}:
             # simply insert several reads introns
             for read_pos in range(event_tuple.read_region[0], event_tuple.read_region[1] + 1):
                 current_exon_start = self.add_intron(novel_exons, current_exon_start, read_introns[read_pos])

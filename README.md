@@ -363,6 +363,7 @@ Tab-separated values, the columns are:
 - `unique`;
 - `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
 - `contradictory` - read was matched with inconsistencies, closest matches are reported;
+- `contradictory_monoexon` - monoexonic reads could not be assigned correctly;
 - `ambiguous` - read was assigned to multiple isoforms equally well;
 - `empty` - reads that were not mapped onto known genes.
 * `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible inconsistencies events are:
@@ -378,6 +379,9 @@ Tab-separated values, the columns are:
     - `exon_elongation5` - read goes beyond isoform 5' end;
     - `exon_elongation3` - read goes beyond isoform 3' end;
     - `exon_elongation_both` - read goes beyond isoform's both ends;
+    - `exon_elongation5` - read goes significantly beyond isoform 5' end;
+    - `exon_elongation3` - read goes significantly beyond isoform 3' end;
+    - `exon_elongation_both` - read goes significantly beyond isoform's both ends;
     - `intron_retention`;
     - `unspliced_intron_retention`;
     - `unspliced_genic` - mono-exonic read overlaps some introns;
