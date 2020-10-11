@@ -512,10 +512,11 @@ class LongReadAssigner:
                                                     self.gene_info.split_exon_profiles.profiles,
                                                     hint=overlapping_isoforms)
         return self.detect_differences(read_id, read_intron_profile, read_split_exon_profile,
-                                       intron_matching_isoforms, exon_matching_isoforms)
+                                       intron_matching_isoforms, exon_matching_isoforms,
+                                       alignment=combined_read_profile.alignment)
 
     def detect_differences(self, read_id, read_intron_profile, read_split_exon_profile,
-                           intron_matching_isoforms, exon_matching_isoforms):
+                           intron_matching_isoforms, exon_matching_isoforms, alignment=None):
         """ compare read to closest matching isoforms
 
         Parameters
@@ -525,6 +526,7 @@ class LongReadAssigner:
         read_split_exon_profile: MappedReadProfile
         intron_matching_isoforms: list of IsoformDiff
         exon_matching_isoforms: list of IsoformDiff
+        alignment: pysam AlignedSegment
 
         Returns
         -------
@@ -559,7 +561,7 @@ class LongReadAssigner:
             isoform_region = (isoform_start, isoform_end)
 
             matching_events = self.intron_comparator.compare_junctions(read_intron_profile.read_features, read_region,
-                                                                       isoform_introns, isoform_region)
+                                                                       isoform_introns, isoform_region, alignment)
             if len(matching_events) == 1 and matching_events[0].event_type == MatchEventSubtype.undefined:
                 continue
             match_classification = MatchClassification.get_contradiction_classification_from_subtypes(matching_events)
