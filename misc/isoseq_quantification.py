@@ -1,5 +1,4 @@
-# Usage: python3 src/quantifiaction_calibration.py -rt ../mouse_rna/Mus_musculus.GRCm38.cdna.all.fa -rg ../mouse_rna/Mus_musculus.GRCm38.75.dna.fa -c ../mouse_rna/mouse_cdna/training -e ../mouse_rna/mouse_cdna_chr18/expression_abundance_chr18.tsv -n 100
-# isoseqsim usage: python3 IsoQuant/src/quantifiaction_calibration.py -o examples --reference IQ_data/chr19/Mouse.chr19.fasta isoseqsim --gff IQ_data/chr19/chr19.gtf
+# Usage: python3 misc/isoseq_quantification.py -o examples --reference tests/toy_data/MAPT.Mouse.reference.fasta --gff tests/toy_data/MAPT.Mouse.genedb.gtf --complete --isp tools/IsoSeqSim --nbn 100
 
 import os
 import subprocess
