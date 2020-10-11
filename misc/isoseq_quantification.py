@@ -76,7 +76,7 @@ def compare_transcript_counts(isoquant_res_fpath, sim_reads_fpath, iso_output):
         else:
             df.loc[isoform] = [0, count]
 
-    df.to_csv(iso_output + 'final_counts.tsv', sep='\t')
+    df.to_csv(iso_output + '_final_counts.tsv', sep='\t')
     count_stats(df)
 
 

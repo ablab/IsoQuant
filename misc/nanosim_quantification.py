@@ -21,6 +21,81 @@ def run_quantification(config):
     assert True
 
 
+def print_args(config):
+    print(config.nanosim_command)
+    print(config.isoquant_command)
+    print(config.transcript_counts)
+    print(config.simulated_reads)
+
+
+def main():
+    args = parse_args()
+    config = QuantificationConfig(args)
+    print_args(config)
+    run_quantification(config)
+
+    compare_expression(config.transcript_counts, config.expr_abundance, config.iso_output)
+    compare_transcript_counts(config.transcript_counts, config.simulated_reads, config.iso_output)
+    print('----well done----')
+
+
+def get_simulated_isoforms(sim_reads_fpath):
+    with open(sim_reads_fpath, 'r') as f_in:
+        for line in f_in.readlines():
+            if line.startswith('>'):
+                isoform, _ = line.split('_')
+                yield isoform[1:]
+
+
+def count_stats(df):
+    print('Corrcoef: ', round(np.corrcoef([df['count'], df['sim']])[1, 0], 3))
+    full_matches = (df['count'] == df['sim']).astype(int).sum()
+    n_isoforms = len(df['sim'])
+    print('Full matches:', full_matches, 'Fraction:', round(full_matches / n_isoforms, 3))
+    close_matches = ((df['count'] <= df['sim'] * 1.1) & (df['sim'] * 0.9 <= df['count'])).astype(int).sum()
+    print('Close matches (10% diff):', close_matches, round(close_matches / n_isoforms, 2))
+    close_matches = ((df['count'] <= df['sim'] * 1.2) & (df['sim'] * 0.8 <= df['count'])).astype(int).sum()
+    print('Close matches (20% diff):', close_matches, round(close_matches / n_isoforms, 2))
+    not_detected = (df['count'] == 0).astype(int).sum()
+    print('Not detected:', not_detected, round(not_detected / n_isoforms, 2))
+
+    false_detected = (df['sim'] == 0).astype(int).sum()
+    print('False detections:', false_detected, round(false_detected / n_isoforms, 4))
+
+
+def compare_expression(nanosim_res_fpath, expr_abundance, iso_output):
+    expr_df = pd.read_csv(expr_abundance, sep='\t', index_col=0)
+    df = pd.read_csv(nanosim_res_fpath, sep='\t', index_col=0)
+    df = df.drop('group_id', axis=1)
+    df = df.drop(['__ambiguous', '__no_feature', '__not_aligned'])
+
+    res_df = pd.concat([df, expr_df], axis=1)
+    res_df.fillna(0.)
+    res_df['simulated'] = (10 ** 6) * res_df['est_counts'] / res_df['est_counts'].sum()
+    res_df['count'] = (10 ** 6) * res_df['count'] / res_df['count'].sum()
+    res_df = res_df.drop('est_counts', axis=1)
+
+    res_df.to_csv(iso_output + '_final_counts.tsv', sep='\t')
+    count_stats(res_df)
+
+
+def compare_transcript_counts(isoquant_res_fpath, sim_reads_fpath, iso_output):
+    c = Counter(get_simulated_isoforms(sim_reads_fpath))
+    df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
+    df = df.drop('group_id', axis=1)
+    df = df.drop(['__ambiguous', '__no_feature', '__not_aligned'])
+    df.index = df.index.map(lambda x: x.split('.')[0])
+    df['sim'] = 0
+    for isoform, count in c.items():
+        if isoform in df.index:
+            df.loc[isoform, 'sim'] = count
+        else:
+            df.loc[isoform] = [0, count]
+
+    df.to_csv(iso_output + '_final_counts.tsv', sep='\t')
+    count_stats(df)
+
+
 class QuantificationConfig:
     def __init__(self, args):
         # stages
@@ -120,62 +195,6 @@ def parse_args():
                         default=1000)
 
     return parser.parse_args()
-
-
-def print_args(config):
-    print(config.nanosim_command)
-    print(config.isoquant_command)
-    print(config.transcript_counts)
-    print(config.simulated_reads)
-
-
-def main():
-    args = parse_args()
-    config = QuantificationConfig(args)
-    print_args(config)
-    run_quantification(config)
-
-    compare_expression(config.transcript_counts, config.expr_abundance, config.iso_output)
-    print('----well done----')
-
-
-def get_simulated_isoforms(sim_reads_fpath):
-    with open(sim_reads_fpath, 'r') as f_in:
-        for line in f_in.readlines():
-            if line.startswith('>'):
-                isoform, _ = line.split('_')
-                yield isoform
-
-
-def count_stats(df):
-    print('Corrcoef: ', round(np.corrcoef([df['count'], df['sim']])[1, 0], 3))
-    full_matches = (df['count'] == df['sim']).astype(int).sum()
-    n_isoforms = len(df['sim'])
-    print('Full matches:', full_matches, 'Fraction:', round(full_matches / n_isoforms, 3))
-    close_matches = ((df['count'] <= df['sim'] * 1.1) & (df['sim'] * 0.9 <= df['count'])).astype(int).sum()
-    print('Close matches (10% diff):', close_matches, round(close_matches / n_isoforms, 2))
-    close_matches = ((df['count'] <= df['sim'] * 1.2) & (df['sim'] * 0.8 <= df['count'])).astype(int).sum()
-    print('Close matches (20% diff):', close_matches, round(close_matches / n_isoforms, 2))
-    not_detected = (df['count'] == 0).astype(int).sum()
-    print('Not detected:', not_detected, round(not_detected / n_isoforms, 2))
-
-    false_detected = (df['sim'] == 0).astype(int).sum()
-    print('False detections:', false_detected, round(false_detected / n_isoforms, 4))
-
-
-def compare_expression(nanosim_res_fpath, expr_abundance, iso_output):
-    expr_df = pd.read_csv(expr_abundance, sep='\t', index_col=0)
-    df = pd.read_csv(nanosim_res_fpath, sep='\t', index_col=0)
-    df = df.drop('group_id', axis=1)
-    df = df.drop(['__ambiguous', '__no_feature', '__not_aligned'])
-
-    res_df = pd.concat([df, expr_df], axis=1)
-    res_df['sim'] = 1000 * res_df['est_counts'] / res_df['est_counts'].sum()
-    res_df['count'] = 1000 * res_df['count'] / res_df['count'].sum()
-    res_df = res_df.drop('est_counts', axis=1)
-
-    res_df.to_csv(iso_output + '_final_counts.tsv', sep='\t')
-    count_stats(res_df)
 
 
 if __name__ == '__main__':
