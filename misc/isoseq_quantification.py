@@ -34,10 +34,9 @@ def print_args(config):
 def main():
     args = parse_args()
     config = QuantificationConfig(args)
-    print_args(config)
+    # print_args(config)
     run_quantification(config)
-
-    compare_quant(config.transcript_counts, config.simulated_reads, config.iso_output)
+    compare_transcript_counts(config.transcript_counts, config.simulated_reads, config.iso_output)
     print('----well done----')
 
 
@@ -47,7 +46,6 @@ def get_simulated_isoforms(sim_reads_fpath):
             if line.startswith('>'):
                 _, isoform = line.split(' ')
                 isoform = isoform.strip()
-                print(isoform)
                 yield isoform
 
 
@@ -67,7 +65,7 @@ def count_stats(df):
     print('False detections:', false_detected, round(false_detected / n_isoforms, 4))
 
 
-def compare_quant(isoquant_res_fpath, sim_reads_fpath, iso_output):
+def compare_transcript_counts(isoquant_res_fpath, sim_reads_fpath, iso_output):
     c = Counter(get_simulated_isoforms(sim_reads_fpath))
     df = pd.read_csv(isoquant_res_fpath, sep='\t', index_col=0)
     df = df.drop('group_id', axis=1)
@@ -106,6 +104,7 @@ class QuantificationConfig:
         self.isoquant_path = str(pathlib.Path(__file__).parents[1].absolute() / 'isoquant.py')
         self.transcript_counts = f'{self.iso_output}/00_{self.sim_name}/00_{self.sim_name}.transcript_counts.tsv'
         self.transcript_model_counts = f'{self.iso_output}/00_{self.sim_name}/00_{self.sim_name}.transcript_models_counts.tsv'
+        self.clean_start = args.clean_start
 
         # log params
         self.log_fpath = 'log_quant.txt'
@@ -141,8 +140,9 @@ class QuantificationConfig:
                f'--genedb {self.gff} ' \
                f'--data_type {self.data_type} ' \
                f'--reference {self.reference} ' \
-               f'-t {self.num_threads} ' \
-               f'--clean-start'
+               f'-t {self.num_threads} '
+        if self.clean_start:
+            cmnd += f'--clean-start'
         if self.complete:
             cmnd += f' --complete_genedb'
         return cmnd.split()
@@ -154,6 +154,7 @@ def parse_args():
     parser.add_argument('-o', '--output', help='Output location and prefix for simulated reads (Default = simulated)',
                         default="simulated")
     parser.add_argument('--complete', help='Complete gene db', action='store_true')
+    parser.add_argument('--clean-start', help='Clean start for IsoQuant', action='store_true')
     parser.add_argument('-rg', '--reference', help='Input reference genome', required=True)
     parser.add_argument('-t', '--num_threads', help='Number of threads for simulation (Default = 1)', type=int,
                         default=1)
@@ -164,7 +165,7 @@ def parse_args():
     parser.add_argument('--ei', type=str, default='0.0084', help="Error rate for insertion.")
     parser.add_argument('--ed', type=str, default='0.0027', help="Error rate for deletion.")
     parser.add_argument('--nbn', type=str, default='10',
-                          help="Average read count per transcript to simulate (i.e., the parameter 'n' of the Negative Binomial distribution)")
+                        help="Average read count per transcript to simulate (i.e., the parameter 'n' of the Negative Binomial distribution)")
 
     return parser.parse_args()
 
