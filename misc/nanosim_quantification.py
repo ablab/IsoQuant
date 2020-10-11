@@ -25,7 +25,6 @@ class QuantificationConfig:
     def __init__(self, args):
         # stages
         self.num_threads = args.num_threads
-        self.mode = args.mode
         self.complete = args.complete
         self.data_type = 'nanopore'
 
