@@ -34,7 +34,7 @@ def main():
     print_args(config)
     run_quantification(config)
 
-    compare_expression(config.transcript_counts, config.expr_abundance, config.iso_output)
+    # compare_expression(config.transcript_counts, config.expr_abundance, config.iso_output)
     compare_transcript_counts(config.transcript_counts, config.simulated_reads, config.iso_output)
     print('----well done----')
 
@@ -43,7 +43,7 @@ def get_simulated_isoforms(sim_reads_fpath):
     with open(sim_reads_fpath, 'r') as f_in:
         for line in f_in.readlines():
             if line.startswith('>'):
-                isoform, _ = line.split('_')
+                isoform = line.split('_')[0]
                 yield isoform[1:]
 
 
