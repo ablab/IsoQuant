@@ -90,7 +90,7 @@ class LongReadAssigner:
             logger.warning(" + Werid case for exon elongation, no matching exons")
 
         isoform_start = split_exons[common_first_exon][0]
-        isoform_end = split_exons[common_last_exon][-1]
+        isoform_end = split_exons[common_last_exon][1]
         read_start = read_split_exon_profile.read_features[0][0]
         read_end = read_split_exon_profile.read_features[-1][1]
         extra_left = isoform_start - read_start

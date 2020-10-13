@@ -37,7 +37,7 @@ class TranscriptModel:
         return self.exon_blocks[0][0]
 
     def get_end(self):
-        return self.exon_blocks[1][-1]
+        return self.exon_blocks[-1][1]
 
 
 class GFFPrinter:
