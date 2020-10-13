@@ -579,6 +579,43 @@ class TranscriptModelConstructor:
         return intron[1] + 1
 
     def verify_novel_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
+        if len(transcript_model.exon_blocks) == 1:
+            return self.verify_novel_monoexonic_model(read_assignments, transcript_model, original_read_id, candidate_model_storage)
+        else:
+            return self.verify_novel_spliced_model(read_assignments, transcript_model, original_read_id,
+                                                   candidate_model_storage)
+
+    def verify_novel_monoexonic_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
+        # TODO verify ends using CAGE/polyA/Illumina
+        model_exons = transcript_model.exon_blocks
+        isoform_start = model_exons[0][0]
+        isoform_end = model_exons[-1][1]
+        strand = transcript_model.strand
+
+        assigned_reads = []
+        unassigned_reads = []
+        for assignment in read_assignments:
+            read_start, read_end = self.get_read_region(strand, assignment.combined_profile)
+            start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
+            end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
+            if start_matches and end_matches:
+                assigned_reads.append(assignment.read_id)
+            else:
+                unassigned_reads.append(assignment.read_id)
+
+        if len(assigned_reads) >= self.params.min_novel_supporting_reads:
+            # to confirm we need at least min_novel_supporting_reads supporting reads
+            logger.debug("Successfully confirmed %s" % transcript_model.transcript_id)
+            candidate_model_storage.append(transcript_model)
+            for read_id in assigned_reads:
+                self.transcript_read_ids[transcript_model.transcript_id].add(read_id)
+            return unassigned_reads
+        else:
+            logger.debug("Transcript candidate %s looks unreliable" % transcript_model.transcript_id)
+            all_except_original = list(filter(lambda x: x.read_id != original_read_id, read_assignments))
+            return all_except_original
+
+    def verify_novel_spliced_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
         # logger.debug("Verifying transcript model %s with %d reads" % (transcript_model.transcript_id, len(read_assignments)))
         model_exons = transcript_model.exon_blocks
         isoform_start = model_exons[0][0]
@@ -605,7 +642,6 @@ class TranscriptModelConstructor:
             matching_events = \
                 intron_comparator.compare_junctions(read_introns, (read_start, read_end),
                                                     model_introns, (isoform_start, isoform_end))
-
             # logger.debug("Read %s, start %d, end %d, events %s" % (assignment.read_id, read_start, read_end, str(matching_events)))
 
             # check that no serious contradiction occurs
