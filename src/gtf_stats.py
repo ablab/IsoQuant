@@ -8,7 +8,7 @@
 
 import os
 import sys
-import json
+import logging
 import argparse
 from traceback import print_exc
 
@@ -18,6 +18,9 @@ from Bio import Seq
 from collections import defaultdict
 from gtf2db import *
 from common import *
+
+
+logger = logging.getLogger('IsoQuant')
 
 
 def array_to_coutns(arr):
@@ -81,14 +84,14 @@ class AnnotationStats:
         self.transcripts_per_gene.append(transcript_count)
 
 
-    def count_gene_stats(self, gene_data):
+    def count_gene_stats(self, gene_data, current_chr_record):
         exon_set = set()
         transcript_count = 0
 
         reference_region = None
         gene_start = gene_data.start
         if self.reference_record_dict:
-            reference_region = self.reference_record_dict[gene_data.seqid][gene_start - 1:gene_data.end].seq
+            reference_region = current_chr_record[gene_start - 1:gene_data.end].seq
 
         for t in self.gene_db.children(gene_data, featuretype='transcript', order_by='start'):
             exon_list = []
@@ -102,9 +105,16 @@ class AnnotationStats:
         self.add_gene(exon_set, transcript_count)
 
     def count_stats(self):
+        current_chr = ""
+        current_chr_record = None
         for g in self.gene_db.features_of_type('gene', order_by=('seqid', 'start')):
+            if current_chr != g.seqid:
+                current_chr = g.seqid
+                logger.info("Processing " + current_chr)
+                current_chr_record = None if not self.reference_record_dict else self.reference_record_dict[current_chr]
+
             gene_name = g.id
-            self.count_gene_stats(self.gene_db[gene_name])
+            self.count_gene_stats(self.gene_db[gene_name], current_chr_record)
 
     def print_to_file(self, output):
         outf = open(output, "w")
@@ -155,28 +165,35 @@ def parse_args(args=None, namespace=None):
 
 
 def run_pipeline(args):
-    print(" === Counting gene annotation statistics === ")
+    logger.info(" === Counting gene annotation statistics === ")
 
     if not args.genedb.endswith('db'):
         args.genedb = convert_gtf_to_db(args, output_is_dir=False)
 
-    print("Loading gene database from " + args.genedb)
+    logger.info("Loading gene database from " + args.genedb)
     gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
     reference_record_dict = None
     if args.reference:
-        print("Loading reference genome from " + args.reference)
+        logger.info("Loading reference genome from " + args.reference)
         reference_record_dict = SeqIO.index(args.reference, "fasta")
 
     stats = AnnotationStats(gffutils_db, reference_record_dict)
-    print("Counting stats, may take a while...")
+    logger.info("Counting stats, may take a while...")
     stats.count_stats()
-    print("Writing stats to " + args.output + ".tsv")
+    logger.info("Writing stats to " + args.output + ".tsv")
     stats.print_to_file(args.output + ".tsv")
 
-    print(" === Counting done === ")
+    logger.info(" === Counting done === ")
 
 
 def main(args):
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
     args = parse_args(args)
     run_pipeline(args)
 
