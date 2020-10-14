@@ -274,6 +274,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
 
 
 class IOSupport:
+    # TODO fix pairing
     canonical_donor_sites = ["GT", "GC", "AT"]
     canonical_acceptor_sites = ["AG", "AC"]
     canonical_donor_sites_rc = ["AC", "GC", "AT"]
