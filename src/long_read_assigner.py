@@ -413,7 +413,7 @@ class LongReadAssigner:
         for isoform_id in isoform_split_exon_profiles.keys():
             isoform_split_exon_profile = isoform_split_exon_profiles[isoform_id]
             isoform_intron_profile = isoform_intron_profiles[isoform_id]
-            if not has_inconsistent_features(read_intron_profile, isoform_intron_profile) and\
+            if not has_inconsistent_features(read_intron_profile.gene_profile, isoform_intron_profile) and\
                     has_overlapping_features(read_split_exon_profile.gene_profile, isoform_split_exon_profile):
                 overlapping_isoforms.add(isoform_id)
 

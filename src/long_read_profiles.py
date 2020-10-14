@@ -43,11 +43,8 @@ class OverlappingFeaturesProfileConstructor:
         self.delta = delta
 
     def construct_intron_profile(self, sorted_blocks):
-        if len(sorted_blocks) < 2:
-            return MappedReadProfile([0] * (len(self.known_features)), [], [])
-
-        read_introns = junctions_from_blocks(sorted_blocks)
         mapped_region = (sorted_blocks[0][0], sorted_blocks[-1][1])
+        read_introns = junctions_from_blocks(sorted_blocks)
         return self.construct_profile_for_features(read_introns, mapped_region)
 
     def construct_exon_profile(self, sorted_blocks):
