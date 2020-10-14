@@ -335,6 +335,14 @@ def has_overlapping_features(profile1, profile2):
     return False
 
 
+def has_inconsistent_features(read_profile, gene_profile):
+    assert len(read_profile) == len(gene_profile)
+    for i in range(len(read_profile)):
+        if read_profile[i] != gene_profile[i] and read_profile[i] != 0:
+            return True
+    return False
+
+
 def mask_profile(read_profile, true_profile):
     assert len(read_profile) == len(true_profile)
 

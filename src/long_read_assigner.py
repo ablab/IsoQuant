@@ -305,7 +305,7 @@ class LongReadAssigner:
             assignment = self.match_with_extra_flanking(read_id, combined_read_profile)
 
         else:
-            logger.debug("+ No contradictory features")
+            logger.debug("+ No contradictory features in read, but no consistent isoforms still can be found")
             if len(read_intron_profile.read_features) > 0:
                 assignment = self.match_non_contradictory_spliced(read_id, combined_read_profile)
             else:
@@ -403,15 +403,23 @@ class LongReadAssigner:
         return ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches)
 
     def match_non_contradictory_monoexonic(self, read_id, combined_read_profile):
+        # FIXME read is monoexonic but isoform is not
         logger.debug("+  Resolving monoexonic read")
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
+        read_intron_profile = combined_read_profile.read_intron_profile
         isoform_split_exon_profiles = self.gene_info.split_exon_profiles.profiles
+        isoform_intron_profiles = self.gene_info.intron_profiles.profiles
         overlapping_isoforms = set()
-        for isoform_id, isoform_profile in isoform_split_exon_profiles.items():
-            if has_overlapping_features(read_split_exon_profile.gene_profile, isoform_profile):
+        for isoform_id in isoform_split_exon_profiles.keys():
+            isoform_split_exon_profile = isoform_split_exon_profiles[isoform_id]
+            isoform_intron_profile = isoform_intron_profiles[isoform_id]
+            if not has_inconsistent_features(read_intron_profile, isoform_intron_profile) and\
+                    has_overlapping_features(read_split_exon_profile.gene_profile, isoform_split_exon_profile):
                 overlapping_isoforms.add(isoform_id)
-        # non-contradictory and non empty profile - some exons must match
-        assert overlapping_isoforms
+
+        # all isoforms are incosisten
+        if len(overlapping_isoforms) == 0:
+            return None
 
         jaccard_matched_isoforms = self.resolve_by_nucleotide_jaccard_similarity(combined_read_profile,
                                                                                  sorted(overlapping_isoforms),
@@ -421,6 +429,7 @@ class LongReadAssigner:
                                  jaccard_matched_isoforms)
         ]
 
+        # TODO multiple isoform case
         if len(reliable_isoforms) == 1:
             isoform_id = list(reliable_isoforms)[0]
             logger.debug("Jaccard similarity picked a single isoform: %s " % isoform_id)
