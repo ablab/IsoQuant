@@ -96,8 +96,8 @@ class MatchEventSubtype(Enum):
     extra_intron_flanking_right = 1014
     # significant exon elongation, more than allowed
     major_exon_elongation_both = 124
-    major_exon_elongation5 = 125
-    major_exon_elongation3 = 123
+    major_exon_elongation_left = 125
+    major_exon_elongation_right = 123
     # other intron modifications
     intron_migration = 114
     intron_alternation_novel = 115
@@ -132,8 +132,8 @@ class MatchEventSubtype(Enum):
 
     @staticmethod
     def is_major_elongation(match_event_subtype):
-        return match_event_subtype in {MatchEventSubtype.major_exon_elongation5,
-                                       MatchEventSubtype.major_exon_elongation3,
+        return match_event_subtype in {MatchEventSubtype.major_exon_elongation_left,
+                                       MatchEventSubtype.major_exon_elongation_right,
                                        MatchEventSubtype.major_exon_elongation_both}
 
 
@@ -155,22 +155,31 @@ nic_event_types = {
 }
 
 
-elongation_types = {"major": {3: MatchEventSubtype.major_exon_elongation3,
-                              5: MatchEventSubtype.major_exon_elongation5,
-                              35: MatchEventSubtype.major_exon_elongation_both},
-                    "minor": {3: MatchEventSubtype.exon_elongation3,
-                              5: MatchEventSubtype.exon_elongation5,
-                              35: MatchEventSubtype.exon_elongation_both}}
+class EventSide(Enum):
+    none = 0
+    right = 3
+    left = 5
+    both = 35
+
+
+elongation_types = {"major": {EventSide.right: MatchEventSubtype.major_exon_elongation_right,
+                              EventSide.left: MatchEventSubtype.major_exon_elongation_left,
+                              EventSide.both: MatchEventSubtype.major_exon_elongation_both},
+                    "minor": {EventSide.right: MatchEventSubtype.exon_elongation3,
+                              EventSide.left: MatchEventSubtype.exon_elongation5,
+                              EventSide.both: MatchEventSubtype.exon_elongation_both}}
 
 class SupplementaryMatchConstansts:
     extra_left_mod_position = -1000000
     extra_right_mod_position = 1000000
+    undefined_position = -2000000
 
 
 MatchEvent = namedtuple("MatchEvent", ("event_type", "isoform_position", "read_region"))
 
 
-def make_event(event_type, isoform_position=None, read_region=None):
+def make_event(event_type, isoform_position=SupplementaryMatchConstansts.undefined_position,
+               read_region=SupplementaryMatchConstansts.undefined_position):
     return MatchEvent(event_type, isoform_position, read_region)
 
 

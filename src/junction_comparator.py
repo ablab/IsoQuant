@@ -164,6 +164,7 @@ class JunctionComparator():
 
     def compare_overlapping_contradictional_regions(self, read_junctions, isoform_junctions, read_cregion, isoform_cregion):
         if read_cregion[0] == self.absent:
+            # TODO partial intron retention
             return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
         elif isoform_cregion[0] == self.absent:
             # intron_start = read_junctions[read_cregion[0]]

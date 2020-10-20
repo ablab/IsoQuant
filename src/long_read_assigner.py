@@ -62,6 +62,7 @@ class LongReadAssigner:
                 # serious exon elongation
                 match.add_subclassification(make_event(exon_elongation_type))
                 if assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference}:
+                    # match.set_classification
                     assignment.set_assignment_type(ReadAssignmentType.contradictory)
             elif exon_elongation_type != MatchEventSubtype.none:
                 # minor exon elongation
@@ -102,10 +103,10 @@ class LongReadAssigner:
         logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
 
         elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.max_exon_extension)
-        if elongation_side > 0:
+        if elongation_side != EventSide.none:
             return elongation_types["major"][elongation_side]
         elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.delta)
-        if elongation_side > 0:
+        if elongation_side != EventSide.none:
             return elongation_types["minor"][elongation_side]
 
         logger.debug("+ + + None")
@@ -115,20 +116,12 @@ class LongReadAssigner:
         logger.debug("+ + + Minor")
         if extra_right > limit and extra_left > limit:
             logger.debug("+ + + Extra sequence on both ends")
-            return 35
+            return EventSide.both
         elif extra_right > limit:
-            logger.debug("+ + + Extra sequence on right end")
-            if self.gene_info.isoform_strands[isoform_id] == "+":
-                return 3
-            else:
-                return 5
-        elif extra_right > limit:
-            logger.debug("+ + + Extra sequence on left end")
-            if self.gene_info.isoform_strands[isoform_id] == "-":
-                return 3
-            else:
-                return 5
-        return 0
+            return EventSide.right
+        elif extra_left > limit:
+            return EventSide.left
+        return EventSide.none
 
     # get incompleteness type
     def detect_ism_subtype(self, read_intron_profile, isoform_id):

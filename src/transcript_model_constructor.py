@@ -153,9 +153,10 @@ class TranscriptModelConstructor:
         for read_assignment in self.read_assignment_storage:
             for match in read_assignment.isoform_matches:
                 isoform_id = match.assigned_transcript
-                if match.match_classification in {MatchClassification.full_splice_match,
-                                                  MatchClassification.incomplete_splice_match,
-                                                  MatchClassification.mono_exon_match}:
+                if read_assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference}:
+                #if match.match_classification in {MatchClassification.full_splice_match,
+                #                                  MatchClassification.incomplete_splice_match,
+                #                                  MatchClassification.mono_exon_match}:
                     self.correct_matches[isoform_id].append(read_assignment)
                 else:
                     significant_events = []
