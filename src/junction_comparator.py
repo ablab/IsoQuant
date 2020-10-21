@@ -128,7 +128,7 @@ class JunctionComparator():
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
             # classify contradictions
             logger.debug("+ + Classifying contradictions")
-            matching_events = self.detect_contradiction_type(read_junctions, isoform_junctions, contradictory_region_pairs)
+            matching_events = self.detect_contradiction_type(read_region, read_junctions, isoform_junctions, contradictory_region_pairs)
 
         if read_features_present[0] == 0 or read_features_present[-1] == 0:
             if all(x == 0 for x in read_features_present):
@@ -141,7 +141,7 @@ class JunctionComparator():
             return [make_event(MatchEventSubtype.none)]
         return matching_events
 
-    def detect_contradiction_type(self, read_junctions, isoform_junctions, contradictory_region_pairs):
+    def detect_contradiction_type(self, read_region, read_junctions, isoform_junctions, contradictory_region_pairs):
         """
 
         Parameters
@@ -157,15 +157,21 @@ class JunctionComparator():
         contradiction_events = []
         for pair in contradictory_region_pairs:
             # classify each contradictory area separately
-            event = self.compare_overlapping_contradictional_regions(read_junctions, isoform_junctions, pair[0], pair[1])
+            event = self.compare_overlapping_contradictional_regions(read_region, read_junctions, isoform_junctions, pair[0], pair[1])
             contradiction_events.append(event)
 
         return contradiction_events
 
-    def compare_overlapping_contradictional_regions(self, read_junctions, isoform_junctions, read_cregion, isoform_cregion):
+    def compare_overlapping_contradictional_regions(self, read_region, read_junctions, isoform_junctions, read_cregion, isoform_cregion):
         if read_cregion[0] == self.absent:
-            # TODO partial intron retention
-            return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
+            if isoform_cregion[0] != isoform_cregion[1]:
+                logger.warning("Multiple intron retentions in a single event:" + str(isoform_cregion))
+            overlapped_isoform_intron = isoform_junctions[isoform_cregion[0]]
+
+            if contains(read_region, overlapped_isoform_intron):
+                return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
+            else:
+                return make_event(MatchEventSubtype.none)
         elif isoform_cregion[0] == self.absent:
             # intron_start = read_junctions[read_cregion[0]]
             if self.are_known_introns(read_junctions, read_cregion):

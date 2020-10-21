@@ -56,6 +56,10 @@ class LongReadAssigner:
     # check for extra sequences and modify assignment accordingly
     def check_for_extra_terminal_seqs(self, read_split_exon_profile, assignment):
         for match in assignment.isoform_matches:
+            if any(s.event_type in {MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right}
+                   for s in match.match_subclassifications):
+                continue
+
             exon_elongation_type = self.categorize_exon_elongation_subtype(read_split_exon_profile,
                                                                            match.assigned_transcript)
             if  MatchEventSubtype.is_major_elongation(exon_elongation_type):
@@ -308,9 +312,9 @@ class LongReadAssigner:
                 # alternative isoforms made of known introns/exons or intron retention
                 logger.debug("+ + Resolving unmatched ")
                 assignment = self.match_contradictory(read_id, combined_read_profile)
-            else:
-                # check for extra flanking sequences
-                self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
+            # else:
+        # check for extra flanking sequences
+        self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
 
         self.verify_polyA(combined_read_profile, assignment)
         return assignment
@@ -586,7 +590,7 @@ class LongReadAssigner:
             # Revise all matches as correct
             isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, best_isoform_ids)
             assignment = ReadAssignment(read_id, new_assignment_type, isoform_matches)
-            self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
+            #self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
         return assignment
 
     # check consistency with polyA

@@ -89,15 +89,15 @@ class MatchEventSubtype(Enum):
     alt_donor_site_novel = 103
     alt_acceptor_site_novel = 104
     # additional introns in the middle
-    extra_intron = 2012
-    extra_intron_known = 2011
+    extra_intron = 1012
+    extra_intron_known = 1011
     # extra inrons on the sides
     extra_intron_flanking_left = 1013
-    extra_intron_flanking_right = 1014
+    extra_intron_flanking_right = 1015
     # significant exon elongation, more than allowed
-    major_exon_elongation_both = 124
-    major_exon_elongation_left = 125
-    major_exon_elongation_right = 123
+    major_exon_elongation_both = 1004
+    major_exon_elongation_left = 1005
+    major_exon_elongation_right = 1003
     # other intron modifications
     intron_migration = 114
     intron_alternation_novel = 115

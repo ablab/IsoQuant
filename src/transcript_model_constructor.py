@@ -333,9 +333,9 @@ class TranscriptModelConstructor:
         read_start, read_end = self.get_read_region(strand, combined_profile)
         novel_exons = []
 
-        # logger.debug("Isoform I " + str(isoform_introns))
-        # logger.debug("Isoform E " + str(self.gene_info.all_isoforms_exons[isoform_id]))
-        # logger.debug("Read " + str(read_introns))
+        logger.debug("Isoform I " + str(isoform_introns))
+        logger.debug("Isoform E " + str(self.gene_info.all_isoforms_exons[isoform_id]))
+        logger.debug("Read " + str(read_introns))
 
         if SupplementaryMatchConstansts.extra_left_mod_position in modification_events_map:
             # if there are extra introns on the left
@@ -347,6 +347,7 @@ class TranscriptModelConstructor:
             current_exon_start = read_start
 
         isoform_pos = 0
+        logger.debug(str(modification_events_map))
         while isoform_pos <= len(isoform_introns):
             if isoform_pos not in modification_events_map.keys():
                 if isoform_pos == len(isoform_introns):
@@ -361,7 +362,7 @@ class TranscriptModelConstructor:
                     break
 
                 # simply select reference isoform intron
-                # logger.debug("Adding ref exon: %d, %d" % (isoform_pos, current_exon_start))
+                logger.debug("Adding ref exon: %d, %d" % (isoform_pos, current_exon_start))
                 current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
                 isoform_pos += 1
 
@@ -445,8 +446,8 @@ class TranscriptModelConstructor:
     # process a sorted list of events assigned to the same intron
     def process_intron_related_events(self, sorted_event_list, isoform_pos, isoform_introns, read_introns,
                                       novel_exons, current_exon_start):
-        # logger.debug("> Processing events for position %s: %s" % (str(isoform_pos), str(sorted_event_list)))
-        # logger.debug("> Before: %d, %s" % (current_exon_start, novel_exons))
+        logger.debug("> Processing events for position %s: %s" % (str(isoform_pos), str(sorted_event_list)))
+        logger.debug("> Before: %d, %s" % (current_exon_start, novel_exons))
         for event in sorted_event_list:
             current_exon_start = self.process_single_event(event, isoform_pos, isoform_introns, read_introns,
                                                            novel_exons, current_exon_start)
