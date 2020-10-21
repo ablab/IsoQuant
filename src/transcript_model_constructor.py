@@ -97,12 +97,16 @@ class TranscriptModelConstructor:
         MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right,
         MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
         MatchEventSubtype.intron_retention, MatchEventSubtype.exon_skipping_novel_intron,
+        MatchEventSubtype.unspliced_intron_retention,
         MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
         MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
         MatchEventSubtype.mutually_exclusive_exons_known,
         MatchEventSubtype.exon_skipping_known_intron, MatchEventSubtype.exon_gain_known,
         MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
-        MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known
+        MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
+        MatchEventSubtype.major_exon_elongation_both, MatchEventSubtype.major_exon_elongation_left,
+        MatchEventSubtype.major_exon_elongation_right,
+        MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
     }
 
     def __init__(self, gene_info, read_assignment_storage, params):
@@ -452,7 +456,7 @@ class TranscriptModelConstructor:
     # process single event
     def process_single_event(self, event_tuple, isoform_pos, isoform_introns, read_introns, novel_exons, current_exon_start):
         # logger.debug("> > Applying event %s at position %s" % (event_tuple.event_type.name, str(isoform_pos)))
-        if event_tuple.event_type == MatchEventSubtype.intron_retention:
+        if event_tuple.event_type in {MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention}:
             # simply skip reference intron
             return current_exon_start
 
@@ -600,16 +604,16 @@ class TranscriptModelConstructor:
             start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
             end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
             if start_matches and end_matches:
-                assigned_reads.append(assignment.read_id)
+                assigned_reads.append(assignment)
             else:
-                unassigned_reads.append(assignment.read_id)
+                unassigned_reads.append(assignment)
 
         if len(assigned_reads) >= self.params.min_novel_supporting_reads:
             # to confirm we need at least min_novel_supporting_reads supporting reads
             logger.debug("Successfully confirmed %s" % transcript_model.transcript_id)
             candidate_model_storage.append(transcript_model)
-            for read_id in assigned_reads:
-                self.transcript_read_ids[transcript_model.transcript_id].add(read_id)
+            for a in assigned_reads:
+                self.transcript_read_ids[transcript_model.transcript_id].add(a.read_id)
             return unassigned_reads
         else:
             logger.debug("Transcript candidate %s looks unreliable" % transcript_model.transcript_id)
