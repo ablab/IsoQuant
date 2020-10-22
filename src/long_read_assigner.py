@@ -339,12 +339,12 @@ class LongReadAssigner:
         """
         read_intron_profile = combined_read_profile.read_intron_profile
         assert read_intron_profile
-        #overlapping_isoforms = self.find_overlapping_isoforms(combined_read_profile.read_split_exon_profile.gene_profile,
-        #                                                     self.gene_info.split_exon_profiles.profiles)
-        #assert overlapping_isoforms
+        overlapping_isoforms = self.find_overlapping_isoforms(combined_read_profile.read_split_exon_profile.gene_profile,
+                                                             self.gene_info.split_exon_profiles.profiles)
+        assert overlapping_isoforms
         intron_matched_isoforms = self.find_matching_isoforms(read_intron_profile.gene_profile,
-                                                              self.gene_info.intron_profiles.profiles)
-                                                              #hint=overlapping_isoforms)
+                                                              self.gene_info.intron_profiles.profiles,
+                                                              hint=overlapping_isoforms)
         # logger.debug("Intron matched " + str(intron_matched_isoforms))
 
         read_assignment = None
@@ -362,8 +362,8 @@ class LongReadAssigner:
             logger.debug("+ + Multiexonic read, trying exon resolution")
             read_split_exon_profile = combined_read_profile.read_split_exon_profile
             exon_matched_isoforms = self.find_matching_isoforms(read_split_exon_profile.gene_profile,
-                                                                self.gene_info.split_exon_profiles.profiles)
-                                                                #hint=overlapping_isoforms)
+                                                                self.gene_info.split_exon_profiles.profiles,
+                                                                hint=overlapping_isoforms)
             # logger.debug("Exon matched " + str(exon_matched_isoforms))
             matched_isoforms = sorted(intron_matched_isoforms.intersection(exon_matched_isoforms))
 
