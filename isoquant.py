@@ -286,10 +286,10 @@ def set_matching_options(args):
                                    'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   MatchingStrategy(0,  5,   0,   0,  10, 0.2,  False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
-        'precise': MatchingStrategy(3,  20,  30,  50,  5, 0.1,  False, 50,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'default': MatchingStrategy(6,  60,  60,  200, 5, 0.1,  False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'loose':   MatchingStrategy(12, 100, 120, 300, 5, 0.1,  True,  100, ExonAmbiguityResolvingMethod.all,  True),
+        'exact':   MatchingStrategy(0,  5,   0,   0,   10, 0.2,  False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
+        'precise': MatchingStrategy(3,  20,  30,  50,  10, 0.2,  False, 50,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'default': MatchingStrategy(6,  60,  60,  200, 10, 0.2,  False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'loose':   MatchingStrategy(12, 100, 120, 300, 10, 0.2,  True,  100, ExonAmbiguityResolvingMethod.all,  True),
     }
 
     strategy = strategies[args.matching_strategy]

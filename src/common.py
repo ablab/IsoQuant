@@ -100,10 +100,14 @@ def range_list_to_str(range_list, element_delim=',', coord_delim='-'):
     return element_delim.join(list(map(lambda x: str(x[0]) + coord_delim + str(x[1]), range_list)))
 
 
+def interval_len(interval):
+    return interval[1] - interval[0] + 1
+
+
 def intervals_total_length(sorted_range_list):
     total_len = 0
     for r in sorted_range_list:
-        total_len += r[1] - r[0] + 1
+        total_len += interval_len(r)
     return total_len
 
 
@@ -207,6 +211,24 @@ def junctions_from_blocks(sorted_blocks):
             if sorted_blocks[i][1] + 1 < sorted_blocks[i + 1][0]:
                 junctions.append((sorted_blocks[i][1] + 1, sorted_blocks[i + 1][0] - 1))
     return junctions
+
+
+def get_following_exon_from_junctions(region, introns, intron_position):
+    if intron_position == len(introns) - 1:
+        # intron precedes the last exon
+        following_exon_end = region[1]
+    else:
+        following_exon_end = introns[intron_position + 1][0] - 1
+    return (introns[intron_position][1] + 1, following_exon_end)
+
+
+def get_preceding_exon_from_junctions(region, introns, intron_position):
+    if intron_position == 0:
+        # intron precedes the last exon
+        preceding_exon_start = region[0]
+    else:
+        preceding_exon_start = introns[intron_position - 1][1] + 1
+    return (preceding_exon_start, introns[intron_position][0] - 1)
 
 
 def concat_gapless_blocks(blocks, cigar_tuples):

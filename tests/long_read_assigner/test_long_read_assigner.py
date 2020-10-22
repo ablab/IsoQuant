@@ -147,6 +147,6 @@ class TestDetectContradictionType:
 
     def test(self):
         assigner = LongReadAssigner(self.gene_info, self.Params(1, 1))
-        match_events = assigner.intron_comparator.detect_contradiction_type([(50, 75)], [(50, 75)], [((0, 0), (0, 0))])
+        match_events = assigner.intron_comparator.detect_contradiction_type((0, 200), [(50, 75)], (0, 200), [(45, 70)], [((0, 0), (0, 0))])
         assert len(match_events) == 1
         assert match_events[0].event_type == MatchEventSubtype.intron_shift

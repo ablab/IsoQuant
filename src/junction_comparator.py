@@ -130,7 +130,7 @@ class JunctionComparator():
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
             # classify contradictions
             logger.debug("+ + Classifying contradictions")
-            matching_events = self.detect_contradiction_type(read_region, read_junctions, isoform_junctions, contradictory_region_pairs)
+            matching_events = self.detect_contradiction_type(read_region, read_junctions, isoform_region, isoform_junctions, contradictory_region_pairs)
 
         if read_features_present[0] == 0 or read_features_present[-1] == 0:
             if all(x == 0 for x in read_features_present):
@@ -143,7 +143,7 @@ class JunctionComparator():
             return [make_event(MatchEventSubtype.none)]
         return matching_events
 
-    def detect_contradiction_type(self, read_region, read_junctions, isoform_junctions, contradictory_region_pairs):
+    def detect_contradiction_type(self, read_region, read_junctions, isoform_region, isoform_junctions, contradictory_region_pairs):
         """
 
         Parameters
@@ -159,12 +159,12 @@ class JunctionComparator():
         contradiction_events = []
         for pair in contradictory_region_pairs:
             # classify each contradictory area separately
-            event = self.compare_overlapping_contradictional_regions(read_region, read_junctions, isoform_junctions, pair[0], pair[1])
+            event = self.compare_overlapping_contradictional_regions(read_region, read_junctions, isoform_region, isoform_junctions, pair[0], pair[1])
             contradiction_events.append(event)
 
         return contradiction_events
 
-    def compare_overlapping_contradictional_regions(self, read_region, read_junctions, isoform_junctions, read_cregion, isoform_cregion):
+    def compare_overlapping_contradictional_regions(self, read_region, read_junctions, isoform_region, isoform_junctions, read_cregion, isoform_cregion):
         if read_cregion[0] == self.absent:
             if isoform_cregion[0] != isoform_cregion[1]:
                 logger.warning("Multiple intron retentions in a single event:" + str(isoform_cregion))
@@ -189,7 +189,7 @@ class JunctionComparator():
         read_introns_known = self.are_known_introns(read_junctions, read_cregion)
 
         if read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
-            event = self.classify_single_intron_alternation(read_junctions, isoform_junctions, read_cregion[0],
+            event = self.classify_single_intron_alternation(read_region, read_junctions, isoform_region, isoform_junctions, read_cregion[0],
                                                            isoform_cregion[0], total_intron_len_diff, read_introns_known)
 
         elif read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] and \
@@ -230,7 +230,7 @@ class JunctionComparator():
                 event = MatchEventSubtype.exon_skipping_novel_intron
         return event
 
-    def classify_single_intron_alternation(self, read_junctions, isoform_junctions, read_cpos, isoform_cpos,
+    def classify_single_intron_alternation(self, read_region, read_junctions, isoform_region, isoform_junctions, read_cpos, isoform_cpos,
                                            total_intron_len_diff, read_introns_known):
         if total_intron_len_diff <= 2 * self.params.delta:
             if read_introns_known:
@@ -241,14 +241,26 @@ class JunctionComparator():
                 else:
                     event = MatchEventSubtype.intron_alternation_novel
         else:
-            # TODO check exon overlap
+            event = MatchEventSubtype.intron_alternation_known if read_introns_known \
+                else MatchEventSubtype.intron_alternation_novel
+
             if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) < self.params.delta:
-                event = alternative_sites[("right", read_introns_known)]
+                # left splice sites are similar, check for exon overlap
+                following_read_exon = get_following_exon_from_junctions(read_region, read_junctions, read_cpos)
+                following_isoform_exon = get_following_exon_from_junctions(isoform_region, isoform_junctions, isoform_cpos)
+                min_overlap = max(1, min(self.params.min_abs_exon_overlap,
+                                         round(self.params.min_rel_exon_overlap * interval_len(following_isoform_exon))))
+                if overlaps_at_least(following_read_exon, following_isoform_exon, min_overlap):
+                    event = alternative_sites[("right", read_introns_known)]
             elif abs(isoform_junctions[isoform_cpos][1] - read_junctions[read_cpos][1]) < self.params.delta:
-                event = alternative_sites[("left", read_introns_known)]
-            else:
-                event = MatchEventSubtype.intron_alternation_known if read_introns_known \
-                    else MatchEventSubtype.intron_alternation_novel
+                # right splice sites are similar, check for exon overlap
+                preceding_read_exon = get_preceding_exon_from_junctions(read_region, read_junctions, read_cpos)
+                preceding_isoform_exon = get_preceding_exon_from_junctions(isoform_region, isoform_junctions, isoform_cpos)
+                min_overlap = max(1, min(self.params.min_abs_exon_overlap,
+                                      round(self.params.min_rel_exon_overlap * interval_len(preceding_isoform_exon))))
+                if overlaps_at_least(preceding_read_exon, preceding_isoform_exon, min_overlap):
+                    event = alternative_sites[("left", read_introns_known)]
+
         return event
 
     def get_mono_exon_subtype(self, read_region, isoform_junctions):
