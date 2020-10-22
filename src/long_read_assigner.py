@@ -94,25 +94,18 @@ class LongReadAssigner:
         if common_first_exon == -1 or common_last_exon == -1:
             logger.warning(" + Werid case for exon elongation, no matching exons")
 
-        isoform_start = split_exons[common_first_exon][0]
-        isoform_end = split_exons[common_last_exon][1]
-        read_start = read_split_exon_profile.read_features[0][0]
-        read_end = read_split_exon_profile.read_features[-1][1]
-        extra_left = isoform_start - read_start
-        extra_right = read_end - isoform_end
+        first_read_exon = read_split_exon_profile.read_features[0]
+        if overlaps(first_read_exon, split_exons[common_first_exon]):
+            extra_left = split_exons[common_first_exon][0] - first_read_exon[0]
+        else:
+            # frist read exon seems to be to the left of common exon
+            extra_left = 0
 
-        #first_read_exon = read_split_exon_profile.read_features[0]
-        #if overlaps(first_read_exon, split_exons[common_first_exon]):
-        #    extra_left = split_exons[common_first_exon][0] - first_read_exon[0]
-        #else:
-        #    # frist read exon seems to be to the left of common exon
-        #    extra_left = 0
-
-        #last_read_exon = read_split_exon_profile.read_features[-1]
-        #if overlaps(last_read_exon, split_exons[common_last_exon]):
-        #    extra_right = last_read_exon[1] - split_exons[common_last_exon][1]
-        #else:
-        #    extra_right = 0
+        last_read_exon = read_split_exon_profile.read_features[-1]
+        if overlaps(last_read_exon, split_exons[common_last_exon]):
+            extra_right = last_read_exon[1] - split_exons[common_last_exon][1]
+        else:
+            extra_right = 0
 
         logger.debug("+ + Checking exon elongation")
         logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
