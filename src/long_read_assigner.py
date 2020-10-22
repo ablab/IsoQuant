@@ -30,26 +30,9 @@ class LongReadAssigner:
     def __init__(self, gene_info, params):
         self.gene_info = gene_info
         self.params = params
-        self.intron_profile_constructor = \
-            OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features,
-                                                  (self.gene_info.start, self.gene_info.end),
-                                                  comparator=partial(equal_ranges, delta=self.params.delta))
-        self.intron_comparator = JunctionComparator(params, self.intron_profile_constructor)
+        self.intron_comparator = JunctionComparator(params, self.gene_info)
 
     # ======== SUPPORT FUNCTIONS =======
-    def profile_for_junctions_introns(self, junctions, region):
-        selected_junctions = []
-        logger.debug("Checking for known introns " + str(region))
-        for i in range(region[0], region[1] + 1):
-            selected_junctions.append(junctions[i])
-
-        selected_junctions_profile = self.intron_profile_constructor.construct_profile_for_features(selected_junctions)
-        return selected_junctions_profile
-
-    def are_known_introns(self, junctions, region):
-        selected_junctions_profile = self.profile_for_junctions_introns(junctions, region)
-        return all(el == 1 for el in selected_junctions_profile.read_profile)
-
     def get_gene_id(self, transcript_id):
         return self.gene_info.gene_id_map[transcript_id]
 
@@ -112,6 +95,8 @@ class LongReadAssigner:
 
         elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.max_exon_extension)
         if elongation_side != EventSide.none:
+            # significant exon elongation
+            # TODO if elongation is within THIS isoform intron, it's partial inton retention
             return elongation_types["major"][elongation_side]
         elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.delta)
         if elongation_side != EventSide.none:

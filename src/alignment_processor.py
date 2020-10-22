@@ -40,6 +40,8 @@ class LongReadAlignmentProcessor:
         self.intron_profile_constructor = \
             OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features, gene_region,
                                                   comparator=partial(equal_ranges, delta=self.params.delta),
+                                                  # TODO parameter max_exon_extension
+                                                  absense_condition=partial(overlaps_at_least, delta=self.params.max_exon_extension),
                                                   delta=self.params.delta)
         # TODO check for non split exons which do overlap
         self.exon_profile_constructor = \
