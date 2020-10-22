@@ -65,7 +65,7 @@ class AssignedFeatureCounter(AbstractCounter):
                 self.all_features.add(feature_ids[0])
             else:
                 self.ambiguous_reads += 1
-        elif read_assignment.assignment_type == ReadAssignmentType.empty:
+        elif read_assignment.assignment_type == ReadAssignmentType.noninformative:
             self.not_assigned_reads += 1
         elif read_assignment.assignment_type == ReadAssignmentType.unique or\
                 read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:

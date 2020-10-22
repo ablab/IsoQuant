@@ -204,7 +204,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         if read_assignment is None:
             return
         # FIXME ambiguous matches
-        if read_assignment.assignment_type in [ReadAssignmentType.empty, ReadAssignmentType.ambiguous]:
+        if read_assignment.assignment_type in [ReadAssignmentType.noninformative, ReadAssignmentType.ambiguous]:
             return
 
         gene_info = read_assignment.gene_info

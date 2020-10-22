@@ -281,14 +281,15 @@ def set_data_dependent_options(args):
 def set_matching_options(args):
     MatchingStrategy = namedtuple('MatchingStrategy',
                                   ('delta', 'max_exon_extension', 'max_intron_shift', 'max_missed_exon_len',
+                                   'min_abs_exon_overlap', 'min_rel_exon_overlap',
                                    'allow_extra_terminal_introns', 'apa_delta',
                                    'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   MatchingStrategy(0,  5,   0,   0,   False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
-        'precise': MatchingStrategy(3,  20,  30,  50,  False, 50, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'default': MatchingStrategy(6,  60,  60,  200, False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'loose':   MatchingStrategy(12, 100, 120, 300, True, 100, ExonAmbiguityResolvingMethod.all,  True),
+        'exact':   MatchingStrategy(0,  5,   0,   0,  10, 0.2,  False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
+        'precise': MatchingStrategy(3,  20,  30,  50,  5, 0.1,  False, 50,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'default': MatchingStrategy(6,  60,  60,  200, 5, 0.1,  False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'loose':   MatchingStrategy(12, 100, 120, 300, 5, 0.1,  True,  100, ExonAmbiguityResolvingMethod.all,  True),
     }
 
     strategy = strategies[args.matching_strategy]
@@ -297,6 +298,8 @@ def set_matching_options(args):
     args.max_exon_extension = strategy.max_exon_extension
     args.max_intron_shift = args.max_intron_shift or strategy.max_intron_shift
     args.max_missed_exon_len = args.max_missed_exon_len or strategy.max_missed_exon_len
+    args.min_abs_exon_overlap = strategy.min_abs_exon_overlap
+    args.min_rel_exon_overlap = strategy.min_rel_exon_overlap
     args.allow_extra_terminal_introns = strategy.allow_extra_terminal_introns
     args.apa_delta = strategy.apa_delta
     args.resolve_ambiguous = args.resolve_ambiguous or strategy.resolve_ambiguous
@@ -304,7 +307,8 @@ def set_matching_options(args):
         strategy.correct_minor_errors if args.correct_minor_errors is None else args.correct_minor_errors
 
     updated_strategy = MatchingStrategy(args.delta, args.max_exon_extension, args.max_intron_shift,
-                                        args.max_missed_exon_len, args.allow_extra_terminal_introns,
+                                        args.max_missed_exon_len, args.mimin_abs_exon_overlap,
+                                        args.min_rel_exon_overlap, args.allow_extra_terminal_introns,
                                         args.apa_delta, args.resolve_ambiguous, args.correct_minor_errors)
     logger.debug('Using %s strategy. Updated strategy: %s.' % (args.matching_strategy, updated_strategy))
 

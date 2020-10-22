@@ -125,6 +125,8 @@ class JunctionComparator():
         # logger.debug("+ + Isoform region " + str(isoform_region))
 
         matching_events = []
+        # logger.debug(read_features_present)
+        # logger.debug(isoform_features_present)
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
             # classify contradictions
             logger.debug("+ + Classifying contradictions")
@@ -239,13 +241,11 @@ class JunctionComparator():
                 else:
                     event = MatchEventSubtype.intron_alternation_novel
         else:
-            # TODO correct when strand is negative
+            # TODO check exon overlap
             if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) < self.params.delta:
-                event = MatchEventSubtype.alt_acceptor_site_known if read_introns_known \
-                    else MatchEventSubtype.alt_acceptor_site_novel
+                event = alternative_sites[("right", read_introns_known)]
             elif abs(isoform_junctions[isoform_cpos][1] - read_junctions[read_cpos][1]) < self.params.delta:
-                event = MatchEventSubtype.alt_donor_site_known if read_introns_known \
-                    else MatchEventSubtype.alt_donor_site_novel
+                event = alternative_sites[("left", read_introns_known)]
             else:
                 event = MatchEventSubtype.intron_alternation_known if read_introns_known \
                     else MatchEventSubtype.intron_alternation_novel

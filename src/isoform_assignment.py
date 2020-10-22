@@ -15,12 +15,12 @@ logger = logging.getLogger('IsoQuant')
 
 class ReadAssignmentType(Enum):
     unique = 1
-    empty = 0
+    noninformative = 0
     ambiguous = 10
     unique_minor_difference = 2
-    contradictory = 3
+    inconsistent = 3
     novel = 4
-    contradictory_monoexon = 11
+    inconsistent_monoexon = 11
 
 
 # SQANTI-like
@@ -67,16 +67,16 @@ class MatchEventSubtype(Enum):
     # non-contradictory
     mono_exonic = 10
     fsm = 11
-    ism_5 = 15
-    ism_3 = 13
+    ism_left = 15
+    ism_right = 13
     ism_internal = 14
     mono_exon_match = 15
     # alignment artifacts
     intron_shift = 21
     exon_misallignment = 22
     # minor alternations
-    exon_elongation5 = 25
-    exon_elongation3 = 23
+    exon_elongation_left = 25
+    exon_elongation_right = 23
     exon_elongation_both = 24
     # intron retentions
     intron_retention = 31
@@ -84,10 +84,10 @@ class MatchEventSubtype(Enum):
     unspliced_genic = 33
     # major alternation
     # alternative donor/acceptor sites
-    alt_donor_site_known = 101
-    alt_acceptor_site_known = 102
-    alt_donor_site_novel = 103
-    alt_acceptor_site_novel = 104
+    alt_left_site_known = 101
+    alt_right_site_known = 102
+    alt_left_site_novel = 103
+    alt_right_site_novel = 104
     # additional introns in the middle
     extra_intron = 1012
     extra_intron_known = 1011
@@ -127,7 +127,7 @@ class MatchEventSubtype(Enum):
 
     @staticmethod
     def is_minor_error(match_event_subtype):
-        return match_event_subtype in {MatchEventSubtype.exon_elongation5, MatchEventSubtype.exon_elongation3,
+        return match_event_subtype in {MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right,
                                        MatchEventSubtype.exon_elongation_both}
 
     @staticmethod
@@ -138,7 +138,7 @@ class MatchEventSubtype(Enum):
 
 
 nnic_event_types = {
-    MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
+    MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
     MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_flanking_left,
     MatchEventSubtype.extra_intron_flanking_right,MatchEventSubtype.mutually_exclusive_exons_novel,
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
@@ -147,7 +147,7 @@ nnic_event_types = {
 
 nic_event_types = {
     MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
-    MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
+    MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
     MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
     MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
@@ -165,9 +165,15 @@ class EventSide(Enum):
 elongation_types = {"major": {EventSide.right: MatchEventSubtype.major_exon_elongation_right,
                               EventSide.left: MatchEventSubtype.major_exon_elongation_left,
                               EventSide.both: MatchEventSubtype.major_exon_elongation_both},
-                    "minor": {EventSide.right: MatchEventSubtype.exon_elongation3,
-                              EventSide.left: MatchEventSubtype.exon_elongation5,
+                    "minor": {EventSide.right: MatchEventSubtype.exon_elongation_right,
+                              EventSide.left: MatchEventSubtype.exon_elongation_left,
                               EventSide.both: MatchEventSubtype.exon_elongation_both}}
+
+# (side, is_known) -> alternation type
+alternative_sites = {("left", True): MatchEventSubtype.alt_left_site_known,
+                     ("left", False): MatchEventSubtype.alt_left_site_novel,
+                     ("right", True): MatchEventSubtype.alt_right_site_known,
+                     ("right", False): MatchEventSubtype.alt_right_site_novel}
 
 class SupplementaryMatchConstansts:
     extra_left_mod_position = -1000000

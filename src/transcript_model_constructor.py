@@ -92,13 +92,13 @@ class TranscriptModelConstructor:
     nnic_transcript_suffix = ".nnic"
 
     events_to_track = {
-        MatchEventSubtype.alt_donor_site_novel, MatchEventSubtype.alt_acceptor_site_novel,
+        MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
         MatchEventSubtype.extra_intron,
         MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right,
         MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
         MatchEventSubtype.intron_retention, MatchEventSubtype.exon_skipping_novel_intron,
         MatchEventSubtype.unspliced_intron_retention,
-        MatchEventSubtype.alt_donor_site_known, MatchEventSubtype.alt_acceptor_site_known,
+        MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
         MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
         MatchEventSubtype.mutually_exclusive_exons_known,
         MatchEventSubtype.exon_skipping_known_intron, MatchEventSubtype.exon_gain_known,
@@ -482,17 +482,16 @@ class TranscriptModelConstructor:
         isoform_intron = isoform_introns[isoform_pos]
         assert overlaps(read_intron, isoform_intron)
 
-        if event_tuple.event_type == MatchEventSubtype.alt_donor_site_novel:
-            # TODO check strands for acceptor donor sites
+        if event_tuple.event_type == MatchEventSubtype.alt_left_site_novel:
             novel_intron = (read_intron[0], isoform_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
-        elif event_tuple.event_type == MatchEventSubtype.alt_donor_site_known:
+        elif event_tuple.event_type == MatchEventSubtype.alt_left_site_known:
             novel_intron = self.get_closest_ref_intron((read_intron[0], isoform_intron[1]))
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
-        elif event_tuple.event_type == MatchEventSubtype.alt_acceptor_site_novel:
+        elif event_tuple.event_type == MatchEventSubtype.alt_right_site_novel:
             novel_intron = (isoform_intron[0], read_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
-        elif event_tuple.event_type == MatchEventSubtype.alt_acceptor_site_known:
+        elif event_tuple.event_type == MatchEventSubtype.alt_right_site_known:
             novel_intron = self.get_closest_ref_intron((isoform_intron[0], read_intron[1]))
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_novel,

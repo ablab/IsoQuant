@@ -30,12 +30,12 @@ class MultimapResolver:
         if self.strategy == MultimapResolvingStrategy.ignore_multimapper:
             return ReadAssignment(read_id, ReadAssignmentType.ambiguous)
         elif self.strategy == MultimapResolvingStrategy.merge:
-            return self.merge(list(filter(lambda x: x.assignment_type != ReadAssignmentType.empty, assignment_list)))
+            return self.merge(list(filter(lambda x: x.assignment_type != ReadAssignmentType.noninformative, assignment_list)))
         elif self.strategy == MultimapResolvingStrategy.take_best:
             # TODO: improve take_best strategy
             classified_assignments = defaultdict(list)
             for ra in assignment_list:
-                if ra.assignment_type == ReadAssignmentType.empty:
+                if ra.assignment_type == ReadAssignmentType.noninformative:
                     continue
                 classified_assignments[ra.assignment_type.name].append(ra)
 

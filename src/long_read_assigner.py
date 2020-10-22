@@ -67,7 +67,7 @@ class LongReadAssigner:
                 match.add_subclassification(make_event(exon_elongation_type))
                 if assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference}:
                     # match.set_classification
-                    assignment.set_assignment_type(ReadAssignmentType.contradictory)
+                    assignment.set_assignment_type(ReadAssignmentType.inconsistent)
             elif exon_elongation_type != MatchEventSubtype.none:
                 # minor exon elongation
                 match.add_subclassification(make_event(exon_elongation_type))
@@ -101,9 +101,20 @@ class LongReadAssigner:
         extra_left = isoform_start - read_start
         extra_right = read_end - isoform_end
 
+        #first_read_exon = read_split_exon_profile.read_features[0]
+        #if overlaps(first_read_exon, split_exons[common_first_exon]):
+        #    extra_left = split_exons[common_first_exon][0] - first_read_exon[0]
+        #else:
+        #    # frist read exon seems to be to the left of common exon
+        #    extra_left = 0
+
+        #last_read_exon = read_split_exon_profile.read_features[-1]
+        #if overlaps(last_read_exon, split_exons[common_last_exon]):
+        #    extra_right = last_read_exon[1] - split_exons[common_last_exon][1]
+        #else:
+        #    extra_right = 0
+
         logger.debug("+ + Checking exon elongation")
-        logger.debug("+ + Read: " + str(read_start) + "-" + str(read_end))
-        logger.debug("+ + Isoform: " + str(isoform_start) + "-" + str(isoform_end))
         logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
 
         elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.max_exon_extension)
@@ -113,7 +124,7 @@ class LongReadAssigner:
         if elongation_side != EventSide.none:
             return elongation_types["minor"][elongation_side]
 
-        logger.debug("+ + + None")
+        logger.debug("+ + + No elongation")
         return MatchEventSubtype.none
 
     def exon_elongation_side(self, isoform_id, extra_right, extra_left, limit):
@@ -143,16 +154,10 @@ class LongReadAssigner:
             event_type = MatchEventSubtype.ism_internal
         elif is_left_truncated:
             logger.debug(" + Truncated on the left")
-            if self.gene_info.isoform_strands[isoform_id] == "+":
-                event_type = MatchEventSubtype.ism_5
-            else:
-                event_type = MatchEventSubtype.ism_3
+            event_type = MatchEventSubtype.ism_left
         elif is_right_truncated:
             logger.debug(" + Truncated on the right")
-            if self.gene_info.isoform_strands[isoform_id] == "-":
-                event_type = MatchEventSubtype.ism_5
-            else:
-                event_type = MatchEventSubtype.ism_3
+            event_type = MatchEventSubtype.ism_right
         else:
             logger.debug(" + No ISM truncation ")
             event_type = MatchEventSubtype.none
@@ -169,7 +174,8 @@ class LongReadAssigner:
         return not left_truncated(read_profile, isoform_profile) \
                and not right_truncated(read_profile, isoform_profile)
 
-    def find_overlapping_isoforms(self, read_exon_split_profile, isoform_profiles):
+    @staticmethod
+    def find_overlapping_isoforms(read_exon_split_profile, isoform_profiles):
         isoforms = set()
         for isoform_id, isoform_profile in isoform_profiles.items():
             if has_overlapping_features(isoform_profile, read_exon_split_profile):
@@ -280,18 +286,24 @@ class LongReadAssigner:
 
         if all(el == 0 for el in read_split_exon_profile.read_profile) \
                 or all(el == 0 for el in read_split_exon_profile.gene_profile):
+
+            read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
+            gene_region = (self.gene_info.split_exon_profiles.features[0][0],
+                              self.gene_info.split_exon_profiles.features[-1][1])
             # none of the blocks matched
-            if all(el == 0 for el in read_intron_profile.gene_profile):
-                logger.debug("EMPTY - intergenic")
-                assignment = ReadAssignment(read_id, ReadAssignmentType.empty, IsoformMatch(MatchClassification.intergenic))
-            else:
+            if not overlaps(read_region, gene_region):
+                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.intergenic))
+            elif all(el == 0 for el in read_split_exon_profile.gene_profile):
                 logger.debug("EMPTY - intronic")
-                assignment = ReadAssignment(read_id, ReadAssignmentType.empty, IsoformMatch(MatchClassification.genic_intron))
+                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic_intron))
+            else:
+                logger.debug("EMPTY - genic")
+                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
             return assignment
 
         elif any(el == -1 for el in read_intron_profile.read_profile) \
                 or any(el == -1 for el in read_split_exon_profile.read_profile):
-            # Read has missing exons / introns
+            # Read has inconsistent exons / introns
             logger.debug("+ Has contradictory features")
             assignment = self.match_contradictory(read_id, combined_read_profile)
 
@@ -306,7 +318,7 @@ class LongReadAssigner:
             if len(read_intron_profile.read_features) > 0:
                 assignment = self.match_non_contradictory_spliced(read_id, combined_read_profile)
             else:
-                assignment = self.match_non_contradictory_monoexonic(read_id, combined_read_profile)
+                assignment = self.match_monoexonic(read_id, combined_read_profile)
 
             if assignment is None:
                 # alternative isoforms made of known introns/exons or intron retention
@@ -314,8 +326,9 @@ class LongReadAssigner:
                 assignment = self.match_contradictory(read_id, combined_read_profile)
             # else:
         # check for extra flanking sequences
-        self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
-
+        if assignment.assignment_type != ReadAssignmentType.noninformative:
+            self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
+        # checking
         self.verify_polyA(combined_read_profile, assignment)
         return assignment
 
@@ -333,8 +346,12 @@ class LongReadAssigner:
         """
         read_intron_profile = combined_read_profile.read_intron_profile
         assert read_intron_profile
+        #overlapping_isoforms = self.find_overlapping_isoforms(combined_read_profile.read_split_exon_profile.gene_profile,
+        #                                                     self.gene_info.split_exon_profiles.profiles)
+        #assert overlapping_isoforms
         intron_matched_isoforms = self.find_matching_isoforms(read_intron_profile.gene_profile,
                                                               self.gene_info.intron_profiles.profiles)
+                                                              #hint=overlapping_isoforms)
         # logger.debug("Intron matched " + str(intron_matched_isoforms))
 
         read_assignment = None
@@ -353,6 +370,7 @@ class LongReadAssigner:
             read_split_exon_profile = combined_read_profile.read_split_exon_profile
             exon_matched_isoforms = self.find_matching_isoforms(read_split_exon_profile.gene_profile,
                                                                 self.gene_info.split_exon_profiles.profiles)
+                                                                #hint=overlapping_isoforms)
             # logger.debug("Exon matched " + str(exon_matched_isoforms))
             matched_isoforms = sorted(intron_matched_isoforms.intersection(exon_matched_isoforms))
 
@@ -399,7 +417,7 @@ class LongReadAssigner:
         isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, matched_isoforms)
         return ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches)
 
-    def match_non_contradictory_monoexonic(self, read_id, combined_read_profile):
+    def match_monoexonic(self, read_id, combined_read_profile):
         # FIXME read is monoexonic but isoform is not
         logger.debug("+  Resolving monoexonic read")
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
@@ -434,7 +452,7 @@ class LongReadAssigner:
             if isoform_match.all_subtypes_are_none_or_monoexonic():
                 assignment_type = ReadAssignmentType.unique
             else:
-                assignment_type = ReadAssignmentType.contradictory
+                assignment_type = ReadAssignmentType.inconsistent
             read_assignment = ReadAssignment(read_id, assignment_type, isoform_match)
         elif len(reliable_isoforms) > 0:
             logger.debug("Jaccard similarity picked multiple isoforms")
@@ -442,7 +460,7 @@ class LongReadAssigner:
             if all(im.all_subtypes_are_none_or_monoexonic() for im in isoform_matches):
                 assignment_type = ReadAssignmentType.ambiguous
             else:
-                assignment_type = ReadAssignmentType.contradictory
+                assignment_type = ReadAssignmentType.inconsistent
             read_assignment = ReadAssignment(read_id, assignment_type, isoform_matches)
         else:
             # unreliable_mono_exon
@@ -450,9 +468,9 @@ class LongReadAssigner:
             unreliable_isoforms = [x[0] for x in jaccard_matched_isoforms]
             isoform_matches = self.categorize_multiple_mono_exon_matches(combined_read_profile, unreliable_isoforms)
             if all(im.all_subtypes_are_none_or_monoexonic() for im in isoform_matches):
-                assignment_type = ReadAssignmentType.contradictory_monoexon
+                assignment_type = ReadAssignmentType.inconsistent_monoexon
             else:
-                assignment_type = ReadAssignmentType.contradictory
+                assignment_type = ReadAssignmentType.inconsistent
             read_assignment = ReadAssignment(read_id, assignment_type, isoform_matches)
 
         return read_assignment
@@ -480,7 +498,7 @@ class LongReadAssigner:
     def match_with_extra_flanking(self, read_id, combined_read_profile):
         read_intron_profile = combined_read_profile.read_intron_profile
         if read_intron_profile.read_profile[0] == 1 and read_intron_profile.read_profile[-1] == 1:
-            logger.debug("+ + Both terminal introns present, odd case")
+            logger.warning("+ + Both terminal introns present, odd case")
 
         assignment = self.match_non_contradictory_spliced(read_id, combined_read_profile)
         if assignment is None:
@@ -497,7 +515,7 @@ class LongReadAssigner:
 
         if not self.params.allow_extra_terminal_introns:
             if assignment.assignment_type in (ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference):
-                assignment.set_assignment_type(ReadAssignmentType.contradictory)
+                assignment.set_assignment_type(ReadAssignmentType.inconsistent)
         else:
             if assignment.assignment_type == ReadAssignmentType.unique:
                 assignment.set_assignment_type(ReadAssignmentType.unique_minor_difference)
@@ -511,6 +529,9 @@ class LongReadAssigner:
 
         overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile.gene_profile,
                                                               self.gene_info.split_exon_profiles.profiles)
+        if not overlapping_isoforms:
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
+
         intron_matching_isoforms = self.match_profile(read_intron_profile.gene_profile,
                                                       self.gene_info.intron_profiles.profiles,
                                                       hint=overlapping_isoforms)
@@ -544,9 +565,9 @@ class LongReadAssigner:
         best_exon_isoforms = list(filter(lambda x: x[0] in best_intron_isoform_ids, exon_matching_isoforms))
         best_isoform_ids = get_first_best_from_sorted(best_exon_isoforms)
         if not best_isoform_ids:
-            return ReadAssignment(read_id, ReadAssignmentType.empty)
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
 
-        assignment = ReadAssignment(read_id, ReadAssignmentType.contradictory)
+        assignment = ReadAssignment(read_id, ReadAssignmentType.inconsistent)
         logger.debug("+ + Closest matching isoforms " + str(best_isoform_ids))
         isoform_id = best_isoform_ids[0]
         # logger.debug(str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
@@ -577,7 +598,7 @@ class LongReadAssigner:
 
         new_assignment_type = None
         if len(assignment.isoform_matches) == 0:
-            return ReadAssignment(read_id, ReadAssignmentType.empty)
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative)
         # Change assignment from contradictory when contradictions are minor or absent
         if all(m.all_subtypes_are_none_or_monoexonic() for m in assignment.isoform_matches):
             # No contradiction
@@ -632,7 +653,7 @@ class LongReadAssigner:
                 isoform_match.set_classification(MatchClassification.novel_in_catalog)
 
         if apa_found and read_assignment.assignment_type == ReadAssignmentType.unique:
-            read_assignment.assignment_type = ReadAssignmentType.contradictory
+            read_assignment.assignment_type = ReadAssignmentType.inconsistent
 
     # try to resolve when polyA position is known
     def resolve_by_polyA(self, combined_read_profile, read_assignment):
