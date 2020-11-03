@@ -43,17 +43,17 @@ class LongReadAssigner:
                    for s in match.match_subclassifications):
                 continue
 
-            exon_elongation_type = self.categorize_exon_elongation_subtype(read_split_exon_profile,
+            exon_elongation_types = self.categorize_exon_elongation_subtype(read_split_exon_profile,
                                                                            match.assigned_transcript)
-            if  MatchEventSubtype.is_major_elongation(exon_elongation_type):
+            for e in exon_elongation_types:
+                match.add_subclassification(make_event(e))
+            if  any(MatchEventSubtype.is_major_elongation(e) for e in exon_elongation_types):
                 # serious exon elongation
-                match.add_subclassification(make_event(exon_elongation_type))
                 if assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference}:
                     # match.set_classification
                     assignment.set_assignment_type(ReadAssignmentType.inconsistent)
-            elif exon_elongation_type != MatchEventSubtype.none:
+            elif len(exon_elongation_types) > 0:
                 # minor exon elongation
-                match.add_subclassification(make_event(exon_elongation_type))
                 if assignment.assignment_type == ReadAssignmentType.unique:
                     assignment.set_assignment_type(ReadAssignmentType.unique_minor_difference)
 
@@ -64,14 +64,24 @@ class LongReadAssigner:
 
         # find first and last common exons
         common_first_exon = -1
+        isofrom_first_exon = -1
         for i in range(len(split_exons)):
-            if isoform_profile[i] == 1 and read_split_exon_profile.gene_profile[i] == 1:
+            if isoform_profile[i] != 1:
+                continue
+            if isofrom_first_exon == -1:
+                isofrom_first_exon = i
+            if read_split_exon_profile.gene_profile[i] == 1:
                 common_first_exon = i
                 break
         common_last_exon = -1
+        isofrom_last_exon = -1
         for i in range(len(split_exons)):
             index = len(split_exons) - i - 1
-            if isoform_profile[index] == 1 and read_split_exon_profile.gene_profile[index] == 1:
+            if isoform_profile[index] != 1:
+                continue
+            if isofrom_last_exon == -1:
+                isofrom_last_exon = i
+            if read_split_exon_profile.gene_profile[index] == 1:
                 common_last_exon = index
                 break
         if common_first_exon == -1 or common_last_exon == -1:
@@ -93,17 +103,24 @@ class LongReadAssigner:
         logger.debug("+ + Checking exon elongation")
         logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
 
-        elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.max_exon_extension)
-        if elongation_side != EventSide.none:
-            # significant exon elongation
-            # TODO if elongation is within THIS isoform intron, it's partial inton retention
-            return elongation_types["major"][elongation_side]
-        elongation_side = self.exon_elongation_side(isoform_id, extra_right, extra_left, self.params.delta)
-        if elongation_side != EventSide.none:
-            return elongation_types["minor"][elongation_side]
+        events = []
+        if extra_left > self.params.max_exon_extension:
+            if common_first_exon == isofrom_first_exon:
+                events.append(MatchEventSubtype.major_exon_elongation_left)
+            else:
+                events.append(MatchEventSubtype.incomplete_intron_retention)
+        elif extra_left > self.params.delta:
+            events.append(MatchEventSubtype.exon_elongation_left)
 
-        logger.debug("+ + + No elongation")
-        return MatchEventSubtype.none
+        if extra_right > self.params.max_exon_extension:
+            if common_last_exon == isofrom_last_exon:
+                events.append(MatchEventSubtype.major_exon_elongation_right)
+            else:
+                events.append(MatchEventSubtype.incomplete_intron_retention)
+        elif extra_right > self.params.delta:
+            events.append(MatchEventSubtype.exon_elongation_right)
+
+        return events
 
     def exon_elongation_side(self, isoform_id, extra_right, extra_left, limit):
         logger.debug("+ + + Minor")

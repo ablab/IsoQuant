@@ -82,6 +82,7 @@ class MatchEventSubtype(Enum):
     intron_retention = 31
     unspliced_intron_retention = 32
     unspliced_genic = 33
+    incomplete_intron_retention = 39
     # major alternation
     # alternative donor/acceptor sites
     alt_left_site_known = 101

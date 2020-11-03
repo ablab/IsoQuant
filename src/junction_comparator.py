@@ -164,7 +164,8 @@ class JunctionComparator():
         for pair in contradictory_region_pairs:
             # classify each contradictory area separately
             event = self.compare_overlapping_contradictional_regions(read_region, read_junctions, isoform_region, isoform_junctions, pair[0], pair[1])
-            contradiction_events.append(event)
+            if event is not None:
+                contradiction_events.append(event)
 
         return contradiction_events
 
@@ -173,11 +174,10 @@ class JunctionComparator():
             if isoform_cregion[0] != isoform_cregion[1]:
                 logger.warning("Multiple intron retentions in a single event:" + str(isoform_cregion))
             overlapped_isoform_intron = isoform_junctions[isoform_cregion[0]]
-
             if contains(read_region, overlapped_isoform_intron):
                 return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
             else:
-                return make_event(MatchEventSubtype.none)
+                return None
         elif isoform_cregion[0] == self.absent:
             # intron_start = read_junctions[read_cregion[0]]
             if self.are_known_introns(read_junctions, read_cregion):
