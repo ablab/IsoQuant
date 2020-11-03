@@ -18,13 +18,9 @@ logger = logging.getLogger('IsoQuant')
 class JunctionComparator():
     absent = -10
 
-    def __init__(self, params, gene_info):
+    def __init__(self, params, intron_profile_constructor):
         self.params = params
-        self.gene_info = gene_info
-        self.intron_profile_constructor = \
-            OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features,
-                                                  (self.gene_info.start, self.gene_info.end),
-                                                  comparator=partial(equal_ranges, delta=self.params.delta))
+        self.intron_profile_constructor = intron_profile_constructor
 
     def compare_junctions(self, read_junctions, read_region, isoform_junctions, isoform_region):
         """ compare read splice junctions against similar isoform

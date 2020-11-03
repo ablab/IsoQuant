@@ -30,7 +30,11 @@ class LongReadAssigner:
     def __init__(self, gene_info, params):
         self.gene_info = gene_info
         self.params = params
-        self.intron_comparator = JunctionComparator(params, self.gene_info)
+        self.intron_comparator = JunctionComparator(params,
+                                                    OverlappingFeaturesProfileConstructor
+                                                    (self.gene_info.intron_profiles.features,
+                                                     (self.gene_info.start, self.gene_info.end),
+                                                     comparator=partial(equal_ranges, delta=self.params.delta)))
 
     # ======== SUPPORT FUNCTIONS =======
     def get_gene_id(self, transcript_id):
