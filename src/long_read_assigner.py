@@ -629,6 +629,8 @@ class LongReadAssigner:
         pos = -1
         for isoform_match in read_assignment.isoform_matches:
             isoform_id = isoform_match.assigned_transcript
+            if isoform_id is None:
+                continue
             logger.debug("+ Checking isoform %s" % isoform_id)
             if self.gene_info.isoform_strands[isoform_id] == '+' and combined_read_profile.polya_pos != -1:
                 isoform_end = self.gene_info.transcript_end(isoform_id)
