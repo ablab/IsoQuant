@@ -182,9 +182,10 @@ def make_event(event_type, isoform_position=SupplementaryMatchConstansts.undefin
 
 class IsoformMatch:
     def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
-                 match_subclassification = None):
+                 match_subclassification = None, transcript_strand=None):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
+        self.transcript_strand = transcript_strand
         self.match_classification = match_classification
         if match_subclassification is None:
             self.match_subclassifications = []

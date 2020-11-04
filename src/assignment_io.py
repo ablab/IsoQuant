@@ -14,6 +14,32 @@ from src.long_read_assigner import *
 logger = logging.getLogger('IsoQuant')
 
 
+match_subtype_printable_names = \
+    {MatchEventSubtype.ism_left : ('ism_5', 'ism_3'),
+     MatchEventSubtype.ism_right : ('ism_3', 'ism_5'),
+     MatchEventSubtype.exon_elongation_left : ('exon_elongation_5', 'exon_elongation_3'),
+     MatchEventSubtype.exon_elongation_right : ('exon_elongation_3', 'exon_elongation_5'),
+     MatchEventSubtype.major_exon_elongation_left: ('major_exon_elongation_5', 'major_exon_elongation_3'),
+     MatchEventSubtype.major_exon_elongation_right: ('major_exon_elongation_3', 'major_exon_elongation_5'),
+     MatchEventSubtype.extra_intron_flanking_left: ('extra_intron_5', 'extra_intron_3'),
+     MatchEventSubtype.extra_intron_flanking_right: ('extra_intron_3', 'extra_intron_5'),
+     MatchEventSubtype.alt_left_site_known: ('alt_donor_site_known', 'alt_acceptor_site_known'),
+     MatchEventSubtype.alt_right_site_known: ('alt_acceptor_site_known', 'alt_donor_site_known'),
+     MatchEventSubtype.alt_left_site_novel: ('alt_donor_site_novel', 'alt_acceptor_site_novel'),
+     MatchEventSubtype.alt_right_site_novel: ('alt_acceptor_site_novel', 'alt_donor_site_novel')}
+
+
+def match_subtype_to_str(event_subtype, strand):
+    if event_subtype in match_subtype_printable_names.keys():
+        if strand is None:
+            logger.warning("Strand is not set for site-dependent modifications")
+        if strand == '-':
+            return match_subtype_printable_names[event_subtype][1]
+        else:
+            return match_subtype_printable_names[event_subtype][0]
+    return event_subtype.name
+
+
 class PrintAllFunctor:
     def check(self, assignment):
         return True
@@ -119,7 +145,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 for x in m.match_subclassifications:
                     if not hasattr(x, "event_type"):
                         logger.debug(x)
-            match_events = ",".join(["+".join([x.event_type.name for x in m.match_subclassifications])
+            match_events = ",".join(["+".join([match_subtype_to_str(x.event_type, m.transcript_strand) for x in m.match_subclassifications])
                                      for m in read_assignment.isoform_matches])
             if not match_events:
                 match_events = "."

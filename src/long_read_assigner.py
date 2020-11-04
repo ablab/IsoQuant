@@ -216,12 +216,17 @@ class LongReadAssigner:
     def categorize_correct_splice_match(self, read_intron_profile, isoform_id):
         if self.is_fsm(read_intron_profile, isoform_id):
             logger.debug("+ + Full splice match " + isoform_id)
-            isoform_match = IsoformMatch(MatchClassification.full_splice_match, self.get_gene_id(isoform_id),
-                                         isoform_id, make_event(MatchEventSubtype.fsm))
+            isoform_match = IsoformMatch(MatchClassification.full_splice_match,
+                                         self.get_gene_id(isoform_id),
+                                         isoform_id, make_event(MatchEventSubtype.fsm),
+                                         self.gene_info.isoform_strands[isoform_id])
         else:
             logger.debug("+ + Incomplete splice match " + isoform_id)
-            isoform_match = IsoformMatch(MatchClassification.incomplete_splice_match, self.get_gene_id(isoform_id),
-                                         isoform_id, self.detect_ism_subtype(read_intron_profile, isoform_id))
+            isoform_match = IsoformMatch(MatchClassification.incomplete_splice_match,
+                                         self.get_gene_id(isoform_id),
+                                         isoform_id,
+                                         self.detect_ism_subtype(read_intron_profile, isoform_id),
+                                         self.gene_info.isoform_strands[isoform_id])
         return isoform_match
 
     # make proper match subtype
@@ -237,7 +242,8 @@ class LongReadAssigner:
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
         matching_event = self.intron_comparator.get_mono_exon_subtype(read_region, isoform_introns)
         return IsoformMatch(MatchClassification.get_mono_exon_classification_from_subtypes(matching_event),
-                            self.get_gene_id(isoform_id), isoform_id, matching_event)
+                            self.get_gene_id(isoform_id), isoform_id, matching_event,
+                            self.gene_info.isoform_strands[isoform_id])
 
     def categorize_multiple_mono_exon_matches(self, combined_read_profile, isoform_ids):
         isoform_matches = []
@@ -578,7 +584,8 @@ class LongReadAssigner:
             if len(matching_events) == 1 and matching_events[0].event_type == MatchEventSubtype.undefined:
                 continue
             match_classification = MatchClassification.get_contradiction_classification_from_subtypes(matching_events)
-            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id)
+            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
+                                         transcript_strand=self.gene_info.isoform_strands[isoform_id])
             for m in matching_events:
                 isoform_match.add_subclassification(m)
             assignment.add_match(isoform_match)
