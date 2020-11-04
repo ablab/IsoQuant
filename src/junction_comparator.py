@@ -36,6 +36,7 @@ class JunctionComparator():
         -------
         list of detected contradiction events
         """
+        # FIXME
         if not read_junctions:
             return [self.get_mono_exon_subtype(read_region, isoform_junctions)]
 
@@ -265,15 +266,21 @@ class JunctionComparator():
 
     def get_mono_exon_subtype(self, read_region, isoform_junctions):
         if len(isoform_junctions) == 0:
-            event = MatchEventSubtype.mono_exon_match
-        elif not any(overlaps(read_region, rj) for rj in isoform_junctions):
-            event = MatchEventSubtype.mono_exonic
-        elif any(contains(read_region, rj) for rj in isoform_junctions):
-            # TODO save intron retention position
-            event = MatchEventSubtype.unspliced_intron_retention
+            # both isoform and read are monoexon
+            events = [make_event(MatchEventSubtype.mono_exon_match)]
+        elif any(contains(read_region, intron) for intron in isoform_junctions):
+            # read captures some introns
+            events = []
+            for i, intron in enumerate(isoform_junctions):
+                if contains(read_region, intron):
+                    events.append(make_event(MatchEventSubtype.unspliced_intron_retention, isoform_position=i))
+        elif any(overlaps(read_region, intron) for intron in isoform_junctions):
+            # read overlaps but not captures any intron
+            events = [make_event(MatchEventSubtype.unspliced_genic)]
         else:
-            event = MatchEventSubtype.unspliced_genic
-        return make_event(event)
+            # monoexonic read is inside exon
+            events = [make_event(MatchEventSubtype.mono_exonic)]
+        return events
 
     def add_extra_out_exon_events(self, match_events, read_intron_read_profile, read_introns, isoform_start):
         extra_left = read_intron_read_profile[0] == 0

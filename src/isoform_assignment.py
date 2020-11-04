@@ -20,7 +20,7 @@ class ReadAssignmentType(Enum):
     unique_minor_difference = 2
     inconsistent = 3
     novel = 4
-    inconsistent_monoexon = 11
+    # inconsistent_monoexon = 11
 
 
 # SQANTI-like
@@ -48,14 +48,15 @@ class MatchClassification(Enum):
         return MatchClassification.undefined
 
     @staticmethod
-    def get_mono_exon_classification_from_subtypes(match_event):
-        if match_event.event_type == MatchEventSubtype.unspliced_genic:
+    def get_mono_exon_classification_from_subtypes(match_events):
+        # events are not mixed in the list
+        if match_events[0].event_type == MatchEventSubtype.unspliced_genic:
             return MatchClassification.genic
-        elif match_event.event_type == MatchEventSubtype.unspliced_intron_retention:
+        elif match_events[0].event_type == MatchEventSubtype.unspliced_intron_retention:
             return MatchClassification.novel_in_catalog
-        elif match_event.event_type == MatchEventSubtype.mono_exon_match:
+        elif match_events[0].event_type == MatchEventSubtype.mono_exon_match:
             return MatchClassification.mono_exon_match
-        elif match_event.event_type == MatchEventSubtype.mono_exonic:
+        elif match_events[0].event_type == MatchEventSubtype.mono_exonic:
             return MatchClassification.incomplete_splice_match
         else:
             assert False
@@ -70,7 +71,7 @@ class MatchEventSubtype(Enum):
     ism_left = 15
     ism_right = 13
     ism_internal = 14
-    mono_exon_match = 15
+    mono_exon_match = 19
     # alignment artifacts
     intron_shift = 21
     exon_misallignment = 22
@@ -189,6 +190,8 @@ class IsoformMatch:
         self.match_classification = match_classification
         if match_subclassification is None:
             self.match_subclassifications = []
+        elif isinstance(match_subclassification, list):
+            self.match_subclassifications = match_subclassification
         else:
             self.match_subclassifications = [match_subclassification]
 
@@ -202,7 +205,7 @@ class IsoformMatch:
     def set_classification(self, classification):
         self.match_classification = classification
 
-    def all_subtypes_are_none_or_monoexonic(self):
+    def monoexon_is_consistent(self):
         valid_subtypes = [MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match]
         return all(el.event_type in valid_subtypes for el in self.match_subclassifications)
 

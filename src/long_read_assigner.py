@@ -22,8 +22,8 @@ class ExonAmbiguityResolvingMethod(Enum):
     full_splice_matches_only = 2
     all = 3
 
-    minimal_jaccard_similarity = 0.3
-    top_scored_factor = 1.2
+    minimal_score = 0.0
+    top_scored_factor = 1.3
 
 
 class LongReadAssigner:
@@ -43,6 +43,9 @@ class LongReadAssigner:
     # check for extra sequences and modify assignment accordingly
     def check_for_extra_terminal_seqs(self, read_split_exon_profile, assignment):
         for match in assignment.isoform_matches:
+            if match.assigned_transcript is None:
+                continue
+
             if any(s.event_type in {MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right}
                    for s in match.match_subclassifications):
                 continue
@@ -77,6 +80,7 @@ class LongReadAssigner:
             if read_split_exon_profile.gene_profile[i] == 1:
                 common_first_exon = i
                 break
+
         common_last_exon = -1
         isofrom_last_exon = -1
         for i in range(len(split_exons)):
@@ -84,10 +88,11 @@ class LongReadAssigner:
             if isoform_profile[index] != 1:
                 continue
             if isofrom_last_exon == -1:
-                isofrom_last_exon = i
+                isofrom_last_exon = index
             if read_split_exon_profile.gene_profile[index] == 1:
                 common_last_exon = index
                 break
+                
         if common_first_exon == -1 or common_last_exon == -1:
             logger.warning(" + Werid case for exon elongation, no matching exons")
 
@@ -240,9 +245,11 @@ class LongReadAssigner:
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
         read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
-        matching_event = self.intron_comparator.get_mono_exon_subtype(read_region, isoform_introns)
-        return IsoformMatch(MatchClassification.get_mono_exon_classification_from_subtypes(matching_event),
-                            self.get_gene_id(isoform_id), isoform_id, matching_event,
+
+        matching_events = self.intron_comparator.get_mono_exon_subtype(read_region, isoform_introns)
+        match_classification = MatchClassification.get_mono_exon_classification_from_subtypes(matching_events)
+
+        return IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id, matching_events,
                             self.gene_info.isoform_strands[isoform_id])
 
     def categorize_multiple_mono_exon_matches(self, combined_read_profile, isoform_ids):
@@ -397,7 +404,7 @@ class LongReadAssigner:
         if self.params.resolve_ambiguous in (ExonAmbiguityResolvingMethod.all,
                                              ExonAmbiguityResolvingMethod.full_splice_matches_only):
             jaccard_matched_isoforms = \
-                self.resolve_by_nucleotide_jaccard_similarity(combined_read_profile, matched_isoforms)
+                self.resolve_by_nucleotide_score(combined_read_profile, matched_isoforms)
             jaccard_matched_isoforms = [x[0] for x in jaccard_matched_isoforms]
             if len(jaccard_matched_isoforms) > 1:
                 matched_isoforms = jaccard_matched_isoforms
@@ -415,78 +422,78 @@ class LongReadAssigner:
         # FIXME read is monoexonic but isoform is not
         logger.debug("+  Resolving monoexonic read")
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
-        read_intron_profile = combined_read_profile.read_intron_profile
         isoform_split_exon_profiles = self.gene_info.split_exon_profiles.profiles
-        isoform_intron_profiles = self.gene_info.intron_profiles.profiles
+
         overlapping_isoforms = set()
         for isoform_id in isoform_split_exon_profiles.keys():
             isoform_split_exon_profile = isoform_split_exon_profiles[isoform_id]
-            isoform_intron_profile = isoform_intron_profiles[isoform_id]
-            if not has_inconsistent_features(read_intron_profile.gene_profile, isoform_intron_profile) and\
-                    has_overlapping_features(read_split_exon_profile.gene_profile, isoform_split_exon_profile):
+            if has_overlapping_features(read_split_exon_profile.gene_profile, isoform_split_exon_profile):
                 overlapping_isoforms.add(isoform_id)
 
-        # all isoforms are incosisten
         if len(overlapping_isoforms) == 0:
-            return None
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative,
+                                  IsoformMatch(MatchClassification.genic_intron))
 
-        jaccard_matched_isoforms = self.resolve_by_nucleotide_jaccard_similarity(combined_read_profile,
-                                                                                 sorted(overlapping_isoforms),
-                                                                                 min_similarity=0.0)
-        reliable_isoforms = [
-            x[0] for x in filter(lambda x: x[1] >= ExonAmbiguityResolvingMethod.minimal_jaccard_similarity.value,
-                                 jaccard_matched_isoforms)
-        ]
-
-        # TODO multiple isoform case
-        if len(reliable_isoforms) == 1:
-            isoform_id = list(reliable_isoforms)[0]
-            logger.debug("Jaccard similarity picked a single isoform: %s " % isoform_id)
+        matched_isoforms = self.resolve_by_nucleotide_score(combined_read_profile, sorted(overlapping_isoforms))
+        if len(matched_isoforms) == 1:
+            isoform_id = matched_isoforms[0]
+            logger.debug("Nucleotide similarity picked a single isoform: %s" % isoform_id)
             isoform_match = self.categorize_mono_exonic_read_match(combined_read_profile, isoform_id)
-            if isoform_match.all_subtypes_are_none_or_monoexonic():
+            if isoform_match.monoexon_is_consistent():
                 assignment_type = ReadAssignmentType.unique
             else:
                 assignment_type = ReadAssignmentType.inconsistent
             read_assignment = ReadAssignment(read_id, assignment_type, isoform_match)
-        elif len(reliable_isoforms) > 0:
-            logger.debug("Jaccard similarity picked multiple isoforms")
-            isoform_matches = self.categorize_multiple_mono_exon_matches(combined_read_profile, reliable_isoforms)
-            if all(im.all_subtypes_are_none_or_monoexonic() for im in isoform_matches):
+
+        elif len(matched_isoforms) > 0:
+            logger.debug("Nucleotide similarity picked multiple isoforms")
+            isoform_matches = self.categorize_multiple_mono_exon_matches(combined_read_profile, matched_isoforms)
+            if all(im.monoexon_is_consistent() for im in isoform_matches):
                 assignment_type = ReadAssignmentType.ambiguous
             else:
                 assignment_type = ReadAssignmentType.inconsistent
             read_assignment = ReadAssignment(read_id, assignment_type, isoform_matches)
+
         else:
-            # unreliable_mono_exon
-            logger.debug("Jaccard similarity is not reliable")
-            unreliable_isoforms = [x[0] for x in jaccard_matched_isoforms]
-            isoform_matches = self.categorize_multiple_mono_exon_matches(combined_read_profile, unreliable_isoforms)
-            if all(im.all_subtypes_are_none_or_monoexonic() for im in isoform_matches):
-                assignment_type = ReadAssignmentType.inconsistent_monoexon
-            else:
-                assignment_type = ReadAssignmentType.inconsistent
-            read_assignment = ReadAssignment(read_id, assignment_type, isoform_matches)
+            logger.debug("Nucleotide similarity is not reliable")
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative,
+                                             IsoformMatch(MatchClassification.genic))
 
         return read_assignment
 
     # select best assignment based on nucleotide similarity
-    def resolve_by_nucleotide_jaccard_similarity(self, combined_read_profile, matched_isoforms,
-                                                 min_similarity=ExonAmbiguityResolvingMethod.minimal_jaccard_similarity.value,
-                                                 top_scored_factor=ExonAmbiguityResolvingMethod.top_scored_factor.value):
-        assert matched_isoforms
-        logger.debug("+ + + Resolving by Jaccard similarity")
-        jaccard_similarities = []
+    # score = Jaccard similarity - flanking len / read len ([-1,1])
+    # gives priority to isoforms that contain the read
+    def resolve_by_nucleotide_score(self, combined_read_profile, matched_isoforms,
+                                    min_similarity=ExonAmbiguityResolvingMethod.minimal_score.value,
+                                    top_scored_factor=ExonAmbiguityResolvingMethod.top_scored_factor.value):
+        if not matched_isoforms:
+            return []
+
+        logger.debug("+ + + Resolving by nucleotide similarity")
         read_exons = combined_read_profile.read_exon_profile.read_features
+        read_split_exon_profile = combined_read_profile.read_split_exon_profile
+        read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
+
+        scores = []
         for isoform_id in matched_isoforms:
             isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
-            jaccard_similarities.append((isoform_id, jaccard_similarity(read_exons, isoform_exons)))
+            js = jaccard_similarity(read_exons, isoform_exons)
+
+            isoform_extended_region = (self.gene_info.transcript_start(isoform_id) - self.params.max_exon_extension,
+                                       self.gene_info.transcript_end(isoform_id) + self.params.max_exon_extension)
+            flanking_percentage = max(0, isoform_extended_region[0] - read_region[0]) + \
+                                  max(0, read_region[1] - isoform_extended_region[1])
+            flanking_percentage = float(flanking_percentage) / float(read_region[1] + read_region[0] + 1)
+
+            scores.append((isoform_id, js - flanking_percentage))
 
         # logger.debug(jaccard_similarities)
-        best_score = max([x[1] for x in jaccard_similarities])
+        best_score = max([x[1] for x in scores])
         top_scored = sorted(filter(lambda x: x[1] * top_scored_factor >= best_score and x[1] >= min_similarity,
-                                   jaccard_similarities))
+                                   scores))
         logger.debug("+ + + Best score = %f, total candidates = %d" % (best_score, len(top_scored)))
-        return top_scored
+        return list(map(lambda x: x[0], top_scored))
 
     # resolve when there are 0s  at the ends of read profile
     def match_with_extra_flanking(self, read_id, combined_read_profile):
@@ -556,6 +563,7 @@ class LongReadAssigner:
                      (read_id, len(intron_matching_isoforms), len(exon_matching_isoforms)))
         best_intron_isoform_ids = get_first_best_from_sorted(intron_matching_isoforms)
         # TODO add Jaccard similarity instead of simple exon matching?
+        # FIXME Not sure best isoform should be amond best intron match
         best_exon_isoforms = list(filter(lambda x: x[0] in best_intron_isoform_ids, exon_matching_isoforms))
         best_isoform_ids = get_first_best_from_sorted(best_exon_isoforms)
         if not best_isoform_ids:
@@ -595,7 +603,7 @@ class LongReadAssigner:
         if len(assignment.isoform_matches) == 0:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
         # Change assignment from contradictory when contradictions are minor or absent
-        if all(m.all_subtypes_are_none_or_monoexonic() for m in assignment.isoform_matches):
+        if all(m.monoexon_is_consistent() for m in assignment.isoform_matches):
             # No contradiction
             new_assignment_type = ReadAssignmentType.unique if len(best_isoform_ids) == 1 else ReadAssignmentType.ambiguous
         elif self.params.correct_minor_errors and all(m.all_subtypes_are_alignment_artifacts() for m in assignment.isoform_matches):
