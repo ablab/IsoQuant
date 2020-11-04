@@ -48,7 +48,7 @@ class LongReadAssigner:
                 continue
 
             exon_elongation_types = self.categorize_exon_elongation_subtype(read_split_exon_profile,
-                                                                           match.assigned_transcript)
+                                                                            match.assigned_transcript)
             for e in exon_elongation_types:
                 match.add_subclassification(make_event(e))
             if  any(MatchEventSubtype.is_major_elongation(e) for e in exon_elongation_types):
@@ -125,17 +125,6 @@ class LongReadAssigner:
             events.append(MatchEventSubtype.exon_elongation_right)
 
         return events
-
-    def exon_elongation_side(self, isoform_id, extra_right, extra_left, limit):
-        logger.debug("+ + + Minor")
-        if extra_right > limit and extra_left > limit:
-            logger.debug("+ + + Extra sequence on both ends")
-            return EventSide.both
-        elif extra_right > limit:
-            return EventSide.right
-        elif extra_left > limit:
-            return EventSide.left
-        return EventSide.none
 
     # get incompleteness type
     def detect_ism_subtype(self, read_intron_profile, isoform_id):
@@ -327,7 +316,7 @@ class LongReadAssigner:
         # check for extra flanking sequences
         if assignment.assignment_type != ReadAssignmentType.noninformative:
             self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
-        # checking
+        # checking polyA
         self.verify_polyA(combined_read_profile, assignment)
         return assignment
 
@@ -626,7 +615,6 @@ class LongReadAssigner:
             self.resolve_by_polyA(combined_read_profile, read_assignment)
 
         apa_found = False
-        pos = -1
         for isoform_match in read_assignment.isoform_matches:
             isoform_id = isoform_match.assigned_transcript
             if isoform_id is None:
@@ -651,9 +639,10 @@ class LongReadAssigner:
 
             if apa_found:
                 isoform_match.add_subclassification(make_event(MatchEventSubtype.alternative_polya_site))
-                isoform_match.set_classification(MatchClassification.novel_in_catalog)
+                isoform_match.set_classification(MatchClassification.novel_not_in_catalog)
 
-        if apa_found and read_assignment.assignment_type == ReadAssignmentType.unique:
+        if apa_found and read_assignment.assignment_type in \
+                {ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference}:
             read_assignment.assignment_type = ReadAssignmentType.inconsistent
 
     # try to resolve when polyA position is known
