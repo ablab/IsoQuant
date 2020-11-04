@@ -49,6 +49,7 @@ class AnnotationStats:
         self.transcripts_per_gene = []
         self.noncanonical_splice_sites_per_isoform = defaultdict(int)
         self.splice_site_dict = defaultdict(int)
+        self.transcripts_with_non_canonical = set()
 
     def add_exon(self, exon):
         elen = exon[1] - exon[0] + 1
@@ -73,7 +74,7 @@ class AnnotationStats:
                 self.splice_site_dict[splice_site] += 1
         return splice_site in self.canonical_splic_sites
 
-    def add_transcript(self, exons, strand, reference_region, gene_start):
+    def add_transcript(self, exons, strand, reference_region, gene_start, t_id):
         tlen = 0
         for e in exons:
             tlen += self.add_exon(e)
@@ -83,6 +84,7 @@ class AnnotationStats:
             is_canonical = self.add_intron(i, strand, reference_region, gene_start)
             if not is_canonical:
                 non_canonical_splice_sites += 1
+                self.transcripts_with_non_canonical.add(t_id)
 
         self.transcript_lengths.append(tlen)
         self.exons_per_transcript.append(len(exons))
@@ -112,7 +114,7 @@ class AnnotationStats:
                     exon = (e.start, e.end)
                     exon_set.add(exon)
                     exon_list.append(exon)
-            self.add_transcript(exon_list, t.strand, reference_region, gene_start)
+            self.add_transcript(exon_list, t.strand, reference_region, gene_start, t.id)
         self.add_gene(exon_set, transcript_count)
 
     def count_stats(self):
@@ -147,6 +149,8 @@ class AnnotationStats:
         if len(self.noncanonical_splice_sites_per_isoform) > 0:
             outf.write("Non-canonical splice sites per isoform\n")
             dump_dict_to_tsv(self.noncanonical_splice_sites_per_isoform, outf)
+            outf.write("Transcripts with non-canonical splice sites:\n")
+            outf.write("\n".join(list(self.transcripts_with_non_canonical)))
         outf.close()
 
 def parse_args(args=None, namespace=None):
