@@ -38,7 +38,7 @@ class JunctionComparator():
         """
         # FIXME
         if not read_junctions:
-            return [self.get_mono_exon_subtype(read_region, isoform_junctions)]
+            return self.get_mono_exon_subtype(read_region, isoform_junctions)
 
         read_pos = 0
         isoform_pos = 0
