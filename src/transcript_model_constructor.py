@@ -351,11 +351,11 @@ class TranscriptModelConstructor:
                 if isoform_pos == len(isoform_introns):
                     # such position is possible only when extra intron is present inside last reference exon
                     break
-                if isoform_introns[isoform_pos][0] < current_exon_start:
+                if isoform_introns[isoform_pos][0] <= current_exon_start:
                     # skip introns that outside of gene region
                     isoform_pos += 1
                     continue
-                if isoform_introns[isoform_pos][1] > read_end:
+                if isoform_introns[isoform_pos][1] >= read_end:
                     # skip introns that ourside of gene region
                     break
 
@@ -369,7 +369,7 @@ class TranscriptModelConstructor:
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, novel_exons, current_exon_start)
                 if isoform_pos < len(isoform_introns) \
-                        and current_exon_start < isoform_introns[isoform_pos][0] < read_end \
+                        and current_exon_start < isoform_introns[isoform_pos][0] \
                         and isoform_introns[isoform_pos][1] < read_end:
                     # intron modification was processed but nothing overlapping was added =>
                     # extra intron within previous exon => add this intron as is
@@ -381,7 +381,7 @@ class TranscriptModelConstructor:
                         logger.debug("Adding reference intron after additional extra intron: " + str(isoform_introns[isoform_pos]))
 
                 isoform_pos += 1
-                while isoform_pos < len(isoform_introns) and isoform_introns[isoform_pos][0] < current_exon_start:
+                while isoform_pos < len(isoform_introns) and isoform_introns[isoform_pos][0] <= current_exon_start:
                     isoform_pos += 1
 
         if SupplementaryMatchConstansts.extra_right_mod_position in modification_events_map:
