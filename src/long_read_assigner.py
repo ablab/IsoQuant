@@ -92,7 +92,7 @@ class LongReadAssigner:
             if read_split_exon_profile.gene_profile[index] == 1:
                 common_last_exon = index
                 break
-                
+
         if common_first_exon == -1 or common_last_exon == -1:
             logger.warning(" + Werid case for exon elongation, no matching exons")
 
@@ -403,14 +403,14 @@ class LongReadAssigner:
 
         if self.params.resolve_ambiguous in (ExonAmbiguityResolvingMethod.all,
                                              ExonAmbiguityResolvingMethod.full_splice_matches_only):
-            jaccard_matched_isoforms = \
+            nucl_matched_isoforms = \
                 self.resolve_by_nucleotide_score(combined_read_profile, matched_isoforms)
-            jaccard_matched_isoforms = [x[0] for x in jaccard_matched_isoforms]
-            if len(jaccard_matched_isoforms) > 1:
-                matched_isoforms = jaccard_matched_isoforms
-            elif len(jaccard_matched_isoforms) == 1:
-                logger.debug("Successfully resolved using Jaccard similarity")
-                isoform_id = list(jaccard_matched_isoforms)[0]
+            nucl_matched_isoforms = [x[0] for x in nucl_matched_isoforms]
+            if len(nucl_matched_isoforms) > 1:
+                matched_isoforms = nucl_matched_isoforms
+            elif len(nucl_matched_isoforms) == 1:
+                logger.debug("Successfully resolved using Nucleotide similarity")
+                isoform_id = list(nucl_matched_isoforms)[0]
                 isoform_match = self.categorize_correct_splice_match(read_intron_profile, isoform_id)
                 return ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match)
 
@@ -536,85 +536,82 @@ class LongReadAssigner:
         intron_matching_isoforms = self.match_profile(read_intron_profile.gene_profile,
                                                       self.gene_info.intron_profiles.profiles,
                                                       hint=overlapping_isoforms)
-        exon_matching_isoforms = self.match_profile(read_split_exon_profile.gene_profile,
-                                                    self.gene_info.split_exon_profiles.profiles,
-                                                    hint=overlapping_isoforms)
-        return self.detect_differences(read_id, read_intron_profile, read_split_exon_profile,
-                                       intron_matching_isoforms, exon_matching_isoforms)
+        top_intron_matched = get_first_best_from_sorted(intron_matching_isoforms)
+        best_candidates = self.resolve_by_nucleotide_score(combined_read_profile, top_intron_matched)
 
-    def detect_differences(self, read_id, read_intron_profile, read_split_exon_profile,
-                           intron_matching_isoforms, exon_matching_isoforms):
+        if not best_candidates:
+            best_candidates = top_intron_matched
+            # return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
+        logger.debug("+ + Closest matching isoforms " + str(best_candidates))
+
+        return self.detect_inconsistensies(read_id, combined_read_profile, best_candidates)
+
+    # detect inconsistensies for selected isoforms
+    def detect_inconsistensies(self, read_id, combined_read_profile, matched_isoforms):
         """ compare read to closest matching isoforms
 
         Parameters
         ----------
         read_id: str
-        read_intron_profile: MappedReadProfile
-        read_split_exon_profile: MappedReadProfile
-        intron_matching_isoforms: list of IsoformDiff
-        exon_matching_isoforms: list of IsoformDiff
+        matched_isoforms: list of str
 
         Returns
         -------
         result: ReadAssignment
         """
         # get isoforms that have closes intron and exon profiles
-        logger.debug("Detecting difference for %s, %d intron matched and %d exon matched" %
-                     (read_id, len(intron_matching_isoforms), len(exon_matching_isoforms)))
-        best_intron_isoform_ids = get_first_best_from_sorted(intron_matching_isoforms)
-        # TODO add Jaccard similarity instead of simple exon matching?
-        # FIXME Not sure best isoform should be amond best intron match
-        best_exon_isoforms = list(filter(lambda x: x[0] in best_intron_isoform_ids, exon_matching_isoforms))
-        best_isoform_ids = get_first_best_from_sorted(best_exon_isoforms)
-        if not best_isoform_ids:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
+        logger.debug("Detecting difference for %s, %d matched isoforms" % (read_id, len(matched_isoforms)))
+        read_intron_profile = combined_read_profile.read_intron_profile
+        read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
         assignment = ReadAssignment(read_id, ReadAssignmentType.inconsistent)
-        logger.debug("+ + Closest matching isoforms " + str(best_isoform_ids))
-        isoform_id = best_isoform_ids[0]
+        logger.debug("+ + Closest matching isoforms " + str(matched_isoforms))
+        # isoform_id = best_isoform_ids[0]
         # logger.debug(str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
         # logger.debug(str(self.gene_info.intron_profiles.profiles[isoform_id]))
 
-        for isoform_id in sorted(best_isoform_ids):
+        for isoform_id in sorted(matched_isoforms):
             logger.debug("Checking isoform %s" % isoform_id)
             # get intron coordinates
             isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
-            # get_blocks_from_profile(self.gene_info.intron_profiles.features, self.gene_info.intron_profiles.profiles[isoform_id])
             # read start-end coordinates
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             # isoform start-end
-            isoform_start = self.gene_info.transcript_start(isoform_id)
-            isoform_end = self.gene_info.transcript_end(isoform_id)
-            isoform_region = (isoform_start, isoform_end)
+            isoform_region = (self.gene_info.transcript_start(isoform_id), self.gene_info.transcript_end(isoform_id))
 
             matching_events = self.intron_comparator.compare_junctions(read_intron_profile.read_features, read_region,
                                                                        isoform_introns, isoform_region)
+
             if len(matching_events) == 1 and matching_events[0].event_type == MatchEventSubtype.undefined:
                 continue
+
             match_classification = MatchClassification.get_contradiction_classification_from_subtypes(matching_events)
-            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
+            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id, matching_events,
                                          transcript_strand=self.gene_info.isoform_strands[isoform_id])
-            for m in matching_events:
-                isoform_match.add_subclassification(m)
             assignment.add_match(isoform_match)
             logger.debug("+ + Found contradiction for " + isoform_id + ": " + " ".join(map(lambda x: x.event_type.name, matching_events)))
 
         new_assignment_type = None
         if len(assignment.isoform_matches) == 0:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
-        # Change assignment from contradictory when contradictions are minor or absent
+
+        # Change assignment from inconsistent when inconsistencies are minor or absent
         if all(m.monoexon_is_consistent() for m in assignment.isoform_matches):
             # No contradiction
-            new_assignment_type = ReadAssignmentType.unique if len(best_isoform_ids) == 1 else ReadAssignmentType.ambiguous
-        elif self.params.correct_minor_errors and all(m.all_subtypes_are_alignment_artifacts() for m in assignment.isoform_matches):
+            new_assignment_type = \
+                ReadAssignmentType.unique if len(assignment.isoform_matches) == 1 else ReadAssignmentType.ambiguous
+
+        elif self.params.correct_minor_errors and \
+                all(m.all_subtypes_are_alignment_artifacts() for m in assignment.isoform_matches):
             # Only alignment artifacts
-            new_assignment_type = ReadAssignmentType.unique_minor_difference if len(best_isoform_ids) == 1 else ReadAssignmentType.ambiguous
+            new_assignment_type = ReadAssignmentType.unique_minor_difference if len(assignment.isoform_matches) == 1 \
+                else ReadAssignmentType.ambiguous
 
         if new_assignment_type is not None:
             # Revise all matches as correct
-            isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, best_isoform_ids)
+            isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, matched_isoforms)
             assignment = ReadAssignment(read_id, new_assignment_type, isoform_matches)
-            #self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
+
         return assignment
 
     # check consistency with polyA
