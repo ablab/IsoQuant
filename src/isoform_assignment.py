@@ -167,13 +167,14 @@ class SupplementaryMatchConstansts:
     extra_left_mod_position = -1000000
     extra_right_mod_position = 1000000
     undefined_position = -2000000
+    undefined_region = (undefined_position, undefined_position)
 
 
 MatchEvent = namedtuple("MatchEvent", ("event_type", "isoform_position", "read_region"))
 
 
 def make_event(event_type, isoform_position=SupplementaryMatchConstansts.undefined_position,
-               read_region=SupplementaryMatchConstansts.undefined_position):
+               read_region=SupplementaryMatchConstansts.undefined_region):
     return MatchEvent(event_type, isoform_position, read_region)
 
 

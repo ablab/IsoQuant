@@ -79,7 +79,7 @@ class JunctionComparator():
                     current_contradictory_region = (self.absent, self.absent)
                 if read_pos > 0 or overlaps(read_region, isoform_junctions[isoform_pos]):
                     if isoform_features_present[isoform_pos] != -1:
-                        contradictory_region_pairs.append(((self.absent, self.absent), (isoform_pos, isoform_pos)))
+                        contradictory_region_pairs.append(((self.absent, read_pos), (isoform_pos, isoform_pos)))
                     isoform_features_present[isoform_pos] = -1
                 isoform_pos += 1
 
@@ -110,7 +110,7 @@ class JunctionComparator():
         while isoform_pos < len(isoform_junctions):
             if overlaps(read_region, isoform_junctions[isoform_pos]):
                 if isoform_features_present[isoform_pos] != -1:
-                    contradictory_region_pairs.append(((self.absent, self.absent), (isoform_pos, isoform_pos)))
+                    contradictory_region_pairs.append(((self.absent, read_pos), (isoform_pos, isoform_pos)))
                     isoform_features_present[isoform_pos] = -1
             else:
                 break
@@ -211,6 +211,7 @@ class JunctionComparator():
                 event = MatchEventSubtype.exon_gain_novel
 
         else:
+            # FIXME multiple introns are affected
             if read_introns_known:
                 event = MatchEventSubtype.alternative_structure_known
             else:
@@ -273,7 +274,8 @@ class JunctionComparator():
             events = []
             for i, intron in enumerate(isoform_junctions):
                 if contains(read_region, intron):
-                    events.append(make_event(MatchEventSubtype.unspliced_intron_retention, isoform_position=i))
+                    events.append(make_event(MatchEventSubtype.unspliced_intron_retention, isoform_position=i,
+                                             read_region=(JunctionComparator.absent, 0)))
         elif any(overlaps(read_region, intron) for intron in isoform_junctions):
             # read overlaps but not captures any intron
             events = [make_event(MatchEventSubtype.unspliced_genic)]

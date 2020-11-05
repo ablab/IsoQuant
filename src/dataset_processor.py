@@ -214,7 +214,6 @@ class DatasetProcessor:
             self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
 
         if self.args.read_group:
-            # TODO test count grouping
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv)
             if self.args.count_exons:
@@ -250,7 +249,6 @@ class DatasetProcessor:
                     else:
                         self.pass_to_aggregators(read_assignment)
 
-        #  TODO: resolve multimappers
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         for read_id in multimap_reads_assignments.keys():
             read_assignment = multimap_resolver.resolve(multimap_reads_assignments[read_id])

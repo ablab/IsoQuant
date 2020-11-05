@@ -92,19 +92,18 @@ class TranscriptModelConstructor:
     nnic_transcript_suffix = ".nnic"
 
     events_to_track = {
-        MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
-        MatchEventSubtype.extra_intron,
-        MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right,
-        MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.exon_gain_novel,
-        MatchEventSubtype.intron_retention, MatchEventSubtype.exon_skipping_novel_intron,
-        MatchEventSubtype.unspliced_intron_retention,
+        MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention,
         MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
-        MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
-        MatchEventSubtype.mutually_exclusive_exons_known,
-        MatchEventSubtype.exon_skipping_known_intron, MatchEventSubtype.exon_gain_known,
-        MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
-        MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
+        MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
+        MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_known,
+        MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right,
         MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
+        MatchEventSubtype.intron_migration,
+        MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
+        MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.mutually_exclusive_exons_known,
+        MatchEventSubtype.exon_skipping_novel_intron, MatchEventSubtype.exon_skipping_known_intron,
+        MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_gain_known,
+        MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
         MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
     }
 
@@ -353,7 +352,7 @@ class TranscriptModelConstructor:
                     # such position is possible only when extra intron is present inside last reference exon
                     break
                 if isoform_introns[isoform_pos][0] < current_exon_start:
-                    # skip introns that ourside of gene region
+                    # skip introns that outside of gene region
                     isoform_pos += 1
                     continue
                 if isoform_introns[isoform_pos][1] > read_end:
@@ -370,7 +369,8 @@ class TranscriptModelConstructor:
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, novel_exons, current_exon_start)
                 if isoform_pos < len(isoform_introns) \
-                        and current_exon_start < isoform_introns[isoform_pos][0] < read_end:
+                        and current_exon_start < isoform_introns[isoform_pos][0] < read_end \
+                        and isoform_introns[isoform_pos][1] < read_end:
                     # intron modification was processed but nothing overlapping was added =>
                     # extra intron within previous exon => add this intron as is
                     # check that is was really extra intron
@@ -378,6 +378,8 @@ class TranscriptModelConstructor:
                     only_extra_intron = all(el.event_type in extra_intron_types for el in current_events)
                     if only_extra_intron:
                         current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
+                        logger.debug("Adding reference intron after additional extra intron: " + str(isoform_introns[isoform_pos]))
+
                 isoform_pos += 1
                 while isoform_pos < len(isoform_introns) and isoform_introns[isoform_pos][0] < current_exon_start:
                     isoform_pos += 1
@@ -390,13 +392,13 @@ class TranscriptModelConstructor:
             novel_transcript_end = read_end
         else:
             novel_transcript_end = read_end
-        novel_exons.append((current_exon_start, novel_transcript_end))
 
+        novel_exons.append((current_exon_start, novel_transcript_end))
         novel_exons = self.correct_transcripts_ends(novel_exons, combined_profile, isoform_id, modification_events_map)
 
         if not self.validate_exons(novel_exons):
             logger.warning("Error in novel transcript, not sorted or incorrect exon coords")
-            logger.info(novel_exons)
+            logger.warning(novel_exons)
             return None
 
         nnic = False
@@ -450,17 +452,19 @@ class TranscriptModelConstructor:
         for event in sorted_event_list:
             current_exon_start = self.process_single_event(event, isoform_pos, isoform_introns, read_introns,
                                                            novel_exons, current_exon_start)
-        # logger.debug("> After: %d, %s" % (current_exon_start, novel_exons))
+            logger.debug("> In progress: %d, %s" % (current_exon_start, novel_exons))
+
+        logger.debug("> After: %d, %s" % (current_exon_start, novel_exons))
         return current_exon_start
 
     # process single event
     def process_single_event(self, event_tuple, isoform_pos, isoform_introns, read_introns, novel_exons, current_exon_start):
-        # logger.debug("> > Applying event %s at position %s" % (event_tuple.event_type.name, str(isoform_pos)))
+        logger.debug("> > Applying event %s at position %s" % (event_tuple.event_type.name, str(isoform_pos)))
         if event_tuple.event_type in {MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention}:
             # simply skip reference intron
             return current_exon_start
 
-        if event_tuple.read_region == (JunctionComparator.absent, JunctionComparator.absent):
+        if event_tuple.read_region[0] == JunctionComparator.absent:
             logger.warning("Undefined read intron position for event type: %s" % event_tuple.event_type.name)
             return current_exon_start
         read_intron = read_introns[event_tuple.read_region[0]]
@@ -496,13 +500,11 @@ class TranscriptModelConstructor:
         elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_novel,
                                         MatchEventSubtype.exon_skipping_novel_intron}:
             # simply add read intron
-            # FIXME move to lower condition
             novel_intron = (read_intron[0], read_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_known, MatchEventSubtype.intron_migration,
                                         MatchEventSubtype.exon_skipping_known_intron}:
             # simply add corrected read intron
-            # FIXME move to lower condition
             novel_intron = self.get_closest_ref_intron((read_intron[0], read_intron[1]))
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.mutually_exclusive_exons_novel,
@@ -536,7 +538,8 @@ class TranscriptModelConstructor:
         # logger.debug("Selected modifications: " +", ".join(["%s: %s - %s" % (x.event_type.name, str(x.isoform_position), str(x.read_region))
         #                                                    for x in match_subclassifications]))
         if not self.params.report_intron_retention and \
-                all(m.event_type == MatchEventSubtype.intron_retention for m in match_subclassifications):
+                all(m.event_type in {MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention}
+                    for m in match_subclassifications):
             return None
 
         modification_events_map = defaultdict(list)
@@ -546,7 +549,8 @@ class TranscriptModelConstructor:
             if len(modification_events_map[isoform_position]) == 1:
                 continue
             modification_events_map[isoform_position] = \
-                sorted(modification_events_map[isoform_position], key=lambda x: x.read_region)
+                sorted(modification_events_map[isoform_position], key=lambda x: x.read_region[1])
+            logger.debug(modification_events_map[isoform_position])
 
         if not modification_events_map:
             # logger.debug("No modification events detected for " + read_assignment.read_id)
@@ -592,6 +596,7 @@ class TranscriptModelConstructor:
     def verify_novel_monoexonic_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
         # TODO verify ends using CAGE/polyA/Illumina
         model_exons = transcript_model.exon_blocks
+        assert len(model_exons) == 1
         isoform_start = model_exons[0][0]
         isoform_end = model_exons[-1][1]
         strand = transcript_model.strand
@@ -610,6 +615,7 @@ class TranscriptModelConstructor:
         if len(assigned_reads) >= self.params.min_novel_supporting_reads:
             # to confirm we need at least min_novel_supporting_reads supporting reads
             logger.debug("Successfully confirmed %s" % transcript_model.transcript_id)
+            logger.debug(str(transcript_model.exon_blocks))
             candidate_model_storage.append(transcript_model)
             for a in assigned_reads:
                 self.transcript_read_ids[transcript_model.transcript_id].add(a.read_id)
@@ -687,6 +693,7 @@ class TranscriptModelConstructor:
             # to confirm we need at least min_novel_supporting_reads supporting reads
             # and at least min_novel_fsm_supporting_reads FSM
             logger.debug("Successfully confirmed %s" % transcript_model.transcript_id)
+            logger.debug(str(transcript_model.exon_blocks))
             candidate_model_storage.append(transcript_model)
             for read_id in assigned_reads:
                 self.transcript_read_ids[transcript_model.transcript_id].add(read_id)

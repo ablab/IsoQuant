@@ -113,7 +113,7 @@ class LongReadAssigner:
         logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
 
         events = []
-        # TODO add intron retention position?
+        # TODO add intron retention position and process it in transcript model constructor
         if extra_left > self.params.max_exon_extension:
             if common_first_exon == isofrom_first_exon:
                 events.append(MatchEventSubtype.major_exon_elongation_left)
@@ -420,7 +420,6 @@ class LongReadAssigner:
         return ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches)
 
     def match_monoexonic(self, read_id, combined_read_profile):
-        # FIXME read is monoexonic but isoform is not
         logger.debug("+  Resolving monoexonic read")
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
         isoform_split_exon_profiles = self.gene_info.split_exon_profiles.profiles
