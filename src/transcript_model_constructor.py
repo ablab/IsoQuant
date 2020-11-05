@@ -104,8 +104,7 @@ class TranscriptModelConstructor:
         MatchEventSubtype.exon_skipping_known_intron, MatchEventSubtype.exon_gain_known,
         MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
         MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
-        MatchEventSubtype.major_exon_elongation_both, MatchEventSubtype.major_exon_elongation_left,
-        MatchEventSubtype.major_exon_elongation_right,
+        MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
         MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
     }
 

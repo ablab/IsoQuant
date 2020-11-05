@@ -46,9 +46,9 @@ class LongReadAssigner:
             if match.assigned_transcript is None:
                 continue
 
-            if any(s.event_type in {MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right}
-                   for s in match.match_subclassifications):
-                continue
+            #if any(s.event_type in {MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right}
+            #       for s in match.match_subclassifications):
+            #    continue
 
             exon_elongation_types = self.categorize_exon_elongation_subtype(read_split_exon_profile,
                                                                             match.assigned_transcript)
@@ -100,7 +100,7 @@ class LongReadAssigner:
         if overlaps(first_read_exon, split_exons[common_first_exon]):
             extra_left = split_exons[common_first_exon][0] - first_read_exon[0]
         else:
-            # frist read exon seems to be to the left of common exon
+            # first read exon seems to be to the left of common exon
             extra_left = 0
 
         last_read_exon = read_split_exon_profile.read_features[-1]
@@ -113,6 +113,7 @@ class LongReadAssigner:
         logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
 
         events = []
+        # TODO add intron retention position?
         if extra_left > self.params.max_exon_extension:
             if common_first_exon == isofrom_first_exon:
                 events.append(MatchEventSubtype.major_exon_elongation_left)

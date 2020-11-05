@@ -78,7 +78,6 @@ class MatchEventSubtype(Enum):
     # minor alternations
     exon_elongation_left = 25
     exon_elongation_right = 23
-    exon_elongation_both = 24
     # intron retentions
     intron_retention = 31
     unspliced_intron_retention = 32
@@ -97,7 +96,6 @@ class MatchEventSubtype(Enum):
     extra_intron_flanking_left = 1013
     extra_intron_flanking_right = 1015
     # significant exon elongation, more than allowed
-    major_exon_elongation_both = 1004
     major_exon_elongation_left = 1005
     major_exon_elongation_right = 1003
     # other intron modifications
@@ -130,14 +128,12 @@ class MatchEventSubtype(Enum):
     @staticmethod
     def is_minor_error(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.exon_elongation_left,
-                                       MatchEventSubtype.exon_elongation_right,
-                                       MatchEventSubtype.exon_elongation_both}
+                                       MatchEventSubtype.exon_elongation_right}
 
     @staticmethod
     def is_major_elongation(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.major_exon_elongation_left,
                                        MatchEventSubtype.major_exon_elongation_right,
-                                       MatchEventSubtype.major_exon_elongation_both,
                                        MatchEventSubtype.incomplete_intron_retention}
 
 
