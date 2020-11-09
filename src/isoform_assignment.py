@@ -101,7 +101,7 @@ class MatchEventSubtype(Enum):
     # other intron modifications
     intron_migration = 114
     intron_alternation_novel = 115
-    intron_alternation_known = 115
+    intron_alternation_known = 116
     # mutually exclusive
     mutually_exclusive_exons_novel = 121
     mutually_exclusive_exons_known = 122
