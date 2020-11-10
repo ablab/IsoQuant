@@ -482,9 +482,7 @@ class LongReadAssigner:
 
             isoform_extended_region = (self.gene_info.transcript_start(isoform_id) - self.params.max_exon_extension,
                                        self.gene_info.transcript_end(isoform_id) + self.params.max_exon_extension)
-            flanking_percentage = max(0, isoform_extended_region[0] - read_region[0]) + \
-                                  max(0, read_region[1] - isoform_extended_region[1])
-            flanking_percentage = float(flanking_percentage) / float(read_region[1] + read_region[0] + 1)
+            flanking_percentage = extra_exon_percentage(isoform_extended_region, read_exons)
 
             scores.append((isoform_id, js - flanking_percentage))
 
@@ -492,7 +490,7 @@ class LongReadAssigner:
         best_score = max([x[1] for x in scores])
         top_scored = sorted(filter(lambda x: x[1] * top_scored_factor >= best_score and x[1] >= min_similarity,
                                    scores))
-        logger.debug("+ + + Best score = %f, total candidates = %d" % (best_score, len(top_scored)))
+        logger.debug("+ + + Best score = %f, all candidates = %s" % (best_score, str(top_scored)))
         return list(map(lambda x: x[0], top_scored))
 
     # resolve when there are 0s  at the ends of read profile
@@ -540,8 +538,8 @@ class LongReadAssigner:
         best_candidates = self.resolve_by_nucleotide_score(combined_read_profile, top_intron_matched)
 
         if not best_candidates:
-            best_candidates = top_intron_matched
-            # return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
+            # best_candidates = top_intron_matched
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
         logger.debug("+ + Closest matching isoforms " + str(best_candidates))
 
         return self.detect_inconsistensies(read_id, combined_read_profile, best_candidates)

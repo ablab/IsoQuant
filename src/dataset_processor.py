@@ -163,6 +163,7 @@ class DatasetProcessor:
             for a in assignment_storage:
                 read_stat_counter.add(a.assignment_type)
 
+            # TODO move ater multimap resolving
             transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
             transcript_generator.process()
             gff_printer.dump(transcript_generator)

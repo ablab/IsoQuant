@@ -203,6 +203,19 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
     return float(intersection) / float(union)
 
 
+def extra_exon_percentage(isoform_region, read_exons):
+    total_read_len = 0
+    outside_read_len = 0
+    for e in read_exons:
+        total_read_len += e[1] - e[0] + 1
+        if e[0] < isoform_region[0]:
+            outside_read_len += min(e[1], isoform_region[0] - 1) - e[0] + 1
+        elif e[1] > isoform_region[1]:
+            outside_read_len += e[1] - max(e[0], isoform_region[1] + 1) + 1
+
+    return float(outside_read_len) / float(total_read_len)
+
+
 # == working with alignment blocks ==
 def junctions_from_blocks(sorted_blocks):
     junctions = []
