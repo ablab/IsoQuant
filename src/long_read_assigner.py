@@ -473,7 +473,6 @@ class LongReadAssigner:
         logger.debug("+ + + Resolving by nucleotide similarity")
         read_exons = combined_read_profile.read_exon_profile.read_features
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
-        read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
 
         scores = []
         for isoform_id in matched_isoforms:

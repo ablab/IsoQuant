@@ -26,10 +26,14 @@ class FeatureProfiles:
     def set_features(self, features):
         self.features = features
 
-    def set_profiles(self, transcript_id, transcript_features, comaprator):
+    def set_profiles(self, transcript_id, transcript_features, transcript_region, comaprator):
         self.profiles[transcript_id] = [-1] * len(self.features)
-        pos = 0
 
+        for pos, feature in enumerate(self.features):
+            if not overlaps(feature, transcript_region):
+                self.profiles[transcript_id][pos] = -2
+
+        pos = 0
         for feature in transcript_features:
             while pos < len(self.features) and not comaprator(feature, self.features[pos]):
                 pos += 1
@@ -278,12 +282,15 @@ class GeneInfo:
     def set_junction_profiles(self, all_isoforms_introns, all_isoforms_exons):
         for gene_db in self.gene_db_list:
             for t in self.db.children(gene_db, featuretype='transcript', order_by='start'):
+                transcript_region = self.transcript_region(t.id)
                 # setting up intron profiles for current isoform
-                self.intron_profiles.set_profiles(t.id, all_isoforms_introns[t.id], partial(equal_ranges, delta=0))
+                self.intron_profiles.set_profiles(t.id, all_isoforms_introns[t.id], transcript_region,
+                                                  partial(equal_ranges, delta=0))
                 # setting up exon profiles for current isoform
-                self.exon_profiles.set_profiles(t.id, all_isoforms_exons[t.id], partial(equal_ranges, delta=0))
+                self.exon_profiles.set_profiles(t.id, all_isoforms_exons[t.id], transcript_region,
+                                                partial(equal_ranges, delta=0))
                 # setting up split exon profiles for current isoform
-                self.split_exon_profiles.set_profiles(t.id, all_isoforms_exons[t.id], contains)
+                self.split_exon_profiles.set_profiles(t.id, all_isoforms_exons[t.id], transcript_region, contains)
 
     # detect isoforms which are exact sub-isoforms of others
     def detect_ambiguous(self):
@@ -303,6 +310,9 @@ class GeneInfo:
 
     def transcript_end(self, transcript_id):
         return self.all_isoforms_exons[transcript_id][-1][1]
+
+    def transcript_region(self, transcript_id):
+        return (self.transcript_start(transcript_id), self.transcript_end(transcript_id))
 
     def transcript_exon_count(self, transcript_id):
         return sum([1 if e == 1 else 0 for e in self.exon_profiles.profiles[transcript_id]])
