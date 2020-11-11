@@ -211,7 +211,6 @@ class JunctionComparator():
                 event = MatchEventSubtype.exon_gain_novel
 
         else:
-            # FIXME multiple introns are affected
             if read_introns_known:
                 event = MatchEventSubtype.alternative_structure_known
             else:
