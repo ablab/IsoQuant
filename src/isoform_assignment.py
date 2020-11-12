@@ -165,8 +165,8 @@ event_subtype_cost = {
     # intron retentions
     MatchEventSubtype.intron_retention:0.5,
     MatchEventSubtype.unspliced_intron_retention:0.5,
-    MatchEventSubtype.unspliced_genic:0.5,
-    MatchEventSubtype.incomplete_intron_retention:0.5,
+    MatchEventSubtype.unspliced_genic:0.75,
+    MatchEventSubtype.incomplete_intron_retention:0.75,
     # major alternation
     # alternative donor/acceptor sites
     MatchEventSubtype.alt_left_site_known:1,
@@ -199,9 +199,23 @@ event_subtype_cost = {
     MatchEventSubtype.alternative_structure_novel:1,
     MatchEventSubtype.alternative_structure_known:1,
     # TTS and TSS
-    MatchEventSubtype.alternative_polya_site:1,
-    MatchEventSubtype.alternative_tss :1
+    MatchEventSubtype.alternative_polya_site:0.1,
+    MatchEventSubtype.alternative_tss :0.1
 }
+
+
+def elongation_cost(params, elongation_len):
+    min_cost = event_subtype_cost[MatchEventSubtype.exon_elongation_left]
+    max_cost = event_subtype_cost[MatchEventSubtype.major_exon_elongation_left]
+    lower_bound = params.minor_exon_extension
+    upper_bound = params.major_exon_extension
+    if elongation_len <= lower_bound:
+        return min_cost
+    elif elongation_len >= upper_bound:
+        return max_cost
+    else:
+        logger.debug(str(elongation_len) + ", " + str(lower_bound) + "," + str(upper_bound) + ", " + str((elongation_len - lower_bound) / (upper_bound - lower_bound)))
+        return min_cost + (max_cost - min_cost) * (elongation_len - lower_bound) / (upper_bound - lower_bound)
 
 
 nnic_event_types = {
@@ -239,12 +253,14 @@ class SupplementaryMatchConstansts:
     undefined_region = (undefined_position, undefined_position)
 
 
-MatchEvent = namedtuple("MatchEvent", ("event_type", "isoform_position", "read_region"))
+MatchEvent = namedtuple("MatchEvent", ("event_type", "isoform_position", "read_region", "event_length"))
 
 
-def make_event(event_type, isoform_position=SupplementaryMatchConstansts.undefined_position,
-               read_region=SupplementaryMatchConstansts.undefined_region):
-    return MatchEvent(event_type, isoform_position, read_region)
+def make_event(event_type,
+               isoform_position=SupplementaryMatchConstansts.undefined_position,
+               read_region=SupplementaryMatchConstansts.undefined_region,
+               event_length=0):
+    return MatchEvent(event_type, isoform_position, read_region, event_length)
 
 
 class IsoformMatch:

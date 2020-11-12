@@ -38,12 +38,12 @@ class OverlappingFeaturesProfileConstructor:
     # ignore_terminal -- bool flag, indicates whether to ignore leading and trailing -1s in the profile
     def __init__(self, known_features, gene_region,
                  comparator = partial(equal_ranges, delta=0),
-                 absense_condition = contains,
+                 absence_condition = contains,
                  delta=0):
         self.known_features = known_features
         self.gene_region = gene_region
         self.comparator = comparator
-        self.absense_condition = absense_condition
+        self.absence_condition = absence_condition
         self.delta = delta
 
     def construct_intron_profile(self, sorted_blocks):
@@ -64,10 +64,10 @@ class OverlappingFeaturesProfileConstructor:
         matched_features = defaultdict(list)
 
         for i in range(len(intron_profile)):
-            if self.absense_condition(mapped_region, self.known_features[i]):
+            if self.absence_condition(mapped_region, self.known_features[i]):
                 intron_profile[i] = -1
         for i in range(len(read_profile)):
-            if self.absense_condition(self.gene_region, read_features[i]):
+            if self.absence_condition(self.gene_region, read_features[i]):
                 read_profile[i] = -1
 
         gene_pos = 0

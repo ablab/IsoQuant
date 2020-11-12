@@ -280,36 +280,34 @@ def set_data_dependent_options(args):
 
 def set_matching_options(args):
     MatchingStrategy = namedtuple('MatchingStrategy',
-                                  ('delta', 'max_exon_extension', 'max_intron_shift', 'max_missed_exon_len',
-                                   'min_abs_exon_overlap', 'min_rel_exon_overlap',
-                                   'allow_extra_terminal_introns', 'apa_delta',
+                                  ('delta', 'max_intron_shift', 'max_missed_exon_len',
                                    'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   MatchingStrategy(0,  5,   0,   0,   10, 0.2,  False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
-        'precise': MatchingStrategy(3,  30,  30,  50,  10, 0.2,  False, 50,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'default': MatchingStrategy(6,  60,  60,  200, 10, 0.2,  False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'loose':   MatchingStrategy(12, 100, 120, 300, 10, 0.2,  True,  100, ExonAmbiguityResolvingMethod.all,  True),
+        'exact':   MatchingStrategy(0,  0,   0,   ExonAmbiguityResolvingMethod.mono_exonic_only, False),
+        'precise': MatchingStrategy(3,  30,  50,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'default': MatchingStrategy(6,  60,  200, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'loose':   MatchingStrategy(12, 120, 300, ExonAmbiguityResolvingMethod.all,  True),
     }
 
     strategy = strategies[args.matching_strategy]
 
     args.delta = args.delta or strategy.delta
-    args.max_exon_extension = strategy.max_exon_extension
+    args.minor_exon_extension = 50
+    args.major_exon_extension = 300
     args.max_intron_shift = args.max_intron_shift or strategy.max_intron_shift
     args.max_missed_exon_len = args.max_missed_exon_len or strategy.max_missed_exon_len
-    args.min_abs_exon_overlap = strategy.min_abs_exon_overlap
-    args.min_rel_exon_overlap = strategy.min_rel_exon_overlap
-    args.allow_extra_terminal_introns = strategy.allow_extra_terminal_introns
-    args.apa_delta = strategy.apa_delta
+    args.min_abs_exon_overlap = 10
+    args.min_rel_exon_overlap = 0.2
+    args.apa_delta = 50
+    args.minimal_exon_overlap = 5
+    args.minimal_intron_absence_overlap = 20
     args.resolve_ambiguous = args.resolve_ambiguous or strategy.resolve_ambiguous
     args.correct_minor_errors = \
         strategy.correct_minor_errors if args.correct_minor_errors is None else args.correct_minor_errors
 
-    updated_strategy = MatchingStrategy(args.delta, args.max_exon_extension, args.max_intron_shift,
-                                        args.max_missed_exon_len, args.min_abs_exon_overlap,
-                                        args.min_rel_exon_overlap, args.allow_extra_terminal_introns,
-                                        args.apa_delta, args.resolve_ambiguous, args.correct_minor_errors)
+    updated_strategy = MatchingStrategy(args.delta, args.max_intron_shift, args.max_missed_exon_len,
+                                        args.resolve_ambiguous, args.correct_minor_errors)
     logger.debug('Using %s strategy. Updated strategy: %s.' % (args.matching_strategy, updated_strategy))
 
 
@@ -320,7 +318,7 @@ def set_model_construction_options(args):
                                             'report_intron_retention', 'max_dist_to_isoforms_tsts',
                                             'max_dist_to_novel_tsts', 'min_reads_supporting_tsts',
                                             'collapse_subisoforms', 'count_ambiguous'))
-
+    # TODO revise params
     strategies = {
         'reliable': ModelConstructionStrategy(2, 4, 5, 9, False, 30, 100, 8, True, True),
         'default': ModelConstructionStrategy(1, 2, 4, 7, True, 30, 100, 5, True, True),
