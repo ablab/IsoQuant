@@ -287,7 +287,7 @@ def set_matching_options(args):
 
     strategies = {
         'exact':   MatchingStrategy(0,  5,   0,   0,   10, 0.2,  False, 20,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
-        'precise': MatchingStrategy(3,  20,  30,  50,  10, 0.2,  False, 50,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'precise': MatchingStrategy(3,  30,  30,  50,  10, 0.2,  False, 50,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
         'default': MatchingStrategy(6,  60,  60,  200, 10, 0.2,  False, 100, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
         'loose':   MatchingStrategy(12, 100, 120, 300, 10, 0.2,  True,  100, ExonAmbiguityResolvingMethod.all,  True),
     }

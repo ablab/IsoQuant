@@ -38,7 +38,7 @@ class MatchClassification(Enum):
     genic_intron = 31
 
     @staticmethod
-    def get_contradiction_classification_from_subtypes(match_event_subtypes):
+    def get_inconsistency_classification(match_event_subtypes):
         if any(me.event_type in nnic_event_types for me in match_event_subtypes):
             return MatchClassification.novel_not_in_catalog
         elif any(me.event_type in nic_event_types for me in match_event_subtypes):
@@ -48,15 +48,15 @@ class MatchClassification(Enum):
         return MatchClassification.undefined
 
     @staticmethod
-    def get_mono_exon_classification_from_subtypes(match_events):
+    def get_mono_exon_classification(match_event_subtypes):
         # events are not mixed in the list
-        if match_events[0].event_type == MatchEventSubtype.unspliced_genic:
+        if match_event_subtypes[0].event_type == MatchEventSubtype.unspliced_genic:
             return MatchClassification.genic
-        elif match_events[0].event_type == MatchEventSubtype.unspliced_intron_retention:
+        elif match_event_subtypes[0].event_type == MatchEventSubtype.unspliced_intron_retention:
             return MatchClassification.novel_in_catalog
-        elif match_events[0].event_type == MatchEventSubtype.mono_exon_match:
+        elif match_event_subtypes[0].event_type == MatchEventSubtype.mono_exon_match:
             return MatchClassification.mono_exon_match
-        elif match_events[0].event_type == MatchEventSubtype.mono_exonic:
+        elif match_event_subtypes[0].event_type == MatchEventSubtype.mono_exonic:
             return MatchClassification.incomplete_splice_match
         else:
             assert False
@@ -128,7 +128,15 @@ class MatchEventSubtype(Enum):
     @staticmethod
     def is_minor_error(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.exon_elongation_left,
-                                       MatchEventSubtype.exon_elongation_right}
+                                       MatchEventSubtype.exon_elongation_right,
+                                       MatchEventSubtype.intron_shift,
+                                       MatchEventSubtype.exon_misallignment}
+
+    @staticmethod
+    def is_consistent(match_event_subtype):
+        return match_event_subtype in {MatchEventSubtype.none,
+                                       MatchEventSubtype.mono_exonic,
+                                       MatchEventSubtype.mono_exon_match}
 
     @staticmethod
     def is_major_elongation(match_event_subtype):
@@ -136,11 +144,70 @@ class MatchEventSubtype(Enum):
                                        MatchEventSubtype.major_exon_elongation_right,
                                        MatchEventSubtype.incomplete_intron_retention}
 
+    @staticmethod
+    def is_major_inconsistency(match_event_subtype):
+        return match_event_subtype in nnic_event_types or match_event_subtype in nic_event_types
+
+
+event_subtype_cost = {
+    MatchEventSubtype.none:0,
+    MatchEventSubtype.undefined:0,
+    MatchEventSubtype.mono_exonic:0,
+    MatchEventSubtype.ism_left:0,
+    MatchEventSubtype.ism_right:0,
+    MatchEventSubtype.ism_internal:0,
+    MatchEventSubtype.mono_exon_match:0,
+    MatchEventSubtype.intron_shift:0.1,
+    MatchEventSubtype.exon_misallignment:0.1,
+    # minor alternations
+    MatchEventSubtype.exon_elongation_left:0.1,
+    MatchEventSubtype.exon_elongation_right:0.1,
+    # intron retentions
+    MatchEventSubtype.intron_retention:0.5,
+    MatchEventSubtype.unspliced_intron_retention:0.5,
+    MatchEventSubtype.unspliced_genic:0.5,
+    MatchEventSubtype.incomplete_intron_retention:0.5,
+    # major alternation
+    # alternative donor/acceptor sites
+    MatchEventSubtype.alt_left_site_known:1,
+    MatchEventSubtype.alt_right_site_known:1,
+    MatchEventSubtype.alt_left_site_novel:1,
+    MatchEventSubtype.alt_right_site_novel:1,
+    # additional introns in the middle
+    MatchEventSubtype.extra_intron:1,
+    MatchEventSubtype.extra_intron_known:1,
+    # extra inrons on the sides
+    MatchEventSubtype.extra_intron_flanking_left:1,
+    MatchEventSubtype.extra_intron_flanking_right:1,
+    # significant exon elongation, more than allowed
+    MatchEventSubtype.major_exon_elongation_left:1,
+    MatchEventSubtype.major_exon_elongation_right:1,
+    # other intron modifications
+    MatchEventSubtype.intron_migration:1,
+    MatchEventSubtype.intron_alternation_novel:1,
+    MatchEventSubtype.intron_alternation_known:1,
+    # mutually exclusive
+    MatchEventSubtype.mutually_exclusive_exons_novel:1,
+    MatchEventSubtype.mutually_exclusive_exons_known:1,
+    # exon skipping
+    MatchEventSubtype.exon_skipping_known_intron:1,
+    MatchEventSubtype.exon_skipping_novel_intron:1,
+    # exon gain
+    MatchEventSubtype.exon_gain_known:1,
+    MatchEventSubtype.exon_gain_novel:1,
+    # other
+    MatchEventSubtype.alternative_structure_novel:1,
+    MatchEventSubtype.alternative_structure_known:1,
+    # TTS and TSS
+    MatchEventSubtype.alternative_polya_site:1,
+    MatchEventSubtype.alternative_tss :1
+}
+
 
 nnic_event_types = {
     MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
     MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_flanking_left,
-    MatchEventSubtype.extra_intron_flanking_right,MatchEventSubtype.mutually_exclusive_exons_novel,
+    MatchEventSubtype.extra_intron_flanking_right, MatchEventSubtype.mutually_exclusive_exons_novel,
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
     MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
     MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
@@ -152,7 +219,9 @@ nic_event_types = {
     MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
     MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
-    MatchEventSubtype.intron_alternation_known
+    MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,
+    MatchEventSubtype.major_exon_elongation_right, MatchEventSubtype.incomplete_intron_retention
+
 }
 
 
@@ -203,15 +272,8 @@ class IsoformMatch:
         self.match_classification = classification
 
     def monoexon_is_consistent(self):
-        valid_subtypes = [MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match]
+        valid_subtypes = {MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match}
         return all(el.event_type in valid_subtypes for el in self.match_subclassifications)
-
-    def all_subtypes_are_alignment_artifacts(self):
-        return all(MatchEventSubtype.is_alignment_artifact(el.event_type) for el in self.match_subclassifications)
-
-    def all_subtypes_are_minor_errors(self):
-        return all(MatchEventSubtype.is_minor_error(el.event_type) for el in self.match_subclassifications)
-
 
 class ReadAssignment:
     def __init__(self, read_id, assignment_type, match=None):
