@@ -505,6 +505,7 @@ class LongReadAssigner:
 
     def match_consistent_unspliced(self, read_id, combined_read_profile):
         logger.debug("+  Resolving monoexonic read")
+        # FIXME add intron comparison as well
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
         isoform_split_exon_profiles = self.gene_info.split_exon_profiles.profiles
 
