@@ -22,6 +22,8 @@ DATATYPE_TO_ALIGNER = {ASSEMBLY: 'minimap2', PACBIO_DATA: 'minimap2', PACBIO_CCS
 SUPPORTED_ALIGNERS = ['starlong', 'minimap2']
 SUPPORTED_STRANDEDNESS = ['forward', 'reverse', 'none']
 
+KMER_SIZE = {ASSEMBLY: '15', PACBIO_DATA: '15', PACBIO_CCS_DATA: '15', NANOPORE_DATA: '14'}
+CANONICAL_SITE_BONUS = {ASSEMBLY: '5', PACBIO_DATA: '5', PACBIO_CCS_DATA: '5', NANOPORE_DATA: '10'}
 
 class DataSetReadMapper:
     def __init__(self, args):
@@ -109,10 +111,12 @@ def find_stored_index(args):
         return None
     index_mtime = converted_indexes.get(reference_filename, {}).get('index_mtime')
     reference_mtime = converted_indexes.get(reference_filename, {}).get('reference_mtime')
+    kmer_size = converted_indexes.get(reference_filename, {}).get('kmer_size')
     if os.path.exists(reference_filename) and os.path.getmtime(reference_filename) == reference_mtime:
         if os.path.exists(index_filename) and os.path.getmtime(index_filename) == index_mtime:
-            logger.info('Index file found. Using {}'.format(index_filename))
-            return index_filename
+            if KMER_SIZE[args.data_type] == kmer_size:
+                logger.info('Index file found. Using {}'.format(index_filename))
+                return index_filename
     return None
 
 
@@ -125,7 +129,8 @@ def store_index(index, args):
     converted_indexes[reference_filename] = {
         'index_filename': index,
         'reference_mtime': os.path.getmtime(reference_filename),
-        'index_mtime': os.path.getmtime(index)
+        'index_mtime': os.path.getmtime(index),
+        'kmer_size': KMER_SIZE[args.data_type]
     }
     with open(args.index_config_path, 'w') as f_out:
         json.dump(converted_indexes, f_out)
@@ -173,8 +178,8 @@ def index_reference(aligner, args):
     ref_name, _ = os.path.splitext(args.reference.split('/')[-1])
 
     command = ""
+    index_name = os.path.join(args.output, "%s_k%s_idx" % (ref_name, KMER_SIZE[args.data_type]))
     if aligner == "starlong":
-        index_name = os.path.join(args.output, ref_name + "_idx")
         if os.path.isdir(index_name) and os.path.exists(os.path.join(index_name, "genomeParameters.txt")):
             logger.debug('Reusing reference index ' + index_name)
             return index_name
@@ -185,13 +190,13 @@ def index_reference(aligner, args):
         command = [exec_path, '--runMode', 'genomeGenerate', '--runThreadN', str(args.threads),
                    '--genomeDir', index_name, '--genomeFastaFiles', args.reference]
     elif aligner == "minimap2":
-        index_name = os.path.join(args.output, ref_name + ".idx")
         if os.path.isfile(index_name):
             logger.debug('Reusing reference index ' + index_name)
             return index_name
         minimap2_path = get_aligner('minimap2')
-        k = 14 if args.data_type == NANOPORE_DATA else 15
-        command = [minimap2_path, '-t', str(args.threads), '-k', str(k), '-w', '5', '-d', index_name, args.reference]
+        command = [minimap2_path, '-t', str(args.threads),
+                   '-k', str(KMER_SIZE[args.data_type]),
+                   '-w', '5', '-d', index_name, args.reference]
     else:
         logger.critical("Aligner " + aligner + " is not supported")
         exit(-1)
@@ -258,7 +263,8 @@ def align_fasta(aligner, fastq_paths, args, label, out_dir):
         if args.stranded == 'forward':
             additional_options.append('-uf')
         # TODO: add junction bed
-        command = [minimap2_path, args.index, fastq_path, '-a', '-x', 'splice', '--secondary=no', '-C', '5',
+        command = [minimap2_path, args.index, fastq_path, '-a', '-x', 'splice', '--secondary=no',
+                   '-C', str(CANONICAL_SITE_BONUS[args.data_type]),
                    '-t', str(args.threads)] + additional_options
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
             logger.critical("Minimap2 finished with errors! See " + log_fpath)
@@ -270,6 +276,6 @@ def align_fasta(aligner, fastq_paths, args, label, out_dir):
         logger.critical("Aligner " + aligner + " is not supported")
         exit(-1)
 
-    subprocess.call(['samtools', 'index', '-@', str(args.threads), alignment_bam_path])
+    subprocess.call(['samtools', 'index', alignment_bam_path])
     return alignment_bam_path
 
