@@ -192,24 +192,29 @@ class LongReadAssigner:
         logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
 
         events = []
-        # TODO add intron retention position and process it in transcript model constructor
-        if extra_left > self.params.max_exon_extension:
+        left_event = None
+        if extra_left > self.params.minor_exon_extension:
             if common_first_exon == isofrom_first_exon:
-                events.append(MatchEventSubtype.major_exon_elongation_left)
+                left_event = MatchEventSubtype.major_exon_elongation_left
             else:
-                events.append(MatchEventSubtype.incomplete_intron_retention)
+                left_event = MatchEventSubtype.incomplete_intron_retention
         elif extra_left > self.params.delta:
-            events.append(MatchEventSubtype.exon_elongation_left)
+            left_event = MatchEventSubtype.exon_elongation_left
+        if left_event:
+            events.append(make_event(left_event, event_length=extra_left))
 
-        if extra_right > self.params.max_exon_extension:
+        right_event = None
+        if extra_right > self.params.minor_exon_extension:
             if common_last_exon == isofrom_last_exon:
-                events.append(MatchEventSubtype.major_exon_elongation_right)
+                right_event = MatchEventSubtype.major_exon_elongation_right
             else:
-                events.append(MatchEventSubtype.incomplete_intron_retention)
+                right_event = MatchEventSubtype.incomplete_intron_retention
         elif extra_right > self.params.delta:
-            events.append(MatchEventSubtype.exon_elongation_right)
+                right_event = MatchEventSubtype.exon_elongation_right
+        if right_event:
+            events.append(make_event(right_event, event_length=extra_right))
 
-        return list(map(make_event, events))
+        return events
 
     # select best assignment based on nucleotide similarity
     # score = Jaccard similarity - flanking len / read len ([-1,1])
@@ -229,8 +234,8 @@ class LongReadAssigner:
             isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
             js = jaccard_similarity(read_exons, isoform_exons)
 
-            isoform_extended_region = (self.gene_info.transcript_start(isoform_id) - self.params.max_exon_extension,
-                                       self.gene_info.transcript_end(isoform_id) + self.params.max_exon_extension)
+            isoform_extended_region = (self.gene_info.transcript_start(isoform_id) - self.params.minor_exon_extension,
+                                       self.gene_info.transcript_end(isoform_id) + self.params.minor_exon_extension)
             flanking_percentage = extra_exon_percentage(isoform_extended_region, read_exons)
 
             scores.append((isoform_id, js - flanking_percentage))
@@ -685,9 +690,17 @@ class LongReadAssigner:
                                           MatchEventSubtype.unspliced_genic,
                                           MatchEventSubtype.incomplete_intron_retention}:
                         event_count = 1
-                score += event_subtype_cost[e.event_type] * event_count
+
+                event_cost = event_subtype_cost[e.event_type]
+                if e.event_type in {MatchEventSubtype.major_exon_elongation_left,
+                                    MatchEventSubtype.major_exon_elongation_right,
+                                    MatchEventSubtype.exon_elongation_right,
+                                    MatchEventSubtype.exon_elongation_left}:
+                    event_cost = elongation_cost(self.params, e.event_length)
+
+                score +=  event_cost * event_count
                 logger.debug("* * * Event " + str(e.event_type) + ", introns affected " + str(event_count) +
-                             ", event cost " + str(event_subtype_cost[e.event_type]) +
+                             ", event cost " + str(event_cost) +
                              ". Updated score: " + str(score))
             logger.debug("* * Final score for isoform " + isoform_id + ": " + str(score))
             isoform_scores.append((isoform_id, score))
