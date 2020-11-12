@@ -185,7 +185,7 @@ class LongReadAssigner:
 
         events = []
         left_event = None
-        if extra_left > self.params.minor_exon_extension:
+        if extra_left >= self.params.minor_exon_extension:
             if common_first_exon == isofrom_first_exon:
                 left_event = MatchEventSubtype.major_exon_elongation_left
         elif extra_left > self.params.delta:
@@ -194,7 +194,7 @@ class LongReadAssigner:
             events.append(make_event(left_event, event_length=extra_left))
 
         right_event = None
-        if extra_right > self.params.minor_exon_extension:
+        if extra_right >= self.params.minor_exon_extension:
             if common_last_exon == isofrom_last_exon:
                 right_event = MatchEventSubtype.major_exon_elongation_right
         elif extra_right > self.params.delta:
@@ -215,7 +215,6 @@ class LongReadAssigner:
 
         logger.debug("+ + + Resolving by nucleotide similarity")
         read_exons = combined_read_profile.read_exon_profile.read_features
-        read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
         scores = []
         for isoform_id in matched_isoforms:
@@ -409,6 +408,8 @@ class LongReadAssigner:
                 # alternative isoforms made of known introns/exons or intron retention
                 logger.debug("+ + Resolving unmatched ")
                 assignment = self.match_inconsistent(read_id, combined_read_profile)
+            else:
+                self.check_for_extra_terminal_seqs(read_split_exon_profile, assignment)
 
         # checking polyA
         self.verify_polyA(combined_read_profile, assignment)
