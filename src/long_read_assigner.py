@@ -51,18 +51,19 @@ class LongReadAssigner:
     def find_overlapping_isoforms(read_exon_split_profile, isoform_profiles):
         isoforms = set()
         for isoform_id, isoform_profile in isoform_profiles.items():
-            if has_overlapping_features(isoform_profile, read_exon_split_profile):
+            if has_overlapping_features(isoform_profile, read_exon_split_profile.gene_profile):
                 isoforms.add(isoform_id)
         return isoforms
 
     def find_containing_isoforms(self, read_exon_split_profile, isoform_profiles, hint=None):
         isoforms = set()
+        read_exons = read_exon_split_profile.read_features
         for isoform_id, isoform_profile in isoform_profiles.items():
             if hint and isoform_id not in hint:
                 continue
-            isoform_region = (self.gene_info.transcript_start() - self.params.delta,
-                              self.gene_info.transcript_end() + self.params.delta)
-            read_region = (read_exon_split_profile[0][0], read_exon_split_profile[-1][1])
+            isoform_region = (self.gene_info.transcript_start(isoform_id) - self.params.delta,
+                              self.gene_info.transcript_end(isoform_id) + self.params.delta)
+            read_region = (read_exons[0][0], read_exons[-1][1])
             if contains(isoform_region, read_region):
                 isoforms.add(isoform_id)
         return isoforms
@@ -113,9 +114,7 @@ class LongReadAssigner:
     # select most similar isoform based on different criteria
     def select_similar_isoforms(self, read_id, combined_read_profile):
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
-        read_region = (read_split_exon_profile[0][0], read_split_exon_profile[-1][1])
-
-        overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile.gene_profile,
+        overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile,
                                                               self.gene_info.split_exon_profiles.profiles)
         if not overlapping_isoforms:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
@@ -130,14 +129,16 @@ class LongReadAssigner:
         intron_matching_isoforms = self.match_profile(combined_read_profile.read_intron_profile.gene_profile,
                                                       self.gene_info.intron_profiles.profiles,
                                                       hint=significantly_overlapping_isoforms)
+
         # add extra terminal bases as potential inconsistency event
         candidates = []
+        read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
         for isoform_id, diff_introns in intron_matching_isoforms:
             extra_left = 1 if read_region[0] + self.params.delta < self.gene_info.transcript_start(isoform_id) else 0
             extra_right = 1 if read_region[0] - self.params.delta > self.gene_info.transcript_end(isoform_id) else 0
             candidates.append((isoform_id, diff_introns + extra_right + extra_left))
         # select isoforms that have similar number of potential inconsistencies
-        best_diff = min(candidates, lambda x: x[1])
+        best_diff = min(candidates, key=lambda x: x[1])[1]
         best_candidates = [x[0] for x in filter(lambda x: x[1] <= best_diff + 1, candidates)]
         logger.debug("+ + Closest matching isoforms " + str(best_candidates))
         return best_candidates
@@ -208,7 +209,7 @@ class LongReadAssigner:
         elif extra_right > self.params.delta:
             events.append(MatchEventSubtype.exon_elongation_right)
 
-        return events
+        return list(map(make_event, events))
 
     # select best assignment based on nucleotide similarity
     # score = Jaccard similarity - flanking len / read len ([-1,1])
@@ -336,7 +337,7 @@ class LongReadAssigner:
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
 
         matching_events = self.intron_comparator.get_mono_exon_subtype(read_region, isoform_introns)
-        match_classification = MatchClassification.get_mono_exon_classification_from_subtypes(matching_events)
+        match_classification = MatchClassification.get_mono_exon_classification(matching_events)
 
         return IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id, matching_events,
                             self.gene_info.isoform_strands[isoform_id])
@@ -402,7 +403,7 @@ class LongReadAssigner:
                 or any(el == 0 for el in read_split_exon_profile.read_profile):
             # Read has extra flanking exons / introns
             logger.debug("+ Has extra flanking features")
-            assignment = self.match_with_extra_flanking(read_id, combined_read_profile)
+            assignment = self.match_inconsistent(read_id, combined_read_profile)
 
         else:
             logger.debug("+ No contradictory features in read, but no consistent isoforms still can be found")
@@ -543,39 +544,77 @@ class LongReadAssigner:
 
         return read_assignment
 
-    # resolve when there are 0s  at the ends of read profile
-    def match_with_extra_flanking(self, read_id, combined_read_profile):
-        read_intron_profile = combined_read_profile.read_intron_profile
-        if read_intron_profile.read_profile[0] == 1 and read_intron_profile.read_profile[-1] == 1:
-            logger.warning("+ + Both terminal introns present, odd case")
-
-        assignment = self.match_consistent_spliced(read_id, combined_read_profile)
-        if assignment is None:
-            # alternative isoforms made of known introns/exons or intron retention
-            logger.debug("+ + Resolving unmatched with extra flanking ")
-            return self.match_inconsistent(read_id, combined_read_profile)
-
-        for match in assignment.isoform_matches:
-            match.set_classification(MatchClassification.novel_not_in_catalog)
-            logger.debug("+ + Found extra terminal introns " + str(read_intron_profile.read_profile))
-            isoform_start = self.gene_info.transcript_start(match.assigned_transcript)
-            self.intron_comparator.add_extra_out_exon_events(match.match_subclassifications, read_intron_profile.read_profile,
-                                                             read_intron_profile.read_features, isoform_start)
-
-        if not self.params.allow_extra_terminal_introns:
-            if assignment.assignment_type in (ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference):
-                assignment.set_assignment_type(ReadAssignmentType.inconsistent)
-        else:
-            if assignment.assignment_type == ReadAssignmentType.unique:
-                assignment.set_assignment_type(ReadAssignmentType.unique_minor_difference)
-
-        return assignment
-
     # resolve when there are -1s in read profile or when there are no exactly matching isoforms, but no -1s in read profiles
     def match_inconsistent(self, read_id, combined_read_profile):
+        # select most similar isoforms based on multiple criteria
         best_candidates = self.select_similar_isoforms(read_id, combined_read_profile)
+        logger.debug("* Best candidates for inconsistency detection: " + str(best_candidates))
+        # detect inconsistency for each one
         read_matches = self.detect_inconsistensies(read_id, combined_read_profile, best_candidates)
-        return self.select_inconsistent_assignment(read_id, read_matches)
+        if not read_matches:
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative)
+        logger.debug("* Inconsistencies detected: " + str(read_matches))
+
+        # select ones with least number of inconsistent events
+        best_isoforms = self.select_best_among_inconsistent(read_matches)
+        if not best_isoforms:
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative)
+
+        is_abmiguous = len(best_isoforms) > 1
+        all_event_types = set()
+        for isoform_id in best_isoforms:
+            for e in read_matches[isoform_id]:
+                all_event_types.add(e.event_type)
+
+        logger.debug("* Selected isoforms: " + str(best_isoforms) + ", all events: " + str(all_event_types))
+        if all(MatchEventSubtype.is_consistent(e) for e in all_event_types):
+            logger.debug("* * Assignment seems to be consistent")
+            assignment_type = ReadAssignmentType.ambiguous if is_abmiguous else ReadAssignmentType.unique
+        elif any(MatchEventSubtype.is_major_inconsistency(e) for e in all_event_types):
+            logger.debug("* * Assignment is INconsistent")
+            assignment_type = ReadAssignmentType.inconsistent
+        elif any(MatchEventSubtype.is_minor_error(e) for e in all_event_types):
+            logger.debug("* * Assignment has minor errors")
+            assignment_type = ReadAssignmentType.ambiguous if is_abmiguous else ReadAssignmentType.unique_minor_difference
+        else:
+            logger.warning("Unexpected event reported: " + str(all_event_types))
+            assignment_type = ReadAssignmentType.noninformative
+
+        if not combined_read_profile.read_intron_profile.read_profile:
+            isoform_matches = self.create_monoexon_matches(read_matches, best_isoforms)
+        elif assignment_type == ReadAssignmentType.inconsistent:
+            isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms)
+        else:
+            isoform_matches = self.create_consistent_matches(read_matches, best_isoforms, combined_read_profile)
+        return ReadAssignment(read_id, assignment_type, isoform_matches)
+
+    def create_monoexon_matches(self, read_matches, selected_isoforms):
+        matches = []
+        for isoform_id in selected_isoforms:
+            match_classification = MatchClassification.get_mono_exon_classification(read_matches[isoform_id])
+            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
+                                         read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id])
+            matches.append(isoform_match)
+        return matches
+
+    def create_consistent_matches(self, read_matches, selected_isoforms, combined_read_profile):
+        matches = []
+        for isoform_id in selected_isoforms:
+            isoform_match = self.categorize_correct_splice_match(combined_read_profile.read_intron_profile, isoform_id)
+            for e in read_matches[isoform_id]:
+                if e.event_type != MatchEventSubtype.none:
+                    isoform_match.add_subclassification(e)
+            matches.append(isoform_match)
+        return matches
+
+    def create_inconsistent_matches(self, read_matches, selected_isoforms):
+        matches = []
+        for isoform_id in selected_isoforms:
+            match_classification = MatchClassification.get_inconsistency_classification(read_matches[isoform_id])
+            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
+                                         read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id])
+            matches.append(isoform_match)
+        return matches
 
     # detect inconsistensies for selected isoforms
     def detect_inconsistensies(self, read_id, combined_read_profile, matched_isoforms):
@@ -588,7 +627,7 @@ class LongReadAssigner:
 
         Returns
         -------
-        result: ReadAssignment
+        result: list of tuples (isoform_id, list of events)
         """
         # get isoforms that have closes intron and exon profiles
         logger.debug("Detecting difference for %s, %d matched isoforms" % (read_id, len(matched_isoforms)))
@@ -600,7 +639,7 @@ class LongReadAssigner:
         # logger.debug(str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
         # logger.debug(str(self.gene_info.intron_profiles.profiles[isoform_id]))
 
-        read_matches = []
+        read_matches = {}
         for isoform_id in sorted(matched_isoforms):
             logger.debug("Checking isoform %s" % isoform_id)
             # get intron coordinates
@@ -618,13 +657,40 @@ class LongReadAssigner:
 
             matching_events += self.categorize_exon_elongation_subtype(read_split_exon_profile, isoform_id)
             #match_classification = MatchClassification.get_contradiction_classification_from_subtypes(matching_events)
-            read_matches.append((isoform_id, matching_events))
+            read_matches[isoform_id] = matching_events
 
             logger.debug("+ + Found contradiction for " + isoform_id + ": " + " ".join(map(lambda x: x.event_type.name, matching_events)))
         return read_matches
 
-    def select_inconsistent_assignment(self, read_id, read_matches):
-        pass
+    def select_best_among_inconsistent(self, read_matches):
+        isoform_scores = []
+        for isoform_id, match_events in read_matches.items():
+            logger.debug("* * Scoring inconsistencies for " + isoform_id + ": " + str(match_events))
+            score = 0.0
+            for e in match_events:
+                event_count = 1
+                if e.read_region != SupplementaryMatchConstansts.undefined_region:
+                    event_count = e.read_region[1] - e.read_region[0] + 1
+                    if e.event_type in {MatchEventSubtype.exon_gain_novel,
+                                        MatchEventSubtype.exon_gain_known,
+                                        MatchEventSubtype.mutually_exclusive_exons_novel,
+                                        MatchEventSubtype.mutually_exclusive_exons_known}:
+                        event_count -= 1
+                    elif e.event_type in {MatchEventSubtype.intron_retention,
+                                          MatchEventSubtype.unspliced_intron_retention,
+                                          MatchEventSubtype.unspliced_genic,
+                                          MatchEventSubtype.incomplete_intron_retention}:
+                        event_count = 1
+                score += event_subtype_cost[e.event_type] * event_count
+                logger.debug("* * * Event " + str(e.event_type) + ", introns affected " + str(event_count) +
+                             ", event cost " + str(event_subtype_cost[e.event_type]) +
+                             ". Updated score: " + str(score))
+            logger.debug("* * Final score for isoform " + isoform_id + ": " + str(score))
+            isoform_scores.append((isoform_id, score))
+
+        best_score = min(isoform_scores, key=lambda x:x[1])[1]
+        logger.debug("* * Best score " + str(best_score))
+        return [x[0] for x in filter(lambda x:x[1] == best_score, isoform_scores)]
 
     # check consistency with polyA
     def verify_polyA(self, combined_read_profile, read_assignment):

@@ -204,7 +204,9 @@ class JunctionComparator():
             event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
                                                 total_intron_len_diff, read_introns_known)
 
-        elif read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
+        elif read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0] and \
+            abs(read_junctions[read_cregion[0]][0] - isoform_junctions[isoform_cregion[0]][0]) <= self.params.delta and \
+            abs(read_junctions[read_cregion[1]][1] - isoform_junctions[isoform_cregion[1]][1]) <= self.params.delta:
             if read_introns_known:
                 event = MatchEventSubtype.exon_gain_known
             else:
