@@ -69,7 +69,6 @@ def overlaps(range1, range2):
 def overlaps_at_least(range1, range2, delta=0):
     cutoff = min([delta, range1[1] - range1[0] + 1, range2[1] - range2[0] + 1])
     overlap = min(range1[1], range2[1]) + 1 - max(range1[0], range2[0])
-    logger.debug(str(delta) + ", " + str(range1) + ", " + str(range2) + ", " + str(overlap))
     return overlap >= cutoff
 
 
