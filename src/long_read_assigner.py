@@ -117,13 +117,13 @@ class LongReadAssigner:
         overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile,
                                                               self.gene_info.split_exon_profiles.profiles)
         if not overlapping_isoforms:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
+            return
         # select isoforms with non-negative nucleotide score
         significantly_overlapping_isoforms = self.resolve_by_nucleotide_score(combined_read_profile,
                                                                                overlapping_isoforms,
                                                                                top_scored_factor=2)
         if not significantly_overlapping_isoforms:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
+            return
 
         # find intron matches
         intron_matching_isoforms = self.match_profile(combined_read_profile.read_intron_profile.gene_profile,
@@ -548,6 +548,9 @@ class LongReadAssigner:
     def match_inconsistent(self, read_id, combined_read_profile):
         # select most similar isoforms based on multiple criteria
         best_candidates = self.select_similar_isoforms(read_id, combined_read_profile)
+        if not best_candidates:
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
+
         logger.debug("* Best candidates for inconsistency detection: " + str(best_candidates))
         # detect inconsistency for each one
         read_matches = self.detect_inconsistensies(read_id, combined_read_profile, best_candidates)
