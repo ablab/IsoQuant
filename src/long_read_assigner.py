@@ -150,25 +150,17 @@ class LongReadAssigner:
 
         # find first and last common exons
         common_first_exon = -1
-        isofrom_first_exon = -1
+        isofrom_first_exon = isoform_profile.index(1)
         for i in range(len(split_exons)):
-            if isoform_profile[i] != 1:
-                continue
-            if isofrom_first_exon == -1:
-                isofrom_first_exon = i
-            if read_split_exon_profile.gene_profile[i] == 1:
+            if isoform_profile[i] == read_split_exon_profile.gene_profile[i] == 1:
                 common_first_exon = i
                 break
 
         common_last_exon = -1
-        isofrom_last_exon = -1
+        isofrom_last_exon = rindex(isoform_profile, 1)
         for i in range(len(split_exons)):
             index = len(split_exons) - i - 1
-            if isoform_profile[index] != 1:
-                continue
-            if isofrom_last_exon == -1:
-                isofrom_last_exon = index
-            if read_split_exon_profile.gene_profile[index] == 1:
+            if isoform_profile[index] == read_split_exon_profile.gene_profile[index] == 1:
                 common_last_exon = index
                 break
 
@@ -196,8 +188,6 @@ class LongReadAssigner:
         if extra_left > self.params.minor_exon_extension:
             if common_first_exon == isofrom_first_exon:
                 left_event = MatchEventSubtype.major_exon_elongation_left
-            else:
-                left_event = MatchEventSubtype.incomplete_intron_retention
         elif extra_left > self.params.delta:
             left_event = MatchEventSubtype.exon_elongation_left
         if left_event:
@@ -207,8 +197,6 @@ class LongReadAssigner:
         if extra_right > self.params.minor_exon_extension:
             if common_last_exon == isofrom_last_exon:
                 right_event = MatchEventSubtype.major_exon_elongation_right
-            else:
-                right_event = MatchEventSubtype.incomplete_intron_retention
         elif extra_right > self.params.delta:
                 right_event = MatchEventSubtype.exon_elongation_right
         if right_event:

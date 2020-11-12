@@ -293,7 +293,7 @@ def set_matching_options(args):
     strategy = strategies[args.matching_strategy]
 
     args.delta = args.delta or strategy.delta
-    args.minor_exon_extension = 50
+    args.minor_exon_extension = 30
     args.major_exon_extension = 300
     args.max_intron_shift = args.max_intron_shift or strategy.max_intron_shift
     args.max_missed_exon_len = args.max_missed_exon_len or strategy.max_missed_exon_len
