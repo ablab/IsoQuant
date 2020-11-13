@@ -48,16 +48,17 @@ class MatchClassification(Enum):
     @staticmethod
     def get_mono_exon_classification(match_event_subtypes):
         # events are not mixed in the list
-        if all(e.event_type == MatchEventSubtype.incomplete_intron_retention for e in match_event_subtypes):
-            return MatchClassification.genic
-        elif any(e.event_type == MatchEventSubtype.unspliced_intron_retention for e in match_event_subtypes):
+        if any(e.event_type == MatchEventSubtype.unspliced_intron_retention for e in match_event_subtypes):
             return MatchClassification.novel_in_catalog
+        elif any(e.event_type == MatchEventSubtype.incomplete_intron_retention for e in match_event_subtypes):
+            return MatchClassification.genic
         elif match_event_subtypes[0].event_type == MatchEventSubtype.mono_exon_match:
             return MatchClassification.mono_exon_match
         elif match_event_subtypes[0].event_type == MatchEventSubtype.mono_exonic:
             return MatchClassification.incomplete_splice_match
         else:
-            assert False
+            logger.warning("Unexpected set of monoexonic events: " + str(match_event_subtypes))
+            return MatchClassification.undefined
 
 
 class MatchEventSubtype(Enum):

@@ -525,7 +525,7 @@ class LongReadAssigner:
             logger.debug("* * Assignment seems to be consistent")
             assignment_type = ReadAssignmentType.ambiguous if is_abmiguous else ReadAssignmentType.unique
         elif any(MatchEventSubtype.is_major_inconsistency(e) for e in all_event_types):
-            logger.debug("* * Assignment is INconsistent")
+            logger.debug("* * Assignment is inconsistent")
             assignment_type = ReadAssignmentType.inconsistent
         elif any(MatchEventSubtype.is_minor_error(e) for e in all_event_types):
             logger.debug("* * Assignment has minor errors")
@@ -642,9 +642,9 @@ class LongReadAssigner:
                     event_cost = elongation_cost(self.params, e.event_length)
 
                 score +=  event_cost * event_count
-                logger.debug("* * * Event " + str(e.event_type) + ", introns affected " + str(event_count) +
-                             ", event cost " + str(event_cost) +
-                             ". Updated score: " + str(score))
+                # logger.debug("* * * Event " + str(e.event_type) + ", introns affected " + str(event_count) +
+                #             ", event cost " + str(event_cost) +
+                #             ". Updated score: " + str(score))
             logger.debug("* * Final score for isoform " + isoform_id + ": " + str(score))
             isoform_scores.append((isoform_id, score))
 
