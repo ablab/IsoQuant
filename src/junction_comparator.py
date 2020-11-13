@@ -36,7 +36,6 @@ class JunctionComparator():
         -------
         list of detected contradiction events
         """
-        # FIXME
         if not read_junctions:
             return self.get_mono_exon_subtype(read_region, isoform_junctions)
 
