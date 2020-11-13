@@ -520,7 +520,6 @@ class LongReadAssigner:
             for e in read_matches[isoform_id]:
                 all_event_types.add(e.event_type)
 
-        # FIXME unspliced genic
         logger.debug("* Selected isoforms: " + str(best_isoforms) + ", all events: " + str(all_event_types))
         if all(MatchEventSubtype.is_consistent(e) for e in all_event_types):
             logger.debug("* * Assignment seems to be consistent")
@@ -632,7 +631,6 @@ class LongReadAssigner:
                         event_count -= 1
                     elif e.event_type in {MatchEventSubtype.intron_retention,
                                           MatchEventSubtype.unspliced_intron_retention,
-                                          MatchEventSubtype.unspliced_genic,
                                           MatchEventSubtype.incomplete_intron_retention}:
                         event_count = 1
 
