@@ -29,7 +29,8 @@ match_subtype_printable_names = \
      MatchEventSubtype.alt_right_site_novel: ('alt_acceptor_site_novel', 'alt_donor_site_novel')}
 
 
-def match_subtype_to_str(event_subtype, strand):
+def match_subtype_to_str(event, strand):
+    event_subtype = event.event_type
     if event_subtype in match_subtype_printable_names.keys():
         if strand is None:
             logger.warning("Strand is not set for site-dependent modifications")
@@ -38,6 +39,23 @@ def match_subtype_to_str(event_subtype, strand):
         else:
             return match_subtype_printable_names[event_subtype][0]
     return event_subtype.name
+
+
+def match_subtype_to_str_with_additional_info(event, strand, read_introns, isoform_introns):
+    event_subtype = event.event_type
+    coordinates = ""
+    if event_subtype in {MatchEventSubtype.intron_retention,
+                         MatchEventSubtype.unspliced_intron_retention,
+                         MatchEventSubtype.incomplete_intron_retention}:
+        if event.isoform_position != SupplementaryMatchConstansts.undefined_position:
+            intron = isoform_introns[event.isoform_position]
+            coordinates = ":" + str(intron[0]) + "-" + str(intron[1])
+    else:
+        if event.read_region != SupplementaryMatchConstansts.undefined_region:
+            introns = read_introns[event.read_region[0]:event.read_region[1]+1]
+            coordinates = ":" + str(introns[0][0]) + "-" + str(introns[-1][1])
+
+    return match_subtype_to_str(event, strand) + coordinates
 
 
 class PrintAllFunctor:
@@ -145,8 +163,17 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 for x in m.match_subclassifications:
                     if not hasattr(x, "event_type"):
                         logger.debug(x)
-            match_events = ",".join(["+".join([match_subtype_to_str(x.event_type, m.transcript_strand) for x in m.match_subclassifications])
-                                     for m in read_assignment.isoform_matches])
+            match_evetns_strings = []
+            read_introns = read_assignment.combined_profile.read_intron_profile.read_features
+            for m in read_assignment.isoform_matches:
+                if m.assigned_transcript is None:
+                    continue
+                isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
+                match_evetns_strings.append("+".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
+                                                                                                read_introns,
+                                                                                                isoform_introns)
+                                                       for x in m.match_subclassifications]))
+            match_events = ",".join(match_evetns_strings)
             if not match_events:
                 match_events = "."
             line = read_assignment.read_id + "\t" + ",".join(assigned_transcripts) + "\t" \
