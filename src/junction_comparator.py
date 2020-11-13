@@ -271,21 +271,21 @@ class JunctionComparator():
         if len(isoform_junctions) == 0:
             # both isoform and read are monoexon
             events = [make_event(MatchEventSubtype.mono_exon_match)]
-        elif any(contains(read_region, intron) for intron in isoform_junctions):
-            # read captures some introns
+        else:
+            # check if read captures some introns
             events = []
             for i, intron in enumerate(isoform_junctions):
                 if contains(read_region, intron):
+                    # full intron retention
                     events.append(make_event(MatchEventSubtype.unspliced_intron_retention, isoform_position=i,
                                              read_region=(JunctionComparator.absent, 0)))
                 elif overlaps_at_least(read_region, intron, self.params.minor_exon_extension):
+                    # partial IR
                     events.append(make_event(MatchEventSubtype.incomplete_intron_retention, isoform_position=i,
                                              read_region=(JunctionComparator.absent, 0)))
-        elif any(overlaps(read_region, intron) for intron in isoform_junctions):
-            # read overlaps but not captures any intron
-            events = [make_event(MatchEventSubtype.unspliced_genic)]
-        else:
-            # monoexonic read is inside exon
+
+        if not events:
+            # monoexonic read without significant intron overlap
             events = [make_event(MatchEventSubtype.mono_exonic)]
         return events
 

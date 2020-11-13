@@ -43,16 +43,14 @@ class MatchClassification(Enum):
             return MatchClassification.novel_not_in_catalog
         elif any(me.event_type in nic_event_types for me in match_event_subtypes):
             return MatchClassification.novel_in_catalog
-        elif any(me.event_type == MatchEventSubtype.unspliced_genic for me in match_event_subtypes):
-            return MatchClassification.genic
         return MatchClassification.undefined
 
     @staticmethod
     def get_mono_exon_classification(match_event_subtypes):
         # events are not mixed in the list
-        if match_event_subtypes[0].event_type == MatchEventSubtype.unspliced_genic:
+        if all(e.event_type == MatchEventSubtype.incomplete_intron_retention for e in match_event_subtypes):
             return MatchClassification.genic
-        elif match_event_subtypes[0].event_type == MatchEventSubtype.unspliced_intron_retention:
+        elif any(e.event_type == MatchEventSubtype.unspliced_intron_retention for e in match_event_subtypes):
             return MatchClassification.novel_in_catalog
         elif match_event_subtypes[0].event_type == MatchEventSubtype.mono_exon_match:
             return MatchClassification.mono_exon_match
@@ -81,7 +79,6 @@ class MatchEventSubtype(Enum):
     # intron retentions
     intron_retention = 31
     unspliced_intron_retention = 32
-    unspliced_genic = 33
     incomplete_intron_retention = 39
     # major alternation
     # alternative donor/acceptor sites
@@ -165,7 +162,6 @@ event_subtype_cost = {
     # intron retentions
     MatchEventSubtype.intron_retention:0.5,
     MatchEventSubtype.unspliced_intron_retention:0.5,
-    MatchEventSubtype.unspliced_genic:0.75,
     MatchEventSubtype.incomplete_intron_retention:0.75,
     # major alternation
     # alternative donor/acceptor sites
