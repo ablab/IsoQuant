@@ -270,13 +270,15 @@ class IsoformMatch:
         if match_subclassification is None:
             self.match_subclassifications = []
         elif isinstance(match_subclassification, list):
+            if match_subclassification and match_subclassification[0] == MatchEventSubtype.none:
+                self.match_subclassifications = match_subclassification[1:]
             self.match_subclassifications = match_subclassification
         else:
             self.match_subclassifications = [match_subclassification]
 
     def add_subclassification(self, match_subclassification):
         if len(self.match_subclassifications) == 1 and \
-                self.match_subclassifications[0].event_type == MatchClassification.undefined:
+                self.match_subclassifications[0].event_type in {MatchEventSubtype.undefined, MatchEventSubtype.none}:
             self.match_subclassifications = [match_subclassification]
         else:
             self.match_subclassifications.append(match_subclassification)
