@@ -292,11 +292,11 @@ def set_matching_options(args):
 
     strategy = strategies[args.matching_strategy]
 
-    args.delta = args.delta or strategy.delta
+    args.delta = args.delta if args.delta is not None else strategy.delta
     args.minor_exon_extension = 30
     args.major_exon_extension = 300
-    args.max_intron_shift = args.max_intron_shift or strategy.max_intron_shift
-    args.max_missed_exon_len = args.max_missed_exon_len or strategy.max_missed_exon_len
+    args.max_intron_shift = args.max_intron_shift if args.max_intron_shift is not None else strategy.max_intron_shift
+    args.max_missed_exon_len = args.max_missed_exon_len if args.max_missed_exon_len is not None else strategy.max_missed_exon_len
     args.min_abs_exon_overlap = 10
     args.min_rel_exon_overlap = 0.2
     args.apa_delta = 50
