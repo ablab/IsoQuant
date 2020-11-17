@@ -194,8 +194,8 @@ class JunctionComparator():
             event = self.classify_single_intron_alternation(read_region, read_junctions, isoform_region, isoform_junctions, read_cregion[0],
                                                            isoform_cregion[0], total_intron_len_diff, read_introns_known)
 
-        elif read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] and \
-                total_intron_len_diff < self.params.delta:
+        elif read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] >= 1 and \
+                total_intron_len_diff <= 2 * self.params.delta:
             if read_introns_known:
                 event = MatchEventSubtype.mutually_exclusive_exons_known
             else:
