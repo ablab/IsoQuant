@@ -225,7 +225,7 @@ class JunctionComparator():
         total_exon_len = sum([isoform_junctions[i + 1][0] - isoform_junctions[i][1] + 1
                               for i in range(isoform_cregion[0], isoform_cregion[1])])
 
-        if total_intron_len_diff < 2 * self.params.delta and total_exon_len <= self.params.max_missed_exon_len:
+        if total_intron_len_diff <= 2 * self.params.delta and total_exon_len <= self.params.max_missed_exon_len:
             event = MatchEventSubtype.exon_misallignment
         else:
             if read_introns_known:
@@ -248,7 +248,7 @@ class JunctionComparator():
             event = MatchEventSubtype.intron_alternation_known if read_introns_known \
                 else MatchEventSubtype.intron_alternation_novel
 
-            if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) < self.params.delta:
+            if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) <= self.params.delta:
                 # left splice sites are similar, check for exon overlap
                 following_read_exon = get_following_exon_from_junctions(read_region, read_junctions, read_cpos)
                 following_isoform_exon = get_following_exon_from_junctions(isoform_region, isoform_junctions, isoform_cpos)
@@ -256,7 +256,7 @@ class JunctionComparator():
                                          round(self.params.min_rel_exon_overlap * interval_len(following_isoform_exon))))
                 if overlaps_at_least(following_read_exon, following_isoform_exon, min_overlap):
                     event = alternative_sites[("right", read_introns_known)]
-            elif abs(isoform_junctions[isoform_cpos][1] - read_junctions[read_cpos][1]) < self.params.delta:
+            elif abs(isoform_junctions[isoform_cpos][1] - read_junctions[read_cpos][1]) <= self.params.delta:
                 # right splice sites are similar, check for exon overlap
                 preceding_read_exon = get_preceding_exon_from_junctions(read_region, read_junctions, read_cpos)
                 preceding_isoform_exon = get_preceding_exon_from_junctions(isoform_region, isoform_junctions, isoform_cpos)
