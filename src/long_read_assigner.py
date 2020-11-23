@@ -121,7 +121,7 @@ class LongReadAssigner:
         # select isoforms with non-negative nucleotide score
         significantly_overlapping_isoforms = self.resolve_by_nucleotide_score(combined_read_profile,
                                                                                overlapping_isoforms,
-                                                                               top_scored_factor=2)
+                                                                               top_scored_factor=3)
         if not significantly_overlapping_isoforms:
             return
 
@@ -141,6 +141,7 @@ class LongReadAssigner:
         best_diff = min(candidates, key=lambda x: x[1])[1]
         best_candidates = [x[0] for x in filter(lambda x: x[1] <= best_diff + 1, candidates)]
         logger.debug("+ + Closest matching isoforms " + str(best_candidates))
+
         return best_candidates
 
     # detect exon elongation subtyp
@@ -205,7 +206,7 @@ class LongReadAssigner:
         return events
 
     # select best assignment based on nucleotide similarity
-    # score = Jaccard similarity - flanking len / read len ([-1,1])
+    # score = read's covered fraction - flanking fraction (can take values in [-1,1])
     # gives priority to isoforms that contain the read
     def resolve_by_nucleotide_score(self, combined_read_profile, matched_isoforms,
                                     min_similarity=ExonAmbiguityResolvingMethod.minimal_score.value,
@@ -219,7 +220,7 @@ class LongReadAssigner:
         scores = []
         for isoform_id in matched_isoforms:
             isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
-            js = jaccard_similarity(read_exons, isoform_exons)
+            js = read_coverage_fraction(read_exons, isoform_exons)
 
             isoform_extended_region = (self.gene_info.transcript_start(isoform_id) - self.params.minor_exon_extension,
                                        self.gene_info.transcript_end(isoform_id) + self.params.minor_exon_extension)
@@ -227,7 +228,7 @@ class LongReadAssigner:
 
             scores.append((isoform_id, js - flanking_percentage))
 
-        # logger.debug(jaccard_similarities)
+        #logger.debug("Scores: " + str(scores))
         best_score = max([x[1] for x in scores])
         if top_scored_factor == 0:
             top_scored = sorted(filter(lambda x: x[1] >= min_similarity, scores))

@@ -203,6 +203,29 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
     return float(intersection) / float(union)
 
 
+def read_coverage_fraction(read_range_list, isoform_range_list):
+    intersection = 0
+    pos1 = 0
+    pos2 = 0
+
+    while pos1 < len(read_range_list) and pos2 < len(isoform_range_list):
+        block1 = read_range_list[pos1]
+        block2 = isoform_range_list[pos2]
+        if overlaps(block1, block2):
+            intersection += min(block1[1], block2[1]) - max(block1[0], block2[0]) + 1
+            if block2[1] < block1[1]:
+                pos2 += 1
+            else:
+                pos1 += 1
+        elif left_of(block2, block1):
+            pos2 += 1
+        else:
+            pos1 += 1
+
+    read_length = intervals_total_length(read_range_list)
+    return float(intersection) / float(read_length)
+
+
 def extra_exon_percentage(isoform_region, read_exons):
     total_read_len = 0
     outside_read_len = 0
