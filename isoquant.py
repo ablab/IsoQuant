@@ -311,6 +311,7 @@ def set_matching_options(args):
         strategy.correct_minor_errors if args.correct_minor_errors is None else args.correct_minor_errors
 
     updated_strategy = MatchingStrategy(args.delta, args.max_intron_shift, args.max_missed_exon_len,
+                                        args.max_suspicious_intron_abs_len, args.max_suspicious_intron_rel_len,
                                         args.resolve_ambiguous, args.correct_minor_errors)
     logger.debug('Using %s strategy. Updated strategy: %s.' % (args.matching_strategy, updated_strategy))
 
