@@ -290,7 +290,8 @@ class LongReadAssigner:
         read_exons = combined_read_profile.read_split_exon_profile.read_features
         read_region = (read_exons[0][0], read_exons[-1][1])
 
-        if len(combined_read_profile.read_intron_profile.read_profile) == 0:
+        if len(combined_read_profile.read_intron_profile.read_profile) == 0 or \
+                len(self.gene_info.all_isoforms_introns[isoform_id]) == 0:
             logger.debug(" + Mono exon")
             match_classification = MatchClassification.mono_exon_match
             match_subclassifications = make_event(MatchEventSubtype.mono_exon_match)
