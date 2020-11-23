@@ -258,16 +258,12 @@ class LongReadAssigner:
                 if assignment.assignment_type == ReadAssignmentType.unique:
                     assignment.set_assignment_type(ReadAssignmentType.unique_minor_difference)
 
-    # get incompleteness type
-    def detect_ism_subtype(self, read_intron_profile, isoform_id):
-        if len(read_intron_profile.read_profile) == 0:
-            logger.debug(" + Mono exon")
-            return MatchEventSubtype.mono_exonic
-
-        read_profile = read_intron_profile.gene_profile
-        isoform_profile = self.gene_info.intron_profiles.profiles[isoform_id]
-        is_left_truncated = left_truncated(read_profile, isoform_profile)
-        is_right_truncated = right_truncated(read_profile, isoform_profile)
+    # get incompleteness type, assuming introns are matched and read is spliced
+    def detect_ism_subtype(self, read_region, isoform_id):
+        isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
+        isoform_intron_region = (isoform_introns[0][0], isoform_introns[-1][1])
+        is_left_truncated = isoform_intron_region[0] < read_region[0]
+        is_right_truncated = isoform_intron_region[1] > read_region[1]
 
         if is_left_truncated and is_right_truncated:
             logger.debug(" + Internal")
@@ -283,39 +279,38 @@ class LongReadAssigner:
             event_type = MatchEventSubtype.none
         return make_event(event_type)
 
-    # check where it is full splice match
-    def is_fsm(self, read_intron_profile, isoform_id):
-        # TODO include check for minor alignment errors
-        read_profile = read_intron_profile.gene_profile
-        if not read_intron_profile.read_profile or not all(el == 1 for el in read_intron_profile.read_profile):
-            return False
+    # check where it is full splice match, assume all introns are matched and read is spliced
+    def is_fsm(self, read_region, isoform_id):
+        isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
+        # all isoform instrons are within read
+        return contains(read_region, (isoform_introns[0][0], isoform_introns[-1][1]))
 
-        isoform_profile = self.gene_info.intron_profiles.profiles[isoform_id]
-        return not left_truncated(read_profile, isoform_profile) \
-               and not right_truncated(read_profile, isoform_profile)
+    # make proper match subtype, assume all introns are matched or read is unspliced
+    def categorize_correct_splice_match(self, combined_read_profile, isoform_id):
+        read_exons = combined_read_profile.read_split_exon_profile.read_features
+        read_region = (read_exons[0][0], read_exons[-1][1])
 
-    # make proper match subtype
-    def categorize_correct_splice_match(self, read_intron_profile, isoform_id):
-        if self.is_fsm(read_intron_profile, isoform_id):
+        if len(combined_read_profile.read_intron_profile.read_profile) == 0:
+            logger.debug(" + Mono exon")
+            match_classification = MatchClassification.mono_exon_match
+            match_subclassifications = make_event(MatchEventSubtype.mono_exon_match)
+        elif self.is_fsm(read_region, isoform_id):
             logger.debug("+ + Full splice match " + isoform_id)
-            isoform_match = IsoformMatch(MatchClassification.full_splice_match,
-                                         self.get_gene_id(isoform_id),
-                                         isoform_id, make_event(MatchEventSubtype.fsm),
-                                         self.gene_info.isoform_strands[isoform_id])
+            match_classification = MatchClassification.full_splice_match
+            match_subclassifications = make_event(MatchEventSubtype.fsm)
         else:
             logger.debug("+ + Incomplete splice match " + isoform_id)
-            isoform_match = IsoformMatch(MatchClassification.incomplete_splice_match,
-                                         self.get_gene_id(isoform_id),
-                                         isoform_id,
-                                         self.detect_ism_subtype(read_intron_profile, isoform_id),
-                                         self.gene_info.isoform_strands[isoform_id])
-        return isoform_match
+            match_classification = MatchClassification.incomplete_splice_match
+            match_subclassifications = self.detect_ism_subtype(read_region, isoform_id)
+
+        return IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
+                            match_subclassifications, self.gene_info.isoform_strands[isoform_id])
 
     # make proper match subtype
-    def categorize_multiple_splice_matches(self, read_intron_profile, isoform_ids):
+    def categorize_multiple_splice_matches(self, combined_read_profile, isoform_ids):
         isoform_matches = []
         for isoform_id in isoform_ids:
-            isoform_matches.append(self.categorize_correct_splice_match(read_intron_profile, isoform_id))
+            isoform_matches.append(self.categorize_correct_splice_match(combined_read_profile, isoform_id))
         return isoform_matches
 
     def categorize_correct_unspliced_match(self, combined_read_profile, isoform_id):
@@ -465,12 +460,12 @@ class LongReadAssigner:
         if len(matched_isoforms) == 1:
             isoform_id = list(matched_isoforms)[0]
             logger.debug("+ + UNIQUE intron match found " + isoform_id)
-            isoform_match = self.categorize_correct_splice_match(read_intron_profile, isoform_id)
+            isoform_match = self.categorize_correct_splice_match(combined_read_profile, isoform_id)
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match)
 
         elif len(matched_isoforms) > 1:
             logger.debug("+ + Ambiguous read")
-            isoform_matches = self.categorize_multiple_splice_matches(read_intron_profile, matched_isoforms)
+            isoform_matches = self.categorize_multiple_splice_matches(combined_read_profile, matched_isoforms)
             return ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches)
 
         return read_assignment
@@ -555,7 +550,7 @@ class LongReadAssigner:
     def create_consistent_matches(self, read_matches, selected_isoforms, combined_read_profile):
         matches = []
         for isoform_id in selected_isoforms:
-            isoform_match = self.categorize_correct_splice_match(combined_read_profile.read_intron_profile, isoform_id)
+            isoform_match = self.categorize_correct_splice_match(combined_read_profile, isoform_id)
             for e in read_matches[isoform_id]:
                 if e.event_type != MatchEventSubtype.none:
                     isoform_match.add_subclassification(e)
