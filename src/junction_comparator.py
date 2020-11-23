@@ -180,19 +180,22 @@ class JunctionComparator():
             # intron_start = read_junctions[read_cregion[0]]
             if self.are_known_introns(read_junctions, read_cregion):
                 return make_event(MatchEventSubtype.extra_intron_known, isoform_cregion[1], read_cregion)
+            elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
+                return make_event(MatchEventSubtype.none, isoform_cregion[1], read_cregion)
             return make_event(MatchEventSubtype.extra_intron, isoform_cregion[1], read_cregion)
 
-        read_intron_total_len = sum(
-            [read_junctions[i][1] - read_junctions[i][0] + 1 for i in range(read_cregion[0], read_cregion[1] + 1)])
-        isoform_intron_total_len = sum(
-            [isoform_junctions[i][1] - isoform_junctions[i][0] + 1 for i in range(isoform_cregion[0], isoform_cregion[1] + 1)])
+        read_intron_total_len = sum(interval_len(read_junctions[i])
+                                    for i in range(read_cregion[0], read_cregion[1] + 1))
+        isoform_intron_total_len = sum(interval_len(isoform_junctions[i])
+                                       for i in range(isoform_cregion[0], isoform_cregion[1] + 1))
         total_intron_len_diff = abs(read_intron_total_len - isoform_intron_total_len)
 
         read_introns_known = self.are_known_introns(read_junctions, read_cregion)
 
         if read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
-            event = self.classify_single_intron_alternation(read_region, read_junctions, isoform_region, isoform_junctions, read_cregion[0],
-                                                           isoform_cregion[0], total_intron_len_diff, read_introns_known)
+            event = self.classify_single_intron_alternation(read_region, read_junctions, isoform_region,
+                                                            isoform_junctions, read_cregion[0], isoform_cregion[0],
+                                                            total_intron_len_diff, read_introns_known)
 
         elif read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] >= 1 and \
                 total_intron_len_diff <= 2 * self.params.delta:
@@ -210,12 +213,16 @@ class JunctionComparator():
             abs(read_junctions[read_cregion[1]][1] - isoform_junctions[isoform_cregion[1]][1]) <= self.params.delta:
             if read_introns_known:
                 event = MatchEventSubtype.exon_gain_known
+            elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
+                event = MatchEventSubtype.intron_retention
             else:
                 event = MatchEventSubtype.exon_gain_novel
 
         else:
             if read_introns_known:
                 event = MatchEventSubtype.alternative_structure_known
+            elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
+                event = MatchEventSubtype.intron_retention
             else:
                 event = MatchEventSubtype.alternative_structure_novel
         return make_event(event, isoform_cregion[0], read_cregion)
@@ -234,8 +241,8 @@ class JunctionComparator():
                 event = MatchEventSubtype.exon_skipping_novel_intron
         return event
 
-    def classify_single_intron_alternation(self, read_region, read_junctions, isoform_region, isoform_junctions, read_cpos, isoform_cpos,
-                                           total_intron_len_diff, read_introns_known):
+    def classify_single_intron_alternation(self, read_region, read_junctions, isoform_region, isoform_junctions,
+                                           read_cpos, isoform_cpos, total_intron_len_diff, read_introns_known):
         if total_intron_len_diff <= 2 * self.params.delta:
             if read_introns_known:
                 event = MatchEventSubtype.intron_migration
@@ -265,7 +272,25 @@ class JunctionComparator():
                 if overlaps_at_least(preceding_read_exon, preceding_isoform_exon, min_overlap):
                     event = alternative_sites[("left", read_introns_known)]
 
+            if event == MatchEventSubtype.intron_alternation_novel and \
+                self.are_suspicious_introns(read_region, read_junctions, (read_cpos, read_cpos)):
+                event = MatchEventSubtype.intron_retention
+
         return event
+
+    def are_suspicious_introns(self, read_region, read_junctions, read_cregion):
+        total_intron_len = 0
+        for cpos in range(read_cregion[0], read_cregion[1] + 1):
+            if interval_len(read_junctions[cpos]) > self.params.max_suspicious_intron_abs_len:
+                return False
+            total_intron_len += interval_len(read_junctions[cpos])
+
+        total_exon_len = 0
+        for cpos in range(read_cregion[0], read_cregion[1] + 1):
+            total_exon_len += interval_len(get_preceding_exon_from_junctions(read_region, read_junctions, cpos))
+        total_exon_len += interval_len(get_following_exon_from_junctions(read_region, read_junctions, read_cregion[-1]))
+
+        return float(total_intron_len) <= float(total_exon_len) * self.params.max_suspicious_intron_rel_len
 
     def get_mono_exon_subtype(self, read_region, isoform_junctions):
         if len(isoform_junctions) == 0:

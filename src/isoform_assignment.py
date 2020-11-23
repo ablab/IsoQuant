@@ -270,9 +270,7 @@ class IsoformMatch:
         if match_subclassification is None:
             self.match_subclassifications = []
         elif isinstance(match_subclassification, list):
-            if match_subclassification and match_subclassification[0] == MatchEventSubtype.none:
-                self.match_subclassifications = match_subclassification[1:]
-            self.match_subclassifications = match_subclassification
+            self.match_subclassifications = list(filter(lambda x: x != MatchEventSubtype.none, match_subclassification))
         else:
             self.match_subclassifications = [match_subclassification]
 

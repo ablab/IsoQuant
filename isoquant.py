@@ -281,13 +281,14 @@ def set_data_dependent_options(args):
 def set_matching_options(args):
     MatchingStrategy = namedtuple('MatchingStrategy',
                                   ('delta', 'max_intron_shift', 'max_missed_exon_len',
+                                   'max_suspicious_intron_abs_len', 'max_suspicious_intron_rel_len',
                                    'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   MatchingStrategy(0,  0,   0,   ExonAmbiguityResolvingMethod.mono_exonic_only, False),
-        'precise': MatchingStrategy(3,  30,  50,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'default': MatchingStrategy(6,  60,  200, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'loose':   MatchingStrategy(12, 120, 300, ExonAmbiguityResolvingMethod.all,  True),
+        'exact':   MatchingStrategy(0,  0,   0,   0, 0.0,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
+        'precise': MatchingStrategy(3,  30,  50,  0, 0.0,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'default': MatchingStrategy(6,  60,  200, 60, 1.0, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
+        'loose':   MatchingStrategy(12, 120, 300, 60, 1.0, ExonAmbiguityResolvingMethod.all,  True),
     }
 
     strategy = strategies[args.matching_strategy]
@@ -297,6 +298,9 @@ def set_matching_options(args):
     args.major_exon_extension = 300
     args.max_intron_shift = args.max_intron_shift if args.max_intron_shift is not None else strategy.max_intron_shift
     args.max_missed_exon_len = args.max_missed_exon_len if args.max_missed_exon_len is not None else strategy.max_missed_exon_len
+    # short introns that are actually long deletions, fix minimaps logic
+    args.max_suspicious_intron_abs_len = strategy.max_suspicious_intron_abs_len
+    args.max_suspicious_intron_rel_len = strategy.max_suspicious_intron_rel_len
     args.min_abs_exon_overlap = 10
     args.min_rel_exon_overlap = 0.2
     args.apa_delta = 50
