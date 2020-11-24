@@ -121,7 +121,7 @@ class LongReadAssigner:
         # select isoforms with non-negative nucleotide score
         significantly_overlapping_isoforms = self.resolve_by_nucleotide_score(combined_read_profile,
                                                                                overlapping_isoforms,
-                                                                               top_scored_factor=3)
+                                                                               top_scored_factor=0)
         if not significantly_overlapping_isoforms:
             return
 
