@@ -5,14 +5,14 @@
 ############################################################################
 
 import logging
-from enum import Enum
+from enum import Enum, unique
 from collections import namedtuple
 
 from src.common import *
 
 logger = logging.getLogger('IsoQuant')
 
-
+@unique
 class ReadAssignmentType(Enum):
     unique = 1
     noninformative = 0
@@ -24,6 +24,7 @@ class ReadAssignmentType(Enum):
 
 
 # SQANTI-like
+@unique
 class MatchClassification(Enum):
     undefined = 0
     full_splice_match = 10
@@ -61,6 +62,7 @@ class MatchClassification(Enum):
             return MatchClassification.undefined
 
 
+@unique
 class MatchEventSubtype(Enum):
     none = 0
     undefined = 1

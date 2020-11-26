@@ -17,10 +17,12 @@ logger = logging.getLogger('IsoQuant')
 IsoformDiff = namedtuple("IsoformDiff", ("id", "diff"))
 
 
-class ExonAmbiguityResolvingMethod(Enum):
-    mono_exonic_only = 1
-    full_splice_matches_only = 2
-    all = 3
+@unique
+class AmbiguityResolvingMethod(Enum):
+    none = -10
+    monoexon_only = 10
+    monoexon_and_fsm = 20
+    all = 30
 
     minimal_score = 0.0
     top_scored_factor = 1.5
@@ -119,9 +121,10 @@ class LongReadAssigner:
         if not overlapping_isoforms:
             return
         # select isoforms with non-negative nucleotide score
-        significantly_overlapping_isoforms = self.resolve_by_nucleotide_score(combined_read_profile,
-                                                                               overlapping_isoforms,
-                                                                               top_scored_factor=0)
+        significantly_overlapping_isoforms = \
+            self.resolve_by_nucleotide_score(combined_read_profile, overlapping_isoforms,
+                                             similarity_function=self.coverage_based_nucleotide_score,
+                                             top_scored_factor=0)
         if not significantly_overlapping_isoforms:
             return
 
@@ -206,11 +209,10 @@ class LongReadAssigner:
         return events
 
     # select best assignment based on nucleotide similarity
-    # score = read's covered fraction - flanking fraction (can take values in [-1,1])
-    # gives priority to isoforms that contain the read
-    def resolve_by_nucleotide_score(self, combined_read_profile, matched_isoforms,
-                                    min_similarity=ExonAmbiguityResolvingMethod.minimal_score.value,
-                                    top_scored_factor=ExonAmbiguityResolvingMethod.top_scored_factor.value):
+    # score = similarity_function(read_exons, isoform_exons)
+    def resolve_by_nucleotide_score(self, combined_read_profile, matched_isoforms, similarity_function,
+                                    min_similarity=AmbiguityResolvingMethod.minimal_score.value,
+                                    top_scored_factor=AmbiguityResolvingMethod.top_scored_factor.value):
         if not matched_isoforms:
             return []
 
@@ -220,13 +222,7 @@ class LongReadAssigner:
         scores = []
         for isoform_id in matched_isoforms:
             isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
-            js = read_coverage_fraction(read_exons, isoform_exons)
-
-            isoform_extended_region = (self.gene_info.transcript_start(isoform_id) - self.params.minor_exon_extension,
-                                       self.gene_info.transcript_end(isoform_id) + self.params.minor_exon_extension)
-            flanking_percentage = extra_exon_percentage(isoform_extended_region, read_exons)
-
-            scores.append((isoform_id, js - flanking_percentage))
+            scores.append((isoform_id, similarity_function(read_exons, isoform_exons)))
 
         #logger.debug("Scores: " + str(scores))
         best_score = max([x[1] for x in scores])
@@ -237,6 +233,27 @@ class LongReadAssigner:
                                        scores))
         logger.debug("+ + + Best score = %f, all candidates = %s" % (best_score, str(top_scored)))
         return list(map(lambda x: x[0], top_scored))
+
+    # score = read's covered fraction - flanking fraction (can take values in [-1,1])
+    # gives priority to isoforms that contain the read
+    def coverage_based_nucleotide_score(self, read_exons, isoform_exons):
+        read_coverage = read_coverage_fraction(read_exons, isoform_exons)
+        isoform_extended_region = (isoform_exons[0][0] - self.params.minor_exon_extension,
+                                   isoform_exons[-1][1] + self.params.minor_exon_extension)
+        flanking_percentage = extra_exon_percentage(isoform_extended_region, read_exons)
+
+        return read_coverage - flanking_percentage
+
+    # score = Jaccard similarity - flanking fraction (can take values in [-1,1])
+    # gives priority to isoforms that contain the read
+    def jaccard_based_nucleotide_score(self, read_exons, isoform_exons):
+        js = jaccard_similarity(read_exons, isoform_exons)
+        isoform_extended_region = (isoform_exons[0][0] - self.params.minor_exon_extension,
+                                   isoform_exons[-1][1] + self.params.minor_exon_extension)
+        flanking_percentage = extra_exon_percentage(isoform_extended_region, read_exons)
+
+        return js - flanking_percentage
+
 
     # ====== CLASSIFICATION =======
 
@@ -442,20 +459,24 @@ class LongReadAssigner:
 
     def match_consistent_spliced(self, read_id, combined_read_profile, consistent_isoforms):
         isoform_split_exon_profiles = self.gene_info.split_exon_profiles.profiles
-        read_intron_profile = combined_read_profile.read_intron_profile
-
         matched_isoforms = consistent_isoforms
         if len(consistent_isoforms) > 1:
-            exon_matched_isoforms = self.find_matching_isoforms(combined_read_profile.read_split_exon_profile.gene_profile,
-                                                           isoform_split_exon_profiles,
-                                                           hint=consistent_isoforms)
+            exon_matched_isoforms = \
+                self.find_matching_isoforms(combined_read_profile.read_split_exon_profile.gene_profile,
+                                            isoform_split_exon_profiles, hint=consistent_isoforms)
             if len(exon_matched_isoforms) != 0:
                 matched_isoforms = exon_matched_isoforms
 
-        if len(matched_isoforms) > 1 and \
-            self.params.resolve_ambiguous in {ExonAmbiguityResolvingMethod.all,
-                                              ExonAmbiguityResolvingMethod.full_splice_matches_only}:
-            matched_isoforms = self.resolve_by_nucleotide_score(combined_read_profile, matched_isoforms)
+        if len(matched_isoforms) > 1:
+            read_exons = combined_read_profile.read_split_exon_profile.read_features
+            read_region = (read_exons[0][0], read_exons[-1][1])
+            if self.params.resolve_ambiguous == AmbiguityResolvingMethod.all or \
+               (self.params.resolve_ambiguous == AmbiguityResolvingMethod.monoexon_and_fsm and
+                any(self.is_fsm(read_region, isoform_id) for isoform_id in matched_isoforms)):
+                # resolve spliced using nucleotide score
+                matched_isoforms = \
+                    self.resolve_by_nucleotide_score(combined_read_profile, matched_isoforms,
+                                                     similarity_function=self.jaccard_based_nucleotide_score)
 
         read_assignment = None
         if len(matched_isoforms) == 1:
@@ -475,8 +496,9 @@ class LongReadAssigner:
         logger.debug("+  Resolving monoexonic read")
 
         matched_isoforms = consistent_isoforms
-        if len(consistent_isoforms) > 1:
-            matched_isoforms = self.resolve_by_nucleotide_score(combined_read_profile, sorted(consistent_isoforms))
+        if len(consistent_isoforms) > 1  and self.params.resolve_ambiguous != AmbiguityResolvingMethod.none:
+            matched_isoforms = self.resolve_by_nucleotide_score(combined_read_profile, sorted(consistent_isoforms),
+                                                                similarity_function=self.jaccard_based_nucleotide_score)
 
         read_assignment = None
         if len(matched_isoforms) == 1:

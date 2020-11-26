@@ -113,6 +113,8 @@ def parse_args(args=None, namespace=None):
                           help="set maximum length for intron shift")
     add_additional_option("--max_missed_exon_len", type=int, default=None,
                           help="set maximum length for skipped exon")
+    add_additional_option("--resolve_ambiguous", type=str, default='default',
+                          help="set ambiguity resolving method: default, none, monoexon_only, monoexon_and_fsm, all")
 
     # TODO: add read-type presets, transcript model contruction presets and counting
     parser.add_argument("--model_construction_strategy", choices=["reliable", "default", "fl", "all", "assembly"],
@@ -275,7 +277,8 @@ def set_data_dependent_options(args):
         if args.fl_data and args.model_construction_strategy == "default":
             args.model_construction_strategy = "fl"
 
-    args.resolve_ambiguous = ExonAmbiguityResolvingMethod.full_splice_matches_only if args.fl_data else None
+    if args.resolve_ambiguous == 'default' and args.fl_data:
+        args.resolve_ambiguous = 'monoexon_and_fsm'
 
 
 def set_matching_options(args):
@@ -285,10 +288,10 @@ def set_matching_options(args):
                                    'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   MatchingStrategy(0,  0,   0,   0, 0.0,  ExonAmbiguityResolvingMethod.mono_exonic_only, False),
-        'precise': MatchingStrategy(3,  30,  50,  0, 0.0,  ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'default': MatchingStrategy(6,  60,  200, 60, 1.0, ExonAmbiguityResolvingMethod.mono_exonic_only, True),
-        'loose':   MatchingStrategy(12, 120, 300, 60, 1.0, ExonAmbiguityResolvingMethod.all,  True),
+        'exact':   MatchingStrategy(0, 0, 0, 0, 0.0, 'monoexon_only', False),
+        'precise': MatchingStrategy(3, 30, 50, 0, 0.0, 'monoexon_and_fsm', True),
+        'default': MatchingStrategy(6, 60, 200, 60, 1.0, 'monoexon_and_fsm', True),
+        'loose':   MatchingStrategy(12, 120, 300, 60, 1.0, 'all',  True),
     }
 
     strategy = strategies[args.matching_strategy]
@@ -306,7 +309,12 @@ def set_matching_options(args):
     args.apa_delta = 50
     args.minimal_exon_overlap = 5
     args.minimal_intron_absence_overlap = 20
-    args.resolve_ambiguous = args.resolve_ambiguous or strategy.resolve_ambiguous
+    if args.resolve_ambiguous == 'default':
+        args.resolve_ambiguous = strategy.resolve_ambiguous
+    if args.resolve_ambiguous not in AmbiguityResolvingMethod.__dict__:
+        logger.error("Incorrect resolving ambiguity method: " + args.resolve_ambiguous + ", default will be used")
+        args.resolve_ambiguous = strategy.resolve_ambiguous
+    args.resolve_ambiguous = AmbiguityResolvingMethod[args.resolve_ambiguous]
     args.correct_minor_errors = \
         strategy.correct_minor_errors if args.correct_minor_errors is None else args.correct_minor_errors
 
