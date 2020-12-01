@@ -93,6 +93,7 @@ class LongReadAlignmentProcessor:
 
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
                 sorted_blocks = correct_bam_coords(concat_blocks)
+                # TODO: remove this option
                 if self.params.has_polya:
                     polya_pos = self.polya_finder.find_polya_tail(alignment)
                     polyt_pos = self.polya_finder.find_polyt_head(alignment)

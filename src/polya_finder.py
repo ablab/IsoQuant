@@ -13,8 +13,70 @@ from Bio import Seq
 logger = logging.getLogger('IsoQuant')
 
 
+# given a cigar string of an alignment, move shift bases along the alignment from the start
+# if shift is negative, moves from the alignment's end
+# return value is always positive
+def move_ref_coord_alogn_alignment(alignment, shift):
+    if shift == 0:
+        return 0
+
+    cigar_tuples = alignment.cigartuples
+    assert cigar_tuples
+
+    direction = 1 if shift > 0 else -1 # 1 for forward -1 for backward
+    shift = abs(shift)
+
+    if direction == 1:
+        current_pos = 0
+        if len(cigar_tuples) > 1 and cigar_tuples[0][0] == 5 and cigar_tuples[1][0] == 4:
+            # hard clipped
+            current_pos = 2
+        elif cigar_tuples[0][0] == 4:
+            # soft clipped
+            current_pos = 1
+    else:
+        current_pos = -1
+        if len(cigar_tuples) > 1 and cigar_tuples[-1][0] == 5 and cigar_tuples[-2][0] == 4:
+            # hard clipped
+            current_pos -= 2
+        elif cigar_tuples[-1][0] == 4:
+            # soft clipped
+            current_pos -= 1
+
+    read_length_consumed = 0
+    reference_length_consumed = 0
+    while abs(current_pos) < len(cigar_tuples) and read_length_consumed < shift:
+        cigar_event = cigar_tuples[current_pos][0]
+        event_len = cigar_tuples[current_pos][1]
+        if cigar_event == 1:
+            # insertion
+            read_length_consumed += event_len
+        elif cigar_event in {2, 3}:
+            # deletion or intron
+            reference_length_consumed += event_len
+        elif cigar_event == 0:
+            # match
+            remaining_bases = shift - read_length_consumed # how many nucleotides in read to complete shift
+            if event_len < remaining_bases:
+                reference_length_consumed += event_len
+                read_length_consumed += event_len
+            else:
+                read_length_consumed += remaining_bases
+                reference_length_consumed += remaining_bases
+        elif cigar_event in {4, 5}:
+            # met clipping on the other side
+            break
+        else:
+            # unexpected event
+            logger.warning("Unexpected event: " + cigar_event)
+
+        current_pos += direction
+
+    return reference_length_consumed
+
+
 class PolyAFinder:
-    def __init__(self, window_size=20, min_polya_fraction=0.8):
+    def __init__(self, window_size=16, min_polya_fraction=0.75):
         self.window_size = window_size
         self.min_polya_fraction = min_polya_fraction
         self.polyA_count = int(self.window_size * self.min_polya_fraction)
@@ -23,60 +85,87 @@ class PolyAFinder:
     def find_polya_tail(self, alignment):
         logger.debug("Detecting polyA tail for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
-        clipped_size = 0
-        # hard clipped
+        soft_clipped_tail_len = 0
 
         if len(cigar_tuples) > 1 and cigar_tuples[-1][0] == 5 and cigar_tuples[-2][0] == 4:
-            clipped_size = cigar_tuples[-2][1]
+            # hard clipped
+            soft_clipped_tail_len = cigar_tuples[-2][1]
         elif cigar_tuples[-1][0] == 4:
-            clipped_size = cigar_tuples[-1][1]
+            # soft clipped
+            soft_clipped_tail_len = cigar_tuples[-1][1]
 
         seq = alignment.seq
         if not seq:
             return -1
-        # TODO check read end, but also check that we do not clip the entire last exon
-        whole_tail_len = min(clipped_size, len(seq))
-        check_tail_start = len(seq) - whole_tail_len
-        check_tail_end = min(check_tail_start + 2 * self.window_size, len(seq))
-        pos = self.find_polya(alignment.seq[check_tail_start:check_tail_end].upper())
-        # logger.debug("start: %d, end: %d, len: %d, pos: %d" % (check_tail_start, check_tail_end, whole_tail_len, pos))
-        # logger.debug(alignment.seq[check_tail_start:check_tail_end].upper())
+        assert soft_clipped_tail_len < len(seq)
+
+        read_mapped_region_end = len(seq) - soft_clipped_tail_len
+        to_check_start = max(0, read_mapped_region_end - 2 * self.window_size)
+        to_check_end = min(len(seq), read_mapped_region_end + 2 * self.window_size + 1)
+        sequence_to_check = alignment.seq[to_check_start:to_check_end].upper()
+        pos = self.find_polya(sequence_to_check.upper())
+
+        logger.debug("start: %d, end: %d, len: %d, pos: %d" % (read_mapped_region_end, to_check_start, to_check_end, pos))
+        logger.debug(sequence_to_check)
+
         if pos == -1:
             logger.debug("No polyA found")
             return -1
-        # FIXME this does not include indels
-        ref_tail_start = alignment.reference_end + clipped_size - whole_tail_len
-        ref_polya_start = ref_tail_start + pos + 1
-        logger.debug("PolyA found at position %d" % ref_polya_start)
-        return min(ref_polya_start, alignment.reference_end)
+
+        # add position of the region we check
+        pos = to_check_start + pos
+        if pos >= read_mapped_region_end: # poly A starts after last mapped base
+            shift = pos - read_mapped_region_end
+            reference_polya_start = alignment.reference_end + shift
+        else:
+            shift = pos - read_mapped_region_end
+            reference_polya_start = alignment.reference_end - move_ref_coord_alogn_alignment(alignment, shift)
+
+        logger.debug("PolyA found at position %d" % reference_polya_start)
+        return reference_polya_start
 
     def find_polyt_head(self, alignment):
         logger.debug("Detecting polyT head for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
-        clipped_size = 0
-        # hard clipped
+        soft_clipped_head_len = 0
+
         if len(cigar_tuples) > 1 and cigar_tuples[0][0] == 5 and cigar_tuples[1][0] == 4:
-            clipped_size = cigar_tuples[1][1]
-        elif cigar_tuples[0][0] == 4:
-            clipped_size = cigar_tuples[0][1]
+            # hard clipped
+            soft_clipped_head_len = cigar_tuples[1][1]
+        elif cigar_tuples[-1][0] == 4:
+            # soft clipped
+            soft_clipped_head_len = cigar_tuples[0][1]
 
         seq = alignment.seq
         if not seq:
             return -1
-        whole_head_len = min(clipped_size, len(seq))
-        check_head_end = 0 + whole_head_len
-        check_head_start = max(check_head_end - 2 * self.window_size, 0)
+        assert soft_clipped_head_len < len(seq)
 
-        rc_head = str(Seq.Seq(alignment.seq[check_head_start:check_head_end]).reverse_complement()).upper()
-        pos = self.find_polya(rc_head)
+        read_mapped_region_start = soft_clipped_head_len
+        to_check_start = max(0, read_mapped_region_start - 2 * self.window_size)
+        to_check_end = min(len(seq), read_mapped_region_start + 2 * self.window_size + 1)
+        sequence_to_check = str(Seq.Seq(alignment.seq[to_check_start:to_check_end]).reverse_complement()).upper()
+
+        pos = self.find_polya(sequence_to_check.upper())
+
+        logger.debug("start: %d, end: %d, len: %d, pos: %d" % (read_mapped_region_start, to_check_start, to_check_end, pos))
+        logger.debug(sequence_to_check)
+
         if pos == -1:
             logger.debug("No polyT found")
             return -1
-        # FIXME this does not include indels
-        ref_head_end = alignment.reference_start - clipped_size + whole_head_len
-        ref_polyt_end = max(alignment.reference_start, ref_head_end - pos)
-        logger.debug("PolyA found at position %d" % ref_polyt_end)
-        return max(ref_polyt_end, alignment.reference_start)
+
+        # reverse position
+        pos = to_check_end - pos - 1
+        if pos <= read_mapped_region_start:  # poly T starts to the left of first mapped base
+            shift = read_mapped_region_start - pos
+            reference_polyt_end = alignment.reference_start - shift
+        else:
+            shift = pos - read_mapped_region_start
+            reference_polyt_end = alignment.reference_start + move_ref_coord_alogn_alignment(alignment, shift)
+
+        logger.debug("PolyT found at position %d" % reference_polyt_end)
+        return reference_polyt_end
 
     # poly A tail detection
     def find_polya(self, seq):
