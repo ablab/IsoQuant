@@ -52,7 +52,8 @@ class LongReadAlignmentProcessor:
         self.split_exon_profile_constructor = \
             NonOverlappingFeaturesProfileConstructor(self.gene_info.split_exon_profiles.features,
                                                      comparator=partial(overlaps_at_least,
-                                                                        delta=self.params.minimal_exon_overlap))
+                                                                        delta=self.params.minimal_exon_overlap),
+                                                     delta=self.params.delta)
         self.polya_finder = PolyAFinder()
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
@@ -93,13 +94,9 @@ class LongReadAlignmentProcessor:
 
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
                 sorted_blocks = correct_bam_coords(concat_blocks)
-                # TODO: remove this option
-                if self.params.has_polya:
-                    polya_pos = self.polya_finder.find_polya_tail(alignment)
-                    polyt_pos = self.polya_finder.find_polyt_head(alignment)
-                else:
-                    polya_pos = -1
-                    polyt_pos = -1
+
+                polya_pos = self.polya_finder.find_polya_tail(alignment)
+                polyt_pos = self.polya_finder.find_polyt_head(alignment)
 
                 cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 
@@ -109,11 +106,7 @@ class LongReadAlignmentProcessor:
                     if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
                         self.gene_info.all_read_region_start = sorted_blocks[-1][1]
 
-                intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks)
-                exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks)
-                split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks)
-                combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
-                                                        polya_pos=polya_pos, polyt_pos=polyt_pos, cage_hits=cage_hits)
+                combined_profile = self.construct_profiles(sorted_blocks, polya_pos, polyt_pos, cage_hits)
 
                 read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
                 read_assignment.polyA_found = (polya_pos != -1 or polyt_pos != -1)
@@ -130,6 +123,13 @@ class LongReadAlignmentProcessor:
 
                 self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")
+
+    def construct_profiles(self, sorted_blocks, polya_pos, polyt_pos, cage_hits):
+        intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polyt_pos, polyt_pos)
+        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polyt_pos, polyt_pos)
+        split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polyt_pos, polyt_pos)
+        return CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
+                                    polya_pos=polya_pos, polyt_pos=polyt_pos, cage_hits=cage_hits)
 
     def count_indel_stats(self, alignment):
         cigar_event_count = len(alignment.cigartuples)

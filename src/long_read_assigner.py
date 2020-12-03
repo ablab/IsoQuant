@@ -267,6 +267,7 @@ class LongReadAssigner:
                                                                             match.assigned_transcript)
             for e in exon_elongation_types:
                 match.add_subclassification(e)
+
             if  any(MatchEventSubtype.is_major_elongation(e.event_type) for e in exon_elongation_types):
                 # serious exon elongation
                 assignment.set_assignment_type(ReadAssignmentType.inconsistent)
@@ -715,6 +716,7 @@ class LongReadAssigner:
             read_assignment.assignment_type = ReadAssignmentType.inconsistent
 
     # try to resolve when polyA position is known
+    # TODO: set -2 in profiles
     def resolve_by_polyA(self, combined_read_profile, read_assignment):
         logger.debug("+ + Resolving ambiguous case with polyA: " + str())
         strands = set()

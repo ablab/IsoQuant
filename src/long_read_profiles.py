@@ -46,19 +46,19 @@ class OverlappingFeaturesProfileConstructor:
         self.absence_condition = absence_condition
         self.delta = delta
 
-    def construct_intron_profile(self, sorted_blocks):
+    def construct_intron_profile(self, sorted_blocks, polya_position=-1, polyt_position=-1):
         mapped_region = (sorted_blocks[0][0], sorted_blocks[-1][1])
         read_introns = junctions_from_blocks(sorted_blocks)
-        return self.construct_profile_for_features(read_introns, mapped_region)
+        return self.construct_profile_for_features(read_introns, mapped_region, polya_position, polyt_position)
 
-    def construct_exon_profile(self, sorted_blocks):
+    def construct_exon_profile(self, sorted_blocks, polya_position=-1, polyt_position=-1):
         mapped_region = (sorted_blocks[0][1] + self.delta, sorted_blocks[-1][0] - self.delta)
-        return self.construct_profile_for_features(sorted_blocks, mapped_region)
+        return self.construct_profile_for_features(sorted_blocks, mapped_region, polya_position, polyt_position)
 
     def match_delta(self, feature1, feature2):
         return abs(feature1[0] - feature2[0]) + abs(feature1[1] - feature2[1])
 
-    def construct_profile_for_features(self, read_features, mapped_region=(0, 0)):
+    def construct_profile_for_features(self, read_features, mapped_region=(0, 0), polya_position=-1, polyt_position=-1):
         read_profile = [0] * (len(read_features))
         intron_profile = [0] * (len(self.known_features))
         matched_features = defaultdict(list)
@@ -72,7 +72,6 @@ class OverlappingFeaturesProfileConstructor:
 
         gene_pos = 0
         read_pos = 0
-        # TODO reduce excessive if statements
         while gene_pos < len(self.known_features) and read_pos < len(read_features):
             if self.comparator(read_features[read_pos], self.known_features[gene_pos]):
                 intron_profile[gene_pos] = 1
@@ -101,16 +100,29 @@ class OverlappingFeaturesProfileConstructor:
                     if deltas[i] > best_match:
                         intron_profile[matched_features[read_pos][i]] = -1
 
+        # making everying beyond polyA tail as outside feature
+        if polya_position != -1:
+            for i in range(len(self.known_features)):
+                # feature is surely beyond polyA tail
+                if self.known_features[i][0] > polya_position + self.delta:
+                    intron_profile[i] = -2
+        if polyt_position != -1:
+            for i in range(len(self.known_features)):
+                # feature is surely before polyT tail
+                if self.known_features[i][1] < polyt_position - self.delta:
+                    intron_profile[i] = -2
+
         return MappedReadProfile(intron_profile, read_profile, read_features)
 
 
 # accepts sorted gapless alignment blocks
 class NonOverlappingFeaturesProfileConstructor:
-    def __init__(self, known_exons, comparator=overlaps):
+    def __init__(self, known_exons, comparator=overlaps, delta=0):
         self.known_exons = known_exons
         self.comparator = comparator
+        self.delta = delta
 
-    def construct_profile(self, sorted_blocks):
+    def construct_profile(self, sorted_blocks, polya_position=-1, polyt_position=-1):
         exon_profile = [0] * (len(self.known_exons))
         read_profile = [0] * (len(sorted_blocks))
         read_exons = sorted_blocks
@@ -138,5 +150,17 @@ class NonOverlappingFeaturesProfileConstructor:
                 if read_pos > 0 and exon_profile[gene_pos] == 0:
                     exon_profile[gene_pos] = -1
                 gene_pos += 1
+
+        # making everying beyond polyA tail as outside feature
+        if polya_position != -1:
+            for i in range(len(self.known_exons)):
+                # feature is surely beyond polyA tail
+                if self.known_exons[i][0] > polya_position + self.delta:
+                    exon_profile[i] = -2
+        if polyt_position != -1:
+            for i in range(len(self.known_exons)):
+                # feature is surely before polyT tail
+                if self.known_exons[i][1] < polyt_position - self.delta:
+                    exon_profile[i] = -2
 
         return MappedReadProfile(exon_profile, read_profile, read_exons)
