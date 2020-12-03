@@ -51,7 +51,8 @@ class MatchClassification(Enum):
         # events are not mixed in the list
         if any(e.event_type == MatchEventSubtype.unspliced_intron_retention for e in match_event_subtypes):
             return MatchClassification.novel_in_catalog
-        elif any(e.event_type == MatchEventSubtype.incomplete_intron_retention for e in match_event_subtypes):
+        elif any(e.event_type in {MatchEventSubtype.incomplete_intron_retention_left,
+                                  MatchEventSubtype.incomplete_intron_retention_right} for e in match_event_subtypes):
             return MatchClassification.genic
         elif match_event_subtypes[0].event_type == MatchEventSubtype.mono_exon_match:
             return MatchClassification.mono_exon_match
@@ -82,7 +83,8 @@ class MatchEventSubtype(Enum):
     # intron retentions
     intron_retention = 31
     unspliced_intron_retention = 32
-    incomplete_intron_retention = 39
+    incomplete_intron_retention_left = 38
+    incomplete_intron_retention_right = 39
     # major alternation
     # alternative donor/acceptor sites
     alt_left_site_known = 101
@@ -116,7 +118,8 @@ class MatchEventSubtype(Enum):
     alternative_structure_known = 132
     # TTS and TSS
     alternative_polya_site = 200
-    alternative_tss = 201
+    fake_polya_site = 201
+    alternative_tss = 202
 
     def __lt__(self, other):
         return self.value < other.value
@@ -165,7 +168,8 @@ event_subtype_cost = {
     # intron retentions
     MatchEventSubtype.intron_retention:0.5,
     MatchEventSubtype.unspliced_intron_retention:0.5,
-    MatchEventSubtype.incomplete_intron_retention:0.75,
+    MatchEventSubtype.incomplete_intron_retention_left:0.75,
+    MatchEventSubtype.incomplete_intron_retention_right:0.75,
     # major alternation
     # alternative donor/acceptor sites
     MatchEventSubtype.alt_left_site_known:1,
@@ -199,6 +203,7 @@ event_subtype_cost = {
     MatchEventSubtype.alternative_structure_known:1,
     # TTS and TSS
     MatchEventSubtype.alternative_polya_site:0.1,
+    MatchEventSubtype.fake_polya_site:0.5,
     MatchEventSubtype.alternative_tss :0.1
 }
 
@@ -223,7 +228,7 @@ nnic_event_types = {
     MatchEventSubtype.extra_intron_flanking_right, MatchEventSubtype.mutually_exclusive_exons_novel,
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
     MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
-    MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
+    MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss, MatchEventSubtype.fake_polya_site
 }
 
 nic_event_types = {
@@ -233,8 +238,14 @@ nic_event_types = {
     MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
     MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,
-    MatchEventSubtype.major_exon_elongation_right, MatchEventSubtype.incomplete_intron_retention
+    MatchEventSubtype.major_exon_elongation_right, MatchEventSubtype.incomplete_intron_retention_left,
+    MatchEventSubtype.incomplete_intron_retention_right
+}
 
+nonintronic_events = {
+    MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss, MatchEventSubtype.fake_polya_site,
+    MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
+    MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right,
 }
 
 
@@ -272,7 +283,8 @@ class IsoformMatch:
         if match_subclassification is None:
             self.match_subclassifications = []
         elif isinstance(match_subclassification, list):
-            self.match_subclassifications = list(filter(lambda x: x != MatchEventSubtype.none, match_subclassification))
+            self.match_subclassifications = \
+                list(filter(lambda x: x.event_type != MatchEventSubtype.none, match_subclassification))
         else:
             self.match_subclassifications = [match_subclassification]
 

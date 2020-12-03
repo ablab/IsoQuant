@@ -309,6 +309,8 @@ def set_matching_options(args):
     args.apa_delta = 50
     args.minimal_exon_overlap = 5
     args.minimal_intron_absence_overlap = 20
+    args.polya_window = 16
+    args.polya_fraction = 0.75
     if args.resolve_ambiguous == 'default':
         args.resolve_ambiguous = strategy.resolve_ambiguous
     if args.resolve_ambiguous not in AmbiguityResolvingMethod.__dict__:

@@ -173,7 +173,10 @@ class JunctionComparator():
             if contains(read_region, overlapped_isoform_intron):
                 return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
             elif overlaps_at_least(read_region, overlapped_isoform_intron, self.params.minor_exon_extension):
-                return make_event(MatchEventSubtype.incomplete_intron_retention, isoform_cregion[0], read_cregion)
+                if overlapped_isoform_intron[0] <= read_region[0]:
+                    return make_event(MatchEventSubtype.incomplete_intron_retention_left, isoform_cregion[0], read_cregion)
+                else:
+                    return make_event(MatchEventSubtype.incomplete_intron_retention_right, isoform_cregion[0], read_cregion)
             else:
                 return None
         elif isoform_cregion[0] == self.absent:
@@ -306,8 +309,12 @@ class JunctionComparator():
                                              read_region=(JunctionComparator.absent, 0)))
                 elif overlaps_at_least(read_region, intron, self.params.minor_exon_extension):
                     # partial IR
-                    events.append(make_event(MatchEventSubtype.incomplete_intron_retention, isoform_position=i,
-                                             read_region=(JunctionComparator.absent, 0)))
+                    if intron[0] <= read_region[0]:
+                        events.append(make_event(MatchEventSubtype.incomplete_intron_retention_left, isoform_position=i,
+                                                 read_region=(JunctionComparator.absent, 0)))
+                    else:
+                        events.append(make_event(MatchEventSubtype.incomplete_intron_retention_right, isoform_position=i,
+                                                 read_region=(JunctionComparator.absent, 0)))
 
         if not events:
             # monoexonic read without significant intron overlap

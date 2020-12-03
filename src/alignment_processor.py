@@ -40,21 +40,18 @@ class LongReadAlignmentProcessor:
         self.intron_profile_constructor = \
             OverlappingFeaturesProfileConstructor(self.gene_info.intron_profiles.features, gene_region,
                                                   comparator=partial(equal_ranges, delta=self.params.delta),
-                                                  # TODO parameter max_exon_extension
                                                   absence_condition=partial(overlaps_at_least, delta=self.params.minimal_intron_absence_overlap),
                                                   delta=self.params.delta)
-        # TODO check for non split exons which do overlap
         self.exon_profile_constructor = \
             OverlappingFeaturesProfileConstructor(self.gene_info.exon_profiles.features, gene_region,
                                                   comparator=partial(equal_ranges, delta=self.params.delta),
                                                   delta=self.params.delta)
-        # TODO think whether overlaps should be changed to contains to avoid terminal partially covered exons
         self.split_exon_profile_constructor = \
             NonOverlappingFeaturesProfileConstructor(self.gene_info.split_exon_profiles.features,
                                                      comparator=partial(overlaps_at_least,
                                                                         delta=self.params.minimal_exon_overlap),
                                                      delta=self.params.delta)
-        self.polya_finder = PolyAFinder()
+        self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
 
