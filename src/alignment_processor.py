@@ -122,9 +122,9 @@ class LongReadAlignmentProcessor:
                 logger.debug("=== Finished read " + read_id + " ===")
 
     def construct_profiles(self, sorted_blocks, polya_pos, polyt_pos, cage_hits):
-        intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polyt_pos, polyt_pos)
-        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polyt_pos, polyt_pos)
-        split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polyt_pos, polyt_pos)
+        intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
+        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
+        split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
         return CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
                                     polya_pos=polya_pos, polyt_pos=polyt_pos, cage_hits=cage_hits)
 
