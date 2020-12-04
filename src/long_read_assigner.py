@@ -679,6 +679,7 @@ class LongReadAssigner:
             logger.debug("+ Distance to polyA is %d" % dist_to_polya)
             if dist_to_polya > self.params.apa_delta:
                 logger.debug("+ Seems like APA site")
+                matching_events.append(MatchEventSubtype.alternative_polya_site)
 
         elif self.gene_info.isoform_strands[isoform_id] == '-' and combined_read_profile.polyt_pos != -1:
             isoform_start = self.gene_info.transcript_start(isoform_id)
@@ -707,6 +708,9 @@ class LongReadAssigner:
             logger.debug("+ Distance to polyA is %d" % dist_to_polya)
             if dist_to_polya > self.params.apa_delta:
                 logger.debug("+ Seems like APA site")
+                matching_events.append(MatchEventSubtype.alternative_polya_site)
+
+        return matching_events
 
     def select_best_among_inconsistent(self, read_matches):
         isoform_scores = []

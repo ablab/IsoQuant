@@ -68,6 +68,7 @@ def parse_args(args=None, namespace=None):
                         help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
     parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
+    # TODO remove
     parser.add_argument('--has_polya', action='store_true', default=False,
                         help="set if reads were not polyA trimmed; polyA tails will be detected and further "
                              " required for transcript model construction")
