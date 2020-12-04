@@ -659,15 +659,17 @@ class LongReadAssigner:
             # FIXME: remove this set once we check these events never appear together
             events_to_remove = set()
             for i, event in enumerate(matching_events):
-                if event == MatchEventSubtype.incomplete_intron_retention_right and \
+                if event.event_type == MatchEventSubtype.incomplete_intron_retention_right and \
                         read_end > polya_pos + self.params.polya_window:
                     # polyA found within intron and inside mapped part of the read
-                    matching_events.append(MatchEventSubtype.fake_polya_site)
+                    matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
+                                                      isoform_position=event.isoform_position,
+                                                      event_length=read_end-polya_pos))
                     del matching_events[i]
                     return matching_events
-                elif event in {MatchEventSubtype.incomplete_intron_retention_right,
-                               MatchEventSubtype.major_exon_elongation_right,
-                               MatchEventSubtype.exon_elongation_right}:
+                elif event.event_type in {MatchEventSubtype.incomplete_intron_retention_right,
+                                          MatchEventSubtype.major_exon_elongation_right,
+                                          MatchEventSubtype.exon_elongation_right}:
                     events_to_remove.add(i)
 
             if len(events_to_remove) > 1:
@@ -679,7 +681,7 @@ class LongReadAssigner:
             logger.debug("+ Distance to polyA is %d" % dist_to_polya)
             if dist_to_polya > self.params.apa_delta:
                 logger.debug("+ Seems like APA site")
-                matching_events.append(MatchEventSubtype.alternative_polya_site)
+                matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
 
         elif self.gene_info.isoform_strands[isoform_id] == '-' and combined_read_profile.polyt_pos != -1:
             isoform_start = self.gene_info.transcript_start(isoform_id)
@@ -688,15 +690,17 @@ class LongReadAssigner:
 
             events_to_remove = set()
             for i, event in enumerate(matching_events):
-                if event == MatchEventSubtype.incomplete_intron_retention_left and \
+                if event.event_type == MatchEventSubtype.incomplete_intron_retention_left and \
                         read_start < polya_pos - self.params.polya_window:
                     # polyT found within intron and inside mapped part of the read
-                    matching_events.append(MatchEventSubtype.fake_polya_site)
+                    matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
+                                                      isoform_position=event.isoform_position,
+                                                      event_length=polya_pos-read_start))
                     del matching_events[i]
                     return matching_events
-                elif event in {MatchEventSubtype.incomplete_intron_retention_left,
-                               MatchEventSubtype.major_exon_elongation_left,
-                               MatchEventSubtype.exon_elongation_left}:
+                elif event.event_type in {MatchEventSubtype.incomplete_intron_retention_left,
+                                          MatchEventSubtype.major_exon_elongation_left,
+                                          MatchEventSubtype.exon_elongation_left}:
                     events_to_remove.add(i)
 
             if len(events_to_remove) > 1:
@@ -708,7 +712,7 @@ class LongReadAssigner:
             logger.debug("+ Distance to polyA is %d" % dist_to_polya)
             if dist_to_polya > self.params.apa_delta:
                 logger.debug("+ Seems like APA site")
-                matching_events.append(MatchEventSubtype.alternative_polya_site)
+                matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
 
         return matching_events
 
