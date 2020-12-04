@@ -49,6 +49,9 @@ class MatchClassification(Enum):
     @staticmethod
     def get_mono_exon_classification(match_event_subtypes):
         # events are not mixed in the list
+        if any(e.event_type in {MatchEventSubtype.alternative_polya_site, MatchEventSubtype.fake_polya_site}
+               for e in match_event_subtypes):
+            return MatchClassification.novel_not_in_catalog
         if any(e.event_type == MatchEventSubtype.unspliced_intron_retention for e in match_event_subtypes):
             return MatchClassification.novel_in_catalog
         elif any(e.event_type in {MatchEventSubtype.incomplete_intron_retention_left,
