@@ -46,7 +46,8 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
     coordinates = ""
     if event_subtype in {MatchEventSubtype.intron_retention,
                          MatchEventSubtype.unspliced_intron_retention,
-                         MatchEventSubtype.incomplete_intron_retention}:
+                         MatchEventSubtype.incomplete_intron_retention_left,
+                         MatchEventSubtype.incomplete_intron_retention_right}:
         if event.isoform_position != SupplementaryMatchConstansts.undefined_position:
             intron = isoform_introns[event.isoform_position]
             coordinates = ":" + str(intron[0]) + "-" + str(intron[1])
