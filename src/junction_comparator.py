@@ -136,7 +136,7 @@ class JunctionComparator():
             if all(x == 0 for x in read_features_present):
                 return [make_event(MatchEventSubtype.undefined)]
             logger.debug("+ + Found only extra terminal introns ")
-            self.add_extra_out_exon_events(matching_events, read_features_present, read_junctions, isoform_region[0])
+            self.add_extra_out_exon_events(matching_events, read_features_present, read_region, read_junctions, isoform_region[0])
 
         if len(matching_events) == 0:
             logger.debug("No contradiction detected")
@@ -179,12 +179,21 @@ class JunctionComparator():
                     return make_event(MatchEventSubtype.incomplete_intron_retention_right, isoform_cregion[0], read_cregion)
             else:
                 return None
+
         elif isoform_cregion[0] == self.absent:
-            # intron_start = read_junctions[read_cregion[0]]
+
             if self.are_known_introns(read_junctions, read_cregion):
                 return make_event(MatchEventSubtype.extra_intron_known, isoform_cregion[1], read_cregion)
             elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
                 return make_event(MatchEventSubtype.none, isoform_cregion[1], read_cregion)
+            elif read_cregion[0] == 0 and \
+                    interval_len(get_exon(read_region, read_junctions, 0)) <= self.params.max_fake_terminal_exon_len:
+                # we have extra intron to the left and first exons is short
+                return make_event(MatchEventSubtype.fake_terminal_exon_left, isoform_cregion[1], read_cregion)
+            elif read_cregion[1] == len(read_junctions) - 1 and \
+                    interval_len(get_exon(read_region, read_junctions, -1)) <= self.params.max_fake_terminal_exon_len:
+                # we have extra intron to the right and last exons is short
+                return make_event(MatchEventSubtype.fake_terminal_exon_right, isoform_cregion[1], read_cregion)
             return make_event(MatchEventSubtype.extra_intron, isoform_cregion[1], read_cregion)
 
         read_intron_total_len = sum(interval_len(read_junctions[i])
@@ -321,7 +330,7 @@ class JunctionComparator():
             events = [make_event(MatchEventSubtype.mono_exonic)]
         return events
 
-    def add_extra_out_exon_events(self, match_events, read_intron_read_profile, read_introns, isoform_start):
+    def add_extra_out_exon_events(self, match_events, read_intron_read_profile, read_region, read_introns, isoform_start):
         extra_left = read_intron_read_profile[0] == 0
         extra_right = read_intron_read_profile[-1] == 0
 
@@ -333,17 +342,42 @@ class JunctionComparator():
 
         if extra_left:
             read_pos = 0
-            while read_pos < len(read_intron_read_profile) and read_intron_read_profile[read_pos] == 0:
+            while read_pos < len(read_intron_read_profile) and read_intron_read_profile[read_pos] == 0 and \
+                    interval_len(get_exon(read_region, read_introns, read_pos)) < self.params.max_fake_terminal_exon_len:
+                # checking short extra exons
                 read_pos += 1
-            match_events.append(make_event(MatchEventSubtype.extra_intron_flanking_left,
-                                           SupplementaryMatchConstansts.extra_left_mod_position, (0, read_pos - 1)))
+
+            if read_pos > 0:
+                match_events.append(make_event(MatchEventSubtype.extra_intron_flanking_left,
+                                               SupplementaryMatchConstansts.extra_left_mod_position,
+                                               (0, read_pos - 1)))
+
+            read_pos2 = read_pos
+            while read_pos2 < len(read_intron_read_profile) and read_intron_read_profile[read_pos2] == 0:
+                read_pos2 += 1
+            if read_pos2 > read_pos:
+                match_events.append(make_event(MatchEventSubtype.extra_intron_flanking_left,
+                                               SupplementaryMatchConstansts.extra_left_mod_position,
+                                               (read_pos, read_pos2 - 1)))
         if extra_right:
-            max_right = len(read_intron_read_profile) - 1
-            read_pos = max_right
+            total_read_introns = len(read_intron_read_profile) - 1
+            read_pos = total_read_introns
+            while read_pos >= 0 and read_intron_read_profile[read_pos] == 0  and \
+                    interval_len(get_exon(read_region, read_introns, read_pos + 1)) < self.params.max_fake_terminal_exon_len:
+                read_pos -= 1
+            if read_pos < total_read_introns:
+                match_events.append(make_event(MatchEventSubtype.extra_intron_flanking_right,
+                                               SupplementaryMatchConstansts.extra_right_mod_position,
+                                               (read_pos + 1, total_read_introns)))
+
+            total_read_introns = len(read_intron_read_profile) - 1
+            read_pos2 = read_pos
             while read_pos >= 0 and read_intron_read_profile[read_pos] == 0:
                 read_pos -= 1
-            match_events.append(make_event(MatchEventSubtype.extra_intron_flanking_right,
-                                           SupplementaryMatchConstansts.extra_right_mod_position, (read_pos + 1, max_right)))
+            if read_pos2 < read_pos:
+                match_events.append(make_event(MatchEventSubtype.extra_intron_flanking_right,
+                                               SupplementaryMatchConstansts.extra_right_mod_position,
+                                               (read_pos2 + 1, read_pos)))
 
     def profile_for_junctions_introns(self, junctions, region):
         selected_junctions = []

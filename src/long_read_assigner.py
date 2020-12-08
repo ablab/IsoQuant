@@ -665,7 +665,6 @@ class LongReadAssigner:
                     matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
                                                       isoform_position=event.isoform_position,
                                                       event_length=read_end-polya_pos))
-                    del matching_events[i]
                     return matching_events
                 elif event.event_type in {MatchEventSubtype.incomplete_intron_retention_right,
                                           MatchEventSubtype.major_exon_elongation_right,
@@ -696,7 +695,6 @@ class LongReadAssigner:
                     matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
                                                       isoform_position=event.isoform_position,
                                                       event_length=polya_pos-read_start))
-                    del matching_events[i]
                     return matching_events
                 elif event.event_type in {MatchEventSubtype.incomplete_intron_retention_left,
                                           MatchEventSubtype.major_exon_elongation_left,

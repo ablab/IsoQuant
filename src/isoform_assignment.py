@@ -80,6 +80,8 @@ class MatchEventSubtype(Enum):
     # alignment artifacts
     intron_shift = 21
     exon_misallignment = 22
+    fake_terminal_exon_left = 24
+    fake_terminal_exon_right = 26
     # minor alternations
     exon_elongation_left = 25
     exon_elongation_right = 23
@@ -129,14 +131,18 @@ class MatchEventSubtype(Enum):
 
     @staticmethod
     def is_alignment_artifact(match_event_subtype):
-        return match_event_subtype in {MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misallignment}
+        return match_event_subtype in {MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misallignment,
+                                       MatchEventSubtype.fake_terminal_exon_left,
+                                       MatchEventSubtype.fake_terminal_exon_right}
 
     @staticmethod
     def is_minor_error(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.exon_elongation_left,
                                        MatchEventSubtype.exon_elongation_right,
                                        MatchEventSubtype.intron_shift,
-                                       MatchEventSubtype.exon_misallignment}
+                                       MatchEventSubtype.exon_misallignment,
+                                       MatchEventSubtype.fake_terminal_exon_left,
+                                       MatchEventSubtype.fake_terminal_exon_right}
 
     @staticmethod
     def is_consistent(match_event_subtype):
@@ -165,6 +171,8 @@ event_subtype_cost = {
     MatchEventSubtype.mono_exon_match:0,
     MatchEventSubtype.intron_shift:0.1,
     MatchEventSubtype.exon_misallignment:0.1,
+    MatchEventSubtype.fake_terminal_exon_left:0.2,
+    MatchEventSubtype.fake_terminal_exon_right:0.2,
     # minor alternations
     MatchEventSubtype.exon_elongation_left:0.1,
     MatchEventSubtype.exon_elongation_right:0.1,

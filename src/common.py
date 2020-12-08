@@ -267,6 +267,19 @@ def get_preceding_exon_from_junctions(region, introns, intron_position):
     return (preceding_exon_start, introns[intron_position][0] - 1)
 
 
+def get_exon(read_region, read_junctions, exon_position):
+    assert exon_position <= len(read_junctions)
+    if exon_position < 0:
+        exon_position = len(read_junctions) + exon_position + 1
+
+    if exon_position == 0:
+        return (read_region[0], read_junctions[0][0])
+    elif exon_position == len(read_junctions):
+        return (read_junctions[-1][1], read_region[1])
+    else:
+        return (read_junctions[exon_position - 1][1], read_junctions[exon_position][0])
+
+
 def concat_gapless_blocks(blocks, cigar_tuples):
     cigar_index = 0
     block_index = 0

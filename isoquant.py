@@ -284,15 +284,15 @@ def set_data_dependent_options(args):
 
 def set_matching_options(args):
     MatchingStrategy = namedtuple('MatchingStrategy',
-                                  ('delta', 'max_intron_shift', 'max_missed_exon_len',
+                                  ('delta', 'max_intron_shift', 'max_missed_exon_len', 'max_fake_terminal_exon_len',
                                    'max_suspicious_intron_abs_len', 'max_suspicious_intron_rel_len',
                                    'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   MatchingStrategy(0, 0, 0, 0, 0.0, 'monoexon_only', False),
-        'precise': MatchingStrategy(3, 30, 50, 0, 0.0, 'monoexon_and_fsm', True),
-        'default': MatchingStrategy(6, 60, 200, 60, 1.0, 'monoexon_and_fsm', True),
-        'loose':   MatchingStrategy(12, 120, 300, 60, 1.0, 'all',  True),
+        'exact':   MatchingStrategy(0, 0, 0, 0, 0, 0.0, 'monoexon_only', False),
+        'precise': MatchingStrategy(3, 30, 50, 10, 0, 0.0, 'monoexon_and_fsm', True),
+        'default': MatchingStrategy(6, 60, 200, 30, 60, 1.0, 'monoexon_and_fsm', True),
+        'loose':   MatchingStrategy(12, 120, 300, 50, 60, 1.0, 'all',  True),
     }
 
     strategy = strategies[args.matching_strategy]
@@ -302,6 +302,7 @@ def set_matching_options(args):
     args.major_exon_extension = 300
     args.max_intron_shift = args.max_intron_shift if args.max_intron_shift is not None else strategy.max_intron_shift
     args.max_missed_exon_len = args.max_missed_exon_len if args.max_missed_exon_len is not None else strategy.max_missed_exon_len
+    args.max_fake_terminal_exon_len = strategy.max_fake_terminal_exon_len
     # short introns that are actually long deletions, fix minimaps logic
     args.max_suspicious_intron_abs_len = strategy.max_suspicious_intron_abs_len
     args.max_suspicious_intron_rel_len = strategy.max_suspicious_intron_rel_len
@@ -322,6 +323,7 @@ def set_matching_options(args):
         strategy.correct_minor_errors if args.correct_minor_errors is None else args.correct_minor_errors
 
     updated_strategy = MatchingStrategy(args.delta, args.max_intron_shift, args.max_missed_exon_len,
+                                        args.max_fake_terminal_exon_len,
                                         args.max_suspicious_intron_abs_len, args.max_suspicious_intron_rel_len,
                                         args.resolve_ambiguous, args.correct_minor_errors)
     logger.debug('Using %s strategy. Updated strategy: %s.' % (args.matching_strategy, updated_strategy))
