@@ -332,11 +332,9 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
 
 
 class IOSupport:
-    # TODO fix pairing
-    canonical_donor_sites = ["GT", "GC", "AT"]
-    canonical_acceptor_sites = ["AG", "AC"]
-    canonical_donor_sites_rc = ["AC", "GC", "AT"]
-    canonical_acceptor_sites_rc = ["CT", "GT"]
+    # left site always first
+    canonical_forward_sites = {("GT", "AG"), ("GC", "AG"), ("AT", "AC")}
+    cononical_reverse_sites = {("AC", "CT"), ("GC", "CT"), ("AT", "GT")}
 
     def __init__(self, params):
         self.params = params
@@ -392,11 +390,9 @@ class IOSupport:
                 left_site = gene_info.reference_region[intron_left_pos:intron_left_pos+2]
                 right_site = gene_info.reference_region[intron_right_pos - 1:intron_right_pos + 1]
                 if strand == '+':
-                    gene_info.canonical_sites[intron] = \
-                        (left_site in self.canonical_donor_sites) and (right_site in self.canonical_acceptor_sites)
+                    gene_info.canonical_sites[intron] = (left_site, right_site) in self.canonical_forward_sites
                 else:
-                    gene_info.canonical_sites[intron] = \
-                        (left_site in self.canonical_acceptor_sites_rc) and (right_site in self.canonical_donor_sites_rc)
+                    gene_info.canonical_sites[intron] = (left_site, right_site) in self.cononical_reverse_sites
 
             if not gene_info.canonical_sites[intron]:
                 return False
