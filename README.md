@@ -1,7 +1,7 @@
 ![TeamCity Simple Build Status](http://chihua.cab.spbu.ru:3000/app/rest/builds/buildType:(id:IsoQuant_SimpleTest)/statusIcon)
 ![Python version](https://img.shields.io/badge/python-3.7-blue)
 ![License](https://img.shields.io/badge/licence-GPLv2-blue)
-# IsoQuant 1.0 manual
+# IsoQuant 1.1 manual
 
 1. [About IsoQuant](#sec1) </br>
     1.1. [Supported data types](#sec1.1)</br>
@@ -27,20 +27,20 @@
 
         conda install -c bioconda -c conda-forge -c isoquant isoquant
 
-*   If installing manually, you will need Python3 (preferably 3.7), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pyfaidx](https://pypi.org/project/pyfaidx/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
+*   If installing manually, you will need Python3 (preferably 3.7), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
   
 *   To run IsoQuant on raw FASTQ/FASTA files use the following command
 
-        python IsoQuant.py \
-        --reference /PATH/TO/reference_genome.fasta --genedb /PATH/TO/gene_annotation.gtf \
-        --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz \
+        python IsoQuant.py 
+        --reference /PATH/TO/reference_genome.fasta --genedb /PATH/TO/gene_annotation.gtf 
+        --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz 
         --data_type (pacbio_css|pacbio_raw|nanopore) -o OUTPUT_FOLDER
 
 
 *   To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
 
-        python IsoQuant.py --genedb /PATH/TO/gene_annotation.gtf \
-        --fastq /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam \
+        python IsoQuant.py --genedb /PATH/TO/gene_annotation.gtf 
+        --fastq /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam 
         --data_type (pacbio_css|pacbio_raw|nanopore) -o OUTPUT_FOLDER
 
 <a name="sec1"></a>
@@ -48,7 +48,7 @@
 
 IsoQuant is a tool for reference-based analysis of long RNA reads, such as PacBio or Oxford Nanopores. IsoQuant maps reads to the reference genome and assigns them to the annotated isoforms based on their intron and exon structure. IsoQuant is also capable of discovering various modifications, such as intron retention, alternative splice sites, skipped exons etc. IsoQuant further performs gene, isoform, exon and intron quantification. If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. In addition, IsoQuant generates discovered transcript models, including novel ones.
 
-IsoQuant version 1.0 was released under GPLv2 on July 12th, 2020 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 1.1 was released under GPLv2 on December 11th, 2020 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 
 <a name="sec1.1"></a>
@@ -78,11 +78,11 @@ You will also need
 * [gffutils](https://pythonhosted.org/gffutils/installation.html) 
 * [pysam](https://pysam.readthedocs.io/en/latest/index.html) 
 * [biopython](https://biopython.org/)
-* [pyfaidx](https://pypi.org/project/pyfaidx/)
+* [pybedtools](https://daler.github.io/pybedtools/)
 * [pandas](https://pandas.pydata.org/)
 * [numpy](https://numpy.org/)
 * [minimap2](https://github.com/lh3/minimap2) 
-* [samtools](http://www.htslib.org/download/)) 
+* [samtools](http://www.htslib.org/download/) 
 * [STAR](https://github.com/alexdobin/STAR) (optional)
 
 <a name="sec2.1"></a>
@@ -239,12 +239,12 @@ To provide read sequences use one of the following options:
 #### Read to isoform matching:
 
 `--matching-strategy` A preset of parameters for read to isoform matching algorithm, should be one of 
-* `exact` - delta = 0, all minor errors and exon elongations are treated as inconsistencies;  
-* `precise` - delta = 3, only minor alignment errors and exon elongations are allowed, cutoff = 30;  
-* `default` - delta = 6, alignment errors and exon elongations are allowed, cutoff = 100;   
-* `loose` - delta = 12, resolve ambiguous matches based on nucleotide similarity, allow extra introns/alternative TSS/polyA sites, minor errors and exon elongation allowed, cutoff = 300.
+* `exact` - delta = 0, all minor errors are treated as inconsistencies;  
+* `precise` - delta = 3, only minor alignment errors are allowed;  
+* `default` - delta = 6, alignment errors typical for Nanopore reads are allowed, short novel introns are treated as deletions;   
+* `loose` - delta = 12, even more serious inconsistencies are ignored, ambiguity is resolved based on nucleotide similarity.
 
-Matching strategy is chosen automatically based on specified data type. However, parameters will be overridden if the matching strategy is set manually.
+Matching strategy is chosen automatically based on specified data type. However, the parameters will be overridden if the matching strategy is set manually.
 
 You can manually set some of the parameters (will override options in the preset):
 
@@ -322,7 +322,7 @@ Output directory will contain one folder per sample with the following files:
 * `SAMPLE_ID.transcript_counts.tsv` - TSV file with isoform counts;
 * `SAMPLE_ID.gene_counts.tsv` - TSV file with gene counts;
 * `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models;
-* `SAMPLE_ID.reads_transcript_model_map.tsv` - TSV file indicating which reads contributed to transcript models;
+* `SAMPLE_ID.transcript_models_reads.tsv` - TSV file indicating which reads contributed to transcript models;
 * `SAMPLE_ID.transcript_models_counts.tsv` - counts for constructed transcript models;
 * `SAMPLE_ID.mapped_reads.bed` - coordinates of mapped reads in BED format.
 
@@ -360,51 +360,52 @@ Tab-separated values, the columns are:
 * `read_id` - read id;
 * `isoform_id` - isoform ids from the annotation, can contain several ids separated by comma;
 * `assignment_type` - assignment type, can be:
-- `unique`;
-- `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
-- `contradictory` - read was matched with inconsistencies, closest matches are reported;
-- `contradictory_monoexon` - monoexonic reads could not be assigned correctly;
-- `ambiguous` - read was assigned to multiple isoforms equally well;
-- `empty` - reads that were not mapped onto known genes.
+    - `unique` - reads was unambiguously assigned to a single known isoform;
+    - `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
+    - `inconsistent` - read was matched with inconsistencies, closest match(es) are reported;
+    - `ambiguous` - read was assigned to multiple isoforms equally well;
+    - `noninfomative` - reads is intronic/intergenic.
 * `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible inconsistencies events are:
-    - `none`;
-    - `mono_exonic`;
-    - `fsm` - full splice match;
-    - `ism_5` - incomplete splice match, truncated on 5' side;
-    - `ism_3` - incomplete splice match, truncated on 3' side;
-    - `ism_internal` - incomplete splice match, truncated on both sides;
-    - `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
-    - `intron_shift` - intron was shifted due to misalignment;
-    - `exon_misallignment` - short exon was missed due to misalignment;
-    - `exon_elongation5` - read goes beyond isoform 5' end;
-    - `exon_elongation3` - read goes beyond isoform 3' end;
-    - `exon_elongation_both` - read goes beyond isoform's both ends;
-    - `exon_elongation5` - read goes significantly beyond isoform 5' end;
-    - `exon_elongation3` - read goes significantly beyond isoform 3' end;
-    - `exon_elongation_both` - read goes significantly beyond isoform's both ends;
-    - `intron_retention`;
-    - `unspliced_intron_retention`;
-    - `unspliced_genic` - mono-exonic read overlaps some introns;
-    - `alt_donor_site_known` - read contains alternative annotated donor site;
-    - `alt_acceptor_site_known` - read contains alternative annotated acceptor site;
-    - `alt_donor_site_novel` - read contains alternative unannotated donor site;
-    - `alt_acceptor_site_novel` - read contains alternative unannotated acceptor site;
-    - `extra_intron_known` - read contains additional annotated intron in the middle of exon;
-    - `extra_intron` - read contains additional unannotated intron in the middle of exon;
-    - `extra_intron_out_left` - additional intron to the left of known isoform;
-    - `extra_intron_out_right` - additional intron to the right of known isoform;
-    - `intron_migration` - read contains alternative annotated intron of approximately the same length as isoform;
-    - `intron_alternation_known` - read contains alternative annotated intron;
-    - `intron_alternation_novel` - read contains alternative unannotated intron; 
-    - `mutually_exclusive_exons_known` - read contains different exon(s) comparing to the isoform, all resulting introns are annotated;
-    - `mutually_exclusive_exons_novel` - read contains different exon(s) comparing to the isoform, at least one of introns is unannotated;
-    - `exon_skipping_known_intron` - read skips exon(s) comparing to the isoform, resulting intron is annotated;
-    - `exon_skipping_novel_intron` - read skips exon(s) comparing to the isoform, resulting intron is unannotated;
-    - `exon_gain_known` - read contains additional exon(s) comparing to the isoform, all resulting introns are annotated;
-    - `exon_gain_novel` - read contains additional exon(s) comparing to the isoform, at least one of introns is unannotated;
-    - `alternative_structure_known` - reads has different intron chain that does not fall into any of categories above, all read's introns are annotated;
-    - `alternative_structure_novel`  - reads has different intron chain that does not fall into any of categories above, at least one of read's introns is unannotated;
-    - `alternative_polya_site` - read has alternative polyadenylation site.
+    - consistent events:
+        - `none` / `.` / `undefined` - no special event detected;
+        - `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
+        - `fsm` - full splice match;
+        - `ism_5/3` - incomplete splice match, truncated on 5'/3' side;
+        - `ism_internal` - incomplete splice match, truncated on both sides;
+        - `mono_exonic` - mono-exonic read matching spliced isoform;
+    - alignment artifacts:
+        - `intron_shift` - intron that seems to be shifted due to misalignment (typical for Nanopores);
+        - `exon_misallignment` - short exon that seems to be missed due to misalignment  (typical for Nanopores);
+        - `fake_terminal_exon_5/3` - short terminal exon at 5'/3' end that looks like an alignment artifact (typical for Nanopores);  
+        - `exon_elongation_5/3` - minor exon extension at 5'/3' end (not exceeding 30bp);
+    - intron retentions:
+        - `intron_retention` - intron retention;
+        - `unspliced_intron_retention`  - intron retention by mono-exonic read;
+        - `incomplete_intron_retention_5/3` - terminal exon at 5'/3' end partially covers adjacent intron;
+    - significant inconsistencies:
+        - `major_exon_elongation_5/3` - significant exon extension at 5'/3' end (exceeding 30bp);
+        - `extra_intron_5/3` - additional intron on the 5'/3' end of the isoform;
+        - `extra_intron_known` - read contains additional annotated intron in the middle of exon;
+        - `extra_intron` - read contains additional unannotated intron in the middle of exon;
+        - `alt_donor_site_known` - read contains alternative annotated donor site;
+        - `alt_acceptor_site_known` - read contains alternative annotated acceptor site;
+        - `alt_donor_site_novel` - read contains alternative unannotated donor site;
+        - `alt_acceptor_site_novel` - read contains alternative unannotated acceptor site;
+        - `intron_migration` - read contains alternative annotated intron of approximately the same length as the isoform;
+        - `intron_alternation_known` - read contains alternative annotated intron;
+        - `intron_alternation_novel` - read contains alternative unannotated intron; 
+        - `mutually_exclusive_exons_known` - read contains different exon(s) comparing to the isoform, all resulting introns are annotated;
+        - `mutually_exclusive_exons_novel` - read contains different exon(s) comparing to the isoform, at least one of introns is unannotated;
+        - `exon_skipping_known_intron` - read skips exon(s) comparing to the isoform, resulting intron is annotated;
+        - `exon_skipping_novel_intron` - read skips exon(s) comparing to the isoform, resulting intron is unannotated;
+        - `exon_gain_known` - read contains additional exon(s) comparing to the isoform, all resulting introns are annotated;
+        - `exon_gain_novel` - read contains additional exon(s) comparing to the isoform, at least one of introns is unannotated;
+        - `alternative_structure_known` - reads has different intron chain that does not fall into any of categories above, all read's introns are annotated;
+        - `alternative_structure_novel`  - reads has different intron chain that does not fall into any of categories above, at least one of read's introns is unannotated;
+    - alternative transcription start / end (reported when CAGE data / poly-A tails are present):
+        - `alternative_polya_site` - read has alternative polyadenylation site;
+        - `fake_polya_site` - poly-A tail detected but seems to be originated from A-rich intronic region;
+        - `alternative_tss` - alternative transcription start site.
 * `polyA_found` - whether poly-A/T was detected at 5' end (True or False);
 * `aligned_blocks` - list of coordinates for normalized aligned blocks (1-based, indels excluded);
 * `intron_profile`, `split_exon_profile` - supplementary information intended for internal use; so called read profile, i.e. which of the gene's known introns and exons match the read.

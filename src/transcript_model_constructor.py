@@ -44,7 +44,7 @@ class GFFPrinter:
     def __init__(self, outf_prefix, sample_name, print_meta_features=False):
         self.out_gff = open(os.path.join(outf_prefix, sample_name + ".transcript_models.gtf"), "w")
         self.out_gff.write("# " + sample_name + " IsoQuant generated GFF\n")
-        self.out_r2t = open(os.path.join(outf_prefix, sample_name + ".reads_transcript_model_map.tsv"), "w")
+        self.out_r2t = open(os.path.join(outf_prefix, sample_name + ".transcript_models_reads.tsv"), "w")
         self.out_r2t.write("#read_id\ttranscript_id\n")
         self.out_counts = open(os.path.join(outf_prefix, sample_name + ".transcript_models_counts.tsv"), "w")
         self.out_counts.write("#ID\t%s\n" % sample_name)
