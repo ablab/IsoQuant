@@ -2,10 +2,26 @@ from collections import namedtuple, Counter
 
 import pytest
 
-from src.long_read_assigner import LongReadAssigner, MatchEventSubtype
+from src.long_read_assigner import LongReadAssigner, MatchEventSubtype, AmbiguityResolvingMethod
 
+class Params:
+    def __init__(self, delta):
+        self.delta = delta
+        self.minor_exon_extension = 10
+        self.major_exon_extension = 100
+        self.min_abs_exon_overlap = 10
+        self.min_rel_exon_overlap = 0.2
+        self.max_suspicious_intron_abs_len = 0
+        self.max_suspicious_intron_rel_len = 0
+        self.max_fake_terminal_exon_len = 0
+        self.apa_delta = 50
+        self.minimal_exon_overlap = 5
+        self.minimal_intron_absence_overlap = 5
+        self.max_intron_shift = 10
+        self.max_missed_exon_len = 10
+        self.resolve_ambiguous = AmbiguityResolvingMethod.monoexon_only
+        self.correct_minor_errors = True
 
-Params = namedtuple("Params", ("delta", ))
 IntronProfiles = namedtuple("IntronProfiles", ("features", ))
 GeneInfo = namedtuple("GeneInfo", ("intron_profiles", "start", "end"))
 
@@ -29,39 +45,39 @@ class TestMatchProfileAndFindMatchingIsoforms:
 
     def check(self, read_gene_profile, isoform_profiles, hint, expected):
         assert expected == self.assigner.match_profile(read_gene_profile, isoform_profiles, hint)
-        expected = {x[0] for x in expected if x[1] == 0}
+        expected = sorted([x[0] for x in expected if x[1] == 0])
         assert expected == self.assigner.find_matching_isoforms(read_gene_profile, isoform_profiles, hint)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
-                             [([-1, 1, 0, -1], dict(id1=[-1, 1, 0, -1], id2=[-1, 1, 0, -1]),
+                             [([-1, 1, -1, 0], dict(id1=[-1, 1, -1, -1], id2=[-1, 1, -1, -2]),
                                None, [("id1", 0), ("id2", 0)]),
-                              ([-1, 1, 0, -1], dict(id1=[-1, 1, 1, -1], id2=[-1, 1, 0, -1]),
+                              ([-1, 1, 1, 1], dict(id1=[-1, 1, 1, 1], id2=[-2, 1, 1, 1]),
                                None, [("id1", 0), ("id2", 0)])])
     def test_all_equals(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
-                             [([-1, 1, 0, -1], dict(id1=[-1, 1, -1, -1], id2=[1, 1, 1, -1]),
-                               None, [("id1", 0), ("id2", 1)]),
-                              ([-1, 1, 1, 0, -1], dict(id1=[-1, 1, 1, 1, -1], id2=[-1, -1, 0, 1, -1],
-                                                       id3=[-1, 0, 1, -1, -1]),
-                               None, [("id1", 0), ("id3", 0), ("id2", 1)])])
+                             [([-1, 1, -1, 0], dict(id1=[-1, 1, -1, -1], id2=[1, 1, 1, -1]),
+                               None, [("id1", 0), ("id2", 2)]),
+                              ([-1, 1, 1, -1, 0], dict(id1=[-1, 1, 1,  1, -2], id2=[-2, 1, 1, -1, -2],
+                                                       id3=[ 1, -1, 1, -1, -1]),
+                               None, [("id2", 0), ("id2", 1), ("id3", 2)])])
     def test_some_equals(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
-                             [([-1, 1, 0, -1], dict(id1=[-1, -1, 1, -1], id2=[1, 0, 1, -1]),
-                               None, [("id1", 1), ("id2", 1)]),
-                              ([-1, 1, 1, 1, -1], dict(id1=[-1, 0, 1, 1, 1], id2=[1, 0, 0, -1, -1],
-                                                       id3=[1, 0, 0, 0, 1]),
-                               None, [("id1", 1), ("id2", 2), ("id3", 2)])])
+                             [([-1, 1, -1, 0], dict(id1=[-2, -1, -1, -1], id2=[1, 1, 1, 1]),
+                               None, [("id1", 1), ("id2", 2)]),
+                              ([-1, 1, 1, -1, 0], dict(id1=[-1, 1, 1, 1, 1], id2=[1, 1, -1, -1, -1],
+                                                       id3=[1, -1, -1, 1, -2]),
+                               None, [("id1", 1), ("id2", 2), ("id3", 4)])])
     def test_no_equals(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
-                             [([-1, 1, 0, -1], dict(id1=[-1, 1, 0, -1], id2=[0, 1, 0, -1], id3=[-1, 1, 0, 1]),
-                               {"id2", "id3"}, [("id2", 0), ("id3", 1)]),  # skip matched return another one
-                              ([-1, 1, 0, -1], dict(id1=[-1, 0, 0, -1], id2=[-1, 1, -1], id3=[-1, 1, 0, -1]),
+                             [([-1, 1, 1, 0], dict(id1=[-1, 1, 1, -1], id2=[1, 1, 1, -1], id3=[-1, -1, -1, 1]),
+                               {"id2", "id3"}, [("id2", 1), ("id3", 2)]),  # skip matched return another one
+                              ([-1, 1, -1, -1], dict(id1=[-1, 1, 1, -2], id2=[-1, -1, 1, -2], id3=[-1, 1, -1, -2]),
                                {"id3"}, [("id3", 0)])])  # matched
     def test_hint(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
@@ -71,9 +87,9 @@ class TestCompareJunctions:
     gene_info = GeneInfo(IntronProfiles([(1, 1)]), 1, 100)
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
-                             [([(1, 10), (15,  20)], (1, 10), [(2, 10), (15,  19)], (1, 10), 1),
-                              ([(1, 10), (15, 20)], (1, 10), [(1, 10), (15, 20)], (15, 20), 0),
-                              ([(1, 10), (15, 20)], (1, 10), [(1, 10), (15, 21), (25, 30)], (1, 10), 1),
+                             [([(1, 10), (15,  20)], (1, 20), [(2, 10), (15,  19)], (1, 19), 3),
+                              ([(1, 10), (15, 20)], (1, 20), [(1, 10), (15, 20)], (1, 20), 0),
+                              ([(1, 10), (15, 20)], (1, 20), [(1, 10), (15, 21), (25, 30)], (1, 10), 1),
                               ([(15, 20), (25, 35)], (15, 20), [(1, 10), (15, 21), (25, 34)], (1, 10), 1)])
     def test_no_contradiction(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
         assigner = LongReadAssigner(self.gene_info, Params(delta))
