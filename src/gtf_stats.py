@@ -169,7 +169,7 @@ def parse_args(args=None, namespace=None):
                              "speeds up gene database conversion")
     parser.add_argument("--reference", "-r", help="reference genome in FASTA format,"
                                                   "should be provided to compute splice site stats", type=str)
-    parser.add_argument('--clean-start', action='store_true', default=False,
+    parser.add_argument('--clean_start', action='store_true', default=False,
                         help='Do not use previously generated genee db')
 
     args = parser.parse_args(args, namespace)

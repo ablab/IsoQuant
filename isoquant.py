@@ -51,7 +51,7 @@ def parse_args(args=None, namespace=None):
                                                   "when raw reads are used as an input", type=str)
     parser.add_argument("--index", help="genome index for specified aligner, "
                                         "should be provided only when raw reads are used as an input", type=str)
-    parser.add_argument('--clean-start', action='store_true', default=False,
+    parser.add_argument('--clean_start', action='store_true', default=False,
                         help='Do not use previously generated index, feature db or alignments.')
     # INPUT READS
     input_args = parser.add_mutually_exclusive_group(required=True)
@@ -159,7 +159,7 @@ class TestMode(argparse.Action):
                    '--reference', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.reference.fasta'),
                    '--genedb', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.genedb.gtf'),
                    '--cage', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.CAGE.bed'),
-                   '--clean-start',
+                   '--clean_start',
                    '--data_type', 'nanopore', '--complete_genedb']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')

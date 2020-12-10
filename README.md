@@ -210,6 +210,9 @@ To provide read sequences use one of the following options:
 
 ### Pipeline and output options
 
+`--clean_start`
+    Do not use previously generated gene database, genome indices or BAM files, run pipeline from the very beginning (will take more time).
+
 `--sqanti_output`
     Produce SQANTI-like TSV output (requires more time).
 
