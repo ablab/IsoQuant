@@ -2,7 +2,7 @@ from collections import namedtuple, Counter
 
 import pytest
 
-from src.long_read_assigner import LongReadAssigner, MatchEventSubtype, AmbiguityResolvingMethod
+from src.long_read_assigner import LongReadAssigner, MatchEventSubtype, AmbiguityResolvingMethod, IsoformDiff
 
 class Params:
     def __init__(self, delta):
@@ -31,14 +31,14 @@ class TestMatchProfileAndFindMatchingIsoforms:
     assigner = LongReadAssigner(gene_info, Params(0))  # we need no params here
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
-                             [([], dict(id1=[1], id2=[0]), None, [("id2", -1), ("id1", 0)])])
+                             [([], dict(id1=[1], id2=[-1]), None, [IsoformDiff("id2", 0), IsoformDiff("id1", 0)])])
     def test_empty(self, read_gene_profile, isoform_profiles, hint, expected):
         with pytest.raises(AssertionError):
             self.check(read_gene_profile, isoform_profiles, hint, expected)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
-                             [([-1, 1, 0, -1], dict(id1=[-1, 1, 0, -1], id2=[-1, 1, 0], id3=[-1, 1, 0, 1]),
-                               {"id2", "id3"}, [("id2", -1), ("id3", 1)])])
+                             [([-1, 1, -1, 0], dict(id1=[-1, 1, 1, -1], id2=[-1, 1 ,-2], id3=[-1, 1, 1, 1]),
+                               {"id2", "id3"}, [IsoformDiff("id2", -1), IsoformDiff("id3", 1)])])
     def test_different_length(self, read_gene_profile, isoform_profiles, hint, expected):
         with pytest.raises(AssertionError):
             self.check(read_gene_profile, isoform_profiles, hint, expected)
@@ -50,35 +50,35 @@ class TestMatchProfileAndFindMatchingIsoforms:
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
                              [([-1, 1, -1, 0], dict(id1=[-1, 1, -1, -1], id2=[-1, 1, -1, -2]),
-                               None, [("id1", 0), ("id2", 0)]),
+                               None, [IsoformDiff("id1", 0), IsoformDiff("id2", 0)]),
                               ([-1, 1, 1, 1], dict(id1=[-1, 1, 1, 1], id2=[-2, 1, 1, 1]),
-                               None, [("id1", 0), ("id2", 0)])])
+                               None, [IsoformDiff("id1", 0), IsoformDiff("id2", 0)])])
     def test_all_equals(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
                              [([-1, 1, -1, 0], dict(id1=[-1, 1, -1, -1], id2=[1, 1, 1, -1]),
-                               None, [("id1", 0), ("id2", 2)]),
+                               None, [IsoformDiff("id1", 0), IsoformDiff("id2", 2)]),
                               ([-1, 1, 1, -1, 0], dict(id1=[-1, 1, 1,  1, -2], id2=[-2, 1, 1, -1, -2],
                                                        id3=[ 1, -1, 1, -1, -1]),
-                               None, [("id2", 0), ("id2", 1), ("id3", 2)])])
+                               None, [IsoformDiff("id2", 0), IsoformDiff("id2", 1), IsoformDiff("id3", 2)])])
     def test_some_equals(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
                              [([-1, 1, -1, 0], dict(id1=[-2, -1, -1, -1], id2=[1, 1, 1, 1]),
-                               None, [("id1", 1), ("id2", 2)]),
+                               None, [IsoformDiff("id1", 1), IsoformDiff("id2", 2)]),
                               ([-1, 1, 1, -1, 0], dict(id1=[-1, 1, 1, 1, 1], id2=[1, 1, -1, -1, -1],
                                                        id3=[1, -1, -1, 1, -2]),
-                               None, [("id1", 1), ("id2", 2), ("id3", 4)])])
+                               None, [IsoformDiff("id1", 1), IsoformDiff("id2", 2), IsoformDiff("id3", 4)])])
     def test_no_equals(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
                              [([-1, 1, 1, 0], dict(id1=[-1, 1, 1, -1], id2=[1, 1, 1, -1], id3=[-1, -1, -1, 1]),
-                               {"id2", "id3"}, [("id2", 1), ("id3", 2)]),  # skip matched return another one
+                               {"id2", "id3"}, [IsoformDiff("id2", 1), IsoformDiff("id3", 2)]),  # skip matched return another one
                               ([-1, 1, -1, -1], dict(id1=[-1, 1, 1, -2], id2=[-1, -1, 1, -2], id3=[-1, 1, -1, -2]),
-                               {"id3"}, [("id3", 0)])])  # matched
+                               {"id3"}, [IsoformDiff("id3", 0)])])  # matched
     def test_hint(self, read_gene_profile, isoform_profiles, hint, expected):
         self.check(read_gene_profile, isoform_profiles, hint, expected)
 
