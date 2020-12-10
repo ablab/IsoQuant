@@ -189,11 +189,13 @@ class JunctionComparator():
             elif read_cregion[0] == 0 and \
                     interval_len(get_exon(read_region, read_junctions, 0)) <= self.params.max_fake_terminal_exon_len:
                 # we have extra intron to the left and first exons is short
-                return make_event(MatchEventSubtype.fake_terminal_exon_left, isoform_cregion[1], read_cregion)
+                return make_event(MatchEventSubtype.fake_terminal_exon_left,
+                                  SupplementaryMatchConstansts.extra_left_mod_position, read_cregion)
             elif read_cregion[1] == len(read_junctions) - 1 and \
                     interval_len(get_exon(read_region, read_junctions, -1)) <= self.params.max_fake_terminal_exon_len:
                 # we have extra intron to the right and last exons is short
-                return make_event(MatchEventSubtype.fake_terminal_exon_right, isoform_cregion[1], read_cregion)
+                return make_event(MatchEventSubtype.fake_terminal_exon_right,
+                                  SupplementaryMatchConstansts.extra_right_mod_position, read_cregion)
             return make_event(MatchEventSubtype.extra_intron, isoform_cregion[1], read_cregion)
 
         read_intron_total_len = sum(interval_len(read_junctions[i])

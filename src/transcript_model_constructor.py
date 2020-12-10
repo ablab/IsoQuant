@@ -6,6 +6,7 @@
 
 import logging
 from collections import defaultdict
+from functools import reduce
 import copy
 
 from src.isoform_assignment import *
@@ -260,7 +261,7 @@ class TranscriptModelConstructor:
             # logger.debug("Created new candidate transcript model %s : %s " %
             #             (new_transcript_model.transcript_id, str(new_transcript_model.exon_blocks)))
             # compare read junctions with novel transcript model, count them and keep only those that do not match
-            remaining_assignments = self.verify_novel_model(remaining_assignments, new_transcript_model,
+            remaining_assignments = self.verify_novel_model(isoform_id, remaining_assignments, new_transcript_model,
                                                             representative_read_assignment.read_id,
                                                             candidate_model_storage)
 
@@ -319,7 +320,8 @@ class TranscriptModelConstructor:
 
     def blend_read_into_isoform(self, isoform_id, read_assignment):
         # logger.debug("Creating novel transcript model for isoform %s and read %s" % (isoform_id, read_assignment.read_id))
-        modification_events_map = self.derive_significant_modifications_map(isoform_id, read_assignment)
+        read_inconsistencies = self.get_read_inconsistencies(isoform_id, read_assignment)
+        modification_events_map = self.derive_significant_modifications_map(read_inconsistencies)
         if not modification_events_map:
             return None
 
@@ -328,7 +330,7 @@ class TranscriptModelConstructor:
 
         combined_profile = read_assignment.combined_profile
         read_introns = combined_profile.read_intron_profile.read_features
-        read_start, read_end = self.get_read_region(strand, combined_profile)
+        read_start, read_end = self.get_read_region(strand, combined_profile, read_inconsistencies)
         novel_exons = []
 
         logger.debug("Isoform I " + str(isoform_introns))
@@ -526,15 +528,16 @@ class TranscriptModelConstructor:
 
         return current_exon_start
 
-    # return map: isoform position -> event tuple
-    def derive_significant_modifications_map(self, isoform_id, read_assignment):
-        match_subclassifications = None
+    # return list of all reads modifications relative to this isoform
+    def get_read_inconsistencies(self, isoform_id, read_assignment):
         for match in read_assignment.isoform_matches:
             if match.assigned_transcript == isoform_id:
-                match_subclassifications = match.match_subclassifications
-                break
+                return match.match_subclassifications
+        return None
 
-        match_subclassifications = list(filter(lambda m: m.event_type in self.events_to_track, match_subclassifications))
+    # return map: isoform position -> event tuple
+    def derive_significant_modifications_map(self, read_inconsistencies):
+        match_subclassifications = list(filter(lambda m: m.event_type in self.events_to_track, read_inconsistencies))
         # logger.debug("Selected modifications: " +", ".join(["%s: %s - %s" % (x.event_type.name, str(x.isoform_position), str(x.read_region))
         #                                                    for x in match_subclassifications]))
         if not self.params.report_intron_retention and \
@@ -560,19 +563,21 @@ class TranscriptModelConstructor:
         return modification_events_map
 
     # get tentative transcript start and end based on polyA and mapping coordinates
-    def get_read_region(self, strand, combined_profile):
-        if strand == "+":
-            read_start = combined_profile.read_exon_profile.read_features[0][0]
-            if combined_profile.polya_pos != -1:
-                read_end = combined_profile.polya_pos
-            else:
-                read_end = combined_profile.read_exon_profile.read_features[-1][1]
-        else:
-            read_end = combined_profile.read_exon_profile.read_features[-1][1]
-            if combined_profile.polyt_pos != -1:
-                read_start = combined_profile.polyt_pos
-            else:
-                read_start = combined_profile.read_exon_profile.read_features[0][0]
+    def get_read_region(self, strand, combined_profile, read_inconsistencies = None):
+        if read_inconsistencies == None:
+            read_inconsistencies = []
+        starting_exon_position = reduce(lambda x: 1 if x.event_type == MatchEventSubtype.fake_terminal_exon_left else 0,
+                                        read_inconsistencies, 0)
+        read_start = combined_profile.read_exon_profile.read_features[starting_exon_position][0]
+
+        terminal_exon_position = reduce(lambda x: 1 if x.event_type == MatchEventSubtype.fake_terminal_exon_right else 0,
+                                        read_inconsistencies, 0)
+        read_end = combined_profile.read_exon_profile.read_features[terminal_exon_position][1]
+
+        if strand == "+" and combined_profile.polya_pos != -1:
+            read_end = combined_profile.polya_pos
+        elif strand == '-' and combined_profile.polyt_pos != -1:
+            read_start = combined_profile.polyt_pos
         return read_start, read_end
 
     def get_closest_ref_intron(self, read_intron):
@@ -586,11 +591,11 @@ class TranscriptModelConstructor:
         novel_exons.append(exon)
         return intron[1] + 1
 
-    def verify_novel_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
+    def verify_novel_model(self, isoform_id, read_assignments, transcript_model, original_read_id, candidate_model_storage):
         if len(transcript_model.exon_blocks) == 1:
             return self.verify_novel_monoexonic_model(read_assignments, transcript_model, original_read_id, candidate_model_storage)
         else:
-            return self.verify_novel_spliced_model(read_assignments, transcript_model, original_read_id,
+            return self.verify_novel_spliced_model(isoform_id, read_assignments, transcript_model, original_read_id,
                                                    candidate_model_storage)
 
     def verify_novel_monoexonic_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
@@ -625,7 +630,7 @@ class TranscriptModelConstructor:
             all_except_original = list(filter(lambda x: x.read_id != original_read_id, read_assignments))
             return all_except_original
 
-    def verify_novel_spliced_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
+    def verify_novel_spliced_model(self, isoform_id, read_assignments, transcript_model, original_read_id, candidate_model_storage):
         # logger.debug("Verifying transcript model %s with %d reads" % (transcript_model.transcript_id, len(read_assignments)))
         model_exons = transcript_model.exon_blocks
         isoform_start = model_exons[0][0]
@@ -643,8 +648,9 @@ class TranscriptModelConstructor:
         nearby_starts_count = 0
         nearby_ends_count = 0
         for assignment in read_assignments:
+            read_inconsistencies = self.get_read_inconsistencies(isoform_id, assignment)
             read_introns = assignment.combined_profile.read_intron_profile.read_features
-            read_start, read_end = self.get_read_region(strand, assignment.combined_profile)
+            read_start, read_end = self.get_read_region(strand, assignment.combined_profile, read_inconsistencies)
             start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
             end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
             # profile_matches =  all(el == 1 for el in read_profile.read_profile)
