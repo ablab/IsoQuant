@@ -566,13 +566,13 @@ class TranscriptModelConstructor:
     def get_read_region(self, strand, combined_profile, read_inconsistencies = None):
         if read_inconsistencies == None:
             read_inconsistencies = []
-        starting_exon_position = reduce(lambda x: 1 if x.event_type == MatchEventSubtype.fake_terminal_exon_left else 0,
+        starting_exon_position = reduce(lambda x, y: x + (1 if y.event_type == MatchEventSubtype.fake_terminal_exon_left else 0),
                                         read_inconsistencies, 0)
         read_start = combined_profile.read_exon_profile.read_features[starting_exon_position][0]
 
-        terminal_exon_position = reduce(lambda x: 1 if x.event_type == MatchEventSubtype.fake_terminal_exon_right else 0,
+        terminal_exon_position = reduce(lambda x, y: x + (1 if y.event_type == MatchEventSubtype.fake_terminal_exon_right else 0),
                                         read_inconsistencies, 0)
-        read_end = combined_profile.read_exon_profile.read_features[terminal_exon_position][1]
+        read_end = combined_profile.read_exon_profile.read_features[-terminal_exon_position-1][1]
 
         if strand == "+" and combined_profile.polya_pos != -1:
             read_end = combined_profile.polya_pos
