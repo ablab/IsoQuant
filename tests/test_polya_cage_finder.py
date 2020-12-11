@@ -17,7 +17,13 @@ TUPLES1 = [(4, 2), (0, 15), (1, 1), (0, 5), (2, 1), (0, 16), (3, 4642), (0, 5), 
 
 TUPLES2 = [(0, 167), (4, 30)]
 
-TUPLES3 = [(0, 167), (4, 30), (5, 30)]
+TUPLES3 = [(0, 167), (4, 30), (5, 5)]
+
+TUPLES4 = [(0, 175), (3, 100), (0, 10), (3, 100), (0, 10), (4, 3)]
+
+TUPLES5 = [(0, 175), (3, 100), (0, 6), (2, 2), (0, 4), (3, 100), (0, 5), (1, 2), (0, 5), (4, 3)]
+
+TUPLES6 = [(0, 175), (3, 100), (0, 6), (2, 2), (0, 4), (3, 100), (0, 5), (1, 2), (0, 8), (5, 30)]
 
 SEQ1 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
        'GGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGCACTCCAACTGCTGCAAACCG' \
@@ -29,7 +35,11 @@ SEQ2 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
 
 SEQ3 = 'TTTTTTTTTTTTTTTTTTTTCTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGC' \
        'TCCCCACAGCCCCCTGCGATGGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGC' \
-       'ACTCCAACTGCTGCAAACCGAAGAAGCAGGCATCGGACDCCAAAAAAAAACCAAAAAAAAAAAAA'
+       'ACTCCAACTGCTGCAAACCGAAGAAGCAGGCATCGGACGCCAAAAAAAAACCAAAAAAAAAAAAA'
+
+SEQ4 = 'TTTTTTTATTTGTTTTTTTTTTTTTTTCTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGC' \
+       'TCCCCACAGCCCCCTGCGATGGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGC' \
+       'ACTCCAACTGCTGCAAACCGAAGAAGCAGGCATCGGACGCCAAAAAAAAACCAAAAAAAAAAAAA'
 
 
 class TestPolyAFinder:
@@ -46,18 +56,30 @@ class TestPolyAFinder:
         assert self.polya_finder.find_polya_tail(alignment) == -1
 
     @pytest.mark.parametrize("alignment, expected",
-                             [(PolyAAlignment('aligned_segment1', TUPLES2, SEQ2, 51054, 63535), 63535),
-                              (PolyAAlignment('aligned_segment1', TUPLES3, SEQ2, 51054, 63535), 63535)])
+                             [(PolyAAlignment('aligned_segment1', TUPLES2, SEQ2, 51054, 63535), 63538),
+                              (PolyAAlignment('aligned_segment1', TUPLES3, SEQ2, 51054, 63535), 63538)])
     def test_find_a_tail(self, alignment, expected):
+        assert self.polya_finder.find_polya_tail(alignment) == expected
+
+    @pytest.mark.parametrize("alignment, expected",
+                             [(PolyAAlignment('aligned_segment1', TUPLES4, SEQ2, 51054, 63535), 63311),
+                              (PolyAAlignment('aligned_segment2', TUPLES5, SEQ2, 51054, 63535), 63311)])
+    def test_find_fake_a_tail(self, alignment, expected):
         assert self.polya_finder.find_polya_tail(alignment) == expected
 
     @pytest.mark.parametrize("alignment",
                              [PolyAAlignment('aligned_segment1', list(reversed(TUPLES2)), SEQ3, 51054, 63535)])
     def test_find_t_head(self, alignment):
-        assert self.polya_finder.find_polyt_head(alignment) == 51054
+        assert self.polya_finder.find_polyt_head(alignment) == 51043
+
+    @pytest.mark.parametrize("alignment, expected",
+                             [(PolyAAlignment('aligned_segment1', list(reversed(TUPLES5)), SEQ4, 51054, 63535), 51277),
+                              (PolyAAlignment('aligned_segment2', list(reversed(TUPLES6)), SEQ4, 51054, 63535), 51280)])
+    def test_find_fake_t_head(self, alignment, expected):
+        assert self.polya_finder.find_polyt_head(alignment) == expected
 
     @pytest.mark.parametrize("seq, expected",
-                             [('TTTATATTTTTTTTTTGCC', -1),
+                             [('TTTATATTGGTATTTTGCC', -1),
                               ('AAAAAAAAAAACGAAAAAAAAAAAAAAAA', 0)])
     def test_find_polya_pos(self, seq, expected):
         assert self.polya_finder.find_polya(seq) == expected
