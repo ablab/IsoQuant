@@ -31,7 +31,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
         if len(cigar_tuples) > 1 and cigar_tuples[0][0] == 5 and cigar_tuples[1][0] == 4:
             # hard clipped
             current_pos = 2
-        elif cigar_tuples[0][0] == 4:
+        elif cigar_tuples[0][0] in {4, 5}:
             # soft clipped
             current_pos = 1
     else:
@@ -39,13 +39,13 @@ def move_ref_coord_alogn_alignment(alignment, shift):
         if len(cigar_tuples) > 1 and cigar_tuples[-1][0] == 5 and cigar_tuples[-2][0] == 4:
             # hard clipped
             current_pos -= 2
-        elif cigar_tuples[-1][0] == 4:
+        elif cigar_tuples[-1][0] in {4, 5}:
             # soft clipped
             current_pos -= 1
 
     read_length_consumed = 0
     reference_length_consumed = 0
-    while abs(current_pos) < len(cigar_tuples) and read_length_consumed < shift:
+    while current_pos < len(cigar_tuples) and current_pos >= -len(cigar_tuples) and read_length_consumed < shift:
         cigar_event = cigar_tuples[current_pos][0]
         event_len = cigar_tuples[current_pos][1]
         if cigar_event == 1:
@@ -57,6 +57,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
         elif cigar_event == 0:
             # match
             remaining_bases = shift - read_length_consumed # how many nucleotides in read to complete shift
+            #logger.debug("%d" % remaining_bases)
             if event_len < remaining_bases:
                 reference_length_consumed += event_len
                 read_length_consumed += event_len
@@ -69,6 +70,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
         else:
             # unexpected event
             logger.warning("Unexpected event: " + cigar_event)
+        #logger.debug("%d, %d, %d, %d" % (cigar_event, event_len, read_length_consumed, reference_length_consumed))
 
         current_pos += direction
 
@@ -105,7 +107,7 @@ class PolyAFinder:
         sequence_to_check = alignment.seq[to_check_start:to_check_end].upper()
         pos = self.find_polya(sequence_to_check.upper())
 
-        logger.debug("start: %d, end: %d, len: %d, pos: %d" % (read_mapped_region_end, to_check_start, to_check_end, pos))
+        logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_end, to_check_start, to_check_end, pos))
         logger.debug(sequence_to_check)
 
         if pos == -1:
@@ -119,7 +121,9 @@ class PolyAFinder:
             reference_polya_start = alignment.reference_end + shift
         else:
             shift = pos - read_mapped_region_end
-            reference_polya_start = alignment.reference_end - move_ref_coord_alogn_alignment(alignment, shift)
+            ref_shift = move_ref_coord_alogn_alignment(alignment, shift)
+            reference_polya_start = alignment.reference_end - ref_shift
+            logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polya_start))
 
         logger.debug("PolyA found at position %d" % reference_polya_start)
         return reference_polya_start
@@ -132,7 +136,7 @@ class PolyAFinder:
         if len(cigar_tuples) > 1 and cigar_tuples[0][0] == 5 and cigar_tuples[1][0] == 4:
             # hard clipped
             soft_clipped_head_len = cigar_tuples[1][1]
-        elif cigar_tuples[-1][0] == 4:
+        elif cigar_tuples[0][0] == 4:
             # soft clipped
             soft_clipped_head_len = cigar_tuples[0][1]
 
@@ -148,7 +152,7 @@ class PolyAFinder:
 
         pos = self.find_polya(sequence_to_check.upper())
 
-        logger.debug("start: %d, end: %d, len: %d, pos: %d" % (read_mapped_region_start, to_check_start, to_check_end, pos))
+        logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_start, to_check_start, to_check_end, pos))
         logger.debug(sequence_to_check)
 
         if pos == -1:
@@ -162,7 +166,9 @@ class PolyAFinder:
             reference_polyt_end = alignment.reference_start - shift
         else:
             shift = pos - read_mapped_region_start
-            reference_polyt_end = alignment.reference_start + move_ref_coord_alogn_alignment(alignment, shift)
+            ref_shift = move_ref_coord_alogn_alignment(alignment, shift)
+            reference_polyt_end = alignment.reference_start + ref_shift
+            logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polyt_end))
 
         logger.debug("PolyT found at position %d" % reference_polyt_end)
         return reference_polyt_end
@@ -173,12 +179,14 @@ class PolyAFinder:
             return -1
         i = 0
         while i < len(seq) - self.window_size:
-            if seq[i:i + self.window_size].count('A') >= self.polyA_count:
+            a_count = seq[i:i + self.window_size].count('A')
+            if a_count >= self.polyA_count:
                 break
             i += 1
         if i >= len(seq) - self.window_size:
             return -1
-        return i
+
+        return i + max(0, seq[i:].find('AA'))
 
 
 class CagePeakFinder:
