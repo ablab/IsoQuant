@@ -382,7 +382,6 @@ def count_both_present_features(profile1, profile2):
 
 def all_features_present(isoform_profile, read_profile):
     assert len(isoform_profile) == len(read_profile)
-    d = 0
     for i in range(len(isoform_profile)):
         if isoform_profile[i] == 1 and read_profile[i] != 1:
             return False
