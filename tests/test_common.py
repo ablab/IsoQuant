@@ -4,7 +4,6 @@ from src.common import *
 
 
 class TestMiscFunction:
-    @pytest.mark.parametrize()
     def test_get_first(self):
         assert get_first_best_from_sorted([(1,1), (2,2), (3,3)]) == [1]
         assert get_first_best_from_sorted([(1,1), (2,1), (3,3)]) == [1, 2]
