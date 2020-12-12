@@ -81,11 +81,11 @@ def equal_ranges(range1, range2, delta=0):
 
 
 def covers_end(bigger_range, smaller_range):
-    return bigger_range[1] <= smaller_range[1] and bigger_range[0] <= smaller_range[0]
+    return bigger_range[0] <= smaller_range[0] <= bigger_range[1] <= smaller_range[1]
 
 
 def covers_start(bigger_range, smaller_range):
-    return bigger_range[0] >= smaller_range[0] and bigger_range[1] >= smaller_range[1]
+    return smaller_range[0] <= bigger_range[0] <= smaller_range[1] <= bigger_range[1]
 
 
 def contains(bigger_range, smaller_range):
@@ -167,10 +167,10 @@ def jaccard_similarity(sorted_range_list1, sorted_range_list2):
                 union += max(block1[1], block2[1]) - min(block1[0], block2[0]) + 1
             elif included2[pos2] == 1:
                 # second block was included, take extra bite from block1
-                union += max(0, block1[1] - block2[1] + 1)
+                union += max(0, block1[1] - block2[1])
             else:
                 # first block was included, take extra bite from block2
-                union += max(0, block2[1] - block1[1] + 1)
+                union += max(0, block2[1] - block1[1])
 
             included1[pos1] = 1
             included2[pos2] = 1
@@ -273,11 +273,11 @@ def get_exon(read_region, read_junctions, exon_position):
         exon_position = len(read_junctions) + exon_position + 1
 
     if exon_position == 0:
-        return (read_region[0], read_junctions[0][0])
+        return (read_region[0], read_junctions[0][0] - 1)
     elif exon_position == len(read_junctions):
-        return (read_junctions[-1][1], read_region[1])
+        return (read_junctions[-1][1] + 1, read_region[1])
     else:
-        return (read_junctions[exon_position - 1][1], read_junctions[exon_position][0])
+        return (read_junctions[exon_position - 1][1] + 1, read_junctions[exon_position][0] - 1)
 
 
 def concat_gapless_blocks(blocks, cigar_tuples):
@@ -329,17 +329,17 @@ def correct_bam_coords(blocks):
 # == profile functions ==
 def is_subprofile(short_isoform_profile, long_isoform_profile):
     assert len(short_isoform_profile) == len(long_isoform_profile)
-
-    if all(el == -1 for el in short_isoform_profile):
-        return None
+    assert 0 not in short_isoform_profile
 
     short_range_start = None
     short_range_end = None
     for i in range(len(short_isoform_profile)):
-        if short_isoform_profile[i] == 1:
+        if short_isoform_profile[i] in {-1, 1}:
             if short_range_start is None:
                 short_range_start = i
             short_range_end = i
+
+    assert short_range_end is not None
 
     for i in range(short_range_start, short_range_end + 1):
         if short_isoform_profile[i] != long_isoform_profile[i]:

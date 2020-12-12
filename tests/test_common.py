@@ -40,7 +40,7 @@ class TestRanges:
         assert expected == overlaps_at_least(range1, range2, delta)
 
     @pytest.mark.parametrize("range1, range2, delta, expected",
-                             [((1, 25), (20, 25), 0, True), ((18, 40), (16, 41), 3, True), ((1, 25), (6, 20), 7, False)])
+                             [((1, 25), (20, 25), 0, True), ((18, 40), (16, 41), 3, True), ((10, 25), (5, 30), 7, False)])
     def test_contains_approx(self, range1, range2, delta, expected):
         assert expected == contains_approx(range1, range2, delta)
 
@@ -53,7 +53,7 @@ class TestRanges:
 
     @pytest.mark.parametrize("range1, range2, expected",
                              [((1, 20), (1, 20), True), ((1, 120), (20, 201), False), ((1, 10), (11, 20), False),
-                              ((111, 210), (111, 211), True), ((120, 210), (119, 201), True)])
+                              ((111, 210), (111, 211), False), ((120, 210), (119, 201), True)])
     def test_covers_start(self, range1, range2, expected):
         assert expected == covers_start(range1, range2)
 
@@ -81,7 +81,7 @@ class TestRanges:
 
     @pytest.mark.parametrize("ranges, point, expected",
                              [([(1, 20), (40, 50)], 1, 30), ([(1, 1), (5, 5)], 0, 2),
-                              ([(1, 20), (40, 50)], 39, 11), ([(1, 20), (40, 50)], 11, 21)])
+                              ([(1, 20), (40, 50)], 39, 11), ([(1, 20), (40, 50)], 11, 20)])
     def test_intervals_len_from_point(self, ranges, point, expected):
         assert expected == sum_intervals_from_point(ranges, point)
 
@@ -94,7 +94,7 @@ class TestSimilarityFunctions:
                               ([(1, 20), (41, 50), (61, 70)], [(46, 55), (60, 62), (70, 74), (101, 150)], 0.08),
                               ([(1, 20), (41, 50), (61, 70)], [(146, 155), (160, 172)], 0.0),
                               ([(146, 155), (160, 172)], [(1, 20), (41, 50), (61, 70)], 0.0),
-                              ([(11, 20), (41, 50), (61, 70)], [(1, 4), (10, 12), (14, 16), (19, 30), (30, 34), (60, 70), (101, 159)], 0.17)])
+                              ([(11, 20), (41, 50), (61, 70)], [(1, 4), (10, 12), (14, 16), (19, 30), (30, 34), (60, 70), (101, 149)], 0.17)])
     def test_jaccard_index(self, ranges1, ranges2, expected):
         assert expected == jaccard_similarity(ranges1, ranges2)
 
@@ -105,18 +105,18 @@ class TestSimilarityFunctions:
                               ([(1, 20), (41, 50), (61, 80)], [(0, 0), (46, 55), (60, 62), (70, 74), (80,82), (101, 110)], 0.26),
                               ([(1, 20), (41, 50), (61, 80)], [(146, 155), (160, 172)], 0.0),
                               ([(146, 155), (160, 172)], [(1, 20), (41, 50), (61, 70)], 0.0),
-                              ([(11, 20), (41, 50), (61, 70), (201, 210)], [(1, 4), (10, 12), (14, 16), (19, 30), (30, 34), (60, 70), (101, 109)], 0.34)])
+                              ([(11, 20), (41, 50), (61, 70), (201, 220)], [(1, 4), (10, 12), (14, 16), (19, 30), (30, 34), (60, 70), (101, 109)], 0.34)])
     def test_read_coverage_fraction(self, read_exons, isoform_exons, expected):
         assert expected == read_coverage_fraction(read_exons, isoform_exons)
 
     @pytest.mark.parametrize("read_exons, isoform_region, expected",
-                             [([(1, 100)], [(31, 110)], 0.3),
-                              ([(1, 100)], [(31, 70)], 0.6),
+                             [([(1, 100)], (31, 110), 0.3),
+                              ([(1, 100)], (31, 70), 0.6),
                               ([(1, 20), (41, 50), (61, 70)], (1, 70), 0.0),
                               ([(1, 20), (41, 50), (61, 70)], (0, 71), 0.0),
                               ([(1, 20), (41, 50), (61, 80)], (35, 55), 0.8),
-                              ([(1, 20), (41, 50), (61, 80)], [(146, 155), (160, 172)], 1.0),
-                              ([(11, 20), (41, 50), (61, 80)], (16, 70), 0.3)])
+                              ([(1, 20), (41, 50), (61, 80)], (146, 172), 1.0),
+                              ([(11, 20), (41, 50), (61, 90)], (16, 70), 0.5)])
     def test_extra_flanking(self, read_exons, isoform_region, expected):
         assert expected == extra_exon_percentage(isoform_region, read_exons)
 
@@ -167,9 +167,10 @@ class TestExonFunctions:
 
 
 class TestProfiles:
-    @pytest.mark.parametrize("profile1, profile2, expected", [([0, 1], [1, 1], True), ([0, -1, 0], [-1, -1, -1], True),
+    @pytest.mark.parametrize("profile1, profile2, expected", [([-2, 1], [1, 1], True), ([-2, -1, -2], [-1, -1, -1], True),
                                                               ([1], [1], True),
-                                                              ([0, 1, -1, 0], [-2, 1, 1, -2], False)])
+                                                              ([-2, 1, -1, -2], [-1, 1, 1, 1], False),
+                                                              ([-2, 1, -1, -2], [-1, 1, -1, 1], True)])
     def test_is_subprofile(self, profile1, profile2, expected):
         assert expected == is_subprofile(profile1, profile2)
 
@@ -185,9 +186,9 @@ class TestProfiles:
     def test_count_both_present_features(self, profile1, profile2, expected):
         assert expected == count_both_present_features(profile1, profile2)
 
-    @pytest.mark.parametrize("profile1, profile2, expected", [([1], [1], True), ([0, 1], [1, 1], False),
-                                                              ([0, 1, 1, 0], [-1, 1, 1, -2], True),
-                                                              ([0, 1, -1], [-2, 1, 1], False)])
+    @pytest.mark.parametrize("profile1, profile2, expected", [([1], [1], True), ([1, 1], [0, 1], False),
+                                                              ([-1, 1, 1, -2], [0, 1, 1, -2], True),
+                                                              ([-2, 1, 1], [0, 1, -1], False)])
     def test_all_features_present(self, profile1, profile2, expected):
         assert expected == all_features_present(profile1, profile2)
 
