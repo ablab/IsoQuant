@@ -68,7 +68,8 @@ class TestPolyAFinder:
         assert self.polya_finder.find_polya_tail(alignment) == expected
 
     @pytest.mark.parametrize("alignment",
-                             [PolyAAlignment('aligned_segment1', list(reversed(TUPLES2)), SEQ3, 51054, 63535)])
+                             [PolyAAlignment('aligned_segment1', list(reversed(TUPLES2)), SEQ3, 51054, 63535),
+                              PolyAAlignment('aligned_segment1', list(reversed(TUPLES3)), SEQ3, 51054, 63535)])
     def test_find_t_head(self, alignment):
         assert self.polya_finder.find_polyt_head(alignment) == 51043
 
@@ -80,7 +81,8 @@ class TestPolyAFinder:
 
     @pytest.mark.parametrize("seq, expected",
                              [('TTTATATTGGTATTTTGCC', -1),
-                              ('AAAAAAAAAAACGAAAAAAAAAAAAAAAA', 0)])
+                              ('AAAAAAAAAAACGAAAAAAAAAAAAAAAA', 0),
+                              ('TGGCGGTACAAAAAAAAAAACGAAAAAAAAAAAAAAAA', 9)])
     def test_find_polya_pos(self, seq, expected):
         assert self.polya_finder.find_polya(seq) == expected
 
