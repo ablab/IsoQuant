@@ -1,8 +1,11 @@
 from collections import namedtuple, Counter
 
 import pytest
+import gffutils
+import os
 
-from src.long_read_assigner import LongReadAssigner, MatchEventSubtype, AmbiguityResolvingMethod, IsoformDiff
+from src.long_read_assigner import *
+from src.gene_info import *
 
 class Params:
     def __init__(self, delta):
@@ -23,11 +26,11 @@ class Params:
         self.correct_minor_errors = True
 
 IntronProfiles = namedtuple("IntronProfiles", ("features", ))
-GeneInfo = namedtuple("GeneInfo", ("intron_profiles", "start", "end"))
+GeneInfoTuple = namedtuple("GeneInfo", ("intron_profiles", "start", "end"))
 
 
 class TestMatchProfileAndFindMatchingIsoforms:
-    gene_info = GeneInfo(IntronProfiles([(50, 60), (80, 100), (80, 110), (200, 210)]), 0, 300)
+    gene_info = GeneInfoTuple(IntronProfiles([(50, 60), (80, 100), (80, 110), (200, 210)]), 0, 300)
     assigner = LongReadAssigner(gene_info, Params(0))  # we need no params here
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
@@ -84,7 +87,7 @@ class TestMatchProfileAndFindMatchingIsoforms:
 
 
 class TestCompareJunctions:
-    gene_info = GeneInfo(IntronProfiles([(50, 60), (80, 100), (80, 110), (80, 150), (200, 210)]), 0, 300)
+    gene_info = GeneInfoTuple(IntronProfiles([(50, 60), (80, 100), (80, 110), (80, 150), (200, 210)]), 0, 300)
 
     @pytest.mark.parametrize("junctions, region, delta, expexted",
                              [([(50, 60), (80, 100), (200, 210)], (1, 1), 3, [0, 1, -1, 0]),
@@ -346,10 +349,166 @@ class TestCompareJunctions:
 
 
 class TestDetectContradictionType:
-    gene_info = GeneInfo(IntronProfiles([(1, 1)]), 1, 100)
+    gene_info = GeneInfoTuple(IntronProfiles([(1, 1)]), 1, 100)
 
     def test(self):
         assigner = LongReadAssigner(self.gene_info, Params(3))
         match_events = assigner.intron_comparator.detect_contradiction_type((0, 200), [(50, 75)], (0, 200), [(45, 70)], [((0, 0), (0, 0))])
         assert len(match_events) == 1
         assert match_events[0].event_type == MatchEventSubtype.intron_shift
+
+
+class TestAssignIsoform:
+    params = Params(3)
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    gffutils_db = gffutils.FeatureDB(os.path.join(source_dir, 'toy_data/synth.db'), keep_order=True)
+    gene_db = gffutils_db['ENSMUSG00000020196.10']
+    gene_info = GeneInfo([gene_db], gffutils_db)
+    assigner = LongReadAssigner(gene_info, params)
+    gene_region = (gene_info.start, gene_info.end)
+
+    intron_profile_constructor = \
+        OverlappingFeaturesProfileConstructor(gene_info.intron_profiles.features, gene_region,
+                                              comparator=partial(equal_ranges, delta=params.delta),
+                                              absence_condition=partial(overlaps_at_least,
+                                                                        delta=params.minimal_intron_absence_overlap),
+                                              delta=params.delta)
+    exon_profile_constructor = \
+        OverlappingFeaturesProfileConstructor(gene_info.exon_profiles.features, gene_region,
+                                              comparator=partial(equal_ranges, delta=params.delta),
+                                              delta=params.delta)
+    split_exon_profile_constructor = \
+        NonOverlappingFeaturesProfileConstructor(gene_info.split_exon_profiles.features,
+                                                 comparator=partial(overlaps_at_least,
+                                                                    delta=params.minimal_exon_overlap),
+                                                 delta=params.delta)
+
+    @pytest.mark.parametrize("sorted_blocks, polya_pos, polyt_pos, isoform_id, expected_event",
+                             [([(1000, 1100), (2000, 2100), (2300, 2400), (3000, 3300), (9500, 10000)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.fsm),
+                              ([(1000, 1100), (2000, 2100), (2300, 2400), (3000, 3300)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.ism_right),
+                              ([(2000, 2098), (2301, 2400), (3001, 3300), (9500, 10003)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.ism_left),
+                              ([(2000, 2100), (2300, 2400), (3000, 3300)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.ism_internal),
+                              ([(1000, 1100), (2000, 2200), (2500, 2600), (3000, 3300), (6000, 6010), (9500, 10000)],
+                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.fsm),
+                              ([(1040, 1100), (2000, 2201), (2500, 2602), (2998, 3300), (6000, 6011), (9500, 9600)],
+                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.fsm),
+                              ([(7998, 8201), (8500, 8800)], -1, -1,
+                               "ENSMUST00000001715.7", MatchEventSubtype.fsm),
+                              ([(7000, 7500)], -1, -1,
+                               "ENSMUST00000001714.7", MatchEventSubtype.mono_exon_match),
+                              ([(7100, 7300)], -1, -1,
+                               "ENSMUST00000001714.7", MatchEventSubtype.mono_exon_match),
+                              ([(6999, 7503)], -1, -1,
+                               "ENSMUST00000001714.7", MatchEventSubtype.mono_exon_match),
+                              ])
+    def test_assign_unique(self, sorted_blocks, polya_pos, polyt_pos, isoform_id, expected_event):
+        intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
+        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
+        split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile, polya_pos, polyt_pos)
+
+        read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
+        assert read_assignment.assignment_type == ReadAssignmentType.unique
+        assert len(read_assignment.isoform_matches) == 1
+        assert read_assignment.isoform_matches[0].assigned_transcript == isoform_id
+        assert expected_event in {e.event_type for e in read_assignment.isoform_matches[0].match_subclassifications}
+
+    @pytest.mark.parametrize("sorted_blocks, polya_pos, polyt_pos, isoform_id, expected_event",
+                             [([(1000, 1108), (2007, 2100), (2300, 2400), (3000, 3300), (9500, 10000)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.intron_shift),
+                              ([(1000, 1100), (2000, 2092), (2295, 2400), (3000, 3300)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.intron_shift),
+                              ([(2000, 2098), (2301, 2400), (3001, 3300), (9500, 10008)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.exon_elongation_right),
+                              ([(1000, 1100), (2000, 2200), (2500, 2600), (3000, 3303), (9496, 10000)],
+                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.exon_misallignment),
+                              ([(993, 1100), (2000, 2200), (2500, 2602), (2998, 3300), (6000, 6011), (9500, 9600)],
+                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.exon_elongation_left),
+                              ([(7998, 8201), (8500, 8800), (9900, 9907)], -1, -1,
+                               "ENSMUST00000001715.7", MatchEventSubtype.fake_terminal_exon_right),
+                              ([(4000, 4010), (7998, 8201), (8500, 8800)], -1, -1,
+                               "ENSMUST00000001715.7", MatchEventSubtype.fake_terminal_exon_left),
+                              ])
+    def test_assign_unique_minor_error(self, sorted_blocks, polya_pos, polyt_pos, isoform_id, expected_event):
+        self.assigner.params.max_missed_exon_len = 20
+        self.assigner.params.max_fake_terminal_exon_len = 20
+        intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
+        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
+        split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile, polya_pos, polyt_pos)
+
+        read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
+        assert read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference
+        assert len(read_assignment.isoform_matches) == 1
+        assert read_assignment.isoform_matches[0].assigned_transcript == isoform_id
+        assert expected_event in {e.event_type for e in read_assignment.isoform_matches[0].match_subclassifications}
+
+    @pytest.mark.parametrize("sorted_blocks, polya_pos, polyt_pos, isoform_id",
+                             [([(1000, 1108), (2007, 2100)], -1, -1,
+                               "ENSMUST00000001712.7"),
+                              ([(1050, 1100), (2001, 2092)], -1, -1,
+                               "ENSMUST00000001712.7"),
+                              ])
+    def test_assign_unique_ambiguous(self, sorted_blocks, polya_pos, polyt_pos, isoform_id):
+        self.assigner.params.max_missed_exon_len = 20
+        self.assigner.params.max_fake_terminal_exon_len = 20
+        intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
+        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
+        split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile, polya_pos, polyt_pos)
+
+        read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
+        assert read_assignment.assignment_type == ReadAssignmentType.ambiguous
+        assert len(read_assignment.isoform_matches) > 1
+        assert isoform_id in {im.assigned_transcript for im in read_assignment.isoform_matches}
+
+    @pytest.mark.parametrize("sorted_blocks, polya_pos, polyt_pos, isoform_id, expected_event",
+                             [([(1000, 1200), (2000, 2100), (2300, 2400), (3000, 3300), (9500, 10000)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.alt_left_site_novel),
+                              ([(1000, 1100), (2000, 2400), (3000, 3300), (9500, 10000)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.intron_retention),
+                              ([(500, 600), (1000, 1100), (2000, 2100), (2300, 2400), (3000, 3300), (9500, 10000)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.extra_intron_flanking_left),
+                              ([(1000, 1100), (2000, 2100), (2300, 2400), (2700, 2750), (3000, 3300)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.exon_gain_novel),
+                              ([(2000, 2098), (2301, 2400), (3001, 3300), (9500, 11003)], -1, -1,
+                               "ENSMUST00000001712.7", MatchEventSubtype.major_exon_elongation_right),
+                              ([(1000, 1100), (2000, 2200), (2500, 2600), (3000, 3300), (5000, 5010), (9500, 10000)],
+                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.mutually_exclusive_exons_novel),
+                              ([(1040, 1100), (2000, 2201), (2500, 2602), (2998, 3300), (6000, 6011), (9500, 9600), (9700, 9999)],
+                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.extra_intron),
+                              ([(7998, 8201), (8300, 8333), (8500, 8800)], -1, -1,
+                               "ENSMUST00000001715.7", MatchEventSubtype.exon_gain_novel),
+                              ([(7100, 7800)], -1, -1,
+                               "ENSMUST00000001714.7", MatchEventSubtype.major_exon_elongation_right),
+                              ([(1040, 1100), (2000, 2201), (2500, 2602), (2998, 3900)], -1, -1,
+                               "ENSMUST00000001713.7", MatchEventSubtype.incomplete_intron_retention_right),
+                              ([(2500, 6010)], -1, -1,
+                               "ENSMUST00000001713.7", MatchEventSubtype.unspliced_intron_retention),
+                              ([(900, 1100), (2000, 2100), (2300, 2400), (3000, 3300), (9500, 10000)], -1, 900,
+                               "ENSMUST00000001712.7", MatchEventSubtype.alternative_polya_site),
+                              ([(1000, 1100), (1900, 2100)], -1, -1,
+                               "ENSMUST00000001713.7", MatchEventSubtype.alt_right_site_novel),
+                              ([(1000, 2100)], -1, -1,
+                               "ENSMUST00000001713.7", MatchEventSubtype.unspliced_intron_retention),
+                              ([(1000, 1100), (2000, 3300)], -1, -1,
+                               "ENSMUST00000001713.7", MatchEventSubtype.intron_retention),
+                              ])
+    def test_assign_inconsistent(self, sorted_blocks, polya_pos, polyt_pos, isoform_id, expected_event):
+        self.assigner.params.max_missed_exon_len = 20
+        self.assigner.params.max_fake_terminal_exon_len = 20
+        intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
+        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
+        split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile, polya_pos, polyt_pos)
+
+        read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
+        assert read_assignment.assignment_type == ReadAssignmentType.inconsistent
+        if isoform_id:
+            assert isoform_id in {im.assigned_transcript for im in read_assignment.isoform_matches}
+        if expected_event:
+            assert expected_event in {e.event_type for e in read_assignment.isoform_matches[0].match_subclassifications}

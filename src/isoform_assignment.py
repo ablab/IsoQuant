@@ -19,8 +19,6 @@ class ReadAssignmentType(Enum):
     ambiguous = 10
     unique_minor_difference = 2
     inconsistent = 3
-    novel = 4
-    # inconsistent_monoexon = 11
 
 
 # SQANTI-like
