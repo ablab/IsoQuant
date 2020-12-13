@@ -27,7 +27,7 @@ GeneInfo = namedtuple("GeneInfo", ("intron_profiles", "start", "end"))
 
 
 class TestMatchProfileAndFindMatchingIsoforms:
-    gene_info = GeneInfo(IntronProfiles([(50, 60), (80, 100), (80, 110), 200, 210]), 0, 300)
+    gene_info = GeneInfo(IntronProfiles([(50, 60), (80, 100), (80, 110), (200, 210)]), 0, 300)
     assigner = LongReadAssigner(gene_info, Params(0))  # we need no params here
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
@@ -84,7 +84,47 @@ class TestMatchProfileAndFindMatchingIsoforms:
 
 
 class TestCompareJunctions:
-    gene_info = GeneInfo(IntronProfiles([(50, 60), (80, 100), (80, 110), (200, 210)]), 0, 300)
+    gene_info = GeneInfo(IntronProfiles([(50, 60), (80, 100), (80, 110), (80, 150), (200, 210)]), 0, 300)
+
+    @pytest.mark.parametrize("junctions, region, delta, expexted",
+                             [([(50, 60), (80, 100), (200, 210)], (1, 1), 3, [0, 1, -1, 0]),
+                              ([(50, 60), (80, 100), (200, 210)], (0, 1), 3, [1, 1, -1, 0])])
+    def test_profile_for_junctions_introns(self, junctions, region, delta, expexted):
+        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        profile = assigner.intron_comparator.profile_for_junctions_introns(junctions, region)
+        assert expexted == profile.gene_profile
+
+    @pytest.mark.parametrize("junctions, region, delta, expexted",
+                             [([(50, 60), (82, 100), (200, 210)], (1, 1), 3, True),
+                              ([(48, 61), (80, 98), (200, 210)], (0, 1), 3, True),
+                              ([(48, 61), (80, 98), (160, 220)], (0, 1), 3, True),
+                              ([(48, 66), (80, 99), (200, 210)], (0, 1), 3, False)])
+    def test_profile_for_junctions_introns(self, junctions, region, delta, expexted):
+        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assert expexted == assigner.intron_comparator.are_known_introns(junctions, region)
+
+    @pytest.mark.parametrize("read_intron_read_profile, read_region, read_introns, delta, expexted",
+                             [([0, 1, 1], (0, 300), [(30, 60), (82, 100), (200, 210)], 3, MatchEventSubtype.extra_intron_flanking_left),
+                              ([0, 1, 1], (0, 300), [(5, 60), (82, 100), (200, 210)], 3, MatchEventSubtype.fake_terminal_exon_left),
+                              ([1, 1, 0], (0, 300), [(50, 60), (82, 100), (200, 210)], 3, MatchEventSubtype.extra_intron_flanking_right),
+                              ([1, 1, 0], (0, 300), [(50, 60), (82, 100), (200, 292)], 3, MatchEventSubtype.fake_terminal_exon_right)])
+    def test_add_extra_out_exon_events(self, read_intron_read_profile, read_region, read_introns, delta, expexted):
+        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner.params.max_fake_terminal_exon_len = 10
+        events = []
+        assigner.intron_comparator.add_extra_out_exon_events(events, read_intron_read_profile, read_region, read_introns, 100)
+        assert expexted == events[0].event_type
+
+    @pytest.mark.parametrize("read_region, junctions, region, delta, expexted",
+                             [((0, 300), [(50, 60), (82, 100), (200, 210)], (0, 0), 3, True),
+                              ((0, 300), [(48, 61), (80, 98), (200, 210)], (0, 1), 3, True),
+                              ((0, 300), [(38, 61), (80, 98), (160, 220)], (0, 0), 3, False),
+                              ((50, 300), [(58, 76), (80, 97), (130, 210)], (0, 1), 3, False)])
+    def test_profile_for_junctions_introns(self, read_region, junctions, region, delta, expexted):
+        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner.params.max_suspicious_intron_abs_len = 20
+        assigner.params.max_suspicious_intron_rel_len = 0.2
+        assert expexted == assigner.intron_comparator.are_suspicious_introns(read_region, junctions, region)
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([], (20, 200), [], (20, 290), 1)])
@@ -164,24 +204,29 @@ class TestCompareJunctions:
         assert len(match_events) == expected_len
         assert match_events[0].event_type == MatchEventSubtype.extra_intron_flanking_left
 
-    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
-                             [([(20, 50), (60, 100), (150,  200)], (0, 300), [(20, 51), (150, 201)], (0, 290), 1)])
-    def test_extra_intron(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
+                             [([(20, 50), (60, 100), (150,  200)], (0, 300), [(20, 51), (150, 201)], (0, 290), 2,
+                               MatchEventSubtype.extra_intron),
+                              ([(20, 40), (50, 60), (150, 200)], (0, 300), [(20, 41), (150, 201)], (0, 290), 1,
+                               MatchEventSubtype.extra_intron_known),
+                              ([(20, 40), (78, 112), (150, 200)], (0, 300), [(20, 41), (150, 201)], (0, 290), 3,
+                               MatchEventSubtype.extra_intron_known),
+                              ([(20, 40), (98, 102), (150, 200)], (0, 300), [(20, 41), (150, 201)], (0, 290), 3,
+                               MatchEventSubtype.none),
+                              ([(20, 50), (60, 100), (150, 200)], (15, 300), [(60, 100), (150, 201)], (45, 290), 2,
+                               MatchEventSubtype.fake_terminal_exon_left),
+                              ([(20, 50), (60, 100), (150, 200)], (0, 205), [(20, 50), (60, 100)], (0, 170), 2,
+                               MatchEventSubtype.fake_terminal_exon_right)
+                              ])
+    def test_extra_intron(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
         assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner.params.max_suspicious_intron_abs_len = 10
+        assigner.params.max_suspicious_intron_rel_len = 0.1
+        assigner.params.max_fake_terminal_exon_len = 10
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
-        assert match_events[0].event_type == MatchEventSubtype.extra_intron
-
-    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
-                             [([(20, 40), (50, 60), (150,  200)], (0, 300), [(20, 41), (150, 201)], (0, 290), 1),
-                              ([(20, 40), (78, 112), (150, 200)], (0, 300), [(20, 41), (150, 201)], (0, 290), 3)])
-    def test_extra_intron_known(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
-        match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
-                                                                    isoform_junctions, isoform_region)
-        assert len(match_events) == 1
-        assert match_events[0].event_type == MatchEventSubtype.extra_intron_known
+        assert match_events[0].event_type == expected
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([(10, 50), (150,  200)], (0, 300), [(10, 51), (80, 100), (150, 200), (225, 240)], (0, 310), 3)])
@@ -193,23 +238,111 @@ class TestCompareJunctions:
         assert len(match_events) == 2
         assert set(event_types) == {MatchEventSubtype.intron_retention}
 
-    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
-                             [([(10, 50)], (0, 100), [(10, 25), (40, 49)], (0, 99), 3)])
-    def test_exon_skipping_novel_intron(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
+                             [([(10, 50)], (0, 100), [(10, 25), (40, 49)], (0, 99), 3, MatchEventSubtype.exon_skipping_novel_intron),
+                              ([(80, 110)], (50, 150), [(80, 90), (105, 110)], (50, 149), 3, MatchEventSubtype.exon_skipping_known_intron),
+                              ([(81, 109)], (50, 150), [(80, 98), (102, 110)], (50, 149), 3, MatchEventSubtype.exon_misallignment)])
+    def test_exon_skipping(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
         assigner = LongReadAssigner(self.gene_info, Params(delta))
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
-        assert match_events[0].event_type == MatchEventSubtype.exon_skipping_novel_intron
+        assert match_events[0].event_type == expected
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
+                             [([(10, 30), (50, 100)], (0, 120), [(10, 60), (80, 100)], (0, 119), 3,
+                               MatchEventSubtype.mutually_exclusive_exons_novel),
+                              ([(50, 60), (81, 149)], (0, 200), [(50, 100), (119, 150)], (0, 219), 3,
+                               MatchEventSubtype.mutually_exclusive_exons_known),
+                              ([(50, 60), (81, 130), (140, 181)], (0, 200), [(50, 100), (119, 200)], (0, 219), 3,
+                               MatchEventSubtype.alternative_structure_novel),
+                              ([(50, 60), (81, 150), (200, 210)], (0, 250), [(50, 99), (115, 210)], (0, 279), 3,
+                               MatchEventSubtype.alternative_structure_known)
+                              ])
+    def test_complex_alteration(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
+        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
+                                                                    isoform_junctions, isoform_region)
+        assert len(match_events) == 1
+        assert match_events[0].event_type == expected
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
+                             [([(10, 30), (55, 100)], (0, 150), [(10, 100)], (9, 149), 2,
+                               MatchEventSubtype.exon_gain_novel),
+                              ([(50, 60), (80, 100)], (0, 150), [(50, 100)], (9, 149), 2,
+                               MatchEventSubtype.exon_gain_known),
+                              ([(10, 13), (95, 100)], (0, 150), [(10, 100)], (9, 149), 2,
+                               MatchEventSubtype.intron_retention)])
+    def test_exon_gain(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
+        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner.params.max_suspicious_intron_abs_len = 10
+        assigner.params.max_suspicious_intron_rel_len = 0.1
+        match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
+                                                                    isoform_junctions, isoform_region)
+        assert len(match_events) == 1
+        assert match_events[0].event_type == expected
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
+                             [([(50, 70), (80, 100)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.alt_right_site_novel),
+                              ([(50, 60), (80, 110)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.alt_right_site_known),
+                              ([(50, 60), (90, 100)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.alt_left_site_novel),
+                              ([(50, 60), (80, 100)], (0, 150), [(40, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.alt_left_site_known),
+                              ([(50, 60), (80, 100)], (0, 150), [(50, 60), (70, 90)], (9, 149), 2,
+                               MatchEventSubtype.intron_migration),
+                              ([(50, 60), (85, 105)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.intron_shift),
+                              ([(50, 60), (68, 85)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.intron_alternation_novel),
+                              ([(50, 60), (75, 115)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.intron_alternation_novel),
+                              ([(50, 60), (80, 110)], (0, 150), [(50, 60), (65, 100)], (9, 149), 2,
+                               MatchEventSubtype.intron_alternation_known),
+                              ([(50, 60), (98, 100)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.intron_retention),
+                              ([(50, 60), (93, 96)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.intron_retention)
+                              ])
+    def test_single_introns(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
+        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner.params.max_suspicious_intron_abs_len = 5
+        assigner.params.max_suspicious_intron_rel_len = 0.1
+        match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
+                                                                    isoform_junctions, isoform_region)
+        assert len(match_events) == 1
+        assert match_events[0].event_type == expected
+
+    @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
+                             [([(80, 100)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.intron_retention),
+                              ([(50, 60)], (0, 95), [(50, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.incomplete_intron_retention_right),
+                              ([(80, 100)], (40, 150), [(20, 60), (80, 100)], (9, 149), 2,
+                               MatchEventSubtype.incomplete_intron_retention_left),
+                              ])
+    def test_ir(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
+        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner.params.max_suspicious_intron_abs_len = 5
+        assigner.params.max_suspicious_intron_rel_len = 0.1
+        match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
+                                                                    isoform_junctions, isoform_region)
+        assert len(match_events) == 1
+        assert match_events[0].event_type == expected
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
-                             [([(1, 10), (15, 50)], (15, 50), [(1, 49)], (1, 49), 1)])
-    def test_exon_gain_novel(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
+                             [([(50, 60)], (0, 85), [(50, 60), (80, 100)], (9, 149), 2),
+                              ([(80, 100)], (57, 150), [(20, 60), (80, 100)], (9, 149), 2),
+                              ])
+    def test_no_ir(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
         assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner.params.max_suspicious_intron_abs_len = 5
+        assigner.params.max_suspicious_intron_rel_len = 0.1
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
-        assert len(match_events) == 1
-        assert match_events[0].event_type == MatchEventSubtype.exon_gain_novel
+        assert match_events[0].event_type == MatchEventSubtype.none
 
 
 class TestDetectContradictionType:

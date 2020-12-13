@@ -181,7 +181,6 @@ class JunctionComparator():
                 return None
 
         elif isoform_cregion[0] == self.absent:
-
             if self.are_known_introns(read_junctions, read_cregion):
                 return make_event(MatchEventSubtype.extra_intron_known, isoform_cregion[1], read_cregion)
             elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
@@ -286,7 +285,9 @@ class JunctionComparator():
                 if overlaps_at_least(preceding_read_exon, preceding_isoform_exon, min_overlap):
                     event = alternative_sites[("left", read_introns_known)]
 
-            if event == MatchEventSubtype.intron_alternation_novel and \
+            if event in {MatchEventSubtype.intron_alternation_novel,
+                         MatchEventSubtype.alt_left_site_novel,
+                         MatchEventSubtype.alt_right_site_novel} and \
                 self.are_suspicious_introns(read_region, read_junctions, (read_cpos, read_cpos)):
                 event = MatchEventSubtype.intron_retention
 
