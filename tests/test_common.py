@@ -40,7 +40,7 @@ class TestRanges:
         assert expected == overlaps_at_least(range1, range2, delta)
 
     @pytest.mark.parametrize("range1, range2, delta, expected",
-                             [((1, 25), (20, 25), 0, True), ((18, 40), (16, 41), 3, True), ((10, 25), (5, 30), 7, False)])
+                             [((1, 25), (20, 25), 0, True), ((18, 40), (16, 41), 3, True), ((10, 27), (5, 30), 4, False)])
     def test_contains_approx(self, range1, range2, delta, expected):
         assert expected == contains_approx(range1, range2, delta)
 

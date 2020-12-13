@@ -318,7 +318,8 @@ class JunctionComparator():
                     # full intron retention
                     events.append(make_event(MatchEventSubtype.unspliced_intron_retention, isoform_position=i,
                                              read_region=(JunctionComparator.absent, 0)))
-                elif overlaps_at_least(read_region, intron, self.params.minor_exon_extension):
+                elif overlaps_at_least(read_region, intron, self.params.minor_exon_extension) and \
+                        not contains(intron, read_region):
                     # partial IR
                     if intron[0] <= read_region[0]:
                         events.append(make_event(MatchEventSubtype.incomplete_intron_retention_left, isoform_position=i,

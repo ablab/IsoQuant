@@ -233,7 +233,7 @@ def extra_exon_percentage(isoform_region, read_exons):
         total_read_len += e[1] - e[0] + 1
         if e[0] < isoform_region[0]:
             outside_read_len += min(e[1], isoform_region[0] - 1) - e[0] + 1
-        elif e[1] > isoform_region[1]:
+        if e[1] > isoform_region[1]:
             outside_read_len += e[1] - max(e[0], isoform_region[1] + 1) + 1
 
     return float(outside_read_len) / float(total_read_len)
