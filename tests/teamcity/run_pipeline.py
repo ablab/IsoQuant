@@ -8,7 +8,6 @@
 
 import os
 import sys
-from _cython_0_28_1 import coroutine_wrapper
 from traceback import print_exc
 import subprocess
 
@@ -76,11 +75,11 @@ def load_tsv_config(config_file):
         if l.startswith("#"):
             continue
 
-        tokens = l.strip().split()
+        tokens = l.strip().split('\t')
         if len(tokens) < 2:
             continue
 
-        config_file[tokens[0]] = tokens[1]
+        config_dict[tokens[0]] = tokens[1]
     return config_dict
 
 
@@ -135,10 +134,11 @@ def main(args):
         bam = os.path.join(output_folder, "%s/%s.bam" % (label, label))
 
     if "isoquant_options" in config_dict:
-        isoquant_command_list.append(config_dict["isoquant_options"])
+        isoquant_command_list.append(config_dict["isoquant_options"].replace('"', ''))
 
+    log.log("IsoQuant command line: " + " ".join(isoquant_command_list))
     result = subprocess.run(isoquant_command_list)
-    assert result == 0
+    assert result.returncode == 0
     output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
     log.end_block('isoquant')
 
@@ -147,8 +147,10 @@ def main(args):
     qa_command_list = ["python", os.path.join(isoquant_dir, "src/assess_assignment_quality.py"),
                        "-o", quality_report, "--gene_db", genedb, "--tsv", output_tsv,
                        "--mapping", bam, "--fasta", reads]
+
+    log.log("QA command line: " + " ".join(qa_command_list))
     result = subprocess.run(qa_command_list)
-    assert result == 0
+    assert result.returncode == 0
     log.end_block('quality')
 
     if "etalon" not in config_dict:

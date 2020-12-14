@@ -18,7 +18,7 @@ from enum import Enum
 import matplotlib.pyplot as plt
 from matplotlib_venn import venn2
 
-from src.common import overlaps
+from common import overlaps
 
 id_pattern = re.compile("[A-Z]+\.?(\d+\.\d+)")
 
@@ -139,9 +139,13 @@ class StatCounter:
         return sum(val == read_type for val in self.seq_assignments.values())
 
     def calc_precision(self, tp, fp):
+        if tp + fp == 0.0:
+            return 0.0
         return tp * 100.0 / (tp + fp)
 
     def calc_recall(self, tp, fn):
+        if tp + fn == 0.0:
+            return 0.0
         return tp * 100.0 / (tp + fn)
 
     def print_stats(self, tp, fp, fn, stream, name=""):
