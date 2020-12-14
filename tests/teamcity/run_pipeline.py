@@ -125,7 +125,7 @@ def main(args):
         bam = fix_path(config_file, config_dict["bam"])
         isoquant_command_list.append(bam)
         if "genome" in config_dict:
-            isoquant_command_list.append("--r")
+            isoquant_command_list.append("-r")
             isoquant_command_list.append(fix_path(config_file, config_dict["genome"]))
     else:
         if "genome" not in config_dict:
@@ -133,7 +133,7 @@ def main(args):
             return -10
         isoquant_command_list.append("--fastq")
         isoquant_command_list.append(reads)
-        isoquant_command_list.append("--r")
+        isoquant_command_list.append("-r")
         isoquant_command_list.append(fix_path(config_file, config_dict["genome"]))
         bam = os.path.join(output_folder, "%s/%s.bam" % (label, label))
 
