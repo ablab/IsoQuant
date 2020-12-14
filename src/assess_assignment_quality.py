@@ -30,6 +30,9 @@ class ReadType(Enum):
     NOT_ASSIGNED = 4
 
 
+def correct_isoform(isoform_id):
+    return isoform_id.split('.')[0]
+
 class MappingData:
     def __init__(self, args):
         self.seq_set = set()
@@ -66,7 +69,7 @@ class MappingData:
                     continue
                 isoform_id = tokens[1]
                 if isoform_id.startswith("E"):
-                    self.seqid_to_isoform[seq_id] = isoform_id
+                    self.seqid_to_isoform[seq_id] = correct_isoform(isoform_id)
                 else:
                     print("Unexpectred isoform id %s" % isoform_id)
             self.seq_set.add(seq_id)
@@ -99,9 +102,9 @@ class AssignmentData:
                 tokens = l.strip().split()
                 seq_id = tokens[0] if is_real_data else id_pattern.search(tokens[0]).group(1)
                 if len(tokens) > 10:  ## SQANTI2
-                    self.assigned_isoforms[seq_id] = tokens[7]
+                    self.assigned_isoforms[seq_id] = correct_isoform(tokens[7])
                 else:
-                    self.assigned_isoforms[seq_id] = tokens[1]
+                    self.assigned_isoforms[seq_id] = correct_isoform(tokens[1])
 
 
 class StatCounter:
@@ -116,7 +119,12 @@ class StatCounter:
     def count_mapping_stats(self, db):
         for seq_id in self.mapping_data.seq_set:
             if seq_id in self.mapping_data.mapped_seqs:
-                gene_name = db.isoform_to_gene_map[self.mapping_data.seqid_to_isoform[seq_id]]
+                isoform_id = self.mapping_data.seqid_to_isoform[seq_id]
+                if isoform_id not in db.isoform_to_gene_map:
+                    self.mismapped_seqs.add(seq_id)
+                    continue
+
+                gene_name = db.isoform_to_gene_map[isoform_id]
                 if overlaps(self.mapping_data.mapped_seqs[seq_id], db.get_gene_coords(gene_name)):
                     self.correct_seqs.add(seq_id)
                 else:
@@ -187,8 +195,8 @@ class DbHandler:
             self.gene_to_isoforms_map[gene_name] = set()
             gene_db = self.db[gene_name]
             for t in self.db.children(gene_db, featuretype='transcript'):
-                self.isoform_to_gene_map[t.id] = gene_name
-                self.gene_to_isoforms_map[gene_name].add(t.id)
+                self.isoform_to_gene_map[correct_isoform(t.id)] = gene_name
+                self.gene_to_isoforms_map[gene_name].add(correct_isoform(t.id))
 
     def get_gene_by_isoform(self, t_id):
         return self.isoform_to_gene_map[t_id]
