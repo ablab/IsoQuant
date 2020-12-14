@@ -23,10 +23,6 @@ from src.common import overlaps
 id_pattern = re.compile("[A-Z]+\.?(\d+\.\d+)")
 
 
-# == range operations ==
-def overlaps(range1, range2):
-    return not (range1[1] < range2[0] or range1[0] > range2[1])
-
 class ReadType(Enum):
     CORRECT = 1
     INCORRECT_SAME_GENE = 2
@@ -148,10 +144,10 @@ class StatCounter:
     def calc_recall(self, tp, fn):
         return tp * 100.0 / (tp + fn)
 
-    def print_stats(self, tp, fp, fn):
-        print("Correct %d, incorrect %d, unmapped/unassigned %d" % (tp, fp, fn))
+    def print_stats(self, tp, fp, fn, stream, name=""):
+        stream.write("correct\t%d\nincorrect\t%d\nunmapped/unassigned\t%d\n" % (tp, fp, fn))
         precision, recall = self.calc_precision(tp, fp), self.calc_recall(tp, fn)
-        print("Precision: %d, recall %d" % (precision, recall))
+        stream.write("%sprecision\t%d\n%srecall\t%d\n" % (name, precision, name, recall))
 
 
 class DbHandler:
@@ -225,6 +221,7 @@ def compare_real_results(data_a, data_b):
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--output", "-o", type=str, help="Output file name")
     parser.add_argument("--fasta", "-f", type=str, help="initial file with sequences")
     parser.add_argument("--mapping", "-m", type=str, help="mapped sequences (SAM or BAM format)") ## SQANTI2 output
     parser.add_argument("--tsv", "-t", type=str, nargs='+', help="assigned isoforms, max number of files to compare: 2")
@@ -244,6 +241,8 @@ def main():
     db = DbHandler(args.gene_db)
     mapping_data = MappingData(args)
     all_stats = []
+    output_file = sys.stdout if not args.output else open(args.output, "w")
+
     for tsv_file in args.tsv:
         #TODO: diff bams
         print()
@@ -260,24 +259,24 @@ def main():
         correctly_mapped = len(stat_counter.correct_seqs)
         mismapped_reads = len(stat_counter.mismapped_seqs)
         unmapped_reads = total_reads - (correctly_mapped + mismapped_reads)
-        print("****MAPPING STATS****")
-        stat_counter.print_stats(correctly_mapped, mismapped_reads, unmapped_reads)
+        output_file.write("# MAPPING STATS \n")
+        stat_counter.print_stats(correctly_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
 
         # use only correctly mapped reads
         stat_counter.count_assignment_stats(db)
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
-        print("****ASSIGNMENT STATS****")
-        stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads)
+        print("# ASSIGNMENT STATS")
+        stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="assignment_")
 
         # use all reads
         stat_counter.count_assignment_stats(db, use_mismapped=True)
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
-        print("****ASSIGNMENT STATS (INCLUDING MISMAPPED READS)****")
-        stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads)
+        print("# ASSIGNMENT STATS (INCLUDING MISMAPPED READS) ")
+        stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="overall_")
         all_stats.append((stat_counter, prefix))
 
     if len(all_stats) == 2:
@@ -285,6 +284,9 @@ def main():
             compare_real_results(all_stats[0], all_stats[1])
         else:
             compare_stats(all_stats[0], all_stats[1])
+
+    if args.output:
+        output_file.close()
 
 
 if __name__ == "__main__":
