@@ -48,8 +48,15 @@ class MappingData:
                 seq_id = record.id
             else:
                 seq_id = re.search(id_pattern, record.description).group(1)
-                isoform_id = record.description.replace('_', ' ').split()[-1]
-                self.seqid_to_isoform[seq_id] = isoform_id
+                tokens = record.description.split('_', 2)
+                if len(tokens) < 2:
+                    print("Malformed read id %s" % seq_id)
+                    continue
+                isoform_id = tokens[1]
+                if isoform_id.startswith("E"):
+                    self.seqid_to_isoform[seq_id] = isoform_id
+                else:
+                    print("Unexpectred isoform id %s" % isoform_id)
             self.seq_set.add(seq_id)
 
     def parse_bam(self, bam_file):
@@ -249,7 +256,6 @@ def main():
 
     for tsv_file in args.tsv:
         #TODO: diff bams
-        print()
         print("Calculating stats for %s" % tsv_file)
         assignment_data = AssignmentData(tsv_file, args.real_data)
         prefix = os.path.splitext(os.path.basename(tsv_file))[0]
@@ -271,7 +277,7 @@ def main():
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
-        print("# ASSIGNMENT STATS")
+        output_file.write("# ASSIGNMENT STATS")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="assignment_")
 
         # use all reads
@@ -279,7 +285,7 @@ def main():
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
-        print("# ASSIGNMENT STATS (INCLUDING MISMAPPED READS) ")
+        output_file.write("# ASSIGNMENT STATS (INCLUDING MISMAPPED READS) ")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="overall_")
         all_stats.append((stat_counter, prefix))
 
@@ -290,6 +296,7 @@ def main():
             compare_stats(all_stats[0], all_stats[1])
 
     if args.output:
+        print("Quality report saved to " + args.output)
         output_file.close()
 
 
