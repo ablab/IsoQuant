@@ -42,7 +42,19 @@ class MappingData:
             self.parse_bam(args.mapping)
 
     def parse_fasta(self, fasta, is_real_data):
-        for record in SeqIO.parse(fasta, "fasta"):
+        basename_plus_inner_ext, outer_ext = os.path.splitext(fasta.lower())
+        if outer_ext not in ['.zip', '.gz', '.gzip', '.bz2', '.bzip2']:
+            basename_plus_inner_ext, outer_ext = fasta, ''  # not a supported archive
+        basename, fasta_ext = os.path.splitext(basename_plus_inner_ext)
+        if fasta_ext in {'.fastq', '.fq'}:
+            data_type = 'fastq'
+        elif fasta_ext in {'.fasta', '.fa', '.fna'}:
+            data_type = 'fasta'
+        else:
+            print("Unsupported extension: %s" % fasta_ext)
+            return
+
+        for record in SeqIO.parse(fasta, data_type):
             if is_real_data:
                 #TODO: check SQANTI seq names
                 seq_id = record.id
