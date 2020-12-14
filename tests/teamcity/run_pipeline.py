@@ -107,11 +107,10 @@ def main(args):
 
     log.log("Loading config from %s" % config_file)
     config_dict = load_tsv_config(config_file)
-    assert "genedb" in config_dict
-    assert "reads" in config_dict
-    assert "datatype" in config_dict
-    assert "output" in config_dict
-    assert "name" in config_dict
+    for k in ["genedb", "reads", "datatype", "output", "name"]:
+        if k not in config_dict:
+            log.err(k + "is not set in the config")
+            return -10
 
     label = config_dict["name"]
     output_folder = os.path.join(config_dict["output"], label)
@@ -125,8 +124,13 @@ def main(args):
         isoquant_command_list.append("--bam")
         bam = fix_path(config_file, config_dict["bam"])
         isoquant_command_list.append(bam)
+        if "genome" in config_dict:
+            isoquant_command_list.append("--r")
+            isoquant_command_list.append(fix_path(config_file, config_dict["genome"]))
     else:
-        assert "genome" in config_dict
+        if "genome" not in config_dict:
+            log.err("genome is not set in the config")
+            return -10
         isoquant_command_list.append("--fastq")
         isoquant_command_list.append(reads)
         isoquant_command_list.append("--r")
@@ -138,7 +142,10 @@ def main(args):
 
     log.log("IsoQuant command line: " + " ".join(isoquant_command_list))
     result = subprocess.run(isoquant_command_list)
-    assert result.returncode == 0
+    if result.returncode != 0:
+        log.err("IsoQuant exited with non-zero status: %d" % result.returncode)
+        return -11
+
     output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
     log.end_block('isoquant')
 
@@ -150,7 +157,9 @@ def main(args):
 
     log.log("QA command line: " + " ".join(qa_command_list))
     result = subprocess.run(qa_command_list)
-    assert result.returncode == 0
+    if result.returncode != 0:
+        log.err("QA exited with non-zero status: %d" % result.returncode)
+        return -13
     log.end_block('quality')
 
     if "etalon" not in config_dict:
@@ -159,13 +168,28 @@ def main(args):
     log.start_block('assessment', 'Checking quality metrics')
     etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
     quality_report_dict = load_tsv_config(quality_report)
+    exit_code = 0
     for k, v in etalon_qaulity_dict.items():
-        assert k in quality_report_dict
+        if k not in quality_report_dict:
+            log.err("Metric %s was not found in the report" % k)
+            exit_code = -22
+            continue
         lower_bound = float(v) * 0.99
         upper_bound = float(v) * 1.01
-        assert lower_bound <= float(quality_report_dict[k]) <= upper_bound
-
+        value = float(quality_report_dict[k])
+        if value < lower_bound:
+            log.err("Value of %s = %2.2f is lower than the expected value %2.2f" % (k, value, lower_bound))
+            exit_code = -20
+        else:
+            log.log("Value of %s = %2.2f >= %2.2f as expected" % (k, value, lower_bound))
+        if value > upper_bound:
+            log.err("Value of %s = %2.2f is higher than the expected value %2.2f" % (k, value, upper_bound))
+            exit_code = -21
+        else:
+            log.log("Value of %s = %2.2f <= %2.2f as expected" % (k, value, upper_bound))
     log.end_block('assessment')
+
+    return exit_code
 
 
 if __name__ == "__main__":
