@@ -195,7 +195,9 @@ def main(args):
 if __name__ == "__main__":
     # stuff only to run when not called via 'import' here
     try:
-        main(sys.argv[1:])
+        ecode = main(sys.argv[1:])
+        if ecode != 0:
+            sys.exit(ecode)
     except SystemExit:
         raise
     except:
