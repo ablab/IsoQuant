@@ -1,6 +1,11 @@
-![TeamCity Simple Build Status](http://chihua.cab.spbu.ru:3000/app/rest/builds/buildType:(id:IsoQuant_SimpleTest)/statusIcon)
-![Python version](https://img.shields.io/badge/python-3.7-blue)
-![License](https://img.shields.io/badge/licence-GPLv2-blue)
+[![BioConda Install](https://img.shields.io/conda/dn/bioconda/isoquant.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/isoquant)
+[![TeamCity Simple Build Status](http://chihua.cab.spbu.ru:3000/app/rest/builds/buildType:(id:IsoQuant_SimpleTest)/statusIcon)](http://chihua.cab.spbu.ru:3000/project/IsoQuant?mode=builds)
+[![Python version](https://img.shields.io/badge/python-3.7-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
+[![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
+
+
 # IsoQuant 1.1 manual
 
 1. [About IsoQuant](#sec1) </br>
