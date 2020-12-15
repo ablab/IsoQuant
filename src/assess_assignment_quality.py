@@ -100,8 +100,8 @@ class AssignmentData:
 
     def __init__(self, tsv_file, is_real_data, assignment_types = UNIQUE_ASSIGNMENTS_TYPES):
         self.assigned_isoforms = defaultdict(str)
-        self.parse_tsv(tsv_file, is_real_data)
         self.assignment_types = assignment_types
+        self.parse_tsv(tsv_file, is_real_data)
 
     def parse_tsv(self, tsv_file, is_real_data):
         print("Reading assignments from %s" % tsv_file)
