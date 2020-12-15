@@ -151,13 +151,14 @@ class StatCounter:
                     self.seq_assignments[seq_id] = ReadType.NOT_ASSIGNED
                     u_f.write(seq_id + "\n")
                 else:
-                    gene_name = db.isoform_to_gene_map[real_isoform_id]
-                    if assigned_isoform_id in db.gene_to_isoforms_map[gene_name]:
-                        self.seq_assignments[seq_id] = ReadType.INCORRECT_SAME_GENE
-                        w_f.write(seq_id + "\n")
-                    else:
+                    if real_isoform_id not in db.isoform_to_gene_map or \
+                            assigned_isoform_id not in db.gene_to_isoforms_map[db.isoform_to_gene_map[real_isoform_id]]:
                         self.seq_assignments[seq_id] = ReadType.INCORRECT_OTHER_GENE
                         w_f.write(seq_id + "\n")
+                    else:
+                        self.seq_assignments[seq_id] = ReadType.INCORRECT_SAME_GENE
+                        w_f.write(seq_id + "\n")
+
             else:
                 self.seq_assignments[seq_id] = ReadType.NOT_ASSIGNED
                 u_f.write(seq_id + "\n")
@@ -178,7 +179,7 @@ class StatCounter:
     def print_stats(self, tp, fp, fn, stream, name=""):
         stream.write("correct\t%d\nincorrect\t%d\nunmapped/unassigned\t%d\n" % (tp, fp, fn))
         precision, recall = self.calc_precision(tp, fp), self.calc_recall(tp, fn)
-        stream.write("%sprecision\t%d\n%srecall\t%d\n" % (name, precision, name, recall))
+        stream.write("%sprecision\t%2.4f\n%srecall\t%2.4f\n" % (name, precision, name, recall))
 
 
 class DbHandler:
@@ -289,7 +290,7 @@ def main():
         correctly_mapped = len(stat_counter.correct_seqs)
         mismapped_reads = len(stat_counter.mismapped_seqs)
         unmapped_reads = total_reads - (correctly_mapped + mismapped_reads)
-        output_file.write("# MAPPING STATS \n")
+        output_file.write("# MAPPING STATS\n")
         stat_counter.print_stats(correctly_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
 
         # use only correctly mapped reads
@@ -297,7 +298,7 @@ def main():
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
-        output_file.write("# ASSIGNMENT STATS")
+        output_file.write("# ASSIGNMENT STATS\n")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="assignment_")
 
         # use all reads
@@ -305,7 +306,7 @@ def main():
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
-        output_file.write("# ASSIGNMENT STATS (INCLUDING MISMAPPED READS) ")
+        output_file.write("# ASSIGNMENT STATS (INCLUDING MISMAPPED READS)\n")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="overall_")
         all_stats.append((stat_counter, prefix))
 
