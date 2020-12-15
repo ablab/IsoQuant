@@ -103,7 +103,7 @@ class AssignmentData:
                 seq_id = tokens[0] if is_real_data else id_pattern.search(tokens[0]).group(1)
                 if len(tokens) > 10:  ## SQANTI2
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[7])
-                else:
+                elif "unique" in l:
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[1])
 
 
