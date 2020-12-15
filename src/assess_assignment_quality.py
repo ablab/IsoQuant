@@ -45,6 +45,7 @@ class MappingData:
             self.parse_bam(args.mapping)
 
     def parse_fasta(self, fasta, is_real_data):
+        print("Loading reads from %s" % fasta)
         basename_plus_inner_ext, outer_ext = os.path.splitext(fasta.lower())
         if outer_ext not in ['.zip', '.gz', '.gzip', '.bz2', '.bzip2']:
             basename_plus_inner_ext, outer_ext = fasta, ''  # not a supported archive
@@ -62,8 +63,8 @@ class MappingData:
                 #TODO: check SQANTI seq names
                 seq_id = record.id
             else:
-                seq_id = re.search(id_pattern, record.description).group(1)
-                tokens = record.description.split('_', 2)
+                tokens = record.id.split('_', 2)
+                seq_id = record.id[1:]
                 if len(tokens) < 2:
                     print("Malformed read id %s" % seq_id)
                     continue
@@ -73,20 +74,23 @@ class MappingData:
                 else:
                     print("Unexpectred isoform id %s" % isoform_id)
             self.seq_set.add(seq_id)
+        print("Total %d sequences loaded" % len(self.seq_set))
 
     def parse_bam(self, bam_file):
+        print("Loading alignments from %s" % bam_file)
         alignment_file_in = pysam.AlignmentFile(bam_file, "rb")
-        for alignment in alignment_file_in:
+        for alignment in alignment_file_in.fetch():
             if alignment.reference_id == -1:
                 continue
-            blocks = sorted(alignment.get_blocks())
-            if len(blocks) == 0:
+            read_coords = (alignment.reference_start, alignment.reference_end)
+            if not read_coords[1]:
                 continue
-            seq_id = id_pattern.search(alignment.query_name).group(1)
+            seq_id = alignment.query_name
             if alignment.is_secondary or alignment.is_supplementary:
-                self.secondary_mapped_seqs[seq_id] = (blocks[0][0], blocks[-1][1])
+                self.secondary_mapped_seqs[seq_id] = read_coords
             else:
-                self.mapped_seqs[seq_id] = (blocks[0][0], blocks[-1][1])
+                self.mapped_seqs[seq_id] = read_coords
+        print("Total alignments loaded: %d" % len(self.mapped_seqs))
 
 
 class AssignmentData:
@@ -100,16 +104,18 @@ class AssignmentData:
         self.assignment_types = assignment_types
 
     def parse_tsv(self, tsv_file, is_real_data):
+        print("Reading assignments from %s" % tsv_file)
         with open(tsv_file) as f:
             for i,l in enumerate(f):
                 if i == 0:
                     continue
                 tokens = l.strip().split()
-                seq_id = tokens[0] if is_real_data else id_pattern.search(tokens[0]).group(1)
+                seq_id = tokens[0] # if is_real_data else id_pattern.search(tokens[0]).group(1)
                 if len(tokens) > 10:  ## SQANTI2
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[7])
                 elif tokens[2] in self.assignment_types:
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[1])
+        print("Total assignments loaded: %d" % len(self.assigned_isoforms))
 
 
 class StatCounter:
@@ -196,6 +202,7 @@ class DbHandler:
         self.parse_db()
 
     def parse_db(self):
+        print("Loading gene database")
         for g in self.db.features_of_type('gene'):
             gene_name = g.id
             self.gene_to_isoforms_map[gene_name] = set()
@@ -203,6 +210,7 @@ class DbHandler:
             for t in self.db.children(gene_db, featuretype='transcript'):
                 self.isoform_to_gene_map[correct_isoform(t.id)] = gene_name
                 self.gene_to_isoforms_map[gene_name].add(correct_isoform(t.id))
+        print("Gene database loaded: %d genes, %d transcripts" % (len(self.gene_to_isoforms_map), len(self.isoform_to_gene_map)))
 
     def get_gene_by_isoform(self, t_id):
         return self.isoform_to_gene_map[t_id]
@@ -291,24 +299,28 @@ def main():
         if args.real_data:
             all_stats.append((stat_counter, prefix))
             continue
+        print("   Counting mapping stats...")
         stat_counter.count_mapping_stats(db)
-
         total_reads = len(stat_counter.mapping_data.seq_set)
         correctly_mapped = len(stat_counter.correct_seqs)
         mismapped_reads = len(stat_counter.mismapped_seqs)
         unmapped_reads = total_reads - (correctly_mapped + mismapped_reads)
         output_file.write("# MAPPING STATS\n")
         stat_counter.print_stats(correctly_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
+        print("   Done")
 
         # use only correctly mapped reads
+        print("   Counting pure assignment stats...")
         stat_counter.count_assignment_stats(db)
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
         output_file.write("# ASSIGNMENT STATS\n")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="assignment_")
+        print("   Done")
 
         # use all reads
+        print("   Counting overall assignment stats...")
         stat_counter.count_assignment_stats(db, use_mismapped=True)
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
@@ -316,6 +328,7 @@ def main():
         output_file.write("# ASSIGNMENT STATS (INCLUDING MISMAPPED READS)\n")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="overall_")
         all_stats.append((stat_counter, prefix))
+        print("   Done")
 
     if len(all_stats) == 2:
         if args.real_data:
