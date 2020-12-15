@@ -90,9 +90,14 @@ class MappingData:
 
 
 class AssignmentData:
-    def __init__(self, tsv_file, is_real_data):
+    UNIQUE_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference"}
+    AMB_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous"}
+    ALL_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous", "inconsistent"}
+
+    def __init__(self, tsv_file, is_real_data, assignment_types = UNIQUE_ASSIGNMENTS_TYPES):
         self.assigned_isoforms = defaultdict(str)
         self.parse_tsv(tsv_file, is_real_data)
+        self.assignment_types = assignment_types
 
     def parse_tsv(self, tsv_file, is_real_data):
         with open(tsv_file) as f:
@@ -103,7 +108,7 @@ class AssignmentData:
                 seq_id = tokens[0] if is_real_data else id_pattern.search(tokens[0]).group(1)
                 if len(tokens) > 10:  ## SQANTI2
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[7])
-                elif "unique" in l:
+                elif tokens[2] in self.assignment_types:
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[1])
 
 
@@ -260,6 +265,8 @@ def parse_args():
     parser.add_argument("--gene_db", "-g", type=str, help="gene database")
     parser.add_argument("--real_data", default=False, action="store_true",
                         help="real data is used (correct isoforms for each read are not provided)")
+    parser.add_argument('--additional_stats', action='store_true', default=False,
+                        help="count additional stats including ambiguous/inconsistent reads")
 
     args = parser.parse_args()
     if len(args.tsv) > 2:
