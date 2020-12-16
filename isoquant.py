@@ -168,6 +168,7 @@ class TestMode(argparse.Action):
             logger.info(' === TEST PASSED CORRECTLY === ')
         else:
             logger.error(' === TEST FAILED ===')
+            exit(-1)
         parser.exit()
 
     @staticmethod
