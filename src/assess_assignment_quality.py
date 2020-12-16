@@ -197,6 +197,7 @@ class DbHandler:
         self.db = gffutils.FeatureDB(gene_db, keep_order=True)
         self.isoform_to_gene_map = {}
         self.gene_to_isoforms_map = {}
+        self.gene_coords = {}
 
         self.parse_db()
 
@@ -204,6 +205,7 @@ class DbHandler:
         print("Loading gene database")
         for g in self.db.features_of_type('gene'):
             gene_name = g.id
+            self.gene_coords[gene_name] = (self.db[gene_name].start, self.db[gene_name].end)
             self.gene_to_isoforms_map[gene_name] = set()
             gene_db = self.db[gene_name]
             for t in self.db.children(gene_db, featuretype='transcript'):
@@ -218,7 +220,7 @@ class DbHandler:
         return self.gene_to_isoforms_map[gene_name]
 
     def get_gene_coords(self, gene_name):
-        return self.db[gene_name].start, self.db[gene_name].end
+        return self.gene_coords[gene_name]
 
 
 def compare_stats(data_a, data_b):
