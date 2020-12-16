@@ -128,18 +128,17 @@ class StatCounter:
         self.seq_assignments = defaultdict()
 
     def count_mapping_stats(self, db):
-        for seq_id in self.mapping_data.seq_set:
-            if seq_id in self.mapping_data.mapped_seqs:
-                isoform_id = self.mapping_data.seqid_to_isoform[seq_id]
-                if isoform_id not in db.isoform_to_gene_map:
-                    self.mismapped_seqs.add(seq_id)
-                    continue
+        for seq_id in self.mapping_data.mapped_seqs:
+            isoform_id = self.mapping_data.seqid_to_isoform[seq_id]
+            if isoform_id not in db.isoform_to_gene_map:
+                self.mismapped_seqs.add(seq_id)
+                continue
 
-                gene_name = db.isoform_to_gene_map[isoform_id]
-                if overlaps(self.mapping_data.mapped_seqs[seq_id], db.get_gene_coords(gene_name)):
-                    self.correct_seqs.add(seq_id)
-                else:
-                    self.mismapped_seqs.add(seq_id)
+            gene_name = db.isoform_to_gene_map[isoform_id]
+            if overlaps(self.mapping_data.mapped_seqs[seq_id], db.get_gene_coords(gene_name)):
+                self.correct_seqs.add(seq_id)
+            else:
+                self.mismapped_seqs.add(seq_id)
 
     def count_assignment_stats(self, db, use_mismapped=False):
         self.seq_assignments = defaultdict()
@@ -289,6 +288,7 @@ def main():
     mapping_data = MappingData(args)
     all_stats = []
     output_file = sys.stdout if not args.output else open(args.output, "w")
+    sys.stdout.flush()
 
     for tsv_file in args.tsv:
         #TODO: diff bams
@@ -299,6 +299,8 @@ def main():
         if args.real_data:
             all_stats.append((stat_counter, prefix))
             continue
+        sys.stdout.flush()
+
         print("   Counting mapping stats...")
         stat_counter.count_mapping_stats(db)
         total_reads = len(stat_counter.mapping_data.seq_set)
@@ -308,6 +310,7 @@ def main():
         output_file.write("# MAPPING STATS\n")
         stat_counter.print_stats(correctly_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
         print("   Done")
+        sys.stdout.flush()
 
         # use only correctly mapped reads
         print("   Counting pure assignment stats...")
@@ -318,6 +321,7 @@ def main():
         output_file.write("# ASSIGNMENT STATS\n")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="assignment_")
         print("   Done")
+        sys.stdout.flush()
 
         # use all reads
         print("   Counting overall assignment stats...")
@@ -329,6 +333,7 @@ def main():
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="overall_")
         all_stats.append((stat_counter, prefix))
         print("   Done")
+        sys.stdout.flush()
 
     if len(all_stats) == 2:
         if args.real_data:
