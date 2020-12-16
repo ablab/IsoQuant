@@ -64,7 +64,7 @@ class MappingData:
                 seq_id = record.id
             else:
                 tokens = record.id.split('_', 2)
-                seq_id = record.id[1:]
+                seq_id = record.id
                 if len(tokens) < 2:
                     print("Malformed read id %s" % seq_id)
                     continue
