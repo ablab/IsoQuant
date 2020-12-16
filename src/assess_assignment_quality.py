@@ -17,10 +17,23 @@ import gffutils
 from enum import Enum
 import matplotlib.pyplot as plt
 from matplotlib_venn import venn2
+import logging
 
 from common import overlaps
 
+logger = logging.getLogger('IsoQuantQA')
+
 id_pattern = re.compile("[A-Z]+\.?(\d+\.\d+)")
+
+
+def set_logger(logger_instance):
+    logger_instance.setLevel(logging.INFO)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger_instance.addHandler(ch)
 
 
 class ReadType(Enum):
@@ -45,7 +58,7 @@ class MappingData:
             self.parse_bam(args.mapping)
 
     def parse_fasta(self, fasta, is_real_data):
-        print("Loading reads from %s" % fasta)
+        logger.info("Loading reads from %s" % fasta)
         basename_plus_inner_ext, outer_ext = os.path.splitext(fasta.lower())
         if outer_ext not in ['.zip', '.gz', '.gzip', '.bz2', '.bzip2']:
             basename_plus_inner_ext, outer_ext = fasta, ''  # not a supported archive
@@ -55,7 +68,7 @@ class MappingData:
         elif fasta_ext in {'.fasta', '.fa', '.fna'}:
             data_type = 'fasta'
         else:
-            print("Unsupported extension: %s" % fasta_ext)
+            logger.error("Unsupported extension: %s" % fasta_ext)
             return
 
         for record in SeqIO.parse(fasta, data_type):
@@ -66,18 +79,18 @@ class MappingData:
                 tokens = record.id.split('_', 2)
                 seq_id = record.id
                 if len(tokens) < 2:
-                    print("Malformed read id %s" % seq_id)
+                    logger.warning("Malformed read id %s" % seq_id)
                     continue
                 isoform_id = tokens[1]
                 if isoform_id.startswith("E"):
                     self.seqid_to_isoform[seq_id] = correct_isoform(isoform_id)
                 else:
-                    print("Unexpectred isoform id %s" % isoform_id)
+                    logger.warning("Unexpectred isoform id %s" % isoform_id)
             self.seq_set.add(seq_id)
-        print("Total %d sequences loaded" % len(self.seq_set))
+        logger.info("Total %d sequences loaded" % len(self.seq_set))
 
     def parse_bam(self, bam_file):
-        print("Loading alignments from %s" % bam_file)
+        logger.info("Loading alignments from %s" % bam_file)
         alignment_file_in = pysam.AlignmentFile(bam_file, "rb")
         for alignment in alignment_file_in.fetch():
             if alignment.reference_id == -1:
@@ -90,7 +103,7 @@ class MappingData:
                 self.secondary_mapped_seqs[seq_id] = read_coords
             else:
                 self.mapped_seqs[seq_id] = read_coords
-        print("Total alignments loaded: %d" % len(self.mapped_seqs))
+        logger.info("Total alignments loaded: %d" % len(self.mapped_seqs))
 
 
 class AssignmentData:
@@ -104,7 +117,7 @@ class AssignmentData:
         self.parse_tsv(tsv_file, is_real_data)
 
     def parse_tsv(self, tsv_file, is_real_data):
-        print("Reading assignments from %s" % tsv_file)
+        logger.info("Reading assignments from %s" % tsv_file)
         with open(tsv_file) as f:
             for i,l in enumerate(f):
                 if i == 0:
@@ -115,7 +128,7 @@ class AssignmentData:
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[7])
                 elif tokens[2] in self.assignment_types:
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[1])
-        print("Total assignments loaded: %d" % len(self.assigned_isoforms))
+        logger.info("Total assignments loaded: %d" % len(self.assigned_isoforms))
 
 
 class StatCounter:
@@ -202,7 +215,7 @@ class DbHandler:
         self.parse_db()
 
     def parse_db(self):
-        print("Loading gene database")
+        logger.info("Loading gene database")
         for g in self.db.features_of_type('gene'):
             gene_name = g.id
             self.gene_coords[gene_name] = (self.db[gene_name].start, self.db[gene_name].end)
@@ -211,7 +224,7 @@ class DbHandler:
             for t in self.db.children(gene_db, featuretype='transcript'):
                 self.isoform_to_gene_map[correct_isoform(t.id)] = gene_name
                 self.gene_to_isoforms_map[gene_name].add(correct_isoform(t.id))
-        print("Gene database loaded: %d genes, %d transcripts" % (len(self.gene_to_isoforms_map), len(self.isoform_to_gene_map)))
+        logger.info("Gene database loaded: %d genes, %d transcripts" % (len(self.gene_to_isoforms_map), len(self.isoform_to_gene_map)))
 
     def get_gene_by_isoform(self, t_id):
         return self.isoform_to_gene_map[t_id]
@@ -239,8 +252,8 @@ def compare_stats(data_a, data_b):
 
     venn2(subsets=(a, b, ab), set_labels=(label_a, label_b))
     plt.savefig("venn.png")
-    print("%d correct reads by both methods, %d in %s only and %d in %s only" % (ab, a, label_a, b, label_b))
-    print("Venn diagram saved to venn.png")
+    logger.info("%d correct reads by both methods, %d in %s only and %d in %s only" % (ab, a, label_a, b, label_b))
+    logger.info("Venn diagram saved to venn.png")
     return
 
 
@@ -261,9 +274,9 @@ def compare_real_results(data_a, data_b):
             b += 1
         else:
             not_ab += 1
-    print('Common assignments: %d, different assignments: %d, '
-          'only %s assignments: %d, only %s assignments: %d, both not assigned: %d' %
-          (ab, diff_ab, label_a, a, label_b, b, not_ab))
+    logger.info('Common assignments: %d, different assignments: %d, '
+                'only %s assignments: %d, only %s assignments: %d, both not assigned: %d' %
+                (ab, diff_ab, label_a, a, label_b, b, not_ab))
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -279,12 +292,13 @@ def parse_args():
 
     args = parser.parse_args()
     if len(args.tsv) > 2:
-        print("ERROR! Maximum number of files to compare: 2")
+        logger.error("ERROR! Maximum number of files to compare: 2")
         exit(-1)
     return args
 
 
 def main():
+    set_logger(logger)
     args = parse_args()
     db = DbHandler(args.gene_db)
     mapping_data = MappingData(args)
@@ -294,7 +308,7 @@ def main():
 
     for tsv_file in args.tsv:
         #TODO: diff bams
-        print("Calculating stats for %s" % tsv_file)
+        logger.info("Calculating stats for %s" % tsv_file)
         assignment_data = AssignmentData(tsv_file, args.real_data)
         prefix = os.path.splitext(os.path.basename(tsv_file))[0]
         stat_counter = StatCounter(prefix, mapping_data, assignment_data)
@@ -303,7 +317,7 @@ def main():
             continue
         sys.stdout.flush()
 
-        print("   Counting mapping stats...")
+        logger.info("   Counting mapping stats...")
         stat_counter.count_mapping_stats(db)
         total_reads = len(stat_counter.mapping_data.seq_set)
         correctly_mapped = len(stat_counter.correct_seqs)
@@ -311,22 +325,22 @@ def main():
         unmapped_reads = total_reads - (correctly_mapped + mismapped_reads)
         output_file.write("# MAPPING STATS\n")
         stat_counter.print_stats(correctly_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
-        print("   Done")
+        logger.info("   Done")
         sys.stdout.flush()
 
         # use only correctly mapped reads
-        print("   Counting pure assignment stats...")
+        logger.info("   Counting pure assignment stats...")
         stat_counter.count_assignment_stats(db)
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
         output_file.write("# ASSIGNMENT STATS\n")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="assignment_")
-        print("   Done")
+        logger.info("   Done")
         sys.stdout.flush()
 
         # use all reads
-        print("   Counting overall assignment stats...")
+        logger.info("   Counting overall assignment stats...")
         stat_counter.count_assignment_stats(db, use_mismapped=True)
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
@@ -334,7 +348,7 @@ def main():
         output_file.write("# ASSIGNMENT STATS (INCLUDING MISMAPPED READS)\n")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="overall_")
         all_stats.append((stat_counter, prefix))
-        print("   Done")
+        logger.info("   Done")
         sys.stdout.flush()
 
     if len(all_stats) == 2:
@@ -344,7 +358,7 @@ def main():
             compare_stats(all_stats[0], all_stats[1])
 
     if args.output:
-        print("Quality report saved to " + args.output)
+        logger.info("Quality report saved to " + args.output)
         output_file.close()
 
 
