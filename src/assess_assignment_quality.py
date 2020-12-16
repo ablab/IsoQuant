@@ -304,7 +304,6 @@ def main():
     mapping_data = MappingData(args)
     all_stats = []
     output_file = sys.stdout if not args.output else open(args.output, "w")
-    sys.stdout.flush()
 
     for tsv_file in args.tsv:
         #TODO: diff bams
@@ -315,7 +314,6 @@ def main():
         if args.real_data:
             all_stats.append((stat_counter, prefix))
             continue
-        sys.stdout.flush()
 
         logger.info("   Counting mapping stats...")
         stat_counter.count_mapping_stats(db)
@@ -326,7 +324,6 @@ def main():
         output_file.write("# MAPPING STATS\n")
         stat_counter.print_stats(correctly_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
         logger.info("   Done")
-        sys.stdout.flush()
 
         # use only correctly mapped reads
         logger.info("   Counting pure assignment stats...")
@@ -337,7 +334,6 @@ def main():
         output_file.write("# ASSIGNMENT STATS\n")
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="assignment_")
         logger.info("   Done")
-        sys.stdout.flush()
 
         # use all reads
         logger.info("   Counting overall assignment stats...")
@@ -349,7 +345,6 @@ def main():
         stat_counter.print_stats(correct_assignments, incorrect_assignments, unassigned_reads, output_file, name="overall_")
         all_stats.append((stat_counter, prefix))
         logger.info("   Done")
-        sys.stdout.flush()
 
     if len(all_stats) == 2:
         if args.real_data:
