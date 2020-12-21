@@ -118,7 +118,7 @@ Install requirements:
 pip install -r requirements.txt
 ```
 
-You also need [minimap2](https://github.com/lh3/minimap2) to be in the `$PATH` variable.
+You also need [samtools](http://www.htslib.org/download/) and [minimap2](https://github.com/lh3/minimap2) to be in the `$PATH` variable.
   
 <a name="sec2.3"></a>
 ## Verifying your installation 
@@ -272,7 +272,7 @@ You can manually set some of the parameters (will override options in the preset
 * `default` - a just trade-off between precision and recall for usual long-read dataset, intron retention is reported;   
 * `all` - report most of detected modification as novel transcripts, loses precision in favor to recall; intron retention is reported;
 * `fl` - input reads are considered as full-length transcripts; intron retention is reported;
-* `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not requires; intron retention is reported;
+* `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not required; intron retention is reported;
 
 Transcript model construction strategy is chosen automatically based on specified data type. However, parameters will be overridden if set manually.
 
