@@ -380,8 +380,8 @@ class LongReadAssigner:
         # logger.debug("Gene intron profile" + str(read_intron_profile.gene_profile))
 
         if all(el == 0 for el in read_split_exon_profile.read_profile) \
-                or all(el == 0 for el in read_split_exon_profile.gene_profile):
-
+                or all(el == 0 for el in read_split_exon_profile.gene_profile) \
+                or all(el == -2 for el in read_split_exon_profile.gene_profile):
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             gene_region = (self.gene_info.split_exon_profiles.features[0][0],
                               self.gene_info.split_exon_profiles.features[-1][1])
@@ -453,7 +453,6 @@ class LongReadAssigner:
             assignment = self.match_consistent_spliced(read_id, combined_read_profile, consistent_isoforms)
 
         if assignment is not None:
-            # FIXME: is it needed since isoforms are contained?
             self.verify_polya_for_assignment(combined_read_profile, assignment)
         return assignment
 
@@ -676,9 +675,8 @@ class LongReadAssigner:
                         matching_events[i] = make_event(MatchEventSubtype.fake_terminal_exon_right,
                                                         event.isoform_position, event.read_region, event.event_length)
 
-                elif event.event_type in {MatchEventSubtype.incomplete_intron_retention_right,
-                                          MatchEventSubtype.major_exon_elongation_right,
-                                          MatchEventSubtype.exon_elongation_right}:
+                elif event.event_type == MatchEventSubtype.major_exon_elongation_right:
+                    # substitute major elongation with APA site
                     events_to_remove.add(i)
 
             if len(events_to_remove) > 1:
@@ -715,9 +713,8 @@ class LongReadAssigner:
                         # if intron lies prior polyA tail, consider it as alignment error
                         matching_events[i] = make_event(MatchEventSubtype.fake_terminal_exon_left,
                                                         event.isoform_position, event.read_region, event.event_length)
-                elif event.event_type in {MatchEventSubtype.incomplete_intron_retention_left,
-                                          MatchEventSubtype.major_exon_elongation_left,
-                                          MatchEventSubtype.exon_elongation_left}:
+                elif event.event_type ==  MatchEventSubtype.major_exon_elongation_left:
+                    # substitute major elongation with APA site
                     events_to_remove.add(i)
 
             if len(events_to_remove) > 1:
@@ -731,6 +728,9 @@ class LongReadAssigner:
                 logger.debug("+ Seems like APA site")
                 matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
 
+        if not matching_events:
+            logger.warning("Empty event list after polyA verification")
+            matching_events = [make_event(MatchEventSubtype.none)]
         return matching_events
 
     def select_best_among_inconsistent(self, read_matches):

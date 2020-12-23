@@ -309,7 +309,7 @@ def set_matching_options(args):
     args.max_suspicious_intron_rel_len = strategy.max_suspicious_intron_rel_len
     args.min_abs_exon_overlap = 10
     args.min_rel_exon_overlap = 0.2
-    args.apa_delta = 50
+    args.apa_delta = args.minor_exon_extension
     args.minimal_exon_overlap = 5
     args.minimal_intron_absence_overlap = 20
     args.polya_window = 16
