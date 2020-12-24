@@ -380,8 +380,7 @@ class LongReadAssigner:
         # logger.debug("Gene intron profile" + str(read_intron_profile.gene_profile))
 
         if all(el == 0 for el in read_split_exon_profile.read_profile) \
-                or all(el == 0 for el in read_split_exon_profile.gene_profile) \
-                or all(el == -2 for el in read_split_exon_profile.gene_profile):
+                or all(el == 0 or el == -2 for el in read_split_exon_profile.gene_profile):
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             gene_region = (self.gene_info.split_exon_profiles.features[0][0],
                               self.gene_info.split_exon_profiles.features[-1][1])
