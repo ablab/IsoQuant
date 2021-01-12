@@ -335,6 +335,7 @@ class TranscriptModelConstructor:
 
         logger.debug("Isoform I " + str(isoform_introns))
         logger.debug("Isoform E " + str(self.gene_info.all_isoforms_exons[isoform_id]))
+        logger.debug("Read coords %d, %d" % (read_start, read_end))
         logger.debug("Read " + str(read_introns))
 
         if SupplementaryMatchConstansts.extra_left_mod_position in modification_events_map:
