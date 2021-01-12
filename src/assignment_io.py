@@ -162,6 +162,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             return
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
             line = read_assignment.read_id + "\t.\t.\t."
+        elif read_assignment.combined_profile is None:
+            logger.warning("Empty combined profile, read id %s, assignment type %s" %
+                           (read_assignment.read_id, str(read_assignment.assignment_type)))
+            line = read_assignment.read_id + "\t.\t.\t."
         else:
             assigned_transcripts = [str(m.assigned_transcript) for m in read_assignment.isoform_matches]
             for m in read_assignment.isoform_matches:
@@ -177,7 +181,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 match_evetns_strings.append("+".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
                                                                                                 read_introns,
                                                                                                 isoform_introns)
-                                                       for x in m.match_subclassifications]))
+                                                      for x in m.match_subclassifications]))
             match_events = ",".join(match_evetns_strings)
             if not match_events:
                 match_events = "."
