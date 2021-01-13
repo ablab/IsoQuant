@@ -165,7 +165,9 @@ class JunctionComparator():
 
         return contradiction_events
 
-    def compare_overlapping_contradictional_regions(self, read_region, read_junctions, isoform_region, isoform_junctions, read_cregion, isoform_cregion):
+    def compare_overlapping_contradictional_regions(self, read_region, read_junctions,
+                                                    isoform_region, isoform_junctions,
+                                                    read_cregion, isoform_cregion):
         if read_cregion[0] == self.absent:
             if isoform_cregion[0] != isoform_cregion[1]:
                 logger.warning("Multiple intron retentions in a single event:" + str(isoform_cregion))
@@ -202,28 +204,41 @@ class JunctionComparator():
         isoform_intron_total_len = sum(interval_len(isoform_junctions[i])
                                        for i in range(isoform_cregion[0], isoform_cregion[1] + 1))
         total_intron_len_diff = abs(read_intron_total_len - isoform_intron_total_len)
-
         read_introns_known = self.are_known_introns(read_junctions, read_cregion)
 
-        if read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
+        left_exons_overlap = overlaps(get_exon(read_region, read_junctions, read_cregion[0]),
+                                      get_exon(isoform_region, isoform_junctions, isoform_cregion[0]))
+        right_exons_overlap = overlaps(get_exon(read_region, read_junctions, read_cregion[1] + 1),
+                                       get_exon(isoform_region, isoform_junctions, isoform_cregion[1] + 1))
+        surrounded_by_exons = left_exons_overlap and right_exons_overlap
+        similar_bounds = \
+            abs(read_junctions[read_cregion[0]][0] - isoform_junctions[isoform_cregion[0]][0]) <= 2 * self.params.delta and \
+            abs(read_junctions[read_cregion[1]][1] - isoform_junctions[isoform_cregion[1]][1]) <= 2 * self.params.delta
+
+        if surrounded_by_exons and read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
+            # single exons is altered
             event = self.classify_single_intron_alternation(read_region, read_junctions, isoform_region,
                                                             isoform_junctions, read_cregion[0], isoform_cregion[0],
                                                             total_intron_len_diff, read_introns_known)
 
-        elif read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] >= 1 and \
+        elif surrounded_by_exons and similar_bounds and \
+                read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] >= 1 and \
                 total_intron_len_diff <= 2 * self.params.delta:
+            # several introns of the same total length as reference onces
             if read_introns_known:
                 event = MatchEventSubtype.mutually_exclusive_exons_known
             else:
                 event = MatchEventSubtype.mutually_exclusive_exons_novel
 
-        elif read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
+        elif surrounded_by_exons and similar_bounds and \
+                read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
+            # skipped exon(s)
             event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
                                                 total_intron_len_diff, read_introns_known)
 
-        elif read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0] and \
-            abs(read_junctions[read_cregion[0]][0] - isoform_junctions[isoform_cregion[0]][0]) <= self.params.delta and \
-            abs(read_junctions[read_cregion[1]][1] - isoform_junctions[isoform_cregion[1]][1]) <= self.params.delta:
+        elif surrounded_by_exons and similar_bounds and \
+                read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
+            # gain exon
             if read_introns_known:
                 event = MatchEventSubtype.exon_gain_known
             elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
@@ -234,7 +249,7 @@ class JunctionComparator():
         else:
             if read_introns_known:
                 event = MatchEventSubtype.alternative_structure_known
-            elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
+            elif surrounded_by_exons and self.are_suspicious_introns(read_region, read_junctions, read_cregion):
                 event = MatchEventSubtype.intron_retention
             else:
                 event = MatchEventSubtype.alternative_structure_novel
