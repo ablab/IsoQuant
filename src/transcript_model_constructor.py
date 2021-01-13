@@ -349,12 +349,13 @@ class TranscriptModelConstructor:
 
         isoform_pos = 0
         logger.debug(str(modification_events_map))
+        processed_events = []
         while isoform_pos <= len(isoform_introns):
             if isoform_pos not in modification_events_map.keys():
                 if isoform_pos == len(isoform_introns):
                     # such position is possible only when extra intron is present inside last reference exon
                     break
-                if isoform_introns[isoform_pos][0] <= current_exon_start:
+                if isoform_introns[isoform_pos][0] < current_exon_start:
                     # skip introns that outside of gene region
                     isoform_pos += 1
                     continue
@@ -369,6 +370,7 @@ class TranscriptModelConstructor:
 
             else:
                 current_events = modification_events_map[isoform_pos]
+                processed_events.append(isoform_pos)
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, novel_exons, current_exon_start)
                 if isoform_pos < len(isoform_introns) \
@@ -384,8 +386,12 @@ class TranscriptModelConstructor:
                         logger.debug("Adding reference intron after additional extra intron: " + str(isoform_introns[isoform_pos]))
 
                 isoform_pos += 1
-                while isoform_pos < len(isoform_introns) and isoform_introns[isoform_pos][0] <= current_exon_start:
+                while isoform_pos < len(isoform_introns) and isoform_introns[isoform_pos][0] < current_exon_start:
                     isoform_pos += 1
+
+        if len(processed_events) != len(modification_events_map.keys()):
+            logger.warning("Not all modification events were processed")
+            logger.debug(str(set(modification_events_map.keys()).difference(set(processed_events))))
 
         if SupplementaryMatchConstansts.extra_right_mod_position in modification_events_map:
             # if there are extra introns on the right
