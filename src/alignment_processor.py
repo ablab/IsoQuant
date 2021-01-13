@@ -89,11 +89,16 @@ class LongReadAlignmentProcessor:
 
                 logger.debug("=== Processing read " + read_id + " ===")
 
+                # concat indels
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
+                # correct coordinates to GTF style (inclusive intervals)
                 sorted_blocks = correct_bam_coords(concat_blocks)
 
                 polya_pos = self.polya_finder.find_polya_tail(alignment)
                 polyt_pos = self.polya_finder.find_polyt_head(alignment)
+
+                # ignore fake exons beyond polyA
+                sorted_blocks = truncate_read_to_polya(sorted_blocks, polya_pos, polyt_pos)
 
                 cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 

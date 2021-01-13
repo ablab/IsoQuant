@@ -664,17 +664,8 @@ class LongReadAssigner:
                                                       isoform_position=event.isoform_position,
                                                       event_length=read_end-polya_pos))
                     return matching_events
-                elif event.event_type in {MatchEventSubtype.extra_intron_flanking_right,
-                                          MatchEventSubtype.extra_intron}:
-                    # check if any extra introns are beyond polyA
-                    read_introns = combined_read_profile.read_intron_profile.read_features
-                    intron_pos = event.read_region[0]
-                    if read_introns[intron_pos][0] > polya_pos:
-                        # if intron lies beyond polyA tail, consider it as alignment error
-                        matching_events[i] = make_event(MatchEventSubtype.fake_terminal_exon_right,
-                                                        event.isoform_position, event.read_region, event.event_length)
 
-                elif event.event_type == MatchEventSubtype.major_exon_elongation_right:
+                if event.event_type == MatchEventSubtype.major_exon_elongation_right:
                     # substitute major elongation with APA site
                     events_to_remove.add(i)
 
@@ -703,16 +694,8 @@ class LongReadAssigner:
                                                       isoform_position=event.isoform_position,
                                                       event_length=polya_pos-read_start))
                     return matching_events
-                elif event.event_type in {MatchEventSubtype.extra_intron_flanking_left,
-                                          MatchEventSubtype.extra_intron}:
-                    # check if any extra introns are beyond polyA
-                    read_introns = combined_read_profile.read_intron_profile.read_features
-                    intron_pos = event.read_region[0]
-                    if read_introns[intron_pos][1] < polya_pos:
-                        # if intron lies prior polyA tail, consider it as alignment error
-                        matching_events[i] = make_event(MatchEventSubtype.fake_terminal_exon_left,
-                                                        event.isoform_position, event.read_region, event.event_length)
-                elif event.event_type ==  MatchEventSubtype.major_exon_elongation_left:
+
+                if event.event_type ==  MatchEventSubtype.major_exon_elongation_left:
                     # substitute major elongation with APA site
                     events_to_remove.add(i)
 

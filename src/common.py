@@ -326,6 +326,37 @@ def correct_bam_coords(blocks):
     return list(map(lambda x: (x[0] + 1, x[1]), blocks))
 
 
+def truncate_read_to_polya(read_exons, polya_pos, polyt_pos):
+    end_index = len(read_exons) - 1
+    end_position = read_exons[-1][1]
+    if polya_pos != -1:
+        end_position = polya_pos
+        while end_index >= 0:
+            if read_exons[end_index][0] < polya_pos:
+                break
+            end_index -= 1
+
+    start_index = 0
+    start_position = read_exons[0][0]
+    if polyt_pos != -1:
+        start_position = polyt_pos
+        while start_index <= end_index:
+            if read_exons[start_index][1] > polyt_pos:
+                break
+            start_index += 1
+
+    if start_position == read_exons[0][0] and end_position == read_exons[-1][1]:
+        return read_exons
+
+    if start_index == end_index:
+        return [(start_position, end_position)]
+
+    new_exons = [(start_position, read_exons[start_index][1])]
+    new_exons += read_exons[start_index+1:end_index]
+    new_exons.append((read_exons[end_index][0], end_position))
+    return new_exons
+
+
 # == profile functions ==
 def is_subprofile(short_isoform_profile, long_isoform_profile):
     assert len(short_isoform_profile) == len(long_isoform_profile)
