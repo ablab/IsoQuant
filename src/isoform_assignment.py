@@ -366,3 +366,52 @@ def get_assigned_transcript_id(match):
 
 def get_assigned_gene_id(match):
     return match.assigned_gene
+
+
+match_subtype_printable_names = \
+    {MatchEventSubtype.ism_left : ('ism_5', 'ism_3'),
+     MatchEventSubtype.ism_right : ('ism_3', 'ism_5'),
+     MatchEventSubtype.exon_elongation_left : ('exon_elongation_5', 'exon_elongation_3'),
+     MatchEventSubtype.exon_elongation_right : ('exon_elongation_3', 'exon_elongation_5'),
+     MatchEventSubtype.major_exon_elongation_left: ('major_exon_elongation_5', 'major_exon_elongation_3'),
+     MatchEventSubtype.major_exon_elongation_right: ('major_exon_elongation_3', 'major_exon_elongation_5'),
+     MatchEventSubtype.fake_terminal_exon_left : ('fake_terminal_exon_5', 'efake_terminal_exon_3'),
+     MatchEventSubtype.fake_terminal_exon_right : ('fake_terminal_exon_3', 'fake_terminal_exon_5'),
+     MatchEventSubtype.incomplete_intron_retention_left: ('incomplete_intron_retention_5', 'incomplete_intron_retention_3'),
+     MatchEventSubtype.incomplete_intron_retention_right: ('incomplete_intron_retention_3', 'incomplete_intron_retention_5'),
+     MatchEventSubtype.extra_intron_flanking_left: ('extra_intron_5', 'extra_intron_3'),
+     MatchEventSubtype.extra_intron_flanking_right: ('extra_intron_3', 'extra_intron_5'),
+     MatchEventSubtype.alt_left_site_known: ('alt_donor_site_known', 'alt_acceptor_site_known'),
+     MatchEventSubtype.alt_right_site_known: ('alt_acceptor_site_known', 'alt_donor_site_known'),
+     MatchEventSubtype.alt_left_site_novel: ('alt_donor_site_novel', 'alt_acceptor_site_novel'),
+     MatchEventSubtype.alt_right_site_novel: ('alt_acceptor_site_novel', 'alt_donor_site_novel')}
+
+
+def match_subtype_to_str(event, strand):
+    event_subtype = event.event_type
+    if event_subtype in match_subtype_printable_names.keys():
+        if strand is None:
+            logger.warning("Strand is not set for site-dependent modifications")
+        if strand == '-':
+            return match_subtype_printable_names[event_subtype][1]
+        else:
+            return match_subtype_printable_names[event_subtype][0]
+    return event_subtype.name
+
+
+def match_subtype_to_str_with_additional_info(event, strand, read_introns, isoform_introns):
+    event_subtype = event.event_type
+    coordinates = ""
+    if event_subtype in {MatchEventSubtype.intron_retention,
+                         MatchEventSubtype.unspliced_intron_retention,
+                         MatchEventSubtype.incomplete_intron_retention_left,
+                         MatchEventSubtype.incomplete_intron_retention_right}:
+        if event.isoform_position != SupplementaryMatchConstansts.undefined_position:
+            intron = isoform_introns[event.isoform_position]
+            coordinates = ":" + str(intron[0]) + "-" + str(intron[1])
+    else:
+        if event.read_region != SupplementaryMatchConstansts.undefined_region:
+            introns = read_introns[event.read_region[0]:event.read_region[1]+1]
+            coordinates = ":" + str(introns[0][0]) + "-" + str(introns[-1][1])
+
+    return match_subtype_to_str(event, strand) + coordinates

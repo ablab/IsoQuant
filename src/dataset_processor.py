@@ -176,7 +176,7 @@ class DatasetProcessor:
         logger.info("Combining output")
         self.aggregate_reads(sample)
         os.rmdir(self.tmp_dir)
-        logger.info("Transcript model file " + sample.out_dir + "/transcript_models.gff")
+        logger.info("Transcript model file " + gff_printer.model_fname)
         logger.info("Processed sample " + sample.label)
         read_stat_counter.print_start("Read assignment statistics")
         transcript_stat_counter.print_start("Transcript model statistics")

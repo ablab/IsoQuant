@@ -124,6 +124,13 @@ class GeneInfo:
 
         return chr_id, start, end
 
+    # return regions of every gene
+    def get_gene_regions(self):
+        gene_regions = {}
+        for gene_db in self.gene_db_list:
+            gene_regions[gene_db.id] = (gene_db.start, gene_db.end)
+        return gene_regions
+
     # set strands
     def set_isoform_strands(self):
         self.isoform_strands = {}

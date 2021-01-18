@@ -100,6 +100,10 @@ def range_list_to_str(range_list, element_delim=',', coord_delim='-'):
     return element_delim.join(list(map(lambda x: str(x[0]) + coord_delim + str(x[1]), range_list)))
 
 
+def max_range(range1, range2):
+    return (min(range1[0], range2[0]), max(range1[1], range2[1]))
+
+
 def interval_len(interval):
     return interval[1] - interval[0] + 1
 
