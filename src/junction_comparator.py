@@ -230,7 +230,7 @@ class JunctionComparator():
             else:
                 event = MatchEventSubtype.mutually_exclusive_exons_novel
 
-        elif surrounded_by_exons and similar_bounds and \
+        elif surrounded_by_exons and \
                 read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
             # skipped exon(s)
             event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
