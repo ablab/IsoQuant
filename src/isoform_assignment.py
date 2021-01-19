@@ -55,6 +55,8 @@ class MatchClassification(Enum):
         elif any(e.event_type in {MatchEventSubtype.incomplete_intron_retention_left,
                                   MatchEventSubtype.incomplete_intron_retention_right} for e in match_event_subtypes):
             return MatchClassification.genic
+        elif match_event_subtypes[0].event_type == MatchEventSubtype.fake_micro_intron_retention:
+            return MatchClassification.incomplete_splice_match
         elif match_event_subtypes[0].event_type == MatchEventSubtype.mono_exon_match:
             return MatchClassification.mono_exon_match
         elif match_event_subtypes[0].event_type == MatchEventSubtype.mono_exonic:
@@ -409,7 +411,8 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
     if event_subtype in {MatchEventSubtype.intron_retention,
                          MatchEventSubtype.unspliced_intron_retention,
                          MatchEventSubtype.incomplete_intron_retention_left,
-                         MatchEventSubtype.incomplete_intron_retention_right}:
+                         MatchEventSubtype.incomplete_intron_retention_right,
+                         MatchEventSubtype.fake_micro_intron_retention}:
         if event.isoform_position != SupplementaryMatchConstansts.undefined_position:
             intron = isoform_introns[event.isoform_position]
             coordinates = ":" + str(intron[0]) + "-" + str(intron[1])

@@ -310,6 +310,8 @@ def set_matching_options(args):
     args.min_abs_exon_overlap = 10
     args.min_rel_exon_overlap = 0.2
     args.micro_intron_length = 30
+    # args.max_intron_abs_diff = 30
+    # args.max_intron_rel_diff = 0.2
     args.apa_delta = args.minor_exon_extension
     args.minimal_exon_overlap = 5
     args.minimal_intron_absence_overlap = 20
