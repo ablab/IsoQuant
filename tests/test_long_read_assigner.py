@@ -212,7 +212,7 @@ class TestCompareJunctions:
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
                              [([(20, 50), (60, 100), (150,  200)], (0, 300), [(20, 51), (150, 201)], (0, 290), 2,
-                               MatchEventSubtype.extra_intron),
+                               MatchEventSubtype.extra_intron_novel),
                               ([(20, 40), (50, 60), (150, 200)], (0, 300), [(20, 41), (150, 201)], (0, 290), 1,
                                MatchEventSubtype.extra_intron_known),
                               ([(20, 40), (78, 112), (150, 200)], (0, 300), [(20, 41), (150, 201)], (0, 290), 3,
@@ -245,8 +245,8 @@ class TestCompareJunctions:
         assert set(event_types) == {MatchEventSubtype.intron_retention}
 
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
-                             [([(10, 50)], (0, 100), [(10, 25), (40, 49)], (0, 99), 3, MatchEventSubtype.exon_skipping_novel_intron),
-                              ([(80, 110)], (50, 150), [(80, 90), (105, 110)], (50, 149), 3, MatchEventSubtype.exon_skipping_known_intron),
+                             [([(10, 50)], (0, 100), [(10, 25), (40, 49)], (0, 99), 3, MatchEventSubtype.exon_skipping_novel),
+                              ([(80, 110)], (50, 150), [(80, 90), (105, 110)], (50, 149), 3, MatchEventSubtype.exon_skipping_known),
                               ([(80, 110)], (20, 150), [(65, 90), (105, 110)], (20, 149), 3, MatchEventSubtype.exon_merge_known),
                               ([(70, 110)], (20, 150), [(55, 90), (105, 110)], (20, 149), 3, MatchEventSubtype.exon_merge_novel),
                               ([(81, 109)], (50, 150), [(80, 98), (102, 110)], (50, 149), 3, MatchEventSubtype.exon_misallignment)])
@@ -489,7 +489,7 @@ class TestAssignIsoform:
                               ([(1000, 1100), (2000, 2200), (2500, 2600), (3000, 3300), (5000, 5010), (9500, 10000)],
                                -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.mutually_exclusive_exons_novel),
                               ([(1040, 1100), (2000, 2201), (2500, 2602), (2998, 3300), (6000, 6011), (9500, 9600), (9700, 9999)],
-                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.extra_intron),
+                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.extra_intron_novel),
                               ([(7998, 8201), (8300, 8333), (8500, 8800)], -1, -1,
                                "ENSMUST00000001715.7", MatchEventSubtype.exon_gain_novel),
                               ([(7100, 7800)], -1, -1,

@@ -98,7 +98,7 @@ class MatchEventSubtype(Enum):
     alt_left_site_novel = 103
     alt_right_site_novel = 104
     # additional introns in the middle
-    extra_intron = 1012
+    extra_intron_novel = 1012
     extra_intron_known = 1011
     # extra inrons on the sides
     extra_intron_flanking_left = 1013
@@ -114,8 +114,8 @@ class MatchEventSubtype(Enum):
     mutually_exclusive_exons_novel = 121
     mutually_exclusive_exons_known = 122
     # exon skipping
-    exon_skipping_known_intron = 133
-    exon_skipping_novel_intron = 134
+    exon_skipping_known = 133
+    exon_skipping_novel = 134
     # similar to mutually exclusive exons but when read exon is attached to another exon
     exon_merge_known = 135
     exon_merge_novel = 136
@@ -198,7 +198,7 @@ event_subtype_cost = {
     MatchEventSubtype.alt_left_site_novel:1,
     MatchEventSubtype.alt_right_site_novel:1,
     # additional introns in the middle
-    MatchEventSubtype.extra_intron:1,
+    MatchEventSubtype.extra_intron_novel:1,
     MatchEventSubtype.extra_intron_known:1,
     # extra inrons on the sides
     MatchEventSubtype.extra_intron_flanking_left:1,
@@ -214,8 +214,8 @@ event_subtype_cost = {
     MatchEventSubtype.mutually_exclusive_exons_novel:1,
     MatchEventSubtype.mutually_exclusive_exons_known:1,
     # exon skipping
-    MatchEventSubtype.exon_skipping_known_intron:1,
-    MatchEventSubtype.exon_skipping_novel_intron:1,
+    MatchEventSubtype.exon_skipping_known:1,
+    MatchEventSubtype.exon_skipping_novel:1,
     MatchEventSubtype.exon_merge_known:1,
     MatchEventSubtype.exon_merge_novel:1,
     # exon gain
@@ -249,9 +249,9 @@ def elongation_cost(params, elongation_len):
 
 nnic_event_types = {
     MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
-    MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_flanking_left,
+    MatchEventSubtype.extra_intron_novel, MatchEventSubtype.extra_intron_flanking_left,
     MatchEventSubtype.extra_intron_flanking_right, MatchEventSubtype.mutually_exclusive_exons_novel,
-    MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
+    MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel,
     MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
     MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
     MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss, MatchEventSubtype.fake_polya_site
@@ -261,7 +261,7 @@ nic_event_types = {
     MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
     MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
     MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
-    MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
+    MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known,
     MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
     MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,

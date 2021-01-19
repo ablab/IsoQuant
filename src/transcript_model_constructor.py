@@ -138,13 +138,13 @@ class TranscriptModelConstructor:
         MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention,
         MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
         MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
-        MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_known,
+        MatchEventSubtype.extra_intron_novel, MatchEventSubtype.extra_intron_known,
         MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right,
         MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
         MatchEventSubtype.intron_migration,
         MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
         MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.mutually_exclusive_exons_known,
-        MatchEventSubtype.exon_skipping_novel_intron, MatchEventSubtype.exon_skipping_known_intron,
+        MatchEventSubtype.exon_skipping_novel, MatchEventSubtype.exon_skipping_known,
         MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
         MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
         MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_gain_known,
@@ -421,7 +421,7 @@ class TranscriptModelConstructor:
                     # intron modification was processed but nothing overlapping was added =>
                     # extra intron within previous exon => add this intron as is
                     # check that is was really extra intron
-                    extra_intron_types = {MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_known}
+                    extra_intron_types = {MatchEventSubtype.extra_intron_novel, MatchEventSubtype.extra_intron_known}
                     only_extra_intron = all(el.event_type in extra_intron_types for el in current_events)
                     if only_extra_intron:
                         current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[isoform_pos])
@@ -517,7 +517,7 @@ class TranscriptModelConstructor:
         read_intron = read_introns[event_tuple.read_region[0]]
         # logger.debug("Novel intron " + str(read_intron))
 
-        if event_tuple.event_type == MatchEventSubtype.extra_intron:
+        if event_tuple.event_type == MatchEventSubtype.extra_intron_novel:
             return self.add_intron(novel_exons, current_exon_start, read_intron)
         elif event_tuple.event_type == MatchEventSubtype.extra_intron_known:
             corrected_intron = self.get_closest_ref_intron(read_intron)
@@ -545,14 +545,14 @@ class TranscriptModelConstructor:
             novel_intron = self.get_closest_ref_intron((isoform_intron[0], read_intron[1]))
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_novel,
-                                        MatchEventSubtype.exon_skipping_novel_intron,
+                                        MatchEventSubtype.exon_skipping_novel,
                                         MatchEventSubtype.exon_merge_novel}:
             # simply add read intron
             novel_intron = (read_intron[0], read_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_known,
                                         MatchEventSubtype.intron_migration,
-                                        MatchEventSubtype.exon_skipping_known_intron,
+                                        MatchEventSubtype.exon_skipping_known,
                                         MatchEventSubtype.exon_detatch_known}:
             # simply add corrected read intron
             novel_intron = self.get_closest_ref_intron((read_intron[0], read_intron[1]))

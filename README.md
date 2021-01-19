@@ -391,29 +391,20 @@ Tab-separated values, the columns are:
         - `intron_retention` - intron retention;
         - `unspliced_intron_retention`  - intron retention by mono-exonic read;
         - `incomplete_intron_retention_5/3` - terminal exon at 5'/3' end partially covers adjacent intron;
-    - significant inconsistencies:
+    - significant inconsistencies (each type end with `_known` if _all_ resulting read introns are annotated and `_novel` otherwise):
         - `major_exon_elongation_5/3` - significant exon extension at 5'/3' end (exceeding 30bp);
         - `extra_intron_5/3` - additional intron on the 5'/3' end of the isoform;
-        - `extra_intron_known` - read contains additional annotated intron in the middle of exon;
-        - `extra_intron` - read contains additional unannotated intron in the middle of exon;
-        - `alt_donor_site_known` - read contains alternative annotated donor site;
-        - `alt_acceptor_site_known` - read contains alternative annotated acceptor site;
-        - `alt_donor_site_novel` - read contains alternative unannotated donor site;
-        - `alt_acceptor_site_novel` - read contains alternative unannotated acceptor site;
-        - `intron_migration` - read contains alternative annotated intron of approximately the same length as the isoform;
-        - `intron_alternation_known` - read contains alternative annotated intron;
-        - `intron_alternation_novel` - read contains alternative unannotated intron; 
-        - `mutually_exclusive_exons_known` - read contains different exon(s) comparing to the isoform, all resulting introns are annotated;
-        - `mutually_exclusive_exons_novel` - read contains different exon(s) comparing to the isoform, at least one of introns is unannotated;
-        - `exon_skipping_known_intron` - read skips exon(s) comparing to the isoform, resulting intron is annotated;
-        - `exon_skipping_novel_intron` - read skips exon(s) comparing to the isoform, resulting intron is unannotated;
-        - `exon_merge_known` - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon, resulting intron is annotated;
-        - `exon_merge_novel` - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon, resulting intron is unannotated;
-        - `exon_gain_known` - read contains additional exon(s) comparing to the isoform, all resulting introns are annotated;
-        - `exon_gain_novel` - read contains additional exon(s) comparing to the isoform, at least one of introns is unannotated;
-        - `exon_gain_known` - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length, all resulting introns are annotated;
-        - `alternative_structure_known` - reads has different intron chain that does not fall into any of categories above, all read's introns are annotated;
-        - `alternative_structure_novel`  - reads has different intron chain that does not fall into any of categories above, at least one of read's introns is unannotated;
+        - `extra_intron` - read contains additional intron in the middle of exon;
+        - `alt_donor_site` - read contains alternative donor site;
+        - `alt_acceptor_site` - read contains alternative annotated acceptor site;
+        - `intron_migration` - read contains alternative annotated intron of approximately the same length as in the isoform;
+        - `intron_alternation` - read contains alternative intron, which doesn't fall intro any of the categories above;
+        - `mutually_exclusive_exons` - read contains different exon(s) of the same total length comparing to the isoform;
+        - `exon_skipping` - read skips exon(s) comparing to the isoform;
+        - `exon_merge` - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon;
+        - `exon_gain` - read contains additional exon(s) comparing to the isoform;
+        - `exon_detatch` - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length;
+        - `alternative_structure` - reads has different intron chain that does not fall into any of categories above;
     - alternative transcription start / end (reported when CAGE data / poly-A tails are present):
         - `alternative_polya_site` - read has alternative polyadenylation site;
         - `fake_polya_site` - poly-A tail detected but seems to be originated from A-rich intronic region;

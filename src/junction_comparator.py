@@ -199,7 +199,7 @@ class JunctionComparator():
                 # we have extra intron to the right and last exons is short
                 return make_event(MatchEventSubtype.fake_terminal_exon_right,
                                   SupplementaryMatchConstansts.extra_right_mod_position, read_cregion)
-            return make_event(MatchEventSubtype.extra_intron, isoform_cregion[1], read_cregion)
+            return make_event(MatchEventSubtype.extra_intron_novel, isoform_cregion[1], read_cregion)
 
         read_intron_total_len = sum(interval_len(read_junctions[i])
                                     for i in range(read_cregion[0], read_cregion[1] + 1))
@@ -285,9 +285,9 @@ class JunctionComparator():
                 event = MatchEventSubtype.exon_merge_novel
         else:
             if read_introns_known:
-                event = MatchEventSubtype.exon_skipping_known_intron
+                event = MatchEventSubtype.exon_skipping_known
             else:
-                event = MatchEventSubtype.exon_skipping_novel_intron
+                event = MatchEventSubtype.exon_skipping_novel
         return event
 
     def classify_single_intron_alternation(self, read_region, read_junctions, isoform_region, isoform_junctions,
