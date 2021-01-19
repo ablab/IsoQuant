@@ -206,6 +206,10 @@ class JunctionComparator():
         isoform_intron_total_len = sum(interval_len(isoform_junctions[i])
                                        for i in range(isoform_cregion[0], isoform_cregion[1] + 1))
         total_intron_len_diff = abs(read_intron_total_len - isoform_intron_total_len)
+        intron_length_is_similar = \
+            total_intron_len_diff <= min(self.params.max_intron_abs_diff,
+                                         self.params.max_intron_rel_diff * max(read_intron_total_len, isoform_intron_total_len))
+
         read_introns_known = self.are_known_introns(read_junctions, read_cregion)
 
         left_exons_overlap = overlaps(get_exon(read_region, read_junctions, read_cregion[0]),
@@ -221,11 +225,12 @@ class JunctionComparator():
             # single exons is altered
             event = self.classify_single_intron_alternation(read_region, read_junctions, isoform_region,
                                                             isoform_junctions, read_cregion[0], isoform_cregion[0],
-                                                            total_intron_len_diff, read_introns_known)
+                                                            intron_length_is_similar, read_introns_known)
 
         elif surrounded_by_exons and similar_bounds and \
                 read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] >= 1 and \
                 total_intron_len_diff <= 2 * self.params.delta:
+                # FIXME: increase threshold when re-alignment is implemented
             # several introns of the same total length as reference onces
             if read_introns_known:
                 event = MatchEventSubtype.mutually_exclusive_exons_known
@@ -236,7 +241,7 @@ class JunctionComparator():
                 read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
             # skipped exon(s)
             event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
-                                                total_intron_len_diff, read_introns_known)
+                                                intron_length_is_similar, read_introns_known)
 
         elif surrounded_by_exons and similar_bounds and \
                 read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
@@ -259,11 +264,11 @@ class JunctionComparator():
         return make_event(event, isoform_cregion[0], read_cregion)
 
     def classify_skipped_exons(self, isoform_junctions, isoform_cregion,
-                               total_intron_len_diff, read_introns_known):
+                               intron_length_is_similar, read_introns_known):
         total_exon_len = sum([isoform_junctions[i + 1][0] - isoform_junctions[i][1] + 1
                               for i in range(isoform_cregion[0], isoform_cregion[1])])
 
-        if total_intron_len_diff <= 2 * self.params.delta and total_exon_len <= self.params.max_missed_exon_len:
+        if intron_length_is_similar and total_exon_len <= self.params.max_missed_exon_len:
             event = MatchEventSubtype.exon_misallignment
         else:
             if read_introns_known:
@@ -273,8 +278,8 @@ class JunctionComparator():
         return event
 
     def classify_single_intron_alternation(self, read_region, read_junctions, isoform_region, isoform_junctions,
-                                           read_cpos, isoform_cpos, total_intron_len_diff, read_introns_known):
-        if total_intron_len_diff <= 2 * self.params.delta:
+                                           read_cpos, isoform_cpos, intron_length_is_similar, read_introns_known):
+        if intron_length_is_similar:
             if read_introns_known:
                 event = MatchEventSubtype.intron_migration
             else:

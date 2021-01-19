@@ -18,6 +18,8 @@ class Params:
         self.max_suspicious_intron_rel_len = 0
         self.max_fake_terminal_exon_len = 0
         self.micro_intron_length = 0
+        self.max_intron_abs_diff = 5
+        self.max_intron_rel_diff = 0.1
         self.apa_delta = 50
         self.minimal_exon_overlap = 5
         self.minimal_intron_absence_overlap = 5
