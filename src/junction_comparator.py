@@ -253,6 +253,14 @@ class JunctionComparator():
             else:
                 event = MatchEventSubtype.exon_gain_novel
 
+        elif surrounded_by_exons and intron_length_is_similar and \
+                read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
+            # exon detach
+            if read_introns_known:
+                event = MatchEventSubtype.exon_detatch_known
+            else:
+                event = MatchEventSubtype.exon_detatch_novel
+
         else:
             # none of above, complex alternative structure
             if read_introns_known:
@@ -268,8 +276,13 @@ class JunctionComparator():
         total_exon_len = sum([isoform_junctions[i + 1][0] - isoform_junctions[i][1] + 1
                               for i in range(isoform_cregion[0], isoform_cregion[1])])
 
-        if intron_length_is_similar and total_exon_len <= self.params.max_missed_exon_len:
-            event = MatchEventSubtype.exon_misallignment
+        if intron_length_is_similar:
+            if total_exon_len <= self.params.max_missed_exon_len:
+                event = MatchEventSubtype.exon_misallignment
+            elif read_introns_known:
+                event = MatchEventSubtype.exon_merge_known
+            else:
+                event = MatchEventSubtype.exon_merge_novel
         else:
             if read_introns_known:
                 event = MatchEventSubtype.exon_skipping_known_intron

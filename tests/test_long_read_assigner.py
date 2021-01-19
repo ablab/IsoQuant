@@ -247,6 +247,8 @@ class TestCompareJunctions:
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta, expected",
                              [([(10, 50)], (0, 100), [(10, 25), (40, 49)], (0, 99), 3, MatchEventSubtype.exon_skipping_novel_intron),
                               ([(80, 110)], (50, 150), [(80, 90), (105, 110)], (50, 149), 3, MatchEventSubtype.exon_skipping_known_intron),
+                              ([(80, 110)], (20, 150), [(65, 90), (105, 110)], (20, 149), 3, MatchEventSubtype.exon_merge_known),
+                              ([(70, 110)], (20, 150), [(55, 90), (105, 110)], (20, 149), 3, MatchEventSubtype.exon_merge_novel),
                               ([(81, 109)], (50, 150), [(80, 98), (102, 110)], (50, 149), 3, MatchEventSubtype.exon_misallignment)])
     def test_exon_skipping(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
         assigner = LongReadAssigner(self.gene_info, Params(delta))
@@ -277,6 +279,10 @@ class TestCompareJunctions:
                                MatchEventSubtype.exon_gain_novel),
                               ([(50, 60), (80, 100)], (0, 150), [(50, 100)], (9, 149), 2,
                                MatchEventSubtype.exon_gain_known),
+                              ([(10, 30), (55, 100)], (0, 150), [(10, 75)], (9, 149), 2,
+                               MatchEventSubtype.exon_detatch_novel),
+                              ([(50, 60), (80, 110)], (0, 150), [(50, 90)], (9, 149), 2,
+                               MatchEventSubtype.exon_detatch_known),
                               ([(10, 13), (95, 100)], (0, 150), [(10, 100)], (9, 149), 2,
                                MatchEventSubtype.intron_retention)])
     def test_exon_gain(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):

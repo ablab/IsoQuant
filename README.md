@@ -407,8 +407,11 @@ Tab-separated values, the columns are:
         - `mutually_exclusive_exons_novel` - read contains different exon(s) comparing to the isoform, at least one of introns is unannotated;
         - `exon_skipping_known_intron` - read skips exon(s) comparing to the isoform, resulting intron is annotated;
         - `exon_skipping_novel_intron` - read skips exon(s) comparing to the isoform, resulting intron is unannotated;
+        - `exon_merge_known` - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon, resulting intron is annotated;
+        - `exon_merge_novel` - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon, resulting intron is unannotated;
         - `exon_gain_known` - read contains additional exon(s) comparing to the isoform, all resulting introns are annotated;
         - `exon_gain_novel` - read contains additional exon(s) comparing to the isoform, at least one of introns is unannotated;
+        - `exon_gain_known` - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length, all resulting introns are annotated;
         - `alternative_structure_known` - reads has different intron chain that does not fall into any of categories above, all read's introns are annotated;
         - `alternative_structure_novel`  - reads has different intron chain that does not fall into any of categories above, at least one of read's introns is unannotated;
     - alternative transcription start / end (reported when CAGE data / poly-A tails are present):

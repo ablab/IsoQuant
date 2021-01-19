@@ -133,6 +133,7 @@ class TranscriptModelConstructor:
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
 
+    # TODO union of nic and nnic?
     events_to_track = {
         MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention,
         MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
@@ -144,6 +145,8 @@ class TranscriptModelConstructor:
         MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
         MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.mutually_exclusive_exons_known,
         MatchEventSubtype.exon_skipping_novel_intron, MatchEventSubtype.exon_skipping_known_intron,
+        MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
+        MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
         MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_gain_known,
         MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
         MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
@@ -542,23 +545,28 @@ class TranscriptModelConstructor:
             novel_intron = self.get_closest_ref_intron((isoform_intron[0], read_intron[1]))
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_novel,
-                                        MatchEventSubtype.exon_skipping_novel_intron}:
+                                        MatchEventSubtype.exon_skipping_novel_intron,
+                                        MatchEventSubtype.exon_merge_novel}:
             # simply add read intron
             novel_intron = (read_intron[0], read_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
-        elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_known, MatchEventSubtype.intron_migration,
-                                        MatchEventSubtype.exon_skipping_known_intron}:
+        elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_known,
+                                        MatchEventSubtype.intron_migration,
+                                        MatchEventSubtype.exon_skipping_known_intron,
+                                        MatchEventSubtype.exon_detatch_known}:
             # simply add corrected read intron
             novel_intron = self.get_closest_ref_intron((read_intron[0], read_intron[1]))
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.mutually_exclusive_exons_novel,
                                         MatchEventSubtype.exon_gain_novel,
+                                        MatchEventSubtype.exon_detatch_novel,
                                         MatchEventSubtype.alternative_structure_novel}:
             # simply insert several reads introns
             for read_pos in range(event_tuple.read_region[0], event_tuple.read_region[1] + 1):
                 current_exon_start = self.add_intron(novel_exons, current_exon_start, read_introns[read_pos])
         elif event_tuple.event_type in {MatchEventSubtype.mutually_exclusive_exons_known,
                                         MatchEventSubtype.exon_gain_known,
+                                        MatchEventSubtype.exon_detatch_known,
                                         MatchEventSubtype.alternative_structure_known}:
             # insert several reads introns my fitting them onto reference introns
             for read_pos in range(event_tuple.read_region[0], event_tuple.read_region[1] + 1):

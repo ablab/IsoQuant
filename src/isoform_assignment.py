@@ -114,14 +114,20 @@ class MatchEventSubtype(Enum):
     mutually_exclusive_exons_novel = 121
     mutually_exclusive_exons_known = 122
     # exon skipping
-    exon_skipping_known_intron = 123
-    exon_skipping_novel_intron = 124
+    exon_skipping_known_intron = 133
+    exon_skipping_novel_intron = 134
+    # similar to mutually exclusive exons but when read exon is attached to another exon
+    exon_merge_known = 135
+    exon_merge_novel = 136
     # exon gain
-    exon_gain_known = 125
-    exon_gain_novel = 126
+    exon_gain_known = 145
+    exon_gain_novel = 146
+    # similar to mutually exclusive exons but when reference exon is attached to another exon
+    exon_detatch_known = 147
+    exon_detatch_novel = 148
     # other
-    alternative_structure_novel = 131
-    alternative_structure_known = 132
+    alternative_structure_novel = 181
+    alternative_structure_known = 182
     # TTS and TSS
     alternative_polya_site = 200
     fake_polya_site = 201
@@ -210,9 +216,13 @@ event_subtype_cost = {
     # exon skipping
     MatchEventSubtype.exon_skipping_known_intron:1,
     MatchEventSubtype.exon_skipping_novel_intron:1,
+    MatchEventSubtype.exon_merge_known:1,
+    MatchEventSubtype.exon_merge_novel:1,
     # exon gain
     MatchEventSubtype.exon_gain_known:1,
     MatchEventSubtype.exon_gain_novel:1,
+    MatchEventSubtype.exon_detatch_known:1,
+    MatchEventSubtype.exon_detatch_novel:1,
     # other
     MatchEventSubtype.alternative_structure_novel:1,
     MatchEventSubtype.alternative_structure_known:1,
@@ -242,6 +252,7 @@ nnic_event_types = {
     MatchEventSubtype.extra_intron, MatchEventSubtype.extra_intron_flanking_left,
     MatchEventSubtype.extra_intron_flanking_right, MatchEventSubtype.mutually_exclusive_exons_novel,
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel_intron,
+    MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
     MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
     MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss, MatchEventSubtype.fake_polya_site
 }
@@ -251,6 +262,7 @@ nic_event_types = {
     MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
     MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
     MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known_intron,
+    MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
     MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,
     MatchEventSubtype.major_exon_elongation_right, MatchEventSubtype.incomplete_intron_retention_left,
