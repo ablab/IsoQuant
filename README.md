@@ -386,6 +386,7 @@ Tab-separated values, the columns are:
         - `exon_misallignment` - short exon that seems to be missed due to misalignment  (typical for Nanopores);
         - `fake_terminal_exon_5/3` - short terminal exon at 5'/3' end that looks like an alignment artifact (typical for Nanopores);  
         - `exon_elongation_5/3` - minor exon extension at 5'/3' end (not exceeding 30bp);
+        - `fake_micro_intron_retention` - short annotated introns (not exceeding 30bp) are often missed by the aligners and thus are not considered as intron retention;
     - intron retentions:
         - `intron_retention` - intron retention;
         - `unspliced_intron_retention`  - intron retention by mono-exonic read;

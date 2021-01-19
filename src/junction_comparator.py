@@ -173,6 +173,8 @@ class JunctionComparator():
                 logger.warning("Multiple intron retentions in a single event:" + str(isoform_cregion))
             overlapped_isoform_intron = isoform_junctions[isoform_cregion[0]]
             if contains(read_region, overlapped_isoform_intron):
+                if interval_len(overlapped_isoform_intron) < self.params.micro_intron_length:
+                    return make_event(MatchEventSubtype.fake_micro_intron_retention, isoform_cregion[0], read_cregion)
                 return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
             elif overlaps_at_least(read_region, overlapped_isoform_intron, self.params.minor_exon_extension):
                 if overlapped_isoform_intron[0] <= read_region[0]:
@@ -247,6 +249,7 @@ class JunctionComparator():
                 event = MatchEventSubtype.exon_gain_novel
 
         else:
+            # none of above, complex alternative structure
             if read_introns_known:
                 event = MatchEventSubtype.alternative_structure_known
             elif surrounded_by_exons and self.are_suspicious_introns(read_region, read_junctions, read_cregion):
@@ -332,8 +335,12 @@ class JunctionComparator():
             for i, intron in enumerate(isoform_junctions):
                 if contains(read_region, intron):
                     # full intron retention
-                    events.append(make_event(MatchEventSubtype.unspliced_intron_retention, isoform_position=i,
-                                             read_region=(JunctionComparator.absent, 0)))
+                    if interval_len(intron) < self.params.micro_intron_length:
+                        events.append(make_event(MatchEventSubtype.fake_micro_intron_retention, isoform_position=i,
+                                                 read_region=(JunctionComparator.absent, 0)))
+                    else:
+                        events.append(make_event(MatchEventSubtype.unspliced_intron_retention, isoform_position=i,
+                                                 read_region=(JunctionComparator.absent, 0)))
                 elif overlaps_at_least(read_region, intron, self.params.minor_exon_extension) and \
                         not contains(intron, read_region):
                     # partial IR

@@ -88,6 +88,7 @@ class MatchEventSubtype(Enum):
     unspliced_intron_retention = 32
     incomplete_intron_retention_left = 38
     incomplete_intron_retention_right = 39
+    fake_micro_intron_retention = 34
     # major alternation
     # alternative donor/acceptor sites
     alt_left_site_known = 101
@@ -131,7 +132,8 @@ class MatchEventSubtype(Enum):
     def is_alignment_artifact(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misallignment,
                                        MatchEventSubtype.fake_terminal_exon_left,
-                                       MatchEventSubtype.fake_terminal_exon_right}
+                                       MatchEventSubtype.fake_terminal_exon_right,
+                                       MatchEventSubtype.fake_micro_intron_retention}
 
     @staticmethod
     def is_minor_error(match_event_subtype):
@@ -139,6 +141,7 @@ class MatchEventSubtype(Enum):
                                        MatchEventSubtype.exon_elongation_right,
                                        MatchEventSubtype.intron_shift,
                                        MatchEventSubtype.exon_misallignment,
+                                       MatchEventSubtype.fake_micro_intron_retention,
                                        MatchEventSubtype.fake_terminal_exon_left,
                                        MatchEventSubtype.fake_terminal_exon_right}
 
@@ -179,6 +182,7 @@ event_subtype_cost = {
     MatchEventSubtype.unspliced_intron_retention:0.5,
     MatchEventSubtype.incomplete_intron_retention_left:0.75,
     MatchEventSubtype.incomplete_intron_retention_right:0.75,
+    MatchEventSubtype.fake_micro_intron_retention:0.1,
     # major alternation
     # alternative donor/acceptor sites
     MatchEventSubtype.alt_left_site_known:1,
