@@ -173,7 +173,7 @@ class JunctionComparator():
                 logger.warning("Multiple intron retentions in a single event:" + str(isoform_cregion))
             overlapped_isoform_intron = isoform_junctions[isoform_cregion[0]]
             if contains(read_region, overlapped_isoform_intron):
-                if interval_len(overlapped_isoform_intron) < self.params.micro_intron_length:
+                if interval_len(overlapped_isoform_intron) <= self.params.micro_intron_length:
                     return make_event(MatchEventSubtype.fake_micro_intron_retention, isoform_cregion[0], read_cregion)
                 return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
             elif overlaps_at_least(read_region, overlapped_isoform_intron, self.params.minor_exon_extension):
@@ -335,7 +335,7 @@ class JunctionComparator():
             for i, intron in enumerate(isoform_junctions):
                 if contains(read_region, intron):
                     # full intron retention
-                    if interval_len(intron) < self.params.micro_intron_length:
+                    if interval_len(intron) <= self.params.micro_intron_length:
                         events.append(make_event(MatchEventSubtype.fake_micro_intron_retention, isoform_position=i,
                                                  read_region=(JunctionComparator.absent, 0)))
                     else:
