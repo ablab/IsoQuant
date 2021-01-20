@@ -532,15 +532,25 @@ class LongReadAssigner:
         best_isoforms = self.select_best_among_inconsistent(read_matches)
         if not best_isoforms:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
+        logger.debug("* Selected isoforms: " + str(best_isoforms))
 
-        # TODO factor out to classify_assignment
+        assignment_type = self.classify_assignment(best_isoforms, read_matches)
+        if not combined_read_profile.read_intron_profile.read_profile:
+            isoform_matches = self.create_monoexon_matches(read_matches, best_isoforms)
+        elif assignment_type == ReadAssignmentType.inconsistent:
+            isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms)
+        else:
+            isoform_matches = self.create_consistent_matches(read_matches, best_isoforms, combined_read_profile)
+        return ReadAssignment(read_id, assignment_type, isoform_matches)
+
+    def classify_assignment(self, best_isoforms, read_matches):
         is_abmiguous = len(best_isoforms) > 1
         all_event_types = set()
         for isoform_id in best_isoforms:
             for e in read_matches[isoform_id]:
                 all_event_types.add(e.event_type)
 
-        logger.debug("* Selected isoforms: " + str(best_isoforms) + ", all events: " + str(all_event_types))
+        logger.debug("* All events: " + str(all_event_types))
         if all(MatchEventSubtype.is_consistent(e) for e in all_event_types):
             logger.debug("* * Assignment seems to be consistent")
             assignment_type = ReadAssignmentType.ambiguous if is_abmiguous else ReadAssignmentType.unique
@@ -554,13 +564,7 @@ class LongReadAssigner:
             logger.warning("Unexpected event reported: " + str(all_event_types))
             assignment_type = ReadAssignmentType.noninformative
 
-        if not combined_read_profile.read_intron_profile.read_profile:
-            isoform_matches = self.create_monoexon_matches(read_matches, best_isoforms)
-        elif assignment_type == ReadAssignmentType.inconsistent:
-            isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms)
-        else:
-            isoform_matches = self.create_consistent_matches(read_matches, best_isoforms, combined_read_profile)
-        return ReadAssignment(read_id, assignment_type, isoform_matches)
+        return assignment_type
 
     def create_monoexon_matches(self, read_matches, selected_isoforms):
         matches = []
@@ -673,16 +677,21 @@ class LongReadAssigner:
 
         best_score = min(isoform_scores, key=lambda x:x[1])[1]
         logger.debug("* * Best score " + str(best_score))
+        # TODO add nucleotide score for ties
         return [x[0] for x in filter(lambda x:x[1] == best_score, isoform_scores)]
 
     # ==== POLYA STUFF ====
     def verify_read_ends_for_assignment(self, combined_read_profile, assignment):
+        match_dict = {}
         for match in assignment.isoform_matches:
             if match.assigned_transcript is None:
                 continue
             match.match_subclassifications = \
                 self.polya_verifier.verify_read_ends(combined_read_profile, match.assigned_transcript,
                                                      match.match_subclassifications)
-        # TODO fix classification
+            match_dict[match.assigned_transcript] = match.match_subclassifications
+
+        assignment.assignment_type = self.classify_assignment(match_dict.keys(), match_dict)
+
 
 

@@ -157,7 +157,11 @@ class MatchEventSubtype(Enum):
     def is_consistent(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.none,
                                        MatchEventSubtype.mono_exonic,
-                                       MatchEventSubtype.mono_exon_match}
+                                       MatchEventSubtype.mono_exon_match,
+                                       MatchEventSubtype.fsm,
+                                       MatchEventSubtype.ism_left,
+                                       MatchEventSubtype.ism_right,
+                                       MatchEventSubtype.ism_internal}
 
     @staticmethod
     def is_major_elongation(match_event_subtype):
@@ -174,6 +178,7 @@ event_subtype_cost = {
     MatchEventSubtype.none:0,
     MatchEventSubtype.undefined:0,
     MatchEventSubtype.mono_exonic:0,
+    MatchEventSubtype.fsm:0,
     MatchEventSubtype.ism_left:0,
     MatchEventSubtype.ism_right:0,
     MatchEventSubtype.ism_internal:0,
@@ -254,7 +259,7 @@ nnic_event_types = {
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel,
     MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
     MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
-    MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss, MatchEventSubtype.fake_polya_site
+    MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
 }
 
 nic_event_types = {
@@ -266,7 +271,7 @@ nic_event_types = {
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
     MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,
     MatchEventSubtype.major_exon_elongation_right, MatchEventSubtype.incomplete_intron_retention_left,
-    MatchEventSubtype.incomplete_intron_retention_right
+    MatchEventSubtype.incomplete_intron_retention_right, MatchEventSubtype.fake_polya_site
 }
 
 nonintronic_events = {

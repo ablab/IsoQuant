@@ -133,7 +133,6 @@ class TranscriptModelConstructor:
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
 
-    # TODO union of nic and nnic?
     events_to_track = {
         MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention,
         MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
