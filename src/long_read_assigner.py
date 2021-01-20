@@ -705,7 +705,7 @@ class LongReadAssigner:
                 if event.event_type ==  MatchEventSubtype.major_exon_elongation_left:
                     # substitute major elongation with APA site
                     events_to_remove.add(i)
-                elif event.event_type == MatchEventSubtype.fake_terminal_exon_right:
+                elif event.event_type == MatchEventSubtype.fake_terminal_exon_left:
                     fake_terminal_exon_count += 1
 
             assert fake_terminal_exon_count == 0 or len(events_to_remove) == 0
