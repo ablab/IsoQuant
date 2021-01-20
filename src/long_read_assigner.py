@@ -737,8 +737,7 @@ class LongReadAssigner:
             for i in range(fake_terminal_exon_count):
                 exon = read_exons[-i-1]
                 dist_to_polya += max(0, min(polya_pos-exon[0], interval_len(exon)))
-
-            last_good_exon = read_exons[-fake_terminal_exon_count]
+            last_good_exon = read_exons[-fake_terminal_exon_count-1]
             return last_good_exon[1] + dist_to_polya
         else:
             dist_to_polya = 0
