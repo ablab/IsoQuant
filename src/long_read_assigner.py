@@ -644,7 +644,7 @@ class LongReadAssigner:
     # check consistency with polyA
     def verify_polya(self, combined_read_profile, isoform_id, matching_events):
         logger.debug("+ Validating polyA/T sites")
-        if combined_read_profile.polya_pos == -1 and combined_read_profile.polyt_pos == -1 or isoform_id is None:
+        if (combined_read_profile.polya_pos == -1 and combined_read_profile.polyt_pos == -1) or isoform_id is None:
             logger.debug("+ No sites found, ciao")
             return matching_events
 
@@ -714,7 +714,7 @@ class LongReadAssigner:
             if events_to_remove:
                 del matching_events[events_to_remove.pop()]
 
-            self.correct_polya_coord(read_exons, fake_terminal_exon_count, polya_pos, True)
+            self.correct_polya_coord(read_exons, fake_terminal_exon_count, polya_pos, False)
             dist_to_polya = abs(isoform_start - polya_pos)
             logger.debug("+ Distance to polyA is %d" % dist_to_polya)
             if dist_to_polya > self.params.apa_delta:
@@ -726,6 +726,7 @@ class LongReadAssigner:
             matching_events = [make_event(MatchEventSubtype.none)]
         return matching_events
 
+    # correct polyA/T position when fake terminal exons are present or isoform has short terminal exons
     def correct_polya_coord(self, read_exons, fake_terminal_exon_count, polya_pos, forward_read):
         if fake_terminal_exon_count == 0:
             return polya_pos
