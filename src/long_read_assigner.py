@@ -11,6 +11,7 @@ from src.isoform_assignment import *
 from src.gene_info import *
 from src.long_read_profiles import *
 from src.junction_comparator import *
+from src.polya_verification import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -37,6 +38,7 @@ class LongReadAssigner:
                                                     (self.gene_info.intron_profiles.features,
                                                      (self.gene_info.start, self.gene_info.end),
                                                      comparator=partial(equal_ranges, delta=self.params.delta)))
+        self.polya_verifier = PolyAVerifier(self.gene_info, self.params)
 
     # ======== SUPPORT FUNCTIONS =======
     def get_gene_id(self, transcript_id):
@@ -452,7 +454,7 @@ class LongReadAssigner:
             assignment = self.match_consistent_spliced(read_id, combined_read_profile, consistent_isoforms)
 
         if assignment is not None:
-            self.verify_polya_for_assignment(combined_read_profile, assignment)
+            self.verify_read_ends_for_assignment(combined_read_profile, assignment)
         return assignment
 
     def match_consistent_spliced(self, read_id, combined_read_profile, consistent_isoforms):
@@ -531,6 +533,7 @@ class LongReadAssigner:
         if not best_isoforms:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
 
+        # TODO factor out to classify_assignment
         is_abmiguous = len(best_isoforms) > 1
         all_event_types = set()
         for isoform_id in best_isoforms:
@@ -628,125 +631,11 @@ class LongReadAssigner:
                 continue
 
             matching_events += self.categorize_exon_elongation_subtype(read_split_exon_profile, isoform_id)
-            matching_events = self.verify_polya(combined_read_profile, isoform_id, matching_events)
+            matching_events = self.polya_verifier.verify_read_ends(combined_read_profile, isoform_id, matching_events)
             read_matches[isoform_id] = matching_events
 
             logger.debug("+ + Found contradiction for " + isoform_id + ": " + " ".join(map(lambda x: x.event_type.name, matching_events)))
         return read_matches
-
-    def verify_polya_for_assignment(self, combined_read_profile, assignment):
-        for match in assignment.isoform_matches:
-            if match.assigned_transcript is None:
-                continue
-            match.match_subclassifications = \
-                self.verify_polya(combined_read_profile, match.assigned_transcript, match.match_subclassifications)
-
-    # check consistency with polyA
-    def verify_polya(self, combined_read_profile, isoform_id, matching_events):
-        logger.debug("+ Validating polyA/T sites")
-        if (combined_read_profile.polya_pos == -1 and combined_read_profile.polyt_pos == -1) or isoform_id is None:
-            logger.debug("+ No sites found, ciao")
-            return matching_events
-
-        logger.debug("+ Checking isoform %s" % isoform_id)
-        read_exons = combined_read_profile.read_exon_profile.read_features
-        if self.gene_info.isoform_strands[isoform_id] == '+' and combined_read_profile.polya_pos != -1:
-            isoform_end = self.gene_info.transcript_end(isoform_id)
-            read_end = read_exons[-1][1]
-            polya_pos = combined_read_profile.polya_pos
-
-            # FIXME: remove this set once we check these events never appear together
-            events_to_remove = set()
-            fake_terminal_exon_count = 0
-            for i, event in enumerate(matching_events):
-                if event.event_type == MatchEventSubtype.incomplete_intron_retention_right and \
-                        read_end > polya_pos + self.params.polya_window:
-                    # polyA found within intron and inside mapped part of the read
-                    matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
-                                                      isoform_position=event.isoform_position,
-                                                      event_length=read_end-polya_pos))
-                    return matching_events
-
-                if event.event_type == MatchEventSubtype.major_exon_elongation_right:
-                    # substitute major elongation with APA site
-                    events_to_remove.add(i)
-                elif event.event_type == MatchEventSubtype.fake_terminal_exon_right:
-                    fake_terminal_exon_count += 1
-
-            assert fake_terminal_exon_count == 0 or len(events_to_remove) == 0
-            if len(events_to_remove) > 1:
-                logger.warning("Too many extension events on the right side: " + str(events_to_remove))
-            if events_to_remove:
-                del matching_events[events_to_remove.pop()]
-
-            self.correct_polya_coord(read_exons, fake_terminal_exon_count, polya_pos, True)
-            dist_to_polya = abs(isoform_end - polya_pos)
-            logger.debug("+ Distance to polyA is %d" % dist_to_polya)
-            if dist_to_polya > self.params.apa_delta:
-                logger.debug("+ Seems like APA site")
-                matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
-
-        elif self.gene_info.isoform_strands[isoform_id] == '-' and combined_read_profile.polyt_pos != -1:
-            isoform_start = self.gene_info.transcript_start(isoform_id)
-            read_start = read_exons[0][0]
-            polya_pos = combined_read_profile.polyt_pos
-
-            events_to_remove = set()
-            fake_terminal_exon_count = 0
-            for i, event in enumerate(matching_events):
-                if event.event_type == MatchEventSubtype.incomplete_intron_retention_left and \
-                        read_start < polya_pos - self.params.polya_window:
-                    # polyT found within intron and inside mapped part of the read
-                    matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
-                                                      isoform_position=event.isoform_position,
-                                                      event_length=polya_pos-read_start))
-                    return matching_events
-
-                if event.event_type ==  MatchEventSubtype.major_exon_elongation_left:
-                    # substitute major elongation with APA site
-                    events_to_remove.add(i)
-                elif event.event_type == MatchEventSubtype.fake_terminal_exon_left:
-                    fake_terminal_exon_count += 1
-
-            assert fake_terminal_exon_count == 0 or len(events_to_remove) == 0
-            if len(events_to_remove) > 1:
-                logger.warning("Too many extension events on the right side: " + str(events_to_remove))
-            if events_to_remove:
-                del matching_events[events_to_remove.pop()]
-
-            self.correct_polya_coord(read_exons, fake_terminal_exon_count, polya_pos, False)
-            dist_to_polya = abs(isoform_start - polya_pos)
-            logger.debug("+ Distance to polyA is %d" % dist_to_polya)
-            if dist_to_polya > self.params.apa_delta:
-                logger.debug("+ Seems like APA site")
-                matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
-
-        if not matching_events:
-            logger.warning("Empty event list after polyA verification")
-            matching_events = [make_event(MatchEventSubtype.none)]
-        return matching_events
-
-    # correct polyA/T position when fake terminal exons are present or isoform has short terminal exons
-    def correct_polya_coord(self, read_exons, fake_terminal_exon_count, polya_pos, forward_read):
-        if fake_terminal_exon_count == 0:
-            return polya_pos
-
-        assert fake_terminal_exon_count < len(read_exons)
-        if forward_read:
-            dist_to_polya = 0
-            for i in range(fake_terminal_exon_count):
-                exon = read_exons[-i-1]
-                dist_to_polya += max(0, min(polya_pos-exon[0], interval_len(exon)))
-            last_good_exon = read_exons[-fake_terminal_exon_count-1]
-            return last_good_exon[1] + dist_to_polya
-        else:
-            dist_to_polya = 0
-            for i in range(fake_terminal_exon_count):
-                exon = read_exons[i]
-                dist_to_polya += max(0, min(exon[1]-polya_pos, interval_len(exon)))
-
-            first_good_exon = read_exons[fake_terminal_exon_count]
-            return first_good_exon[0] - dist_to_polya
 
     def select_best_among_inconsistent(self, read_matches):
         isoform_scores = []
@@ -785,5 +674,15 @@ class LongReadAssigner:
         best_score = min(isoform_scores, key=lambda x:x[1])[1]
         logger.debug("* * Best score " + str(best_score))
         return [x[0] for x in filter(lambda x:x[1] == best_score, isoform_scores)]
+
+    # ==== POLYA STUFF ====
+    def verify_read_ends_for_assignment(self, combined_read_profile, assignment):
+        for match in assignment.isoform_matches:
+            if match.assigned_transcript is None:
+                continue
+            match.match_subclassifications = \
+                self.polya_verifier.verify_read_ends(combined_read_profile, match.assigned_transcript,
+                                                     match.match_subclassifications)
+        # TODO fix classification
 
 
