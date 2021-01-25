@@ -147,8 +147,8 @@ class TranscriptModelConstructor:
         MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
         MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
         MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_gain_known,
-        MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
-        MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
+        MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel
+        #MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
     }
 
     def __init__(self, gene_info, read_assignment_storage, params):
