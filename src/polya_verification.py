@@ -56,6 +56,7 @@ class PolyAVerifier:
         for i, event in enumerate(matching_events):
             if event.event_type == MatchEventSubtype.incomplete_intron_retention_right and \
                     read_end > polya_pos + self.params.polya_window:
+                # TODO: check for polyA once again
                 # polyA found within intron and inside mapped part of the read
                 matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
                                                   isoform_position=event.isoform_position,

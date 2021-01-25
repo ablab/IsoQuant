@@ -19,11 +19,11 @@ TUPLES2 = [(0, 167), (4, 30)]
 
 TUPLES3 = [(0, 167), (4, 30), (5, 5)]
 
-TUPLES4 = [(0, 175), (3, 100), (0, 10), (3, 100), (0, 10), (4, 3)]
+TUPLES4 = [(0, 150), (3, 100), (0, 10), (3, 100), (0, 11), (4, 27)]
 
-TUPLES5 = [(0, 175), (3, 100), (0, 6), (2, 2), (0, 4), (3, 100), (0, 5), (1, 2), (0, 5), (4, 3)]
+TUPLES5 = [(0, 147), (3, 100), (0, 5), (2, 2), (0, 4), (3, 100), (0, 5), (1, 2), (0, 5), (4, 30)]
 
-TUPLES6 = [(0, 175), (3, 100), (0, 6), (2, 2), (0, 4), (3, 100), (0, 5), (1, 2), (0, 8), (5, 30)]
+TUPLES6 = [(0, 147), (3, 100), (0, 5), (2, 2), (0, 4), (3, 100), (0, 5), (1, 2), (0, 5), (4, 30), (5, 5)]
 
 SEQ1 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
        'GGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGCACTCCAACTGCTGCAAACCG' \
@@ -62,8 +62,8 @@ class TestPolyAFinder:
         assert self.polya_finder.find_polya_tail(alignment) == expected
 
     @pytest.mark.parametrize("alignment, expected",
-                             [(PolyAAlignment('aligned_segment1', TUPLES4, SEQ2, 51054, 63535), 63311),
-                              (PolyAAlignment('aligned_segment2', TUPLES5, SEQ2, 51054, 63535), 63311)])
+                             [(PolyAAlignment('aligned_segment1', TUPLES4, SEQ2, 1000, 1300), 1300),
+                              (PolyAAlignment('aligned_segment2', TUPLES5, SEQ2, 1000, 1300), 1303)])
     def test_find_fake_a_tail(self, alignment, expected):
         assert self.polya_finder.find_polya_tail(alignment) == expected
 
@@ -74,8 +74,8 @@ class TestPolyAFinder:
         assert self.polya_finder.find_polyt_head(alignment) == 51043
 
     @pytest.mark.parametrize("alignment, expected",
-                             [(PolyAAlignment('aligned_segment1', list(reversed(TUPLES5)), SEQ4, 51054, 63535), 51277),
-                              (PolyAAlignment('aligned_segment2', list(reversed(TUPLES6)), SEQ4, 51054, 63535), 51280)])
+                             [(PolyAAlignment('aligned_segment1', list(reversed(TUPLES5)), SEQ4, 1000, 1300), 996),
+                              (PolyAAlignment('aligned_segment2', list(reversed(TUPLES6)), SEQ4, 1000, 1300), 996)])
     def test_find_fake_t_head(self, alignment, expected):
         assert self.polya_finder.find_polyt_head(alignment) == expected
 
