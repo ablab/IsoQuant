@@ -6,20 +6,8 @@
 # See file LICENSE for details.
 ############################################################################
 
-import os
-import sys
-import json
-import logging
-import argparse
-from traceback import print_exc
-from collections import namedtuple
 from shutil import rmtree
 
-import gffutils
-import pysam
-from Bio import SeqIO
-
-from src.input_data_storage import *
 from src.gtf2db import *
 from src.read_mapper import *
 from src.dataset_processor import *
