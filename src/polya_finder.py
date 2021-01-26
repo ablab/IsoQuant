@@ -84,7 +84,7 @@ class PolyAFinder:
         self.polyA_count = int(self.window_size * self.min_polya_fraction)
 
     # == polyA stuff ==
-    def find_polya_tail(self, alignment, start_delta=3):
+    def find_polya_tail(self, alignment, start_delta=0):
         logger.debug("Detecting polyA tail for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_tail_len = 0
@@ -128,7 +128,7 @@ class PolyAFinder:
         logger.debug("PolyA found at position %d" % reference_polya_start)
         return reference_polya_start
 
-    def find_polyt_head(self, alignment, start_delta=3):
+    def find_polyt_head(self, alignment, start_delta=0):
         logger.debug("Detecting polyT head for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_head_len = 0
