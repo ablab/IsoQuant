@@ -93,7 +93,7 @@ class PolyAFinder:
 
     def detect_polya(self, alignement):
         return PolyAInfo(self.find_polya_external(alignement), self.find_polyt_external(alignement),
-                         self.find_polya_internal(alignement), self.find_polya_internal(alignement))
+                         self.find_polya_internal(alignement), self.find_polyt_internal(alignement))
 
     def find_polya_external(self, alignment):
         return self.find_polya_tail(alignment, 2, 2 * self.window_size)
