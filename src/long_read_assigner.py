@@ -65,8 +65,8 @@ class LongReadAssigner:
         for isoform_id, isoform_profile in isoform_profiles.items():
             if hint and isoform_id not in hint:
                 continue
-            isoform_region = (self.gene_info.transcript_start(isoform_id) - self.params.delta,
-                              self.gene_info.transcript_end(isoform_id) + self.params.delta)
+            isoform_region = (self.gene_info.transcript_start(isoform_id) - self.params.min_abs_exon_overlap,
+                              self.gene_info.transcript_end(isoform_id) + self.params.min_abs_exon_overlap)
             read_region = (read_exons[0][0], read_exons[-1][1])
             if contains(isoform_region, read_region):
                 isoforms.add(isoform_id)
@@ -455,6 +455,11 @@ class LongReadAssigner:
 
         if assignment is not None:
             self.verify_read_ends_for_assignment(combined_read_profile, assignment)
+
+            # if apa detected isofrom should be treated as inconsistent and rechecked
+            if assignment.assignment_type == ReadAssignmentType.inconsistent:
+                return None
+
         return assignment
 
     def match_consistent_spliced(self, read_id, combined_read_profile, consistent_isoforms):
