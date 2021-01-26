@@ -22,13 +22,12 @@ class MappedReadProfile:
 
 class CombinedReadProfiles:
     def __init__(self, read_intron_profile, read_exon_profile, read_split_exon_profile,
-                 polya_pos=-1, polyt_pos=-1, cage_hits=-1, alignment=None):
+                 polya_info=None, cage_hits=-1, alignment=None):
         self.read_intron_profile = read_intron_profile
         self.read_exon_profile = read_exon_profile
         self.read_split_exon_profile = read_split_exon_profile
         self.alignment = alignment
-        self.polya_pos = polya_pos
-        self.polyt_pos = polyt_pos
+        self.polya_info = polya_info
         self.cage_hits = cage_hits
         self.corrected_read_start = self.read_exon_profile.read_features[0][0]
         self.corrected_read_end = self.read_exon_profile.read_features[-1][1]

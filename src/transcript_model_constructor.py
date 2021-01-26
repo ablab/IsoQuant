@@ -332,9 +332,10 @@ class TranscriptModelConstructor:
             logger.debug("Checking whether read is reliable")
             # logger.debug(a.combined_profile.read_exon_profile.read_features[0][0],
             #             a.combined_profile.read_exon_profile.read_features[-1][1])
-            # logger.debug("%s %d %d" % (a.read_id, a.combined_profile.polya_pos, a.combined_profile.polyt_pos))
+            # logger.debug("%s %d %d" % (a.read_id, a.combined_profile.polya_info.external_polya_pos,
+            #                            a.combined_profile.polya_info.external_polyt_pos))
             if strand == '+':
-                if not self.params.require_polyA or a.combined_profile.polya_pos != -1:
+                if not self.params.require_polyA or a.combined_profile.polya_info.external_polya_pos != -1:
                     tss = read_exon_profile.read_features[0][0]
                     tts = read_exon_profile.read_features[-1][1]
                     if tss == best_read_3prime_pos:
@@ -345,7 +346,7 @@ class TranscriptModelConstructor:
                     elif tss < best_read_3prime_pos:
                         best_reads = [a]
             else:
-                if not self.params.require_polyA or a.combined_profile.polyt_pos != -1:
+                if not self.params.require_polyA or a.combined_profile.polya_info.external_polyt_pos != -1:
                     tss = read_exon_profile.read_features[-1][1]
                     tts = read_exon_profile.read_features[0][0]
                     if tss == best_read_3prime_pos:
@@ -473,7 +474,7 @@ class TranscriptModelConstructor:
             # change only if there are no extra introns on the left and first intron is not modified
             novel_transcript_start = novel_exons[0][0]
             known_isoform_start = self.gene_info.transcript_start(isoform_id)
-            if (strand == "+" or combined_profile.polyt_pos == -1) and \
+            if (strand == "+" or combined_profile.polya_info.external_polyt_pos == -1) and \
                     abs(novel_transcript_start - known_isoform_start) <= self.params.max_dist_to_isoforms_tsts and \
                     known_isoform_start < novel_exons[0][1]:
                 novel_exons[0] = (known_isoform_start, novel_exons[0][1])
@@ -484,7 +485,7 @@ class TranscriptModelConstructor:
             # change only if there are no extra introns on the right and last intron is not modified
             novel_transcript_end = novel_exons[-1][1]
             known_isoform_end = self.gene_info.transcript_end(isoform_id)
-            if (strand == "-" or combined_profile.polya_pos == -1) and \
+            if (strand == "-" or combined_profile.polya_info.external_polya_pos == -1) and \
                     abs(novel_transcript_end - known_isoform_end) <= self.params.max_dist_to_isoforms_tsts and \
                     known_isoform_end > novel_exons[-1][0]:
                 novel_exons[-1] = (novel_exons[-1][0], known_isoform_end)

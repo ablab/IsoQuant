@@ -6,6 +6,8 @@ import os
 
 from src.long_read_assigner import *
 from src.gene_info import *
+from src.polya_finder import PolyAInfo
+
 
 class Params:
     def __init__(self, delta):
@@ -418,7 +420,8 @@ class TestAssignIsoform:
         intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
         exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
         split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
-        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile, polya_pos, polyt_pos)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
+                                                PolyAInfo(polya_pos, polyt_pos, -1, -1))
 
         read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
         assert read_assignment.assignment_type == ReadAssignmentType.unique
@@ -448,7 +451,8 @@ class TestAssignIsoform:
         intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
         exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
         split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
-        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile, polya_pos, polyt_pos)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
+                                                PolyAInfo(polya_pos, polyt_pos, -1, -1))
 
         read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
         assert read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference
@@ -468,7 +472,8 @@ class TestAssignIsoform:
         intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
         exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
         split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
-        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile, polya_pos, polyt_pos)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
+                                                PolyAInfo(polya_pos, polyt_pos, -1, -1))
 
         read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
         assert read_assignment.assignment_type == ReadAssignmentType.ambiguous
@@ -513,7 +518,8 @@ class TestAssignIsoform:
         intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, polya_pos, polyt_pos)
         exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, polya_pos, polyt_pos)
         split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, polya_pos, polyt_pos)
-        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile, polya_pos, polyt_pos)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
+                                                PolyAInfo(polya_pos, polyt_pos, -1, -1))
 
         read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
         assert read_assignment.assignment_type == ReadAssignmentType.inconsistent

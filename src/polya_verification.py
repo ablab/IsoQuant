@@ -22,107 +22,134 @@ class PolyAVerifier:
     # check consistency with polyA
     def verify_read_ends(self, combined_read_profile, isoform_id, matching_events):
         logger.debug("+ Validating polyA/T sites")
-        if (combined_read_profile.polya_pos == -1 and combined_read_profile.polyt_pos == -1) or isoform_id is None:
+        if isoform_id is None:
             logger.debug("+ No sites found, ciao")
             return matching_events
 
         logger.debug("+ Checking isoform %s" % isoform_id)
         read_exons = combined_read_profile.read_exon_profile.read_features
+        polya_info = combined_read_profile.polya_info
         isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
 
-        if self.gene_info.isoform_strands[isoform_id] == '+' and combined_read_profile.polya_pos != -1:
-            matching_events, corrected_read_end = self.verify_polya(isoform_exons, read_exons,
-                                                                    combined_read_profile.polya_pos, matching_events)
-            combined_read_profile.corrected_read_end = corrected_read_end
+        if self.gene_info.isoform_strands[isoform_id] == '+':
+            if polya_info.internal_polya_pos != -1:
+                # check for internal intron polyA priming
+                matching_events, is_internal = self.check_internal_polya(polya_info.internal_polya_pos, matching_events)
+                if is_internal:
+                    return matching_events
 
-        elif self.gene_info.isoform_strands[isoform_id] == '-' and combined_read_profile.polyt_pos != -1:
-            matching_events, corrected_read_start = self.verify_polyt(isoform_exons, read_exons,
-                                                                      combined_read_profile.polyt_pos, matching_events)
-            combined_read_profile.corrected_read_start = corrected_read_start
+            if polya_info.external_polya_pos != -1:
+                matching_events, corrected_read_end = self.verify_polya(isoform_exons, read_exons,
+                                                                        polya_info, matching_events)
+                combined_read_profile.corrected_read_end = corrected_read_end
+
+        elif self.gene_info.isoform_strands[isoform_id] == '-':
+            if polya_info.internal_polyt_pos != -1:
+                # check for internal intron polyA priming
+                matching_events, is_internal = self.check_internal_polyt(polya_info.internal_polyt_pos, matching_events)
+                if is_internal:
+                    return matching_events
+
+            if polya_info.external_polyt_pos != -1:
+                matching_events, corrected_read_start = self.verify_polyt(isoform_exons, read_exons,
+                                                                          polya_info, matching_events)
+                combined_read_profile.corrected_read_start = corrected_read_start
 
         if not matching_events:
             logger.warning("Empty event list after polyA verification")
             matching_events = [make_event(MatchEventSubtype.none)]
         return matching_events
 
-    def verify_polya(self, isoform_exons, read_exons, polya_pos, matching_events):
+    def verify_polya(self, isoform_exons, read_exons, polya_info, matching_events):
         isoform_end = isoform_exons[-1][1]
-        read_end = read_exons[-1][1]
-
-        # FIXME: remove this set once we check these events never appear together
-        events_to_remove = set()
+        event_to_remove = -1
         fake_terminal_exon_count = 0
         # checking events
         for i, event in enumerate(matching_events):
-            if event.event_type == MatchEventSubtype.incomplete_intron_retention_right and \
-                    read_end > polya_pos + self.params.polya_window:
-                # TODO: check for polyA once again
-                # polyA found within intron and inside mapped part of the read
-                matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
-                                                  isoform_position=event.isoform_position,
-                                                  event_length=read_end - polya_pos))
-                return matching_events, polya_pos
-
             if event.event_type == MatchEventSubtype.major_exon_elongation_right:
                 # substitute major elongation with APA site
-                events_to_remove.add(i)
+                event_to_remove = i
             elif event.event_type == MatchEventSubtype.fake_terminal_exon_right:
                 fake_terminal_exon_count += 1
 
-        assert fake_terminal_exon_count == 0 or len(events_to_remove) == 0
-        if len(events_to_remove) > 1:
-            logger.warning("Too many extension events on the right side: " + str(events_to_remove))
-        if events_to_remove:
-            del matching_events[events_to_remove.pop()]
+        assert fake_terminal_exon_count == 0 or event_to_remove == -1
+        if event_to_remove != -1:
+            del matching_events[event_to_remove]
 
-        corrected_read_end = self.truncate_fake_terminal_exons(read_exons, fake_terminal_exon_count, polya_pos)
+        corrected_read_end = self.truncate_fake_terminal_exons(read_exons, fake_terminal_exon_count,
+                                                               polya_info.external_polya_pos)
         matching_events, corrected_read_end = \
             self.check_reference_terminal_exons(isoform_exons, corrected_read_end, matching_events)
 
-        dist_to_polya = abs(isoform_end - corrected_read_end)
+        # accidentally aligned polyA tails must not create APA site
+        dist_external_to_polya = abs(isoform_end - corrected_read_end)
+        dist_to_internal_polya = abs(isoform_end - polya_info.internal_polya_pos)
+        dist_to_polya = min(dist_external_to_polya, dist_to_internal_polya)
         logger.debug("+ Distance to polyA is %d" % dist_to_polya)
         if dist_to_polya > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
         return matching_events, corrected_read_end
 
-    def verify_polyt(self, isoform_exons, read_exons, polyt_pos, matching_events):
+    def verify_polyt(self, isoform_exons, read_exons, polya_info, matching_events):
         isoform_start = isoform_exons[0][0]
-        read_start = read_exons[0][0]
-
-        events_to_remove = set()
+        event_to_remove = -1
         fake_terminal_exon_count = 0
         for i, event in enumerate(matching_events):
-            if event.event_type == MatchEventSubtype.incomplete_intron_retention_left and \
-                    read_start < polyt_pos - self.params.polya_window:
-                # polyT found within intron and inside mapped part of the read
-                matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
-                                                  isoform_position=event.isoform_position,
-                                                  event_length=polyt_pos - read_start))
-                return matching_events, polyt_pos
-
             if event.event_type == MatchEventSubtype.major_exon_elongation_left:
                 # substitute major elongation with APA site
-                events_to_remove.add(i)
+                event_to_remove = i
             elif event.event_type == MatchEventSubtype.fake_terminal_exon_left:
                 fake_terminal_exon_count += 1
 
-        assert fake_terminal_exon_count == 0 or len(events_to_remove) == 0
-        if len(events_to_remove) > 1:
-            logger.warning("Too many extension events on the left side: " + str(events_to_remove))
-        if events_to_remove:
-            del matching_events[events_to_remove.pop()]
+        assert fake_terminal_exon_count == 0 or event_to_remove == -1
+        if event_to_remove != -1:
+            del matching_events[event_to_remove]
 
-        corrected_read_start = self.truncate_fake_starting_exons(read_exons, fake_terminal_exon_count, polyt_pos)
+        corrected_read_start = self.truncate_fake_starting_exons(read_exons, fake_terminal_exon_count,
+                                                                 polya_info.external_polyt_pos)
         matching_events, corrected_read_start = \
             self.check_reference_starting_exons(isoform_exons, corrected_read_start, matching_events)
 
-        dist_to_polya = abs(isoform_start - corrected_read_start)
+        # accidentally aligned polyT head must not create APA site
+        dist_external_to_polya = abs(isoform_start - corrected_read_start)
+        dist_to_internal_polya = abs(isoform_start - polya_info.internal_polyt_pos)
+        dist_to_polya = min(dist_external_to_polya, dist_to_internal_polya)
         logger.debug("+ Distance to polyA is %d" % dist_to_polya)
         if dist_to_polya > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
         return matching_events, corrected_read_start
+
+    # check if polyA found within intron and inside mapped part of the read
+    def check_internal_polya(self, internal_polya_pos, matching_events):
+        if internal_polya_pos == -1:
+            return matching_events, False
+
+        for i, event in enumerate(matching_events):
+            if event.event_type == MatchEventSubtype.incomplete_intron_retention_right:
+                matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
+                                                  isoform_position=event.isoform_position,
+                                                  event_length=internal_polya_pos))
+                return matching_events, True
+
+        return matching_events, False
+
+    # check if polyT found within intron and inside mapped part of the read
+    def check_internal_polyt(self, internal_polyt_pos, matching_events):
+        if internal_polyt_pos == -1:
+            return matching_events, False
+
+        fake_terminal_exon_count = 0
+        for i, event in enumerate(matching_events):
+            if event.event_type == MatchEventSubtype.incomplete_intron_retention_left:
+                # polyT found within intron and inside mapped part of the read
+                matching_events.append(make_event(MatchEventSubtype.fake_polya_site,
+                                                  isoform_position=event.isoform_position,
+                                                  event_length=internal_polyt_pos))
+                return matching_events, True
+
+        return matching_events, False
 
     # correct polyA position when fake terminal exons are present or isoform has short terminal exons
     def truncate_fake_terminal_exons(self, read_exons, fake_terminal_exon_count, polya_pos):

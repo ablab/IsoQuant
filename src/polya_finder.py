@@ -77,14 +77,38 @@ def move_ref_coord_alogn_alignment(alignment, shift):
     return reference_length_consumed
 
 
+class PolyAInfo:
+    def __init__(self, external_polya_pos, external_polyt_pos, internal_polya_pos, internal_polyt_pos):
+        self.external_polya_pos = external_polya_pos
+        self.external_polyt_pos = external_polyt_pos
+        self.internal_polya_pos = internal_polya_pos
+        self.internal_polyt_pos = internal_polyt_pos
+
+
 class PolyAFinder:
     def __init__(self, window_size=16, min_polya_fraction=0.75):
         self.window_size = window_size
         self.min_polya_fraction = min_polya_fraction
         self.polyA_count = int(self.window_size * self.min_polya_fraction)
 
+    def detect_polya(self, alignement):
+        return PolyAInfo(self.find_polya_external(alignement), self.find_polyt_external(alignement),
+                         self.find_polya_internal(alignement), self.find_polya_internal(alignement))
+
+    def find_polya_external(self, alignment):
+        return self.find_polya_tail(alignment, 2, 2 * self.window_size)
+
+    def find_polya_internal(self, alignment):
+        return self.find_polya_tail(alignment, 4 * self.window_size, 2)
+
+    def find_polyt_external(self, alignment):
+        return self.find_polyt_head(alignment, 2, 2 * self.window_size)
+
+    def find_polyt_internal(self, alignment):
+        return self.find_polyt_head(alignment, 4 * self.window_size, 2)
+
     # == polyA stuff ==
-    def find_polya_tail(self, alignment, start_delta=0):
+    def find_polya_tail(self, alignment, from_pos, to_pos):
         logger.debug("Detecting polyA tail for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_tail_len = 0
@@ -102,8 +126,8 @@ class PolyAFinder:
         assert soft_clipped_tail_len < len(seq)
 
         read_mapped_region_end = len(seq) - soft_clipped_tail_len
-        to_check_start = max(0, read_mapped_region_end - start_delta)
-        to_check_end = min(len(seq), read_mapped_region_end + 2 * self.window_size + 1)
+        to_check_start = max(0, read_mapped_region_end - from_pos)
+        to_check_end = min(len(seq), read_mapped_region_end + to_pos + 1)
         sequence_to_check = alignment.seq[to_check_start:to_check_end].upper()
         pos = self.find_polya(sequence_to_check.upper())
 
@@ -128,7 +152,7 @@ class PolyAFinder:
         logger.debug("PolyA found at position %d" % reference_polya_start)
         return reference_polya_start
 
-    def find_polyt_head(self, alignment, start_delta=0):
+    def find_polyt_head(self, alignment, from_pos, to_pos):
         logger.debug("Detecting polyT head for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_head_len = 0
@@ -146,8 +170,8 @@ class PolyAFinder:
         assert soft_clipped_head_len < len(seq)
 
         read_mapped_region_start = soft_clipped_head_len
-        to_check_start = max(0, read_mapped_region_start - 2 * self.window_size)
-        to_check_end = min(len(seq), read_mapped_region_start + start_delta + 1)
+        to_check_start = max(0, read_mapped_region_start - to_pos)
+        to_check_end = min(len(seq), read_mapped_region_start + from_pos + 1)
         sequence_to_check = str(Seq.Seq(alignment.seq[to_check_start:to_check_end]).reverse_complement()).upper()
 
         pos = self.find_polya(sequence_to_check.upper())

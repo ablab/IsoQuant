@@ -48,36 +48,36 @@ class TestPolyAFinder:
     @pytest.mark.parametrize("alignment",
                              [PolyAAlignment('aligned_segment1', TUPLES1, SEQ1, 51054, 63535)])
     def test_no_t_head(self, alignment):
-        assert self.polya_finder.find_polyt_head(alignment) == -1
+        assert self.polya_finder.find_polyt_external(alignment) == -1
 
     @pytest.mark.parametrize("alignment",
                              [PolyAAlignment('aligned_segment1', TUPLES1, SEQ1, 51054, 63535)])
     def test_no_a_tail(self, alignment):
-        assert self.polya_finder.find_polya_tail(alignment) == -1
+        assert self.polya_finder.find_polya_external(alignment) == -1
 
     @pytest.mark.parametrize("alignment, expected",
                              [(PolyAAlignment('aligned_segment1', TUPLES2, SEQ2, 51054, 63535), 63538),
                               (PolyAAlignment('aligned_segment1', TUPLES3, SEQ2, 51054, 63535), 63538)])
     def test_find_a_tail(self, alignment, expected):
-        assert self.polya_finder.find_polya_tail(alignment) == expected
+        assert self.polya_finder.find_polya_external(alignment) == expected
 
     @pytest.mark.parametrize("alignment, expected",
                              [(PolyAAlignment('aligned_segment1', TUPLES4, SEQ2, 1000, 1300), 1300),
                               (PolyAAlignment('aligned_segment2', TUPLES5, SEQ2, 1000, 1300), 1303)])
     def test_find_fake_a_tail(self, alignment, expected):
-        assert self.polya_finder.find_polya_tail(alignment) == expected
+        assert self.polya_finder.find_polya_external(alignment) == expected
 
     @pytest.mark.parametrize("alignment",
                              [PolyAAlignment('aligned_segment1', list(reversed(TUPLES2)), SEQ3, 51054, 63535),
                               PolyAAlignment('aligned_segment1', list(reversed(TUPLES3)), SEQ3, 51054, 63535)])
     def test_find_t_head(self, alignment):
-        assert self.polya_finder.find_polyt_head(alignment) == 51043
+        assert self.polya_finder.find_polyt_external(alignment) == 51043
 
     @pytest.mark.parametrize("alignment, expected",
                              [(PolyAAlignment('aligned_segment1', list(reversed(TUPLES5)), SEQ4, 1000, 1300), 996),
                               (PolyAAlignment('aligned_segment2', list(reversed(TUPLES6)), SEQ4, 1000, 1300), 996)])
     def test_find_fake_t_head(self, alignment, expected):
-        assert self.polya_finder.find_polyt_head(alignment) == expected
+        assert self.polya_finder.find_polyt_external(alignment) == expected
 
     @pytest.mark.parametrize("seq, expected",
                              [('TTTATATTGGTATTTTGCC', -1),
