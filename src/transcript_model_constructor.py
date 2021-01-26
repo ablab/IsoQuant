@@ -373,7 +373,8 @@ class TranscriptModelConstructor:
 
         combined_profile = read_assignment.combined_profile
         read_introns = combined_profile.read_intron_profile.read_features
-        read_start, read_end = self.get_read_region(strand, combined_profile, read_inconsistencies)
+        read_start = combined_profile.corrected_read_start
+        read_end = combined_profile.corrected_read_end
         novel_exons = []
 
         logger.debug("Isoform I " + str(isoform_introns))
@@ -611,24 +612,6 @@ class TranscriptModelConstructor:
         #                                                    for x in sorted(modification_events_map.keys())]))
         return modification_events_map
 
-    # get tentative transcript start and end based on polyA and mapping coordinates
-    def get_read_region(self, strand, combined_profile, read_inconsistencies = None):
-        if read_inconsistencies == None:
-            read_inconsistencies = []
-        starting_exon_position = reduce(lambda x, y: x + (1 if y.event_type == MatchEventSubtype.fake_terminal_exon_left else 0),
-                                        read_inconsistencies, 0)
-        read_start = combined_profile.read_exon_profile.read_features[starting_exon_position][0]
-
-        terminal_exon_position = reduce(lambda x, y: x + (1 if y.event_type == MatchEventSubtype.fake_terminal_exon_right else 0),
-                                        read_inconsistencies, 0)
-        read_end = combined_profile.read_exon_profile.read_features[-terminal_exon_position-1][1]
-
-        if strand == "+" and combined_profile.polya_pos != -1:
-            read_end = combined_profile.polya_pos
-        elif strand == '-' and combined_profile.polyt_pos != -1:
-            read_start = combined_profile.polyt_pos
-        return read_start, read_end
-
     def get_closest_ref_intron(self, read_intron):
         # TODO speed up - binray search or interval tree
         intron_profile = self.intron_profile_constructor.construct_profile_for_features([read_intron])
@@ -658,7 +641,8 @@ class TranscriptModelConstructor:
         assigned_reads = []
         unassigned_reads = []
         for assignment in read_assignments:
-            read_start, read_end = self.get_read_region(strand, assignment.combined_profile)
+            read_start = assignment.combined_profile.corrected_read_start
+            read_end = assignment.combined_profile.corrected_read_end
             start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
             end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
             if start_matches and end_matches:
@@ -699,7 +683,8 @@ class TranscriptModelConstructor:
         for assignment in read_assignments:
             read_inconsistencies = self.get_read_inconsistencies(isoform_id, assignment)
             read_introns = assignment.combined_profile.read_intron_profile.read_features
-            read_start, read_end = self.get_read_region(strand, assignment.combined_profile, read_inconsistencies)
+            read_start = assignment.combined_profile.corrected_read_start
+            read_end = assignment.combined_profile.corrected_read_end
             start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
             end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
             # profile_matches =  all(el == 1 for el in read_profile.read_profile)

@@ -30,6 +30,8 @@ class CombinedReadProfiles:
         self.polya_pos = polya_pos
         self.polyt_pos = polyt_pos
         self.cage_hits = cage_hits
+        self.corrected_read_start = self.read_exon_profile.read_features[0][0]
+        self.corrected_read_end = self.read_exon_profile.read_features[-1][1]
 
 
 # The following 2 classes are very similar, but lets keep them separately for now
