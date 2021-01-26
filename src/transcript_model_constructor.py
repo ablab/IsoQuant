@@ -552,7 +552,7 @@ class TranscriptModelConstructor:
         elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_known,
                                         MatchEventSubtype.intron_migration,
                                         MatchEventSubtype.exon_skipping_known,
-                                        MatchEventSubtype.exon_detatch_known}:
+                                        MatchEventSubtype.exon_merge_known}:
             # simply add corrected read intron
             novel_intron = self.get_closest_ref_intron((read_intron[0], read_intron[1]))
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
