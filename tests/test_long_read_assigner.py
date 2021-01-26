@@ -10,7 +10,7 @@ from src.gene_info import *
 class Params:
     def __init__(self, delta):
         self.delta = delta
-        self.minor_exon_extension = 10
+        self.minor_exon_extension = 15
         self.major_exon_extension = 100
         self.min_abs_exon_overlap = 10
         self.min_rel_exon_overlap = 0.2
@@ -431,11 +431,11 @@ class TestAssignIsoform:
                                "ENSMUST00000001712.7", MatchEventSubtype.intron_shift),
                               ([(1000, 1100), (2000, 2092), (2295, 2400), (3000, 3300)], -1, -1,
                                "ENSMUST00000001712.7", MatchEventSubtype.intron_shift),
-                              ([(2000, 2098), (2301, 2400), (3001, 3300), (9500, 10008)], -1, -1,
+                              ([(2000, 2098), (2301, 2400), (3001, 3300), (9500, 10012)], -1, -1,
                                "ENSMUST00000001712.7", MatchEventSubtype.exon_elongation_right),
                               ([(1000, 1100), (2000, 2200), (2500, 2600), (3000, 3303), (9496, 10000)],
                                -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.exon_misallignment),
-                              ([(993, 1100), (2000, 2200), (2500, 2602), (2998, 3300), (6000, 6011), (9500, 9600)],
+                              ([(988, 1100), (2000, 2200), (2500, 2602), (2998, 3300), (6000, 6011), (9500, 9600)],
                                -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.exon_elongation_left),
                               ([(7998, 8201), (8500, 8800), (9900, 9907)], -1, -1,
                                "ENSMUST00000001715.7", MatchEventSubtype.fake_terminal_exon_right),
