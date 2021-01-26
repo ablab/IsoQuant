@@ -17,31 +17,6 @@ from src.junction_comparator import *
 logger = logging.getLogger('IsoQuant')
 
 
-class TranscriptModelType(Enum):
-    known = 1
-    novel_in_catalog = 2
-    novel_not_in_catalog = 10
-
-
-# simple class for storing all information needed for GFF
-class TranscriptModel:
-    def __init__(self, chr_id, strand, transcript_id, reference_transcript, reference_gene, exon_blocks, transcript_type):
-        self.chr_id = chr_id
-        self.strand = strand
-        self.transcript_id = transcript_id
-        self.gene_id = reference_gene
-        self.reference_transcript = reference_transcript
-        self.reference_gene = reference_gene
-        self.exon_blocks = exon_blocks
-        self.transcript_type = transcript_type
-
-    def get_start(self):
-        return self.exon_blocks[0][0]
-
-    def get_end(self):
-        return self.exon_blocks[-1][1]
-
-
 class GFFPrinter:
     def __init__(self, outf_prefix, sample_name, print_meta_features=False):
         self.model_fname = os.path.join(outf_prefix, sample_name + ".transcript_models.gtf")

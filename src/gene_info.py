@@ -6,12 +6,39 @@
 
 import logging
 import gffutils
+from enum import Enum, unique
 from functools import partial
 from collections import defaultdict
 
 from src.common import *
 
 logger = logging.getLogger('IsoQuant')
+
+
+@unique
+class TranscriptModelType(Enum):
+    known = 1
+    novel_in_catalog = 2
+    novel_not_in_catalog = 10
+
+
+# simple class for storing all information needed for GFF
+class TranscriptModel:
+    def __init__(self, chr_id, strand, transcript_id, reference_transcript, reference_gene, exon_blocks, transcript_type):
+        self.chr_id = chr_id
+        self.strand = strand
+        self.transcript_id = transcript_id
+        self.gene_id = reference_gene
+        self.reference_transcript = reference_transcript
+        self.reference_gene = reference_gene
+        self.exon_blocks = exon_blocks
+        self.transcript_type = transcript_type
+
+    def get_start(self):
+        return self.exon_blocks[0][0]
+
+    def get_end(self):
+        return self.exon_blocks[-1][1]
 
 
 # storage for feature profiles of all known isoforms of a gene or a set of overlapping genes
@@ -70,7 +97,7 @@ class FeatureInfo:
 # All gene(s) information
 class GeneInfo:
     # chr_bam_prefix: additional string used when bam files were aligned to different reference that has difference in chromosome names (e.g. 1 and chr1)
-    def __init__(self, gene_db_list, db, delta = 0):
+    def __init__(self, gene_db_list, db, delta=0):
         # gffutils main structure
         self.db = db
         # list of genes in cluster
@@ -97,7 +124,47 @@ class GeneInfo:
         self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
         self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
 
-        #self.print_debug()
+    @classmethod
+    def from_model(self, transcript_model, delta=0):
+        self.db = None
+        self.gene_db_list = []
+        # gene region
+        self.chr_id = transcript_model.chr_id
+        self.start = transcript_model.get_start()
+        self.end = transcript_model.get_end()
+        self.delta = delta
+
+        # profiles for all known isoforoms
+        self.intron_profiles = FeatureProfiles()
+        self.exon_profiles = FeatureProfiles()
+        self.split_exon_profiles = FeatureProfiles()
+        self.ambiguous_isoforms = set()
+
+        exons = transcript_model.exon_blocks
+        introns = junctions_from_blocks(transcript_model.exon_blocks)
+        t_id = transcript_model.transcript_id
+        transcript_region = (transcript_model.get_start(), transcript_model.get_end())
+
+        self.all_isoforms_exons = {}
+        self.all_isoforms_exons[t_id] = exons
+        self.all_isoforms_introns = {}
+        self.all_isoforms_introns[t_id] = introns
+
+        self.exon_profiles.set_features(exons)
+        self.split_exon_profiles.set_features(exons)
+        self.intron_profiles.set_features(introns)
+
+        self.intron_profiles.set_profiles(t_id, introns, transcript_region, partial(equal_ranges, delta=0))
+        self.exon_profiles.set_profiles(t_id, exons, transcript_region, partial(equal_ranges, delta=0))
+        self.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
+
+        self.isoform_strands = {}
+        self.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
+        self.gene_id_map = {}
+        self.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
+
+        self.exon_property_map = None
+        self.intron_property_map = None
 
     def print_debug(self):
         gene_names = []
