@@ -66,7 +66,8 @@ class PolyAVerifier:
         fake_terminal_exon_count = 0
         # checking events
         for i, event in enumerate(matching_events):
-            if event.event_type == MatchEventSubtype.major_exon_elongation_right:
+            if event.event_type in [MatchEventSubtype.major_exon_elongation_right,
+                                    MatchEventSubtype.exon_elongation_right]:
                 # substitute major elongation with APA site
                 event_to_remove = i
             elif event.event_type == MatchEventSubtype.fake_terminal_exon_right:
@@ -89,6 +90,9 @@ class PolyAVerifier:
         if dist_to_polya > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
+        elif dist_to_polya > self.params.delta:
+            logger.debug("+ Seems like minor exon elongation site")
+            matching_events.append(make_event(MatchEventSubtype.exon_elongation_right, event_length=dist_to_polya))
         return matching_events, corrected_read_end
 
     def verify_polyt(self, isoform_exons, read_exons, polya_info, matching_events):
@@ -96,8 +100,9 @@ class PolyAVerifier:
         event_to_remove = -1
         fake_terminal_exon_count = 0
         for i, event in enumerate(matching_events):
-            if event.event_type == MatchEventSubtype.major_exon_elongation_left:
-                # substitute major elongation with APA site
+            if event.event_type in [MatchEventSubtype.major_exon_elongation_left,
+                                    MatchEventSubtype.exon_elongation_left]:
+                # substitute elongation with APA site if major
                 event_to_remove = i
             elif event.event_type == MatchEventSubtype.fake_terminal_exon_left:
                 fake_terminal_exon_count += 1
@@ -119,6 +124,9 @@ class PolyAVerifier:
         if dist_to_polya > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
+        elif dist_to_polya > self.params.delta:
+            logger.debug("+ Seems like minor exon elongation site")
+            matching_events.append(make_event(MatchEventSubtype.exon_elongation_left, event_length=dist_to_polya))
         return matching_events, corrected_read_start
 
     # check if polyA found within intron and inside mapped part of the read
