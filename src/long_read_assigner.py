@@ -653,7 +653,8 @@ class LongReadAssigner:
             score = 0.0
             for e in match_events:
                 event_count = 1
-                if e.read_region != SupplementaryMatchConstansts.undefined_region:
+                if e.read_region != SupplementaryMatchConstansts.undefined_region and \
+                        JunctionComparator.absent not in e.read_region:
                     event_count = e.read_region[1] - e.read_region[0] + 1
                     if e.event_type in {MatchEventSubtype.exon_gain_novel,
                                         MatchEventSubtype.exon_gain_known,
@@ -664,6 +665,7 @@ class LongReadAssigner:
                         event_count -= 1
                     elif e.event_type in {MatchEventSubtype.intron_retention,
                                           MatchEventSubtype.unspliced_intron_retention,
+                                          MatchEventSubtype.fake_micro_intron_retention,
                                           MatchEventSubtype.incomplete_intron_retention_left,
                                           MatchEventSubtype.incomplete_intron_retention_right}:
                         event_count = 1

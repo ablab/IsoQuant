@@ -15,7 +15,7 @@ from src.long_read_profiles import *
 logger = logging.getLogger('IsoQuant')
 
 
-class JunctionComparator():
+class JunctionComparator:
     absent = -10
 
     def __init__(self, params, intron_profile_constructor):
