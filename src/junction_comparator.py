@@ -232,9 +232,9 @@ class JunctionComparator():
                 (read_cregion[0] == len(read_junctions)-1 and isoform_cregion[0] == len(isoform_junctions) - 1):
             # terminal exon alternation
             if read_introns_known:
-                event = MatchEventSubtype.alternative_structure_known
+                event = MatchEventSubtype.terminal_exon_shift_known
             else:
-                event = MatchEventSubtype.alternative_structure_novel
+                event = MatchEventSubtype.terminal_exon_shift_novel
 
         elif surrounded_by_exons and similar_bounds and \
                 read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] >= 1 and \
