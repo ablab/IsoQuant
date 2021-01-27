@@ -285,9 +285,9 @@ class TestCompareJunctions:
                                MatchEventSubtype.exon_detatch_novel),
                               ([(50, 60), (80, 110)], (0, 150), [(50, 90)], (9, 149), 2,
                                MatchEventSubtype.exon_detatch_known),
-                              ([(50, 60), (80, 110)], (30, 150), [(20, 60), (80, 100)], (0, 150), 2,
+                              ([(50, 60), (80, 110)], (30, 150), [(20, 60), (80, 110)], (0, 150), 2,
                                MatchEventSubtype.terminal_exon_shift_known),
-                              ([(43, 60), (80, 110)], (23, 150), [(20, 60), (80, 100)], (0, 150), 2,
+                              ([(43, 60), (80, 110)], (23, 150), [(20, 60), (80, 110)], (0, 150), 2,
                                MatchEventSubtype.terminal_exon_shift_novel),
                               ([(10, 13), (95, 100)], (0, 150), [(10, 100)], (9, 149), 2,
                                MatchEventSubtype.intron_retention)])
