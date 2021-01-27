@@ -139,7 +139,6 @@ class TranscriptModelConstructor:
         MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
         MatchEventSubtype.extra_intron_novel, MatchEventSubtype.extra_intron_known,
         MatchEventSubtype.extra_intron_flanking_left, MatchEventSubtype.extra_intron_flanking_right,
-        MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
         MatchEventSubtype.intron_migration,
         MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
         MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.mutually_exclusive_exons_known,
