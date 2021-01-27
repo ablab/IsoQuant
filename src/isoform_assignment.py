@@ -232,9 +232,9 @@ event_subtype_cost = {
     MatchEventSubtype.alternative_structure_novel:1,
     MatchEventSubtype.alternative_structure_known:1,
     # TTS and TSS
-    MatchEventSubtype.alternative_polya_site:0.1,
+    MatchEventSubtype.alternative_polya_site:0.75,
     MatchEventSubtype.fake_polya_site:0.5,
-    MatchEventSubtype.alternative_tss :0.1
+    MatchEventSubtype.alternative_tss :0.75
 }
 
 
