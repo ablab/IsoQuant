@@ -73,7 +73,7 @@ class PolyAVerifier:
             elif event.event_type == MatchEventSubtype.fake_terminal_exon_right:
                 fake_terminal_exon_count += 1
 
-        assert fake_terminal_exon_count == 0 or event_to_remove == -1
+        #assert fake_terminal_exon_count == 0 or event_to_remove == -1
         if event_to_remove != -1:
             del matching_events[event_to_remove]
 
@@ -107,7 +107,7 @@ class PolyAVerifier:
             elif event.event_type == MatchEventSubtype.fake_terminal_exon_left:
                 fake_terminal_exon_count += 1
 
-        assert fake_terminal_exon_count == 0 or event_to_remove == -1
+        #assert fake_terminal_exon_count == 0 or event_to_remove == -1
         if event_to_remove != -1:
             del matching_events[event_to_remove]
 
