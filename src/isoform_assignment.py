@@ -125,6 +125,9 @@ class MatchEventSubtype(Enum):
     # similar to mutually exclusive exons but when reference exon is attached to another exon
     exon_detatch_known = 147
     exon_detatch_novel = 148
+    # terminal exon shift
+    terminal_exon_shift_known = 151
+    terminal_exon_shift_novel = 152
     # other
     alternative_structure_novel = 181
     alternative_structure_known = 182
@@ -228,6 +231,8 @@ event_subtype_cost = {
     MatchEventSubtype.exon_gain_novel:1,
     MatchEventSubtype.exon_detatch_known:1,
     MatchEventSubtype.exon_detatch_novel:1,
+    MatchEventSubtype.terminal_exon_shift_known:0.5,
+    MatchEventSubtype.terminal_exon_shift_novel:0.5,
     # other
     MatchEventSubtype.alternative_structure_novel:1,
     MatchEventSubtype.alternative_structure_known:1,
@@ -258,6 +263,7 @@ nnic_event_types = {
     MatchEventSubtype.extra_intron_flanking_right, MatchEventSubtype.mutually_exclusive_exons_novel,
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel,
     MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
+    MatchEventSubtype.terminal_exon_shift_novel,
     MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
     MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
 }
@@ -268,6 +274,7 @@ nic_event_types = {
     MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
     MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known,
     MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
+    MatchEventSubtype.terminal_exon_shift_known,
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
     MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,
     MatchEventSubtype.major_exon_elongation_right, MatchEventSubtype.incomplete_intron_retention_left,

@@ -227,6 +227,15 @@ class JunctionComparator():
                                                             isoform_junctions, read_cregion[0], isoform_cregion[0],
                                                             intron_length_is_similar, read_introns_known)
 
+        elif read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0] and \
+                (read_cregion[0] == 0 and isoform_cregion[0] == 0) or \
+                (read_cregion[0] == len(read_junctions)-1 and isoform_cregion[0] == len(isoform_junctions) - 1):
+            # terminal exon alternation
+            if read_introns_known:
+                event = MatchEventSubtype.alternative_structure_known
+            else:
+                event = MatchEventSubtype.alternative_structure_novel
+
         elif surrounded_by_exons and similar_bounds and \
                 read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] >= 1 and \
                 total_intron_len_diff <= 2 * self.params.delta:
