@@ -77,15 +77,19 @@ class PolyAVerifier:
         if event_to_remove != -1:
             del matching_events[event_to_remove]
 
-        corrected_read_end = self.truncate_fake_terminal_exons(read_exons, fake_terminal_exon_count,
-                                                               polya_info.external_polya_pos)
-        matching_events, corrected_read_end = \
-            self.check_reference_terminal_exons(isoform_exons, corrected_read_end, matching_events)
+        external_polya_pos, internal_polya_pos = \
+            self.correct_polya_positions(read_exons, fake_terminal_exon_count, polya_info)
+
+        polya_pos = internal_polya_pos if internal_polya_pos != -1 else external_polya_pos
+        matching_events, corrected_polya_pos = \
+            self.check_reference_terminal_exons(isoform_exons, polya_pos, matching_events)
 
         # accidentally aligned polyA tails must not create APA site
-        dist_external_to_polya = abs(isoform_end - corrected_read_end)
-        dist_to_internal_polya = abs(isoform_end - polya_info.internal_polya_pos)
-        dist_to_polya = min(dist_external_to_polya, dist_to_internal_polya)
+        dist_to_corrected_polya = abs(isoform_end - corrected_polya_pos)
+        dist_to_external_polya = abs(isoform_end - external_polya_pos)
+        corrected_read_end = corrected_polya_pos if dist_to_corrected_polya < dist_to_external_polya \
+            else external_polya_pos
+        dist_to_polya = min(dist_to_corrected_polya, dist_to_external_polya)
         logger.debug("+ Distance to polyA is %d" % dist_to_polya)
         if dist_to_polya > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
@@ -111,22 +115,26 @@ class PolyAVerifier:
         if event_to_remove != -1:
             del matching_events[event_to_remove]
 
-        corrected_read_start = self.truncate_fake_starting_exons(read_exons, fake_terminal_exon_count,
-                                                                 polya_info.external_polyt_pos)
-        matching_events, corrected_read_start = \
-            self.check_reference_starting_exons(isoform_exons, corrected_read_start, matching_events)
+        external_polyt_pos, internal_polyt_pos = \
+            self.correct_polyt_positions(read_exons, fake_terminal_exon_count, polya_info)
+
+        polyt_pos = internal_polyt_pos if internal_polyt_pos != -1 else external_polyt_pos
+        matching_events, corrected_polyt_pos = \
+            self.check_reference_starting_exons(isoform_exons, polyt_pos, matching_events)
 
         # accidentally aligned polyT head must not create APA site
-        dist_external_to_polya = abs(isoform_start - corrected_read_start)
-        dist_to_internal_polya = abs(isoform_start - polya_info.internal_polyt_pos)
-        dist_to_polya = min(dist_external_to_polya, dist_to_internal_polya)
-        logger.debug("+ Distance to polyA is %d" % dist_to_polya)
-        if dist_to_polya > self.params.apa_delta:
+        dist_to_corrected_polyt = abs(isoform_start - corrected_polyt_pos)
+        dist_to_external_polyt = abs(isoform_start - external_polyt_pos)
+        corrected_read_start = corrected_polyt_pos if dist_to_corrected_polyt < dist_to_external_polyt \
+            else external_polyt_pos
+        dist_to_polyt = min(dist_to_corrected_polyt, dist_to_external_polyt)
+        logger.debug("+ Distance to polyT is %d" % dist_to_polyt)
+        if dist_to_polyt > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
-            matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polya))
-        elif dist_to_polya > self.params.delta:
+            matching_events.append(make_event(MatchEventSubtype.alternative_polya_site, event_length=dist_to_polyt))
+        elif dist_to_polyt > self.params.delta:
             logger.debug("+ Seems like minor exon elongation site")
-            matching_events.append(make_event(MatchEventSubtype.exon_elongation_left, event_length=dist_to_polya))
+            matching_events.append(make_event(MatchEventSubtype.exon_elongation_left, event_length=dist_to_polyt))
         return matching_events, corrected_read_start
 
     # check if polyA found within intron and inside mapped part of the read
@@ -159,15 +167,38 @@ class PolyAVerifier:
 
         return matching_events, False
 
-    # correct polyA position when fake terminal exons are present or isoform has short terminal exons
-    def truncate_fake_terminal_exons(self, read_exons, fake_terminal_exon_count, polya_pos):
-        if fake_terminal_exon_count == 0:
+    # correct polyA position when fake terminal exons are present
+    def correct_polya_positions(self, read_exons, fake_terminal_exon_count, polya_info):
+        assert fake_terminal_exon_count < len(read_exons)
+
+        external_polya_pos = polya_info.external_polya_pos
+        internal_polya_pos = polya_info.internal_polya_pos
+
+        if internal_polya_pos == -1:
+            return self.shift_polya(read_exons, fake_terminal_exon_count, external_polya_pos), -1
+
+        # find exons beyond internal polyA
+        polya_exon_count = 0
+        for i in range(len(read_exons)):
+            exon = read_exons[-i - 1]
+            if exon[1] <= internal_polya_pos:
+                break
+            if exon[1] - internal_polya_pos > internal_polya_pos - exon[0]:
+                # more than half of the exon is polyA
+                polya_exon_count += 1
+
+        extra_exons = max(fake_terminal_exon_count, polya_exon_count)
+        # correcting fake terminal exons
+        return self.shift_polya(read_exons, extra_exons, external_polya_pos), \
+               self.shift_polya(read_exons, extra_exons, internal_polya_pos)
+
+    # recalculate polya site considering terminal exons are fake
+    def shift_polya(self, read_exons, exon_count, polya_pos):
+        if exon_count == 0:
             return polya_pos
 
-        assert fake_terminal_exon_count < len(read_exons)
-        # correcting fake terminal exons
         dist_to_polya = 0
-        for i in range(fake_terminal_exon_count):
+        for i in range(exon_count):
             exon = read_exons[-i-1]
             if exon[0] > polya_pos:
                 continue
@@ -176,18 +207,40 @@ class PolyAVerifier:
                 dist_to_polya += polya_pos-exon[0]
             else:
                 dist_to_polya += interval_len(exon)
-        last_good_exon = read_exons[-fake_terminal_exon_count-1]
-        return last_good_exon[1] + dist_to_polya
+        return read_exons[-exon_count-1][1] + dist_to_polya
 
     # correct polyT position when fake terminal exons are present or isoform has short terminal exons
-    def truncate_fake_starting_exons(self, read_exons, fake_terminal_exon_count, polyt_pos):
-        if fake_terminal_exon_count == 0:
+    def correct_polyt_positions(self, read_exons, fake_terminal_exon_count, polya_info):
+        assert fake_terminal_exon_count < len(read_exons)
+
+        external_polyt_pos = polya_info.external_polyt_pos
+        internal_polyt_pos = polya_info.internal_polyt_pos
+
+        if internal_polyt_pos == -1:
+            return self.shift_polyt(read_exons, fake_terminal_exon_count, external_polyt_pos), -1
+
+        # find exons beyond internal polyA
+        polya_exon_count = 0
+        for i in range(len(read_exons)):
+            exon = read_exons[i]
+            if exon[0] >= internal_polyt_pos:
+                break
+            if exon[1] - internal_polyt_pos < internal_polyt_pos - exon[0]:
+                # more than half of the exon is polyT
+                polya_exon_count += 1
+
+        extra_exons = max(fake_terminal_exon_count, polya_exon_count)
+        # correcting fake terminal exons
+        return self.shift_polya(read_exons, extra_exons, external_polyt_pos), \
+               self.shift_polya(read_exons, extra_exons, internal_polyt_pos)
+
+    # recalculate polya site considering terminal exons are fake
+    def shift_polyt(self, read_exons, exon_count, polyt_pos):
+        if exon_count == 0:
             return polyt_pos
 
-        assert fake_terminal_exon_count < len(read_exons)
-        # correcting fake terminal exons
         dist_to_polya = 0
-        for i in range(fake_terminal_exon_count):
+        for i in range(exon_count):
             exon = read_exons[i]
             if exon[1] < polyt_pos:
                 continue
@@ -196,25 +249,22 @@ class PolyAVerifier:
                 dist_to_polya += exon[1] - polyt_pos
             else:
                 dist_to_polya += interval_len(exon)
-        first_good_exon = read_exons[fake_terminal_exon_count]
-        return first_good_exon[0] - dist_to_polya
+        return read_exons[exon_count][0] - dist_to_polya
 
     # check isoform exons beyond polyA
     def check_reference_terminal_exons(self, isoform_exons, polya_pos, matching_events):
         isoform_terminal_exon_count = 0
-        for i in range(len(isoform_exons)):
-            if isoform_exons[-i-1][0] < polya_pos:
-                break
+        i = 0
+        while i < len(isoform_exons) and isoform_exons[-i-1][0] >= polya_pos:
             isoform_terminal_exon_count += 1
-
         if isoform_terminal_exon_count == 0:
             return matching_events, polya_pos
 
         corrected_read_end = polya_pos
         isoform_terminal_exon_length = intervals_total_length(isoform_exons[-isoform_terminal_exon_count:])
         dist_to_polya = abs(isoform_exons[-isoform_terminal_exon_count-1][1] - polya_pos)
-        if isoform_terminal_exon_length <= self.params.max_missed_exon_len and \
-                dist_to_polya <= self.params.max_missed_exon_len:
+        if isoform_terminal_exon_length <= self.params.max_fake_terminal_exon_len and \
+                dist_to_polya <= self.params.max_fake_terminal_exon_len:
             logger.debug("+ Looks like missed terminal exons, shifting polyA")
             corrected_read_end = isoform_exons[-1][1]
             for i in range(isoform_terminal_exon_count):
@@ -226,23 +276,21 @@ class PolyAVerifier:
     def check_reference_starting_exons(self, isoform_exons, polyt_pos, matching_events):
         # check isoform exons beyond polyA
         isoform_terminal_exon_count = 0
-        for i in range(len(isoform_exons)):
-            if isoform_exons[i][1] > polyt_pos:
-                break
+        i = 0
+        while i < len(isoform_exons) and isoform_exons[i][1] <= polyt_pos:
             isoform_terminal_exon_count += 1
-
         if isoform_terminal_exon_count == 0:
             return matching_events, polyt_pos
 
-        corrected_polyt = polyt_pos
+        corrected_read_start = polyt_pos
         isoform_terminal_exon_length = intervals_total_length(isoform_exons[:isoform_terminal_exon_count])
-        dist_to_polya = abs(isoform_exons[isoform_terminal_exon_count][0] - corrected_polyt)
-        if isoform_terminal_exon_length <= self.params.max_missed_exon_len and \
-                dist_to_polya <= self.params.max_missed_exon_len:
+        dist_to_polya = abs(isoform_exons[isoform_terminal_exon_count][0] - polyt_pos)
+        if isoform_terminal_exon_length <= self.params.max_fake_terminal_exon_len and \
+                dist_to_polya <= self.params.max_fake_terminal_exon_len:
             logger.debug("+ Looks like missed terminal exons, shifting polyT")
-            corrected_polyt = isoform_exons[0][0]
+            corrected_read_start = isoform_exons[0][0]
             for i in range(isoform_terminal_exon_count):
                 matching_events.append(make_event(MatchEventSubtype.exon_misallignment, i))
 
-        return matching_events, corrected_polyt
+        return matching_events, corrected_read_start
 

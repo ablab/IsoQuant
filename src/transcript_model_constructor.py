@@ -684,16 +684,19 @@ class TranscriptModelConstructor:
         nearby_starts_count = 0
         nearby_ends_count = 0
         for assignment in read_assignments:
-            read_inconsistencies = self.get_read_inconsistencies(isoform_id, assignment)
-            read_introns = assignment.combined_profile.read_intron_profile.read_features
-            read_start = assignment.combined_profile.corrected_read_start
-            read_end = assignment.combined_profile.corrected_read_end
-            start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
-            end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
+            #read_inconsistencies = self.get_read_inconsistencies(isoform_id, assignment)
+            combined_profile = assignment.combined_profile
+            read_introns = combined_profile.read_intron_profile.read_features
+            corrected_read_start = combined_profile.corrected_read_start
+            corrected_read_end = combined_profile.corrected_read_end
+            real_read_start = combined_profile.read_exon_profile.read_features[0][0]
+            real_read_end = combined_profile.read_exon_profile.read_features[-1][1]
+            start_matches = abs(corrected_read_start - isoform_start) < self.params.max_dist_to_novel_tsts
+            end_matches = abs(corrected_read_end - isoform_end) < self.params.max_dist_to_novel_tsts
             # profile_matches =  all(el == 1 for el in read_profile.read_profile)
 
             matching_events = \
-                intron_comparator.compare_junctions(read_introns, (read_start, read_end),
+                intron_comparator.compare_junctions(read_introns, (real_read_start, real_read_end),
                                                     model_introns, (isoform_start, isoform_end))
             # logger.debug("Read %s, start %d, end %d, events %s" % (assignment.read_id, read_start, read_end, str(matching_events)))
 
