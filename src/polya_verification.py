@@ -255,8 +255,8 @@ class PolyAVerifier:
         extra_exons = max(fake_terminal_exon_count, polya_exon_count)
         logger.debug("Fake exons %d, polya exons %d" % (fake_terminal_exon_count, polya_exon_count))
         # correcting fake terminal exons
-        return self.shift_polya(read_exons, extra_exons, external_polyt_pos), \
-               self.shift_polya(read_exons, extra_exons, internal_polyt_pos)
+        return self.shift_polyt(read_exons, extra_exons, external_polyt_pos), \
+               self.shift_polyt(read_exons, extra_exons, internal_polyt_pos)
 
     # recalculate polya site considering terminal exons are fake
     def shift_polyt(self, read_exons, exon_count, polyt_pos):
