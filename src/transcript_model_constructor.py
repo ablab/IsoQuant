@@ -197,6 +197,7 @@ class TranscriptModelConstructor:
         self.correct_matches = defaultdict(list)
 
         for read_assignment in self.read_assignment_storage:
+            #TODO only unique assignments for novel models?
             for match in read_assignment.isoform_matches:
                 isoform_id = match.assigned_transcript
                 if read_assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference}:
@@ -718,7 +719,7 @@ class TranscriptModelConstructor:
                 assigned_reads.append(assignment.read_id)
                 # since profile is not reliable due to intron shifts etc
                 # considering that there are no serious errors, covering all introns in enough
-                is_fsm = contains((read_start, read_end), (model_introns[0][0], model_introns[-1][1]))
+                is_fsm = contains((corrected_read_start, corrected_read_end), (model_introns[0][0], model_introns[-1][1]))
                 if is_fsm:
                     # all introns of novel model are covered
                     fsm_match_count += 1
