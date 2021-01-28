@@ -152,7 +152,7 @@ class PolyAVerifier:
         if dist_to_polyt > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(
-                make_event(MatchEventSubtype.alternative_polyt_site, event_length=polya_info.external_polyt_pos))
+                make_event(MatchEventSubtype.alternative_polya_site, event_length=polya_info.external_polyt_pos))
         else:
             logger.debug("+ Seems like correct polyT, odd case")
             matching_events.append(
