@@ -194,7 +194,7 @@ class PolyAVerifier:
 
     # recalculate polya site considering terminal exons are fake
     def shift_polya(self, read_exons, exon_count, polya_pos):
-        if exon_count == 0:
+        if exon_count == 0 or exon_count == len(read_exons):
             return polya_pos
 
         dist_to_polya = 0
@@ -236,7 +236,7 @@ class PolyAVerifier:
 
     # recalculate polya site considering terminal exons are fake
     def shift_polyt(self, read_exons, exon_count, polyt_pos):
-        if exon_count == 0:
+        if exon_count == 0 or exon_count == len(read_exons):
             return polyt_pos
 
         dist_to_polya = 0
@@ -256,7 +256,7 @@ class PolyAVerifier:
         terminal_exon_count = 0
         while terminal_exon_count < len(isoform_exons) and isoform_exons[-terminal_exon_count-1][0] >= polya_pos:
             terminal_exon_count += 1
-        if terminal_exon_count == 0:
+        if terminal_exon_count == 0 or terminal_exon_count == len(isoform_exons):
             return matching_events, polya_pos
 
         corrected_read_end = polya_pos
@@ -277,7 +277,7 @@ class PolyAVerifier:
         terminal_exon_count = 0
         while terminal_exon_count < len(isoform_exons) and isoform_exons[terminal_exon_count][1] <= polyt_pos:
             terminal_exon_count += 1
-        if terminal_exon_count == 0:
+        if terminal_exon_count == 0 or terminal_exon_count == len(isoform_exons):
             return matching_events, polyt_pos
 
         corrected_read_start = polyt_pos
