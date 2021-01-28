@@ -287,7 +287,7 @@ class PolyAVerifier:
                 dist_to_polya <= self.params.max_fake_terminal_exon_len:
             logger.debug("+ Looks like missed terminal exons, shifting polyT")
             corrected_read_start = isoform_exons[0][0]
-            for i in range(isoform_terminal_exon_count):
+            for i in range(terminal_exon_count):
                 matching_events.append(make_event(MatchEventSubtype.exon_misallignment, i))
 
         return matching_events, corrected_read_start
