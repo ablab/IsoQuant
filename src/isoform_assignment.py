@@ -165,7 +165,8 @@ class MatchEventSubtype(Enum):
                                        MatchEventSubtype.fsm,
                                        MatchEventSubtype.ism_left,
                                        MatchEventSubtype.ism_right,
-                                       MatchEventSubtype.ism_internal}
+                                       MatchEventSubtype.ism_internal,
+                                       MatchEventSubtype.correct_polya_site}
 
     @staticmethod
     def is_major_elongation(match_event_subtype):
