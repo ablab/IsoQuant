@@ -135,6 +135,7 @@ class MatchEventSubtype(Enum):
     alternative_polya_site = 200
     fake_polya_site = 201
     alternative_tss = 202
+    correct_polya_site = 222
 
     def __lt__(self, other):
         return self.value < other.value
@@ -239,7 +240,8 @@ event_subtype_cost = {
     # TTS and TSS
     MatchEventSubtype.alternative_polya_site:0.75,
     MatchEventSubtype.fake_polya_site:0.5,
-    MatchEventSubtype.alternative_tss :0.75
+    MatchEventSubtype.alternative_tss :0.75,
+    MatchEventSubtype.correct_polya_site:0
 }
 
 
