@@ -341,8 +341,10 @@ class PolyAVerifier:
         dist_to_internal_polya = abs(isoform_exons[-terminal_exon_count - 1][1] - internal_polya_pos)
         dist_to_polya = min(dist_to_external_polya, dist_to_internal_polya)
 
-        if isoform_terminal_exon_length <= self.params.max_fake_terminal_exon_len and \
-                dist_to_polya <= self.params.max_fake_terminal_exon_len:
+        if (isoform_terminal_exon_length <= self.params.max_fake_terminal_exon_len and
+                dist_to_polya <= self.params.max_fake_terminal_exon_len) or \
+                (isoform_terminal_exon_length <= self.params.max_missed_exon_len and
+                 abs(isoform_terminal_exon_length - dist_to_polya) <= self.params.delta):
             for i in range(terminal_exon_count):
                 matching_events.append(make_event(MatchEventSubtype.exon_misallignment, len(isoform_exons) - 2 - i))
             corrected_read_end = isoform_exons[-1][1]
@@ -367,8 +369,11 @@ class PolyAVerifier:
         dist_to_external_polyt = abs(isoform_exons[terminal_exon_count][0] - external_polyt_pos)
         dist_to_internal_polyt = abs(isoform_exons[terminal_exon_count][0] - internal_polyt_pos)
         dist_to_polyt = min(dist_to_external_polyt, dist_to_internal_polyt)
-        if isoform_terminal_exon_length <= self.params.max_fake_terminal_exon_len and \
-                dist_to_polyt <= self.params.max_fake_terminal_exon_len:
+        # if it looks like we did not align last isoform exons
+        if (isoform_terminal_exon_length <= self.params.max_fake_terminal_exon_len and
+                dist_to_polyt <= self.params.max_fake_terminal_exon_len) or \
+                (isoform_terminal_exon_length <= self.params.max_missed_exon_len and
+                 abs(isoform_terminal_exon_length - dist_to_polyt) <= self.params.delta):
             for i in range(terminal_exon_count):
                 matching_events.append(make_event(MatchEventSubtype.exon_misallignment, i))
             corrected_read_start = isoform_exons[0][0]
