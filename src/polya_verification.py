@@ -28,6 +28,7 @@ class PolyAVerifier:
 
         logger.debug("+ Checking isoform %s" % isoform_id)
         read_exons = combined_read_profile.read_exon_profile.read_features
+        read_introns = combined_read_profile.read_intron_profile.read_features
         polya_info = combined_read_profile.polya_info
         isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
 
@@ -42,6 +43,8 @@ class PolyAVerifier:
                 matching_events, corrected_read_end = self.verify_polya(isoform_exons, read_exons,
                                                                         polya_info, matching_events)
                 combined_read_profile.corrected_read_end = corrected_read_end
+                matching_events = self.remove_extra_intron_events_right(corrected_read_end, matching_events,
+                                                                        read_introns)
 
         elif self.gene_info.isoform_strands[isoform_id] == '-':
             if polya_info.internal_polyt_pos != -1:
@@ -54,6 +57,8 @@ class PolyAVerifier:
                 matching_events, corrected_read_start = self.verify_polyt(isoform_exons, read_exons,
                                                                           polya_info, matching_events)
                 combined_read_profile.corrected_read_start = corrected_read_start
+                matching_events = self.remove_extra_intron_events_left(corrected_read_start, matching_events,
+                                                                        read_introns)
 
         if not matching_events:
             logger.warning("Empty event list after polyA verification")
@@ -156,6 +161,42 @@ class PolyAVerifier:
             matching_events.append(
                 make_event(MatchEventSubtype.correct_polya_site, event_length=polya_info.external_polyt_pos))
         return matching_events, polya_info.external_polyt_pos
+
+    # remove extra introns beyond corrected read ends
+    def remove_extra_intron_events_right(self, corrected_read_end, matching_events, read_introns):
+        if corrected_read_end == -1:
+            return matching_events
+
+        events_to_remove = set()
+        for i, event in enumerate(matching_events):
+            if event.event_type in [MatchEventSubtype.extra_intron_known,
+                                    MatchEventSubtype.extra_intron_novel,
+                                    MatchEventSubtype.extra_intron_flanking_right] and \
+                    read_introns[event.read_region[0]][1] >= corrected_read_end:
+                events_to_remove.add(i)
+
+        for i in sorted(events_to_remove, reverse=True):
+            del matching_events[i]
+
+        return matching_events
+
+    # remove extra introns beyond corrected read ends
+    def remove_extra_intron_events_left(self, corrected_read_start, matching_events, read_introns):
+        if corrected_read_start == -1:
+            return matching_events
+
+        events_to_remove = set()
+        for i, event in enumerate(matching_events):
+            if event.event_type in [MatchEventSubtype.extra_intron_known,
+                                    MatchEventSubtype.extra_intron_novel,
+                                    MatchEventSubtype.extra_intron_flanking_left] and \
+                    read_introns[event.read_region[0]][0] <= corrected_read_start:
+                events_to_remove.add(i)
+
+        for i in sorted(events_to_remove, reverse=True):
+            del matching_events[i]
+
+        return matching_events
 
     # check if polyA found within intron and inside mapped part of the read
     def check_internal_polya(self, internal_polya_pos, matching_events):
