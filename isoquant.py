@@ -56,10 +56,11 @@ def parse_args(args=None, namespace=None):
                         help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
     parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
-    # TODO remove
-    parser.add_argument('--has_polya', action='store_true', default=False,
-                        help="set if reads were not polyA trimmed; polyA tails will be detected and further "
-                             " required for transcript model construction")
+    parser.add_argument('--polya_trimmed', action='store_true', default=False,
+                        help="set if reads were polyA trimmed; "
+                             "polyA tails will not be required for transcript model construction")
+    parser.add_argument('--has_polya', action='store_true', default=True,
+                        help="deprecated option, use --polya_trimmed when reads do not have polyA tails")
     parser.add_argument('--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
@@ -111,6 +112,9 @@ def parse_args(args=None, namespace=None):
                         type=str, default=None)
     add_additional_option("--report_intron_retention", type=bool, default=None,
                           help="report intron retention events in transcript model files")
+    add_additional_option("--report_apa", type=bool, default=None,
+                          help="report alternative polyA sites in transcript model files, "
+                               "may significantly increase the number of isoforms ")
     add_additional_option("--collapse_subisoforms", type=bool, default=None,
                           help="collapse isoforms whose intron chain is a subsequence of other intron chain")
     add_additional_option("--min_ref_fsm_supporting_reads", type=int, default=None,
@@ -142,13 +146,11 @@ def parse_args(args=None, namespace=None):
 class TestMode(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         source_dir = os.path.dirname(os.path.realpath(__file__))
-        options = ['--output', 'isoquant_test', '--threads', '1',
-                   '--fastq', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.ONT.simulated.fastq'),
-                   '--reference', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.reference.fasta'),
-                   '--genedb', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.genedb.gtf'),
-                   '--cage', os.path.join(source_dir, 'tests/toy_data/MAPT.Mouse.CAGE.bed'),
-                   '--clean_start',
-                   '--data_type', 'nanopore', '--complete_genedb']
+        options = ['--output', 'isoquant_test', '--threads', '2',
+                   '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
+                   '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
+                   '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
+                   '--clean_start', '--data_type', 'nanopore', '--complete_genedb']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
         main(options)
@@ -164,7 +166,7 @@ class TestMode(argparse.Action):
         with open('isoquant_test/isoquant.log', 'r') as f:
             log = f.read()
 
-        correct_results = ['noninformative: 15', 'unique: 116', 'known: 10', 'Processed 1 sample']
+        correct_results = ['noninformative: 110', 'unique: 88', 'known: 15', 'Processed 1 sample']
         return all([result in log for result in correct_results])
 
 
@@ -238,14 +240,14 @@ def create_output_dirs(args):
 
 
 def set_logger(args, logger_instance):
-    logger_instance.setLevel(logging.INFO)
+    logger_instance.setLevel(logging.DEBUG)
     log_file = os.path.join(args.output, "isoquant.log")
     f = open(log_file, "w")
     f.write("CMD: " + ' '.join(sys.argv) + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
     # FIXME
-    fh.setLevel(logging.INFO)
+    fh.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
 
@@ -353,7 +355,7 @@ def set_model_construction_options(args):
         strategy.collapse_subisoforms if args.collapse_subisoforms is None else args.collapse_subisoforms
     args.count_ambiguous = strategy.count_ambiguous
 
-    args.require_polyA = args.has_polya
+    args.require_polyA = not args.polya_trimmed
     args.require_cage_peak = args.cage is not None
 
     updated_strategy = ModelConstructionStrategy(args.min_ref_fsm_supporting_reads, args.min_ref_supporting_reads,

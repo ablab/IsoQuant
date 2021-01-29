@@ -34,7 +34,7 @@ def test_clean_start():
                              "--fastq", data_dir + "chr9.4M.ont.sim.fq.gz",
                              "--genedb", data_dir + "chr9.4M.gtf.gz", "--complete_genedb",
                              "-r",  data_dir + "chr9.4M.fa.gz",
-                             "-t", "4",
+                             "-t", "2",
                              "--labels", sample_name,
                              "--count_exons", "--sqanti_output",
                              "--read_group","file:" + data_dir + "chr9.4M.ont.sim.read_groups.tsv" + ":0:1"])
@@ -63,7 +63,7 @@ def test_usual_start():
                              "--fastq", data_dir + "chr9.4M.ont.sim.fq.gz",
                              "--genedb", data_dir + "chr9.4M.gtf.gz", "--complete_genedb",
                              "-r",  data_dir + "chr9.4M.fa.gz",
-                             "-t", "4",
+                             "-t", "2",
                              "--labels", sample_name])
 
     assert result.returncode == 0
@@ -88,7 +88,7 @@ def test_with_bam_and_polya():
                              "--bam", data_dir + "chr9.4M.ont.sim.polya.bam",
                              "--genedb", data_dir + "chr9.4M.gtf.gz", "--complete_genedb",
                              "-r",  data_dir + "chr9.4M.fa.gz",
-                             "-t", "4",
+                             "-t", "2",
                              "--labels", sample_name,
                              "--has_polya", "--sqanti_output", "--count_exons"])
 
@@ -98,6 +98,32 @@ def test_with_bam_and_polya():
     resulting_files = ["exon_counts.tsv", "gene_counts.tsv",
                        "intron_counts.tsv", "mapped_reads.bed", "read_assignments.tsv",
                        "SQANTI-like.tsv", "transcript_counts.tsv",
+                       "transcript_models_counts.tsv", "transcript_models.gtf", "transcript_models_reads.tsv"]
+    for f in resulting_files:
+        assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
+
+def test_no_polya():
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    data_dir = os.path.join(source_dir, 'toy_data/')
+    out_dir = os.path.join(source_dir, "out_mapt/")
+    shutil.rmtree(out_dir, ignore_errors=True)
+    os.environ['HOME'] = source_dir # dirty hack to set $HOME for tox environment
+    sample_name = "MAPT.Mouse.ONT"
+
+    result = subprocess.run(["python", "isoquant.py", '--clean_start', "--polya_trimmed",
+                             "-o", out_dir,
+                             "--data_type", "nanopore",
+                             "--fastq", data_dir + "MAPT.Mouse.ONT.simulated.fastq",
+                             "--genedb", data_dir + "MAPT.Mouse.genedb.gtf", "--complete_genedb",
+                             "-r",  data_dir + "MAPT.Mouse.reference.fasta",
+                             '--cage', data_dir + "MAPT.Mouse.CAGE.bed",
+                             "-t", "2",
+                             "--labels", sample_name])
+
+    assert result.returncode == 0
+    sample_folder = os.path.join(out_dir, sample_name)
+    assert os.path.isdir(sample_folder)
+    resulting_files = ["gene_counts.tsv", "read_assignments.tsv", "transcript_counts.tsv",
                        "transcript_models_counts.tsv", "transcript_models.gtf", "transcript_models_reads.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))

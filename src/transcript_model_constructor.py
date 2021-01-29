@@ -13,6 +13,8 @@ import copy
 from src.isoform_assignment import *
 from src.long_read_profiles import *
 from src.junction_comparator import *
+from src.long_read_assigner import *
+from src.gene_info import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -122,11 +124,13 @@ class TranscriptModelConstructor:
         MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
         MatchEventSubtype.terminal_exon_shift_known, MatchEventSubtype.terminal_exon_shift_novel,
         MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_gain_known,
-        MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel,
-        MatchEventSubtype.alternative_polya_site, MatchEventSubtype.alternative_tss
+        MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel
     }
 
     def __init__(self, gene_info, read_assignment_storage, params):
+        if params.report_apa:
+            self.events_to_track.add(MatchEventSubtype.alternative_polya_site)
+            self.events_to_track.add(MatchEventSubtype.alternative_tss)
         self.gene_info = gene_info
         self.read_assignment_storage = read_assignment_storage
         self.params = params
@@ -442,7 +446,6 @@ class TranscriptModelConstructor:
 
     # move transcripts ends to known ends if they are closed and no polyA found
     def correct_transcripts_ends(self, novel_exons, combined_profile, isoform_id, modification_events_map):
-        isoform_end = self.gene_info.transcript_end(isoform_id)
         strand = self.gene_info.isoform_strands[isoform_id]
 
         if SupplementaryMatchConstansts.extra_left_mod_position not in modification_events_map and \
@@ -453,6 +456,7 @@ class TranscriptModelConstructor:
             if (strand == "+" or combined_profile.polya_info.external_polyt_pos == -1) and \
                     abs(novel_transcript_start - known_isoform_start) <= self.params.max_dist_to_isoforms_tsts and \
                     known_isoform_start < novel_exons[0][1]:
+                # correct model start only if no polyT is found
                 novel_exons[0] = (known_isoform_start, novel_exons[0][1])
 
         last_index = len(self.gene_info.all_isoforms_introns[isoform_id]) - 1
@@ -464,6 +468,7 @@ class TranscriptModelConstructor:
             if (strand == "-" or combined_profile.polya_info.external_polya_pos == -1) and \
                     abs(novel_transcript_end - known_isoform_end) <= self.params.max_dist_to_isoforms_tsts and \
                     known_isoform_end > novel_exons[-1][0]:
+                # correct model end only if no polyA is found
                 novel_exons[-1] = (novel_exons[-1][0], known_isoform_end)
 
         return novel_exons
@@ -647,12 +652,11 @@ class TranscriptModelConstructor:
         model_exons = transcript_model.exon_blocks
         isoform_start = model_exons[0][0]
         isoform_end = model_exons[-1][1]
-        model_introns = junctions_from_blocks(model_exons)
-        strand = transcript_model.strand
-        model_intron_profile_constructor = \
-            OverlappingFeaturesProfileConstructor(model_introns, (model_exons[0][0], model_exons[-1][1]),
-                                                  comparator=partial(equal_ranges, delta=self.params.delta))
-        intron_comparator = JunctionComparator(self.params, model_intron_profile_constructor)
+
+        transcript_model_gene_info = GeneInfo.from_model(transcript_model, self.params.delta)
+        model_introns = transcript_model_gene_info.all_isoforms_introns[transcript_model.transcript_id]
+        assigner = LongReadAssigner(transcript_model_gene_info, self.params)
+        profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
 
         assigned_reads = []
         fsm_match_count = 0
@@ -660,32 +664,21 @@ class TranscriptModelConstructor:
         nearby_starts_count = 0
         nearby_ends_count = 0
         for assignment in read_assignments:
-            #read_inconsistencies = self.get_read_inconsistencies(isoform_id, assignment)
-            combined_profile = assignment.combined_profile
-            read_introns = combined_profile.read_intron_profile.read_features
-            corrected_read_start = combined_profile.corrected_read_start
-            corrected_read_end = combined_profile.corrected_read_end
-            real_read_start = combined_profile.read_exon_profile.read_features[0][0]
-            real_read_end = combined_profile.read_exon_profile.read_features[-1][1]
-            start_matches = abs(corrected_read_start - isoform_start) < self.params.max_dist_to_novel_tsts
-            end_matches = abs(corrected_read_end - isoform_end) < self.params.max_dist_to_novel_tsts
-            # profile_matches =  all(el == 1 for el in read_profile.read_profile)
-
-            matching_events = \
-                intron_comparator.compare_junctions(read_introns, (real_read_start, real_read_end),
-                                                    model_introns, (isoform_start, isoform_end))
             # logger.debug("Read %s, start %d, end %d, events %s" % (assignment.read_id, read_start, read_end, str(matching_events)))
-
+            combined_profile = assignment.combined_profile
+            read_exons = combined_profile.read_exon_profile.read_features
+            model_combined_profile = profile_constructor.construct_profiles(read_exons, combined_profile.polya_info, [])
+            model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
             # check that no serious contradiction occurs
-            profile_matches = True
-            if len(matching_events) > 1 \
-                    or (len(matching_events) == 1 and matching_events[0].event_type != MatchEventSubtype.none):
-                for e in matching_events:
-                    if e.event_type in nnic_event_types or e.event_type in nic_event_types:
-                        profile_matches = False
-                        break
+            profile_matches = model_assignment.assignment_type in [ReadAssignmentType.unique,
+                                                                   ReadAssignmentType.unique_minor_difference]
 
             if profile_matches:
+                corrected_read_start = combined_profile.corrected_read_start
+                corrected_read_end = combined_profile.corrected_read_end
+                start_matches = abs(corrected_read_start - isoform_start) < self.params.max_dist_to_novel_tsts
+                end_matches = abs(corrected_read_end - isoform_end) < self.params.max_dist_to_novel_tsts
+
                 if start_matches:
                     nearby_starts_count += 1
                 if end_matches:

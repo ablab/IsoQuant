@@ -98,6 +98,8 @@ class FeatureInfo:
 class GeneInfo:
     # chr_bam_prefix: additional string used when bam files were aligned to different reference that has difference in chromosome names (e.g. 1 and chr1)
     def __init__(self, gene_db_list, db, delta=0):
+        if db is None:
+            return
         # gffutils main structure
         self.db = db
         # list of genes in cluster
@@ -125,46 +127,48 @@ class GeneInfo:
         self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
 
     @classmethod
-    def from_model(self, transcript_model, delta=0):
-        self.db = None
-        self.gene_db_list = []
+    def from_model(cls, transcript_model, delta=0):
+        cls.db = None
+        cls.gene_db_list = []
         # gene region
-        self.chr_id = transcript_model.chr_id
-        self.start = transcript_model.get_start()
-        self.end = transcript_model.get_end()
-        self.delta = delta
+        cls.chr_id = transcript_model.chr_id
+        cls.start = transcript_model.get_start()
+        cls.end = transcript_model.get_end()
+        cls.delta = delta
 
         # profiles for all known isoforoms
-        self.intron_profiles = FeatureProfiles()
-        self.exon_profiles = FeatureProfiles()
-        self.split_exon_profiles = FeatureProfiles()
-        self.ambiguous_isoforms = set()
+        cls.intron_profiles = FeatureProfiles()
+        cls.exon_profiles = FeatureProfiles()
+        cls.split_exon_profiles = FeatureProfiles()
+        cls.ambiguous_isoforms = set()
 
         exons = transcript_model.exon_blocks
         introns = junctions_from_blocks(transcript_model.exon_blocks)
         t_id = transcript_model.transcript_id
         transcript_region = (transcript_model.get_start(), transcript_model.get_end())
 
-        self.all_isoforms_exons = {}
-        self.all_isoforms_exons[t_id] = exons
-        self.all_isoforms_introns = {}
-        self.all_isoforms_introns[t_id] = introns
+        cls.all_isoforms_exons = {}
+        cls.all_isoforms_exons[t_id] = exons
+        cls.all_isoforms_introns = {}
+        cls.all_isoforms_introns[t_id] = introns
 
-        self.exon_profiles.set_features(exons)
-        self.split_exon_profiles.set_features(exons)
-        self.intron_profiles.set_features(introns)
+        cls.exon_profiles.set_features(exons)
+        cls.split_exon_profiles.set_features(exons)
+        cls.intron_profiles.set_features(introns)
 
-        self.intron_profiles.set_profiles(t_id, introns, transcript_region, partial(equal_ranges, delta=0))
-        self.exon_profiles.set_profiles(t_id, exons, transcript_region, partial(equal_ranges, delta=0))
-        self.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
+        cls.intron_profiles.set_profiles(t_id, introns, transcript_region, partial(equal_ranges, delta=0))
+        cls.exon_profiles.set_profiles(t_id, exons, transcript_region, partial(equal_ranges, delta=0))
+        cls.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
 
-        self.isoform_strands = {}
-        self.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
-        self.gene_id_map = {}
-        self.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
+        cls.isoform_strands = {}
+        cls.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
+        cls.gene_id_map = {}
+        cls.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
 
-        self.exon_property_map = None
-        self.intron_property_map = None
+        cls.exon_property_map = None
+        cls.intron_property_map = None
+
+        return cls([], None, delta)
 
     def print_debug(self):
         gene_names = []
