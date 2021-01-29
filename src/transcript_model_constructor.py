@@ -506,9 +506,9 @@ class TranscriptModelConstructor:
             return current_exon_start
         # logger.debug("Novel intron " + str(read_intron))
 
-        if event_tuple.event_type == {MatchEventSubtype.extra_intron_novel,
+        if event_tuple.event_type in [MatchEventSubtype.extra_intron_novel,
                                       MatchEventSubtype.extra_intron_flanking_left,
-                                      MatchEventSubtype.extra_intron_flanking_right}:
+                                      MatchEventSubtype.extra_intron_flanking_right]:
             return self.add_intron(novel_exons, current_exon_start, read_intron)
         elif event_tuple.event_type == MatchEventSubtype.extra_intron_known:
             corrected_intron = self.get_closest_ref_intron(read_intron)
