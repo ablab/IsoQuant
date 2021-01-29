@@ -146,7 +146,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             if combined_read_profile is None:
                 line += "\t."
             else:
-                line += "\t" + range_list_to_str(combined_read_profile.read_split_exon_profile.read_features) 
+                line += "\t" + range_list_to_str(combined_read_profile.read_split_exon_profile.read_features)
         line += "\n"
         self.output_file.write(line)
 
