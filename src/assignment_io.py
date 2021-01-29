@@ -113,11 +113,11 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
             return
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
-            line = read_assignment.read_id + "\t.\t.\t."
+            line = read_assignment.read_id + "\t."
         elif read_assignment.combined_profile is None:
             logger.warning("Empty combined profile, read id %s, assignment type %s" %
                            (read_assignment.read_id, str(read_assignment.assignment_type)))
-            line = read_assignment.read_id + "\t.\t.\t."
+            line = read_assignment.read_id + "\t."
         else:
             assigned_transcripts = [str(m.assigned_transcript) for m in read_assignment.isoform_matches]
             for m in read_assignment.isoform_matches:
@@ -144,11 +144,9 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if self.params.print_additional_info:
             combined_read_profile = read_assignment.combined_profile
             if combined_read_profile is None:
-                line += "\t.\t.\t."
+                line += "\t."
             else:
-                line += "\t" + range_list_to_str(combined_read_profile.read_split_exon_profile.read_features) + "\t" + \
-                    list_to_str(combined_read_profile.read_intron_profile.gene_profile) + "\t" + \
-                        list_to_str(combined_read_profile.read_split_exon_profile.gene_profile)
+                line += "\t" + range_list_to_str(combined_read_profile.read_split_exon_profile.read_features) 
         line += "\n"
         self.output_file.write(line)
 
