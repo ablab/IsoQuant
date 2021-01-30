@@ -171,7 +171,9 @@ class PolyAVerifier:
         for i, event in enumerate(matching_events):
             if event.event_type in [MatchEventSubtype.extra_intron_known,
                                     MatchEventSubtype.extra_intron_novel,
-                                    MatchEventSubtype.extra_intron_flanking_right] and \
+                                    MatchEventSubtype.extra_intron_flanking_right,
+                                    MatchEventSubtype.terminal_exon_shift_known,
+                                    MatchEventSubtype.terminal_exon_shift_novel] and \
                     read_introns[event.read_region[0]][1] >= corrected_read_end:
                 events_to_remove.add(i)
 
@@ -189,7 +191,9 @@ class PolyAVerifier:
         for i, event in enumerate(matching_events):
             if event.event_type in [MatchEventSubtype.extra_intron_known,
                                     MatchEventSubtype.extra_intron_novel,
-                                    MatchEventSubtype.extra_intron_flanking_left] and \
+                                    MatchEventSubtype.extra_intron_flanking_left,
+                                    MatchEventSubtype.terminal_exon_shift_known,
+                                    MatchEventSubtype.terminal_exon_shift_novel] and \
                     read_introns[event.read_region[0]][0] <= corrected_read_start:
                 events_to_remove.add(i)
 
