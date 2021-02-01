@@ -139,13 +139,16 @@ def store_index(index, args):
 
 def find_stored_alignment(aligner, fastq_files, args):
     fastq = os.path.abspath(fastq_files[0])
-    key = "_aligned_by_".join([fastq, aligner])
+    key = "%s_aligned_to_%s" % (fastq, args.index)
     with open(args.alignment_config_path, 'r') as f_in:
         aligned_fastq_files = json.load(f_in)
 
-    logger.debug('Searching for previously created index for {}'.format(fastq))
+    logger.debug('Searching for previously created alignment for {}'.format(fastq))
     bam_fpath = aligned_fastq_files.get(key, {}).get('alignment_fpath')
     if bam_fpath is None:
+        return None
+    index_mtime = aligned_fastq_files.get(key, {}).get('index_mtime')
+    if os.path.getmtime(args.index) != index_mtime:
         return None
     fastq_mtime = aligned_fastq_files.get(key, {}).get('fastq_mtime')
     bam_mtime = aligned_fastq_files.get(key, {}).get('bam_mtime')
@@ -158,13 +161,14 @@ def find_stored_alignment(aligner, fastq_files, args):
 
 def store_alignment(bam_file, aligner, fastq_files, args):
     fastq = os.path.abspath(fastq_files[0])
-    key = "_aligned_by_".join([fastq, aligner])
+    key = "%s_aligned_to_%s" % (fastq, args.index)
     bam_file = os.path.abspath(bam_file)
 
     with open(args.alignment_config_path, 'r') as f_in:
         aligned_fastq_files = json.load(f_in)
     aligned_fastq_files[key] = {
         'alignment_fpath': bam_file,
+        'index_mtime': os.path.getmtime(args.index),
         'fastq_mtime': os.path.getmtime(fastq),
         'bam_mtime': os.path.getmtime(bam_file)
     }
@@ -178,7 +182,7 @@ def index_reference(aligner, args):
     ref_name, _ = os.path.splitext(args.reference.split('/')[-1])
 
     command = ""
-    index_name = os.path.join(args.output, "%s_k%s_idx" % (ref_name, KMER_SIZE[args.data_type]))
+    index_name = os.path.join(os.path.abspath(args.output), "%s_k%s_idx" % (ref_name, KMER_SIZE[args.data_type]))
     if aligner == "starlong":
         if os.path.isdir(index_name) and os.path.exists(os.path.join(index_name, "genomeParameters.txt")):
             logger.debug('Reusing reference index ' + index_name)
@@ -215,8 +219,8 @@ def align_fasta(aligner, fastq_paths, args, label, out_dir):
     logger.info("Aligning %s to the reference" % fastq_path)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
     alignment_prefix = os.path.join(args.tmp_dir, label)
-    alignment_sam_path = alignment_prefix + '.sam'
-    alignment_bam_path = os.path.join(out_dir, label + '.bam')
+    alignment_bam_path = os.path.join(out_dir, label + '_%d.bam' % hash(args.index))
+    alignment_sam_path = alignment_bam_path[:-4] + '.sam'
 
     # if 'barcoded' in args.data_type:
     #    fastq_path = convert_fasta_with_barcodes(fastq_path, args)
