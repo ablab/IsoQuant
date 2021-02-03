@@ -26,7 +26,8 @@ def parse_args(args=None, namespace=None):
 
     parser.add_argument("--output", "-o", help="output folder, will be created automatically [default=isoquant_output]",
                         type=str, default="isoquant_output")
-
+    parser.add_argument('--debug', action='store_true', default=False,
+                        help='Debug log output.')
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
                         required='--run_aligner_only' not in sys.argv)
@@ -146,7 +147,7 @@ def parse_args(args=None, namespace=None):
 class TestMode(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         source_dir = os.path.dirname(os.path.realpath(__file__))
-        options = ['--output', 'isoquant_test', '--threads', '2',
+        options = ['--output', 'isoquant_test', '--threads', '2', 
                    '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
                    '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
                    '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
@@ -240,14 +241,19 @@ def create_output_dirs(args):
 
 
 def set_logger(args, logger_instance):
-    logger_instance.setLevel(logging.INFO)
+    if args.debug:
+        logger_instance.setLevel(logging.DEBUG)
+    else:
+        logger_instance.setLevel(logging.INFO)
     log_file = os.path.join(args.output, "isoquant.log")
     f = open(log_file, "w")
     f.write("CMD: " + ' '.join(sys.argv) + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
-    # FIXME
-    fh.setLevel(logging.INFO)
+    if args.debug:
+        fh.setLevel(logging.DEBUG)
+    else:
+        fh.setLevel(logging.INFO)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
 
@@ -447,5 +453,6 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except:
+        print("IsoQuant failed with the following error, please, submit this issue to https://github.com/ablab/IsoQuant/issues")
         print_exc()
         sys.exit(-1)
