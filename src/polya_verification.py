@@ -39,7 +39,7 @@ class PolyAVerifier:
                 if is_internal:
                     return matching_events
 
-            if polya_info.external_polya_pos != -1:
+            if polya_info.external_polya_pos != -1 or polya_info.internal_polya_pos != -1:
                 matching_events, corrected_read_end = self.verify_polya(isoform_exons, read_exons,
                                                                         polya_info, matching_events)
                 combined_read_profile.corrected_read_end = corrected_read_end
@@ -53,7 +53,7 @@ class PolyAVerifier:
                 if is_internal:
                     return matching_events
 
-            if polya_info.external_polyt_pos != -1:
+            if polya_info.external_polyt_pos != -1 or polya_info.internal_polyt_pos != -1:
                 matching_events, corrected_read_start = self.verify_polyt(isoform_exons, read_exons,
                                                                           polya_info, matching_events)
                 combined_read_profile.corrected_read_start = corrected_read_start
@@ -102,17 +102,18 @@ class PolyAVerifier:
             logger.debug("Corrected polyA seems good")
             return new_events, polya_pos
 
-        dist_to_polya = abs(polya_info.external_polya_pos - isoform_end)
+        polya_pos = polya_info.external_polya_pos if polya_info.external_polya_pos != -1 else polya_info.internal_polya_pos
+        dist_to_polya = abs(polya_pos - isoform_end)
         logger.debug("+ Distance to polyA is %d" % dist_to_polya)
         if dist_to_polya > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(
-                make_event(MatchEventSubtype.alternative_polya_site, event_length=polya_info.external_polya_pos))
+                make_event(MatchEventSubtype.alternative_polya_site, event_length=polya_pos))
         else:
             logger.debug("+ Seems like correct polyA, odd case")
             matching_events.append(
-                make_event(MatchEventSubtype.correct_polya_site, event_length=polya_info.external_polya_pos))
-        return matching_events, polya_info.external_polya_pos
+                make_event(MatchEventSubtype.correct_polya_site, event_length=polya_pos))
+        return matching_events, polya_pos
 
     def verify_polyt(self, isoform_exons, read_exons, polya_info, matching_events):
         isoform_start = isoform_exons[0][0]
@@ -150,17 +151,18 @@ class PolyAVerifier:
             logger.debug("Corrected polyT seems good")
             return new_events, polyt_pos
 
-        dist_to_polyt = abs(polya_info.external_polyt_pos - isoform_start)
+        polyt_pos = polya_info.external_polyt_pos if polya_info.external_polyt_pos != -1 else polya_info.internal_polyt_pos
+        dist_to_polyt = abs(polyt_pos - isoform_start)
         logger.debug("+ Distance to polyT is %d" % dist_to_polyt)
         if dist_to_polyt > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(
-                make_event(MatchEventSubtype.alternative_polya_site, event_length=polya_info.external_polyt_pos))
+                make_event(MatchEventSubtype.alternative_polya_site, event_length=polyt_pos))
         else:
             logger.debug("+ Seems like correct polyT, odd case")
             matching_events.append(
-                make_event(MatchEventSubtype.correct_polya_site, event_length=polya_info.external_polyt_pos))
-        return matching_events, polya_info.external_polyt_pos
+                make_event(MatchEventSubtype.correct_polya_site, event_length=polyt_pos))
+        return matching_events, polyt_pos
 
     # remove extra introns beyond corrected read ends
     def remove_extra_intron_events_right(self, corrected_read_end, matching_events, read_introns):
@@ -267,7 +269,7 @@ class PolyAVerifier:
 
     # recalculate polya site considering terminal exons are fake
     def shift_polya(self, read_exons, exon_count, polya_pos):
-        if exon_count == 0 or exon_count == len(read_exons):
+        if exon_count == 0 or exon_count == len(read_exons) or polya_pos == -1:
             return polya_pos
 
         dist_to_polya = 0
@@ -315,7 +317,7 @@ class PolyAVerifier:
 
     # recalculate polya site considering terminal exons are fake
     def shift_polyt(self, read_exons, exon_count, polyt_pos):
-        if exon_count == 0 or exon_count == len(read_exons):
+        if exon_count == 0 or exon_count == len(read_exons) or polyt_pos == -1:
             return polyt_pos
 
         dist_to_polya = 0

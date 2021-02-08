@@ -167,7 +167,7 @@ class TestMode(argparse.Action):
         with open('isoquant_test/isoquant.log', 'r') as f:
             log = f.read()
 
-        correct_results = ['noninformative: 110', 'unique: 88', 'known: 15', 'Processed 1 sample']
+        correct_results = ['noninformative: 110', 'unique: 92', 'known: 15', 'Processed 1 sample']
         return all([result in log for result in correct_results])
 
 

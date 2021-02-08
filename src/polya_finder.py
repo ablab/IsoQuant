@@ -99,13 +99,13 @@ class PolyAFinder:
         return self.find_polya_tail(alignment, 2, 2 * self.window_size)
 
     def find_polya_internal(self, alignment):
-        return self.find_polya_tail(alignment, 3 * self.window_size, 2)
+        return self.find_polya_tail(alignment, 4 * self.window_size, 2)
 
     def find_polyt_external(self, alignment):
         return self.find_polyt_head(alignment, 2, 2 * self.window_size)
 
     def find_polyt_internal(self, alignment):
-        return self.find_polyt_head(alignment, 3 * self.window_size, 2)
+        return self.find_polyt_head(alignment, 4 * self.window_size, 2)
 
     # == polyA stuff ==
     def find_polya_tail(self, alignment, from_pos, to_pos):
