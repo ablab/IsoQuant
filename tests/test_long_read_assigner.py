@@ -309,7 +309,7 @@ class TestCompareJunctions:
                                MatchEventSubtype.alt_left_site_novel),
                               ([(50, 60), (80, 100)], (0, 150), [(40, 60), (80, 100)], (9, 149), 2,
                                MatchEventSubtype.alt_left_site_known),
-                              ([(50, 60), (80, 100)], (0, 150), [(50, 60), (70, 90)], (9, 149), 2,
+                              ([(50, 60), (80, 100)], (0, 150), [(50, 60), (95, 115)], (9, 149), 2,
                                MatchEventSubtype.intron_migration),
                               ([(50, 60), (85, 105)], (0, 150), [(50, 60), (80, 100)], (9, 149), 2,
                                MatchEventSubtype.intron_shift),
