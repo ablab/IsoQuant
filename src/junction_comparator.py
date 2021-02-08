@@ -302,13 +302,12 @@ class JunctionComparator:
     def classify_single_intron_alternation(self, read_region, read_junctions, isoform_region, isoform_junctions,
                                            read_cpos, isoform_cpos, intron_length_is_similar, read_introns_known):
         if intron_length_is_similar:
-            if read_introns_known:
+            if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) <= self.params.max_intron_shift:
+                event = MatchEventSubtype.intron_shift
+            elif read_introns_known:
                 event = MatchEventSubtype.intron_migration
             else:
-                if abs(isoform_junctions[isoform_cpos][0] - read_junctions[read_cpos][0]) <= self.params.max_intron_shift:
-                    event = MatchEventSubtype.intron_shift
-                else:
-                    event = MatchEventSubtype.intron_alternation_novel
+                event = MatchEventSubtype.intron_alternation_novel
         else:
             event = MatchEventSubtype.intron_alternation_known if read_introns_known \
                 else MatchEventSubtype.intron_alternation_novel

@@ -120,7 +120,7 @@ class TranscriptModelConstructor:
         MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
         MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.mutually_exclusive_exons_known,
         MatchEventSubtype.exon_skipping_novel, MatchEventSubtype.exon_skipping_known,
-        MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
+        MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known, # TODO: remove these?
         MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
         MatchEventSubtype.terminal_exon_shift_known, MatchEventSubtype.terminal_exon_shift_novel,
         MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_gain_known,
