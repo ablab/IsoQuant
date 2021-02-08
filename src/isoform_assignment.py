@@ -444,8 +444,11 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
             intron = isoform_introns[event.isoform_position]
             coordinates = ":" + str(intron[0]) + "-" + str(intron[1])
     else:
-        if event.read_region != SupplementaryMatchConstansts.undefined_region:
+        if event.read_region != SupplementaryMatchConstansts.undefined_region and \
+                event.read_region[0] >= 0 and event.read_region[1] >= 0:
             introns = read_introns[event.read_region[0]:event.read_region[1]+1]
+            logger.debug("+ adding info for %s, introns indices %s, introns %s" %
+                         (str(event.event_type), str(event.read_region), str(introns)))
             coordinates = ":" + str(introns[0][0]) + "-" + str(introns[-1][1])
 
     return match_subtype_to_str(event, strand) + coordinates
