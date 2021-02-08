@@ -120,17 +120,20 @@ class TranscriptModelConstructor:
         MatchEventSubtype.intron_alternation_novel, MatchEventSubtype.intron_alternation_known,
         MatchEventSubtype.mutually_exclusive_exons_novel, MatchEventSubtype.mutually_exclusive_exons_known,
         MatchEventSubtype.exon_skipping_novel, MatchEventSubtype.exon_skipping_known,
-        MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known, # TODO: remove these?
-        MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
         MatchEventSubtype.terminal_exon_shift_known, MatchEventSubtype.terminal_exon_shift_novel,
         MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_gain_known,
         MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel
     }
 
+    modification_events = nic_event_types.union(nnic_event_types)
+
     def __init__(self, gene_info, read_assignment_storage, params):
         if params.report_apa:
             self.events_to_track.add(MatchEventSubtype.alternative_polya_site)
             self.events_to_track.add(MatchEventSubtype.alternative_tss)
+        if params.report_intron_retention:
+            self.events_to_track.add(MatchEventSubtype.intron_retention)
+            self.events_to_track.add(MatchEventSubtype.unspliced_intron_retention)
         self.gene_info = gene_info
         self.read_assignment_storage = read_assignment_storage
         self.params = params
@@ -344,8 +347,7 @@ class TranscriptModelConstructor:
 
     def blend_read_into_isoform(self, isoform_id, read_assignment):
         logger.debug("Creating novel transcript model for isoform %s and read %s" % (isoform_id, read_assignment.read_id))
-        read_inconsistencies = self.get_read_inconsistencies(isoform_id, read_assignment)
-        modification_events_map = self.derive_significant_modifications_map(read_inconsistencies)
+        modification_events_map = self.derive_significant_modifications_map(isoform_id, read_assignment)
         if not modification_events_map:
             return None
 
@@ -573,8 +575,13 @@ class TranscriptModelConstructor:
         return None
 
     # return map: isoform position -> event tuple
-    def derive_significant_modifications_map(self, read_inconsistencies):
-        match_subclassifications = list(filter(lambda m: m.event_type in self.events_to_track, read_inconsistencies))
+    def derive_significant_modifications_map(self, isoform_id, read_assignment):
+        read_inconsistencies = self.get_read_inconsistencies(isoform_id, read_assignment)
+        if read_inconsistencies is None:
+            logger.debug("No modification events detected for " + read_assignment.read_id)
+            return None
+
+        match_subclassifications = list(filter(lambda m: m.event_type in self.modification_events, read_inconsistencies))
         logger.debug("Selected modifications: " +", ".join(["%s: %s - %s" % (x.event_type.name, str(x.isoform_position), str(x.read_region))
                                                             for x in match_subclassifications]))
         if not self.params.report_intron_retention and \
