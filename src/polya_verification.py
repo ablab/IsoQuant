@@ -42,6 +42,8 @@ class PolyAVerifier:
             if polya_info.external_polya_pos != -1 or polya_info.internal_polya_pos != -1:
                 matching_events, corrected_read_end = self.verify_polya(isoform_exons, read_exons,
                                                                         polya_info, matching_events)
+                if corrected_read_end == -1:
+                    return matching_events
                 combined_read_profile.corrected_read_end = corrected_read_end
                 matching_events = self.remove_extra_intron_events_right(corrected_read_end, matching_events,
                                                                         read_introns)
@@ -56,6 +58,8 @@ class PolyAVerifier:
             if polya_info.external_polyt_pos != -1 or polya_info.internal_polyt_pos != -1:
                 matching_events, corrected_read_start = self.verify_polyt(isoform_exons, read_exons,
                                                                           polya_info, matching_events)
+                if corrected_read_start == -1:
+                    return matching_events
                 combined_read_profile.corrected_read_start = corrected_read_start
                 matching_events = self.remove_extra_intron_events_left(corrected_read_start, matching_events,
                                                                         read_introns)
@@ -102,7 +106,10 @@ class PolyAVerifier:
             logger.debug("Corrected polyA seems good")
             return new_events, polya_pos
 
-        polya_pos = polya_info.external_polya_pos if polya_info.external_polya_pos != -1 else polya_info.internal_polya_pos
+        if polya_info.external_polya_pos == -1:
+            return matching_events, -1
+
+        polya_pos = polya_info.external_polya_pos
         dist_to_polya = abs(polya_pos - isoform_end)
         logger.debug("+ Distance to polyA is %d" % dist_to_polya)
         if dist_to_polya > self.params.apa_delta:
@@ -151,7 +158,10 @@ class PolyAVerifier:
             logger.debug("Corrected polyT seems good")
             return new_events, polyt_pos
 
-        polyt_pos = polya_info.external_polyt_pos if polya_info.external_polyt_pos != -1 else polya_info.internal_polyt_pos
+        if polya_info.external_polyt_pos == -1:
+            return matching_events, -1
+
+        polyt_pos = polya_info.external_polyt_pos
         dist_to_polyt = abs(polyt_pos - isoform_start)
         logger.debug("+ Distance to polyT is %d" % dist_to_polyt)
         if dist_to_polyt > self.params.apa_delta:

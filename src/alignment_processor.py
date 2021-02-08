@@ -94,6 +94,7 @@ class LongReadAlignmentProcessor:
                 combined_profile = self.profile_constructor.construct_profiles(sorted_blocks, polya_info, cage_hits)
 
                 read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
+                # TODO remove field or fix
                 read_assignment.polyA_found = (polya_info.external_polya_pos != -1 or
                                                polya_info.external_polyt_pos != -1 or
                                                polya_info.internal_polya_pos != -1 or
