@@ -99,16 +99,16 @@ class PolyAFinder:
         return self.find_polya_tail(alignment, 2, 2 * self.window_size)
 
     def find_polya_internal(self, alignment):
-        return self.find_polya_tail(alignment, 4 * self.window_size, 2)
+        return self.find_polya_tail(alignment, 4 * self.window_size, 2, check_entire_tail=True)
 
     def find_polyt_external(self, alignment):
         return self.find_polyt_head(alignment, 2, 2 * self.window_size)
 
     def find_polyt_internal(self, alignment):
-        return self.find_polyt_head(alignment, 4 * self.window_size, 2)
+        return self.find_polyt_head(alignment, 4 * self.window_size, 2, check_entire_head=True)
 
     # == polyA stuff ==
-    def find_polya_tail(self, alignment, from_pos, to_pos):
+    def find_polya_tail(self, alignment, from_pos, to_pos, check_entire_tail=False):
         logger.debug("Detecting polyA tail for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_tail_len = 0
@@ -129,10 +129,16 @@ class PolyAFinder:
         to_check_start = max(0, read_mapped_region_end - from_pos)
         to_check_end = min(len(seq), read_mapped_region_end + to_pos + 1)
         sequence_to_check = alignment.seq[to_check_start:to_check_end].upper()
-        pos = self.find_polya(sequence_to_check.upper())
+        pos = self.find_polya(sequence_to_check)
 
         logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_end, to_check_start, to_check_end, pos))
         logger.debug(sequence_to_check)
+
+        if check_entire_tail and pos != -1:
+            entire_tail = sequence_to_check[pos:]
+            if entire_tail.count('A') < len(entire_tail) * self.min_polya_fraction:
+                logger.debug("Internal polyA seems unreliable")
+                pos = -1
 
         if pos == -1:
             logger.debug("No polyA found")
@@ -152,7 +158,7 @@ class PolyAFinder:
         logger.debug("PolyA found at position %d" % reference_polya_start)
         return reference_polya_start
 
-    def find_polyt_head(self, alignment, from_pos, to_pos):
+    def find_polyt_head(self, alignment, from_pos, to_pos, check_entire_head=False):
         logger.debug("Detecting polyT head for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_head_len = 0
@@ -174,10 +180,16 @@ class PolyAFinder:
         to_check_end = min(len(seq), read_mapped_region_start + from_pos + 1)
         sequence_to_check = str(Seq.Seq(alignment.seq[to_check_start:to_check_end]).reverse_complement()).upper()
 
-        pos = self.find_polya(sequence_to_check.upper())
+        pos = self.find_polya(sequence_to_check)
 
         logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_start, to_check_start, to_check_end, pos))
         logger.debug(sequence_to_check)
+
+        if check_entire_head and pos != -1:
+            entire_tail = sequence_to_check[pos:]
+            if entire_tail.count('A') < len(entire_tail) * self.min_polya_fraction:
+                logger.debug("Internal polyT seems unreliable")
+                pos = -1
 
         if pos == -1:
             logger.debug("No polyT found")

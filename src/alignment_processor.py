@@ -80,6 +80,7 @@ class LongReadAlignmentProcessor:
                 concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
                 # correct coordinates to GTF style (inclusive intervals)
                 sorted_blocks = correct_bam_coords(concat_blocks)
+                logger.debug("Read exons: " + str(sorted_blocks))
 
                 polya_info = self.polya_finder.detect_polya(alignment)
 

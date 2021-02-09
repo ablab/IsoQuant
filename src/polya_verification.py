@@ -251,7 +251,7 @@ class PolyAVerifier:
         external_polya_pos = polya_info.external_polya_pos
         internal_polya_pos = polya_info.internal_polya_pos
 
-        if internal_polya_pos == -1:
+        if internal_polya_pos == -1 or len(read_exons) == 0:
             return matching_events, self.shift_polya(read_exons, fake_terminal_exon_count, external_polya_pos), -1
 
         # find exons beyond internal polyA
@@ -260,8 +260,8 @@ class PolyAVerifier:
             exon = read_exons[-i - 1]
             if exon[1] <= internal_polya_pos:
                 break
-            if exon[1] - internal_polya_pos > internal_polya_pos - exon[0]:
-                # more than half of the exon is polyA
+            if exon[1] - internal_polya_pos > 2 * (internal_polya_pos - exon[0]):
+                # more than 2/3 of the exon is polyA
                 polya_exon_count += 1
 
         # add events
@@ -301,7 +301,7 @@ class PolyAVerifier:
         external_polyt_pos = polya_info.external_polyt_pos
         internal_polyt_pos = polya_info.internal_polyt_pos
 
-        if internal_polyt_pos == -1:
+        if internal_polyt_pos == -1 or len(read_exons) == 0:
             return matching_events, self.shift_polyt(read_exons, fake_terminal_exon_count, external_polyt_pos), -1
 
         # find exons beyond internal polyA
@@ -310,8 +310,8 @@ class PolyAVerifier:
             exon = read_exons[i]
             if exon[0] >= internal_polyt_pos:
                 break
-            if exon[1] - internal_polyt_pos < internal_polyt_pos - exon[0]:
-                # more than half of the exon is polyT
+            if 2 * (exon[1] - internal_polyt_pos) < internal_polyt_pos - exon[0]:
+                # more than 2/3 of the exon is polyT
                 polya_exon_count += 1
 
         # add events

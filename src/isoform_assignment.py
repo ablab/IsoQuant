@@ -408,7 +408,7 @@ match_subtype_printable_names = \
      MatchEventSubtype.exon_elongation_right : ('exon_elongation_3', 'exon_elongation_5'),
      MatchEventSubtype.major_exon_elongation_left: ('major_exon_elongation_5', 'major_exon_elongation_3'),
      MatchEventSubtype.major_exon_elongation_right: ('major_exon_elongation_3', 'major_exon_elongation_5'),
-     MatchEventSubtype.fake_terminal_exon_left : ('fake_terminal_exon_5', 'efake_terminal_exon_3'),
+     MatchEventSubtype.fake_terminal_exon_left : ('fake_terminal_exon_5', 'fake_terminal_exon_3'),
      MatchEventSubtype.fake_terminal_exon_right : ('fake_terminal_exon_3', 'fake_terminal_exon_5'),
      MatchEventSubtype.incomplete_intron_retention_left: ('incomplete_intron_retention_5', 'incomplete_intron_retention_3'),
      MatchEventSubtype.incomplete_intron_retention_right: ('incomplete_intron_retention_3', 'incomplete_intron_retention_5'),
@@ -447,6 +447,7 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
         if event.read_region != SupplementaryMatchConstansts.undefined_region and \
                 event.read_region[0] >= 0 and event.read_region[1] >= 0:
             introns = read_introns[event.read_region[0]:event.read_region[1]+1]
+            logger.debug(read_introns)
             logger.debug("+ adding info for %s, introns indices %s, introns %s" %
                          (str(event.event_type), str(event.read_region), str(introns)))
             coordinates = ":" + str(introns[0][0]) + "-" + str(introns[-1][1])
