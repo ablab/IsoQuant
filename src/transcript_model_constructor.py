@@ -125,7 +125,22 @@ class TranscriptModelConstructor:
         MatchEventSubtype.alternative_structure_known, MatchEventSubtype.alternative_structure_novel
     }
 
-    modification_events = nic_event_types.union(nnic_event_types)
+    modification_events =  {MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
+                            MatchEventSubtype.extra_intron_novel, MatchEventSubtype.extra_intron_flanking_left,
+                            MatchEventSubtype.extra_intron_flanking_right,
+                            MatchEventSubtype.mutually_exclusive_exons_novel,
+                            MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel,
+                            MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
+                            MatchEventSubtype.terminal_exon_shift_novel,
+                            MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
+                            MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
+                            MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
+                            MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
+                            MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known,
+                            MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
+                            MatchEventSubtype.terminal_exon_shift_known,
+                            MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
+                            MatchEventSubtype.intron_alternation_known}
 
     def __init__(self, gene_info, read_assignment_storage, params):
         if params.report_apa:
@@ -352,8 +367,6 @@ class TranscriptModelConstructor:
             return None
 
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
-        strand = self.gene_info.isoform_strands[isoform_id]
-
         combined_profile = read_assignment.combined_profile
         read_introns = combined_profile.read_intron_profile.read_features
         read_start = combined_profile.corrected_read_start
