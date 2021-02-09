@@ -254,7 +254,7 @@ def junctions_from_blocks(sorted_blocks):
 
 
 def get_following_exon_from_junctions(region, introns, intron_position):
-    if intron_position == len(introns) - 1:
+    if intron_position == len(introns) - 1 or intron_position == -1:
         # intron precedes the last exon
         following_exon_end = region[1]
     else:

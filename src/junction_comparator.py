@@ -231,7 +231,16 @@ class JunctionComparator:
                 (read_cregion[0] == 0 and isoform_cregion[0] == 0) or \
                 (read_cregion[0] == len(read_junctions)-1 and isoform_cregion[0] == len(isoform_junctions) - 1):
             # terminal exon alternation
-            if read_introns_known:
+            if read_cregion[0] == 0:
+                read_exon = get_preceding_exon_from_junctions(read_region, read_junctions, 0)
+                isoform_exon = get_preceding_exon_from_junctions(isoform_region, isoform_junctions, 0)
+            else:
+                read_exon = get_following_exon_from_junctions(read_region, read_junctions, -1)
+                isoform_exon = get_following_exon_from_junctions(isoform_region, isoform_junctions, -1)
+            if abs(interval_len(read_exon) - interval_len(isoform_exon)) < 2 * self.params.delta:
+                # TODO: verify with alignment
+                event = MatchEventSubtype.exon_misallignment
+            elif read_introns_known:
                 event = MatchEventSubtype.terminal_exon_shift_known
             else:
                 event = MatchEventSubtype.terminal_exon_shift_novel
