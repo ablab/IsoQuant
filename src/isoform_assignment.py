@@ -221,8 +221,8 @@ event_subtype_cost = {
     MatchEventSubtype.intron_alternation_novel:1,
     MatchEventSubtype.intron_alternation_known:1,
     # mutually exclusive
-    MatchEventSubtype.mutually_exclusive_exons_novel:1,
-    MatchEventSubtype.mutually_exclusive_exons_known:1,
+    MatchEventSubtype.mutually_exclusive_exons_novel:0.6,
+    MatchEventSubtype.mutually_exclusive_exons_known:0.6,
     # exon skipping
     MatchEventSubtype.exon_skipping_known:1,
     MatchEventSubtype.exon_skipping_novel:1,
