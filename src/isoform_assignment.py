@@ -226,13 +226,13 @@ event_subtype_cost = {
     # exon skipping
     MatchEventSubtype.exon_skipping_known:1,
     MatchEventSubtype.exon_skipping_novel:1,
-    MatchEventSubtype.exon_merge_known:1,
-    MatchEventSubtype.exon_merge_novel:1,
+    MatchEventSubtype.exon_merge_known:0.5,
+    MatchEventSubtype.exon_merge_novel:0.5,
     # exon gain
     MatchEventSubtype.exon_gain_known:1,
     MatchEventSubtype.exon_gain_novel:1,
-    MatchEventSubtype.exon_detatch_known:1,
-    MatchEventSubtype.exon_detatch_novel:1,
+    MatchEventSubtype.exon_detatch_known:0.5,
+    MatchEventSubtype.exon_detatch_novel:0.5,
     MatchEventSubtype.terminal_exon_shift_known:0.5,
     MatchEventSubtype.terminal_exon_shift_novel:0.5,
     # other
