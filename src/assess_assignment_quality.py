@@ -78,7 +78,7 @@ class MappingData:
             else:
                 seq_id = record.id
                 if record.id.startswith("E"):
-                    isoform_id = record.id.record.id.split('_', 2)[0]
+                    isoform_id = record.id.split('_', 2)[0]
                 else:
                     tokens = record.id.split('_', 2)
                     if len(tokens) < 2:
