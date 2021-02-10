@@ -82,7 +82,7 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--sqanti_output", help="produce SQANTI-like TSV output (requires more time)",
                         action='store_true', default=False)
     parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
-    add_additional_option("--use_secondary", help="do not ignore secondary alignments", action='store_true', default=False)
+    add_additional_option("--use_secondary", help="do not ignore secondary alignments", action='store_true', default=True)
 
     # ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
@@ -167,7 +167,7 @@ class TestMode(argparse.Action):
         with open('isoquant_test/isoquant.log', 'r') as f:
             log = f.read()
 
-        correct_results = ['noninformative: 110', 'unique: 92', 'known: 17', 'Processed 1 sample']
+        correct_results = ['noninformative: 16', 'unique: 92', 'known: 15', 'Processed 1 sample']
         return all([result in log for result in correct_results])
 
 

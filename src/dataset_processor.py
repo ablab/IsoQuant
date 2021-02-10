@@ -138,13 +138,8 @@ class DatasetProcessor:
         if not os.path.isdir(self.tmp_dir):
             os.makedirs(self.tmp_dir)
 
-        gff_printer = GFFPrinter(sample.out_dir, sample.label)
-        read_stat_counter = EnumStats()
-        transcript_stat_counter = EnumStats()
-
         current_chromosome = ""
         current_chr_record = None
-        counter = 0
         self.processed_reads = set()
         self.multimapped_reads = set()
         self.reads_assignments = []
@@ -160,31 +155,18 @@ class DatasetProcessor:
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
                                                              current_chr_record, self.read_grouper)
             assignment_storage = alignment_processor.process()
-            for a in assignment_storage:
-                read_stat_counter.add(a.assignment_type)
+            self.dump_reads(assignment_storage, gene_info)
 
-            # TODO move ater multimap resolving
-            transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
-            transcript_generator.process()
-            gff_printer.dump(transcript_generator)
-            for t in transcript_generator.transcript_model_storage:
-                transcript_stat_counter.add(t.transcript_type)
-
-            self.dump_reads(assignment_storage, counter)
-            counter += 1
-
-        logger.info("Combining output")
+        logger.info("Combining output for sample " + sample.label)
         self.aggregate_reads(sample)
+        self.construct_models(sample)
         os.rmdir(self.tmp_dir)
-        logger.info("Transcript model file " + gff_printer.model_fname)
         logger.info("Processed sample " + sample.label)
-        read_stat_counter.print_start("Read assignment statistics")
-        transcript_stat_counter.print_start("Transcript model statistics")
 
-    def dump_reads(self, read_storage, gene_counter):
+    def dump_reads(self, read_storage, gene_info):
         if self.args.memory_efficient:
             # TODO: dump to file
-            out_tmp_tsv = os.path.join(self.tmp_dir, str(gene_counter) + ".processed_reads.tsv")
+            # out_tmp_tsv = os.path.join(self.tmp_dir, str(gene_counter) + ".processed_reads.tsv")
             assert False
         else:
             for read_assignment in read_storage:
@@ -193,9 +175,10 @@ class DatasetProcessor:
                         self.multimapped_reads.add(read_assignment.read_id)
                     else:
                         self.processed_reads.add(read_assignment.read_id)
-            self.reads_assignments.append(read_storage)
+            self.reads_assignments.append((gene_info, read_storage))
 
     def create_aggregators(self, sample):
+        self.read_stat_counter = EnumStats()
         self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args)
         self.bed_printer = BEDPrinter(sample.out_mapped_bed, self.args)
         printer_list = [self.basic_printer, self.bed_printer]
@@ -226,14 +209,17 @@ class DatasetProcessor:
                 self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 
     def pass_to_aggregators(self, read_assignment):
+        if read_assignment is None:
+            return
+        self.read_stat_counter.add(read_assignment.assignment_type)
         self.global_printer.add_read_info(read_assignment)
         self.global_counter.add_read_info(read_assignment)
 
     def finalize_aggregators(self, sample):
         self.global_counter.dump()
-        logger.info("Finished processing sample " + sample.label)
         logger.info("Gene counts are stored in " + self.gene_counter.output_file_name)
         logger.info("Transcript counts are stored in " + self.transcript_counter.output_file_name)
+        self.read_stat_counter.print_start("Read assignment statistics")
 
     def aggregate_reads(self, sample):
         self.create_aggregators(sample)
@@ -243,16 +229,36 @@ class DatasetProcessor:
             assert False
         else:
             for storage in self.reads_assignments:
-                for read_assignment in storage:
+                gene_read_assignments = storage[1]
+                for i, read_assignment in enumerate(gene_read_assignments):
                     read_id = read_assignment.read_id
                     if read_id in self.multimapped_reads:
                         multimap_reads_assignments[read_id].append(read_assignment)
+                        # remove multimappers from the storage
+                        gene_read_assignments[i] = None
                     else:
                         self.pass_to_aggregators(read_assignment)
 
+        logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         for read_id in multimap_reads_assignments.keys():
+            # TODO add read assignments back to storage
             read_assignment = multimap_resolver.resolve(multimap_reads_assignments[read_id])
             self.pass_to_aggregators(read_assignment)
 
         self.finalize_aggregators(sample)
+
+    def construct_models(self, sample):
+        logger.info("Constructing transcript models for " + sample.label)
+        gff_printer = GFFPrinter(sample.out_dir, sample.label)
+        transcript_stat_counter = EnumStats()
+
+        for gene_info, assignment_storage in self.reads_assignments:
+            transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
+            transcript_generator.process()
+            gff_printer.dump(transcript_generator)
+            for t in transcript_generator.transcript_model_storage:
+                transcript_stat_counter.add(t.transcript_type)
+
+        logger.info("Transcript model file " + gff_printer.model_fname)
+        transcript_stat_counter.print_start("Transcript model statistics")

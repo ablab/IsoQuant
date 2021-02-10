@@ -94,7 +94,7 @@ class GFFPrinter:
                 used_reads.add(read_id)
                 self.out_r2t.write("%s\t%s\n" % (read_id, model_id))
         for read_assignment in transcript_model_constructor.read_assignment_storage:
-            if read_assignment.read_id not in used_reads:
+            if read_assignment is not None and read_assignment.read_id not in used_reads:
                 self.out_r2t.write("%s\t%s\n" % (read_assignment.read_id, "*"))
 
         for id in sorted(transcript_model_constructor.transcript_counts.keys()):
@@ -194,6 +194,8 @@ class TranscriptModelConstructor:
         self.correct_matches = defaultdict(list)
 
         for read_assignment in self.read_assignment_storage:
+            if read_assignment is None:
+                continue
             #TODO only unique assignments for novel models?
             for match in read_assignment.isoform_matches:
                 isoform_id = match.assigned_transcript

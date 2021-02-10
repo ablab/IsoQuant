@@ -227,7 +227,8 @@ class LongReadAssigner:
             scores.append((isoform_id, similarity_function(read_exons, isoform_exons)))
 
         #logger.debug("Scores: " + str(scores))
-        best_score = max([x[1] for x in scores])
+        scores = sorted(scores, key=lambda x:x[1], reverse=True)
+        best_score = scores[0][1]
         if top_scored_factor == 0:
             top_scored = sorted(filter(lambda x: x[1] >= min_similarity, scores))
         else:
