@@ -245,8 +245,9 @@ class DatasetProcessor:
             # TODO add read assignments back to storage
             logger.debug("Resolving multimapper " + read_id +
                          ", total assignments %d" % len(multimap_reads_assignments[read_id]))
-            read_assignment = multimap_resolver.resolve(multimap_reads_assignments[read_id])
-            self.pass_to_aggregators(read_assignment)
+            read_assignments = multimap_resolver.resolve(multimap_reads_assignments[read_id])
+            for a in read_assignments:
+                self.pass_to_aggregators(a)
 
         self.finalize_aggregators(sample)
 
