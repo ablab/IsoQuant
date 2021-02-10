@@ -263,7 +263,7 @@ def align_fasta(aligner, fastq_paths, args, label, out_dir):
         if args.stranded == 'forward':
             additional_options.append('-uf')
         # TODO: add junction bed
-        command = [minimap2_path, args.index, fastq_path, '-a', '-x', 'splice', '--secondary=no',
+        command = [minimap2_path, args.index, fastq_path, '-a', '-x', 'splice', '--secondary=yes',
                    '-C', str(CANONICAL_SITE_BONUS[args.data_type]),
                    '-t', str(args.threads)] + additional_options
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
