@@ -196,22 +196,22 @@ class TranscriptModelConstructor:
         for read_assignment in self.read_assignment_storage:
             if read_assignment is None:
                 continue
-            #TODO only unique assignments for novel models?
-            for match in read_assignment.isoform_matches:
-                isoform_id = match.assigned_transcript
-                if read_assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference}:
-                #if match.match_classification in {MatchClassification.full_splice_match,
-                #                                  MatchClassification.incomplete_splice_match,
-                #                                  MatchClassification.mono_exon_match}:
-                    self.correct_matches[isoform_id].append(read_assignment)
-                else:
-                    significant_events = []
-                    for event in match.match_subclassifications:
-                        if event.event_type in self.events_to_track:
-                            significant_events.append((event.event_type, event.isoform_position))
-                    if significant_events:
-                        significant_events = sorted(significant_events)
-                        self.modified_isoforms_groups[isoform_id][tuple(significant_events)].append(read_assignment)
+
+            if read_assignment.assignment_type == ReadAssignmentType.noninformative or not read_assignment.isoform_matches:
+                continue
+            elif read_assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.ambiguous,
+                                                   ReadAssignmentType.unique_minor_difference}:
+                self.correct_matches[read_assignment.isoform_matches[0].assigned_transcript].append(read_assignment)
+            else:
+                best_match = read_assignment.isoform_matches[0]
+                isoform_id = best_match.assigned_transcript
+                significant_events = []
+                for event in best_match.match_subclassifications:
+                    if event.event_type in self.events_to_track:
+                        significant_events.append((event.event_type, event.isoform_position))
+                if significant_events:
+                    significant_events = sorted(significant_events)
+                    self.modified_isoforms_groups[isoform_id][tuple(significant_events)].append(read_assignment)
 
         # logger.debug("Constructed %d correct clusters and %d clusters with modifications" %
         #              (len(self.correct_matches), len(self.modified_isoforms_groups)))
@@ -325,7 +325,7 @@ class TranscriptModelConstructor:
         # read_coords_to_assignment = {}
 
         for a in assignments:
-            if a.read_id in self.representative_reads:
+            if a.multimapper or a.read_id in self.representative_reads:
                 continue
             read_exon_profile = a.combined_profile.read_exon_profile
 
@@ -599,10 +599,6 @@ class TranscriptModelConstructor:
         match_subclassifications = list(filter(lambda m: m.event_type in self.modification_events, read_inconsistencies))
         logger.debug("Selected modifications: " +", ".join(["%s: %s - %s" % (x.event_type.name, str(x.isoform_position), str(x.read_region))
                                                             for x in match_subclassifications]))
-        if not self.params.report_intron_retention and \
-                all(m.event_type in {MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention}
-                    for m in match_subclassifications):
-            return None
 
         modification_events_map = defaultdict(list)
         for x in match_subclassifications:
