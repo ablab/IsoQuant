@@ -53,7 +53,7 @@ class MappingData:
         self.parse_fasta(args.fasta, args.real_data)
 
         self.mapped_seqs = {}
-        self.secondary_mapped_seqs = {}
+        self.secondary_mapped_seqs = defaultdict(list)
         if not args.real_data:
             self.parse_bam(args.mapping)
 
@@ -76,12 +76,15 @@ class MappingData:
                 #TODO: check SQANTI seq names
                 seq_id = record.id
             else:
-                tokens = record.id.split('_', 2)
                 seq_id = record.id
-                if len(tokens) < 2:
-                    logger.warning("Malformed read id %s" % seq_id)
-                    continue
-                isoform_id = tokens[1]
+                if record.id.startswith("E"):
+                    isoform_id = record.id.record.id.split('_', 2)[0]
+                else:
+                    tokens = record.id.split('_', 2)
+                    if len(tokens) < 2:
+                        logger.warning("Malformed read id %s" % seq_id)
+                        continue
+                    isoform_id = tokens[1]
                 if isoform_id.startswith("E"):
                     self.seqid_to_isoform[seq_id] = correct_isoform(isoform_id)
                 else:
@@ -100,7 +103,7 @@ class MappingData:
                 continue
             seq_id = alignment.query_name
             if alignment.is_secondary or alignment.is_supplementary:
-                self.secondary_mapped_seqs[seq_id] = read_coords
+                self.secondary_mapped_seqs[seq_id].append(read_coords)
             else:
                 self.mapped_seqs[seq_id] = read_coords
         logger.info("Total alignments loaded: %d" % len(self.mapped_seqs))
@@ -138,10 +141,12 @@ class StatCounter:
         self.assignment_data = assignment_data
         self.correct_seqs = set()
         self.mismapped_seqs = set()
+        self.secondary_mapped = set()
         self.seq_assignments = defaultdict()
 
-    def count_mapping_stats(self, db):
-        for seq_id in self.mapping_data.mapped_seqs:
+    def count_mapping_stats(self, db, read_list=None):
+        reads_to_iterate = read_list if read_list is not None else self.mapping_data.mapped_seqs
+        for seq_id in reads_to_iterate:
             isoform_id = self.mapping_data.seqid_to_isoform[seq_id]
             if isoform_id not in db.isoform_to_gene_map:
                 self.mismapped_seqs.add(seq_id)
@@ -150,6 +155,8 @@ class StatCounter:
             gene_name = db.isoform_to_gene_map[isoform_id]
             if overlaps(self.mapping_data.mapped_seqs[seq_id], db.get_gene_coords(gene_name)):
                 self.correct_seqs.add(seq_id)
+            elif any(overlaps(sec, db.get_gene_coords(gene_name)) for sec in self.mapping_data.secondary_mapped_seqs[seq_id]):
+                self.secondary_mapped.add(seq_id)
             else:
                 self.mismapped_seqs.add(seq_id)
 
@@ -317,12 +324,15 @@ def main():
 
         logger.info("   Counting mapping stats...")
         stat_counter.count_mapping_stats(db)
+        #stat_counter.count_mapping_stats(db, assignment_data.assigned_isoforms.keys())
         total_reads = len(stat_counter.mapping_data.seq_set)
         correctly_mapped = len(stat_counter.correct_seqs)
+        secondary_mapped = len(stat_counter.secondary_mapped)
         mismapped_reads = len(stat_counter.mismapped_seqs)
         unmapped_reads = total_reads - (correctly_mapped + mismapped_reads)
         output_file.write("# MAPPING STATS\n")
-        stat_counter.print_stats(correctly_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
+        logger.info("Secondary mapped %d" % secondary_mapped)
+        stat_counter.print_stats(correctly_mapped + secondary_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
         logger.info("   Done")
 
         # use only correctly mapped reads
