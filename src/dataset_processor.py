@@ -228,11 +228,12 @@ class DatasetProcessor:
         if self.args.memory_efficient:
             assert False
         else:
-            for storage in self.reads_assignments:
+            for storage_id, storage in enumerate(self.reads_assignments):
                 gene_read_assignments = storage[1]
                 for i, read_assignment in enumerate(gene_read_assignments):
                     read_id = read_assignment.read_id
                     if read_id in self.multimapped_reads:
+                        read_assignment.storage_id = storage_id
                         multimap_reads_assignments[read_id].append(read_assignment)
                         # remove multimappers from the storage
                         gene_read_assignments[i] = None
@@ -248,6 +249,7 @@ class DatasetProcessor:
             read_assignments = multimap_resolver.resolve(multimap_reads_assignments[read_id])
             for a in read_assignments:
                 self.pass_to_aggregators(a)
+                self.reads_assignments[a.storage_id][1].append(a)
 
         self.finalize_aggregators(sample)
 
