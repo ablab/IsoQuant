@@ -39,7 +39,8 @@ class AbstractAssignmentPrinter:
     def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor()):
         self.assignment_checker = assignment_checker
         self.params = params
-        self.output_file = open(output_file_name, "w")
+        self.output_file_name = output_file_name
+        self.output_file = open(self.output_file_name, "w")
 
     def __del__(self):
         self.output_file.close()
@@ -112,43 +113,35 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             return
         if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
             return
+
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
-            line = read_assignment.read_id + "\t."
+            logger.warning("Empty assignment read id %s" %  (read_assignment.read_id))
+            return
         elif read_assignment.combined_profile is None:
             logger.warning("Empty combined profile, read id %s, assignment type %s" %
                            (read_assignment.read_id, str(read_assignment.assignment_type)))
-            line = read_assignment.read_id + "\t."
-        else:
-            assigned_transcripts = [str(m.assigned_transcript) for m in read_assignment.isoform_matches]
-            for m in read_assignment.isoform_matches:
-                for x in m.match_subclassifications:
-                    if not hasattr(x, "event_type"):
-                        logger.debug(x)
-            match_evetns_strings = []
-            read_introns = read_assignment.combined_profile.read_intron_profile.read_features
-            for m in read_assignment.isoform_matches:
-                if m.assigned_transcript is None:
-                    continue
-                isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
-                match_evetns_strings.append("+".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
-                                                                                                read_introns,
-                                                                                                isoform_introns)
-                                                      for x in m.match_subclassifications]))
-            match_events = ",".join(match_evetns_strings)
-            if not match_events:
-                match_events = "."
-            line = read_assignment.read_id + "\t" + ",".join(assigned_transcripts) + "\t" \
-                + read_assignment.assignment_type.name + "\t" + match_events + "\t" + str(read_assignment.polyA_found)
+            return
+
+        read_introns = read_assignment.combined_profile.read_intron_profile.read_features
+        read_exons = read_assignment.combined_profile.read_split_exon_profile.read_features
+        for m in read_assignment.isoform_matches:
+            if m.assigned_transcript is None:
+                continue
+            isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
+            event_string = ",".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
+                                                                               read_introns, isoform_introns)
+                                     for x in m.match_subclassifications])
+
+            line = read_assignment.read_id + "\t" + m.assigned_transcript + "\t" \
+                   + read_assignment.assignment_type.name + "\t" + event_string + "\t" + str(read_assignment.polyA_found)
             if self.params.cage is not None:
                 line += '\t' + str(read_assignment.cage_found)
-        if self.params.print_additional_info:
-            combined_read_profile = read_assignment.combined_profile
-            if combined_read_profile is None:
-                line += "\t."
-            else:
-                line += "\t" + range_list_to_str(combined_read_profile.read_split_exon_profile.read_features)
-        line += "\n"
-        self.output_file.write(line)
+
+            if self.params.print_additional_info:
+                line += "\t" + range_list_to_str(read_exons)
+            line += "\n"
+            self.output_file.write(line)
+
 
     """ sqanti output
     
