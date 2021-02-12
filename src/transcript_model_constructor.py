@@ -219,10 +219,12 @@ class TranscriptModelConstructor:
     # process correctly assigned reads and for a reference-identical transcript
     def verify_correct_match(self, isoform_id, assignments):
         # logger.debug("Verifying correct match to %s, cluster size %d" % (isoform_id, len(assignments)))
-        unique_assignment_types = {ReadAssignmentType.unique_minor_difference,
-                                   ReadAssignmentType.unique, ReadAssignmentType.ambiguous}
+        unique_assignment_types = {ReadAssignmentType.unique_minor_difference,  ReadAssignmentType.unique}
         unique_assignments = list(filter(lambda x: x.assignment_type in unique_assignment_types, assignments))
-        if len(unique_assignments) < self.params.min_ref_supporting_reads:
+        consistent_assignments = unique_assignments + \
+                                 list(filter(lambda x: x.assignment_type == ReadAssignmentType.ambiguous, assignments))
+
+        if len(consistent_assignments) < self.params.min_ref_supporting_reads:
             logger.debug("Not enough support")
             return
 
