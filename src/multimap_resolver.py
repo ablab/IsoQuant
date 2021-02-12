@@ -32,7 +32,10 @@ class MultimapResolver:
         if self.strategy == MultimapResolvingStrategy.ignore_multimapper:
             return []
         elif self.strategy == MultimapResolvingStrategy.merge:
-            return self.merge(list(filter(lambda x: x.assignment_type != ReadAssignmentType.noninformative, assignment_list)))
+            informative_assignments = list(filter(lambda x: x.assignment_type != ReadAssignmentType.noninformative, assignment_list))
+            if len(informative_assignments) == 1:
+                return informative_assignments
+            return self.merge(informative_assignments)
         elif self.strategy == MultimapResolvingStrategy.take_best:
             classified_assignments = defaultdict(list)
             for a in assignment_list:
@@ -40,23 +43,19 @@ class MultimapResolver:
                     continue
                 classified_assignments[a.assignment_type].append(a)
 
-            primary_unique_assignment = \
-                self.select_primary(classified_assignments[ReadAssignmentType.unique] +
-                                    classified_assignments[ReadAssignmentType.unique_minor_difference])
+            consistent_assignemnts = classified_assignments[ReadAssignmentType.unique] +\
+                                     classified_assignments[ReadAssignmentType.unique_minor_difference]
+            primary_unique_assignment = self.select_primary(consistent_assignemnts)
             if primary_unique_assignment is not None:
                 logger.debug("Primary unique assignment selected: %s" % primary_unique_assignment.isoform_matches[0].assigned_transcript)
                 return [primary_unique_assignment]
 
-            for assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference,
-                                    ReadAssignmentType.ambiguous]:
-                if len(classified_assignments[assignment_type]) > 0:
-                    assignments = classified_assignments[assignment_type]
-                    logger.debug("Merging %d assignments of type %s" % (len(assignments), str(assignment_type)))
-                    return self.merge(assignments)
+            consistent_assignemnts += classified_assignments[ReadAssignmentType.ambiguous]
+            if consistent_assignemnts:
+                logger.debug("Merging %d consistent assignments " % (len(consistent_assignemnts)))
+                return self.merge(consistent_assignemnts)
 
             inconsistent_assignments = classified_assignments[ReadAssignmentType.inconsistent]
-
-
             primary_inconsistent_assignment = self.select_primary(inconsistent_assignments)
             if primary_inconsistent_assignment is not None:
                 primary_inconsistent_assignment.multimapper = True
@@ -76,12 +75,12 @@ class MultimapResolver:
         return primary_assignment
 
     def merge(self, assignment_list, is_inconsistent=False):
-        if assignment_list is None or len(assignment_list) <= 1:
+        if not assignment_list:
             return assignment_list
 
         for a in assignment_list:
             # set all as multimappers
             a.multimapper = True
-            a.event_type = ReadAssignmentType.inconsistent if is_inconsistent else ReadAssignmentType.ambiguous
+            a.assignment_type = ReadAssignmentType.inconsistent if is_inconsistent else ReadAssignmentType.ambiguous
 
         return assignment_list
