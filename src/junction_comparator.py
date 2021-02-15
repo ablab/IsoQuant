@@ -134,13 +134,13 @@ class JunctionComparator:
 
         if read_features_present[0] == 0 or read_features_present[-1] == 0:
             if all(x == 0 for x in read_features_present):
-                return [make_event(MatchEventSubtype.undefined)]
+                return [MatchEvent(MatchEventSubtype.undefined)]
             logger.debug("+ + Found only extra terminal introns ")
             self.add_extra_out_exon_events(matching_events, read_features_present, read_region, read_junctions, isoform_region[0])
 
         if len(matching_events) == 0:
             logger.debug("No contradiction detected")
-            return [make_event(MatchEventSubtype.none)]
+            return [MatchEvent(MatchEventSubtype.none)]
         return matching_events
 
     def detect_contradiction_type(self, read_region, read_junctions, isoform_region, isoform_junctions, contradictory_region_pairs):
@@ -174,32 +174,32 @@ class JunctionComparator:
             overlapped_isoform_intron = isoform_junctions[isoform_cregion[0]]
             if contains(read_region, overlapped_isoform_intron):
                 if interval_len(overlapped_isoform_intron) <= self.params.micro_intron_length:
-                    return make_event(MatchEventSubtype.fake_micro_intron_retention, isoform_cregion[0], read_cregion)
-                return make_event(MatchEventSubtype.intron_retention, isoform_cregion[0], read_cregion)
+                    return MatchEvent(MatchEventSubtype.fake_micro_intron_retention, isoform_cregion, read_cregion)
+                return MatchEvent(MatchEventSubtype.intron_retention, isoform_cregion, read_cregion)
             elif overlaps_at_least(read_region, overlapped_isoform_intron, self.params.minor_exon_extension):
                 if overlapped_isoform_intron[0] <= read_region[0]:
-                    return make_event(MatchEventSubtype.incomplete_intron_retention_left, isoform_cregion[0], read_cregion)
+                    return MatchEvent(MatchEventSubtype.incomplete_intron_retention_left, isoform_cregion, read_cregion)
                 else:
-                    return make_event(MatchEventSubtype.incomplete_intron_retention_right, isoform_cregion[0], read_cregion)
+                    return MatchEvent(MatchEventSubtype.incomplete_intron_retention_right, isoform_cregion, read_cregion)
             else:
                 return None
 
         elif isoform_cregion[0] == self.absent:
             if self.are_known_introns(read_junctions, read_cregion):
-                return make_event(MatchEventSubtype.extra_intron_known, isoform_cregion[1], read_cregion)
+                return MatchEvent(MatchEventSubtype.extra_intron_known, isoform_cregion, read_cregion)
             elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
-                return make_event(MatchEventSubtype.none, isoform_cregion[1], read_cregion)
+                return MatchEvent(MatchEventSubtype.none, isoform_cregion, read_cregion)
             elif read_cregion[0] == 0 and \
                     interval_len(get_exon(read_region, read_junctions, 0)) <= self.params.max_fake_terminal_exon_len:
                 # we have extra intron to the left and first exons is short
-                return make_event(MatchEventSubtype.fake_terminal_exon_left,
+                return MatchEvent(MatchEventSubtype.fake_terminal_exon_left,
                                   SupplementaryMatchConstansts.extra_left_mod_position, read_cregion)
             elif read_cregion[1] == len(read_junctions) - 1 and \
                     interval_len(get_exon(read_region, read_junctions, -1)) <= self.params.max_fake_terminal_exon_len:
                 # we have extra intron to the right and last exons is short
-                return make_event(MatchEventSubtype.fake_terminal_exon_right,
+                return MatchEvent(MatchEventSubtype.fake_terminal_exon_right,
                                   SupplementaryMatchConstansts.extra_right_mod_position, read_cregion)
-            return make_event(MatchEventSubtype.extra_intron_novel, isoform_cregion[1], read_cregion)
+            return MatchEvent(MatchEventSubtype.extra_intron_novel, isoform_cregion, read_cregion)
 
         read_intron_total_len = sum(interval_len(read_junctions[i])
                                     for i in range(read_cregion[0], read_cregion[1] + 1))
@@ -287,7 +287,7 @@ class JunctionComparator:
                 event = MatchEventSubtype.intron_retention
             else:
                 event = MatchEventSubtype.alternative_structure_novel
-        return make_event(event, isoform_cregion[0], read_cregion)
+        return MatchEvent(event, isoform_cregion, read_cregion)
 
     def classify_skipped_exons(self, isoform_junctions, isoform_cregion,
                                intron_length_is_similar, read_introns_known):
@@ -363,7 +363,7 @@ class JunctionComparator:
     def get_mono_exon_subtype(self, read_region, isoform_junctions):
         if len(isoform_junctions) == 0:
             # both isoform and read are monoexon
-            events = [make_event(MatchEventSubtype.mono_exon_match)]
+            events = [MatchEvent(MatchEventSubtype.mono_exon_match)]
         else:
             # check if read captures some introns
             events = []
@@ -371,24 +371,24 @@ class JunctionComparator:
                 if contains(read_region, intron):
                     # full intron retention
                     if interval_len(intron) <= self.params.micro_intron_length:
-                        events.append(make_event(MatchEventSubtype.fake_micro_intron_retention, isoform_position=i,
+                        events.append(MatchEvent(MatchEventSubtype.fake_micro_intron_retention, isoform_region=(i, i),
                                                  read_region=(JunctionComparator.absent, 0)))
                     else:
-                        events.append(make_event(MatchEventSubtype.unspliced_intron_retention, isoform_position=i,
+                        events.append(MatchEvent(MatchEventSubtype.unspliced_intron_retention, isoform_region=(i, i),
                                                  read_region=(JunctionComparator.absent, 0)))
                 elif overlaps_at_least(read_region, intron, self.params.minor_exon_extension) and \
                         not contains(intron, read_region):
                     # partial IR
                     if intron[0] <= read_region[0]:
-                        events.append(make_event(MatchEventSubtype.incomplete_intron_retention_left, isoform_position=i,
+                        events.append(MatchEvent(MatchEventSubtype.incomplete_intron_retention_left, isoform_region=(i, i),
                                                  read_region=(JunctionComparator.absent, 0)))
                     else:
-                        events.append(make_event(MatchEventSubtype.incomplete_intron_retention_right, isoform_position=i,
+                        events.append(MatchEvent(MatchEventSubtype.incomplete_intron_retention_right, isoform_region=(i, i),
                                                  read_region=(JunctionComparator.absent, 0)))
 
         if not events:
             # monoexonic read without significant intron overlap
-            events = [make_event(MatchEventSubtype.mono_exonic)]
+            events = [MatchEvent(MatchEventSubtype.mono_exonic)]
         return events
 
     def add_extra_out_exon_events(self, match_events, read_intron_read_profile, read_region, read_introns, isoform_start):
@@ -411,7 +411,7 @@ class JunctionComparator:
                     all_exons_are_short = False
                 # add a new event for extra intron
                 even_type = MatchEventSubtype.fake_terminal_exon_left if all_exons_are_short else MatchEventSubtype.extra_intron_flanking_left
-                match_events.append(make_event(even_type, SupplementaryMatchConstansts.extra_left_mod_position,
+                match_events.append(MatchEvent(even_type, SupplementaryMatchConstansts.extra_left_mod_position,
                                                (read_pos, read_pos)))
                 read_pos += 1
 
@@ -426,7 +426,7 @@ class JunctionComparator:
                     all_exons_are_short = False
 
                 even_type = MatchEventSubtype.fake_terminal_exon_right if all_exons_are_short else MatchEventSubtype.extra_intron_flanking_right
-                match_events.append(make_event(even_type, SupplementaryMatchConstansts.extra_right_mod_position,
+                match_events.append(MatchEvent(even_type, SupplementaryMatchConstansts.extra_right_mod_position,
                                                (read_pos, read_pos)))
                 read_pos -= 1
 

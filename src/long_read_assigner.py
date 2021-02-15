@@ -197,7 +197,7 @@ class LongReadAssigner:
         elif extra_left > self.params.delta:
             left_event = MatchEventSubtype.exon_elongation_left
         if left_event:
-            events.append(make_event(left_event, event_length=extra_left))
+            events.append(MatchEvent(left_event, event_info=extra_left))
 
         right_event = None
         if extra_right >= self.params.minor_exon_extension:
@@ -206,7 +206,7 @@ class LongReadAssigner:
         elif extra_right > self.params.delta:
                 right_event = MatchEventSubtype.exon_elongation_right
         if right_event:
-            events.append(make_event(right_event, event_length=extra_right))
+            events.append(MatchEvent(right_event, event_info=extra_right))
 
         return events
 
@@ -298,7 +298,7 @@ class LongReadAssigner:
         else:
             logger.debug(" + No ISM truncation ")
             event_type = MatchEventSubtype.none
-        return make_event(event_type)
+        return MatchEvent(event_type)
 
     # check where it is full splice match, assume all introns are matched and read is spliced
     def is_fsm(self, read_region, isoform_id):
@@ -315,11 +315,11 @@ class LongReadAssigner:
                 len(self.gene_info.all_isoforms_introns[isoform_id]) == 0:
             logger.debug(" + Mono exon")
             match_classification = MatchClassification.mono_exon_match
-            match_subclassifications = make_event(MatchEventSubtype.mono_exon_match)
+            match_subclassifications = MatchEvent(MatchEventSubtype.mono_exon_match)
         elif self.is_fsm(read_region, isoform_id):
             logger.debug("+ + Full splice match " + isoform_id)
             match_classification = MatchClassification.full_splice_match
-            match_subclassifications = make_event(MatchEventSubtype.fsm)
+            match_subclassifications = MatchEvent(MatchEventSubtype.fsm)
         else:
             logger.debug("+ + Incomplete splice match " + isoform_id)
             match_classification = MatchClassification.incomplete_splice_match
@@ -339,10 +339,10 @@ class LongReadAssigner:
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
         if len(isoform_introns) == 0:
             # both isoform and read are monoexon
-            events = [make_event(MatchEventSubtype.mono_exon_match)]
+            events = [MatchEvent(MatchEventSubtype.mono_exon_match)]
         else:
             # monoexonic read is inside exon
-            events = [make_event(MatchEventSubtype.mono_exonic)]
+            events = [MatchEvent(MatchEventSubtype.mono_exonic)]
 
         match_classification = MatchClassification.get_mono_exon_classification(events)
         return IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id, events,
@@ -657,7 +657,11 @@ class LongReadAssigner:
             score = 0.0
             for e in match_events:
                 event_count = 1
-                if e.read_region != SupplementaryMatchConstansts.undefined_region and \
+                if e.isoform_region != SupplementaryMatchConstansts.undefined_region and \
+                        JunctionComparator.absent not in e.isoform_region and \
+                        e.event_type in {MatchEventSubtype.exon_skipping_known, MatchEventSubtype.exon_skipping_novel}:
+                    event_count = e.isoform_region[1] - e.isoform_region[0] + 1
+                elif e.read_region != SupplementaryMatchConstansts.undefined_region and \
                         JunctionComparator.absent not in e.read_region:
                     event_count = e.read_region[1] - e.read_region[0] + 1
                     if e.event_type in {MatchEventSubtype.exon_gain_novel,
@@ -679,7 +683,7 @@ class LongReadAssigner:
                                     MatchEventSubtype.major_exon_elongation_right,
                                     MatchEventSubtype.exon_elongation_right,
                                     MatchEventSubtype.exon_elongation_left}:
-                    event_cost = elongation_cost(self.params, e.event_length)
+                    event_cost = elongation_cost(self.params, e.event_info)
 
                 score +=  event_cost * event_count
                 # logger.debug("* * * Event " + str(e.event_type) + ", introns affected " + str(event_count) +

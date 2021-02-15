@@ -82,6 +82,8 @@ class MatchEventSubtype(Enum):
     exon_misallignment = 22
     fake_terminal_exon_left = 24
     fake_terminal_exon_right = 26
+    terminal_exon_misalignment_right = 28
+    terminal_exon_misalignment_left = 29
     # minor alternations
     exon_elongation_left = 25
     exon_elongation_right = 23
@@ -143,6 +145,8 @@ class MatchEventSubtype(Enum):
     @staticmethod
     def is_alignment_artifact(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misallignment,
+                                       MatchEventSubtype.terminal_exon_misalignment_right,
+                                       MatchEventSubtype.terminal_exon_misalignment_left,
                                        MatchEventSubtype.fake_terminal_exon_left,
                                        MatchEventSubtype.fake_terminal_exon_right,
                                        MatchEventSubtype.fake_micro_intron_retention}
@@ -190,6 +194,8 @@ event_subtype_cost = {
     MatchEventSubtype.mono_exon_match:0,
     MatchEventSubtype.intron_shift:0.1,
     MatchEventSubtype.exon_misallignment:0.1,
+    MatchEventSubtype.terminal_exon_misalignment_right:0.1,
+    MatchEventSubtype.terminal_exon_misalignment_left:0.1,
     MatchEventSubtype.fake_terminal_exon_left:0.2,
     MatchEventSubtype.fake_terminal_exon_right:0.2,
     # minor alternations
@@ -299,20 +305,21 @@ alternative_sites = {("left", True): MatchEventSubtype.alt_left_site_known,
 
 
 class SupplementaryMatchConstansts:
-    extra_left_mod_position = -1000000
-    extra_right_mod_position = 1000000
+    extra_left_mod_position = (-1000000, 0)
+    extra_right_mod_position = (1000000, 0)
     undefined_position = -2000000
     undefined_region = (undefined_position, undefined_position)
 
 
-MatchEvent = namedtuple("MatchEvent", ("event_type", "isoform_position", "read_region", "event_length"))
-
-
-def make_event(event_type,
-               isoform_position=SupplementaryMatchConstansts.undefined_position,
-               read_region=SupplementaryMatchConstansts.undefined_region,
-               event_length=0):
-    return MatchEvent(event_type, isoform_position, read_region, event_length)
+class MatchEvent:
+    def __init__(self, event_type:MatchEventSubtype,
+                 isoform_region:tuple=SupplementaryMatchConstansts.undefined_region,
+                 read_region:tuple=SupplementaryMatchConstansts.undefined_region,
+                 event_info=0):
+        self.event_type = event_type
+        self.isoform_region = isoform_region
+        self.read_region = read_region
+        self.event_info = event_info
 
 
 class IsoformMatch:
@@ -432,17 +439,27 @@ def match_subtype_to_str(event, strand):
     return event_subtype.name
 
 
+def regions_to_str(regions):
+    return ",".join([str(x[0]) + "-" + str(x[1]) for x in regions])
+
+
 def match_subtype_to_str_with_additional_info(event, strand, read_introns, isoform_introns):
     event_subtype = event.event_type
-    coordinates = ""
+    additional_info = ""
     if event_subtype in {MatchEventSubtype.intron_retention,
                          MatchEventSubtype.unspliced_intron_retention,
                          MatchEventSubtype.incomplete_intron_retention_left,
                          MatchEventSubtype.incomplete_intron_retention_right,
                          MatchEventSubtype.fake_micro_intron_retention}:
-        if event.isoform_position != SupplementaryMatchConstansts.undefined_position:
-            intron = isoform_introns[event.isoform_position]
-            coordinates = ":" + str(intron[0]) + "-" + str(intron[1])
+        if event.isoform_region != SupplementaryMatchConstansts.undefined_region:
+            introns = isoform_introns[event.isoform_region[0]:event.isoform_region[1]+1]
+            additional_info = ":" + regions_to_str(introns)
+    elif event_subtype in {MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
+                           MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right,
+                           MatchEventSubtype.alternative_tss, MatchEventSubtype.alternative_polya_site,
+                           MatchEventSubtype.correct_polya_site}:
+        # elongation events
+        additional_info = ":" + str(event.event_info)
     else:
         if event.read_region != SupplementaryMatchConstansts.undefined_region and \
                 event.read_region[0] >= 0 and event.read_region[1] >= 0:
@@ -450,6 +467,6 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
             logger.debug(read_introns)
             logger.debug("+ adding info for %s, introns indices %s, introns %s" %
                          (str(event.event_type), str(event.read_region), str(introns)))
-            coordinates = ":" + str(introns[0][0]) + "-" + str(introns[-1][1])
+            additional_info = ":" + str(introns[0][0]) + "-" + str(introns[-1][1])
 
-    return match_subtype_to_str(event, strand) + coordinates
+    return match_subtype_to_str(event, strand) + additional_info

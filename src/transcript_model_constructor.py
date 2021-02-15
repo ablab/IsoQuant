@@ -208,7 +208,7 @@ class TranscriptModelConstructor:
                 significant_events = []
                 for event in best_match.match_subclassifications:
                     if event.event_type in self.events_to_track:
-                        significant_events.append((event.event_type, event.isoform_position))
+                        significant_events.append((event.event_type, event.isoform_region))
                 if significant_events:
                     significant_events = sorted(significant_events)
                     self.modified_isoforms_groups[isoform_id][tuple(significant_events)].append(read_assignment)
@@ -599,18 +599,18 @@ class TranscriptModelConstructor:
             return None
 
         match_subclassifications = list(filter(lambda m: m.event_type in self.modification_events, read_inconsistencies))
-        logger.debug("Selected modifications: " +", ".join(["%s: %s - %s" % (x.event_type.name, str(x.isoform_position), str(x.read_region))
+        logger.debug("Selected modifications: " +", ".join(["%s: %s - %s" % (x.event_type.name, str(x.isoform_region), str(x.read_region))
                                                             for x in match_subclassifications]))
 
         modification_events_map = defaultdict(list)
         for x in match_subclassifications:
-            modification_events_map[x.isoform_position].append(x)
-        for isoform_position in modification_events_map.keys():
-            if len(modification_events_map[isoform_position]) == 1:
+            modification_events_map[x.isoform_region].append(x)
+        for isoform_region in modification_events_map.keys():
+            if len(modification_events_map[isoform_region]) == 1:
                 continue
-            modification_events_map[isoform_position] = \
-                sorted(modification_events_map[isoform_position], key=lambda x: x.read_region[1])
-            logger.debug(modification_events_map[isoform_position])
+            modification_events_map[isoform_region] = \
+                sorted(modification_events_map[isoform_region], key=lambda x: x.read_region[1])
+            logger.debug(modification_events_map[isoform_region])
 
         if not modification_events_map:
             logger.debug("No modification events detected for " + read_assignment.read_id)
