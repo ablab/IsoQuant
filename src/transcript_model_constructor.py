@@ -74,14 +74,15 @@ class GFFPrinter:
 
                 # TODO add infromation about counts and modifications for novel transcripts
                 transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
-                                  'reference_gene_id "%s"; reference_transcript_id "%s"; \n' % \
+                                  'reference_gene_id "%s"; reference_transcript_id "%s"; counts=%0.2f; %s\n' % \
                             (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,
-                             model.gene_id, model.transcript_id, model.reference_gene, model.reference_transcript)
+                             model.gene_id, model.transcript_id, model.reference_gene, model.reference_transcript,
+                             transcript_model_constructor.transcript_counts[model.transcript_id], model.additional_info)
                 self.out_gff.write(transcript_line)
 
                 prefix_columns = "%s\tIsoQuant\texon\t" % model.chr_id
                 suffix_columns = '.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
-                                 'reference_gene_id "%s"; reference_transcript_id "%s"\n' % \
+                                 'reference_gene_id "%s"; reference_transcript_id "%s";\n' % \
                                  (model.strand, model.gene_id, model.transcript_id,
                                   model.reference_gene, model.reference_transcript)
                 for e in model.exon_blocks:
@@ -450,16 +451,23 @@ class TranscriptModelConstructor:
             logger.warning(novel_exons)
             return None
 
-        nnic = False
+        all_events = []
         for events in modification_events_map.values():
-            nnic |= any(me.event_type in nnic_event_types for me in events)
+            for me in events:
+                all_events.append(me)
+
+        nnic = any(me.event_type in nnic_event_types for me in all_events)
         id_suffix = self.nnic_transcript_suffix if nnic else self.nic_transcript_suffix
         transcript_type = TranscriptModelType.novel_not_in_catalog if nnic else TranscriptModelType.novel_in_catalog
         new_transcript_id = self.transcript_prefix + str(self.get_transcript_id()) + id_suffix
+        transcript_strand = self.gene_info.isoform_strands[isoform_id]
+        event_string = ",".join([match_subtype_to_str_with_additional_info(x, transcript_strand,
+                                                                           read_introns, isoform_introns)
+                                 for x in all_events])
 
-        return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
+        return TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
-                               novel_exons, transcript_type)
+                               novel_exons, transcript_type, additional_info=event_string)
 
     # check that all exons are sorted and have correct coordinates
     def validate_exons(self, novel_exons):
