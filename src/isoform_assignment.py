@@ -159,7 +159,9 @@ class MatchEventSubtype(Enum):
                                        MatchEventSubtype.exon_misallignment,
                                        MatchEventSubtype.fake_micro_intron_retention,
                                        MatchEventSubtype.fake_terminal_exon_left,
-                                       MatchEventSubtype.fake_terminal_exon_right}
+                                       MatchEventSubtype.fake_terminal_exon_right,
+                                       MatchEventSubtype.terminal_exon_misalignment_left,
+                                       MatchEventSubtype.terminal_exon_misalignment_right}
 
     @staticmethod
     def is_consistent(match_event_subtype):
