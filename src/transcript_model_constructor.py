@@ -716,6 +716,9 @@ class TranscriptModelConstructor:
             logger.debug("Checking read %s: %s" % (assignment.read_id, str(read_exons)))
             model_combined_profile = profile_constructor.construct_profiles(read_exons, combined_profile.polya_info, [])
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
+            model_assignment.polyA_found = assignment.polyA_found
+            model_assignment.combined_profile = assignment.model_combined_profile
+            model_assignment.gene_info = assignment.transcript_model_gene_info
             # check that no serious contradiction occurs
             profile_matches = model_assignment.assignment_type in [ReadAssignmentType.unique,
                                                                    ReadAssignmentType.unique_minor_difference]
