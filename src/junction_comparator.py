@@ -16,8 +16,6 @@ logger = logging.getLogger('IsoQuant')
 
 
 class JunctionComparator:
-    absent = -10
-
     def __init__(self, params, intron_profile_constructor):
         self.params = params
         self.intron_profile_constructor = intron_profile_constructor
@@ -44,16 +42,17 @@ class JunctionComparator:
         read_features_present = [0 for i in range(0, len(read_junctions))]
         isoform_features_present = [0 for i in range(0, len(isoform_junctions))]
         contradictory_region_pairs = []
-        current_contradictory_region = (self.absent, self.absent)
+        absent_region = (SupplementaryMatchConstansts.absent_position, SupplementaryMatchConstansts.absent_position)
+        current_contradictory_region = absent_region
 
         while read_pos < len(read_junctions) and isoform_pos < len(isoform_junctions):
             if equal_ranges(isoform_junctions[isoform_pos], read_junctions[read_pos], self.params.delta):
                 # junctions are equal
                 read_features_present[read_pos] = 1
                 isoform_features_present[isoform_pos] = 1
-                if current_contradictory_region != (self.absent, self.absent):
+                if current_contradictory_region != absent_region:
                     contradictory_region_pairs.append(current_contradictory_region)
-                    current_contradictory_region = (self.absent, self.absent)
+                    current_contradictory_region = absent_region
                 read_pos += 1
                 isoform_pos += 1
 
@@ -61,7 +60,7 @@ class JunctionComparator:
                 # junctions overlap, but are unequal
                 read_features_present[read_pos] = -1
                 isoform_features_present[isoform_pos] = -1
-                if current_contradictory_region == (self.absent, self.absent):
+                if current_contradictory_region == absent_region:
                     current_contradictory_region = ((read_pos, read_pos), (isoform_pos, isoform_pos))
                 else:
                     current_contradictory_region = (
@@ -73,34 +72,34 @@ class JunctionComparator:
 
             elif left_of(isoform_junctions[isoform_pos], read_junctions[read_pos]):
                 # isoform junction is behind, move on
-                if current_contradictory_region != (self.absent, self.absent):
+                if current_contradictory_region != absent_region:
                     contradictory_region_pairs.append(current_contradictory_region)
-                    current_contradictory_region = (self.absent, self.absent)
+                    current_contradictory_region = absent_region
                 if read_pos > 0 or overlaps(read_region, isoform_junctions[isoform_pos]):
                     if isoform_features_present[isoform_pos] != -1:
-                        contradictory_region_pairs.append(((self.absent, read_pos), (isoform_pos, isoform_pos)))
+                        contradictory_region_pairs.append(((SupplementaryMatchConstansts.absent_position, read_pos), (isoform_pos, isoform_pos)))
                     isoform_features_present[isoform_pos] = -1
                 isoform_pos += 1
 
             else:
                 # read junction is behind, move on
-                if current_contradictory_region != (self.absent, self.absent):
+                if current_contradictory_region != absent_region:
                     contradictory_region_pairs.append(current_contradictory_region)
-                    current_contradictory_region = (self.absent, self.absent)
+                    current_contradictory_region = absent_region
                 if isoform_pos > 0 or overlaps(isoform_region, read_junctions[read_pos]):
                     if read_features_present[read_pos] != -1:
-                        contradictory_region_pairs.append(((read_pos, read_pos), (self.absent, isoform_pos)))
+                        contradictory_region_pairs.append(((read_pos, read_pos), (SupplementaryMatchConstansts.absent_position, isoform_pos)))
                     read_features_present[read_pos] = -1
                 read_pos += 1
 
-        if current_contradictory_region != (self.absent, self.absent):
+        if current_contradictory_region != absent_region:
             contradictory_region_pairs.append(current_contradictory_region)
 
         # check terminating regions
         while read_pos < len(read_junctions):
             if overlaps(isoform_region, read_junctions[read_pos]):
                 if read_features_present[read_pos] != -1:
-                    contradictory_region_pairs.append(((read_pos, read_pos), (self.absent, isoform_pos)))
+                    contradictory_region_pairs.append(((read_pos, read_pos), (SupplementaryMatchConstansts.absent_position, isoform_pos)))
                     read_features_present[read_pos] = -1
             else:
                 break
@@ -109,7 +108,7 @@ class JunctionComparator:
         while isoform_pos < len(isoform_junctions):
             if overlaps(read_region, isoform_junctions[isoform_pos]):
                 if isoform_features_present[isoform_pos] != -1:
-                    contradictory_region_pairs.append(((self.absent, read_pos), (isoform_pos, isoform_pos)))
+                    contradictory_region_pairs.append(((SupplementaryMatchConstansts.absent_position, read_pos), (isoform_pos, isoform_pos)))
                     isoform_features_present[isoform_pos] = -1
             else:
                 break
@@ -168,7 +167,7 @@ class JunctionComparator:
     def compare_overlapping_contradictional_regions(self, read_region, read_junctions,
                                                     isoform_region, isoform_junctions,
                                                     read_cregion, isoform_cregion):
-        if read_cregion[0] == self.absent:
+        if read_cregion[0] == SupplementaryMatchConstansts.absent_position:
             if isoform_cregion[0] != isoform_cregion[1]:
                 logger.warning("Multiple intron retentions in a single event:" + str(isoform_cregion))
             overlapped_isoform_intron = isoform_junctions[isoform_cregion[0]]
@@ -184,7 +183,7 @@ class JunctionComparator:
             else:
                 return None
 
-        elif isoform_cregion[0] == self.absent:
+        elif isoform_cregion[0] == SupplementaryMatchConstansts.absent_position:
             if self.are_known_introns(read_junctions, read_cregion):
                 return MatchEvent(MatchEventSubtype.extra_intron_known, isoform_cregion, read_cregion)
             elif self.are_suspicious_introns(read_region, read_junctions, read_cregion):
@@ -193,12 +192,12 @@ class JunctionComparator:
                     interval_len(get_exon(read_region, read_junctions, 0)) <= self.params.max_fake_terminal_exon_len:
                 # we have extra intron to the left and first exons is short
                 return MatchEvent(MatchEventSubtype.fake_terminal_exon_left,
-                                  SupplementaryMatchConstansts.extra_left_mod_position, read_cregion)
+                                  SupplementaryMatchConstansts.extra_left_region, read_cregion)
             elif read_cregion[1] == len(read_junctions) - 1 and \
                     interval_len(get_exon(read_region, read_junctions, -1)) <= self.params.max_fake_terminal_exon_len:
                 # we have extra intron to the right and last exons is short
                 return MatchEvent(MatchEventSubtype.fake_terminal_exon_right,
-                                  SupplementaryMatchConstansts.extra_right_mod_position, read_cregion)
+                                  SupplementaryMatchConstansts.extra_right_region, read_cregion)
             return MatchEvent(MatchEventSubtype.extra_intron_novel, isoform_cregion, read_cregion)
 
         read_intron_total_len = sum(interval_len(read_junctions[i])
@@ -372,19 +371,19 @@ class JunctionComparator:
                     # full intron retention
                     if interval_len(intron) <= self.params.micro_intron_length:
                         events.append(MatchEvent(MatchEventSubtype.fake_micro_intron_retention, isoform_region=(i, i),
-                                                 read_region=(JunctionComparator.absent, 0)))
+                                                 read_region=(SupplementaryMatchConstansts.absent_position, 0)))
                     else:
                         events.append(MatchEvent(MatchEventSubtype.unspliced_intron_retention, isoform_region=(i, i),
-                                                 read_region=(JunctionComparator.absent, 0)))
+                                                 read_region=(SupplementaryMatchConstansts.absent_position, 0)))
                 elif overlaps_at_least(read_region, intron, self.params.minor_exon_extension) and \
                         not contains(intron, read_region):
                     # partial IR
                     if intron[0] <= read_region[0]:
                         events.append(MatchEvent(MatchEventSubtype.incomplete_intron_retention_left, isoform_region=(i, i),
-                                                 read_region=(JunctionComparator.absent, 0)))
+                                                 read_region=(SupplementaryMatchConstansts.absent_position, 0)))
                     else:
                         events.append(MatchEvent(MatchEventSubtype.incomplete_intron_retention_right, isoform_region=(i, i),
-                                                 read_region=(JunctionComparator.absent, 0)))
+                                                 read_region=(SupplementaryMatchConstansts.absent_position, 0)))
 
         if not events:
             # monoexonic read without significant intron overlap
@@ -411,7 +410,7 @@ class JunctionComparator:
                     all_exons_are_short = False
                 # add a new event for extra intron
                 even_type = MatchEventSubtype.fake_terminal_exon_left if all_exons_are_short else MatchEventSubtype.extra_intron_flanking_left
-                match_events.append(MatchEvent(even_type, SupplementaryMatchConstansts.extra_left_mod_position,
+                match_events.append(MatchEvent(even_type, SupplementaryMatchConstansts.extra_left_region,
                                                (read_pos, read_pos)))
                 read_pos += 1
 
@@ -426,7 +425,7 @@ class JunctionComparator:
                     all_exons_are_short = False
 
                 even_type = MatchEventSubtype.fake_terminal_exon_right if all_exons_are_short else MatchEventSubtype.extra_intron_flanking_right
-                match_events.append(MatchEvent(even_type, SupplementaryMatchConstansts.extra_right_mod_position,
+                match_events.append(MatchEvent(even_type, SupplementaryMatchConstansts.extra_right_region,
                                                (read_pos, read_pos)))
                 read_pos -= 1
 

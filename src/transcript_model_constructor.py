@@ -522,7 +522,7 @@ class TranscriptModelConstructor:
             # simply skip reference intron
             return current_exon_start
 
-        if event_tuple.read_region[0] == JunctionComparator.absent:
+        if event_tuple.read_region[0] == SupplementaryMatchConstansts.absent_position:
             logger.warning("Undefined read intron position for event type: %s" % event_tuple.event_type.name)
             return current_exon_start
         read_intron = read_introns[event_tuple.read_region[0]]
@@ -626,13 +626,16 @@ class TranscriptModelConstructor:
 
         modification_events_map = defaultdict(list)
         for x in match_subclassifications:
-            modification_events_map[x.isoform_region].append(x)
-        for isoform_region in modification_events_map.keys():
-            if len(modification_events_map[isoform_region]) == 1:
+            isoform_position = x.isoform_region[0]
+            if isoform_position == SupplementaryMatchConstansts.absent_position:
+                isoform_position = x.isoform_region[1]
+            modification_events_map[isoform_position].append(x)
+        for isoform_position in modification_events_map.keys():
+            if len(modification_events_map[isoform_position]) == 1:
                 continue
-            modification_events_map[isoform_region] = \
-                sorted(modification_events_map[isoform_region], key=lambda x: x.read_region[1])
-            logger.debug(modification_events_map[isoform_region])
+            modification_events_map[isoform_position] = \
+                sorted(modification_events_map[isoform_position], key=lambda x: x.read_region[1])
+            logger.debug(modification_events_map[isoform_position])
 
         if not modification_events_map:
             logger.debug("No modification events detected for " + read_assignment.read_id)

@@ -321,11 +321,13 @@ alternative_sites = {("left", True): MatchEventSubtype.alt_left_site_known,
 
 
 class SupplementaryMatchConstansts:
-    extra_left_mod_position = (-1000000, 0)
-    extra_right_mod_position = (1000000, 0)
+    extra_left_mod_position = -1000000
+    extra_right_mod_position = 1000000
     undefined_position = -2000000
     undefined_region = (undefined_position, undefined_position)
-
+    extra_left_region = (extra_left_mod_position, extra_left_mod_position)
+    extra_right_region = (extra_right_mod_position, extra_right_mod_position)
+    absent_position = -10
 
 class MatchEvent:
     def __init__(self, event_type:MatchEventSubtype,
