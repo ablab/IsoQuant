@@ -166,7 +166,7 @@ class DatasetProcessor:
 
         intial_polya_required = self.args.require_polyA
         polya_fraction = polya_found / total_alignments
-        logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%) if these" %
+        logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
         if polya_fraction < 0.1 and self.args.require_polyA:
             logger.warning("PolyA tail found in less than 10% of the reads, "
