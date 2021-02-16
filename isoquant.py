@@ -106,10 +106,9 @@ def parse_args(args=None, namespace=None):
                           help="set maximum length for skipped exon")
     add_additional_option("--resolve_ambiguous", type=str, default='default',
                           help="set ambiguity resolving method: default, none, monoexon_only, monoexon_and_fsm, all")
-
-    # TODO: add read-type presets, transcript model contruction presets and counting
-    parser.add_argument("--model_construction_strategy", choices=["reliable", "default", "fl", "all", "assembly"],
-                        help="transcritp model construnction strategy to use",
+    parser.add_argument("--model_construction_strategy", choices=["reliable", "default_ccs", "default_ont",
+                                                                  "fl_ccs", "all", "assembly"],
+                        help="transcript model construction strategy to use",
                         type=str, default=None)
     add_additional_option("--report_intron_retention", type=bool, default=None,
                           help="report intron retention events in transcript model files")
@@ -269,11 +268,12 @@ def set_data_dependent_options(args):
     if args.matching_strategy is None:
         args.matching_strategy = matching_strategies[args.data_type]
 
-    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default", PACBIO_DATA: "default", NANOPORE_DATA: "default"}
+    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_ccs",
+                                     PACBIO_DATA: "default_ont", NANOPORE_DATA: "default_ont"}
     if args.model_construction_strategy is None:
         args.model_construction_strategy = model_construction_strategies[args.data_type]
-        if args.fl_data and args.model_construction_strategy == "default":
-            args.model_construction_strategy = "fl"
+        if args.fl_data and args.model_construction_strategy == "default_ccs":
+            args.model_construction_strategy = "fl_ccs"
 
     if args.resolve_ambiguous == 'default' and args.fl_data:
         args.resolve_ambiguous = 'monoexon_and_fsm'
@@ -336,13 +336,13 @@ def set_model_construction_options(args):
                                             'report_intron_retention', 'max_dist_to_isoforms_tsts',
                                             'max_dist_to_novel_tsts', 'min_reads_supporting_tsts',
                                             'collapse_subisoforms', 'count_ambiguous'))
-    # TODO revise params
     strategies = {
-        'reliable': ModelConstructionStrategy(2, 4, 5, 9, False, 30, 100, 8, True, True),
-        'default': ModelConstructionStrategy(1, 2, 4, 7, True, 30, 100, 5, True, True),
-        'fl': ModelConstructionStrategy(1, 2, 3, 3, True, 15, 30, 2, False, True),
-        'all': ModelConstructionStrategy(1, 1, 2, 3, True, 30, 100, 3, False, True),
-        'assembly': ModelConstructionStrategy(1, 1, 1, 1, True, 30, 60, 1, True, True)
+        'reliable': ModelConstructionStrategy(2, 4, 5, 10, False, 50, 50, 8, True, True),
+        'default_ccs': ModelConstructionStrategy(1, 2, 3, 6, True, 50, 80, 4, True, True),
+        'default_ont': ModelConstructionStrategy(1, 2, 5, 10, True, 50, 80, 6, True, True),
+        'fl_ccs': ModelConstructionStrategy(1, 2, 3, 3, True, 50, 50, 3, False, True),
+        'all': ModelConstructionStrategy(1, 1, 2, 3, True, 50, 100, 3, False, True),
+        'assembly': ModelConstructionStrategy(1, 1, 1, 1, True, 50, 50, 1, True, True)
     }
 
     strategy = strategies[args.model_construction_strategy]
@@ -397,7 +397,6 @@ def set_additional_params(args):
     args.indel_near_splice_site_dist = 10
     args.upstream_region_len = 20
 
-    # TODO move to options
     args.multimap_strategy = "take_best"
     multimap_strategies = {}
     for e in MultimapResolvingStrategy:
