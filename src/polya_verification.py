@@ -44,7 +44,6 @@ class PolyAVerifier:
                                                                         polya_info, matching_events)
                 if corrected_read_end == -1:
                     return matching_events
-                combined_read_profile.corrected_read_end = corrected_read_end
                 matching_events = self.remove_extra_intron_events_right(corrected_read_end, matching_events,
                                                                         read_introns)
 
@@ -60,7 +59,6 @@ class PolyAVerifier:
                                                                           polya_info, matching_events)
                 if corrected_read_start == -1:
                     return matching_events
-                combined_read_profile.corrected_read_start = corrected_read_start
                 matching_events = self.remove_extra_intron_events_left(corrected_read_start, matching_events,
                                                                         read_introns)
 
@@ -87,7 +85,8 @@ class PolyAVerifier:
             del matching_events[event_to_remove]
 
         new_events, polya_pos = self.check_if_close(isoform_end, polya_info.external_polya_pos,
-                                                    polya_info.internal_polya_pos, matching_events)
+                                                    polya_info.internal_polya_pos, matching_events,
+                                                    MatchEventSubtype.correct_polya_site_right)
         if new_events is not None:
             logger.debug("Orginal polyA seems good")
             return new_events, polya_pos
@@ -101,7 +100,8 @@ class PolyAVerifier:
             self.check_reference_terminal_exons(isoform_exons, external_polya_pos, internal_polya_pos, matching_events)
 
         new_events, polya_pos = self.check_if_close(isoform_end, external_polya_pos,
-                                                    internal_polya_pos, matching_events)
+                                                    internal_polya_pos, matching_events,
+                                                    MatchEventSubtype.correct_polya_site_right)
         if new_events is not None:
             logger.debug("Corrected polyA seems good")
             return new_events, polya_pos
@@ -115,11 +115,11 @@ class PolyAVerifier:
         if dist_to_polya > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(
-                MatchEvent(MatchEventSubtype.alternative_polya_site, event_info=polya_pos))
+                MatchEvent(MatchEventSubtype.alternative_polya_site_right, event_info=polya_pos))
         else:
             logger.debug("+ Seems like correct polyA, odd case")
             matching_events.append(
-                MatchEvent(MatchEventSubtype.correct_polya_site, event_info=polya_pos))
+                MatchEvent(MatchEventSubtype.correct_polya_site_right, event_info=polya_pos))
         return matching_events, polya_pos
 
     def verify_polyt(self, isoform_exons, read_exons, polya_info, matching_events):
@@ -139,7 +139,8 @@ class PolyAVerifier:
             del matching_events[event_to_remove]
 
         new_events, polyt_pos = self.check_if_close(isoform_start, polya_info.external_polyt_pos,
-                                                    polya_info.internal_polyt_pos, matching_events)
+                                                    polya_info.internal_polyt_pos, matching_events,
+                                                    MatchEventSubtype.correct_polya_site_left)
         if new_events is not None:
             logger.debug("Orginal polyT seems good")
             return new_events, polyt_pos
@@ -153,7 +154,7 @@ class PolyAVerifier:
             self.check_reference_starting_exons(isoform_exons, external_polyt_pos, internal_polyt_pos, matching_events)
 
         new_events, polyt_pos = self.check_if_close(isoform_start, external_polyt_pos, internal_polyt_pos,
-                                                    matching_events)
+                                                    matching_events, MatchEventSubtype.correct_polya_site_left)
         if new_events is not None:
             logger.debug("Corrected polyT seems good")
             return new_events, polyt_pos
@@ -167,11 +168,11 @@ class PolyAVerifier:
         if dist_to_polyt > self.params.apa_delta:
             logger.debug("+ Seems like APA site")
             matching_events.append(
-                MatchEvent(MatchEventSubtype.alternative_polya_site, event_info=polyt_pos))
+                MatchEvent(MatchEventSubtype.alternative_polya_site_left, event_info=polyt_pos))
         else:
             logger.debug("+ Seems like correct polyT, odd case")
             matching_events.append(
-                MatchEvent(MatchEventSubtype.correct_polya_site, event_info=polyt_pos))
+                MatchEvent(MatchEventSubtype.correct_polya_site_left, event_info=polyt_pos))
         return matching_events, polyt_pos
 
     # remove extra introns beyond corrected read ends
@@ -221,7 +222,7 @@ class PolyAVerifier:
 
         for i, event in enumerate(matching_events):
             if event.event_type == MatchEventSubtype.incomplete_intron_retention_right:
-                matching_events.append(MatchEvent(MatchEventSubtype.fake_polya_site,
+                matching_events.append(MatchEvent(MatchEventSubtype.fake_polya_site_right,
                                                   isoform_region=event.isoform_region,
                                                   event_info=internal_polya_pos))
                 return matching_events, True
@@ -237,7 +238,7 @@ class PolyAVerifier:
         for i, event in enumerate(matching_events):
             if event.event_type == MatchEventSubtype.incomplete_intron_retention_left:
                 # polyT found within intron and inside mapped part of the read
-                matching_events.append(MatchEvent(MatchEventSubtype.fake_polya_site,
+                matching_events.append(MatchEvent(MatchEventSubtype.fake_polya_site_left,
                                                   isoform_region=event.isoform_region,
                                                   event_info=internal_polyt_pos))
                 return matching_events, True
@@ -400,7 +401,7 @@ class PolyAVerifier:
         logger.debug("+ Reference short exons present but not ok")
         return matching_events, external_polyt_pos, internal_polyt_pos
 
-    def check_if_close(self, isoform_end, external_polya_pos, internal_polya_pos, matching_events):
+    def check_if_close(self, isoform_end, external_polya_pos, internal_polya_pos, matching_events, event_type):
         dist_to_external_polya = abs(isoform_end - external_polya_pos)
         dist_to_internal_polya = abs(isoform_end - internal_polya_pos)
         if min(dist_to_internal_polya, dist_to_external_polya) <= self.params.apa_delta:
@@ -408,13 +409,11 @@ class PolyAVerifier:
             if dist_to_internal_polya < dist_to_external_polya:
                 logger.debug("Internal polyAT is good %d, distance %d" %
                              (internal_polya_pos, dist_to_internal_polya))
-                matching_events.append(MatchEvent(MatchEventSubtype.correct_polya_site,
-                                                  event_info=internal_polya_pos))
+                matching_events.append(MatchEvent(event_type, event_info=internal_polya_pos))
                 return matching_events, internal_polya_pos
             else:
                 logger.debug("External polyAT is good %d, distance %d" %
                              (external_polya_pos, dist_to_external_polya))
-                matching_events.append(MatchEvent(MatchEventSubtype.correct_polya_site,
-                                                  event_info=external_polya_pos))
+                matching_events.append(MatchEvent(event_type, event_info=external_polya_pos))
                 return matching_events, external_polya_pos
         return None, -1

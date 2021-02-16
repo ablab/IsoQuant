@@ -374,8 +374,7 @@ class TranscriptModelConstructor:
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
         combined_profile = read_assignment.combined_profile
         read_introns = combined_profile.read_intron_profile.read_features
-        read_start = combined_profile.corrected_read_start
-        read_end = combined_profile.corrected_read_end
+        read_start, read_end = self.get_read_region(isoform_id, read_assignment)
         read_region = (read_start, read_end)
         novel_exons = []
 
@@ -592,6 +591,21 @@ class TranscriptModelConstructor:
 
         return current_exon_start
 
+    # get read region
+    def get_read_region(self, isoform_id, read_assignment):
+        read_start = read_assignment.combined_profile.read_exon_profile.read_features[0][0]
+        read_end = read_assignment.combined_profile.read_exon_profile.read_features[-1][1]
+        for match in read_assignment.isoform_matches:
+            if match.assigned_transcript == isoform_id:
+                for e in match.match_subclassifications:
+                    if e.event_type in [MatchEventSubtype.correct_polya_site_right,
+                                        MatchEventSubtype.alternative_polya_site_right]:
+                        read_end = e.event_info
+                    elif e.event_type in [MatchEventSubtype.correct_polya_site_left,
+                                          MatchEventSubtype.alternative_polya_site_left]:
+                        read_start = e.event_info
+        return read_start, read_end
+
     # return list of all reads modifications relative to this isoform
     def get_read_inconsistencies(self, isoform_id, read_assignment):
         for match in read_assignment.isoform_matches:
@@ -638,11 +652,11 @@ class TranscriptModelConstructor:
         novel_exons.append(exon)
         return intron[1] + 1
 
-    def verify_novel_model(self, isoform_id, read_assignments, transcript_model, original_read_id, candidate_model_storage):
+    def verify_novel_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
         if len(transcript_model.exon_blocks) == 1:
             return self.verify_novel_monoexonic_model(read_assignments, transcript_model, original_read_id, candidate_model_storage)
         else:
-            return self.verify_novel_spliced_model(isoform_id, read_assignments, transcript_model, original_read_id,
+            return self.verify_novel_spliced_model(read_assignments, transcript_model, original_read_id,
                                                    candidate_model_storage)
 
     def verify_novel_monoexonic_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
@@ -656,8 +670,7 @@ class TranscriptModelConstructor:
         assigned_reads = []
         unassigned_reads = []
         for assignment in read_assignments:
-            read_start = assignment.combined_profile.corrected_read_start
-            read_end = assignment.combined_profile.corrected_read_end
+            read_start, read_end = self.get_read_region(transcript_model.reference_transcript, read_assignments)
             start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
             end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
             if start_matches and end_matches:
@@ -678,7 +691,7 @@ class TranscriptModelConstructor:
             all_except_original = list(filter(lambda x: x.read_id != original_read_id, read_assignments))
             return all_except_original
 
-    def verify_novel_spliced_model(self, isoform_id, read_assignments, transcript_model, original_read_id, candidate_model_storage):
+    def verify_novel_spliced_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
         logger.debug("Verifying transcript model %s with %d reads" % (transcript_model.transcript_id, len(read_assignments)))
         model_exons = transcript_model.exon_blocks
         isoform_start = model_exons[0][0]
@@ -705,8 +718,8 @@ class TranscriptModelConstructor:
                                                                    ReadAssignmentType.unique_minor_difference]
 
             if profile_matches:
-                corrected_read_start = combined_profile.corrected_read_start
-                corrected_read_end = combined_profile.corrected_read_end
+                corrected_read_start, corrected_read_end = self.get_read_region(transcript_model.transcript_id,
+                                                                                model_assignment)
                 start_matches = abs(corrected_read_start - isoform_start) < self.params.max_dist_to_novel_tsts
                 end_matches = abs(corrected_read_end - isoform_end) < self.params.max_dist_to_novel_tsts
                 logger.debug("Profile matches, start: %d, end %d" % (corrected_read_start, corrected_read_end))

@@ -510,7 +510,7 @@ class TestAssignIsoform:
                               ([(2500, 6010)], -1, -1,
                                "ENSMUST00000001713.7", MatchEventSubtype.unspliced_intron_retention),
                               ([(900, 1100), (2000, 2100), (2300, 2400), (3000, 3300), (9500, 10000)], -1, 900,
-                               "ENSMUST00000001712.7", MatchEventSubtype.alternative_polya_site),
+                               "ENSMUST00000001712.7", MatchEventSubtype.alternative_polya_site_left),
                               ([(1000, 1100), (1900, 2100)], -1, -1,
                                "ENSMUST00000001713.7", MatchEventSubtype.alt_right_site_novel),
                               ([(1000, 2100)], -1, -1,
