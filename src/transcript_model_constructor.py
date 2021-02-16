@@ -307,7 +307,7 @@ class TranscriptModelConstructor:
             logger.debug("Created new candidate transcript model %s : %s " %
                          (new_transcript_model.transcript_id, str(new_transcript_model.exon_blocks)))
             # compare read junctions with novel transcript model, count them and keep only those that do not match
-            remaining_assignments = self.verify_novel_model(isoform_id, remaining_assignments, new_transcript_model,
+            remaining_assignments = self.verify_novel_model(remaining_assignments, new_transcript_model,
                                                             representative_read_assignment.read_id,
                                                             candidate_model_storage)
 
