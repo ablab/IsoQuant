@@ -486,6 +486,6 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
             logger.debug(read_introns)
             logger.debug("+ adding info for %s, introns indices %s, introns %s" %
                          (str(event.event_type), str(event.read_region), str(introns)))
-            additional_info = ":" + str(introns[0][0]) + "-" + str(introns[-1][1])
+            additional_info = ":" + regions_to_str(introns)
 
     return match_subtype_to_str(event, strand) + additional_info
