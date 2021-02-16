@@ -670,7 +670,7 @@ class TranscriptModelConstructor:
         assigned_reads = []
         unassigned_reads = []
         for assignment in read_assignments:
-            read_start, read_end = self.get_read_region(transcript_model.reference_transcript, read_assignments)
+            read_start, read_end = self.get_read_region(transcript_model.reference_transcript, assignment)
             start_matches = abs(read_start - isoform_start) < self.params.max_dist_to_novel_tsts
             end_matches = abs(read_end - isoform_end) < self.params.max_dist_to_novel_tsts
             if start_matches and end_matches:
