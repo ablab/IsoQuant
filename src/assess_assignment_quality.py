@@ -80,7 +80,7 @@ class MappingData:
                 if record.id.startswith("E"):
                     isoform_id = record.id.split('_', 2)[0]
                 else:
-                    tokens = record.id.split('_', 2)
+                    tokens = record.id.split('_', 3)
                     if len(tokens) < 2:
                         logger.warning("Malformed read id %s" % seq_id)
                         continue
@@ -332,7 +332,7 @@ def main():
         unmapped_reads = total_reads - (correctly_mapped + mismapped_reads)
         output_file.write("# MAPPING STATS\n")
         logger.info("Secondary mapped %d" % secondary_mapped)
-        stat_counter.print_stats(correctly_mapped + secondary_mapped, mismapped_reads, unmapped_reads, output_file, name="mapping_")
+        stat_counter.print_stats(correctly_mapped, mismapped_reads + secondary_mapped, unmapped_reads, output_file, name="mapping_")
         logger.info("   Done")
 
         # use only correctly mapped reads
