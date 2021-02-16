@@ -140,9 +140,12 @@ class DatasetProcessor:
 
         current_chromosome = ""
         current_chr_record = None
+        total_alignments = 0
+        polya_found = 0
         self.processed_reads = set()
         self.multimapped_reads = set()
         self.reads_assignments = []
+
         for g in self.gene_clusters:
             chr_id = g[0].seqid
             if chr_id != current_chromosome:
@@ -156,11 +159,26 @@ class DatasetProcessor:
                                                              current_chr_record, self.read_grouper)
             assignment_storage = alignment_processor.process()
             self.dump_reads(assignment_storage, gene_info)
+            total_alignments += len(assignment_storage)
+            for a in assignment_storage:
+                if a.polyA_found:
+                    polya_found += 1
+
+        intial_polya_required = self.args.require_polyA
+        polya_fraction = polya_found / total_alignments
+        logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%) if these" %
+                    (total_alignments, polya_found, polya_fraction * 100.0))
+        if polya_fraction < 0.1 and self.args.require_polyA:
+            logger.warning("PolyA tail found in less than 10% of the reads, "
+                           "polyA tails will not be required for transcript model construction. "
+                           "Set --polya_trimmed to avoid this warning in future.")
+            self.args.require_polyA = False
 
         logger.info("Combining output for sample " + sample.label)
         self.aggregate_reads(sample)
         self.construct_models(sample)
         os.rmdir(self.tmp_dir)
+        self.args.require_polyA = intial_polya_required
         logger.info("Processed sample " + sample.label)
 
     def dump_reads(self, read_storage, gene_info):

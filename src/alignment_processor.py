@@ -34,7 +34,6 @@ class LongReadAlignmentProcessor:
         self.params = params
         self.chr_record = chr_record
 
-        gene_region = (gene_info.start, gene_info.end)
         self.assigner = LongReadAssigner(self.gene_info, self.params)
         self.read_groupper = read_groupper
         self.profile_constructor = CombinedProfileConstructor(gene_info, params)
@@ -61,8 +60,6 @@ class LongReadAlignmentProcessor:
 
     def process_single_file(self, bam):
         with pysam.AlignmentFile(bam, "rb") as bamfile_in:
-            #self.counter.add_unaligned(bamfile_in.unmapped)
-
             for alignment in bamfile_in.fetch(self.gene_info.chr_id, self.gene_info.start, self.gene_info.end):
                 read_id = alignment.query_name
 
