@@ -114,7 +114,7 @@ class LongReadAlignmentProcessor:
                     read_assignment.set_additional_info("indel_count", indel_count)
                     read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
                     read_assignment.introns_match = \
-                        all(e == 1 for e in read_assignment.combined_profile.read_intron_profile.read_profile)
+                        all(e == 1 for e in combined_profile.read_intron_profile.read_profile)
 
                 self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")
