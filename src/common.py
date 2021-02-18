@@ -49,6 +49,12 @@ def genes_overlap(gene_db1, gene_db2):
     return overlaps((gene_db1.start, gene_db1.end), (gene_db2.start, gene_db2.end))
 
 
+def genes_contain(gene_db1, gene_db2):
+    if gene_db1.seqid != gene_db2.seqid:
+        return False
+    return contains((gene_db1.start, gene_db1.end), (gene_db2.start, gene_db2.end))
+
+
 def argmin(l):
     if len(l) == 0:
         return -1

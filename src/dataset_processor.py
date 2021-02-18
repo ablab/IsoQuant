@@ -25,6 +25,8 @@ logger = logging.getLogger('IsoQuant')
 
 
 class GeneClusterConstructor:
+    MAX_GENE_CLUSTER = 50
+
     def __init__(self, gene_db):
         self.gene_db = gene_db
         self.gene_sets = None
@@ -40,11 +42,14 @@ class GeneClusterConstructor:
         for g in self.gene_db.features_of_type('gene', order_by=('seqid', 'start')):
             gene_name = g.id
             gene_db = self.gene_db[gene_name]
-            if len(current_gene_db_list) == 0 or any(genes_overlap(cg, gene_db) for cg in current_gene_db_list):
-                current_gene_db_list.append(gene_db)
-            else:
+            if len(current_gene_db_list) > 0 and \
+                    (all(not genes_overlap(cg, gene_db) for cg in current_gene_db_list) or
+                     (len(current_gene_db_list) > self.MAX_GENE_CLUSTER and
+                      all(not genes_contain(cg, gene_db) for cg in current_gene_db_list))):
                 gene_sets.append(current_gene_db_list)
                 current_gene_db_list = [gene_db]
+            else:
+                current_gene_db_list.append(gene_db)
 
         gene_sets.append(current_gene_db_list)
         return gene_sets
@@ -153,6 +158,8 @@ class DatasetProcessor:
                 current_chromosome = chr_id
                 current_chr_record = None if not self.reference_record_dict else self.reference_record_dict[chr_id]
 
+            if len(g) > 100:
+                logger.info("Potential slowdown due to large gene cluster of size %d" % len(g))
             gene_info = GeneInfo(g, self.gffutils_db, self.args.delta)
             bam_files = list(map(lambda x: x[0], sample.file_list))
             alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
