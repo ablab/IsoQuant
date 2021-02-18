@@ -273,17 +273,6 @@ class TranscriptModelConstructor:
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
                                self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known)
 
-    # check that all splice junction in isoform are covered by at least one read
-    def check_all_junctions_covered(self, isoform_id, read_assignments):
-        isoform_profile = self.gene_info.intron_profiles.profiles[isoform_id]
-        covered_junctions = [0 for i in range(len(isoform_profile))]
-        for ra in read_assignments:
-            read_profile = ra.combined_profile.read_intron_profile.gene_profile
-            for i in range(len(read_profile)):
-                if read_profile[i] == 1:
-                    covered_junctions[i] = 1
-        return all_features_present(isoform_profile, covered_junctions)
-
     # construct a transcript from a group of reads with the same modification
     def process_isoform_modifications(self, isoform_id, assignments, candidate_model_storage):
         remaining_assignments = copy.copy(assignments)
@@ -318,19 +307,14 @@ class TranscriptModelConstructor:
             return None
 
         strand = self.gene_info.isoform_strands[isoform_id]
-        if strand == '+':
-            best_read_3prime_pos = assignments[0].combined_profile.read_exon_profile.read_features[0][0]
-            best_read_5prime_pos = assignments[0].combined_profile.read_exon_profile.read_features[-1][1]
-        else:
-            best_read_3prime_pos = assignments[0].combined_profile.read_exon_profile.read_features[-1][1]
-            best_read_5prime_pos = assignments[0].combined_profile.read_exon_profile.read_features[0][0]
+        best_tss = -1
+        best_tts = -1
         best_reads = []
         # read_coords_to_assignment = {}
 
         for a in assignments:
             if a.multimapper or a.read_id in self.representative_reads:
                 continue
-            read_exon_profile = a.combined_profile.read_exon_profile
 
             logger.debug("Checking whether read is reliable")
             # logger.debug(a.combined_profile.read_exon_profile.read_features[0][0],
@@ -338,26 +322,28 @@ class TranscriptModelConstructor:
             # logger.debug("%s %d %d" % (a.read_id, a.combined_profile.polya_info.external_polya_pos,
             #                            a.combined_profile.polya_info.external_polyt_pos))
             if strand == '+':
-                if not self.params.require_polyA or a.combined_profile.polya_info.external_polya_pos != -1:
-                    tss = read_exon_profile.read_features[0][0]
-                    tts = read_exon_profile.read_features[-1][1]
-                    if tss == best_read_3prime_pos:
-                        if tts == best_read_5prime_pos:
+                if not self.params.require_polyA or a.polyA_found:
+                    tss, tts = self.get_read_region(isoform_id, a)
+                    if tss == best_tss:
+                        if tts == best_tts:
                             best_reads.append(a)
-                        elif tts > best_read_5prime_pos:
+                        elif tts > best_tts:
+                            best_tts = tts
                             best_reads = [a]
-                    elif tss < best_read_3prime_pos:
+                    elif tss < best_tss or best_tss == -1:
+                        best_tss = tss
                         best_reads = [a]
             else:
-                if not self.params.require_polyA or a.combined_profile.polya_info.external_polyt_pos != -1:
-                    tss = read_exon_profile.read_features[-1][1]
-                    tts = read_exon_profile.read_features[0][0]
-                    if tss == best_read_3prime_pos:
-                        if tts == best_read_5prime_pos:
+                if not self.params.require_polyA or a.polyA_found:
+                    tts, tss = self.get_read_region(isoform_id, a)
+                    if tss == best_tss:
+                        if tts == best_tts:
                             best_reads.append(a)
-                        elif tts < best_read_5prime_pos:
+                        elif tts < best_tts or best_tts == -1:
+                            best_tts = tts
                             best_reads = [a]
-                    elif tss > best_read_3prime_pos:
+                    elif tss > best_tss:
+                        best_tss = tss
                         best_reads = [a]
 
         if not best_reads:
