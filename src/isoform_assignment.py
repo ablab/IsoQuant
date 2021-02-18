@@ -369,6 +369,13 @@ class IsoformMatch:
         valid_subtypes = {MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match}
         return all(el.event_type in valid_subtypes for el in self.match_subclassifications)
 
+    def to_str(self):
+        pass
+
+    def from_str(self):
+        pass
+
+
 class ReadAssignment:
     def __init__(self, read_id, assignment_type, match=None):
         self.read_id = read_id
@@ -412,10 +419,11 @@ class ReadAssignment:
     def set_additional_info(self, key, value):
         self.additional_info[key] = value
 
-    def to_str(self):
-        pass
+    def to_raw_str(self):
+        exon_str = regions_to_str(self.exons)
+        return "%s\t"
 
-    def from_str(self, string):
+    def from_raw_str(self, string):
         pass
 
 
