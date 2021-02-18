@@ -447,10 +447,11 @@ class TranscriptModelConstructor:
         event_string = ",".join([match_subtype_to_str_with_additional_info(x, transcript_strand,
                                                                            read_introns, isoform_introns)
                                  for x in all_events])
+        representative_read_info = "read_id: %s;" % read_assignment.read_id
 
         return TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
-                               novel_exons, transcript_type, additional_info=event_string)
+                               novel_exons, transcript_type, additional_info=event_string + "; " + representative_read_info)
 
     # check that all exons are sorted and have correct coordinates
     def validate_exons(self, novel_exons):
