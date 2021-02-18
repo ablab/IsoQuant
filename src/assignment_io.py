@@ -88,7 +88,7 @@ class BEDPrinter(AbstractAssignmentPrinter):
         else:
             strand = list(strands)[0]
         chr_id = read_assignment.gene_info.chr_id
-        exon_blocks = read_assignment.combined_profile.read_exon_profile.read_features
+        exon_blocks = read_assignment.exons
 
         self.output_file.write("%s\t%d\t%d\t%s\t0\t%s\t%d\t%s\t%s\n" %
                            (chr_id, exon_blocks[0][0] - 1, exon_blocks[-1][1],
@@ -117,13 +117,13 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
             logger.warning("Empty assignment read id %s" %  (read_assignment.read_id))
             return
-        elif read_assignment.combined_profile is None:
+        elif read_assignment.exons is None:
             logger.warning("Empty combined profile, read id %s, assignment type %s" %
                            (read_assignment.read_id, str(read_assignment.assignment_type)))
             return
 
-        read_introns = read_assignment.combined_profile.read_intron_profile.read_features
-        read_exons = read_assignment.combined_profile.read_split_exon_profile.read_features
+        read_exons = read_assignment.exons
+        read_introns = junctions_from_blocks(read_exons)
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
                 continue
@@ -241,7 +241,8 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         ref_cds_start, ref_cds_end = self.io_support.find_ref_CDS_region(gene_info, transcript_id)
 
         if hasattr(gene_info, 'reference_region') and gene_info.reference_region is not None:
-            read_introns = read_assignment.combined_profile.read_intron_profile.read_features
+            read_exons = read_assignment.exons
+            read_introns = junctions_from_blocks(read_exons)
             all_canonical = str(self.io_support.check_sites_are_canonical(read_introns, gene_info, strand))
             seq_A_downstream_TTS, perc_A_downstreamTTS = \
                 self.io_support.check_downstream_polya((read_assignment.start(), read_assignment.end()), gene_info, strand)
@@ -290,7 +291,7 @@ class IOSupport:
         transcript_start = read_assignment.gene_info.transcript_start(transcript_id)
         read_start = read_assignment.start()
         if read_start < transcript_start:
-            return -sum_intervals_to_point(read_assignment.combined_profile.read_exon_profile.read_features, transcript_start)
+            return -sum_intervals_to_point(read_assignment.exons, transcript_start)
         else:
             return sum_intervals_to_point(read_assignment.gene_info.all_isoforms_exons[transcript_id], read_start)
 
@@ -298,7 +299,7 @@ class IOSupport:
         transcript_end = read_assignment.gene_info.transcript_end(transcript_id)
         read_end = read_assignment.end()
         if read_end > transcript_end:
-            return -sum_intervals_from_point(read_assignment.combined_profile.read_exon_profile.read_features, transcript_end)
+            return -sum_intervals_from_point(read_assignment.exons, transcript_end)
         else:
             return sum_intervals_from_point(read_assignment.gene_info.all_isoforms_exons[transcript_id], read_end)
 
@@ -324,9 +325,9 @@ class IOSupport:
 
     def check_all_sites_match_reference(self, read_assignment):
         # FIXME: make a new profile with delta = 0
-        if len(read_assignment.combined_profile.read_intron_profile.read_features) == 0:
+        if len(read_assignment.exons) == 1:
             return "Unspliced"
-        introns_match = all(e == 1 for e in read_assignment.combined_profile.read_intron_profile.read_profile)
+        introns_match = read_assignment.introns_match
         return str(introns_match)
 
     def check_sites_are_canonical(self, read_introns, gene_info, strand):

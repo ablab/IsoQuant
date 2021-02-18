@@ -27,7 +27,7 @@ class PolyAVerifier:
             return matching_events
 
         logger.debug("+ Checking isoform %s" % isoform_id)
-        read_exons = combined_read_profile.read_exon_profile.read_features
+        read_exons = combined_read_profile.read_split_exon_profile.read_features
         read_introns = combined_read_profile.read_intron_profile.read_features
         polya_info = combined_read_profile.polya_info
         isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]

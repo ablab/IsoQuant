@@ -97,17 +97,24 @@ class LongReadAlignmentProcessor:
                                                polya_info.external_polyt_pos != -1 or
                                                polya_info.internal_polya_pos != -1 or
                                                polya_info.internal_polyt_pos != -1)
+                read_assignment.polya_info = polya_info
                 read_assignment.cage_found = len(cage_hits) > 0
-                read_assignment.combined_profile = combined_profile
+                read_assignment.exons = sorted_blocks
                 read_assignment.gene_info = self.gene_info
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
                 read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
                 read_assignment.multimapper = alignment.is_secondary
 
+                if self.params.count_exons:
+                    read_assignment.exon_gene_profile = combined_profile.read_exon_profile.gene_profile
+                    read_assignment.intron_gene_profile = combined_profile.read_intron_profile.gene_profile
+
                 if self.params.sqanti_output:
                     indel_count, junctions_with_indels = self.count_indel_stats(alignment)
                     read_assignment.set_additional_info("indel_count", indel_count)
                     read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
+                    read_assignment.introns_match = \
+                        all(e == 1 for e in read_assignment.combined_profile.read_intron_profile.read_profile)
 
                 self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")

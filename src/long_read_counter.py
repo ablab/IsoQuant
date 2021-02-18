@@ -134,7 +134,8 @@ class ProfileFeatureCounter(AbstractCounter):
     @staticmethod
     def is_valid(assignment):
         return assignment is not None and \
-               hasattr(assignment, 'combined_profile') and assignment.combined_profile is not None and \
+               hasattr(assignment, 'exon_gene_profile') and assignment.exon_gene_profile is not None  and \
+               hasattr(assignment, 'intron_gene_profile') and assignment.intron_gene_profile is not None and \
                hasattr(assignment, 'gene_info') and assignment.gene_info is not None
 
 
@@ -146,7 +147,7 @@ class ExonCounter(ProfileFeatureCounter):
         if not ProfileFeatureCounter.is_valid(read_assignment):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
-        self.add_read_info_from_profile(read_assignment.combined_profile.read_exon_profile.gene_profile,
+        self.add_read_info_from_profile(read_assignment.exon_gene_profile,
                                         read_assignment.gene_info.exon_property_map, group_id)
 
 
@@ -158,6 +159,6 @@ class IntronCounter(ProfileFeatureCounter):
         if not ProfileFeatureCounter.is_valid(read_assignment):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
-        self.add_read_info_from_profile(read_assignment.combined_profile.read_intron_profile.gene_profile,
+        self.add_read_info_from_profile(read_assignment.intron_gene_profile,
                                         read_assignment.gene_info.intron_property_map, group_id)
 

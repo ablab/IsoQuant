@@ -284,10 +284,9 @@ class TranscriptModelConstructor:
                 # logger.debug("> No reliable representative read can be found")
                 return
             logger.debug("> Representative read chosen: %s" % representative_read_assignment.read_id)
-            logger.debug(representative_read_assignment.combined_profile.read_exon_profile.read_features)
-            logger.debug(representative_read_assignment.combined_profile.read_intron_profile.read_features)
-            # create a new transcript model
+            logger.debug(representative_read_assignment.exons)
 
+            # create a new transcript model
             self.representative_reads.add(representative_read_assignment.read_id)
             new_transcript_model = self.blend_read_into_isoform(isoform_id, representative_read_assignment)
             if not new_transcript_model:
@@ -317,10 +316,10 @@ class TranscriptModelConstructor:
                 continue
 
             logger.debug("Checking whether read is reliable")
-            # logger.debug(a.combined_profile.read_exon_profile.read_features[0][0],
-            #             a.combined_profile.read_exon_profile.read_features[-1][1])
-            # logger.debug("%s %d %d" % (a.read_id, a.combined_profile.polya_info.external_polya_pos,
-            #                            a.combined_profile.polya_info.external_polyt_pos))
+            # logger.debug(a.exons[0][0],
+            #             a.exons[-1][1])
+            # logger.debug("%s %d %d" % (a.read_id, a.polya_info.external_polya_pos,
+            #                            a.polya_info.external_polyt_pos))
             if strand == '+':
                 if not self.params.require_polyA or a.polyA_found:
                     tss, tts = self.get_read_region(isoform_id, a)
@@ -358,16 +357,15 @@ class TranscriptModelConstructor:
             return None
 
         isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
-        combined_profile = read_assignment.combined_profile
-        read_introns = combined_profile.read_intron_profile.read_features
+        read_exons = read_assignment.exons
+        read_introns = junctions_from_blocks(read_exons)
         read_start, read_end = self.get_read_region(isoform_id, read_assignment)
         read_region = (read_start, read_end)
         novel_exons = []
 
-        logger.debug("Isoform I " + str(isoform_introns))
         logger.debug("Isoform E " + str(self.gene_info.all_isoforms_exons[isoform_id]))
         logger.debug("Read coords %d, %d" % (read_start, read_end))
-        logger.debug("Read " + str(read_introns))
+        logger.debug("Read E" + str(read_exons))
 
         if SupplementaryMatchConstansts.extra_left_mod_position in modification_events_map:
             # if there are extra introns on the left
@@ -429,7 +427,7 @@ class TranscriptModelConstructor:
             novel_transcript_end = read_end
 
         novel_exons.append((current_exon_start, novel_transcript_end))
-        novel_exons = self.correct_transcripts_ends(novel_exons, combined_profile, isoform_id, modification_events_map)
+        novel_exons = self.correct_transcripts_ends(novel_exons, read_assignment.polya_info, isoform_id, modification_events_map)
 
         if not self.validate_exons(novel_exons):
             logger.warning("Error in novel transcript, not sorted or incorrect exon coords")
@@ -459,7 +457,7 @@ class TranscriptModelConstructor:
         return novel_exons == sorted(novel_exons) and all(x[0] <= x[1] for x in novel_exons)
 
     # move transcripts ends to known ends if they are closed and no polyA found
-    def correct_transcripts_ends(self, novel_exons, combined_profile, isoform_id, modification_events_map):
+    def correct_transcripts_ends(self, novel_exons, polya_info, isoform_id, modification_events_map):
         strand = self.gene_info.isoform_strands[isoform_id]
 
         if SupplementaryMatchConstansts.extra_left_mod_position not in modification_events_map and \
@@ -467,7 +465,7 @@ class TranscriptModelConstructor:
             # change only if there are no extra introns on the left and first intron is not modified
             novel_transcript_start = novel_exons[0][0]
             known_isoform_start = self.gene_info.transcript_start(isoform_id)
-            if (strand == "+" or combined_profile.polya_info.external_polyt_pos == -1) and \
+            if (strand == "+" or polya_info.external_polyt_pos == -1) and \
                     abs(novel_transcript_start - known_isoform_start) <= self.params.max_dist_to_isoforms_tsts and \
                     known_isoform_start < novel_exons[0][1]:
                 # correct model start only if no polyT is found
@@ -479,7 +477,7 @@ class TranscriptModelConstructor:
             # change only if there are no extra introns on the right and last intron is not modified
             novel_transcript_end = novel_exons[-1][1]
             known_isoform_end = self.gene_info.transcript_end(isoform_id)
-            if (strand == "-" or combined_profile.polya_info.external_polya_pos == -1) and \
+            if (strand == "-" or polya_info.external_polya_pos == -1) and \
                     abs(novel_transcript_end - known_isoform_end) <= self.params.max_dist_to_isoforms_tsts and \
                     known_isoform_end > novel_exons[-1][0]:
                 # correct model end only if no polyA is found
@@ -579,8 +577,9 @@ class TranscriptModelConstructor:
 
     # get read region
     def get_read_region(self, isoform_id, read_assignment):
-        read_start = read_assignment.combined_profile.read_exon_profile.read_features[0][0]
-        read_end = read_assignment.combined_profile.read_exon_profile.read_features[-1][1]
+        # TODO add strand check
+        read_start = read_assignment.exons[0][0]
+        read_end = read_assignment.exons[-1][1]
         for match in read_assignment.isoform_matches:
             if match.assigned_transcript == isoform_id:
                 for e in match.match_subclassifications:
@@ -697,13 +696,13 @@ class TranscriptModelConstructor:
         nearby_starts_count = 0
         nearby_ends_count = 0
         for assignment in read_assignments:
-            combined_profile = assignment.combined_profile
-            read_exons = combined_profile.read_exon_profile.read_features
+            read_exons = assignment.exons
             logger.debug("Checking read %s: %s" % (assignment.read_id, str(read_exons)))
-            model_combined_profile = profile_constructor.construct_profiles(read_exons, combined_profile.polya_info, [])
+            model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
             model_assignment.polyA_found = assignment.polyA_found
-            model_assignment.combined_profile = model_combined_profile
+            model_assignment.polya_info = assignment.polya_info
+            model_assignment.exons = read_exons
             model_assignment.gene_info = transcript_model_gene_info
             # check that no serious contradiction occurs
             profile_matches = model_assignment.assignment_type in [ReadAssignmentType.unique,

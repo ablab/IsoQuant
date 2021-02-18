@@ -372,10 +372,11 @@ class IsoformMatch:
 class ReadAssignment:
     def __init__(self, read_id, assignment_type, match=None):
         self.read_id = read_id
-        self.combined_profile = None
+        self.exons = None
         self.gene_info = None
         self.polyA_found = False
         self.cage_found = False
+        self.polya_info = None
         self.read_group = "."
         self.mapped_strand = "."
         self.assignment_type = assignment_type
@@ -397,16 +398,16 @@ class ReadAssignment:
         return self.gene_info.chr_id
 
     def start(self):
-        return self.combined_profile.read_exon_profile.read_features[0][0]
+        return self.exons[0][0]
 
     def end(self):
-        return self.combined_profile.read_exon_profile.read_features[-1][1]
+        return self.exons[-1][1]
 
     def length(self):
-        return sum([x[1] - x[0] + 1 for x in self.combined_profile.read_exon_profile.read_features])
+        return sum([x[1] - x[0] + 1 for x in self.exons])
 
     def exon_count(self):
-        return len(self.combined_profile.read_exon_profile.read_features)
+        return len(self.exons)
 
     def set_additional_info(self, key, value):
         self.additional_info[key] = value

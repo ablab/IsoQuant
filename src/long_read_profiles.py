@@ -190,11 +190,13 @@ class CombinedProfileConstructor:
         intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks,
                                                                                   polya_info.external_polya_pos,
                                                                                   polya_info.external_polyt_pos)
-        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks,
-                                                                                  polya_info.external_polya_pos,
-                                                                                  polya_info.external_polyt_pos)
+        exon_profile = None
+        if self.params.count_exons:
+            exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks,
+                                                                                polya_info.external_polya_pos,
+                                                                                polya_info.external_polyt_pos)
         split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks,
-                                                                                  polya_info.external_polya_pos,
-                                                                                  polya_info.external_polyt_pos)
+                                                                                   polya_info.external_polya_pos,
+                                                                                   polya_info.external_polyt_pos)
         return CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
                                     polya_info=polya_info, cage_hits=cage_hits)
