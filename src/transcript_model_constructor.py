@@ -431,6 +431,8 @@ class TranscriptModelConstructor:
 
         if not self.validate_exons(novel_exons):
             logger.warning("Error in novel transcript, not sorted or incorrect exon coords")
+            logger.warning("Read id: %s, isoform id: %s, chr: %s" %
+                           (read_assignment.read_id, isoform_id, self.gene_info.chr_id))
             logger.warning(novel_exons)
             return None
 
@@ -738,6 +740,8 @@ class TranscriptModelConstructor:
 
         if fsm_match_count == 0:
             logger.warning("Zero FSM for transcript model %s" % transcript_model.transcript_id)
+            logger.warning("%s:%d-%d, %s" % (transcript_model.chr_id, isoform_start, isoform_end,
+                                             transcript_model.reference_transcript))
 
         if len(assigned_reads) >= self.params.min_novel_supporting_reads and \
                 fsm_match_count >= self.params.min_novel_fsm_supporting_reads and \
