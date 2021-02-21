@@ -4,11 +4,7 @@
 # See file LICENSE for details.
 ############################################################################
 
-import logging
-from Bio import SeqIO
-
-from src.common import *
-from src.isoform_assignment import *
+import _pickle as pickle
 from src.long_read_assigner import *
 
 
@@ -95,6 +91,22 @@ class BEDPrinter(AbstractAssignmentPrinter):
                             read_assignment.read_id, strand, len(exon_blocks),
                             ",".join([str(e[1] - e[0] + 1) for e in exon_blocks]),
                             ",".join([str(e[0] - 1) for e in exon_blocks])))
+
+
+class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
+    def __init__(self, output_file_name, params):
+        AbstractAssignmentPrinter.__init__(self, output_file_name, params)
+        self.output_file = open(self.output_file_name, "wb")
+
+    def add_gene_info(self, gene_info):
+        gene_info.db = None
+        pickle.dump(gene_info, self.output_file, -1)
+
+    def add_read_info(self, read_assignment):
+        if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
+            return
+        read_assignment.gene_info = None
+        pickle.dump(read_assignment, self.output_file, -1)
 
 
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):

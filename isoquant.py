@@ -90,6 +90,8 @@ def parse_args(args=None, namespace=None):
     #add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
+    add_additional_option("--read_assignments", help="reuse read assignments (binary format) to construct transcript models",
+                          type=str, default=None)
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 

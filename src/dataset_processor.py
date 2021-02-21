@@ -4,16 +4,11 @@
 # See file LICENSE for details.
 ############################################################################
 
-import logging
-import gffutils
-import pysam
-from collections import defaultdict
+import _pickle as pickle
 
 from src.input_data_storage import *
 from src.alignment_processor import *
 from src.assignment_io import *
-from src.isoform_assignment import *
-from src.gene_info import *
 from src.long_read_counter import *
 from src.multimap_resolver import *
 from src.read_groups import *
@@ -151,25 +146,32 @@ class DatasetProcessor:
         self.multimapped_reads = set()
         self.reads_assignments = []
 
-        for g in self.gene_clusters:
-            chr_id = g[0].seqid
-            if chr_id != current_chromosome:
-                logger.info("Processing chromosome " + chr_id)
-                current_chromosome = chr_id
-                current_chr_record = None if not self.reference_record_dict else self.reference_record_dict[chr_id]
+        if self.args.read_assignments and os.path.exists(self.args.read_assignments):
+            logger.info('Read assignments file found. Using {}'.format(self.args.read_assignments))
+            total_alignments, polya_found = self.load_reads(self.args.read_assignments)
+        else:
+            self.tmp_printer = TmpFileAssignmentPrinter(sample.out_raw_file, self.args)
+            for g in self.gene_clusters:
+                chr_id = g[0].seqid
+                if chr_id != current_chromosome:
+                    logger.info("Processing chromosome " + chr_id)
+                    current_chromosome = chr_id
+                    current_chr_record = None if not self.reference_record_dict else self.reference_record_dict[chr_id]
 
-            if len(g) > 100:
-                logger.info("Potential slowdown due to large gene cluster of size %d" % len(g))
-            gene_info = GeneInfo(g, self.gffutils_db, self.args.delta)
-            bam_files = list(map(lambda x: x[0], sample.file_list))
-            alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
-                                                             current_chr_record, self.read_grouper)
-            assignment_storage = alignment_processor.process()
-            self.dump_reads(assignment_storage, gene_info)
-            total_alignments += len(assignment_storage)
-            for a in assignment_storage:
-                if a.polyA_found:
-                    polya_found += 1
+                if len(g) > 100:
+                    logger.info("Potential slowdown due to large gene cluster of size %d" % len(g))
+                gene_info = GeneInfo(g, self.gffutils_db, self.args.delta)
+                bam_files = list(map(lambda x: x[0], sample.file_list))
+                alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, self.args,
+                                                                 current_chr_record, self.read_grouper)
+                assignment_storage = alignment_processor.process()
+                self.dump_reads(assignment_storage, gene_info)
+                total_alignments += len(assignment_storage)
+                for a in assignment_storage:
+                    if a.polyA_found:
+                        polya_found += 1
+            logger.info('Read assignments file saved to {}.\nYou can reuse it later with option --read_assignments'.
+                        format(sample.out_raw_file))
 
         intial_polya_required = self.args.require_polyA
         polya_fraction = polya_found / total_alignments
@@ -189,18 +191,50 @@ class DatasetProcessor:
         logger.info("Processed sample " + sample.label)
 
     def dump_reads(self, read_storage, gene_info):
-        if self.args.memory_efficient:
-            # TODO: dump to file
-            # out_tmp_tsv = os.path.join(self.tmp_dir, str(gene_counter) + ".processed_reads.tsv")
-            assert False
-        else:
-            for read_assignment in read_storage:
-                if read_assignment.assignment_type is not None:
-                    if read_assignment.read_id in self.processed_reads:
-                        self.multimapped_reads.add(read_assignment.read_id)
+        self.tmp_printer.add_gene_info(gene_info)
+        for read_assignment in read_storage:
+            if read_assignment.assignment_type is not None:
+                self.tmp_printer.add_read_info(read_assignment)
+                read_assignment.gene_info = gene_info
+                if read_assignment.read_id in self.processed_reads:
+                    self.multimapped_reads.add(read_assignment.read_id)
+                else:
+                    self.processed_reads.add(read_assignment.read_id)
+        self.reads_assignments.append((gene_info, read_storage))
+
+    def load_reads(self, dump_file):
+        read_storage = []
+        total_assignments = 0
+        polya_found = 0
+        gene_info = None
+        with open(dump_file, "rb") as f:
+            while True:
+                try:
+                    p = pickle.load(f, fix_imports=False)
+                    if isinstance(p, ReadAssignment):
+                        read_assignment = p
+                        read_assignment.gene_info = gene_info
+                        read_storage.append(read_assignment)
+                        total_assignments += 1
+                        if read_assignment.polyA_found:
+                            polya_found += 1
+                        if read_assignment.read_id in self.processed_reads:
+                            self.multimapped_reads.add(read_assignment.read_id)
+                        else:
+                            self.processed_reads.add(read_assignment.read_id)
+                    elif isinstance(p, GeneInfo):
+                        if gene_info and read_storage:
+                            self.reads_assignments.append((gene_info, read_storage))
+                            read_storage = []
+                        gene_info = p
                     else:
-                        self.processed_reads.add(read_assignment.read_id)
+                        raise ValueError("Read assignment file {} is corrupted!".format(dump_file))
+                except EOFError:
+                    break
+
+        if gene_info and read_storage:
             self.reads_assignments.append((gene_info, read_storage))
+        return total_assignments, polya_found
 
     def create_aggregators(self, sample):
         self.read_stat_counter = EnumStats()
