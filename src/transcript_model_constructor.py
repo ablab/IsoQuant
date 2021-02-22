@@ -635,8 +635,12 @@ class TranscriptModelConstructor:
     def get_closest_ref_intron(self, read_intron):
         # TODO speed up - binray search or interval tree
         intron_profile = self.intron_profile_constructor.construct_profile_for_features([read_intron])
-        matched_intron = intron_profile.gene_profile.index(1)
-        return self.intron_profile_constructor.known_features[matched_intron]
+        try:
+            matched_intron = intron_profile.gene_profile.index(1)
+            return self.intron_profile_constructor.known_features[matched_intron]
+        except ValueError:
+            logger.warning("No reference intron was found for %s" % read_intron)
+            return read_intron
 
     def add_intron(self, novel_exons, current_exon_start, intron):
         exon = (current_exon_start, intron[0] - 1)
