@@ -433,7 +433,7 @@ class TranscriptModelConstructor:
             logger.warning("Error in novel transcript, not sorted or incorrect exon coords")
             logger.warning("Read id: %s, isoform id: %s, chr: %s" %
                            (read_assignment.read_id, isoform_id, self.gene_info.chr_id))
-            logger.warning(novel_exons)
+            logger.warning(str(novel_exons))
             return None
 
         all_events = []
@@ -639,7 +639,7 @@ class TranscriptModelConstructor:
             matched_intron = intron_profile.gene_profile.index(1)
             return self.intron_profile_constructor.known_features[matched_intron]
         except ValueError:
-            logger.warning("No reference intron was found for %s" % read_intron)
+            logger.warning("No reference intron was found for %s" % str(read_intron))
             return read_intron
 
     def add_intron(self, novel_exons, current_exon_start, intron):
