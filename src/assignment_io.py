@@ -96,17 +96,18 @@ class BEDPrinter(AbstractAssignmentPrinter):
 class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
-        self.output_file = open(self.output_file_name, "wb")
+        self.pickler = pickle.Pickler(open(self.output_file_name, "wb"),  -1)
+        self.pickler.fast = True
 
     def add_gene_info(self, gene_info):
         gene_info.db = None
-        pickle.dump(gene_info, self.output_file, -1)
+        self.pickler.dump(gene_info)
 
     def add_read_info(self, read_assignment):
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
             return
         read_assignment.gene_info = None
-        pickle.dump(read_assignment, self.output_file, -1)
+        self.pickler.dump(read_assignment)
 
 
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
