@@ -166,8 +166,8 @@ class DatasetProcessor:
             os.makedirs(self.tmp_dir)
 
         if self.args.read_assignments:
-            logger.info('Using read assignments from {}*'.format(self.args.read_assignments))
-            total_alignments, polya_found = self.load_reads(self.args.read_assignments)
+            logger.info('Using read assignments from {}*'.format(sample.file_list[0]))
+            total_alignments, polya_found = self.load_reads(sample.file_list[0])
         else:
             chrom_clusters = []
             cur_cluster = []

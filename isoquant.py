@@ -5,7 +5,7 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
-
+import glob
 from shutil import rmtree
 
 from src.gtf2db import *
@@ -53,6 +53,9 @@ def parse_args(args=None, namespace=None):
                                                          ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
+    input_args.add_argument("--read_assignments", nargs='+', type=str,
+                            help="reuse read assignments (binary format) to construct transcript models",
+                            default=None)
     parser.add_argument("--data_type", "-d", type=str, required=True, choices=DATATYPE_TO_ALIGNER.keys(),
                         help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
     parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
@@ -90,8 +93,6 @@ def parse_args(args=None, namespace=None):
     #add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
-    add_additional_option("--read_assignments", help="reuse read assignments (binary format) to construct transcript models",
-                          type=str, default=None)
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
@@ -204,6 +205,11 @@ def check_input_files(args):
     for sample in args.input_data.samples:
         for lib in sample.file_list:
             for in_file in lib:
+                if args.input_data.input_type == "save":
+                    saves = glob.glob(in_file)
+                    if not saves:
+                        print("ERROR! Input files " + in_file + "* do not exist")
+                    continue
                 if not os.path.isfile(in_file):
                     print("ERROR! Input file " + in_file + " does not exist")
                     exit(-1)
