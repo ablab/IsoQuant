@@ -124,8 +124,9 @@ class JunctionComparator:
         # logger.debug("+ + Isoform region " + str(isoform_region))
 
         matching_events = []
-        # logger.debug(read_features_present)
-        # logger.debug(isoform_features_present)
+        logger.debug(read_features_present)
+        logger.debug(isoform_features_present)
+        logger.debug(contradictory_region_pairs)
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
             # classify contradictions
             logger.debug("+ + Classifying contradictions")
