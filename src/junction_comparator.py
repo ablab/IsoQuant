@@ -132,8 +132,8 @@ class JunctionComparator:
             matching_events = self.detect_contradiction_type(read_region, read_junctions, isoform_region, isoform_junctions, contradictory_region_pairs)
 
         if read_features_present[0] == 0 or read_features_present[-1] == 0:
-            if all(x == 0 for x in read_features_present):
-                return [MatchEvent(MatchEventSubtype.undefined)]
+            # if all(x == 0 for x in read_features_present):
+            #    return [MatchEvent(MatchEventSubtype.undefined)]
             logger.debug("+ + Found only extra terminal introns ")
             self.add_extra_out_exon_events(matching_events, read_features_present, read_region, read_junctions, isoform_region[0])
 
