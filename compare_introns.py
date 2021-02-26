@@ -28,18 +28,24 @@ class Params:
         self.minimal_intron_absence_overlap = 20
         self.max_intron_shift = 0
         self.max_missed_exon_len = 0
+        self.max_intron_abs_diff = 0
+        self.max_intron_rel_diff = 0
+        self.max_fake_terminal_exon_len = 0
+        self.micro_intron_length = 0
         self.allow_extra_terminal_introns = False
         self.correct_minor_errors = False
         self.has_polya = False
 
 
-inconsistency_events = nnic_event_types + nic_event_types
+inconsistency_events = nnic_event_types | nic_event_types
 
 
 @unique
 class MatchType(Enum):
     match = 0
     inconsistent = 10
+    first_only = 20
+    second_only = 30
     consistent_first_longer = 1
     consistent_second_longer = 2
     consistent_differ = 3
@@ -60,9 +66,13 @@ def compare_intron_chains(exons1, exons2, gene_info, params):
 
     if any(e in inconsistency_events for e in matching_events):
         return MatchType.inconsistent
-    elif len(introns1) == len(introns2) and contains(mapped_region1, (introns2[0][0], introns2[-1][1])) and \
+    elif len(introns1) != 0 and len(introns1) == len(introns2) and contains(mapped_region1, (introns2[0][0], introns2[-1][1])) and \
             contains(mapped_region2, (introns1[0][0], introns1[-1][1])):
         return MatchType.match
+    elif len(introns1) > 0 and len(introns2) == 0:
+        return MatchType.first_only
+    elif len(introns2) > 0 and len(introns1) == 0:
+        return MatchType.second_only
     elif len(introns1) > len(introns2) and contains(mapped_region1, (introns2[0][0], introns2[-1][1])):
         return MatchType.consistent_first_longer
     elif  len(introns1) < len(introns2) and contains(mapped_region2, (introns1[0][0], introns1[-1][1])):
@@ -85,6 +95,8 @@ def check_annotated_introns(exons, gene_info, params):
 def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
     stat_map = defaultdict(int)
     for read_pair in read_pairs:
+        if read_pair[0] not in bam_records1 or read_pair[1] not in bam_records2:
+            continue
         bam_record1 = bam_records1[read_pair[0]]
         bam_record2 = bam_records2[read_pair[1]]
         if bam_record1.reference_name != bam_record2.reference_name:
@@ -97,8 +109,10 @@ def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
             continue
 
         total_mapped_region = max_range(mapped_region1, mapped_region2)
-        gene_list = gene_db.region(region=(bam_record1.reference_name, total_mapped_region[0], total_mapped_region[1]),
-                                   completely_within=False)
+        gene_list = list(gene_db.region(region=(bam_record1.reference_name, total_mapped_region[0], total_mapped_region[1]),
+                                        completely_within=False))
+        if not gene_list:
+            continue
         gene_info = GeneInfo(gene_list, gene_db)
         first_annotated = check_annotated_introns(exons1, gene_info, params)
         second_annotated = check_annotated_introns(exons2, gene_info, params)
@@ -142,7 +156,7 @@ def parse_args(args=None, namespace=None):
     parser.add_argument('--bam_ont', type=str, help='sorted and indexed BAM file for ONT')
     parser.add_argument('--tsv', type=str, help='TSV with barcode and read ids')
     parser.add_argument('--delta', type=int, default=0, help='delta')
-
+    args = parser.parse_args(args)
     return args
 
 
@@ -164,7 +178,7 @@ def run_pipeline(args):
     params = Params()
     params.delta = args.delta
     stat_map = intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params)
-
+    print(stat_map)
 
 def main(args):
     args = parse_args(args)
