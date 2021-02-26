@@ -64,20 +64,28 @@ def compare_intron_chains(exons1, exons2, gene_info, params):
                                             comparator=partial(equal_ranges, delta=params.delta)))
     matching_events = intron_comparator.compare_junctions(introns1, mapped_region1, introns2, mapped_region2)
 
+    logger.debug("Matching events detected: " + str(matching_events))
     if any(e in inconsistency_events for e in matching_events):
+        logger.debug("Inconsistent")
         return MatchType.inconsistent
     elif len(introns1) != 0 and len(introns1) == len(introns2) and \
             contains(mapped_region1, (introns2[0][0], introns2[-1][1])) and \
             contains(mapped_region2, (introns1[0][0], introns1[-1][1])):
+        logger.debug("Perfect match")
         return MatchType.match
     elif len(introns1) > 0 and len(introns2) == 0:
+        logger.debug("First only")
         return MatchType.first_only
     elif len(introns2) > 0 and len(introns1) == 0:
+        logger.debug("Second only")
         return MatchType.second_only
     elif len(introns1) > len(introns2) and contains(mapped_region1, (introns2[0][0], introns2[-1][1])):
+        logger.debug("First longer")
         return MatchType.consistent_first_longer
     elif  len(introns1) < len(introns2) and contains(mapped_region2, (introns1[0][0], introns1[-1][1])):
+        logger.debug("Second longer")
         return MatchType.consistent_second_longer
+    logger.debug("Differ but consistent")
     return MatchType.consistent_differ
 
 
@@ -114,9 +122,13 @@ def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
                                         completely_within=False))
         if not gene_list:
             continue
+        logger.debug("First read exons: "  + str(exons1))
+        logger.debug("Second read exons: " + str(exons2))
         gene_info = GeneInfo(gene_list, gene_db)
+        logger.debug("Gene introns: " + str(gene_info.intron_profiles.features))
         first_annotated = check_annotated_introns(exons1, gene_info, params)
         second_annotated = check_annotated_introns(exons2, gene_info, params)
+        logger.debug("First annotated %r, second annotated %r" % (first_annotated, second_annotated))
         event_type = compare_intron_chains(exons1, exons2, gene_info, params)
         stat_map[(event_type, first_annotated, second_annotated)] += 1
 
@@ -162,9 +174,9 @@ def parse_args(args=None, namespace=None):
 
 
 def set_logger(logger_instance):
-    logger_instance.setLevel(logging.INFO)
+    logger_instance.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
+    ch.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
