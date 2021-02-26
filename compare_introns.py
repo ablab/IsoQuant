@@ -68,10 +68,10 @@ def compare_intron_chains(exons1, exons2, gene_info, params):
     event_string = ",".join([match_subtype_to_str_with_additional_info(x, '+', introns1, introns2)
                              for x in matching_events])
     logger.debug("Matching events detected: " + event_string)
-    if len(exons1) == 1 and len(exons2):
+    if len(exons1) == 1 and len(exons2) == 1:
         logger.debug("Both unspliced")
         return MatchType.both_unspliced
-    if any(e in inconsistency_events for e in matching_events):
+    elif any(e.event_type in inconsistency_events for e in matching_events):
         logger.debug("Inconsistent")
         return MatchType.inconsistent
     elif len(introns1) != 0 and len(introns1) == len(introns2) and \
