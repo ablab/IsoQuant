@@ -184,14 +184,20 @@ def set_logger(logger_instance):
 
 
 def run_pipeline(args):
+    logger.info("Loading gene db from " + args.genedb)
     gene_db = gffutils.FeatureDB(args.genedb, keep_order=True)
+    logger.info("Loading read pairs from " + args.tsv)
     read_pairs = load_tsv(args.tsv)
+    logger.info("Loading alignments from " + args.bam_pb)
     bam_records1 = load_bam(set(map(lambda x: x[0], read_pairs)), args.bam_pb)
+    logger.info("Loading alignments from " + args.bam_ont)
     bam_records2 = load_bam(set(map(lambda x: x[1], read_pairs)), args.bam_ont)
     params = Params()
     params.delta = args.delta
+    logger.info("Comparing intron chains...")
     stat_map = intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params)
     print(stat_map)
+    logger.info("Done")
 
 def main(args):
     args = parse_args(args)
