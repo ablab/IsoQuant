@@ -66,7 +66,8 @@ def compare_intron_chains(exons1, exons2, gene_info, params):
 
     if any(e in inconsistency_events for e in matching_events):
         return MatchType.inconsistent
-    elif len(introns1) != 0 and len(introns1) == len(introns2) and contains(mapped_region1, (introns2[0][0], introns2[-1][1])) and \
+    elif len(introns1) != 0 and len(introns1) == len(introns2) and \
+            contains(mapped_region1, (introns2[0][0], introns2[-1][1])) and \
             contains(mapped_region2, (introns1[0][0], introns1[-1][1])):
         return MatchType.match
     elif len(introns1) > 0 and len(introns2) == 0:
@@ -89,7 +90,7 @@ def check_annotated_introns(exons, gene_info, params):
                                                                         delta=params.minimal_intron_absence_overlap),
                                               delta=params.delta)
     intron_profile = intron_profile_constructor.construct_intron_profile(exons)
-    return all(e == 1 for e in intron_profile.gene_profile)
+    return all(e == 1 for e in intron_profile.read_profile)
 
 
 def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
