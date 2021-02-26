@@ -46,6 +46,7 @@ class MatchType(Enum):
     inconsistent = 10
     first_only = 20
     second_only = 30
+    both_unspliced = 40
     consistent_first_longer = 1
     consistent_second_longer = 2
     consistent_differ = 3
@@ -64,7 +65,12 @@ def compare_intron_chains(exons1, exons2, gene_info, params):
                                             comparator=partial(equal_ranges, delta=params.delta)))
     matching_events = intron_comparator.compare_junctions(introns1, mapped_region1, introns2, mapped_region2)
 
-    logger.debug("Matching events detected: " + str(matching_events))
+    event_string = ",".join([match_subtype_to_str_with_additional_info(x, '+', introns1, introns2)
+                             for x in matching_events])
+    logger.debug("Matching events detected: " + event_string)
+    if len(exons1) == 1 and len(exons2):
+        logger.debug("Both unspliced")
+        return MatchType.both_unspliced
     if any(e in inconsistency_events for e in matching_events):
         logger.debug("Inconsistent")
         return MatchType.inconsistent
