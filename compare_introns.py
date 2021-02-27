@@ -67,6 +67,9 @@ class MatchType(Enum):
     only_second_spliced = 12
     inconsistent = 100
 
+    def __lt__(self, other):
+        return self.value < other.value
+
 
 def compare_intron_chains(exons1, exons2, gene_info, params):
     mapped_region1 = (exons1[0][0], exons1[-1][1])
