@@ -59,13 +59,13 @@ inconsistency_events = {
 @unique
 class MatchType(Enum):
     match = 0
-    inconsistent = 10
-    first_only = 20
-    second_only = 30
-    both_unspliced = 40
     consistent_first_longer = 1
     consistent_second_longer = 2
     consistent_differ = 3
+    both_unspliced = 10
+    only_first_spliced = 11
+    only_second_spliced = 12
+    inconsistent = 100
 
 
 def compare_intron_chains(exons1, exons2, gene_info, params):
@@ -89,10 +89,10 @@ def compare_intron_chains(exons1, exons2, gene_info, params):
         return MatchType.both_unspliced
     elif len(introns2) == 0:
         logger.debug("First only")
-        return MatchType.first_only
+        return MatchType.only_first_spliced
     elif len(introns1) == 0:
         logger.debug("Second only")
-        return MatchType.second_only
+        return MatchType.only_second_spliced
     elif any(e.event_type in inconsistency_events for e in matching_events):
         logger.debug("Inconsistent")
         return MatchType.inconsistent
@@ -218,7 +218,12 @@ def run_pipeline(args):
     params.delta = args.delta
     logger.info("Comparing intron chains...")
     stat_map = intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params)
-    print(stat_map)
+    logger.debug(str(stat_map))
+    logger.info("Saving stats to " + args.output)
+    outf = open(args.output, "w")
+    for match_type in sorted(stat_map.keys()):
+        outf.write("%s\t%r\t%r\t%d\n" % (match_type[0], match_type[1], match_type[2], stat_map[match_type]))
+    outf.close()
     logger.info("Done")
 
 def main(args):
