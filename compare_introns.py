@@ -199,9 +199,9 @@ def parse_args(args=None, namespace=None):
 
 
 def set_logger(logger_instance):
-    logger_instance.setLevel(logging.DEBUG)
+    logger_instance.setLevel(logging.INFO)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
