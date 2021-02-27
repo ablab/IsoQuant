@@ -128,6 +128,7 @@ def check_annotated_introns(exons, gene_info, params):
 
 def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
     stat_map = defaultdict(int)
+    counter = 0
     for read_pair in read_pairs:
         if read_pair[0] not in bam_records1 or read_pair[1] not in bam_records2:
             continue
@@ -156,6 +157,8 @@ def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
         logger.debug("First annotated %r, second annotated %r" % (first_annotated, second_annotated))
         event_type = compare_intron_chains(exons1, exons2, gene_info, params)
         stat_map[(event_type, first_annotated, second_annotated)] += 1
+        if counter % 1000:
+            logger.info("Processed %d read pairs (%0.1f%%)" % (counter, 100 * counter / len(read_pairs)))
 
     return stat_map
 
