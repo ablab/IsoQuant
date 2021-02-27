@@ -37,7 +37,23 @@ class Params:
         self.has_polya = False
 
 
-inconsistency_events = nnic_event_types | nic_event_types
+inconsistency_events = {
+    MatchEventSubtype.alt_left_site_novel, MatchEventSubtype.alt_right_site_novel,
+    MatchEventSubtype.extra_intron_novel, MatchEventSubtype.mutually_exclusive_exons_novel,
+    MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel,
+    MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
+    MatchEventSubtype.terminal_exon_shift_novel,
+    MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
+    MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
+    MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
+    MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
+    MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known,
+    MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
+    MatchEventSubtype.terminal_exon_shift_known,
+    MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
+    MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,
+    MatchEventSubtype.incomplete_intron_retention_right, MatchEventSubtype.incomplete_intron_retention_left
+}
 
 
 @unique
@@ -68,23 +84,23 @@ def compare_intron_chains(exons1, exons2, gene_info, params):
     event_string = ",".join([match_subtype_to_str_with_additional_info(x, '+', introns1, introns2)
                              for x in matching_events])
     logger.debug("Matching events detected: " + event_string)
-    if len(exons1) == 1 and len(exons2) == 1:
+    if len(introns1) == 0 and len(introns2) == 0:
         logger.debug("Both unspliced")
         return MatchType.both_unspliced
+    elif len(introns2) == 0:
+        logger.debug("First only")
+        return MatchType.first_only
+    elif len(introns1) == 0:
+        logger.debug("Second only")
+        return MatchType.second_only
     elif any(e.event_type in inconsistency_events for e in matching_events):
         logger.debug("Inconsistent")
         return MatchType.inconsistent
-    elif len(introns1) != 0 and len(introns1) == len(introns2) and \
+    elif len(introns1) == len(introns2) and \
             contains(mapped_region1, (introns2[0][0], introns2[-1][1])) and \
             contains(mapped_region2, (introns1[0][0], introns1[-1][1])):
         logger.debug("Perfect match")
         return MatchType.match
-    elif len(introns1) > 0 and len(introns2) == 0:
-        logger.debug("First only")
-        return MatchType.first_only
-    elif len(introns2) > 0 and len(introns1) == 0:
-        logger.debug("Second only")
-        return MatchType.second_only
     elif len(introns1) > len(introns2) and contains(mapped_region1, (introns2[0][0], introns2[-1][1])):
         logger.debug("First longer")
         return MatchType.consistent_first_longer
