@@ -422,7 +422,7 @@ def run_pipeline(args):
     logger.info("Loading alignments from " + args.bam_ont)
     bam_records2 = load_bam(set(map(lambda x: x[1], read_pairs)), args.bam_ont)
     logger.info("Loading genome from " + args.reference)
-    chr_records = SeqIO.index(args.reference, "fasta")
+    chr_records = SeqIO.to_dict(SeqIO.parse(args.reference, "fasta"))
     logger.info("Counting error rates...")
     stats1, stats2 = error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records)
     logger.info("Saving stats to " + args.output)
