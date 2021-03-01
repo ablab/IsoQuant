@@ -45,10 +45,9 @@ class ErrorRateStat:
         self.no_poly += 1
 
     def get_index(self, position, read_len, reverse):
-        true_index = math.floor(float(position) * 100 / read_len)
         if reverse:
-            true_index = read_len-true_index-1
-        return true_index
+            return math.floor(float(read_len-position-1) * 100 / read_len)
+        return math.floor(float(position) * 100 / read_len)
 
     def add_match(self, position, read_len, reverse):
         index = self.get_index(position, read_len, reverse)
@@ -202,9 +201,9 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
     current_cigar_index1 = 0
     current_cigar_index2 = 0
     # skip clipped
-    while cigar1[current_cigar_index1][0] in [4,5]:
+    while cigar1[current_cigar_index1][0] in [4, 5]:
         current_cigar_index1 += 1
-    while cigar2[current_cigar_index2][0] == [4, 5]:
+    while cigar2[current_cigar_index2][0] in [4, 5]:
         current_cigar_index2 += 1
 
     cigar1_consumed = 0
