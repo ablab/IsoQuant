@@ -218,8 +218,8 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                 current_cigar_index1 >= len(cigar1) or current_cigar_index2 >= len(cigar2):
             break
 
-        event1 = cigar1[current_cigar_index1]
-        event2 = cigar2[current_cigar_index2]
+        event1 = cigar1[current_cigar_index1][0]
+        event2 = cigar2[current_cigar_index2][0]
 
         if event1 in [4,5] or event2 in [4,5]:
             logger.warning("Reached right-side clipping event")
@@ -338,10 +338,10 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                 cigar1_consumed += 1
                 cigar2_consumed += 1
 
-        if cigar1_consumed >= cigar1[current_cigar_index1]:
+        if cigar1_consumed >= cigar1[current_cigar_index1][1]:
             current_cigar_index1 += 1
             cigar1_consumed = 0
-        if cigar2_consumed >= cigar2[current_cigar_index2]:
+        if cigar2_consumed >= cigar2[current_cigar_index2][1]:
             current_cigar_index2 += 1
             cigar2_consumed = 0
 
@@ -424,7 +424,7 @@ def run_pipeline(args):
     bam_records2 = load_bam(set(map(lambda x: x[1], read_pairs)), args.bam_ont)
     logger.info("Loading genome from " + args.reference)
     chr_records = SeqIO.index(args.reference, "fasta")
-    logger.info("Comparing intron chains...")
+    logger.info("Counting error rates...")
     stats1, stats2 = error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records)
     logger.info("Saving stats to " + args.output)
     outf = open(args.output, "w")
