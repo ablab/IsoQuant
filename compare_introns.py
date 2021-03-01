@@ -190,10 +190,6 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--output", "-o", help="output folder, will be created automatically", type=str)
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str)
-    parser.add_argument("--reference", "-r", help="reference genome in FASTA format, "
-                                                  "should be provided to compute some additional stats and "
-                                                  "when raw reads are used as an input", type=str)
-
     parser.add_argument('--bam_pb', type=str, help='sorted and indexed BAM file for PacBio')
     parser.add_argument('--bam_ont', type=str, help='sorted and indexed BAM file for ONT')
     parser.add_argument('--tsv', type=str, help='TSV with barcode and read ids')
