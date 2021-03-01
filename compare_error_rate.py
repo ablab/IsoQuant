@@ -202,9 +202,9 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
     current_cigar_index1 = 0
     current_cigar_index2 = 0
     # skip clipped
-    while cigar1[current_cigar_index1] == 5 or cigar1[current_cigar_index1] == 4:
+    while cigar1[current_cigar_index1][0] in [4,5]:
         current_cigar_index1 += 1
-    while cigar2[current_cigar_index2] == 5 or cigar2[current_cigar_index2] == 4:
+    while cigar2[current_cigar_index2][0] == [4, 5]:
         current_cigar_index2 += 1
 
     cigar1_consumed = 0
