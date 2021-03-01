@@ -28,11 +28,11 @@ class ErrorRateStat:
         self.no_poly = 0
 
     def dump(self, outf):
-        outf.write("#unmapped\tmismapped\nnopolya\n")
+        outf.write("#unmapped\tmismapped\tnopolya\n")
         outf.write("%d\t%d\t%d\t\n" % (self.unmapped, self.mismapped, self.no_poly))
         outf.write("#position\ttotal\tM\tI\tD\n")
         for i in range(len(self.total)):
-            outf.write("#%d\t%d\t%d\t%d\t%d\n" %
+            outf.write("%d\t%d\t%d\t%d\t%d\n" %
                        (i, self.total[i], self.mismatches[i], self.insertions[i], self.deletions[i]))
 
     def add_unmapped(self):
