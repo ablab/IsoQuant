@@ -334,7 +334,9 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                 cigar1_consumed += 1
                 cigar2_consumed += 1
             else:
-                logger.warning("Unexpected pair of events: ")
+                logger.error("Unexpected pair of events: ")
+                cigar1_consumed += 1
+                cigar2_consumed += 1
 
         if cigar1_consumed >= cigar1[current_cigar_index1]:
             current_cigar_index1 += 1
