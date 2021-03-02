@@ -50,11 +50,12 @@ class DataSetReadMapper:
         for sample in args.input_data.samples:
             bam_files = []
             for fastq_files in sample.file_list:
-                bam_file = None if args.clean_start else find_stored_alignment(self.aligner, fastq_files, args)
-                if bam_file is None:
-                    bam_file = align_fasta(self.aligner, fastq_files, args, sample.label, sample.out_dir)
-                    store_alignment(bam_file, self.aligner, fastq_files, args)
-                bam_files.append([bam_file])
+                for fastq_file in fastq_files:
+                    bam_file = None if args.clean_start else find_stored_alignment(fastq_file, args)
+                    if bam_file is None:
+                        bam_file = align_fasta(self.aligner, fastq_file, args, sample.label, sample.out_dir)
+                        store_alignment(bam_file, fastq_file, args)
+                    bam_files.append([bam_file])
             samples.append(SampleData(bam_files, sample.label, sample.out_dir))
         args.input_data.samples = samples
         args.input_data.input_type = "bam"
@@ -137,8 +138,8 @@ def store_index(index, args):
     logger.debug('New index saved to {}'.format(index))
 
 
-def find_stored_alignment(aligner, fastq_files, args):
-    fastq = os.path.abspath(fastq_files[0])
+def find_stored_alignment(fastq_file, args):
+    fastq = os.path.abspath(fastq_file)
     key = "%s_aligned_to_%s" % (fastq, args.index)
     with open(args.alignment_config_path, 'r') as f_in:
         aligned_fastq_files = json.load(f_in)
@@ -159,8 +160,8 @@ def find_stored_alignment(aligner, fastq_files, args):
     return None
 
 
-def store_alignment(bam_file, aligner, fastq_files, args):
-    fastq = os.path.abspath(fastq_files[0])
+def store_alignment(bam_file, fastq_file, args):
+    fastq = os.path.abspath(fastq_file)
     key = "%s_aligned_to_%s" % (fastq, args.index)
     bam_file = os.path.abspath(bam_file)
 
@@ -213,13 +214,13 @@ def index_reference(aligner, args):
     return index_name
 
 
-def align_fasta(aligner, fastq_paths, args, label, out_dir):
+def align_fasta(aligner, fastq_file, args, label, out_dir):
     # TODO: fix paired end reads
-    fastq_path = fastq_paths[0]
-    logger.info("Aligning %s to the reference" % fastq_path)
+    fastq_path = os.path.abspath(fastq_file)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
     alignment_prefix = os.path.join(args.tmp_dir, label)
-    alignment_bam_path = os.path.join(out_dir, label + '_%d.bam' % hash(args.index))
+    alignment_bam_path = os.path.join(out_dir, label + '_%d_%d.bam' % (hash(fastq_path), hash(args.index)))
+    logger.info("Aligning %s to the reference, alignments will be saved to %s" % (fastq_path, alignment_bam_path))
     alignment_sam_path = alignment_bam_path[:-4] + '.sam'
 
     # if 'barcoded' in args.data_type:
