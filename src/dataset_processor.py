@@ -142,9 +142,6 @@ class DatasetProcessor:
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
         self.read_grouper = create_read_grouper(args)
-        self.processed_reads = set()
-        self.multimapped_reads = set()
-        self.reads_assignments = []
 
         # self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])
         # self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)
@@ -215,6 +212,10 @@ class DatasetProcessor:
         logger.info("Processed sample " + sample.label)
 
     def load_reads(self, dump_filename):
+        self.processed_reads = set()
+        self.multimapped_reads = set()
+        self.reads_assignments = []
+
         read_storage = []
         total_assignments = 0
         polya_found = 0
