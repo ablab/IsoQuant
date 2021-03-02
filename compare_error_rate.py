@@ -69,6 +69,37 @@ class ErrorRateStat:
         self.deletions[index] += 1
 
 
+# [start, end]
+def check_homopolymer(ref_seq, start, end):
+    if start < 0 or end >= len(ref_seq):
+        return False, None
+    seq = ref_seq[start:end + 1]
+    c = seq[0]
+    if all(x == c for x in seq):
+        return True, c
+    return False, None
+
+
+def check_homopolymer_mismatch(read_seq, read_pos, ref_seq, ref_pos):
+    is_homopolymer, c = check_homopolymer(ref_seq, ref_pos-1, ref_pos+1)
+    return is_homopolymer and read_seq[read_pos] != c
+
+
+def check_homopolymer_deletion(ref_seq, ref_pos):
+    is_homopolymer_left, _ = check_homopolymer(ref_seq, ref_pos-2, ref_pos)
+    is_homopolymer_right, _ = check_homopolymer(ref_seq, ref_pos, ref_pos+2)
+    return is_homopolymer_left or is_homopolymer_right
+
+
+def check_homopolymer_insertion(read_seq, read_pos, ref_seq, ref_pos):
+    is_homopolymer_left1, cl1 = check_homopolymer(ref_seq, ref_pos-3, ref_pos-1)
+    is_homopolymer_left2, cl2 = check_homopolymer(ref_seq, ref_pos - 2, ref_pos)
+    is_homopolymer_right, cr= check_homopolymer(ref_seq, ref_pos, ref_pos+2)
+    read_c = read_seq[read_pos]
+    return (is_homopolymer_left1 and cl1 == read_c) or \
+           (is_homopolymer_left2 and cl2 == read_c) or \
+           (is_homopolymer_right and cr == read_c)
+
 
 def check_polya(sequence):
     len_slice = 12
@@ -142,7 +173,8 @@ def increment_position(cigar_event, ref_index, read_index):
     return ref_index, read_index
 
 
-def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, stats1, stats2):
+def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, stats1, stats2,
+                           homopolymer_stats1=None, homopolymer_stats2=None):
     if alignment_record1.is_secondary or alignment_record1.is_supplementary or \
             alignment_record2.is_secondary or alignment_record2.is_supplementary or \
             alignment_record1.seq is None or alignment_record2.seq is None:
@@ -247,10 +279,14 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                     # mismatch, compare with the reference
                     if seq1[read_index1] != true_fragment[ref_index]:
                         stats1.add_mismatch(read_index1, len(seq1), reverse_read1)
+                        if homopolymer_stats1 and check_homopolymer_mismatch(seq1, read_index1, true_fragment, ref_index):
+                            homopolymer_stats1.add_mismatch(read_index1, len(seq1), reverse_read1)
                     else:
                         stats1.add_match(read_index1, len(seq1), reverse_read1)
                     if seq2[read_index2] != true_fragment[ref_index]:
                         stats2.add_mismatch(read_index2, len(seq2), reverse_read2)
+                        if homopolymer_stats2 and check_homopolymer_mismatch(seq2, read_index2, true_fragment, ref_index):
+                            homopolymer_stats2.add_mismatch(read_index2, len(seq2), reverse_read2)
                     else:
                         stats2.add_match(read_index2, len(seq2), reverse_read2)
                 else:
@@ -270,6 +306,10 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                     # different
                     stats1.add_insertion(read_index1, len(seq1), reverse_read1)
                     stats2.add_insertion(read_index2, len(seq2), reverse_read2)
+                    if homopolymer_stats1 and check_homopolymer_insertion(seq1, read_index1, true_fragment, ref_index):
+                        homopolymer_stats1.add_insertion(read_index1, len(seq1), reverse_read1)
+                    if homopolymer_stats2 and check_homopolymer_insertion(seq2, read_index2, true_fragment, ref_index):
+                        homopolymer_stats2.add_insertion(read_index2, len(seq2), reverse_read2)
                 read_index1 += 1
                 read_index2 += 1
             elif event1 == 2:
@@ -286,11 +326,15 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
             if event1 == 1:
                 # I in read1
                 stats1.add_insertion(read_index1, len(seq1), reverse_read1)
+                if homopolymer_stats1 and check_homopolymer_insertion(seq1, read_index1, true_fragment, ref_index):
+                    homopolymer_stats1.add_insertion(read_index1, len(seq1), reverse_read1)
                 cigar1_consumed += 1
                 read_index1 += 1
             elif event2 == 1:
                 # I in read2
                 stats2.add_insertion(read_index2, len(seq2), reverse_read2)
+                if homopolymer_stats2 and check_homopolymer_insertion(seq2, read_index2, true_fragment, ref_index):
+                    homopolymer_stats2.add_insertion(read_index2, len(seq2), reverse_read2)
                 cigar2_consumed += 1
                 read_index2 += 1
             elif event1 == 3:
@@ -314,6 +358,8 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                 else:
                     stats1.add_match(read_index1, len(seq1), reverse_read1)
                 stats2.add_deletion(read_index2, len(seq2), reverse_read2)
+                if homopolymer_stats2 and check_homopolymer_deletion(true_fragment, ref_index):
+                    homopolymer_stats2.add_insertion(read_index2, len(seq2), reverse_read2)
                 read_index1 += 1
                 ref_index += 1
                 cigar1_consumed += 1
@@ -326,6 +372,8 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                 else:
                     stats2.add_match(read_index2, len(seq2), reverse_read2)
                 stats1.add_deletion(read_index1, len(seq1), reverse_read1)
+                if homopolymer_stats1 and check_homopolymer_deletion(true_fragment, ref_index):
+                    homopolymer_stats1.add_insertion(read_index1, len(seq1), reverse_read1)
                 read_index2 += 1
                 ref_index += 1
                 cigar1_consumed += 1
@@ -348,6 +396,8 @@ def error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records):
     counter = 0
     stats1 = ErrorRateStat()
     stats2 = ErrorRateStat()
+    hstats1 = ErrorRateStat()
+    hstats2 = ErrorRateStat()
     for read_pair in read_pairs:
         if read_pair[0] not in bam_records1 or read_pair[1] not in bam_records2:
             continue
@@ -356,13 +406,13 @@ def error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records):
         if bam_record1.reference_name != bam_record2.reference_name:
             continue
 
-        process_alignment_pair(bam_record1, bam_record2, chr_records, stats1, stats2)
+        process_alignment_pair(bam_record1, bam_record2, chr_records, stats1, stats2, hstats1, hstats2)
 
         counter += 1
         if counter % 1000 == 0:
             logger.info("Processed %d read pairs (%0.1f%%)" % (counter, 100 * counter / len(read_pairs)))
 
-    return stats1, stats2
+    return stats1, stats2, hstats1, hstats2
 
 
 def load_bam(read_set, bamfile):
@@ -422,13 +472,17 @@ def run_pipeline(args):
     logger.info("Loading genome from " + args.reference)
     chr_records = SeqIO.to_dict(SeqIO.parse(args.reference, "fasta"))
     logger.info("Counting error rates...")
-    stats1, stats2 = error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records)
+    stats1, stats2, hstats1, hstats2 = error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records)
     logger.info("Saving stats to " + args.output)
     outf = open(args.output, "w")
     outf.write("## First reads stats\n")
     stats1.dump(outf)
     outf.write("## Second reads stats\n")
     stats2.dump(outf)
+    outf.write("## First reads homopolymer stats\n")
+    hstats1.dump(outf)
+    outf.write("## Second reads homopolymer stats\n")
+    hstats2.dump(outf)
     outf.close()
     logger.info("Done")
 
