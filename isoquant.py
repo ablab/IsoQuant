@@ -245,6 +245,11 @@ def create_output_dirs(args):
             logger.warning(sample_dir + " folder already exists, some files may be overwritten")
         else:
             os.makedirs(sample_dir)
+        sample_aux_dir = sample.aux_dir
+        if os.path.exists(sample_aux_dir):
+            logger.warning(sample_aux_dir + " folder already exists, some files may be overwritten")
+        else:
+            os.makedirs(sample_aux_dir)
 
 
 def set_logger(args, logger_instance):

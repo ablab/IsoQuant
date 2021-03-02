@@ -53,7 +53,7 @@ class DataSetReadMapper:
                 for fastq_file in fastq_files:
                     bam_file = None if args.clean_start else find_stored_alignment(fastq_file, args)
                     if bam_file is None:
-                        bam_file = align_fasta(self.aligner, fastq_file, args, sample.label, sample.out_dir)
+                        bam_file = align_fasta(self.aligner, fastq_file, args, sample.label, sample.aux_dir)
                         store_alignment(bam_file, fastq_file, args)
                     bam_files.append([bam_file])
             samples.append(SampleData(bam_files, sample.label, sample.out_dir))
