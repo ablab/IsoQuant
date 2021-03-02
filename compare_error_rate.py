@@ -18,7 +18,8 @@ logger = logging.getLogger('IsoQuant')
 
 
 class ErrorRateStat:
-    def __init__(self):
+    def __init__(self, name=""):
+        self.name = name
         self.mismatches = np.zeros(100)
         self.insertions = np.zeros(100)
         self.deletions = np.zeros(100)
@@ -28,6 +29,7 @@ class ErrorRateStat:
         self.no_poly = 0
 
     def dump(self, outf):
+        outf.write("##%s\n" % self.name)
         outf.write("#unmapped\tmismapped\tnopolya\n")
         outf.write("%d\t%d\t%d\t\n" % (self.unmapped, self.mismapped, self.no_poly))
         outf.write("#position\ttotal\tX\tI\tD\n")
@@ -390,14 +392,115 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
             current_cigar_index2 += 1
             cigar2_consumed = 0
 
+    if (read_index1 < len(seq1) and read_index2 < len(seq2)) or \
+            (current_cigar_index1 < len(cigar1) and cigar1[current_cigar_index1][0] < 4 and
+             current_cigar_index2 < len(cigar2) and cigar2[current_cigar_index2][0] < 4):
+        logger.warning("Both reads is processed incompletely")
+        logger.info("Read: %d / %d, ref: %d / % d, cigar %d (%d) / %d" %
+                    (read_index1, len(seq1), ref_index, len(true_fragment), current_cigar_index1,
+                     cigar1[current_cigar_index1][0], len(cigar1)))
+        logger.info("Read: %d / %d, ref: %d / % d, cigar %d (%d) / %d" %
+                    (read_index2, len(seq2), ref_index, len(true_fragment), current_cigar_index2,
+                     cigar1[current_cigar_index2][0], len(cigar2)))
+
+
+def process_alignment(alignment_record1, fasta_records, stats1, homopolymer_stats1=None):
+    if alignment_record1.is_secondary or alignment_record1.is_supplementary or alignment_record1.seq is None:
+        return
+    if alignment_record1.reference_id == -1:
+        stats1.add_unmapped_pair()
+        return
+
+    ref_start1 = alignment_record1.reference_start
+    ref_length1 = alignment_record1.reference_length
+    ref_end1 = ref_start1 + ref_length1
+    cigar1 = alignment_record1.cigartuples
+
+    if ref_length1 is None or cigar1 is None:
+        stats1.add_unmapped_pair()
+        return
+
+    ref_region_start = ref_start1
+    ref_region_end = ref_end1
+    true_fragment = fasta_records[alignment_record1.reference_name][ref_region_start:ref_region_end]
+
+    direction1 = get_direction(alignment_record1)
+    if (direction1 == -1):
+        stats1.add_no_polya()
+        return
+    elif (direction1 == 1):
+        reverse_read1 = True
+    else:
+        reverse_read1 = False
+
+    seq1 = clip_seq(alignment_record1.seq, cigar1)
+    current_cigar_index1 = 0
+    # skip clipped
+    while cigar1[current_cigar_index1][0] in [4, 5]:
+        current_cigar_index1 += 1
+
+    cigar1_consumed = 0
+    read_index1 = 0
+    ref_index = 0
+    while ref_index < len(true_fragment) and read_index1 < len(seq1) and current_cigar_index1 < len(cigar1):
+        event1 = cigar1[current_cigar_index1][0]
+        if event1 in [4,5]:
+            logger.warning("Reached right-side clipping event")
+            logger.info("Read index 1: %d, RL: %d, cigar index: %d, cigar tuples %s" %
+                        (read_index1, len(seq1), current_cigar_index1, str(cigar1)))
+            break
+
+        cigar1_consumed += 1
+        if event1 == 0:
+            # M
+            if seq1[read_index1] != true_fragment[ref_index]:
+                stats1.add_mismatch(read_index1, len(seq1), reverse_read1)
+                if homopolymer_stats1 and check_homopolymer_mismatch(seq1, read_index1, true_fragment, ref_index):
+                    homopolymer_stats1.add_mismatch(read_index1, len(seq1), reverse_read1)
+            else:
+                stats1.add_match(read_index1, len(seq1), reverse_read1)
+
+            ref_index += 1
+            read_index1 += 1
+        elif event1 == 1:
+            # I
+            stats1.add_insertion(read_index1, len(seq1), reverse_read1)
+            if homopolymer_stats1 and check_homopolymer_insertion(seq1, read_index1, true_fragment, ref_index):
+                homopolymer_stats1.add_insertion(read_index1, len(seq1), reverse_read1)
+            read_index1 += 1
+        elif event1 == 2:
+            # D
+            stats1.add_match(read_index1, len(seq1), reverse_read1)
+            if homopolymer_stats1 and check_homopolymer_deletion(true_fragment, ref_index):
+                homopolymer_stats1.add_deletion(read_index1, len(seq1), reverse_read1)
+            ref_index += 1
+        elif event1 == 3:
+            # N
+            ref_index += 1
+
+        if cigar1_consumed >= cigar1[current_cigar_index1][1]:
+            current_cigar_index1 += 1
+            cigar1_consumed = 0
+
+    if read_index1 < len(seq1) or ref_index < len(true_fragment) or \
+            (current_cigar_index1 < len(cigar1) and cigar1[current_cigar_index1][0] < 4):
+        logger.warning("Read is processed incompletely")
+        logger.info("Read: %d / %d, ref: %d / % d, cigar %d (%d) / %d" %
+                    (read_index1, len(seq1), ref_index, len(true_fragment), current_cigar_index1,
+                     cigar1[current_cigar_index1][0], len(cigar1)))
 
 
 def error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records):
     counter = 0
-    stats1 = ErrorRateStat()
-    stats2 = ErrorRateStat()
-    hstats1 = ErrorRateStat()
-    hstats2 = ErrorRateStat()
+    stats1 = ErrorRateStat("Reads 1 3-way comparison")
+    stats2 = ErrorRateStat("Reads 2 3-way comparison")
+    hstats1 = ErrorRateStat("Reads 1 3-way hompolymer comparison")
+    hstats2 = ErrorRateStat("Reads 2 3-way hompolymer comparison")
+    stats1_only = ErrorRateStat("Reads 1 simple comparison")
+    hstats1_only = ErrorRateStat("Reads 2 simple comparison")
+    stats2_only = ErrorRateStat("Reads 1 simple hompolymer comparison")
+    hstats2_only = ErrorRateStat("Reads 2 simple hompolymer comparison")
+
     for read_pair in read_pairs:
         if read_pair[0] not in bam_records1 or read_pair[1] not in bam_records2:
             continue
@@ -407,12 +510,15 @@ def error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records):
             continue
 
         process_alignment_pair(bam_record1, bam_record2, chr_records, stats1, stats2, hstats1, hstats2)
+        process_alignment(bam_record1, chr_records, stats1_only, hstats1_only)
+        process_alignment(bam_record2, chr_records, stats2_only, hstats2_only)
 
         counter += 1
         if counter % 1000 == 0:
             logger.info("Processed %d read pairs (%0.1f%%)" % (counter, 100 * counter / len(read_pairs)))
 
-    return stats1, stats2, hstats1, hstats2
+    return [("paired_stats", [stats1, stats2]), ("paired_homopolymer_stats", [hstats1, hstats2]),
+            ("reads1_single_stats", [stats1_only, hstats1_only]), ("reads2_single_stats", [stats2_only, hstats2_only])]
 
 
 def load_bam(read_set, bamfile):
@@ -438,16 +544,13 @@ def load_tsv(tsv_file):
 def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument("--output", "-o", help="output folder, will be created automatically", type=str)
+    parser.add_argument("--output", "-o", help="output prefix", type=str)
     # REFERENCE
-    parser.add_argument("--reference", "-r", help="reference genome in FASTA format, "
-                                                  "should be provided to compute some additional stats and "
-                                                  "when raw reads are used as an input", type=str)
+    parser.add_argument("--reference", "-r", help="reference genome in FASTA format", type=str)
 
     parser.add_argument('--bam_pb', type=str, help='sorted and indexed BAM file for PacBio')
     parser.add_argument('--bam_ont', type=str, help='sorted and indexed BAM file for ONT')
     parser.add_argument('--tsv', type=str, help='TSV with barcode and read ids')
-    parser.add_argument('--delta', type=int, default=0, help='delta')
     args = parser.parse_args(args)
     return args
 
@@ -472,18 +575,16 @@ def run_pipeline(args):
     logger.info("Loading genome from " + args.reference)
     chr_records = SeqIO.to_dict(SeqIO.parse(args.reference, "fasta"))
     logger.info("Counting error rates...")
-    stats1, stats2, hstats1, hstats2 = error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records)
+    stat_list = error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records)
+
     logger.info("Saving stats to " + args.output)
-    outf = open(args.output, "w")
-    outf.write("## First reads stats\n")
-    stats1.dump(outf)
-    outf.write("## Second reads stats\n")
-    stats2.dump(outf)
-    outf.write("## First reads homopolymer stats\n")
-    hstats1.dump(outf)
-    outf.write("## Second reads homopolymer stats\n")
-    hstats2.dump(outf)
-    outf.close()
+    for s in stat_list:
+        stat_fname = args.output + s[0] + ".tsv"
+        outf = open(stat_fname, "w")
+        for stat_obj in s[1]:
+            stat_obj.dump(outf)
+        outf.close()
+
     logger.info("Done")
 
 
