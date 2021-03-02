@@ -359,7 +359,7 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                     stats1.add_match(read_index1, len(seq1), reverse_read1)
                 stats2.add_deletion(read_index2, len(seq2), reverse_read2)
                 if homopolymer_stats2 and check_homopolymer_deletion(true_fragment, ref_index):
-                    homopolymer_stats2.add_insertion(read_index2, len(seq2), reverse_read2)
+                    homopolymer_stats2.add_deletion(read_index2, len(seq2), reverse_read2)
                 read_index1 += 1
                 ref_index += 1
                 cigar1_consumed += 1
@@ -373,7 +373,7 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                     stats2.add_match(read_index2, len(seq2), reverse_read2)
                 stats1.add_deletion(read_index1, len(seq1), reverse_read1)
                 if homopolymer_stats1 and check_homopolymer_deletion(true_fragment, ref_index):
-                    homopolymer_stats1.add_insertion(read_index1, len(seq1), reverse_read1)
+                    homopolymer_stats1.add_deletion(read_index1, len(seq1), reverse_read1)
                 read_index2 += 1
                 ref_index += 1
                 cigar1_consumed += 1
