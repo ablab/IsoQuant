@@ -534,13 +534,13 @@ class TranscriptModelConstructor:
             novel_intron = (read_intron[0], isoform_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type == MatchEventSubtype.alt_left_site_known:
-            novel_intron = self.get_closest_ref_intron((read_intron[0], isoform_intron[1]))
+            novel_intron = self.get_closest_ref_intron(read_intron)
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type == MatchEventSubtype.alt_right_site_novel:
             novel_intron = (isoform_intron[0], read_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type == MatchEventSubtype.alt_right_site_known:
-            novel_intron = self.get_closest_ref_intron((isoform_intron[0], read_intron[1]))
+            novel_intron = self.get_closest_ref_intron(read_intron)
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.intron_alternation_novel,
                                         MatchEventSubtype.exon_skipping_novel,
@@ -555,7 +555,7 @@ class TranscriptModelConstructor:
                                         MatchEventSubtype.exon_merge_known,
                                         MatchEventSubtype.terminal_exon_shift_known}:
             # simply add corrected read intron
-            novel_intron = self.get_closest_ref_intron((read_intron[0], read_intron[1]))
+            novel_intron = self.get_closest_ref_intron(read_intron)
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.mutually_exclusive_exons_novel,
                                         MatchEventSubtype.exon_gain_novel,
