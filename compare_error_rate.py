@@ -30,7 +30,7 @@ class ErrorRateStat:
     def dump(self, outf):
         outf.write("#unmapped\tmismapped\tnopolya\n")
         outf.write("%d\t%d\t%d\t\n" % (self.unmapped, self.mismapped, self.no_poly))
-        outf.write("#position\ttotal\tM\tI\tD\n")
+        outf.write("#position\ttotal\tX\tI\tD\n")
         for i in range(len(self.total)):
             outf.write("%d\t%d\t%d\t%d\t%d\n" %
                        (i, self.total[i], self.mismatches[i], self.insertions[i], self.deletions[i]))
@@ -298,14 +298,12 @@ def process_alignment_pair(alignment_record1, alignment_record2, fasta_records, 
                 assert event2 != 1 # insertions should be processed earlier
                 ref_index, read_index2 = increment_position(event2, ref_index, read_index2)
                 # consume intronic base only if reference is shifted
-                read_index1 += 1
                 cigar1_consumed += 1
                 cigar2_consumed += 1
             elif event2 == 3:
                 assert event1 != 1 # insertions should be processed earlier
                 # N in read 2
                 ref_index, read_index1 = increment_position(event1, ref_index, read_index1)
-                read_index2 += 1
                 cigar1_consumed += 1
                 cigar2_consumed += 1
             elif event1 == 0:
