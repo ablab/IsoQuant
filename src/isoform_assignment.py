@@ -339,6 +339,10 @@ class MatchEvent:
         self.read_region = read_region
         self.event_info = event_info
 
+    def __repr__(self):
+        return "%s:%s,%s,%s" % (self.event_type.name, str(self.isoform_region),
+                                str(self.read_region), str(self.event_info))
+
 
 class IsoformMatch:
     def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
