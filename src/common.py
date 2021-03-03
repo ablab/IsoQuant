@@ -273,11 +273,15 @@ def get_following_exon_from_junctions(region, introns, intron_position):
 
 
 def get_preceding_exon_from_junctions(region, introns, intron_position):
+    assert intron_position <= len(introns)
     if intron_position == 0:
-        # intron precedes the last exon
+        # intron precedes the first exon
         preceding_exon_start = region[0]
     else:
         preceding_exon_start = introns[intron_position - 1][1] + 1
+
+    if intron_position == len(introns):
+        return (preceding_exon_start, region[1])
     return (preceding_exon_start, introns[intron_position][0] - 1)
 
 
