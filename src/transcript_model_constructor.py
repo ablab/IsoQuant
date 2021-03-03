@@ -591,14 +591,14 @@ class TranscriptModelConstructor:
                         read_end = e.event_info
                         break
                     elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_right:
-                        read_end = self.gene_info.transcript_end(isoform_id)
+                        read_end = read_assignment.gene_info.transcript_end(isoform_id)
                 for e in match.match_subclassifications:
                     if e.event_type in [MatchEventSubtype.correct_polya_site_left,
                                         MatchEventSubtype.alternative_polya_site_left]:
                         read_start = e.event_info
                         break
                     elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_left:
-                        read_start = self.gene_info.transcript_start(isoform_id)
+                        read_start = read_assignment.gene_info.transcript_start(isoform_id)
 
         return read_start, read_end
 
@@ -668,7 +668,6 @@ class TranscriptModelConstructor:
         assert len(model_exons) == 1
         isoform_start = model_exons[0][0]
         isoform_end = model_exons[-1][1]
-        strand = transcript_model.strand
 
         assigned_reads = []
         unassigned_reads = []
