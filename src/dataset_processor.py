@@ -116,7 +116,7 @@ def process_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr
     gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
     for g in cluster:
         if len(g) > 100:
-            logger.info("Potential slowdown in %s due to large gene cluster of size %d" % (chr_id, len(g)))
+            logger.debug("Potential slowdown in %s due to large gene cluster of size %d" % (chr_id, len(g)))
         gene_info = GeneInfo(g, gffutils_db, args.delta)
         alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, args,
                                                          current_chr_record, read_grouper)
@@ -181,6 +181,7 @@ class DatasetProcessor:
             if cur_cluster:
                 chrom_clusters.append((current_chromosome,cur_cluster))
 
+            chrom_clusters = sorted(chrom_clusters, key=lambda x: sum(len(cluster) for cluster in x[1]), reverse=True)
             pool = Pool(self.args.threads)
             pool.starmap(process_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
                                                 (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
