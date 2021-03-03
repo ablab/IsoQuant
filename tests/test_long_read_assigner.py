@@ -290,7 +290,7 @@ class TestCompareJunctions:
                               ([(45, 60), (80, 110)], (22, 150), [(10, 60), (80, 110)], (0, 150), 2,
                                MatchEventSubtype.terminal_exon_shift_novel),
                               ([(50, 60), (80, 110)], (30, 150), [(20, 60), (80, 110)], (0, 150), 2,
-                               MatchEventSubtype.exon_misallignment),
+                               MatchEventSubtype.terminal_exon_misalignment_left),
                               ([(10, 13), (95, 100)], (0, 150), [(10, 100)], (9, 149), 2,
                                MatchEventSubtype.intron_retention)])
     def test_exon_gain(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):

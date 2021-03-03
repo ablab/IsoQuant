@@ -100,7 +100,6 @@ class LongReadAlignmentProcessor:
             read_assignment.polya_info = polya_info
             read_assignment.cage_found = len(cage_hits) > 0
             read_assignment.exons = sorted_blocks
-            #read_assignment.gene_info = self.gene_info
             read_assignment.read_group = self.read_groupper.get_group_id(alignment)
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.multimapper = alignment.is_secondary

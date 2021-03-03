@@ -234,6 +234,7 @@ class DatasetProcessor:
                         obj = p.load()
                         if isinstance(obj, ReadAssignment):
                             read_assignment = obj
+                            assert gene_info is not None
                             read_assignment.gene_info = gene_info
                             read_storage.append(read_assignment)
                             total_assignments += 1
@@ -248,6 +249,7 @@ class DatasetProcessor:
                                 self.reads_assignments.append((gene_info, read_storage))
                                 read_storage = []
                             gene_info = obj
+                            gene_info.db = self.gffutils_db
                         else:
                             raise ValueError("Read assignment file {} is corrupted!".format(chr_dump_file))
                     except EOFError:
