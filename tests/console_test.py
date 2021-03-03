@@ -42,7 +42,7 @@ def test_clean_start():
     assert result.returncode == 0
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
-    resulting_files = ["bam", "exon_counts.tsv", "exon_grouped_counts.tsv", "gene_counts.tsv", "gene_grouped_counts.tsv",
+    resulting_files = ["exon_counts.tsv", "exon_grouped_counts.tsv", "gene_counts.tsv", "gene_grouped_counts.tsv",
                        "intron_counts.tsv", "intron_grouped_counts.tsv", "mapped_reads.bed", "read_assignments.tsv",
                        "SQANTI-like.tsv", "transcript_counts.tsv", "transcript_grouped_counts.tsv",
                        "transcript_models_counts.tsv", "transcript_models.gtf", "transcript_models_reads.tsv"]
