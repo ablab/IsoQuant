@@ -98,6 +98,10 @@ def contains(bigger_range, smaller_range):
     return bigger_range[1] >= smaller_range[1] and bigger_range[0] <= smaller_range[0]
 
 
+def contains_well_inside(bigger_range, smaller_range, delta=1):
+    return bigger_range[1] >= smaller_range[1]+delta and bigger_range[0] <= smaller_range[0]-delta
+
+
 def contains_approx(bigger_range, smaller_range, delta = 1):
     return bigger_range[1] + delta >= smaller_range[1] and bigger_range[0] - delta <= smaller_range[0]
 
