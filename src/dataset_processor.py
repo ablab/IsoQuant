@@ -181,7 +181,8 @@ class DatasetProcessor:
             if cur_cluster:
                 chrom_clusters.append((current_chromosome,cur_cluster))
 
-            chrom_clusters = sorted(chrom_clusters, key=lambda x: sum(len(cluster) for cluster in x[1]), reverse=True)
+            # chromosomes with large clusters take more time and should go first
+            chrom_clusters = sorted(chrom_clusters, key=lambda x: sum(len(cluster) ** 2 for cluster in x[1]), reverse=True)
             pool = Pool(self.args.threads)
             pool.starmap(process_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
                                                 (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
