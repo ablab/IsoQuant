@@ -589,9 +589,17 @@ class TranscriptModelConstructor:
                     if e.event_type in [MatchEventSubtype.correct_polya_site_right,
                                         MatchEventSubtype.alternative_polya_site_right]:
                         read_end = e.event_info
-                    elif e.event_type in [MatchEventSubtype.correct_polya_site_left,
-                                          MatchEventSubtype.alternative_polya_site_left]:
+                        break
+                    elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_right:
+                        read_end = self.gene_info.transcript_end(isoform_id)
+                for e in match.match_subclassifications:
+                    if e.event_type in [MatchEventSubtype.correct_polya_site_left,
+                                        MatchEventSubtype.alternative_polya_site_left]:
                         read_start = e.event_info
+                        break
+                    elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_left:
+                        read_start = self.gene_info.transcript_start(isoform_id)
+
         return read_start, read_end
 
     # return list of all reads modifications relative to this isoform
