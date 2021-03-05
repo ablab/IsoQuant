@@ -191,7 +191,7 @@ class LongReadAssigner:
 
         events = []
         left_event = None
-        if extra_left >= self.params.minor_exon_extension:
+        if extra_left > self.params.minor_exon_extension:
             if common_first_exon == isofrom_first_exon:
                 left_event = MatchEventSubtype.major_exon_elongation_left
         elif extra_left > self.params.delta:
@@ -200,7 +200,7 @@ class LongReadAssigner:
             events.append(MatchEvent(left_event, event_info=extra_left))
 
         right_event = None
-        if extra_right >= self.params.minor_exon_extension:
+        if extra_right > self.params.minor_exon_extension:
             if common_last_exon == isofrom_last_exon:
                 right_event = MatchEventSubtype.major_exon_elongation_right
         elif extra_right > self.params.delta:

@@ -354,7 +354,7 @@ def set_model_construction_options(args):
         'default_ccs': ModelConstructionStrategy(1, 2, 3, 6, True, 50, 80, 4, True, True),
         'default_ont': ModelConstructionStrategy(1, 2, 5, 10, True, 50, 80, 6, True, True),
         'fl_ccs': ModelConstructionStrategy(1, 2, 3, 3, True, 50, 50, 3, False, True),
-        'all': ModelConstructionStrategy(1, 1, 2, 3, True, 50, 100, 3, False, True),
+        'all': ModelConstructionStrategy(1, 1, 2, 3, True, 50, 50, 3, False, True),
         'assembly': ModelConstructionStrategy(1, 1, 1, 1, True, 50, 50, 1, True, True)
     }
 

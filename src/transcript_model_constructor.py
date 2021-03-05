@@ -469,7 +469,7 @@ class TranscriptModelConstructor:
             novel_transcript_start = novel_exons[0][0]
             known_isoform_start = self.gene_info.transcript_start(isoform_id)
             if (strand == "+" or polya_info.external_polyt_pos == -1) and \
-                    abs(novel_transcript_start - known_isoform_start) <= self.params.max_dist_to_isoforms_tsts and \
+                    abs(novel_transcript_start - known_isoform_start) < self.params.max_dist_to_isoforms_tsts and \
                     known_isoform_start < novel_exons[0][1]:
                 # correct model start only if no polyT is found
                 novel_exons[0] = (known_isoform_start, novel_exons[0][1])
@@ -481,7 +481,7 @@ class TranscriptModelConstructor:
             novel_transcript_end = novel_exons[-1][1]
             known_isoform_end = self.gene_info.transcript_end(isoform_id)
             if (strand == "-" or polya_info.external_polya_pos == -1) and \
-                    abs(novel_transcript_end - known_isoform_end) <= self.params.max_dist_to_isoforms_tsts and \
+                    abs(novel_transcript_end - known_isoform_end) < self.params.max_dist_to_isoforms_tsts and \
                     known_isoform_end > novel_exons[-1][0]:
                 # correct model end only if no polyA is found
                 novel_exons[-1] = (novel_exons[-1][0], known_isoform_end)
