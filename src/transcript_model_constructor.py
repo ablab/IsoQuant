@@ -10,6 +10,8 @@ from collections import namedtuple
 from functools import reduce
 import copy
 
+from sklearn.linear_model import lasso_path
+
 from src.isoform_assignment import *
 from src.long_read_profiles import *
 from src.junction_comparator import *
@@ -580,25 +582,38 @@ class TranscriptModelConstructor:
 
     # get read region
     def get_read_region(self, isoform_id, read_assignment):
-        # TODO add strand check
-        read_start = read_assignment.exons[0][0]
-        read_end = read_assignment.exons[-1][1]
+        isoform_match = None
         for match in read_assignment.isoform_matches:
             if match.assigned_transcript == isoform_id:
-                for e in match.match_subclassifications:
-                    if e.event_type in [MatchEventSubtype.correct_polya_site_right,
-                                        MatchEventSubtype.alternative_polya_site_right]:
-                        read_end = e.event_info
-                        break
-                    elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_right:
-                        read_end = read_assignment.gene_info.transcript_end(isoform_id)
-                for e in match.match_subclassifications:
-                    if e.event_type in [MatchEventSubtype.correct_polya_site_left,
-                                        MatchEventSubtype.alternative_polya_site_left]:
-                        read_start = e.event_info
-                        break
-                    elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_left:
-                        read_start = read_assignment.gene_info.transcript_start(isoform_id)
+                isoform_match = match
+
+        if isoform_match is None:
+            return read_assignment.exons[0][0], read_assignment.exons[-1][1]
+
+        last_true_exon = 0
+        first_true_exon = 0
+        for e in isoform_match.match_subclassifications:
+            if e.event_type == MatchEventSubtype.fake_terminal_exon_left:
+                first_true_exon += 1
+            elif e.event_type == MatchEventSubtype.fake_terminal_exon_right:
+                last_true_exon += 1
+        read_start = read_assignment.exons[first_true_exon][0]
+        read_end = read_assignment.exons[-last_true_exon-1][1]
+        
+        for e in isoform_match.match_subclassifications:
+            if e.event_type in [MatchEventSubtype.correct_polya_site_right,
+                                MatchEventSubtype.alternative_polya_site_right]:
+                read_end = e.event_info
+            elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_right:
+                read_end = read_assignment.gene_info.transcript_end(isoform_id)
+                break
+        for e in isoform_match.match_subclassifications:
+            if e.event_type in [MatchEventSubtype.correct_polya_site_left,
+                                MatchEventSubtype.alternative_polya_site_left]:
+                read_start = e.event_info
+            elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_left:
+                read_start = read_assignment.gene_info.transcript_start(isoform_id)
+                break
 
         return read_start, read_end
 
