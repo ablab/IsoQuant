@@ -10,8 +10,6 @@ from collections import namedtuple
 from functools import reduce
 import copy
 
-from sklearn.linear_model import lasso_path
-
 from src.isoform_assignment import *
 from src.long_read_profiles import *
 from src.junction_comparator import *
