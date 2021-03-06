@@ -106,10 +106,9 @@ class PolyAVerifier:
             logger.debug("Corrected polyA seems good")
             return new_events, polya_pos
 
-        if polya_info.external_polya_pos == -1:
-            return matching_events, -1
-
         polya_pos = polya_info.external_polya_pos if polya_info.internal_polya_pos == -1 else polya_info.internal_polya_pos
+        if polya_pos == -1:
+            return matching_events, -1
         dist_to_polya = abs(polya_pos - isoform_end)
         logger.debug("+ Distance to polyA is %d" % dist_to_polya)
         if dist_to_polya > self.params.apa_delta:
@@ -159,10 +158,9 @@ class PolyAVerifier:
             logger.debug("Corrected polyT seems good")
             return new_events, polyt_pos
 
-        if polya_info.external_polyt_pos == -1:
-            return matching_events, -1
-
         polyt_pos = polya_info.external_polyt_pos if polya_info.internal_polyt_pos == -1 else polya_info.internal_polyt_pos
+        if polyt_pos == -1:
+            return matching_events, -1
         dist_to_polyt = abs(polyt_pos - isoform_start)
         logger.debug("+ Distance to polyT is %d" % dist_to_polyt)
         if dist_to_polyt > self.params.apa_delta:
@@ -234,7 +232,6 @@ class PolyAVerifier:
         if internal_polyt_pos == -1:
             return matching_events, False
 
-        fake_terminal_exon_count = 0
         for i, event in enumerate(matching_events):
             if event.event_type == MatchEventSubtype.incomplete_intron_retention_left:
                 # polyT found within intron and inside mapped part of the read
