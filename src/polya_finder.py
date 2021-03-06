@@ -45,6 +45,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
 
     read_length_consumed = 0
     reference_length_consumed = 0
+    shift += 1 # a hack to jump to the next event
     while current_pos < len(cigar_tuples) and current_pos >= -len(cigar_tuples) and read_length_consumed < shift:
         cigar_event = cigar_tuples[current_pos][0]
         event_len = cigar_tuples[current_pos][1]
@@ -74,7 +75,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
 
         current_pos += direction
 
-    return reference_length_consumed
+    return reference_length_consumed-1
 
 
 class PolyAInfo:
