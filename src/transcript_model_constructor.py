@@ -599,7 +599,7 @@ class TranscriptModelConstructor:
                 last_true_exon += 1
         read_start = read_assignment.exons[first_true_exon][0]
         read_end = read_assignment.exons[-last_true_exon-1][1]
-        
+
         for e in isoform_match.match_subclassifications:
             if e.event_type in [MatchEventSubtype.correct_polya_site_right,
                                 MatchEventSubtype.alternative_polya_site_right]:
