@@ -106,7 +106,7 @@ class PolyAVerifier:
             logger.debug("Corrected polyA seems good")
             return new_events, polya_pos
 
-        polya_pos = polya_info.external_polya_pos if polya_info.internal_polya_pos == -1 else polya_info.internal_polya_pos
+        polya_pos = external_polya_pos if internal_polya_pos == -1 else internal_polya_pos
         if polya_pos == -1:
             return matching_events, -1
         dist_to_polya = abs(polya_pos - isoform_end)
@@ -158,7 +158,7 @@ class PolyAVerifier:
             logger.debug("Corrected polyT seems good")
             return new_events, polyt_pos
 
-        polyt_pos = polya_info.external_polyt_pos if polya_info.internal_polyt_pos == -1 else polya_info.internal_polyt_pos
+        polyt_pos = external_polyt_pos if internal_polyt_pos == -1 else internal_polyt_pos
         if polyt_pos == -1:
             return matching_events, -1
         dist_to_polyt = abs(polyt_pos - isoform_start)
