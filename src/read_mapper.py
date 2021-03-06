@@ -65,7 +65,7 @@ class DataSetReadMapper:
 def get_barcodes(contig_id, delim1, delim2):
     tokens = contig_id.split(delim1)
     if len(tokens) != 2:
-        logger.warn("Wrong format " + contig_id)
+        logger.warning("Wrong format " + contig_id)
 
     return tokens[0], tokens[1].strip().split(delim2) if len(tokens) > 1 else []
 
@@ -219,7 +219,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
     fastq_path = os.path.abspath(fastq_file)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
     alignment_prefix = os.path.join(args.tmp_dir, label)
-    alignment_bam_path = os.path.join(out_dir, label + '_%d_%d.bam' % (hash(fastq_path), hash(args.index)))
+    alignment_bam_path = os.path.join(out_dir, label + '_%x_%x.bam' % (hash(fastq_path), hash(args.index)))
     logger.info("Aligning %s to the reference, alignments will be saved to %s" % (fastq_path, alignment_bam_path))
     alignment_sam_path = alignment_bam_path[:-4] + '.sam'
 
