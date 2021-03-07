@@ -143,6 +143,7 @@ class MatchEventSubtype(Enum):
     alternative_tss_right = 205
     correct_polya_site_left = 222
     correct_polya_site_right = 223
+    aligned_polya_tail = 300
 
     def __lt__(self, other):
         return self.value < other.value
@@ -260,7 +261,8 @@ event_subtype_cost = {
     MatchEventSubtype.alternative_tss_left :0.75,
     MatchEventSubtype.alternative_tss_right :0.75,
     MatchEventSubtype.correct_polya_site_left:0,
-    MatchEventSubtype.correct_polya_site_right:0
+    MatchEventSubtype.correct_polya_site_right:0,
+    MatchEventSubtype.aligned_polya_tail:0
 }
 
 
@@ -373,12 +375,6 @@ class IsoformMatch:
         valid_subtypes = {MatchEventSubtype.none, MatchEventSubtype.mono_exonic, MatchEventSubtype.mono_exon_match}
         return all(el.event_type in valid_subtypes for el in self.match_subclassifications)
 
-    def to_str(self):
-        pass
-
-    def from_str(self):
-        pass
-
 
 class ReadAssignment:
     def __init__(self, read_id, assignment_type, match=None):
@@ -423,12 +419,9 @@ class ReadAssignment:
     def set_additional_info(self, key, value):
         self.additional_info[key] = value
 
-    def to_raw_str(self):
-        exon_str = regions_to_str(self.exons)
-        return "%s\t"
-
-    def from_raw_str(self, string):
-        pass
+    def add_match_attribute(self, match_event):
+        for m in self.isoform_matches:
+            m.add_subclassification(match_event)
 
 
 def get_assigned_transcript_id(match):

@@ -82,7 +82,7 @@ class LongReadAlignmentProcessor:
             logger.debug("Read exons: " + str(sorted_blocks))
 
             polya_info = self.polya_finder.detect_polya(alignment)
-            sorted_blocks, polya_info = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
+            sorted_blocks, polya_infom, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
 
             cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 
@@ -95,6 +95,9 @@ class LongReadAlignmentProcessor:
             combined_profile = self.profile_constructor.construct_profiles(sorted_blocks, polya_info, cage_hits)
 
             read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
+
+            if exon_changed:
+                read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
             # TODO remove field or fix
             read_assignment.polyA_found = (polya_info.external_polya_pos != -1 or
                                            polya_info.external_polyt_pos != -1 or
