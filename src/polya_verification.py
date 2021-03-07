@@ -61,17 +61,19 @@ class PolyAFixer:
         changed = False
         if polya_info.internal_polya_pos != -1:
             polya_exon_count = self.count_polya_exons(read_exons, polya_info.internal_polya_pos)
-            polya_info.internal_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.internal_polya_pos)
-            polya_info.external_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.external_polya_pos)
-            read_exons = read_exons[:-polya_exon_count]
-            changed = True
+            if polya_exon_count > 0:
+                polya_info.internal_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.internal_polya_pos)
+                polya_info.external_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.external_polya_pos)
+                read_exons = read_exons[:-polya_exon_count]
+                changed = True
 
         elif polya_info.internal_polyt_pos != -1:
             polyt_exon_count = self.count_polyt_exons(read_exons, polya_info.internal_polyt_pos)
-            polya_info.internal_polyt_pos = shift_polyt(read_exons, polyt_exon_count, polya_info.internal_polyt_pos)
-            polya_info.external_polyt_pos = shift_polyt(read_exons, polyt_exon_count, polya_info.external_polyt_pos)
-            read_exons = read_exons[polyt_exon_count:]
-            changed = True
+            if polyt_exon_count > 0:
+                polya_info.internal_polyt_pos = shift_polyt(read_exons, polyt_exon_count, polya_info.internal_polyt_pos)
+                polya_info.external_polyt_pos = shift_polyt(read_exons, polyt_exon_count, polya_info.external_polyt_pos)
+                read_exons = read_exons[polyt_exon_count:]
+                changed = True
 
         return read_exons, polya_info, changed
 
