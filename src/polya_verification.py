@@ -85,7 +85,9 @@ class PolyAFixer:
             exon = read_exons[-i - 1]
             if exon[1] <= internal_polya_pos:
                 break
-            if internal_polya_pos - exon[0] <= self.params.max_fake_terminal_exon_len:
+            if internal_polya_pos - exon[0] <= self.params.max_fake_terminal_exon_len and \
+                    exon[1] - internal_polya_pos > 2 * (internal_polya_pos - exon[0]):
+                # more than 2/3 of the exon is polyA
                 polya_exon_count += 1
 
         logger.debug("Detected polya exons %d" % polya_exon_count)
@@ -101,7 +103,9 @@ class PolyAFixer:
             exon = read_exons[i]
             if exon[0] >= internal_polyt_pos:
                 break
-            if exon[1] - internal_polyt_pos < self.params.max_fake_terminal_exon_len:
+            if exon[1] - internal_polyt_pos < self.params.max_fake_terminal_exon_len and \
+                    2 * (exon[1] - internal_polyt_pos) < internal_polyt_pos - exon[0]:
+                # more than 2/3 of the exon is polyT
                 polya_exon_count += 1
 
         logger.debug("Detected polyt exons %d" % polya_exon_count)
