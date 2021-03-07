@@ -12,6 +12,7 @@ from src.long_read_assigner import *
 from src.long_read_profiles import *
 from src.read_groups import *
 from src.polya_finder import *
+from src.polya_verification import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -38,6 +39,7 @@ class LongReadAlignmentProcessor:
         self.read_groupper = read_groupper
         self.profile_constructor = CombinedProfileConstructor(gene_info, params)
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
+        self.polya_fixer = PolyAFixer(self.params)
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
 
@@ -80,6 +82,7 @@ class LongReadAlignmentProcessor:
             logger.debug("Read exons: " + str(sorted_blocks))
 
             polya_info = self.polya_finder.detect_polya(alignment)
+            sorted_blocks, polya_info = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
 
             cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 

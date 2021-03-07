@@ -14,10 +14,101 @@ from src.long_read_profiles import *
 logger = logging.getLogger('IsoQuant')
 
 
+# recalculate polya site considering terminal exons are fake
+def shift_polya(read_exons, exon_count, polya_pos):
+    if exon_count == 0 or exon_count == len(read_exons) or polya_pos == -1:
+        return polya_pos
+
+    dist_to_polya = 0
+    for i in range(exon_count):
+        exon = read_exons[-i - 1]
+        if exon[0] > polya_pos:
+            continue
+        elif dist_to_polya == 0:
+            # no exons counted yet
+            dist_to_polya += polya_pos - exon[0]
+        else:
+            dist_to_polya += interval_len(exon)
+    return read_exons[-exon_count - 1][1] + dist_to_polya
+
+
+# recalculate polyt site considering terminal exons are fake
+def shift_polyt(read_exons, exon_count, polyt_pos):
+    if exon_count == 0 or exon_count == len(read_exons) or polyt_pos == -1:
+        return polyt_pos
+
+    dist_to_polya = 0
+    for i in range(exon_count):
+        exon = read_exons[i]
+        if exon[1] < polyt_pos:
+            continue
+        elif dist_to_polya == 0:
+            # no exons counted yet
+            dist_to_polya += exon[1] - polyt_pos
+        else:
+            dist_to_polya += interval_len(exon)
+    return read_exons[exon_count][0] - dist_to_polya
+
+
+class PolyAFixer:
+    def __init__(self, params):
+        self.params = params
+
+    def correct_read_info(self, read_exons, polya_info):
+        if len(read_exons) == 1 or (polya_info.internal_polya_pos != -1 and polya_info.internal_polyt_pos != -1):
+            return read_exons, polya_info
+
+        if polya_info.internal_polya_pos != -1:
+            polya_exon_count = self.count_polya_exons(read_exons, polya_info.internal_polya_pos)
+            polya_info.internal_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.internal_polya_pos)
+            polya_info.external_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.external_polya_pos)
+            read_exons = read_exons[:-polya_exon_count]
+
+        elif polya_info.internal_polyt_pos != -1:
+            polyt_exon_count = self.count_polyt_exons(read_exons, polya_info.internal_polyt_pos)
+            polya_info.internal_polyt_pos = shift_polyt(read_exons, polyt_exon_count, polya_info.internal_polyt_pos)
+            polya_info.external_polyt_pos = shift_polyt(read_exons, polyt_exon_count, polya_info.external_polyt_pos)
+            read_exons = read_exons[polyt_exon_count:]
+
+        return read_exons, polya_info
+
+    # correct polyA position when fake terminal exons are present
+    def count_polya_exons(self, read_exons, internal_polya_pos):
+        # find exons beyond internal polyA
+        polya_exon_count = 0
+        for i in range(len(read_exons)):
+            exon = read_exons[-i - 1]
+            if exon[1] <= internal_polya_pos:
+                break
+            if internal_polya_pos - exon[0] <= self.params.max_fake_terminal_exon_len:
+                polya_exon_count += 1
+
+        logger.debug("Detected polya exons %d" % polya_exon_count)
+        # correcting fake terminal exons
+        return polya_exon_count
+
+
+    # correct polyT position when fake terminal exons are present or isoform has short terminal exons
+    def count_polyt_exons(self, read_exons, internal_polyt_pos):
+        # find exons beyond internal polyT
+        polya_exon_count = 0
+        for i in range(len(read_exons)):
+            exon = read_exons[i]
+            if exon[0] >= internal_polyt_pos:
+                break
+            if exon[1] - internal_polyt_pos < self.params.max_fake_terminal_exon_len:
+                polya_exon_count += 1
+
+        logger.debug("Detected polyt exons %d" % polya_exon_count)
+        # correcting fake terminal exons
+        return polya_exon_count
+
+
 class PolyAVerifier:
     def __init__(self, gene_info, params):
         self.params = params
         self.gene_info = gene_info
+        self.polya_fixer = PolyAFixer(params)
 
     # check consistency with polyA
     def verify_read_ends(self, combined_read_profile, isoform_id, matching_events):
@@ -250,18 +341,10 @@ class PolyAVerifier:
         internal_polya_pos = polya_info.internal_polya_pos
 
         if internal_polya_pos == -1 or len(read_exons) == 0:
-            return matching_events, self.shift_polya(read_exons, fake_terminal_exon_count, external_polya_pos), -1
+            return matching_events, shift_polya(read_exons, fake_terminal_exon_count, external_polya_pos), -1
 
         # find exons beyond internal polyA
-        polya_exon_count = 0
-        for i in range(len(read_exons)):
-            exon = read_exons[-i - 1]
-            if exon[1] <= internal_polya_pos:
-                break
-            if exon[1] - internal_polya_pos > 2 * (internal_polya_pos - exon[0]):
-                # more than 2/3 of the exon is polyA
-                polya_exon_count += 1
-
+        polya_exon_count = self.polya_fixer.count_polya_exons(read_exons, internal_polya_pos)
         # add events
         for i in range(fake_terminal_exon_count, polya_exon_count):
             intron_pos = len(read_exons) - i - 2
@@ -272,25 +355,8 @@ class PolyAVerifier:
         logger.debug("Fake exons %d, polya exons %d" % (fake_terminal_exon_count, polya_exon_count))
         # correcting fake terminal exons
         return matching_events,\
-               self.shift_polya(read_exons, extra_exons, external_polya_pos), \
-               self.shift_polya(read_exons, extra_exons, internal_polya_pos)
-
-    # recalculate polya site considering terminal exons are fake
-    def shift_polya(self, read_exons, exon_count, polya_pos):
-        if exon_count == 0 or exon_count == len(read_exons) or polya_pos == -1:
-            return polya_pos
-
-        dist_to_polya = 0
-        for i in range(exon_count):
-            exon = read_exons[-i - 1]
-            if exon[0] > polya_pos:
-                continue
-            elif dist_to_polya == 0:
-                # no exons counted yet
-                dist_to_polya += polya_pos - exon[0]
-            else:
-                dist_to_polya += interval_len(exon)
-        return read_exons[-exon_count - 1][1] + dist_to_polya
+               shift_polya(read_exons, extra_exons, external_polya_pos), \
+               shift_polya(read_exons, extra_exons, internal_polya_pos)
 
     # correct polyT position when fake terminal exons are present or isoform has short terminal exons
     def correct_polyt_positions(self, read_exons, fake_terminal_exon_count, polya_info, matching_events):
@@ -300,17 +366,10 @@ class PolyAVerifier:
         internal_polyt_pos = polya_info.internal_polyt_pos
 
         if internal_polyt_pos == -1 or len(read_exons) == 0:
-            return matching_events, self.shift_polyt(read_exons, fake_terminal_exon_count, external_polyt_pos), -1
+            return matching_events, shift_polyt(read_exons, fake_terminal_exon_count, external_polyt_pos), -1
 
         # find exons beyond internal polyA
-        polya_exon_count = 0
-        for i in range(len(read_exons)):
-            exon = read_exons[i]
-            if exon[0] >= internal_polyt_pos:
-                break
-            if 2 * (exon[1] - internal_polyt_pos) < internal_polyt_pos - exon[0]:
-                # more than 2/3 of the exon is polyT
-                polya_exon_count += 1
+        polya_exon_count = self.polya_fixer.count_polyt_exons(read_exons, internal_polyt_pos)
 
         # add events
         for i in range(fake_terminal_exon_count, polya_exon_count):
@@ -320,25 +379,8 @@ class PolyAVerifier:
         logger.debug("Fake exons %d, polya exons %d" % (fake_terminal_exon_count, polya_exon_count))
         # correcting fake terminal exons
         return matching_events,\
-               self.shift_polyt(read_exons, extra_exons, external_polyt_pos), \
-               self.shift_polyt(read_exons, extra_exons, internal_polyt_pos)
-
-    # recalculate polya site considering terminal exons are fake
-    def shift_polyt(self, read_exons, exon_count, polyt_pos):
-        if exon_count == 0 or exon_count == len(read_exons) or polyt_pos == -1:
-            return polyt_pos
-
-        dist_to_polya = 0
-        for i in range(exon_count):
-            exon = read_exons[i]
-            if exon[1] < polyt_pos:
-                continue
-            elif dist_to_polya == 0:
-                # no exons counted yet
-                dist_to_polya += exon[1] - polyt_pos
-            else:
-                dist_to_polya += interval_len(exon)
-        return read_exons[exon_count][0] - dist_to_polya
+               shift_polyt(read_exons, extra_exons, external_polyt_pos), \
+               shift_polyt(read_exons, extra_exons, internal_polyt_pos)
 
     # check isoform exons beyond polyA
     def check_reference_terminal_exons(self, isoform_exons, external_polya_pos, internal_polya_pos, matching_events):
