@@ -167,22 +167,7 @@ class DatasetProcessor:
             logger.info('Using read assignments from {}*'.format(saves_file))
             total_alignments, polya_found = self.load_reads(saves_file)
         else:
-            chrom_clusters = []
-            cur_cluster = []
-            current_chromosome = ""
-            for g in self.gene_clusters:
-                chr_id = g[0].seqid
-                if chr_id != current_chromosome:
-                    if cur_cluster:
-                        chrom_clusters.append((current_chromosome,cur_cluster))
-                        cur_cluster = []
-                    current_chromosome = chr_id
-                cur_cluster.append(g)
-            if cur_cluster:
-                chrom_clusters.append((current_chromosome,cur_cluster))
-
-            # chromosomes with large clusters take more time and should go first
-            chrom_clusters = sorted(chrom_clusters, key=lambda x: sum(len(cluster) ** 2 for cluster in x[1]), reverse=True)
+            chrom_clusters = self.get_chromosome_gene_clusters()
             pool = Pool(self.args.threads)
             pool.starmap(process_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
                                                 (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
@@ -192,12 +177,11 @@ class DatasetProcessor:
 
             logger.info('Finishing read assignment')
             total_alignments, polya_found = self.load_reads(sample.out_raw_file)
-
             logger.info('Read assignments files saved to {}*.\nYou can reuse it later with option --read_assignments'.
                         format(sample.out_raw_file))
 
         intial_polya_required = self.args.require_polyA
-        polya_fraction = polya_found / total_alignments
+        polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
         logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
         if polya_fraction < 0.1 and self.args.require_polyA:
@@ -223,7 +207,7 @@ class DatasetProcessor:
         polya_found = 0
         gene_info = None
         gc.disable()
-        for chr_id in self.reference_record_dict:
+        for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
             logger.info("Loading read assignments from " + chr_dump_file)
             if not os.path.exists(chr_dump_file): continue
@@ -258,6 +242,35 @@ class DatasetProcessor:
         if gene_info and read_storage:
             self.reads_assignments.append((gene_info, read_storage))
         return total_assignments, polya_found
+
+    def get_chromosome_list(self):
+        chromosomes = []
+        current_chromosome = ""
+        for g in self.gene_clusters:
+            chr_id = g[0].seqid
+            if chr_id != current_chromosome:
+                chromosomes.append(chr_id)
+                current_chromosome = chr_id
+        return chromosomes
+
+    def get_chromosome_gene_clusters(self):
+        chrom_clusters = []
+        cur_cluster = []
+        current_chromosome = ""
+        for g in self.gene_clusters:
+            chr_id = g[0].seqid
+            if chr_id != current_chromosome:
+                if cur_cluster:
+                    chrom_clusters.append((current_chromosome, cur_cluster))
+                    cur_cluster = []
+                current_chromosome = chr_id
+            cur_cluster.append(g)
+        if cur_cluster:
+            chrom_clusters.append((current_chromosome, cur_cluster))
+
+        # chromosomes with large clusters take more time and should go first
+        chrom_clusters = sorted(chrom_clusters, key=lambda x: sum(len(cluster) ** 2 for cluster in x[1]), reverse=True)
+        return chrom_clusters
 
     def create_aggregators(self, sample):
         self.read_stat_counter = EnumStats()
