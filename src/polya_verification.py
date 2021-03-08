@@ -374,16 +374,18 @@ class PolyAVerifier:
     def check_if_close(self, isoform_end, external_polya_pos, internal_polya_pos, matching_events, event_type):
         dist_to_external_polya = abs(isoform_end - external_polya_pos)
         dist_to_internal_polya = abs(isoform_end - internal_polya_pos)
-        if min(dist_to_internal_polya, dist_to_external_polya) <= self.params.apa_delta:
-            # polyA position is close, we are satisfied
-            if dist_to_internal_polya < dist_to_external_polya:
-                logger.debug("Internal polyAT is good %d, distance %d" %
-                             (internal_polya_pos, dist_to_internal_polya))
-                matching_events.append(MatchEvent(event_type, event_info=internal_polya_pos))
-                return matching_events
-            else:
-                logger.debug("External polyAT is good %d, distance %d" %
-                             (external_polya_pos, dist_to_external_polya))
-                matching_events.append(MatchEvent(event_type, event_info=external_polya_pos))
-                return matching_events
+
+        # polyA position is close, we are satisfied
+        if internal_polya_pos != -1 and dist_to_internal_polya <= self.params.apa_delta and \
+                dist_to_internal_polya <= dist_to_external_polya:
+            logger.debug("Internal polyAT is good %d, distance %d" %
+                         (internal_polya_pos, dist_to_internal_polya))
+            matching_events.append(MatchEvent(event_type, event_info=internal_polya_pos))
+            return matching_events
+        elif external_polya_pos != -1 and dist_to_external_polya <= self.params.apa_delta and \
+                dist_to_internal_polya > dist_to_external_polya:
+            logger.debug("External polyAT is good %d, distance %d" %
+                         (external_polya_pos, dist_to_external_polya))
+            matching_events.append(MatchEvent(event_type, event_info=external_polya_pos))
+            return matching_events
         return None
