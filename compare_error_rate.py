@@ -470,7 +470,7 @@ def process_alignment(alignment_record1, fasta_records, stats1, homopolymer_stat
             read_index1 += 1
         elif event1 == 2:
             # D
-            stats1.add_match(read_index1, len(seq1), reverse_read1)
+            stats1.add_deletion(read_index1, len(seq1), reverse_read1)
             if homopolymer_stats1 and check_homopolymer_deletion(true_fragment, ref_index):
                 homopolymer_stats1.add_deletion(read_index1, len(seq1), reverse_read1)
             ref_index += 1
@@ -497,8 +497,8 @@ def error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records):
     hstats1 = ErrorRateStat("Reads 1 3-way hompolymer comparison")
     hstats2 = ErrorRateStat("Reads 2 3-way hompolymer comparison")
     stats1_only = ErrorRateStat("Reads 1 simple comparison")
-    hstats1_only = ErrorRateStat("Reads 2 simple comparison")
-    stats2_only = ErrorRateStat("Reads 1 simple hompolymer comparison")
+    hstats1_only = ErrorRateStat("Reads 1 simple hompolymer comparison")
+    stats2_only = ErrorRateStat("Reads 2 simple comparison")
     hstats2_only = ErrorRateStat("Reads 2 simple hompolymer comparison")
 
     for read_pair in read_pairs:
