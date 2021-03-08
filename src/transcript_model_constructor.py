@@ -602,16 +602,16 @@ class TranscriptModelConstructor:
             if e.event_type in [MatchEventSubtype.correct_polya_site_right,
                                 MatchEventSubtype.alternative_polya_site_right]:
                 read_end = e.event_info
+                break
             elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_right:
                 read_end = read_assignment.gene_info.transcript_end(isoform_id)
-                break
         for e in isoform_match.match_subclassifications:
             if e.event_type in [MatchEventSubtype.correct_polya_site_left,
                                 MatchEventSubtype.alternative_polya_site_left]:
                 read_start = e.event_info
+                break
             elif e.event_type == MatchEventSubtype.terminal_exon_misalignment_left:
                 read_start = read_assignment.gene_info.transcript_start(isoform_id)
-                break
 
         return read_start, read_end
 
