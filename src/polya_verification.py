@@ -223,7 +223,7 @@ class PolyAVerifier:
                 event_to_remove = i
             elif event.event_type == MatchEventSubtype.fake_terminal_exon_left:
                 fake_terminal_exon_count += 1
-            elif event.event_type == MatchEventSubtype.terminal_exon_misalignment_right:
+            elif event.event_type == MatchEventSubtype.terminal_exon_misalignment_left:
                 terminal_exon_misaligned += 1
 
         if terminal_exon_misaligned > 0 and fake_terminal_exon_count > 0:
