@@ -301,8 +301,8 @@ def set_matching_options(args):
     strategies = {
         'exact':   MatchingStrategy(0, 0, 0, 0, 0, 0.0, 'monoexon_only', False),
         'precise': MatchingStrategy(3, 30, 50, 20, 0, 0.0, 'monoexon_and_fsm', True),
-        'default': MatchingStrategy(6, 60, 200, 40, 60, 1.0, 'monoexon_and_fsm', True),
-        'loose':   MatchingStrategy(12, 120, 300, 40, 60, 1.0, 'all',  True),
+        'default': MatchingStrategy(6, 60, 100, 40, 60, 1.0, 'monoexon_and_fsm', True),
+        'loose':   MatchingStrategy(12, 60, 100, 40, 60, 1.0, 'all',  True),
     }
 
     strategy = strategies[args.matching_strategy]

@@ -457,7 +457,7 @@ class TranscriptModelConstructor:
 
     # check that all exons are sorted and have correct coordinates
     def validate_exons(self, novel_exons):
-        return novel_exons == sorted(novel_exons) and all(x[0] <= x[1] for x in novel_exons)
+        return novel_exons == sorted(novel_exons) and all(0 < x[0] <= x[1] for x in novel_exons)
 
     # move transcripts ends to known ends if they are closed and no polyA found
     def correct_transcripts_ends(self, novel_exons, polya_info, isoform_id, modification_events_map):
@@ -512,12 +512,12 @@ class TranscriptModelConstructor:
         if event_tuple.read_region[0] == SupplementaryMatchConstansts.absent_position:
             logger.warning("Undefined read intron position for event type: %s" % event_tuple.event_type.name)
             return current_exon_start
-        read_intron = read_introns[event_tuple.read_region[0]]
-        if not contains(read_region, read_intron):
+
+        if any(not contains(read_region, read_intron) for read_intron in read_introns):
             logger.warning("Read intron to be added seems to be outside of read region: %s, read: %s, intron: %s" %
-                           (event_tuple.event_type.name, str(read_region), str(read_intron)))
+                           (event_tuple.event_type.name, str(read_region), str(read_introns)))
             return current_exon_start
-        # logger.debug("Novel intron " + str(read_intron))
+        read_intron = read_introns[event_tuple.read_region[0]]
 
         if event_tuple.event_type in [MatchEventSubtype.extra_intron_novel,
                                       MatchEventSubtype.extra_intron_flanking_left,

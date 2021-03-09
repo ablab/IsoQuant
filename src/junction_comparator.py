@@ -219,10 +219,19 @@ class JunctionComparator:
         right_exons_overlap = overlaps(get_exon(read_region, read_junctions, read_cregion[1] + 1),
                                        get_exon(isoform_region, isoform_junctions, isoform_cregion[1] + 1))
         surrounded_by_exons = left_exons_overlap and right_exons_overlap
-        similar_bounds = \
-            abs(read_junctions[read_cregion[0]][0] - isoform_junctions[isoform_cregion[0]][0]) <= 2 * self.params.delta and \
-            abs(read_junctions[read_cregion[1]][1] - isoform_junctions[isoform_cregion[1]][1]) <= 2 * self.params.delta
+        read_left_site = read_junctions[read_cregion[0]][0]
+        read_right_site = read_junctions[read_cregion[1]][1]
+        isoform_left_site = isoform_junctions[isoform_cregion[0]][0]
+        isoform_right_site = isoform_junctions[isoform_cregion[1]][1]
+        similar_letf_site = abs(read_left_site - isoform_left_site) <= 2 * self.params.delta
+        similar_right_site = abs(read_right_site - isoform_right_site) <= 2 * self.params.delta
+        similar_bounds = similar_letf_site and similar_right_site
+        read_introns_inside = contains_approx((isoform_left_site, isoform_right_site),
+                                              (read_left_site, read_right_site), self.params.delta)
+        isofrom_introns_inside = contains_approx((read_left_site, read_right_site),
+                                                 (isoform_left_site, isoform_right_site), self.params.delta)
 
+        event = None
         if surrounded_by_exons and read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
             # single exons is altered
             event = self.classify_single_intron_alternation(read_region, read_junctions, isoform_region,
@@ -261,11 +270,11 @@ class JunctionComparator:
             else:
                 event = MatchEventSubtype.mutually_exclusive_exons_novel
 
-        elif surrounded_by_exons and \
+        elif surrounded_by_exons and read_introns_inside and \
                 read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
             # skipped exon(s)
             event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
-                                                intron_length_is_similar, read_introns_known)
+                                                intron_length_is_similar, read_introns_known, similar_bounds)
 
         elif surrounded_by_exons and similar_bounds and \
                 read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
@@ -277,7 +286,7 @@ class JunctionComparator:
             else:
                 event = MatchEventSubtype.exon_gain_novel
 
-        elif surrounded_by_exons and intron_length_is_similar and \
+        elif surrounded_by_exons and intron_length_is_similar and isofrom_introns_inside and \
                 read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
             # exon detach
             if read_introns_known:
@@ -285,7 +294,7 @@ class JunctionComparator:
             else:
                 event = MatchEventSubtype.exon_detatch_novel
 
-        else:
+        if event is None:
             # none of above, complex alternative structure
             if read_introns_known:
                 event = MatchEventSubtype.alternative_structure_known
@@ -296,10 +305,10 @@ class JunctionComparator:
         return MatchEvent(event, isoform_cregion, read_cregion)
 
     def classify_skipped_exons(self, isoform_junctions, isoform_cregion,
-                               intron_length_is_similar, read_introns_known):
+                               intron_length_is_similar, read_introns_known, similar_bounds):
         total_exon_len = sum([isoform_junctions[i + 1][0] - isoform_junctions[i][1] + 1
                               for i in range(isoform_cregion[0], isoform_cregion[1])])
-
+        event = None
         if intron_length_is_similar:
             if total_exon_len <= self.params.max_missed_exon_len:
                 event = MatchEventSubtype.exon_misallignment
@@ -307,7 +316,7 @@ class JunctionComparator:
                 event = MatchEventSubtype.exon_merge_known
             else:
                 event = MatchEventSubtype.exon_merge_novel
-        else:
+        elif similar_bounds:
             if read_introns_known:
                 event = MatchEventSubtype.exon_skipping_known
             else:
