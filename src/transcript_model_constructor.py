@@ -141,7 +141,9 @@ class TranscriptModelConstructor:
                             MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
                             MatchEventSubtype.terminal_exon_shift_known,
                             MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
-                            MatchEventSubtype.intron_alternation_known}
+                            MatchEventSubtype.intron_alternation_known,
+                            # tracked but not used generally
+                            MatchEventSubtype.exon_misallignment, MatchEventSubtype.intron_shift}
 
     def __init__(self, gene_info, read_assignment_storage, params):
         if params.report_apa:
@@ -513,7 +515,8 @@ class TranscriptModelConstructor:
             logger.warning("Undefined read intron position for event type: %s" % event_tuple.event_type.name)
             return current_exon_start
 
-        if any(not contains(read_region, read_intron) for read_intron in read_introns):
+        if not contains(read_region,
+                        (read_introns[event_tuple.read_region[0]][0], read_introns[event_tuple.read_region[1]][1])):
             logger.warning("Read intron to be added seems to be outside of read region: %s, read: %s, intron: %s" %
                            (event_tuple.event_type.name, str(read_region), str(read_introns)))
             return current_exon_start
@@ -530,6 +533,17 @@ class TranscriptModelConstructor:
         isoform_intron = isoform_introns[isoform_pos]
         assert overlaps(read_intron, isoform_intron)
 
+        if event_tuple.event_type in {MatchEventSubtype.exon_misallignment, MatchEventSubtype.intron_shift}:
+            if contains_well_inside(read_region, (isoform_introns[event_tuple.isoform_region[0]][0],
+                                                  isoform_introns[event_tuple.isoform_region[1]][1]),
+                                    self.params.delta):
+                # intron isoforms look modified but still inside read region
+                for i_pos in range(event_tuple.isoform_region[0], event_tuple.isoform_region[1] + 1):
+                    current_exon_start = self.add_intron(novel_exons, current_exon_start, isoform_introns[i_pos])
+            else:
+                # simply insert several reads introns
+                for read_pos in range(event_tuple.read_region[0], event_tuple.read_region[1] + 1):
+                    current_exon_start = self.add_intron(novel_exons, current_exon_start, read_introns[read_pos])
         if event_tuple.event_type == MatchEventSubtype.alt_left_site_novel:
             novel_intron = (read_intron[0], isoform_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
