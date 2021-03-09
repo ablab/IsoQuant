@@ -277,7 +277,7 @@ class PolyAVerifier:
 
         for i, event in enumerate(matching_events):
             if event.event_type == MatchEventSubtype.incomplete_intron_retention_right:
-                matching_events.append(MatchEvent(MatchEventSubtype.fake_polya_site_right,
+                matching_events.append(MatchEvent(MatchEventSubtype.internal_polya_right,
                                                   isoform_region=event.isoform_region,
                                                   event_info=internal_polya_pos))
                 return matching_events, True
@@ -292,7 +292,7 @@ class PolyAVerifier:
         for i, event in enumerate(matching_events):
             if event.event_type == MatchEventSubtype.incomplete_intron_retention_left:
                 # polyT found within intron and inside mapped part of the read
-                matching_events.append(MatchEvent(MatchEventSubtype.fake_polya_site_left,
+                matching_events.append(MatchEvent(MatchEventSubtype.internal_polya_left,
                                                   isoform_region=event.isoform_region,
                                                   event_info=internal_polyt_pos))
                 return matching_events, True

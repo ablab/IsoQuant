@@ -47,8 +47,8 @@ class MatchClassification(Enum):
     @staticmethod
     def get_mono_exon_classification(match_event_subtypes):
         # events are not mixed in the list
-        if any(e.event_type in {MatchEventSubtype.alternative_polya_site_left,  MatchEventSubtype.alternative_polya_site_right,
-                                MatchEventSubtype.fake_polya_site_left, MatchEventSubtype.fake_polya_site_right}
+        if any(e.event_type in {MatchEventSubtype.alternative_polya_site_left, MatchEventSubtype.alternative_polya_site_right,
+                                MatchEventSubtype.internal_polya_left, MatchEventSubtype.internal_polya_right}
                for e in match_event_subtypes):
             return MatchClassification.novel_not_in_catalog
         if any(e.event_type == MatchEventSubtype.unspliced_intron_retention for e in match_event_subtypes):
@@ -137,8 +137,8 @@ class MatchEventSubtype(Enum):
     # TTS and TSS
     alternative_polya_site_right = 200
     alternative_polya_site_left = 201
-    fake_polya_site_left = 202
-    fake_polya_site_right = 203
+    internal_polya_left = 202
+    internal_polya_right = 203
     alternative_tss_left = 204
     alternative_tss_right = 205
     correct_polya_site_left = 222
@@ -256,8 +256,8 @@ event_subtype_cost = {
     # TTS and TSS
     MatchEventSubtype.alternative_polya_site_left:0.75,
     MatchEventSubtype.alternative_polya_site_right:0.75,
-    MatchEventSubtype.fake_polya_site_left:0.5,
-    MatchEventSubtype.fake_polya_site_right:0.5,
+    MatchEventSubtype.internal_polya_left:0.5,
+    MatchEventSubtype.internal_polya_right:0.5,
     MatchEventSubtype.alternative_tss_left :0.75,
     MatchEventSubtype.alternative_tss_right :0.75,
     MatchEventSubtype.correct_polya_site_left:0,
@@ -302,14 +302,14 @@ nic_event_types = {
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
     MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,
     MatchEventSubtype.major_exon_elongation_right, MatchEventSubtype.incomplete_intron_retention_left,
-    MatchEventSubtype.incomplete_intron_retention_right, MatchEventSubtype.fake_polya_site_right,
-    MatchEventSubtype.fake_polya_site_left
+    MatchEventSubtype.incomplete_intron_retention_right, MatchEventSubtype.internal_polya_right,
+    MatchEventSubtype.internal_polya_left
 }
 
 nonintronic_events = {
     MatchEventSubtype.alternative_polya_site_left, MatchEventSubtype.alternative_polya_site_right,
     MatchEventSubtype.alternative_tss_left, MatchEventSubtype.alternative_tss_right,
-    MatchEventSubtype.fake_polya_site_right, MatchEventSubtype.fake_polya_site_left,
+    MatchEventSubtype.internal_polya_right, MatchEventSubtype.internal_polya_left,
     MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
     MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right,
 }
@@ -482,7 +482,8 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
                            MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right,
                            MatchEventSubtype.alternative_tss_left, MatchEventSubtype.alternative_tss_right,
                            MatchEventSubtype.alternative_polya_site_left, MatchEventSubtype.alternative_polya_site_right,
-                           MatchEventSubtype.correct_polya_site_right, MatchEventSubtype.correct_polya_site_left}:
+                           MatchEventSubtype.correct_polya_site_right, MatchEventSubtype.correct_polya_site_left,
+                           MatchEventSubtype.internal_polya_left, MatchEventSubtype.internal_polya_right}:
         # elongation events
         additional_info = ":" + str(event.event_info)
     else:
