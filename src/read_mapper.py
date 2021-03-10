@@ -277,6 +277,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
         if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path], stderr=log_file) != 0:
             logger.critical("Samtools finished with errors! See " + log_fpath)
             exit(-1)
+        os.remove(alignment_sam_path)
     else:
         logger.critical("Aligner " + aligner + " is not supported")
         exit(-1)
