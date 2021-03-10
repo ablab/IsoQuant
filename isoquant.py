@@ -232,8 +232,8 @@ def check_input_files(args):
             exit(-1)
 
     if args.read_assignments is not None:
-        if not glob.glob(str(args.read_assignments)):
-            print("No files found with prefix " + args.read_assignments)
+        if not glob.glob(str(args.read_assignments) + "*"):
+            print("No files found with prefix " + str(args.read_assignments))
             exit(-1)
 
 
