@@ -231,6 +231,11 @@ def check_input_files(args):
             print("ERROR! Gene database " + args.genedb + " does not exist")
             exit(-1)
 
+    if args.read_assignments is not None:
+        if not glob.glob(args.read_assignments):
+            print("No files found with prefix " + args.read_assignments)
+            exit(-1)
+
 
 def create_output_dirs(args):
     args.tmp_dir = os.path.join(args.output, "tmp")
