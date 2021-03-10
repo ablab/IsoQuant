@@ -206,7 +206,7 @@ def check_input_files(args):
         for lib in sample.file_list:
             for in_file in lib:
                 if args.input_data.input_type == "save":
-                    saves = glob.glob(in_file)
+                    saves = glob.glob(in_file + "*")
                     if not saves:
                         print("ERROR! Input files " + in_file + "* do not exist")
                     continue
