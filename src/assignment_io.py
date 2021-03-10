@@ -113,12 +113,7 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
-        self.header = "#read_id\tisoform_id\tassignment_type\tassignment_events\tpolyA_found"
-        if self.params.cage is not None:
-            self.header += "\tCAGE_peak_found"
-        if self.params.print_additional_info:
-            self.header += "\taligned_blocks\tintron_profile\tsplit_exon_profile"
-        self.header += "\n"
+        self.header = "#read_id\tisoform_id\tassignment_type\tassignment_events\texons\tadditional\n"
         self.output_file.write(self.header)
 
     def add_read_info(self, read_assignment):
@@ -144,15 +139,18 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             event_string = ",".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
                                                                                read_introns, isoform_introns)
                                      for x in m.match_subclassifications])
-
             line = read_assignment.read_id + "\t" + m.assigned_transcript + "\t" \
-                   + read_assignment.assignment_type.name + "\t" + event_string + "\t" + str(read_assignment.polyA_found)
-            if self.params.cage is not None:
-                line += '\t' + str(read_assignment.cage_found)
+                   + read_assignment.assignment_type.name + "\t" + event_string + "\t" + range_list_to_str(read_exons)
 
-            if self.params.print_additional_info:
-                line += "\t" + range_list_to_str(read_exons)
-            line += "\n"
+            additional_info = []
+            if not self.params.polya_trimmed:
+                additional_info.append("PolyA=" + str(read_assignment.polyA_found) + ";")
+            if self.params.cage is not None:
+                additional_info.append("CAGE=" + str(read_assignment.cage_found) + ";")
+            if additional_info:
+                line += "\t" + " ".join(additional_info) + "\n"
+            else:
+                line += "\t*\n"
             self.output_file.write(line)
 
 
