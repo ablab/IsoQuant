@@ -68,7 +68,6 @@ class InputDataStorage:
         elif args.read_assignments is not None:
             self.input_type = "save"
             for save_file in args.read_assignments:
-                # TODO: check
                 sample_files.append([[save_file]])
         else:
             logger.critical("Input data was not specified")
