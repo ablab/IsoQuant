@@ -544,7 +544,7 @@ class TranscriptModelConstructor:
                 # simply insert several reads introns
                 for read_pos in range(event_tuple.read_region[0], event_tuple.read_region[1] + 1):
                     current_exon_start = self.add_intron(novel_exons, current_exon_start, read_introns[read_pos])
-        if event_tuple.event_type == MatchEventSubtype.alt_left_site_novel:
+        elif event_tuple.event_type == MatchEventSubtype.alt_left_site_novel:
             novel_intron = (read_intron[0], isoform_intron[1])
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type == MatchEventSubtype.alt_left_site_known:
