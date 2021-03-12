@@ -250,7 +250,7 @@ class PolyAVerifier:
             external_polyt_pos = isoform_exons[0][0]
             internal_polyt_pos = isoform_exons[0][0]
         else:
-            matching_events, external_polya_pos, internal_polya_pos = \
+            matching_events, external_polyt_pos, internal_polyt_pos = \
                 self.detect_reference_exons_before_polyt(isoform_exons, external_polyt_pos, internal_polyt_pos, matching_events)
 
         new_events = self.check_if_close(isoform_start, external_polyt_pos, internal_polyt_pos,
