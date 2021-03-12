@@ -374,7 +374,7 @@ class TranscriptModelConstructor:
             current_exon_start = read_start
             events = modification_events_map[SupplementaryMatchConstansts.extra_left_mod_position]
             current_exon_start = self.process_intron_related_events(events, None, isoform_introns, read_introns,
-                                                                    read_region, novel_exons, current_exon_start)
+                                                                    read_region, novel_exons, current_exon_start, isoform_id)
         else:
             current_exon_start = read_start
 
@@ -402,7 +402,7 @@ class TranscriptModelConstructor:
                 current_events = modification_events_map[isoform_pos]
                 current_exon_start = self.process_intron_related_events(current_events, isoform_pos, isoform_introns,
                                                                         read_introns, read_region,
-                                                                        novel_exons, current_exon_start)
+                                                                        novel_exons, current_exon_start, isoform_id)
                 if isoform_pos < len(isoform_introns) \
                         and current_exon_start < isoform_introns[isoform_pos][0] \
                         and isoform_introns[isoform_pos][1] < read_end:
@@ -423,7 +423,7 @@ class TranscriptModelConstructor:
             # if there are extra introns on the right
             events = modification_events_map[SupplementaryMatchConstansts.extra_right_mod_position]
             current_exon_start = self.process_intron_related_events(events, None, isoform_introns, read_introns,
-                                                                    read_region, novel_exons, current_exon_start)
+                                                                    read_region, novel_exons, current_exon_start, isoform_id)
             novel_transcript_end = read_end
         else:
             novel_transcript_end = read_end
@@ -492,12 +492,12 @@ class TranscriptModelConstructor:
 
     # process a sorted list of events assigned to the same intron
     def process_intron_related_events(self, sorted_event_list, isoform_pos, isoform_introns, read_introns, read_region,
-                                      novel_exons, current_exon_start):
+                                      novel_exons, current_exon_start, isoform_id=""):
         logger.debug("> Processing events for position %s: %s" % (str(isoform_pos), str(sorted_event_list)))
         logger.debug("> Before: %d, %s" % (current_exon_start, novel_exons))
         for event in sorted_event_list:
             current_exon_start = self.process_single_event(event, isoform_pos, isoform_introns, read_introns,
-                                                           read_region, novel_exons, current_exon_start)
+                                                           read_region, novel_exons, current_exon_start, isoform_id)
             logger.debug("> In progress: %d, %s" % (current_exon_start, novel_exons))
 
         logger.debug("> After: %d, %s" % (current_exon_start, novel_exons))
@@ -505,20 +505,21 @@ class TranscriptModelConstructor:
 
     # process single event
     def process_single_event(self, event_tuple, isoform_pos, isoform_introns, read_introns, read_region,
-                             novel_exons, current_exon_start):
+                             novel_exons, current_exon_start, isoform_id=""):
         logger.debug("> > Applying event %s at position %s" % (event_tuple.event_type.name, str(isoform_pos)))
         if event_tuple.event_type in {MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention}:
             # simply skip reference intron
             return current_exon_start
 
         if event_tuple.read_region[0] == SupplementaryMatchConstansts.absent_position:
-            logger.warning("Undefined read intron position for event type: %s" % event_tuple.event_type.name)
+            logger.warning("Undefined read intron position for event type: %s, isoform id %s" %
+                           (event_tuple.event_type.name, isoform_id))
             return current_exon_start
 
         if not contains(read_region,
                         (read_introns[event_tuple.read_region[0]][0], read_introns[event_tuple.read_region[1]][1])):
-            logger.warning("Read intron to be added seems to be outside of read region: %s, read: %s, intron: %s" %
-                           (event_tuple.event_type.name, str(read_region), str(read_introns)))
+            logger.warning("Read intron to be added seems to be outside of read region: %s, read: %s, intron: %s, isoform id %s" %
+                           (event_tuple.event_type.name, str(read_region), str(read_introns), isoform_id))
             return current_exon_start
         read_intron = read_introns[event_tuple.read_region[0]]
 
