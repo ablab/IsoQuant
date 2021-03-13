@@ -208,7 +208,7 @@ class PolyAFinder:
             logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polyt_end))
 
         logger.debug("PolyT found at position %d" % reference_polyt_end)
-        return max(0, reference_polyt_end)
+        return max(1, reference_polyt_end)
 
     # poly A tail detection
     def find_polya(self, seq):
