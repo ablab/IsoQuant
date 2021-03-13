@@ -6,7 +6,7 @@
 
 import _pickle as pickle
 import gc
-
+import gzip
 from multiprocessing import Pool
 
 from src.input_data_storage import *
@@ -136,7 +136,12 @@ class DatasetProcessor:
         self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
         if self.args.reference:
             logger.info("Loading reference genome from " + self.args.reference)
-            self.reference_record_dict = SeqIO.index(self.args.reference, "fasta")
+            _, outer_ext = os.path.splitext(self.args.reference)
+            if outer_ext.lower() in ['.gz', '.gzip']:
+                with gzip.open(self.args.reference, "rt") as handle:
+                    self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(handle, "fasta"))
+            else:
+                self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(self.args.reference, "fasta"))
         else:
             self.reference_record_dict = None
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
