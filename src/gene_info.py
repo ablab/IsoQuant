@@ -110,6 +110,12 @@ class GeneInfo:
         self.chr_id, self.start, self.end = self.get_gene_region()
         self.delta = delta
 
+        # additional info for canonical splice site detection
+        self.all_read_region_start = self.start
+        self.all_read_region_end = self.end
+        self.canonical_sites = {}
+        self.reference_region = None
+
         # profiles for all known isoforoms
         self.intron_profiles = FeatureProfiles()
         self.exon_profiles = FeatureProfiles()

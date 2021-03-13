@@ -147,10 +147,8 @@ class DatasetProcessor:
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
         self.read_grouper = create_read_grouper(args)
+        self.io_support = IOSupport(self.args)
 
-        # self.correct_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])
-        # self.novel_assignment_checker = PrintOnlyFunctor(ReadAssignmentType.contradictory)
-        # self.rest_assignment_checker = PrintOnlyFunctor([ReadAssignmentType.empty, ReadAssignmentType.ambiguous])
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
@@ -279,11 +277,11 @@ class DatasetProcessor:
 
     def create_aggregators(self, sample):
         self.read_stat_counter = EnumStats()
-        self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args)
+        self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support)
         self.bed_printer = BEDPrinter(sample.out_mapped_bed, self.args)
         printer_list = [self.basic_printer, self.bed_printer]
         if self.args.sqanti_output:
-            self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args)
+            self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
             printer_list.append(self.sqanti_printer)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 

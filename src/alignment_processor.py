@@ -51,10 +51,9 @@ class LongReadAlignmentProcessor:
         for b in self.bams:
             self.process_single_file(b)
 
-        if self.params.sqanti_output and self.chr_record:
+        if (self.params.sqanti_output or self.params.check_canonical) and self.chr_record:
             self.gene_info.all_read_region_start -= self.params.upstream_region_len
             self.gene_info.all_read_region_end += self.params.upstream_region_len
-
             self.gene_info.reference_region = \
                 str(self.chr_record[self.gene_info.all_read_region_start - 1:self.gene_info.all_read_region_end + 1].seq)
             self.gene_info.canonical_sites = {}
@@ -80,25 +79,21 @@ class LongReadAlignmentProcessor:
             # correct coordinates to GTF style (inclusive intervals)
             sorted_blocks = correct_bam_coords(concat_blocks)
             logger.debug("Read exons: " + str(sorted_blocks))
-
-            polya_info = self.polya_finder.detect_polya(alignment)
-            sorted_blocks, polya_infom, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
-
-            cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
-
-            if self.params.reference and self.params.sqanti_output:
+            if self.params.reference and (self.params.sqanti_output or self.params.check_canonical):
                 if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
                     self.gene_info.all_read_region_start = sorted_blocks[0][0]
                 if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
-                    self.gene_info.all_read_region_start = sorted_blocks[-1][1]
+                    self.gene_info.all_read_region_end = sorted_blocks[-1][1]
+
+            polya_info = self.polya_finder.detect_polya(alignment)
+            sorted_blocks, polya_infom, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
+            cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 
             combined_profile = self.profile_constructor.construct_profiles(sorted_blocks, polya_info, cage_hits)
-
             read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
 
             if exon_changed:
                 read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
-            # TODO remove field or fix
             read_assignment.polyA_found = (polya_info.external_polya_pos != -1 or
                                            polya_info.external_polyt_pos != -1 or
                                            polya_info.internal_polya_pos != -1 or

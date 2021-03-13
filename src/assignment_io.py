@@ -111,10 +111,11 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
 
 
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
-    def __init__(self, output_file_name, params):
+    def __init__(self, output_file_name, params, io_support):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = "#read_id\tisoform_id\tassignment_type\tassignment_events\texons\tadditional\n"
         self.output_file.write(self.header)
+        self.io_support = io_support
 
     def add_read_info(self, read_assignment):
         if read_assignment is None:
@@ -147,6 +148,14 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 additional_info.append("PolyA=" + str(read_assignment.polyA_found) + ";")
             if self.params.cage is not None:
                 additional_info.append("CAGE=" + str(read_assignment.cage_found) + ";")
+            if self.params.check_canonical and read_assignment.gene_info.reference_region:
+                if len(read_introns) == 0:
+                    additional_info.append("Canonical=Unspliced;")
+                else:
+                    strand = read_assignment.gene_info.isoform_strands[m.assigned_transcript]
+                    all_canonical = self.io_support.check_sites_are_canonical(read_introns, read_assignment.gene_info, strand)
+                    additional_info.append("Canonical=" + str(all_canonical) + ";")
+
             if additional_info:
                 line += "\t" + " ".join(additional_info) + "\n"
             else:
@@ -205,7 +214,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
 
 
 class SqantiTSVPrinter(AbstractAssignmentPrinter):
-    def __init__(self, output_file_name, params):
+    def __init__(self, output_file_name, params, io_support):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = 'isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
                       '\tassociated_gene\tassociated_transcript\tref_length\tref_exons\tdiff_to_TSS\tdiff_to_TTS' \
@@ -214,7 +223,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
                       '\tCDS_genomic_end\tperc_A_downstreamTTS\tseq_A_downstream_TTS\tdist_to_cage_peak' \
                       '\twithin_cage_peak\tdist_to_polya_site\twithin_polya_site\tpolyA_motif\tpolyA_dist\n'
         self.output_file.write(self.header)
-        self.io_support = IOSupport(self.params)
+        self.io_support = io_support
 
     def add_read_info(self, read_assignment):
         if read_assignment is None:
@@ -251,7 +260,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         bite = self.io_support.check_all_sites_match_reference(read_assignment)
         ref_cds_start, ref_cds_end = self.io_support.find_ref_CDS_region(gene_info, transcript_id)
 
-        if hasattr(gene_info, 'reference_region') and gene_info.reference_region is not None:
+        if gene_info.reference_region:
             read_exons = read_assignment.exons
             read_introns = junctions_from_blocks(read_exons)
             all_canonical = str(self.io_support.check_sites_are_canonical(read_introns, gene_info, strand))
@@ -355,7 +364,6 @@ class IOSupport:
 
             if not gene_info.canonical_sites[intron]:
                 return False
-
         return True
 
     def check_downstream_polya(self, read_coords, gene_info, strand):
