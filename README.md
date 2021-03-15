@@ -6,7 +6,7 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
 
 
-# IsoQuant 1.1 manual
+# IsoQuant 1.2 manual
 
 1. [About IsoQuant](#sec1) </br>
     1.1. [Supported data types](#sec1.1)</br>
@@ -167,7 +167,6 @@ By default, each file with reads is treated as a separate sample. To group multi
 `--complete_genedb`
     Set this flag if gene annotation contains transcript and gene metafeatures. Use this flag when providing official annotations, e.g. GENCODE. This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options, which dramatically speed up gene database conversion (see more [here](https://pythonhosted.org/gffutils/autodocs/gffutils.create_db.html?highlight=disable_infer_transcripts)).
 
-
 `--reference` or `-r`
     Reference genome in FASTA format, should be provided  when raw reads are used as an input and to compute some additional stats.
 
@@ -187,14 +186,19 @@ To provide read sequences use one of the following options:
     Input FASTQ/FASTA file(s); each file will be treated as a separate sample.
   
 `--fastq_list` 
-    Text file with list of FASTQ/FASTA files, one file per line, leave empty line between samples.  
+    Text file with list of FASTQ/FASTA files, one file per line, leave empty line between samples.
+
+#### Using intermediate IsoQuant resuts
+
+`--read_assignments` 
+    Prefix of intermediate read assignments located in `<output_dir>/<sample_dir>/aux/`
 
 #### Other input options:
 `--stranded`
     Reads strandness type, supported values are: `forward`, `reverse`, `none`.
 
-`--has_polya`
-    Set this flag if reads were not poly-A trimmed; poly-A tails will be detected and further required for transcript model construction.
+`--polya_trimmed`
+    Set this flag if reads were poly-A trimmed; poly-A tails will not be required for transcript model construction.
 
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
@@ -216,6 +220,9 @@ To provide read sequences use one of the following options:
 
 `--sqanti_output`
     Produce SQANTI-like TSV output (requires more time).
+
+`--check_canonical`
+    Report whether read or constructed transcript model contains non-canonical splice junction.
 
 `--count_exons`
     Perform exon and intron counting in addition to gene and transcript counting.
@@ -262,13 +269,14 @@ You can manually set some of the parameters (will override options in the preset
     Set maximum length for skipped exon that will be treated as misalignment.
 
 #### Transcript model construction:
-
+reliable,default_ccs,default_ont,fl_ccs,all,assembly
 `--model_construction_strategy` A preset of parameters for transcript model construction algorithm, should be one of 
 * `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive; intron retention is not reported;  
-* `default` - a just trade-off between precision and recall for usual long-read dataset, intron retention is reported;   
-* `all` - report most of detected modification as novel transcripts, loses precision in favor to recall; intron retention is reported;
+* `default_ccs` - optimal setting for an average PacBio CCS dataset, intron retention is reported;
+* `default_ont` - optimal setting for and average ONT dataset, intron retention is reported;
 * `fl` - input reads are considered as full-length transcripts; intron retention is reported;
-* `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not required; intron retention is reported;
+* `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not required; intron retention is reported;    
+* `all` - report most of detected modification as novel transcripts, loses precision in favor to recall; intron retention is reported;
 
 Transcript model construction strategy is chosen automatically based on specified data type. However, parameters will be overridden if set manually.
 
@@ -276,6 +284,9 @@ You can manually set some of the parameters (will override options in the preset
 
 `--report_intron_retention` 
     Report intron retention events as novel transcript models.
+
+`--report_apa` 
+    Report alternative polyadenylation events as novel transcript models.
 
 `--collapse_subisoform` 
     Collapse isoforms whose intron chain is a subsequence of another intron chain.
@@ -328,7 +339,8 @@ Output directory will contain one folder per sample with the following files:
 * `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models;
 * `SAMPLE_ID.transcript_models_reads.tsv` - TSV file indicating which reads contributed to transcript models;
 * `SAMPLE_ID.transcript_models_counts.tsv` - counts for constructed transcript models;
-* `SAMPLE_ID.mapped_reads.bed` - coordinates of mapped reads in BED format.
+* `SAMPLE_ID.mapped_reads.bed` - coordinates of mapped reads in BED format;
+* `aux/` - folder with alignment files and intermediate read assignments in binary format.
 
 If `--sqanti_output` is set, IsoQuant will save read assignments in [SQANTI](https://github.com/ConesaLab/SQANTI3#class)-like format:
 * `SAMPLE_ID.SQANTI-like.tsv`
@@ -369,7 +381,7 @@ Tab-separated values, the columns are:
     - `inconsistent` - read was matched with inconsistencies, closest match(es) are reported;
     - `ambiguous` - read was assigned to multiple isoforms equally well;
     - `noninfomative` - reads is intronic/intergenic.
-* `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible inconsistencies events are:
+* `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible events are (see graphical representation below):
     - consistent events:
         - `none` / `.` / `undefined` - no special event detected;
         - `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
@@ -379,10 +391,11 @@ Tab-separated values, the columns are:
         - `mono_exonic` - mono-exonic read matching spliced isoform;
     - alignment artifacts:
         - `intron_shift` - intron that seems to be shifted due to misalignment (typical for Nanopores);
-        - `exon_misallignment` - short exon that seems to be missed due to misalignment  (typical for Nanopores);
+        - `exon_misalignment` - short exon that seems to be missed due to misalignment  (typical for Nanopores);
         - `fake_terminal_exon_5/3` - short terminal exon at 5'/3' end that looks like an alignment artifact (typical for Nanopores);  
+        - `terminal_exon_misalignment_5/3` - missed reference short terminal exon; 
         - `exon_elongation_5/3` - minor exon extension at 5'/3' end (not exceeding 30bp);
-        - `fake_micro_intron_retention` - short annotated introns (not exceeding 30bp) are often missed by the aligners and thus are not considered as intron retention;
+        - `fake_micro_intron_retention` - short annotated introns are often missed by the aligners and thus are not considered as intron retention;
     - intron retentions:
         - `intron_retention` - intron retention;
         - `unspliced_intron_retention`  - intron retention by mono-exonic read;
@@ -403,11 +416,15 @@ Tab-separated values, the columns are:
         - `alternative_structure` - reads has different intron chain that does not fall into any of categories above;
     - alternative transcription start / end (reported when CAGE data / poly-A tails are present):
         - `alternative_polya_site` - read has alternative polyadenylation site;
-        - `fake_polya_site` - poly-A tail detected but seems to be originated from A-rich intronic region;
+        - `internal_polya_site` - poly-A tail detected but seems to be originated from A-rich intronic region;
+        - `correct_polya_site` - poly-A site matches reference transcript end;
+        - `aligned_polya_tail` - poly-A tail aligns to the reference;  
         - `alternative_tss` - alternative transcription start site.
-* `polyA_found` - whether poly-A/T was detected at 5' end (True or False);
-* `aligned_blocks` - list of coordinates for normalized aligned blocks (1-based, indels excluded);
-* `intron_profile`, `split_exon_profile` - supplementary information intended for internal use; so called read profile, i.e. which of the gene's known introns and exons match the read.
+* `exons` - list of coordinates for normalized read exons (1-based, indels and polyA exons are excluded);
+* `additional` - field for supplementary information, which may include:
+    - `PolyA` - True if poly-A tail is detected;
+    - `CAGE` - True if CAGE peak is found;
+    - `Canonical` - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use `--check_canonical`) 
 
 #### Gene and transcript count format
 
@@ -447,7 +464,21 @@ Transcript ids given in the `attribute` field have the following format: `transc
 * nic - novel in catalog, new transcript that contains only annotated introns;
 * nnic - novel not in catalog, new transcript that contains unannotated introns.
 
-The `attribute` field also contains `gene_id` (matches reference gene id), `reference_gene_id` (same value) and `reference_transcript_id` - the most similar known isoform. 
+The `attribute` field also contains `gene_id` (matches reference gene id), `reference_gene_id` (same value) and `reference_transcript_id` - the most similar known isoform.
+In addition, it contains `counts` attribute and `canonical` if `--check_canonical` is set. 
+
+### Event classification figures
+#### Consistent match classifications
+![Correct](figs/correct_match.png) <br><br>
+
+#### Misalignment classifications
+![Misalignment](figs/misalignment.png) <br><br>
+
+#### Inconsistency classifications
+![Inconsistent](figs/inconsistent.png) <br><br>
+
+#### PolyA classifications
+![PolyA](figs/polya.png) 
 
 <a name="sec4"></a>
 ## Citation

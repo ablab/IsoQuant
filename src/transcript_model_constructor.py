@@ -155,7 +155,7 @@ class TranscriptModelConstructor:
                             MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
                             MatchEventSubtype.intron_alternation_known,
                             # tracked but not used generally
-                            MatchEventSubtype.exon_misallignment, MatchEventSubtype.intron_shift}
+                            MatchEventSubtype.exon_misalignment, MatchEventSubtype.intron_shift}
 
     def __init__(self, gene_info, read_assignment_storage, params):
         if params.report_apa:
@@ -546,7 +546,7 @@ class TranscriptModelConstructor:
         isoform_intron = isoform_introns[isoform_pos]
         assert overlaps(read_intron, isoform_intron)
 
-        if event_tuple.event_type in {MatchEventSubtype.exon_misallignment, MatchEventSubtype.intron_shift}:
+        if event_tuple.event_type in {MatchEventSubtype.exon_misalignment, MatchEventSubtype.intron_shift}:
             if contains_well_inside(read_region, (isoform_introns[event_tuple.isoform_region[0]][0],
                                                   isoform_introns[event_tuple.isoform_region[1]][1]),
                                     self.params.delta):

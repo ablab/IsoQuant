@@ -63,8 +63,8 @@ def parse_args(args=None, namespace=None):
     parser.add_argument('--polya_trimmed', action='store_true', default=False,
                         help="set if reads were polyA trimmed; "
                              "polyA tails will not be required for transcript model construction")
-    parser.add_argument('--has_polya', action='store_true', default=True,
-                        help="deprecated option, use --polya_trimmed when reads do not have polyA tails")
+    add_additional_option('--has_polya', action='store_true', default=True,
+                          help="deprecated option, use --polya_trimmed when reads do not have polyA tails")
     parser.add_argument('--check_canonical', action='store_true', default=False,
                         help="report whether splice junctions are canonical (requires reference genome)")
     parser.add_argument('--fl_data', action='store_true', default=False,

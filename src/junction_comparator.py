@@ -311,7 +311,7 @@ class JunctionComparator:
         event = None
         if intron_length_is_similar:
             if total_exon_len <= self.params.max_missed_exon_len:
-                event = MatchEventSubtype.exon_misallignment
+                event = MatchEventSubtype.exon_misalignment
             elif read_introns_known:
                 event = MatchEventSubtype.exon_merge_known
             else:

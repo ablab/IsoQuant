@@ -80,7 +80,7 @@ class MatchEventSubtype(Enum):
     mono_exon_match = 19
     # alignment artifacts
     intron_shift = 21
-    exon_misallignment = 22
+    exon_misalignment = 22
     fake_terminal_exon_left = 24
     fake_terminal_exon_right = 26
     terminal_exon_misalignment_right = 28
@@ -150,7 +150,7 @@ class MatchEventSubtype(Enum):
 
     @staticmethod
     def is_alignment_artifact(match_event_subtype):
-        return match_event_subtype in {MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misallignment,
+        return match_event_subtype in {MatchEventSubtype.intron_shift, MatchEventSubtype.exon_misalignment,
                                        MatchEventSubtype.terminal_exon_misalignment_right,
                                        MatchEventSubtype.terminal_exon_misalignment_left,
                                        MatchEventSubtype.fake_terminal_exon_left,
@@ -162,7 +162,7 @@ class MatchEventSubtype(Enum):
         return match_event_subtype in {MatchEventSubtype.exon_elongation_left,
                                        MatchEventSubtype.exon_elongation_right,
                                        MatchEventSubtype.intron_shift,
-                                       MatchEventSubtype.exon_misallignment,
+                                       MatchEventSubtype.exon_misalignment,
                                        MatchEventSubtype.fake_micro_intron_retention,
                                        MatchEventSubtype.fake_terminal_exon_left,
                                        MatchEventSubtype.fake_terminal_exon_right,
@@ -202,7 +202,7 @@ event_subtype_cost = {
     MatchEventSubtype.ism_internal:0,
     MatchEventSubtype.mono_exon_match:0,
     MatchEventSubtype.intron_shift:0.1,
-    MatchEventSubtype.exon_misallignment:0.1,
+    MatchEventSubtype.exon_misalignment:0.1,
     MatchEventSubtype.terminal_exon_misalignment_right:0.1,
     MatchEventSubtype.terminal_exon_misalignment_left:0.1,
     MatchEventSubtype.fake_terminal_exon_left:0.2,
@@ -441,6 +441,8 @@ match_subtype_printable_names = \
      MatchEventSubtype.major_exon_elongation_right: ('major_exon_elongation_3', 'major_exon_elongation_5'),
      MatchEventSubtype.fake_terminal_exon_left : ('fake_terminal_exon_5', 'fake_terminal_exon_3'),
      MatchEventSubtype.fake_terminal_exon_right : ('fake_terminal_exon_3', 'fake_terminal_exon_5'),
+     MatchEventSubtype.terminal_exon_misalignment_left : ('terminal_exon_misalignment_5', 'terminal_exon_misalignment_3'),
+     MatchEventSubtype.terminal_exon_misalignment_right : ('terminal_exon_misalignment_3', 'terminal_exon_misalignment_5'),
      MatchEventSubtype.incomplete_intron_retention_left: ('incomplete_intron_retention_5', 'incomplete_intron_retention_3'),
      MatchEventSubtype.incomplete_intron_retention_right: ('incomplete_intron_retention_3', 'incomplete_intron_retention_5'),
      MatchEventSubtype.extra_intron_flanking_left: ('extra_intron_5', 'extra_intron_3'),
@@ -449,6 +451,14 @@ match_subtype_printable_names = \
      MatchEventSubtype.alt_right_site_known: ('alt_acceptor_site_known', 'alt_donor_site_known'),
      MatchEventSubtype.alt_left_site_novel: ('alt_donor_site_novel', 'alt_acceptor_site_novel'),
      MatchEventSubtype.alt_right_site_novel: ('alt_acceptor_site_novel', 'alt_donor_site_novel')}
+     #MatchEventSubtype.alternative_polya_site_left: ('alternative_polya_site_5', 'alternative_polya_site_3'),
+     #MatchEventSubtype.alternative_polya_site_right: ('alternative_polya_site_3', 'alternative_polya_site_5'),
+     #MatchEventSubtype.internal_polya_left: ('internal_polya_site_5', 'internal_polya_site_3'),
+     #MatchEventSubtype.internal_polya_right: ('internal_polya_site_3', 'internal_polya_site_5'),
+     #MatchEventSubtype.correct_polya_site_left: ('correct_polya_site_5', 'correct_polya_site_3'),
+     #MatchEventSubtype.correct_polya_site_right: ('correct_polya_site_3', 'correct_polya_site_5'),
+     #MatchEventSubtype.alternative_tss_left: ('alternative_tss_5', 'alternative_tss_3'),
+     #MatchEventSubtype.alternative_tss_right: ('alternative_tss_3', 'alternative_tss_5')}
 
 
 def match_subtype_to_str(event, strand):

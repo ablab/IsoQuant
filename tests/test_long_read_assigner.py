@@ -251,7 +251,7 @@ class TestCompareJunctions:
                               ([(80, 110)], (50, 150), [(80, 90), (105, 110)], (50, 149), 3, MatchEventSubtype.exon_skipping_known),
                               ([(80, 110)], (20, 150), [(65, 90), (105, 110)], (20, 149), 3, MatchEventSubtype.exon_merge_known),
                               ([(70, 110)], (20, 150), [(55, 90), (105, 110)], (20, 149), 3, MatchEventSubtype.exon_merge_novel),
-                              ([(81, 109)], (50, 150), [(80, 98), (102, 110)], (50, 149), 3, MatchEventSubtype.exon_misallignment)])
+                              ([(81, 109)], (50, 150), [(80, 98), (102, 110)], (50, 149), 3, MatchEventSubtype.exon_misalignment)])
     def test_exon_skipping(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
         assigner = LongReadAssigner(self.gene_info, Params(delta))
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
@@ -443,7 +443,7 @@ class TestAssignIsoform:
                               ([(2000, 2098), (2301, 2400), (3001, 3300), (9500, 10012)], -1, -1,
                                "ENSMUST00000001712.7", MatchEventSubtype.exon_elongation_right),
                               ([(1000, 1100), (2000, 2200), (2500, 2600), (3000, 3303), (9496, 10000)],
-                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.exon_misallignment),
+                               -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.exon_misalignment),
                               ([(988, 1100), (2000, 2200), (2500, 2602), (2998, 3300), (6000, 6011), (9500, 9600)],
                                -1, -1, "ENSMUST00000001713.7", MatchEventSubtype.exon_elongation_left),
                               ([(7998, 8201), (8500, 8800), (9900, 9907)], -1, -1,
