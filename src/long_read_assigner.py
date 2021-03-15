@@ -668,8 +668,8 @@ class LongReadAssigner:
                                         MatchEventSubtype.exon_gain_known,
                                         MatchEventSubtype.mutually_exclusive_exons_novel,
                                         MatchEventSubtype.mutually_exclusive_exons_known,
-                                        MatchEventSubtype.exon_detatch_known,
-                                        MatchEventSubtype.exon_detatch_novel}:
+                                        MatchEventSubtype.exon_detach_known,
+                                        MatchEventSubtype.exon_detach_novel}:
                         event_count -= 1
                     elif e.event_type in {MatchEventSubtype.intron_retention,
                                           MatchEventSubtype.unspliced_intron_retention,

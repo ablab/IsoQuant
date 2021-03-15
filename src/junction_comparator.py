@@ -290,9 +290,9 @@ class JunctionComparator:
                 read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
             # exon detach
             if read_introns_known:
-                event = MatchEventSubtype.exon_detatch_known
+                event = MatchEventSubtype.exon_detach_known
             else:
-                event = MatchEventSubtype.exon_detatch_novel
+                event = MatchEventSubtype.exon_detach_novel
 
         if event is None:
             # none of above, complex alternative structure

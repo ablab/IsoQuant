@@ -126,8 +126,8 @@ class MatchEventSubtype(Enum):
     exon_gain_known = 145
     exon_gain_novel = 146
     # similar to mutually exclusive exons but when reference exon is attached to another exon
-    exon_detatch_known = 147
-    exon_detatch_novel = 148
+    exon_detach_known = 147
+    exon_detach_novel = 148
     # terminal exon shift
     terminal_exon_shift_known = 151
     terminal_exon_shift_novel = 152
@@ -246,8 +246,8 @@ event_subtype_cost = {
     # exon gain
     MatchEventSubtype.exon_gain_known:1,
     MatchEventSubtype.exon_gain_novel:1,
-    MatchEventSubtype.exon_detatch_known:0.5,
-    MatchEventSubtype.exon_detatch_novel:0.5,
+    MatchEventSubtype.exon_detach_known:0.5,
+    MatchEventSubtype.exon_detach_novel:0.5,
     MatchEventSubtype.terminal_exon_shift_known:0.5,
     MatchEventSubtype.terminal_exon_shift_novel:0.5,
     # other
@@ -285,7 +285,7 @@ nnic_event_types = {
     MatchEventSubtype.extra_intron_novel, MatchEventSubtype.extra_intron_flanking_left,
     MatchEventSubtype.extra_intron_flanking_right, MatchEventSubtype.mutually_exclusive_exons_novel,
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel,
-    MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
+    MatchEventSubtype.exon_detach_novel, MatchEventSubtype.exon_merge_novel,
     MatchEventSubtype.terminal_exon_shift_novel,
     MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
     MatchEventSubtype.alternative_polya_site_left, MatchEventSubtype.alternative_polya_site_right,
@@ -297,7 +297,7 @@ nic_event_types = {
     MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
     MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
     MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known,
-    MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
+    MatchEventSubtype.exon_detach_known, MatchEventSubtype.exon_merge_known,
     MatchEventSubtype.terminal_exon_shift_known,
     MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
     MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,

@@ -143,14 +143,14 @@ class TranscriptModelConstructor:
                             MatchEventSubtype.extra_intron_flanking_right,
                             MatchEventSubtype.mutually_exclusive_exons_novel,
                             MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel,
-                            MatchEventSubtype.exon_detatch_novel, MatchEventSubtype.exon_merge_novel,
+                            MatchEventSubtype.exon_detach_novel, MatchEventSubtype.exon_merge_novel,
                             MatchEventSubtype.terminal_exon_shift_novel,
                             MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
                             MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
                             MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
                             MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
                             MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known,
-                            MatchEventSubtype.exon_detatch_known, MatchEventSubtype.exon_merge_known,
+                            MatchEventSubtype.exon_detach_known, MatchEventSubtype.exon_merge_known,
                             MatchEventSubtype.terminal_exon_shift_known,
                             MatchEventSubtype.exon_gain_known, MatchEventSubtype.alternative_structure_known,
                             MatchEventSubtype.intron_alternation_known,
@@ -586,14 +586,14 @@ class TranscriptModelConstructor:
             current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         elif event_tuple.event_type in {MatchEventSubtype.mutually_exclusive_exons_novel,
                                         MatchEventSubtype.exon_gain_novel,
-                                        MatchEventSubtype.exon_detatch_novel,
+                                        MatchEventSubtype.exon_detach_novel,
                                         MatchEventSubtype.alternative_structure_novel}:
             # simply insert several reads introns
             for read_pos in range(event_tuple.read_region[0], event_tuple.read_region[1] + 1):
                 current_exon_start = self.add_intron(novel_exons, current_exon_start, read_introns[read_pos])
         elif event_tuple.event_type in {MatchEventSubtype.mutually_exclusive_exons_known,
                                         MatchEventSubtype.exon_gain_known,
-                                        MatchEventSubtype.exon_detatch_known,
+                                        MatchEventSubtype.exon_detach_known,
                                         MatchEventSubtype.alternative_structure_known}:
             # insert several reads introns my fitting them onto reference introns
             for read_pos in range(event_tuple.read_region[0], event_tuple.read_region[1] + 1):

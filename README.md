@@ -41,7 +41,7 @@
 *   To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
 
         python IsoQuant.py --genedb /PATH/TO/gene_annotation.gtf 
-        --fastq /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam 
+        --bam /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam 
         --data_type (pacbio_css|pacbio_raw|nanopore) -o OUTPUT_FOLDER
 
 <a name="sec1"></a>
@@ -412,7 +412,7 @@ Tab-separated values, the columns are:
         - `exon_skipping` - read skips exon(s) comparing to the isoform;
         - `exon_merge` - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon;
         - `exon_gain` - read contains additional exon(s) comparing to the isoform;
-        - `exon_detatch` - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length;
+        - `exon_detach` - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length;
         - `alternative_structure` - reads has different intron chain that does not fall into any of categories above;
     - alternative transcription start / end (reported when CAGE data / poly-A tails are present):
         - `alternative_polya_site` - read has alternative polyadenylation site;
