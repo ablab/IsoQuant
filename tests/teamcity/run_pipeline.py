@@ -8,6 +8,7 @@
 
 import os
 import sys
+import glob
 from traceback import print_exc
 import subprocess
 
@@ -135,7 +136,11 @@ def main(args):
         isoquant_command_list.append(reads)
         isoquant_command_list.append("-r")
         isoquant_command_list.append(fix_path(config_file, config_dict["genome"]))
-        bam = os.path.join(output_folder, "%s/%s.bam" % (label, label))
+        bam = glob.glob(os.path.join(output_folder, "%s/aux/%s*.bam" % (label, label)))
+        if not bam:
+            log.err("BAM file was not found")
+            return -11
+        bam = bam[0]
 
     if "isoquant_options" in config_dict:
         isoquant_command_list.append(config_dict["isoquant_options"].replace('"', ''))
