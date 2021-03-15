@@ -10,6 +10,8 @@ from collections import namedtuple
 from functools import reduce
 import copy
 
+from src.common import *
+from src.assignment_io import *
 from src.isoform_assignment import *
 from src.long_read_profiles import *
 from src.junction_comparator import *
@@ -20,7 +22,7 @@ logger = logging.getLogger('IsoQuant')
 
 
 class GFFPrinter:
-    def __init__(self, outf_prefix, sample_name, print_meta_features=False):
+    def __init__(self, outf_prefix, sample_name, io_support):
         self.model_fname = os.path.join(outf_prefix, sample_name + ".transcript_models.gtf")
         self.out_gff = open(self.model_fname, "w")
         self.out_gff.write("# " + sample_name + " IsoQuant generated GFF\n")
@@ -28,9 +30,7 @@ class GFFPrinter:
         self.out_r2t.write("#read_id\ttranscript_id\n")
         self.out_counts = open(os.path.join(outf_prefix, sample_name + ".transcript_models_counts.tsv"), "w")
         self.out_counts.write("#ID\t%s\n" % sample_name)
-        # TODO implement meta features
-        # TODO print additional information in GTF -- counts, modifications
-        self.print_meta_features = print_meta_features
+        self.io_support = io_support
 
     def __del__(self):
         self.out_gff.close()
@@ -72,7 +72,19 @@ class GFFPrinter:
                 model = transcript_model_constructor.transcript_model_storage[model_index]
                 assert model.gene_id == gene_id
 
-                # TODO add infromation about counts and modifications for novel transcripts
+                if transcript_model_constructor.params.check_canonical and \
+                        transcript_model_constructor.gene_info.reference_region:
+                    model_introns = junctions_from_blocks(model.exon_blocks)
+                    if len(model_introns) == 0:
+                        canonical_info = "Canonical=Unspliced;"
+                    else:
+                        strand = transcript_model_constructor.gene_info.isoform_strands[model.reference_transcript]
+                        all_canonical = self.io_support.check_sites_are_canonical(model_introns,
+                                                                                  transcript_model_constructor.gene_info,
+                                                                                  strand)
+                        canonical_info = "Canonical=" + str(all_canonical) + ";"
+                    model.additional_info += canonical_info
+
                 transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
                                   'reference_gene_id "%s"; reference_transcript_id "%s"; counts=%0.2f; %s\n' % \
                             (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,

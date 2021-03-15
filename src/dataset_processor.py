@@ -354,7 +354,7 @@ class DatasetProcessor:
 
     def construct_models(self, sample):
         logger.info("Constructing transcript models for " + sample.label)
-        gff_printer = GFFPrinter(sample.out_dir, sample.label)
+        gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support)
         transcript_stat_counter = EnumStats()
 
         for gene_info, assignment_storage in self.reads_assignments:
