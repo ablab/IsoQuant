@@ -169,7 +169,7 @@ class StatCounter:
         w_f = open(w_fname, "w")
         u_f = open(u_fname, "w")
         for seq_id in self.mapping_data.seq_set:
-            if not use_mismapped and seq_id in self.mismapped_seqs:
+            if not use_mismapped and seq_id not in self.correct_seqs:
                 continue
             if seq_id in self.assignment_data.assigned_isoforms.keys():
                 real_isoform_id = self.mapping_data.seqid_to_isoform[seq_id]
