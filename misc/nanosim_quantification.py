@@ -187,7 +187,7 @@ def parse_args():
                         default=1)
 
     parser.add_argument('-rt', '--transcriptome', help='Input reference transcriptome', default=None)
-    parser.add_argument('-e', '--exp', help='Expression profile in the specified format as described in README',
+    parser.add_argument('-e', '--exp', help='Expression profile in the specified format as described in NanoSim README',
                         required=True)
     parser.add_argument('-c', '--model_prefix', default="training",
                         help='Location and prefix of error profiles generated from characterization step (Default = training)')

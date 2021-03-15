@@ -118,13 +118,15 @@ class QuantificationConfig:
         self.ed = args.ed
         self.nbn = args.nbn
         self.gff = args.gff
+        self.expr_abundance = args.exp
         self.simulated_reads = self.sim_output + '/simulated_reads_normal.fa'
 
     @property
     def isoseqsim_command(self):
         return f'{self.isoseq_path} -g {self.reference} '\
                f'-a {self.gff} '\
-               f'--es {self.es} --ei {self.ei} --ed {self.ed} --nbn {self.nbn} ' \
+               f'--es {self.es} --ei {self.ei} --ed {self.ed}' \
+               f'--exp {self.expr_abundance}' \
                f'--c5 {self.isoseq_utilities / "5_end_completeness.PacBio-P6-C4.tab"} ' \
                f'--c3 {self.isoseq_utilities / "3_end_completeness.PacBio-P6-C4.tab"} ' \
                f'-o {self.simulated_reads} ' \
@@ -165,7 +167,8 @@ def parse_args():
     parser.add_argument('--ed', type=str, default='0.0027', help="Error rate for deletion.")
     parser.add_argument('--nbn', type=str, default='10',
                         help="Average read count per transcript to simulate (i.e., the parameter 'n' of the Negative Binomial distribution)")
-
+    parser.add_argument('-e', '--exp', help='Expression profile, supported only by modified IsoSeqSim',
+                        required=True)
     return parser.parse_args()
 
 
