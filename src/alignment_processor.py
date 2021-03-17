@@ -69,7 +69,7 @@ class LongReadAlignmentProcessor:
                 continue
             if alignment.is_supplementary:
                 continue
-            if not self.params.use_secondary and alignment.is_secondary:
+            if self.params.no_secondary and alignment.is_secondary:
                 continue
 
             logger.debug("=== Processing read " + read_id + " ===")

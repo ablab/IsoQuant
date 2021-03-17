@@ -87,7 +87,8 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--sqanti_output", help="produce SQANTI-like TSV output (requires more time)",
                         action='store_true', default=False)
     parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
-    add_additional_option("--use_secondary", help="do not ignore secondary alignments", action='store_true', default=True)
+    add_additional_option("--no_secondary", help="ignore secondary alignments (not recommended)", action='store_true',
+                          default=False)
 
     # ADDITIONAL OPTIONS
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +

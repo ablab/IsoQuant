@@ -342,7 +342,6 @@ class DatasetProcessor:
         logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         for read_id in multimap_reads_assignments.keys():
-            # TODO add read assignments back to storage
             logger.debug("Resolving multimapper " + read_id +
                          ", total assignments %d" % len(multimap_reads_assignments[read_id]))
             read_assignments = multimap_resolver.resolve(multimap_reads_assignments[read_id])

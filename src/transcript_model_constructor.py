@@ -192,7 +192,6 @@ class TranscriptModelConstructor:
                 logger.debug("== Processing modification cluster for isoform %s of size %d, modifications:" %
                              (isoform_id, len(assignments)))
                 logger.debug(", ".join(["%s: %s" % (x[0], str(x[1])) for x in modification]))
-                # TODO: if modification type is only extra introns, filter out those that have distant intron positions
                 self.process_isoform_modifications(isoform_id, assignments, candidate_model_storage)
 
         # merge constructed transcripts
@@ -292,7 +291,6 @@ class TranscriptModelConstructor:
         remaining_assignments = copy.copy(assignments)
         while len(remaining_assignments) >= self.params.min_novel_supporting_reads:
             # choose the best representative
-            # TODO: precompute them in order
             representative_read_assignment = self.select_representative_read(isoform_id, remaining_assignments)
             if not representative_read_assignment:
                 # logger.debug("> No reliable representative read can be found")
@@ -597,7 +595,6 @@ class TranscriptModelConstructor:
                                         MatchEventSubtype.alternative_structure_known}:
             # insert several reads introns my fitting them onto reference introns
             for read_pos in range(event_tuple.read_region[0], event_tuple.read_region[1] + 1):
-                # TODO speed up
                 novel_intron = self.get_closest_ref_intron(read_introns[read_pos])
                 current_exon_start = self.add_intron(novel_exons, current_exon_start, novel_intron)
         else:
@@ -705,7 +702,7 @@ class TranscriptModelConstructor:
                                                    candidate_model_storage)
 
     def verify_novel_monoexonic_model(self, read_assignments, transcript_model, original_read_id, candidate_model_storage):
-        # TODO verify ends using CAGE/polyA/Illumina
+        # TODO verify ends using CAGE/Illumina
         model_exons = transcript_model.exon_blocks
         assert len(model_exons) == 1
         isoform_start = model_exons[0][0]

@@ -26,23 +26,23 @@
 
 *   IsoQuant can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda:
 
-        conda create -с conda-forge -c bioconda -n isoquant python=3 isoquant
+        conda create -c conda-forge -c bioconda -n isoquant python=3 isoquant
 
 *   If installing manually, you will need Python3 (preferably 3.7), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
   
 *   To run IsoQuant on raw FASTQ/FASTA files use the following command
 
-        python IsoQuant.py 
-        --reference /PATH/TO/reference_genome.fasta --genedb /PATH/TO/gene_annotation.gtf 
+        isoquant.py --reference /PATH/TO/reference_genome.fasta 
+        --genedb /PATH/TO/gene_annotation.gtf 
         --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz 
-        --data_type (pacbio_css|pacbio_raw|nanopore) -o OUTPUT_FOLDER
+        --data_type (pacbio_ccs|pacbio_raw|nanopore) -o OUTPUT_FOLDER
 
 
 *   To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
 
-        python IsoQuant.py --genedb /PATH/TO/gene_annotation.gtf 
+        isoquant.py --genedb /PATH/TO/gene_annotation.gtf 
         --bam /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam 
-        --data_type (pacbio_css|pacbio_raw|nanopore) -o OUTPUT_FOLDER
+        --data_type (pacbio_ccs|pacbio_raw|nanopore) -o OUTPUT_FOLDER
 
 <a name="sec1"></a>
 # About IsoQuant
@@ -120,7 +120,7 @@ You also need [samtools](http://www.htslib.org/download/) and [minimap2](https:/
 ## Verifying your installation 
 To verify IsoQuant installation type
 ```bash
-python3 isoquant.py --test
+isoquant.py --test
 ```
 to run on toy dataset.  
 If the installation is successful, you will find the following information at the end of the log:
@@ -169,6 +169,10 @@ By default, each file with reads is treated as a separate sample. To group multi
 
 `--reference` or `-r`
     Reference genome in FASTA format, should be provided  when raw reads are used as an input and to compute some additional stats.
+
+`--index`
+    Reference genome index for the specified aligner (`minimap2` by default), can be provided only when raw reads are used as an input (constructed automatically if not set).
+
 
 #### Using mapped reads as input:
 To provide aligned reads use one of the following options:
@@ -227,14 +231,11 @@ To provide read sequences use one of the following options:
 `--count_exons`
     Perform exon and intron counting in addition to gene and transcript counting.
 
-`--use_secondary`
-    Do not ignore secondary alignments (may significantly affect the results).
+`--no_secondary`
+    Ignore secondary alignments (not recommended).
 
 `--aligner`
-    Force to use this alignment method, can be `starlong` or `minimap2`; chosen automatically based on data type if not set.
-
-`--index`
-    Reference genome index for the specified aligner, can be provided only when raw reads are used as an input (constructed automatically if not set).
+    Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.
 
 `--run_aligner_only` 
     Align reads to reference without running IsoQuant itself.
