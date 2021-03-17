@@ -5,6 +5,7 @@ mkdir $TARGET_DIR
 
 cp -r ./src $TARGET_DIR/
 cp -r ./tests $TARGET_DIR/
+cp -r ./figs $TARGET_DIR/
 
 # cleaning .pyc and .pyo
 rm -f */*.pyc

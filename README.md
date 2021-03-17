@@ -28,7 +28,7 @@
 
         conda create -c conda-forge -c bioconda -n isoquant python=3 isoquant
 
-*   If installing manually, you will need Python3 (preferably 3.7), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
+*   If installing manually, you will need Python3 (3.7 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
   
 *   To run IsoQuant on raw FASTQ/FASTA files use the following command
 
@@ -49,7 +49,7 @@
 
 IsoQuant is a tool for reference-based analysis of long RNA reads, such as PacBio or Oxford Nanopores. IsoQuant maps reads to the reference genome and assigns them to the annotated isoforms based on their intron and exon structure. IsoQuant is also capable of discovering various modifications, such as intron retention, alternative splice sites, skipped exons etc. IsoQuant further performs gene, isoform, exon and intron quantification. If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. In addition, IsoQuant generates discovered transcript models, including novel ones.
 
-IsoQuant version 1.1 was released under GPLv2 on December 11th, 2020 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 1.2 was released under GPLv2 on March 19th, 2021 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 
 <a name="sec1.1"></a>
@@ -226,7 +226,7 @@ To provide read sequences use one of the following options:
     Produce SQANTI-like TSV output (requires more time).
 
 `--check_canonical`
-    Report whether read or constructed transcript model contains non-canonical splice junction.
+    Report whether read or constructed transcript model contains non-canonical splice junction (requires more time).
 
 `--count_exons`
     Perform exon and intron counting in addition to gene and transcript counting.
@@ -238,10 +238,10 @@ To provide read sequences use one of the following options:
     Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.
 
 `--run_aligner_only` 
-    Align reads to reference without running IsoQuant itself.
+    Align reads to the reference without running IsoQuant itself.
 
 `--threads` or `-t`
-    Number of threads to use, 16 by default (currently affects the alignment stage only). 
+    Number of threads to use, 16 by default. 
 
 `--keep_tmp` 
     Do not remove temporary files in the end.
@@ -313,17 +313,17 @@ You can manually set some of the parameters (will override options in the preset
 * Mapped raw PacBio reads in BAM format; not poly-A trimmed; pre-converted gene annotation:
 
 ```bash
-isoquant.py -d pacbio_raw --has_polya --bam mapped_reads.bam --genedb annotation.db --output output_dir 
+isoquant.py -d pacbio_raw --bam mapped_reads.bam --genedb annotation.db --output output_dir 
 ```
 
 * Nanopore dRNA reads; not poly-A trimmed; official annotation in GTF format, used sample label instead of file name:
 ```bash
-isoquant.py -d nanopore --has_polya --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --threads 8 --labels My_ONT
+isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --labels My_ONT
 ```
 
 * PacBio FL reads, poly-A trimmed; custom annotation in GTF format, which contains only exon features:
 ```bash
-python3 isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir --threads 8
+isoquant.py -d pacbio_ccs --polya_trimmed --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir 
 ```
 
 <a name="sec3.3"></a>
