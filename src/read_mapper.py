@@ -188,7 +188,6 @@ def index_reference(aligner, args):
         if os.path.isdir(index_name) and os.path.exists(os.path.join(index_name, "genomeParameters.txt")):
             logger.debug('Reusing reference index ' + index_name)
             return index_name
-        # TODO: add annotation
         exec_path = get_aligner('STARlong')
         if not os.path.isdir(index_name):
             os.makedirs(index_name)
@@ -267,7 +266,6 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
         additional_options = []
         if args.stranded == 'forward':
             additional_options.append('-uf')
-        # TODO: add junction bed
         command = [minimap2_path, args.index, fastq_path, '-a', '-x', 'splice', '--secondary=yes', '-Y',
                    '-C', str(CANONICAL_SITE_BONUS[args.data_type]),
                    '-t', str(args.threads)] + additional_options

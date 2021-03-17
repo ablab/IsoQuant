@@ -595,7 +595,6 @@ class LongReadAssigner:
         matches = []
         for isoform_id in selected_isoforms:
             match_classification = MatchClassification.get_inconsistency_classification(read_matches[isoform_id])
-            # TODO: add FSM / ISM information if all events are non-itronic - not sure
             isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
                                          read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id])
             matches.append(isoform_match)
