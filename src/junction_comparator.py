@@ -208,9 +208,9 @@ class JunctionComparator:
         isoform_intron_total_len = sum(interval_len(isoform_junctions[i])
                                        for i in range(isoform_cregion[0], isoform_cregion[1] + 1))
         total_intron_len_diff = abs(read_intron_total_len - isoform_intron_total_len)
-        intron_length_is_similar = \
-            total_intron_len_diff <= min(self.params.max_intron_abs_diff,
-                                         self.params.max_intron_rel_diff * max(read_intron_total_len, isoform_intron_total_len))
+        max_intron_diff = min(self.params.max_intron_abs_diff,
+                              self.params.max_intron_rel_diff * max(read_intron_total_len, isoform_intron_total_len))
+        intron_length_is_similar = total_intron_len_diff <= max_intron_diff
 
         read_introns_known = self.are_known_introns(read_junctions, read_cregion)
 
@@ -227,9 +227,9 @@ class JunctionComparator:
         similar_right_site = abs(read_right_site - isoform_right_site) <= 2 * self.params.delta
         similar_bounds = similar_letf_site and similar_right_site
         read_introns_inside = contains_approx((isoform_left_site, isoform_right_site),
-                                              (read_left_site, read_right_site), self.params.delta)
+                                              (read_left_site, read_right_site), max_intron_diff)
         isofrom_introns_inside = contains_approx((read_left_site, read_right_site),
-                                                 (isoform_left_site, isoform_right_site), self.params.delta)
+                                                 (isoform_left_site, isoform_right_site), max_intron_diff)
 
         event = None
         if surrounded_by_exons and read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
