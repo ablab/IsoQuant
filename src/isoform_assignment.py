@@ -503,7 +503,10 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
                            MatchEventSubtype.alternative_tss_left, MatchEventSubtype.alternative_tss_right,
                            MatchEventSubtype.alternative_polya_site_left, MatchEventSubtype.alternative_polya_site_right,
                            MatchEventSubtype.correct_polya_site_right, MatchEventSubtype.correct_polya_site_left,
-                           MatchEventSubtype.internal_polya_left, MatchEventSubtype.internal_polya_right}:
+                           MatchEventSubtype.internal_polya_left, MatchEventSubtype.internal_polya_right,
+                           MatchEventSubtype.exon_misalignment, MatchEventSubtype.exon_skipping_novel,
+                           MatchEventSubtype.exon_skipping_known, MatchEventSubtype.exon_merge_known,
+                           MatchEventSubtype.exon_merge_novel}:
         # elongation events
         additional_info = ":" + str(event.event_info)
     else:

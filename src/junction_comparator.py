@@ -232,6 +232,7 @@ class JunctionComparator:
                                                  (isoform_left_site, isoform_right_site), max_intron_diff)
 
         event = None
+        event_info = 0
         if surrounded_by_exons and read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
             # single exons is altered
             event = self.classify_single_intron_alternation(read_region, read_junctions, isoform_region,
@@ -274,8 +275,8 @@ class JunctionComparator:
         elif surrounded_by_exons and read_introns_inside and \
                 read_cregion[1] == read_cregion[0] and isoform_cregion[1] > isoform_cregion[0]:
             # skipped exon(s)
-            event = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
-                                                intron_length_is_similar, read_introns_known, similar_bounds)
+            event, event_info = self.classify_skipped_exons(isoform_junctions, isoform_cregion,
+                                                            intron_length_is_similar, read_introns_known, similar_bounds)
 
         elif surrounded_by_exons and similar_bounds and \
                 read_cregion[1] > read_cregion[0] and isoform_cregion[1] == isoform_cregion[0]:
@@ -303,7 +304,7 @@ class JunctionComparator:
                 event = MatchEventSubtype.intron_retention
             else:
                 event = MatchEventSubtype.alternative_structure_novel
-        return MatchEvent(event, isoform_cregion, read_cregion)
+        return MatchEvent(event, isoform_cregion, read_cregion, event_info)
 
     def classify_skipped_exons(self, isoform_junctions, isoform_cregion,
                                intron_length_is_similar, read_introns_known, similar_bounds):
@@ -322,7 +323,7 @@ class JunctionComparator:
                 event = MatchEventSubtype.exon_skipping_known
             else:
                 event = MatchEventSubtype.exon_skipping_novel
-        return event
+        return event, total_exon_len
 
     def classify_single_intron_alternation(self, read_region, read_junctions, isoform_region, isoform_junctions,
                                            read_cpos, isoform_cpos, intron_length_is_similar, read_introns_known):
