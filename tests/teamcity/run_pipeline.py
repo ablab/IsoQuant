@@ -146,11 +146,6 @@ def main():
         isoquant_command_list.append(reads)
         isoquant_command_list.append("-r")
         isoquant_command_list.append(fix_path(config_file, config_dict["genome"]))
-        bam = glob.glob(os.path.join(output_folder, "%s/aux/%s*.bam" % (label, label)))
-        if not bam:
-            log.err("BAM file was not found")
-            return -11
-        bam = bam[0]
 
     if "isoquant_options" in config_dict:
         isoquant_command_list.append(config_dict["isoquant_options"].replace('"', ''))
@@ -160,6 +155,13 @@ def main():
     if result.returncode != 0:
         log.err("IsoQuant exited with non-zero status: %d" % result.returncode)
         return -11
+
+    if "bam" not in config_dict:
+        bam = glob.glob(os.path.join(output_folder, "%s/aux/%s*.bam" % (label, label)))
+        if not bam:
+            log.err("BAM file was not found")
+            return -21
+        bam = bam[0]
 
     output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
     log.end_block('isoquant')
