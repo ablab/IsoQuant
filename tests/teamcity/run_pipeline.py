@@ -8,6 +8,7 @@
 
 import os
 import sys
+import argparse
 import glob
 from traceback import print_exc
 import subprocess
@@ -91,14 +92,23 @@ def fix_path(config_file, path):
     return os.path.join(os.path.dirname(config_file), path)
 
 
-def main(args):
-    log = TeamCityLog()
+def parse_args():
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--output", "-o", type=str, help="Output file name")
+    parser.add_argument("config_file", metavar="config_file", type=str, help="configuration .info file")
 
-    if len(args) < 1:
+    args = parser.parse_args()
+    return args
+
+
+def main():
+    log = TeamCityLog()
+    args = parse_args()
+    if not args.config_file:
         log.err("Provide configuration file")
         exit(-2)
 
-    config_file = args[0]
+    config_file = args.config_file
     if not os.path.exists(config_file):
         log.err("Provide correct path to configuration file")
         exit(-3)
@@ -114,7 +124,7 @@ def main(args):
             return -10
 
     label = config_dict["name"]
-    output_folder = os.path.join(config_dict["output"], label)
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
     genedb = fix_path(config_file, config_dict["genedb"])
     reads = fix_path(config_file, config_dict["reads"])
 
@@ -200,7 +210,7 @@ def main(args):
 if __name__ == "__main__":
     # stuff only to run when not called via 'import' here
     try:
-        ecode = main(sys.argv[1:])
+        ecode = main()
         if ecode != 0:
             sys.exit(ecode)
     except SystemExit:

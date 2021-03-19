@@ -160,14 +160,18 @@ class StatCounter:
             else:
                 self.mismapped_seqs.add(seq_id)
 
-    def count_assignment_stats(self, db, use_mismapped=False):
+    def count_assignment_stats(self, db, use_mismapped=False, output_dir=None):
         self.seq_assignments = defaultdict()
-        c_fname = self.prefix + ".corr_isoforms.txt" if use_mismapped else self.prefix + ".full_corr_isoforms.txt"
-        w_fname = self.prefix + ".wrong_isoforms.txt" if use_mismapped else self.prefix + ".full_wrong_isoforms.txt"
-        u_fname = self.prefix + ".unassigned_isoforms.txt" if use_mismapped else self.prefix + ".full_unassigned_isoforms.txt"
-        c_f = open(c_fname, "w")
-        w_f = open(w_fname, "w")
-        u_f = open(u_fname, "w")
+        c_f = None
+        w_f = None
+        u_f = None
+        if output_dir:
+            c_fname = self.prefix + ".corr_isoforms.txt" if use_mismapped else self.prefix + ".full_corr_isoforms.txt"
+            w_fname = self.prefix + ".wrong_isoforms.txt" if use_mismapped else self.prefix + ".full_wrong_isoforms.txt"
+            u_fname = self.prefix + ".unassigned_isoforms.txt" if use_mismapped else self.prefix + ".full_unassigned_isoforms.txt"
+            c_f = open(os.path.join(output_dir, c_fname), "w")
+            w_f = open(os.path.join(output_dir, w_fname), "w")
+            u_f = open(os.path.join(output_dir, u_fname), "w")
         for seq_id in self.mapping_data.seq_set:
             if not use_mismapped and seq_id not in self.correct_seqs:
                 continue
@@ -176,22 +180,27 @@ class StatCounter:
                 assigned_isoform_id = self.assignment_data.assigned_isoforms[seq_id]
                 if assigned_isoform_id == real_isoform_id:
                     self.seq_assignments[seq_id] = ReadType.CORRECT
-                    c_f.write(seq_id + "\n")
+                    if c_f:
+                        c_f.write(seq_id + "\n")
                 elif assigned_isoform_id == 'novel':
                     self.seq_assignments[seq_id] = ReadType.NOT_ASSIGNED
-                    u_f.write(seq_id + "\n")
+                    if u_f:
+                        u_f.write(seq_id + "\n")
                 else:
                     if real_isoform_id not in db.isoform_to_gene_map or \
                             assigned_isoform_id not in db.gene_to_isoforms_map[db.isoform_to_gene_map[real_isoform_id]]:
                         self.seq_assignments[seq_id] = ReadType.INCORRECT_OTHER_GENE
-                        w_f.write(seq_id + "\n")
+                        if w_f:
+                            w_f.write(seq_id + "\n")
                     else:
                         self.seq_assignments[seq_id] = ReadType.INCORRECT_SAME_GENE
-                        w_f.write(seq_id + "\n")
+                        if w_f:
+                            w_f.write(seq_id + "\n")
 
             else:
                 self.seq_assignments[seq_id] = ReadType.NOT_ASSIGNED
-                u_f.write(seq_id + "\n")
+                if w_f:
+                    u_f.write(seq_id + "\n")
 
     def get_read_counts(self, read_type):
         return sum(val == read_type for val in self.seq_assignments.values())
@@ -288,6 +297,7 @@ def compare_real_results(data_a, data_b):
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="Output file name")
+    parser.add_argument("--detailed_output", type=str, help="Output folder for detailed information on every read")
     parser.add_argument("--fasta", "-f", type=str, help="initial file with sequences")
     parser.add_argument("--mapping", "-m", type=str, help="mapped sequences (SAM or BAM format)") ## SQANTI2 output
     parser.add_argument("--tsv", "-t", type=str, nargs='+', help="assigned isoforms, max number of files to compare: 2")
@@ -311,6 +321,11 @@ def main():
     mapping_data = MappingData(args)
     all_stats = []
     output_file = sys.stdout if not args.output else open(args.output, "w")
+    detailed_output_dir = None
+    if args.detailed_output:
+        if not os.path.exists(args.detailed_output):
+            os.makedirs(args.detailed_output)
+        detailed_output_dir = args.detailed_output
 
     for tsv_file in args.tsv:
         #TODO: diff bams
@@ -337,7 +352,7 @@ def main():
 
         # use only correctly mapped reads
         logger.info("   Counting pure assignment stats...")
-        stat_counter.count_assignment_stats(db)
+        stat_counter.count_assignment_stats(db, output_dir=detailed_output_dir)
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
@@ -347,7 +362,7 @@ def main():
 
         # use all reads
         logger.info("   Counting overall assignment stats...")
-        stat_counter.count_assignment_stats(db, use_mismapped=True)
+        stat_counter.count_assignment_stats(db, use_mismapped=True, output_dir=detailed_output_dir)
         correct_assignments = stat_counter.get_read_counts(ReadType.CORRECT)
         incorrect_assignments = stat_counter.get_read_counts(ReadType.INCORRECT_OTHER_GENE) + stat_counter.get_read_counts(ReadType.INCORRECT_SAME_GENE)
         unassigned_reads = stat_counter.get_read_counts(ReadType.NOT_ASSIGNED)
