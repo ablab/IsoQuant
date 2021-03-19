@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+#
 ############################################################################
 # Copyright (c) 2020 Saint Petersburg State University
 # # All Rights Reserved
@@ -129,7 +131,7 @@ def main():
     reads = fix_path(config_file, config_dict["reads"])
 
     log.start_block('isoquant', 'Running IsoQuant')
-    isoquant_command_list = ["python", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
+    isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
                     "--genedb", genedb, "-d", config_dict["datatype"], "-t", "16", "-l", label]
     if "bam" in config_dict:
         isoquant_command_list.append("--bam")
@@ -168,7 +170,7 @@ def main():
 
     log.start_block('quality', 'Running quality assessment')
     quality_report = os.path.join(output_folder, "report.tsv")
-    qa_command_list = ["python", os.path.join(isoquant_dir, "src/assess_assignment_quality.py"),
+    qa_command_list = ["python3", os.path.join(isoquant_dir, "src/assess_assignment_quality.py"),
                        "-o", quality_report, "--gene_db", genedb, "--tsv", output_tsv,
                        "--mapping", bam, "--fasta", reads]
 
