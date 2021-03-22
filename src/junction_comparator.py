@@ -419,31 +419,26 @@ class JunctionComparator:
 
         if extra_left:
             read_pos = 0
-            all_exons_are_short = True
+            if interval_len(get_exon(read_region, read_introns, read_pos)) <= self.params.max_fake_terminal_exon_len:
+                match_events.append(MatchEvent(MatchEventSubtype.fake_terminal_exon_left,
+                                               SupplementaryMatchConstansts.extra_left_region, (read_pos, read_pos)))
+                read_pos += 1
+
             while read_pos < len(read_intron_read_profile) and read_intron_read_profile[read_pos] == 0:
-                # check preceding exon len
-                if all_exons_are_short and \
-                        interval_len(get_exon(read_region, read_introns, read_pos)) > self.params.max_fake_terminal_exon_len:
-                    all_exons_are_short = False
-                # add a new event for extra intron
-                even_type = MatchEventSubtype.fake_terminal_exon_left if all_exons_are_short else MatchEventSubtype.extra_intron_flanking_left
-                match_events.append(MatchEvent(even_type, SupplementaryMatchConstansts.extra_left_region,
-                                               (read_pos, read_pos)))
+                match_events.append(MatchEvent(MatchEventSubtype.extra_intron_flanking_left,
+                                               SupplementaryMatchConstansts.extra_left_region, (read_pos, read_pos)))
                 read_pos += 1
 
         if extra_right:
-            total_read_introns = len(read_intron_read_profile) - 1
-            read_pos = total_read_introns
-            all_exons_are_short = True
-            while read_pos >= 0 and read_intron_read_profile[read_pos] == 0:
-                # check next exon len
-                if all_exons_are_short and \
-                        interval_len(get_exon(read_region, read_introns, read_pos + 1)) > self.params.max_fake_terminal_exon_len:
-                    all_exons_are_short = False
+            read_pos = len(read_intron_read_profile) - 1
+            if interval_len(get_exon(read_region, read_introns, read_pos + 1)) <= self.params.max_fake_terminal_exon_len:
+                match_events.append(MatchEvent(MatchEventSubtype.fake_terminal_exon_right,
+                                               SupplementaryMatchConstansts.extra_right_region, (read_pos, read_pos)))
+                read_pos -= 1
 
-                even_type = MatchEventSubtype.fake_terminal_exon_right if all_exons_are_short else MatchEventSubtype.extra_intron_flanking_right
-                match_events.append(MatchEvent(even_type, SupplementaryMatchConstansts.extra_right_region,
-                                               (read_pos, read_pos)))
+            while read_pos >= 0 and read_intron_read_profile[read_pos] == 0:
+                match_events.append(MatchEvent(MatchEventSubtype.extra_intron_flanking_right,
+                                               SupplementaryMatchConstansts.extra_right_region, (read_pos, read_pos)))
                 read_pos -= 1
 
     def profile_for_junctions_introns(self, junctions, region):

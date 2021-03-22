@@ -414,6 +414,7 @@ Tab-separated values, the columns are:
         - `exon_merge` - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon;
         - `exon_gain` - read contains additional exon(s) comparing to the isoform;
         - `exon_detach` - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length;
+        - `terminal_exon_shift` - read has alternative terminal exon;   
         - `alternative_structure` - reads has different intron chain that does not fall into any of categories above;
     - alternative transcription start / end (reported when CAGE data / poly-A tails are present):
         - `alternative_polya_site` - read has alternative polyadenylation site;
