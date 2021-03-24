@@ -86,7 +86,7 @@ class LongReadAlignmentProcessor:
                     self.gene_info.all_read_region_end = sorted_blocks[-1][1]
 
             polya_info = self.polya_finder.detect_polya(alignment)
-            sorted_blocks, polya_infom, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
+            sorted_blocks, polya_info, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
             cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 
             combined_profile = self.profile_constructor.construct_profiles(sorted_blocks, polya_info, cage_hits)

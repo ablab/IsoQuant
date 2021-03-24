@@ -55,7 +55,7 @@ class PolyAFixer:
         self.params = params
 
     def correct_read_info(self, read_exons, polya_info):
-        if len(read_exons) == 1 or (polya_info.internal_polya_pos != -1 and polya_info.internal_polyt_pos != -1):
+        if len(read_exons) == 1:
             return read_exons, polya_info, False
 
         changed = False
@@ -73,12 +73,14 @@ class PolyAFixer:
             polya_info.internal_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.internal_polya_pos)
             polya_info.external_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.external_polya_pos)
             read_exons = read_exons[:-polya_exon_count]
+            logger.debug("Trimming polyA exons %d: %s" % (polya_exon_count, str(read_exons)))
             changed = True
 
         if polyt_exon_count > 0:
             polya_info.internal_polyt_pos = shift_polyt(read_exons, polyt_exon_count, polya_info.internal_polyt_pos)
             polya_info.external_polyt_pos = shift_polyt(read_exons, polyt_exon_count, polya_info.external_polyt_pos)
             read_exons = read_exons[polyt_exon_count:]
+            logger.debug("Trimming polyT exons %d: %s" % (polyt_exon_count, str(read_exons)))
             changed = True
 
         return read_exons, polya_info, changed
@@ -93,8 +95,10 @@ class PolyAFixer:
             exon = read_exons[-i - 1]
             if exon[1] <= internal_polya_pos:
                 break
-            if internal_polya_pos - exon[0] <= self.params.max_fake_terminal_exon_len and \
-                    exon[1] - internal_polya_pos > 2 * (internal_polya_pos - exon[0]):
+            len_to_polya = internal_polya_pos - exon[0]
+            if len_to_polya <= 0 or \
+                    (len_to_polya <= self.params.max_fake_terminal_exon_len and
+                     exon[1] - internal_polya_pos > 2 * len_to_polya):
                 # more than 2/3 of the exon is polyA
                 polya_exon_count += 1
 
@@ -113,8 +117,10 @@ class PolyAFixer:
             exon = read_exons[i]
             if exon[0] >= internal_polyt_pos:
                 break
-            if exon[1] - internal_polyt_pos < self.params.max_fake_terminal_exon_len and \
-                    2 * (exon[1] - internal_polyt_pos) < internal_polyt_pos - exon[0]:
+            len_to_polyt = exon[1] - internal_polyt_pos
+            if len_to_polyt <= 0 or \
+                    (len_to_polyt <= self.params.max_fake_terminal_exon_len and
+                    2 * len_to_polyt < internal_polyt_pos - exon[0]):
                 # more than 2/3 of the exon is polyT
                 polya_exon_count += 1
 
