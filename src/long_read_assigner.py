@@ -389,6 +389,7 @@ class LongReadAssigner:
                               self.gene_info.split_exon_profiles.features[-1][1])
             # none of the blocks matched
             if not overlaps(read_region, gene_region):
+                logger.debug("EMPTY - noninformative")
                 assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.intergenic))
             elif all(el == 0 for el in read_split_exon_profile.gene_profile):
                 logger.debug("EMPTY - intronic")
