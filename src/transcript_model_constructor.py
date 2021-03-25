@@ -395,7 +395,7 @@ class TranscriptModelConstructor:
                 if isoform_pos == len(isoform_introns):
                     # such position is possible only when extra intron is present inside last reference exon
                     break
-                if isoform_introns[isoform_pos][0] < current_exon_start:
+                if isoform_introns[isoform_pos][0] <= current_exon_start:
                     # skip introns that outside of gene region
                     isoform_pos += 1
                     continue
