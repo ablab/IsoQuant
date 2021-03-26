@@ -238,12 +238,13 @@ class JunctionComparator:
                                                             isoform_junctions, read_cregion[0], isoform_cregion[0],
                                                             intron_length_is_similar, read_introns_known)
 
-        elif read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0] and \
-                (read_cregion[0] == 0 and isoform_cregion[0] == 0 and right_exons_overlap) or \
+        elif len(read_junctions) > 1 and \
+                read_cregion[1] == read_cregion[0] and isoform_cregion[1] == isoform_cregion[0] and \
+                (read_cregion[0] == 0 and isoform_cregion[0] == 0 and similar_right_site) or \
                 (read_cregion[0] == len(read_junctions)-1 and isoform_cregion[0] == len(isoform_junctions) - 1
-                 and left_exons_overlap):
+                 and similar_letf_site):
             # terminal exon alternation
-            if read_cregion[0] == 0:
+            if read_cregion[0] == 0 and isoform_cregion[0] == 0:
                 read_exon = get_preceding_exon_from_junctions(read_region, read_junctions, 0)
                 isoform_exon = get_preceding_exon_from_junctions(isoform_region, isoform_junctions, 0)
             else:
