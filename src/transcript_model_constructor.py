@@ -147,6 +147,8 @@ class TranscriptModelConstructor:
                             MatchEventSubtype.terminal_exon_shift_novel,
                             MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
                             MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
+                            MatchEventSubtype.incomplete_intron_retention_left,
+                            MatchEventSubtype.incomplete_intron_retention_right,
                             MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
                             MatchEventSubtype.extra_intron_known, MatchEventSubtype.intron_migration,
                             MatchEventSubtype.mutually_exclusive_exons_known, MatchEventSubtype.exon_skipping_known,
@@ -517,7 +519,10 @@ class TranscriptModelConstructor:
     def process_single_event(self, event_tuple, isoform_pos, isoform_introns, read_introns, read_region,
                              novel_exons, current_exon_start, isoform_id=""):
         logger.debug("> > Applying event %s at position %s" % (event_tuple.event_type.name, str(isoform_pos)))
-        if event_tuple.event_type in {MatchEventSubtype.intron_retention, MatchEventSubtype.unspliced_intron_retention}:
+        if event_tuple.event_type in [MatchEventSubtype.intron_retention,
+                                      MatchEventSubtype.unspliced_intron_retention,
+                                      MatchEventSubtype.incomplete_intron_retention_left,
+                                      MatchEventSubtype.incomplete_intron_retention_right]:
             # simply skip reference intron
             return current_exon_start
 
