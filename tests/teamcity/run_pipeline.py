@@ -150,6 +150,7 @@ def main():
         isoquant_command_list.append(fix_path(config_file, config_dict["genome"]))
 
     if "isoquant_options" in config_dict:
+        log.log("Appending additional options: %s" % config_dict["isoquant_options"])
         isoquant_command_list.append(config_dict["isoquant_options"].replace('"', ''))
 
     log.log("IsoQuant command line: " + " ".join(isoquant_command_list))
