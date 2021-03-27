@@ -25,6 +25,56 @@ def db2gtf(gtf, db):
     logger.info("Gene database written to " + gtf)
 
 
+def db2bed(bed, db):
+    # adapted from paftools in mimimap2
+    colors = {
+        'protein_coding': '0,128,255',
+        'mRNA': '0,128,255',
+        'lincRNA': '0,192,0',
+        'snRNA': '0,192,0',
+        'miRNA': '0,192,0',
+        'misc_RNA': '0,192,0'
+    }
+
+    def get_color(transcript_kind):
+        if transcript_kind in colors:
+            return colors[transcript_kind]
+        return '196,196,196'
+
+    logger.info("Converting gene annotation file %s to .bed format" % db)
+    genedb = gffutils.FeatureDB(db, keep_order=True)
+    with open(bed, "w") as f:
+        for record in genedb.all_features(featuretype="transcript"):
+            transcript_type = record["transcript_type"][0]
+            transcript_name = record.id + "|" + transcript_type + "|" + record["gene_name"][0]
+            exons = []
+            cds = []
+            for e in genedb.children(record, order_by='start', featuretype='exon'):
+                exons.append((e.start - 1, e.end))
+            for e in genedb.children(record, order_by='start', featuretype='CDS'):
+                cds.append((e.start - 1, e.end))
+
+            transcript_start = exons[0][0]
+            transcript_end = exons[-1][1]
+            exons_lens = []
+            exon_start = []
+            for e in exons:
+                exons_lens.append(e[1] - e[0])
+                exon_start.append(e[0] - transcript_start)
+
+            if cds:
+                thick_start, thick_end = cds[0][0], cds[-1][1]
+            else:
+                thick_start, thick_end = transcript_start, transcript_end
+            exon_lengths = ",".join([str(x) for x in exons_lens]) + ","
+            exon_starts = ",".join([str(x) for x in exon_start]) + ","
+            line = "%s\t%d\t%d\t%s\t1000\t%s\t%d\t%d\t%s\t%d\t%s\t%s\n" % \
+                   (record.seqid, transcript_start, transcript_end, transcript_name, record.strand,
+                    thick_start, thick_end, get_color(transcript_type), len(exons_lens), exon_lengths, exon_starts)
+            f.write(line)
+    logger.info("Gene database BED written to " + bed)
+
+
 def gtf2db(gtf, db, complete_db=False):
     logger.info("Converting gene annotation file to .db format (takes a while)...")
     gffutils.create_db(gtf, db, force=True, keep_order=True, merge_strategy='merge',
