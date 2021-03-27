@@ -10,20 +10,19 @@ from src.input_data_storage import SampleData
 
 logger = logging.getLogger('IsoQuant')
 
-PACBIO_DATA = 'pacbio_raw'
 PACBIO_CCS_DATA = 'pacbio_ccs'
 NANOPORE_DATA = 'nanopore'
 ASSEMBLY = 'assembly'
 
-DATATYPE_TO_ALIGNER = {ASSEMBLY: 'minimap2', PACBIO_DATA: 'minimap2', PACBIO_CCS_DATA: 'minimap2',
-                       NANOPORE_DATA: 'minimap2'}
+DATATYPE_TO_ALIGNER = {ASSEMBLY: 'minimap2', PACBIO_CCS_DATA: 'minimap2', NANOPORE_DATA: 'minimap2'}
                        # 'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
 
 SUPPORTED_ALIGNERS = ['starlong', 'minimap2']
 SUPPORTED_STRANDEDNESS = ['forward', 'reverse', 'none']
 
-KMER_SIZE = {ASSEMBLY: '15', PACBIO_DATA: '15', PACBIO_CCS_DATA: '15', NANOPORE_DATA: '14'}
-CANONICAL_SITE_BONUS = {ASSEMBLY: '5', PACBIO_DATA: '5', PACBIO_CCS_DATA: '5', NANOPORE_DATA: '10'}
+KMER_SIZE = {ASSEMBLY: '15', PACBIO_CCS_DATA: '15', NANOPORE_DATA: '14'}
+CANONICAL_SITE_BONUS = {ASSEMBLY: '5', PACBIO_CCS_DATA: '5', NANOPORE_DATA: '9'}
+MINIMAP_PRESET = {ASSEMBLY: 'splice:hq', PACBIO_CCS_DATA: 'splice:hq', NANOPORE_DATA: 'splice'}
 
 class DataSetReadMapper:
     def __init__(self, args):
@@ -266,7 +265,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
         additional_options = []
         if args.stranded == 'forward':
             additional_options.append('-uf')
-        command = [minimap2_path, args.index, fastq_path, '-a', '-x', 'splice', '--secondary=yes', '-Y',
+        command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type], '--secondary=yes', '-Y',
                    '-C', str(CANONICAL_SITE_BONUS[args.data_type]),
                    '-t', str(args.threads)] + additional_options
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:

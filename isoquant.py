@@ -37,9 +37,9 @@ def parse_args(args=None, namespace=None):
                              "speeds up gene database conversion")
     parser.add_argument("--reference", "-r", help="reference genome in FASTA format, "
                                                   "should be provided to compute some additional stats and "
-                                                  "when raw reads are used as an input", type=str)
+                                                  "when reads in FASTA/FASTQ are used as an input", type=str)
     parser.add_argument("--index", help="genome index for specified aligner, "
-                                        "should be provided only when raw reads are used as an input", type=str)
+                                        "should be provided only when reads are used as an input", type=str)
     parser.add_argument('--clean_start', action='store_true', default=False,
                         help='Do not use previously generated index, feature db or alignments.')
     # INPUT READS
@@ -48,7 +48,7 @@ def parse_args(args=None, namespace=None):
                             help='sorted and indexed BAM file(s), each file will be treated as a separate sample')
     input_args.add_argument('--fastq', nargs='+', type=str,
                             help='input FASTQ file(s), each file will be treated as a separate sample; '
-                                 'reference genome should be provided when using raw reads')
+                                 'reference genome should be provided when using reads as input')
     input_args.add_argument('--bam_list', type=str, help='text file with list of BAM files, one file per line'
                                                          ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
@@ -180,7 +180,7 @@ class TestMode(argparse.Action):
 def check_params(args):
     args.input_data = InputDataStorage(args)
     if args.input_data.input_type == "fastq" and args.reference is None and args.index is None:
-        print("ERROR! Reference genome or index were not provided, raw reads cannot be processed")
+        print("ERROR! Reference genome or index were not provided, reads cannot be processed")
         return False
 
     if args.aligner is not None and args.aligner not in SUPPORTED_ALIGNERS:
@@ -286,12 +286,11 @@ def set_logger(args, logger_instance):
 
 
 def set_data_dependent_options(args):
-    matching_strategies = {ASSEMBLY: "precise", PACBIO_CCS_DATA: "precise", PACBIO_DATA: "default", NANOPORE_DATA: "default"}
+    matching_strategies = {ASSEMBLY: "precise", PACBIO_CCS_DATA: "precise", NANOPORE_DATA: "default"}
     if args.matching_strategy is None:
         args.matching_strategy = matching_strategies[args.data_type]
 
-    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_ccs",
-                                     PACBIO_DATA: "default_ont", NANOPORE_DATA: "default_ont"}
+    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_ccs", NANOPORE_DATA: "default_ont"}
     if args.model_construction_strategy is None:
         args.model_construction_strategy = model_construction_strategies[args.data_type]
         if args.fl_data and args.model_construction_strategy == "default_ccs":

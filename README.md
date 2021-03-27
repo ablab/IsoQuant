@@ -35,14 +35,14 @@
         isoquant.py --reference /PATH/TO/reference_genome.fasta 
         --genedb /PATH/TO/gene_annotation.gtf 
         --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz 
-        --data_type (pacbio_ccs|pacbio_raw|nanopore) -o OUTPUT_FOLDER
+        --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
 
 *   To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
 
         isoquant.py --genedb /PATH/TO/gene_annotation.gtf 
         --bam /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam 
-        --data_type (pacbio_ccs|pacbio_raw|nanopore) -o OUTPUT_FOLDER
+        --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
 <a name="sec1"></a>
 # About IsoQuant
@@ -55,11 +55,10 @@ IsoQuant version 1.2 was released under GPLv2 on March 19th, 2021 and can be dow
 <a name="sec1.1"></a>
 ## Supported data types
 
-IsoQuant support all kinds of long RNA reads:
+IsoQuant support all kinds of long RNA data:
 * PacBio CCS / HiFi
-* PacBio IsoSeq
-* ONT dRNA
-* ONT cDNA
+* ONT dRNA / ONT cDNA
+* Assembled / corrected transcript sequences
 
 Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
 
@@ -159,7 +158,7 @@ By default, each file with reads is treated as a separate sample. To group multi
 
 ### Input options
 `--data_type` or `-d`
-    Type of data to process, supported types are: `assembly`, `pacbio_ccs`, `pacbio_raw`, `nanopore`. This option affects some of the algorithm parameters.
+    Type of data to process, supported types are: `assembly`, `pacbio_ccs`, `nanopore`. This option affects some of the algorithm parameters.
 
 `--genedb` or `-g`
     Gene database in gffutils database format or GTF/GFF format. If you use official gene annotations we recommend to set `--complete_genedb` option.
@@ -310,10 +309,10 @@ You can manually set some of the parameters (will override options in the preset
 
 ### Examples
 
-* Mapped raw PacBio reads in BAM format; not poly-A trimmed; pre-converted gene annotation:
+* Mapped PacBio CCS reads in BAM format; not poly-A trimmed; pre-converted gene annotation:
 
 ```bash
-isoquant.py -d pacbio_raw --bam mapped_reads.bam --genedb annotation.db --output output_dir 
+isoquant.py -d pacbio_ccs --bam mapped_reads.bam --genedb annotation.db --output output_dir 
 ```
 
 * Nanopore dRNA reads; not poly-A trimmed; official annotation in GTF format, used sample label instead of file name:
