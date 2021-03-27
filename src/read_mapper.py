@@ -21,7 +21,7 @@ SUPPORTED_ALIGNERS = ['starlong', 'minimap2']
 SUPPORTED_STRANDEDNESS = ['forward', 'reverse', 'none']
 
 KMER_SIZE = {ASSEMBLY: '15', PACBIO_CCS_DATA: '15', NANOPORE_DATA: '14'}
-CANONICAL_SITE_BONUS = {ASSEMBLY: '5', PACBIO_CCS_DATA: '5', NANOPORE_DATA: '9'}
+# CANONICAL_SITE_BONUS = {ASSEMBLY: '5', PACBIO_CCS_DATA: '5', NANOPORE_DATA: '9'}
 MINIMAP_PRESET = {ASSEMBLY: 'splice:hq', PACBIO_CCS_DATA: 'splice:hq', NANOPORE_DATA: 'splice'}
 
 class DataSetReadMapper:
@@ -265,9 +265,8 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
         additional_options = []
         if args.stranded == 'forward':
             additional_options.append('-uf')
-        command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type], '--secondary=yes', '-Y',
-                   '-C', str(CANONICAL_SITE_BONUS[args.data_type]),
-                   '-t', str(args.threads)] + additional_options
+        command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
+                   '--secondary=yes', '-Y', '-t', str(args.threads)] + additional_options
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
             logger.critical("Minimap2 finished with errors! See " + log_fpath)
             exit(-1)
