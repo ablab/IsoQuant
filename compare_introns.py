@@ -123,11 +123,12 @@ def check_annotated_introns(exons, gene_info, params):
                                                                         delta=params.minimal_intron_absence_overlap),
                                               delta=params.delta)
     intron_profile = intron_profile_constructor.construct_intron_profile(exons)
-    return all(e == 1 for e in intron_profile.read_profile)
+    return intron_profile.read_profile.count(1)
 
 
 def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
     stat_map = defaultdict(int)
+    unannotated_intron_stat = defaultdict(int)
     counter = 0
     for read_pair in read_pairs:
         if read_pair[0] not in bam_records1 or read_pair[1] not in bam_records2:
@@ -152,16 +153,24 @@ def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
         logger.debug("Second read exons: " + str(exons2))
         gene_info = GeneInfo(gene_list, gene_db)
         logger.debug("Gene introns: " + str(gene_info.intron_profiles.features))
-        first_annotated = check_annotated_introns(exons1, gene_info, params)
-        second_annotated = check_annotated_introns(exons2, gene_info, params)
+        first_annotated_count = check_annotated_introns(exons1, gene_info, params)
+        second_annotated_count = check_annotated_introns(exons2, gene_info, params)
+        first_intron_count = len(exons1) - 1
+        second_intron_count = len(exons2) - 1
+        first_annotated = first_annotated_count == first_intron_count
+        second_annotated = second_annotated_count == second_intron_count
         logger.debug("First annotated %r, second annotated %r" % (first_annotated, second_annotated))
         event_type = compare_intron_chains(exons1, exons2, gene_info, params)
         stat_map[(event_type, first_annotated, second_annotated)] += 1
+        unannotated_intron_stat["first", "annotated"] += first_intron_count
+        unannotated_intron_stat["first", "unannotated"] += first_intron_count - first_intron_count
+        unannotated_intron_stat["second", "annotated"] += second_intron_count
+        unannotated_intron_stat["second", "unannotated"] += second_intron_count - second_intron_count
         counter += 1
         if counter % 1000 == 0:
             logger.info("Processed %d read pairs (%0.1f%%)" % (counter, 100 * counter / len(read_pairs)))
 
-    return stat_map
+    return stat_map, unannotated_intron_stat
 
 
 def load_bam(read_set, bamfile):
@@ -220,12 +229,15 @@ def run_pipeline(args):
     params = Params()
     params.delta = args.delta
     logger.info("Comparing intron chains...")
-    stat_map = intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params)
+    stat_map, unannotated_intron_stat = intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params)
     logger.debug(str(stat_map))
     logger.info("Saving stats to " + args.output)
     outf = open(args.output, "w")
     for match_type in sorted(stat_map.keys()):
         outf.write("%s\t%r\t%r\t%d\n" % (match_type[0], match_type[1], match_type[2], stat_map[match_type]))
+    outf.write("\n")
+    for k in sorted(unannotated_intron_stat.keys()):
+        outf.write("%s\t%s\t%d\n" % (k[0], k[1], unannotated_intron_stat[k]))
     outf.close()
     logger.info("Done")
 
