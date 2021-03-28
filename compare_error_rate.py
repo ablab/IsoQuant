@@ -83,26 +83,31 @@ def check_homopolymer(ref_seq, start, end):
 
 
 def check_homopolymer_mismatch(read_seq, read_pos, ref_seq, ref_pos):
-    is_homopolymer, c = check_homopolymer(ref_seq, ref_pos-1, ref_pos+1)
-    return is_homopolymer and read_seq[read_pos] != c
+    read_nucl = read_seq[read_pos]
+    for i in range(3):
+        is_homopolymer, c = check_homopolymer(ref_seq, ref_pos-2+i, ref_pos+i)
+        if is_homopolymer and read_nucl != c:
+            return True
+    return False
 
 
 def check_homopolymer_deletion(ref_seq, ref_pos):
-    is_homopolymer_left, _ = check_homopolymer(ref_seq, ref_pos-2, ref_pos)
-    is_homopolymer_right, _ = check_homopolymer(ref_seq, ref_pos, ref_pos+2)
-    return is_homopolymer_left or is_homopolymer_right
+    for i in range(3):
+        is_homopolymer, _ = check_homopolymer(ref_seq, ref_pos-2+i, ref_pos+i)
+        if is_homopolymer:
+            return True
+    return False
 
 
 def check_homopolymer_insertion(read_seq, read_pos, ref_seq, ref_pos):
-    is_homopolymer_left1, cl1 = check_homopolymer(ref_seq, ref_pos-3, ref_pos-1)
-    is_homopolymer_left2, cl2 = check_homopolymer(ref_seq, ref_pos - 2, ref_pos)
-    is_homopolymer_right, cr= check_homopolymer(ref_seq, ref_pos, ref_pos+2)
-    read_c = read_seq[read_pos]
-    return (is_homopolymer_left1 and cl1 == read_c) or \
-           (is_homopolymer_left2 and cl2 == read_c) or \
-           (is_homopolymer_right and cr == read_c)
+    read_nucl = read_seq[read_pos]
+    for i in range(4):
+        is_homopolymer, c = check_homopolymer(ref_seq, ref_pos-3+i, ref_pos-1+i)
+        if is_homopolymer and read_nucl == c:
+            return True
+    return False
 
-
+    
 def check_polya(sequence):
     len_slice = 12
     n = len(sequence)
