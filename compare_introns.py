@@ -162,10 +162,10 @@ def intron_chain_stat(read_pairs, bam_records1, bam_records2, gene_db, params):
         logger.debug("First annotated %r, second annotated %r" % (first_annotated, second_annotated))
         event_type = compare_intron_chains(exons1, exons2, gene_info, params)
         stat_map[(event_type, first_annotated, second_annotated)] += 1
-        unannotated_intron_stat["first", "annotated"] += first_intron_count
-        unannotated_intron_stat["first", "unannotated"] += first_intron_count - first_intron_count
-        unannotated_intron_stat["second", "annotated"] += second_intron_count
-        unannotated_intron_stat["second", "unannotated"] += second_intron_count - second_intron_count
+        unannotated_intron_stat["first", "annotated"] += first_annotated_count
+        unannotated_intron_stat["first", "unannotated"] += first_intron_count - first_annotated_count
+        unannotated_intron_stat["second", "annotated"] += second_annotated_count
+        unannotated_intron_stat["second", "unannotated"] += second_intron_count - second_annotated_count
         counter += 1
         if counter % 1000 == 0:
             logger.info("Processed %d read pairs (%0.1f%%)" % (counter, 100 * counter / len(read_pairs)))
