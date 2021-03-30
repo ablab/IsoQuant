@@ -526,10 +526,24 @@ def error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records):
             ("reads1_single_stats", [stats1_only, hstats1_only]), ("reads2_single_stats", [stats2_only, hstats2_only])]
 
 
+def error_rate_single(bam_records1, chr_records):
+    counter = 0
+    stats1_only = ErrorRateStat("Reads 1 simple comparison")
+    hstats1_only = ErrorRateStat("Reads 1 simple hompolymer comparison")
+
+    for bam_record1 in bam_records1:
+        process_alignment(bam_record1, chr_records, stats1_only, hstats1_only)
+
+        counter += 1
+        if counter % 1000 == 0:
+            logger.info("Processed %d reads (%0.1f%%)" % (counter, 100 * counter / len(bam_records1)))
+
+    return [("reads1_single_stats", [stats1_only, hstats1_only])]
+
 def load_bam(read_set, bamfile):
     bam_records = {}
     for r in pysam.AlignmentFile(bamfile, "rb").fetch():
-        if r.query_name in read_set:
+        if not read_set or r.query_name in read_set:
             bam_records[r.query_name] = r
     return bam_records
 
@@ -571,16 +585,23 @@ def set_logger(logger_instance):
 
 
 def run_pipeline(args):
-    logger.info("Loading read pairs from " + args.tsv)
-    read_pairs = load_tsv(args.tsv)
-    logger.info("Loading alignments from " + args.bam_pb)
-    bam_records1 = load_bam(set(map(lambda x: x[0], read_pairs)), args.bam_pb)
-    logger.info("Loading alignments from " + args.bam_ont)
-    bam_records2 = load_bam(set(map(lambda x: x[1], read_pairs)), args.bam_ont)
     logger.info("Loading genome from " + args.reference)
     chr_records = SeqIO.to_dict(SeqIO.parse(args.reference, "fasta"))
-    logger.info("Counting error rates...")
-    stat_list = error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records)
+
+    if not args.tsv:
+        logger.info("Loading alignments from " + args.bam_pb)
+        bam_records1 = load_bam({}, args.bam_pb)
+        logger.info("Counting error rates...")
+        stat_list = error_rate_single(bam_records1, chr_records)
+    else:
+        logger.info("Loading read pairs from " + args.tsv)
+        read_pairs = load_tsv(args.tsv)
+        logger.info("Loading alignments from " + args.bam_pb)
+        bam_records1 = load_bam(set(map(lambda x: x[0], read_pairs)), args.bam_pb)
+        logger.info("Loading alignments from " + args.bam_ont)
+        bam_records2 = load_bam(set(map(lambda x: x[1], read_pairs)), args.bam_ont)
+        logger.info("Counting error rates...")
+        stat_list = error_rate_stats(read_pairs, bam_records1, bam_records2, chr_records)
 
     logger.info("Saving stats to " + args.output)
     for s in stat_list:
