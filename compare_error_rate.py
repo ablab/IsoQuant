@@ -538,7 +538,7 @@ def error_rate_single(bam_records1, chr_records):
     stats1_only = ErrorRateStat("Reads 1 simple comparison")
     hstats1_only = ErrorRateStat("Reads 1 simple hompolymer comparison")
 
-    for bam_record1 in bam_records1:
+    for read_id, bam_record1 in bam_records1.items():
         process_alignment(bam_record1, chr_records, stats1_only, hstats1_only)
 
         counter += 1
