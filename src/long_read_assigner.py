@@ -536,7 +536,7 @@ class LongReadAssigner:
         logger.debug("* Inconsistencies detected: " + str(read_matches))
 
         # select ones with least number of inconsistent events
-        best_isoforms = self.select_best_among_inconsistent(combined_read_profile, read_matches)
+        best_isoforms = sorted(self.select_best_among_inconsistent(combined_read_profile, read_matches))
         if not best_isoforms:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
         logger.debug("* Selected isoforms: " + str(best_isoforms))
