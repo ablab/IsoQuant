@@ -539,13 +539,14 @@ def error_rate_single(bam_records1, chr_records):
     hstats1_only = ErrorRateStat("Reads 1 simple hompolymer comparison")
 
     for read_id, bam_record1 in bam_records1.items():
-        process_alignment(bam_record1, chr_records, stats1_only, hstats1_only)
+        process_alignment(bam_record1, chr_records, stats1_only)
 
         counter += 1
         if counter % 1000 == 0:
             logger.info("Processed %d reads (%0.1f%%)" % (counter, 100 * counter / len(bam_records1)))
 
-    return [("reads1_single_stats", [stats1_only, hstats1_only])]
+    return [("reads1_single_stats", [stats1_only])]
+
 
 def load_bam(read_set, bamfile):
     bam_records = {}
