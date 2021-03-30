@@ -32,6 +32,12 @@ class ErrorRateStat:
         outf.write("##%s\n" % self.name)
         outf.write("#unmapped\tmismapped\tnopolya\n")
         outf.write("%d\t%d\t%d\t\n" % (self.unmapped, self.mismapped, self.no_poly))
+        total_nucls = sum(self.total)
+        mm_rate = sum(self.mismatches) / total_nucls
+        d_rate = sum(self.deletions) / total_nucls
+        i_rate = sum(self.insertions) / total_nucls
+        outf.write("#total\tmismatch\tdeletion\tinsertion\n")
+        outf.write("%.6f\t%.6f\t%.6f\t%.6f\n" % (mm_rate + i_rate + d_rate, mm_rate, d_rate, i_rate))
         outf.write("#position\ttotal\tX\tI\tD\n")
         for i in range(len(self.total)):
             outf.write("%d\t%d\t%d\t%d\t%d\n" %
@@ -431,8 +437,9 @@ def process_alignment(alignment_record1, fasta_records, stats1, homopolymer_stat
 
     direction1 = get_direction(alignment_record1)
     if (direction1 == -1):
-        stats1.add_no_polya()
-        return
+        #stats1.add_no_polya()
+        #return
+        reverse_read1 = False
     elif (direction1 == 1):
         reverse_read1 = True
     else:
