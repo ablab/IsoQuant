@@ -65,7 +65,7 @@ def parse_args(args=None, namespace=None):
                              "polyA tails will not be required for transcript model construction")
     add_additional_option('--has_polya', action='store_true', default=True,
                           help="deprecated option, use --polya_trimmed when reads do not have polyA tails")
-    parser.add_argument('--check_canonical', action='store_true', default=False,
+    parser.add_argument('--check_canonical', action='store_true', default=True,
                         help="report whether splice junctions are canonical (requires reference genome)")
     parser.add_argument('--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")

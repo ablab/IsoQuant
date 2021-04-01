@@ -136,7 +136,22 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         read_introns = junctions_from_blocks(read_exons)
         if not read_assignment.isoform_matches:
             line = read_assignment.read_id + "\t.\t" + read_assignment.assignment_type.name + "\t.\t" + \
-                   range_list_to_str(read_exons) + "\t*\n"
+                   range_list_to_str(read_exons)
+            additional_info = []
+            if self.params.check_canonical and read_assignment.gene_info.reference_region:
+                if len(read_introns) == 0:
+                    additional_info.append("Noncanonical=Unspliced;")
+                    additional_info.append("Problematic=Unspliced;")
+                else:
+                    for strand in ['+', '-']:
+                        nonc = self.io_support.count_noncanonincal(read_introns, read_assignment.gene_info, strand)
+                        additional_info.append("Noncanonical%s=%d;" % (strand, nonc))
+                        problematic = self.io_support.count_problematic_introns(read_introns, read_assignment.gene_info, strand)
+                        additional_info.append("Problematic%s=%d;" % (strand, problematic))
+            if additional_info:
+                line += "\t" + " ".join(additional_info) + "\n"
+            else:
+                line += "\t*\n"
             self.output_file.write(line)
             return
 
@@ -160,11 +175,15 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 additional_info.append("CAGE=" + str(read_assignment.cage_found) + ";")
             if self.params.check_canonical and read_assignment.gene_info.reference_region:
                 if len(read_introns) == 0:
-                    additional_info.append("Canonical=Unspliced;")
+                    additional_info.append("Noncanonical=Unspliced;")
+                    additional_info.append("Problematic=Unspliced;")
+
                 else:
                     strand = read_assignment.gene_info.isoform_strands[m.assigned_transcript]
-                    all_canonical = self.io_support.check_sites_are_canonical(read_introns, read_assignment.gene_info, strand)
-                    additional_info.append("Canonical=" + str(all_canonical) + ";")
+                    nonc = self.io_support.count_noncanonincal(read_introns, read_assignment.gene_info, strand)
+                    additional_info.append("Noncanonical=" + str(nonc) + ";")
+                    problematic = self.io_support.count_problematic_introns(read_introns, read_assignment.gene_info, strand)
+                    additional_info.append("Problematic=" + str(problematic) + ";")
 
             if additional_info:
                 line += "\t" + " ".join(additional_info) + "\n"
@@ -359,6 +378,38 @@ class IOSupport:
             return "Unspliced"
         introns_match = read_assignment.introns_match
         return str(introns_match)
+
+    def count_noncanonincal(self, read_introns, gene_info, strand):
+        count = 0
+        for intron in read_introns:
+            intron_left_pos = intron[0] - gene_info.all_read_region_start
+            intron_right_pos = intron[1] - gene_info.all_read_region_start
+            left_site = gene_info.reference_region[intron_left_pos:intron_left_pos + 2]
+            right_site = gene_info.reference_region[intron_right_pos - 1:intron_right_pos + 1]
+            if strand == '+':
+                count += 0 if (left_site, right_site) in self.canonical_forward_sites else 1
+            else:
+                count += 0 if (left_site, right_site) in self.cononical_reverse_sites else 1
+        return count
+
+
+    def count_problematic_introns(self, read_introns, gene_info, strand):
+        count = 0
+        for intron in read_introns:
+            intron_left_pos = intron[0] - gene_info.all_read_region_start
+            intron_right_pos = intron[1] - gene_info.all_read_region_start
+            if strand == "+":
+                left_site = gene_info.reference_region[intron_left_pos-4:intron_left_pos+6]
+                right_site = gene_info.reference_region[intron_right_pos-5:intron_right_pos+4]
+                donor_sight_problematic = left_site[0:6] == "GTAAGT" or left_site[4:10] == "GTAAGT"
+                acceptor_sight_problematic = right_site[4:6] == "AG" and (right_site[1:3] == "AG" or right_site[7:9] == "AG")
+            else:
+                left_site = gene_info.reference_region[intron_left_pos-3:intron_left_pos+6]
+                right_site = gene_info.reference_region[intron_right_pos-5:intron_right_pos+5]
+                donor_sight_problematic = right_site[0:6] == "ACTTAC" or right_site[4:10] == "ACTTAC"
+                acceptor_sight_problematic = left_site[3:5] == "CT" and (left_site[0:2] == "CT" or left_site[6:8] == "CT")
+            count += 1 if donor_sight_problematic or acceptor_sight_problematic else 0
+        return count
 
     def check_sites_are_canonical(self, read_introns, gene_info, strand):
         for intron in read_introns:
