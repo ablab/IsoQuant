@@ -47,7 +47,7 @@ class MultimapResolver:
                                      classified_assignments[ReadAssignmentType.unique_minor_difference]
             primary_unique_assignment = self.select_primary(consistent_assignemnts)
             if primary_unique_assignment is not None:
-                logger.debug("Primary unique assignment selected: %s" % primary_unique_assignment.isoform_matches[0].assigned_transcript)
+                # logger.debug("Primary unique assignment selected: %s" % primary_unique_assignment.isoform_matches[0].assigned_transcript)
                 return [primary_unique_assignment]
 
             consistent_assignemnts += classified_assignments[ReadAssignmentType.ambiguous]
@@ -59,8 +59,7 @@ class MultimapResolver:
             primary_inconsistent_assignment = self.select_primary(inconsistent_assignments)
             if primary_inconsistent_assignment is not None:
                 primary_inconsistent_assignment.multimapper = True
-                logger.debug("Selected primary inconsistent %s" %
-                             primary_inconsistent_assignment.isoform_matches[0].assigned_transcript)
+                # logger.debug("Selected primary inconsistent %s" %                            primary_inconsistent_assignment.isoform_matches[0].assigned_transcript)
                 return [primary_inconsistent_assignment]
             logger.debug("Merging inconsistent from %d assignments" % len(inconsistent_assignments))
             return self.merge(inconsistent_assignments, is_inconsistent=True)

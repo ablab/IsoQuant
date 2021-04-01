@@ -19,6 +19,7 @@ class ReadAssignmentType(Enum):
     ambiguous = 10
     unique_minor_difference = 2
     inconsistent = 3
+    mono_exon_skipped = 20
 
 
 # SQANTI-like

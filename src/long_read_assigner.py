@@ -381,8 +381,11 @@ class LongReadAssigner:
         # logger.debug("Gene introns" + str(self.gene_info.intron_profiles.features))
         # logger.debug("Read intron profile" + str(read_intron_profile.read_profile))
         # logger.debug("Gene intron profile" + str(read_intron_profile.gene_profile))
-
-        if all(el == 0 for el in read_split_exon_profile.read_profile) \
+        if len(read_intron_profile.read_profile) == 0:
+                # or any(el == -1 for el in read_split_exon_profile.read_profile):
+            # Read has inconsistent exons / introns
+            assignment = ReadAssignment(read_id, ReadAssignmentType.mono_exon_skipped)
+        elif all(el == 0 for el in read_split_exon_profile.read_profile) \
                 or all(el == 0 or el == -2 for el in read_split_exon_profile.gene_profile):
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             gene_region = (self.gene_info.split_exon_profiles.features[0][0],
@@ -399,26 +402,38 @@ class LongReadAssigner:
                 assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic))
             return assignment
 
-        elif any(el == -1 for el in read_intron_profile.read_profile) \
-                or any(el == -1 for el in read_split_exon_profile.read_profile):
+        elif any(el == -1 for el in read_intron_profile.read_profile):
+                # or any(el == -1 for el in read_split_exon_profile.read_profile):
             # Read has inconsistent exons / introns
             logger.debug("+ Has inconsistent features (novel intron / exons)")
-            assignment = self.match_inconsistent(read_id, combined_read_profile)
+            assignment = ReadAssignment(read_id, ReadAssignmentType.inconsistent)
 
-        elif any(el == 0 for el in read_intron_profile.read_profile) \
-                or any(el == 0 for el in read_split_exon_profile.read_profile):
+        elif any(el == 0 for el in read_intron_profile.read_profile):
+                #or any(el == 0 for el in read_split_exon_profile.read_profile):
             # Read has extra flanking exons / introns
             logger.debug("+ Has extra flanking features")
-            assignment = self.match_inconsistent(read_id, combined_read_profile)
+            assignment = ReadAssignment(read_id, ReadAssignmentType.inconsistent)
 
         else:
             logger.debug("+ No contradictory features in read, but no consistent isoforms still can be found")
-            assignment = self.match_consistent(read_id, combined_read_profile)
+            consistent_isoforms = self.find_matching_isoforms(read_intron_profile.gene_profile,
+                                                              self.gene_info.intron_profiles.profiles)
+            matches = self.categorize_multiple_splice_matches(combined_read_profile, consistent_isoforms)
 
-            if assignment is None:
+            if len(consistent_isoforms) == 0:
+                assignment = ReadAssignment(read_id, ReadAssignmentType.inconsistent)
+            elif len(consistent_isoforms) == 1:
+                assignment = ReadAssignment(read_id, ReadAssignmentType.unique, matches)
+            else:
+                assignment = ReadAssignment(read_id, ReadAssignmentType.ambiguous, matches)
+
+
+            # assignment = self.match_consistent(read_id, combined_read_profile)
+
+            # if assignment is None:
                 # alternative isoforms made of known introns/exons or intron retention
-                logger.debug("+ + Resolving unmatched ")
-                assignment = self.match_inconsistent(read_id, combined_read_profile)
+            #    logger.debug("+ + Resolving unmatched ")
+            #    assignment = self.match_inconsistent(read_id, combined_read_profile)
 
         return assignment
 

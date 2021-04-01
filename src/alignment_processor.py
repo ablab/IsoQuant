@@ -85,21 +85,22 @@ class LongReadAlignmentProcessor:
                 if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
                     self.gene_info.all_read_region_end = sorted_blocks[-1][1]
 
-            polya_info = self.polya_finder.detect_polya(alignment)
-            sorted_blocks, polya_info, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
+            #polya_info = self.polya_finder.detect_polya(alignment)
+            #sorted_blocks, polya_info, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
             cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 
+            polya_info = PolyAInfo(-1, -1, -1, -1)
             combined_profile = self.profile_constructor.construct_profiles(sorted_blocks, polya_info, cage_hits)
             read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
 
-            if exon_changed:
-                read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
+            #if exon_changed:
+            #    read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
             read_assignment.polyA_found = (polya_info.external_polya_pos != -1 or
                                            polya_info.external_polyt_pos != -1 or
                                            polya_info.internal_polya_pos != -1 or
                                            polya_info.internal_polyt_pos != -1)
             read_assignment.polya_info = polya_info
-            read_assignment.cage_found = len(cage_hits) > 0
+            read_assignment.cage_found = False
             read_assignment.exons = sorted_blocks
             read_assignment.read_group = self.read_groupper.get_group_id(alignment)
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"

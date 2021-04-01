@@ -120,10 +120,11 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def add_read_info(self, read_assignment):
         if read_assignment is None:
             return
-        if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
-            return
+        logger.debug("Outputting read " + read_assignment.read_id + ", " +  read_assignment.assignment_type.name)
+        #if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
+        #    return
 
-        if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
+        if read_assignment.assignment_type is None :
             logger.warning("Empty assignment read id %s" %  (read_assignment.read_id))
             return
         elif read_assignment.exons is None:
@@ -133,8 +134,17 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
 
         read_exons = read_assignment.exons
         read_introns = junctions_from_blocks(read_exons)
+        if not read_assignment.isoform_matches:
+            line = read_assignment.read_id + "\t.\t" + read_assignment.assignment_type.name + "\t.\t" + \
+                   range_list_to_str(read_exons) + "\t*\n"
+            self.output_file.write(line)
+            return
+
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
+                line = read_assignment.read_id + "\t.\t" + read_assignment.assignment_type.name+ "\t.\t" + \
+                       range_list_to_str(read_exons) + "\t*\n"
+                self.output_file.write(line)
                 continue
             isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
             event_string = ",".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,

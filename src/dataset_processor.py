@@ -195,7 +195,7 @@ class DatasetProcessor:
 
         logger.info("Combining output for sample " + sample.label)
         self.aggregate_reads(sample)
-        self.construct_models(sample)
+        # self.construct_models(sample)
         os.rmdir(self.tmp_dir)
         self.args.require_polyA = intial_polya_required
         logger.info("Processed sample " + sample.label)
