@@ -117,6 +117,20 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         self.output_file.write(self.header)
         self.io_support = io_support
 
+    def additional_info_for_unassigned(self, read_introns, gene_info):
+        additional_info = []
+        if self.params.check_canonical and gene_info.reference_region:
+            if len(read_introns) == 0:
+                additional_info.append("Noncanonical=Unspliced;")
+                additional_info.append("Problematic=Unspliced;")
+            else:
+                for strand in ['+', '-']:
+                    nonc = self.io_support.count_noncanonincal(read_introns, gene_info, strand)
+                    additional_info.append("Noncanonical%s=%d;" % (strand, nonc))
+                    problematic = self.io_support.count_problematic_introns(read_introns, gene_info, strand)
+                    additional_info.append("Problematic%s=%d;" % (strand, problematic))
+        return additional_info
+
     def add_read_info(self, read_assignment):
         if read_assignment is None:
             return
@@ -137,17 +151,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if not read_assignment.isoform_matches:
             line = read_assignment.read_id + "\t.\t" + read_assignment.assignment_type.name + "\t.\t" + \
                    range_list_to_str(read_exons)
-            additional_info = []
-            if self.params.check_canonical and read_assignment.gene_info.reference_region:
-                if len(read_introns) == 0:
-                    additional_info.append("Noncanonical=Unspliced;")
-                    additional_info.append("Problematic=Unspliced;")
-                else:
-                    for strand in ['+', '-']:
-                        nonc = self.io_support.count_noncanonincal(read_introns, read_assignment.gene_info, strand)
-                        additional_info.append("Noncanonical%s=%d;" % (strand, nonc))
-                        problematic = self.io_support.count_problematic_introns(read_introns, read_assignment.gene_info, strand)
-                        additional_info.append("Problematic%s=%d;" % (strand, problematic))
+            additional_info = self.additional_info_for_unassigned(read_introns, read_assignment.gene_info)
             if additional_info:
                 line += "\t" + " ".join(additional_info) + "\n"
             else:
@@ -158,7 +162,13 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
                 line = read_assignment.read_id + "\t.\t" + read_assignment.assignment_type.name+ "\t.\t" + \
-                       range_list_to_str(read_exons) + "\t*\n"
+                       range_list_to_str(read_exons)
+                additional_info = self.additional_info_for_unassigned(read_introns, read_assignment.gene_info)
+                additional_info.append("Classification=" + str(m.match_classification.name) + ";")
+                if additional_info:
+                    line += "\t" + " ".join(additional_info) + "\n"
+                else:
+                    line += "\t*\n"
                 self.output_file.write(line)
                 continue
             isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
@@ -177,14 +187,13 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 if len(read_introns) == 0:
                     additional_info.append("Noncanonical=Unspliced;")
                     additional_info.append("Problematic=Unspliced;")
-
                 else:
                     strand = read_assignment.gene_info.isoform_strands[m.assigned_transcript]
                     nonc = self.io_support.count_noncanonincal(read_introns, read_assignment.gene_info, strand)
                     additional_info.append("Noncanonical=" + str(nonc) + ";")
                     problematic = self.io_support.count_problematic_introns(read_introns, read_assignment.gene_info, strand)
                     additional_info.append("Problematic=" + str(problematic) + ";")
-
+            additional_info.append("Classification=" + str(m.match_classification.name) + ";")
             if additional_info:
                 line += "\t" + " ".join(additional_info) + "\n"
             else:
