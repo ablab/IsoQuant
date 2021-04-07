@@ -156,6 +156,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                     all_canonical = self.io_support.check_sites_are_canonical(read_introns, read_assignment.gene_info, strand)
                     additional_info.append("Canonical=" + str(all_canonical) + ";")
 
+            additional_info.append("Classification=" + str(m.match_classification.name) + ";")
             if additional_info:
                 line += "\t" + " ".join(additional_info) + "\n"
             else:
