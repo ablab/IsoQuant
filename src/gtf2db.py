@@ -20,7 +20,7 @@ logger = logging.getLogger('IsoQuant')
 def db2gtf(gtf, db):
     logger.info("Converting gene annotation file to .gtf format (takes a while)...")
     with open(gtf, "w") as f:
-        for record in gffutils.FeatureDB(db, keep_order=True).all_features():
+        for record in gffutils.FeatureDB(db).all_features(order_by=('seqid', 'start')):
             f.write(str(record) + '\n')
     logger.info("Gene database written to " + gtf)
 
