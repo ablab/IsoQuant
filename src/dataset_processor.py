@@ -314,8 +314,8 @@ class DatasetProcessor:
         if len(read_assignment.exons) == 2 and read_assignment.assignment_type == ReadAssignmentType.inconsistent \
                 and read_assignment.isoform_matches:
             for mt in read_assignment.isoform_matches[0].match_subclassifications:
-                if mt in nnic_event_types or mt in nic_event_types:
-                    self.single_intron_inconsistent_counter.add(mt)
+                if mt.event_type in nnic_event_types or mt.event_type in nic_event_types:
+                    self.single_intron_inconsistent_counter.add(mt.event_type)
         self.global_printer.add_read_info(read_assignment)
         self.global_counter.add_read_info(read_assignment)
 
