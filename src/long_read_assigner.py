@@ -382,7 +382,7 @@ class LongReadAssigner:
         # logger.debug("Read intron profile" + str(read_intron_profile.read_profile))
         # logger.debug("Gene intron profile" + str(read_intron_profile.gene_profile))
 
-        if all(el == 0 for el in read_split_exon_profile.read_profile) \
+        if all(el != 1 for el in read_split_exon_profile.read_profile) \
                 or all(el == 0 or el == -2 for el in read_split_exon_profile.gene_profile):
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             gene_region = (self.gene_info.split_exon_profiles.features[0][0],
@@ -391,7 +391,7 @@ class LongReadAssigner:
             if not overlaps(read_region, gene_region):
                 logger.debug("EMPTY - noninformative")
                 assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.intergenic))
-            elif all(el == 0 for el in read_split_exon_profile.gene_profile):
+            elif all(el != 1 for el in read_split_exon_profile.gene_profile):
                 logger.debug("EMPTY - intronic")
                 assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic_intron))
             else:
