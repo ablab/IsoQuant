@@ -398,7 +398,7 @@ class IOSupport:
             if strand == '+':
                 count += 0 if (left_site, right_site) in self.canonical_forward_sites else 1
             else:
-                count += 0 if (left_site, right_site) in self.cononical_reverse_sites else 1
+                count += 0 if (left_site, right_site) in self.canonical_reverse_sites else 1
         return count
 
 
