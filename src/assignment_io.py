@@ -321,7 +321,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
 class IOSupport:
     # left site always first
     canonical_forward_sites = {("GT", "AG"), ("GC", "AG"), ("AT", "AC")}
-    cononical_reverse_sites = {("AC", "CT"), ("GC", "CT"), ("AT", "GT")}
+    canonical_reverse_sites = {("CT", "AC"), ("CT", "GC"), ("GT", "AT")}
 
     def __init__(self, params):
         self.params = params
@@ -379,7 +379,7 @@ class IOSupport:
                 if strand == '+':
                     gene_info.canonical_sites[intron] = (left_site, right_site) in self.canonical_forward_sites
                 else:
-                    gene_info.canonical_sites[intron] = (left_site, right_site) in self.cononical_reverse_sites
+                    gene_info.canonical_sites[intron] = (left_site, right_site) in self.canonical_reverse_sites
 
             if not gene_info.canonical_sites[intron]:
                 return False
