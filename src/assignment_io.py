@@ -146,7 +146,8 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         read_introns = junctions_from_blocks(read_exons)
 
         if not read_assignment.isoform_matches:
-            self.output_file.write(self.unmatched_line(read_assignment))
+            additional_info = [str(k) + "=" + str(read_assignment.additional_info[k]) +";" for k in read_assignment.additional_info.keys()]
+            self.output_file.write(self.unmatched_line(read_assignment, additional_info))
             return
 
         for m in read_assignment.isoform_matches:

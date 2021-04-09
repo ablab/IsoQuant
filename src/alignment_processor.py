@@ -78,6 +78,13 @@ class LongReadAlignmentProcessor:
             concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
             # correct coordinates to GTF style (inclusive intervals)
             sorted_blocks = correct_bam_coords(concat_blocks)
+            read_coverage = read_coverage_fraction(sorted_blocks, self.gene_info.split_exon_profiles.features)
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative)
+            read_assignment.exons = sorted_blocks
+            read_assignment.set_additional_info("read_fraction", read_coverage)
+            self.assignment_storage.append(read_assignment)
+            continue
+
             logger.debug("Read exons: " + str(sorted_blocks))
             if self.params.reference and (self.params.sqanti_output or self.params.check_canonical):
                 if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
