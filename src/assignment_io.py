@@ -410,14 +410,15 @@ class IOSupport:
             if strand == "+":
                 left_site = gene_info.reference_region[intron_left_pos-4:intron_left_pos+6]
                 right_site = gene_info.reference_region[intron_right_pos-5:intron_right_pos+4]
-                donor_sight_problematic = left_site[0:6] == "GTAAGT" or left_site[4:10] == "GTAAGT"
-                acceptor_sight_problematic = right_site[4:6] == "AG" and (right_site[1:3] == "AG" or right_site[7:9] == "AG")
+                donor_site_problematic = left_site[0:6] == "GTAAGT" or left_site[4:10] == "GTAAGT"
+                acceptor_site_problematic = right_site[4:6] == "AG" and (right_site[1:3] == "AG" or right_site[7:9] == "AG")
             else:
                 left_site = gene_info.reference_region[intron_left_pos-3:intron_left_pos+6]
                 right_site = gene_info.reference_region[intron_right_pos-5:intron_right_pos+5]
-                donor_sight_problematic = right_site[0:6] == "ACTTAC" or right_site[4:10] == "ACTTAC"
-                acceptor_sight_problematic = left_site[3:5] == "CT" and (left_site[0:2] == "CT" or left_site[6:8] == "CT")
-            count += 1 if donor_sight_problematic or acceptor_sight_problematic else 0
+                donor_site_problematic = right_site[0:6] == "ACTTAC" or right_site[4:10] == "ACTTAC"
+                acceptor_site_problematic = left_site[3:5] == "CT" and (left_site[0:2] == "CT" or left_site[6:8] == "CT")
+            count += 1 if donor_site_problematic else 0
+            count += 1 if acceptor_site_problematic else 0
         return count
 
     def check_sites_are_canonical(self, read_introns, gene_info, strand):
