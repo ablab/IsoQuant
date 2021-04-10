@@ -38,6 +38,8 @@ class GeneClusterConstructor:
         gene_sets = []
         current_gene_db_list = []
         for g in self.gene_db.features_of_type('gene', order_by=('seqid', 'start')):
+            if g.end - g.start > 100000:
+                continue
             gene_name = g.id
             gene_db = self.gene_db[gene_name]
             if len(current_gene_db_list) > 0 and \
