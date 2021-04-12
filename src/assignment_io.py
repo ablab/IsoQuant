@@ -110,6 +110,19 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
         self.pickler.dump(read_assignment)
 
 
+class IntronInfoPrinter(AbstractAssignmentPrinter):
+    def __init__(self, output_file_name, params):
+        AbstractAssignmentPrinter.__init__(self, output_file_name, params)
+        self.header = "#read_id\tchr_id\tstrand\tcoordinates\tintron_type\tdonor_up\tdonor_down\tacceptor_up\tacceptor_down\n"
+        self.output_file.write(self.header)
+
+    def add_intron_info(self, read_id, chr_id, strand, intron, intron_type,
+                        donor_up_dist, donor_down_dist, acceptor_up_dist, acceptor_down_dist):
+        self.output_file.write("%s\t%s\t%s\t%d-%d\t%s\t%d\t%d\t%d\t%d\n" %
+                               (read_id, chr_id, strand, intron[0], intron[1], intron_type,
+                                donor_up_dist, donor_down_dist, acceptor_up_dist, acceptor_down_dist))
+
+
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
@@ -122,13 +135,13 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         if self.params.check_canonical and gene_info.reference_region:
             if len(read_introns) == 0:
                 additional_info.append("Noncanonical=Unspliced;")
-                additional_info.append("Problematic=Unspliced;")
+                #additional_info.append("Problematic=Unspliced;")
             else:
                 for strand in ['+', '-']:
                     nonc = self.io_support.count_noncanonincal(read_introns, gene_info, strand)
                     additional_info.append("Noncanonical%s=%d;" % (strand, nonc))
-                    problematic = self.io_support.count_problematic_introns(read_introns, gene_info, strand)
-                    additional_info.append("Problematic%s=%d;" % (strand, problematic))
+                    #problematic = self.io_support.count_problematic_introns(read_introns, gene_info, strand)
+                    #additional_info.append("Problematic%s=%d;" % (strand, problematic))
         return additional_info
 
     def add_read_info(self, read_assignment):
@@ -186,13 +199,13 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             if self.params.check_canonical and read_assignment.gene_info.reference_region:
                 if len(read_introns) == 0:
                     additional_info.append("Noncanonical=Unspliced;")
-                    additional_info.append("Problematic=Unspliced;")
+                    #additional_info.append("Problematic=Unspliced;")
                 else:
                     strand = read_assignment.gene_info.isoform_strands[m.assigned_transcript]
                     nonc = self.io_support.count_noncanonincal(read_introns, read_assignment.gene_info, strand)
                     additional_info.append("Noncanonical=" + str(nonc) + ";")
-                    problematic = self.io_support.count_problematic_introns(read_introns, read_assignment.gene_info, strand)
-                    additional_info.append("Problematic=" + str(problematic) + ";")
+                    #problematic = self.io_support.count_problematic_introns(read_introns, read_assignment.gene_info, strand)
+                    #additional_info.append("Problematic=" + str(problematic) + ";")
             additional_info.append("Classification=" + str(m.match_classification.name) + ";")
             if additional_info:
                 line += "\t" + " ".join(additional_info) + "\n"
@@ -396,11 +409,10 @@ class IOSupport:
             left_site = gene_info.reference_region[intron_left_pos:intron_left_pos + 2]
             right_site = gene_info.reference_region[intron_right_pos - 1:intron_right_pos + 1]
             if strand == '+':
-                count += 0 if (left_site, right_site) in self.canonical_forward_sites else 1
+                count += 0 if (left_site, right_site) == ("GT", "AG") else 1
             else:
-                count += 0 if (left_site, right_site) in self.canonical_reverse_sites else 1
+                count += 0 if (left_site, right_site) == ("CT", "AC") else 1
         return count
-
 
     def count_problematic_introns(self, read_introns, gene_info, strand):
         count = 0

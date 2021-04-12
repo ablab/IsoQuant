@@ -43,13 +43,13 @@ class LongReadAlignmentProcessor:
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
 
-    def process(self):
+    def process(self, intron_printer):
         self.assignment_storage = []
         self.gene_info.all_read_region_start = self.gene_info.start
         self.gene_info.all_read_region_end = self.gene_info.end
 
         for b in self.bams:
-            self.process_single_file(b)
+            self.process_single_file(b, intron_printer)
 
         if (self.params.sqanti_output or self.params.check_canonical) and self.chr_record:
             self.gene_info.all_read_region_start -= self.params.upstream_region_len
@@ -59,7 +59,7 @@ class LongReadAlignmentProcessor:
             self.gene_info.canonical_sites = {}
         return self.assignment_storage
 
-    def process_single_file(self, bamfile_in):
+    def process_single_file(self, bamfile_in, intron_printer):
         #with pysam.AlignmentFile(bam, "rb") as bamfile_in:
         for alignment in bamfile_in.fetch(self.gene_info.chr_id, self.gene_info.start, self.gene_info.end):
             read_id = alignment.query_name
@@ -106,6 +106,21 @@ class LongReadAlignmentProcessor:
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.multimapper = alignment.is_secondary
 
+            if self.chr_record and not alignment.is_secondary:
+                chr_id = self.gene_info.chr_id
+                read_start = sorted_blocks[0][0] - 10
+                read_end = sorted_blocks[-1][1] + 10
+                ref_region = str(self.chr_record[read_start - 1:read_end + 1].seq)
+                for i, intron in enumerate(combined_profile.read_intron_profile.read_features):
+                    is_consistent = combined_profile.read_intron_profile.read_profile[i] == 1
+                    strand, donor_up, donor_down, acceptor_up, acceptor_down = self.analyse_intron_sites(intron, ref_region, read_start)
+                    if strand is None:
+                        intron_printer.add_intron_info(read_id, chr_id, ".", intron, "noncanonical", 0, 0, 0, 0)
+                    else:
+                        intron_type = "consistent" if is_consistent else "incosistent"
+                        intron_printer.add_intron_info(read_id, chr_id, strand, intron, intron_type,
+                                                       donor_up, donor_down, acceptor_up, acceptor_down)
+
             if self.params.count_exons:
                 read_assignment.exon_gene_profile = combined_profile.read_exon_profile.gene_profile
                 read_assignment.intron_gene_profile = combined_profile.read_intron_profile.gene_profile
@@ -119,6 +134,51 @@ class LongReadAlignmentProcessor:
 
             self.assignment_storage.append(read_assignment)
             logger.debug("=== Finished read " + read_id + " ===")
+
+    def analyse_intron_sites(self, intron, ref_region, read_start, strand=None):
+        seq_size = 10
+        intron_left_pos = intron[0] - read_start
+        intron_right_pos = intron[1] - read_start
+
+        if strand is None:
+            left_site = ref_region[intron_left_pos:intron_left_pos + 2]
+            right_site = ref_region[intron_right_pos - 1:intron_right_pos + 1]
+            if left_site == "GT" and right_site == "AG":
+                strand = '+'
+            elif left_site == "CT" and right_site == "AC":
+                strand = '-'
+            else:
+                return None, None, None, None, None
+
+        if strand not in ['+', '-']:
+            return None, None, None, None, None
+
+        left_upper = ref_region[intron_left_pos - seq_size:intron_left_pos]
+        left_lower = ref_region[intron_left_pos + 2:intron_left_pos + seq_size + 2]
+        right_upper = ref_region[intron_right_pos - seq_size - 1:intron_right_pos - 1]
+        right_lower = ref_region[intron_right_pos + 1:intron_right_pos + seq_size + 1]
+
+        # upstream and downstream here are relative to the genome
+        if strand == "+":
+            donor_upstream = left_upper.rfind("GT")
+            donor_downstream = left_lower.find("GT")
+            acc_upstream = right_upper.rfind("AG")
+            acc_downstream = right_lower.find("AG")
+        else:
+            acc_upstream = left_upper.rfind("CT")
+            acc_downstream = left_lower.find("CT")
+            donor_upstream = right_upper.rfind("AC")
+            donor_downstream = right_lower.find("AC")
+
+        donor_upstream = seq_size - donor_upstream if donor_upstream != -1 else 0
+        donor_downstream = 2 + donor_downstream if donor_downstream != -1 else 0
+        acc_upstream = seq_size - acc_upstream if acc_upstream != -1 else 0
+        acc_downstream = 2 + acc_downstream if acc_downstream != -1 else 0
+
+        if strand == '+':
+            return strand, donor_upstream, donor_downstream, acc_upstream, acc_downstream
+        else:
+            return strand, donor_downstream, donor_upstream, acc_downstream, acc_upstream
 
     def count_indel_stats(self, alignment):
         cigar_event_count = len(alignment.cigartuples)

@@ -111,6 +111,7 @@ class OverlappingExonsGeneClusterConstructor(GeneClusterConstructor):
 
 def process_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr_record):
     tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
+    intron_info_printer = IntronInfoPrinter(sample.intron_info_tsv + chr_id + ".tsv", args)
 
     bam_files = list(map(lambda x: x[0], sample.file_list))
     bam_files = [pysam.AlignmentFile(bam, "rb") for bam in bam_files]
@@ -122,7 +123,7 @@ def process_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr
         gene_info = GeneInfo(g, gffutils_db, args.delta)
         alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, args,
                                                          current_chr_record, read_grouper)
-        assignment_storage = alignment_processor.process()
+        assignment_storage = alignment_processor.process(intron_info_printer)
         gene_info.db = None
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
