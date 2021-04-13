@@ -113,14 +113,16 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
 class IntronInfoPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
-        self.header = "#read_id\tchr_id\tstrand\tcoordinates\tintron_type\tdonor_up\tdonor_down\tacceptor_up\tacceptor_down\n"
+        self.header = "#read_id\tchr_id\tstrand\tread_coordinates\tref_coordinates\tintron_type\tdonor_up\tdonor_down\tacceptor_up\tacceptor_down\tdonor_diff\tacceptor_diff\n"
         self.output_file.write(self.header)
 
-    def add_intron_info(self, read_id, chr_id, strand, intron, intron_type,
-                        donor_up_dist, donor_down_dist, acceptor_up_dist, acceptor_down_dist):
-        self.output_file.write("%s\t%s\t%s\t%d-%d\t%s\t%d\t%d\t%d\t%d\n" %
-                               (read_id, chr_id, strand, intron[0], intron[1], intron_type,
-                                donor_up_dist, donor_down_dist, acceptor_up_dist, acceptor_down_dist))
+    def add_intron_info(self, read_id, chr_id, strand, intron, ref_intron, intron_type,
+                        donor_up_dist, donor_down_dist, acceptor_up_dist, acceptor_down_dist,
+                        donor_shift, acceptor_shift):
+        self.output_file.write("%s\t%s\t%s\t%d-%d\t%d-%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n" %
+                               (read_id, chr_id, strand, intron[0], intron[1], ref_intron[0], ref_intron[1],intron_type,
+                                donor_up_dist, donor_down_dist, acceptor_up_dist, acceptor_down_dist,
+                                donor_shift, acceptor_shift))
 
 
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):

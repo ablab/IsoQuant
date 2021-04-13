@@ -42,6 +42,7 @@ class LongReadAlignmentProcessor:
         self.polya_fixer = PolyAFixer(self.params)
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
+        gene_region = (gene_info.start, gene_info.end)
 
     def process(self, intron_printer):
         self.assignment_storage = []
@@ -111,15 +112,68 @@ class LongReadAlignmentProcessor:
                 read_start = sorted_blocks[0][0] - 10
                 read_end = sorted_blocks[-1][1] + 10
                 ref_region = str(self.chr_record[read_start - 1:read_end + 1].seq)
+                gene_profile_index = 0
+                gene_profile = combined_profile.read_intron_profile.gene_profile
+
                 for i, intron in enumerate(combined_profile.read_intron_profile.read_features):
-                    is_consistent = combined_profile.read_intron_profile.read_profile[i] == 1
-                    strand, donor_up, donor_down, acceptor_up, acceptor_down = self.analyse_intron_sites(intron, ref_region, read_start)
-                    if strand is None:
-                        intron_printer.add_intron_info(read_id, chr_id, ".", intron, "noncanonical", 0, 0, 0, 0)
+                    if combined_profile.read_intron_profile.read_profile[i] != 1:
+                        intron_printer.add_intron_info(read_id, chr_id, ".", intron, (0, 0), "novel", 0, 0, 0, 0, 0, 0)
+                        continue
+
+                    while gene_profile_index < len(gene_profile) and gene_profile[gene_profile_index] != 1:
+                        gene_profile_index += 1
+                    if gene_profile_index >= len(gene_profile) or gene_profile[gene_profile_index] != 1:
+                        logger.info("profile %s, index %d" % (str(gene_profile), gene_profile_index))
+                        logger.info("read profile %s, index %d" % (str(combined_profile.read_intron_profile.read_profile), i))
+
+                    reference_intron = self.gene_info.intron_profiles.features[gene_profile_index]
+                    gene_profile_index += 1
+                    is_consistent = reference_intron == intron
+                    left_diff = reference_intron[0] - intron[0]
+                    right_diff = reference_intron[1] - intron[1]
+
+                    ref_strand = self.check_canonical(reference_intron, ref_region, read_start)
+                    read_strand = self.check_canonical(intron, ref_region, read_start)
+                    if ref_strand is None :
+                        # reference intron is non-canonical
+                        if read_strand is None:
+                            # read intron is non-canonical as well
+                            intron_printer.add_intron_info(read_id, chr_id, ".", intron, reference_intron,
+                                                           "both_noncanonical", 0, 0, 0, 0, left_diff, right_diff)
+                        else:
+                            # read is canonical
+                            strand, donor_up, donor_down, acceptor_up, acceptor_down = \
+                                self.analyse_intron_sites(intron, ref_region, read_start, read_strand)
+                            if read_strand == '+':
+                                donor_diff = left_diff
+                                acc_diff = right_diff
+                            else:
+                                donor_diff = - right_diff
+                                acc_diff = - left_diff
+                            intron_printer.add_intron_info(read_id, chr_id, read_strand, intron, reference_intron,
+                                                           "reference_noncanonical",
+                                                           donor_up, donor_down, acceptor_up,
+                                                           acceptor_down, donor_diff, acc_diff)
                     else:
-                        intron_type = "consistent" if is_consistent else "incosistent"
-                        intron_printer.add_intron_info(read_id, chr_id, strand, intron, intron_type,
-                                                       donor_up, donor_down, acceptor_up, acceptor_down)
+                        strand, donor_up, donor_down, acceptor_up, acceptor_down = \
+                            self.analyse_intron_sites(intron, ref_region, read_start, ref_strand)
+                        if ref_strand == '+':
+                            donor_diff = left_diff
+                            acc_diff = right_diff
+                        else:
+                            donor_diff = - right_diff
+                            acc_diff = - left_diff
+                        if ref_strand != read_strand:
+                            intron_printer.add_intron_info(read_id, chr_id, ref_strand, intron, reference_intron,
+                                                           "read_noncanonical",
+                                                           donor_up, donor_down, acceptor_up,
+                                                           acceptor_down, donor_diff, acc_diff)
+                        else:
+                            intron_type = "consistent" if is_consistent else "incosistent"
+                            intron_printer.add_intron_info(read_id, chr_id, strand, intron, reference_intron,
+                                                           intron_type,
+                                                           donor_up, donor_down, acceptor_up, acceptor_down,
+                                                           donor_diff, acc_diff)
 
             if self.params.count_exons:
                 read_assignment.exon_gene_profile = combined_profile.read_exon_profile.gene_profile
@@ -134,6 +188,18 @@ class LongReadAlignmentProcessor:
 
             self.assignment_storage.append(read_assignment)
             logger.debug("=== Finished read " + read_id + " ===")
+
+    def check_canonical(self, intron, ref_region, read_start, strand=None):
+        intron_left_pos = intron[0] - read_start
+        intron_right_pos = intron[1] - read_start
+        left_site = ref_region[intron_left_pos:intron_left_pos + 2]
+        right_site = ref_region[intron_right_pos - 1:intron_right_pos + 1]
+        if (left_site == "GT" and right_site == "AG") and strand != '-':
+            return '+'
+        elif (left_site == "CT" and right_site == "AC") and strand != '+':
+            return '-'
+        else:
+            return None
 
     def analyse_intron_sites(self, intron, ref_region, read_start, strand=None):
         seq_size = 10
