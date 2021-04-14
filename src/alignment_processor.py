@@ -130,8 +130,8 @@ class LongReadAlignmentProcessor:
                     reference_intron = self.gene_info.intron_profiles.features[gene_profile_index]
                     gene_profile_index += 1
                     is_consistent = reference_intron == intron
-                    left_diff = reference_intron[0] - intron[0]
-                    right_diff = reference_intron[1] - intron[1]
+                    left_diff = intron[0] - reference_intron[0]
+                    right_diff = intron[1] - reference_intron[1]
 
                     ref_strand = self.check_canonical(reference_intron, ref_region, read_start)
                     read_strand = self.check_canonical(intron, ref_region, read_start)
