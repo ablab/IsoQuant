@@ -128,7 +128,7 @@ class IntronInfoPrinter(AbstractAssignmentPrinter):
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
-        self.header = "#read_id\tisoform_id\tassignment_type\tassignment_events\texons\tadditional\n"
+        self.header = "#read_id\tisoform_id\tchr_id\tassignment_type\tassignment_events\texons\tadditional\n"
         self.output_file.write(self.header)
         self.io_support = io_support
 
@@ -164,7 +164,8 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         read_exons = read_assignment.exons
         read_introns = junctions_from_blocks(read_exons)
         if not read_assignment.isoform_matches:
-            line = read_assignment.read_id + "\t.\t" + read_assignment.assignment_type.name + "\t.\t" + \
+            line = read_assignment.read_id + "\t.\t" + read_assignment.chr_id + "\t" + \
+                   read_assignment.assignment_type.name + "\t.\t" + \
                    range_list_to_str(read_exons)
             additional_info = self.additional_info_for_unassigned(read_introns, read_assignment.gene_info)
             if additional_info:
@@ -176,7 +177,8 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
 
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
-                line = read_assignment.read_id + "\t.\t" + read_assignment.assignment_type.name+ "\t.\t" + \
+                line = read_assignment.read_id + "\t.\t" + read_assignment.chr_id + "\t" \
+                       + read_assignment.assignment_type.name+ "\t.\t" + \
                        range_list_to_str(read_exons)
                 additional_info = self.additional_info_for_unassigned(read_introns, read_assignment.gene_info)
                 additional_info.append("Classification=" + str(m.match_classification.name) + ";")
@@ -190,7 +192,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             event_string = ",".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
                                                                                read_introns, isoform_introns)
                                      for x in m.match_subclassifications])
-            line = read_assignment.read_id + "\t" + m.assigned_transcript + "\t" \
+            line = read_assignment.read_id + "\t" + m.assigned_transcript + "\t" + read_assignment.chr_id + "\t" \
                    + read_assignment.assignment_type.name + "\t" + event_string + "\t" + range_list_to_str(read_exons)
 
             additional_info = []

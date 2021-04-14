@@ -387,6 +387,7 @@ class ReadAssignment:
         self.polya_info = None
         self.read_group = "."
         self.mapped_strand = "."
+        self.chr_id = ""
         self.assignment_type = assignment_type
         if match is None:
             self.isoform_matches = []
@@ -401,9 +402,6 @@ class ReadAssignment:
 
     def set_assignment_type(self, assignment_type):
         self.assignment_type = assignment_type
-
-    def chr_id(self):
-        return self.gene_info.chr_id
 
     def start(self):
         return self.exons[0][0]
