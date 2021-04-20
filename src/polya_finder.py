@@ -31,7 +31,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
         if len(cigar_tuples) > 1 and cigar_tuples[0][0] == 5 and cigar_tuples[1][0] == 4:
             # hard clipped
             current_pos = 2
-        elif cigar_tuples[0][0] in {4, 5}:
+        elif cigar_tuples[0][0] in [4, 5]:
             # soft clipped
             current_pos = 1
     else:
@@ -39,7 +39,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
         if len(cigar_tuples) > 1 and cigar_tuples[-1][0] == 5 and cigar_tuples[-2][0] == 4:
             # hard clipped
             current_pos -= 2
-        elif cigar_tuples[-1][0] in {4, 5}:
+        elif cigar_tuples[-1][0] in [4, 5]:
             # soft clipped
             current_pos -= 1
 
@@ -52,10 +52,10 @@ def move_ref_coord_alogn_alignment(alignment, shift):
         if cigar_event == 1:
             # insertion
             read_length_consumed += event_len
-        elif cigar_event in {2, 3}:
+        elif cigar_event in [2, 3]:
             # deletion or intron
             reference_length_consumed += event_len
-        elif cigar_event == 0:
+        elif cigar_event in [0, 7, 8]:
             # match
             remaining_bases = shift - read_length_consumed # how many nucleotides in read to complete shift
             #logger.debug("%d" % remaining_bases)
@@ -65,7 +65,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
             else:
                 read_length_consumed += remaining_bases
                 reference_length_consumed += remaining_bases
-        elif cigar_event in {4, 5}:
+        elif cigar_event in [4, 5]:
             # met clipping on the other side
             break
         else:

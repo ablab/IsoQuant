@@ -310,7 +310,7 @@ def concat_gapless_blocks(blocks, cigar_tuples):
         # init new block
         if current_block is None:
             # init new block from match
-            if cigar_tuples[cigar_index][0] == 0:
+            if cigar_tuples[cigar_index][0] in [0, 7, 8]:
                 current_block = (blocks[block_index][0] - deletions_before_block, blocks[block_index][1])
                 deletions_before_block = 0
                 block_index += 1

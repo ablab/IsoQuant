@@ -76,6 +76,9 @@ class LongReadAlignmentProcessor:
 
             # concat indels
             concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
+            if not concat_blocks:
+                logger.warning("Read %s has no aligned exons" % read_id)
+                continue
             # correct coordinates to GTF style (inclusive intervals)
             sorted_blocks = correct_bam_coords(concat_blocks)
             logger.debug("Read exons: " + str(sorted_blocks))
@@ -139,10 +142,11 @@ class LongReadAlignmentProcessor:
                 junctions_with_indels += 1
 
             # indel separated by at most 'indel_near_splice_site_dist' matches from intron
-            if (i > 1 and alignment.cigartuples[i - 2][0] in indel_events and alignment.cigartuples[i - 1][0] == 0 and
+            if (i > 1 and alignment.cigartuples[i - 2][0] in indel_events and
+                alignment.cigartuples[i - 1][0] in [0, 7, 8] and
                 alignment.cigartuples[i - 1][1] <= self.params.indel_near_splice_site_dist) or \
                     (i < cigar_event_count - 2 and alignment.cigartuples[i + 2][0] in indel_events and
-                     alignment.cigartuples[i + 1][0] == 0 and
+                     alignment.cigartuples[i + 1][0]  in [0, 7, 8] and
                      alignment.cigartuples[i + 1][1] <= self.params.indel_near_splice_site_dist):
                 junctions_with_indels += 1
 
