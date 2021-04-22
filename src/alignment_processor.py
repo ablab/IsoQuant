@@ -61,66 +61,67 @@ class LongReadAlignmentProcessor:
 
     def process_single_file(self, bamfile_in):
         #with pysam.AlignmentFile(bam, "rb") as bamfile_in:
-        for alignment in bamfile_in.fetch(self.gene_info.chr_id, self.gene_info.start, self.gene_info.end):
-            read_id = alignment.query_name
+        for genic_region in self.gene_info.genic_regions:
+            for alignment in bamfile_in.fetch(self.gene_info.chr_id, genic_region[0], genic_region[1]):
+                read_id = alignment.query_name
 
-            if alignment.reference_id == -1:
-                self.assignment_storage.append(ReadAssignment(read_id, None))
-                continue
-            if alignment.is_supplementary:
-                continue
-            if self.params.no_secondary and alignment.is_secondary:
-                continue
+                if alignment.reference_id == -1:
+                    self.assignment_storage.append(ReadAssignment(read_id, None))
+                    continue
+                if alignment.is_supplementary:
+                    continue
+                if self.params.no_secondary and alignment.is_secondary:
+                    continue
 
-            logger.debug("=== Processing read " + read_id + " ===")
+                logger.debug("=== Processing read " + read_id + " ===")
 
-            # concat indels
-            concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
-            if not concat_blocks:
-                logger.warning("Read %s has no aligned exons" % read_id)
-                continue
-            # correct coordinates to GTF style (inclusive intervals)
-            sorted_blocks = correct_bam_coords(concat_blocks)
-            logger.debug("Read exons: " + str(sorted_blocks))
-            if self.params.reference and (self.params.sqanti_output or self.params.check_canonical):
-                if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
-                    self.gene_info.all_read_region_start = sorted_blocks[0][0]
-                if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
-                    self.gene_info.all_read_region_end = sorted_blocks[-1][1]
+                # concat indels
+                concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
+                if not concat_blocks:
+                    logger.warning("Read %s has no aligned exons" % read_id)
+                    continue
+                # correct coordinates to GTF style (inclusive intervals)
+                sorted_blocks = correct_bam_coords(concat_blocks)
+                logger.debug("Read exons: " + str(sorted_blocks))
+                if self.params.reference and (self.params.sqanti_output or self.params.check_canonical):
+                    if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
+                        self.gene_info.all_read_region_start = sorted_blocks[0][0]
+                    if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
+                        self.gene_info.all_read_region_end = sorted_blocks[-1][1]
 
-            polya_info = self.polya_finder.detect_polya(alignment)
-            sorted_blocks, polya_info, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
-            cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
+                polya_info = self.polya_finder.detect_polya(alignment)
+                sorted_blocks, polya_info, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
+                cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
 
-            combined_profile = self.profile_constructor.construct_profiles(sorted_blocks, polya_info, cage_hits)
-            read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
+                combined_profile = self.profile_constructor.construct_profiles(sorted_blocks, polya_info, cage_hits)
+                read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
 
-            if exon_changed:
-                read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
-            read_assignment.polyA_found = (polya_info.external_polya_pos != -1 or
-                                           polya_info.external_polyt_pos != -1 or
-                                           polya_info.internal_polya_pos != -1 or
-                                           polya_info.internal_polyt_pos != -1)
-            read_assignment.polya_info = polya_info
-            read_assignment.cage_found = len(cage_hits) > 0
-            read_assignment.exons = sorted_blocks
-            read_assignment.read_group = self.read_groupper.get_group_id(alignment)
-            read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
-            read_assignment.multimapper = alignment.is_secondary
+                if exon_changed:
+                    read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
+                read_assignment.polyA_found = (polya_info.external_polya_pos != -1 or
+                                               polya_info.external_polyt_pos != -1 or
+                                               polya_info.internal_polya_pos != -1 or
+                                               polya_info.internal_polyt_pos != -1)
+                read_assignment.polya_info = polya_info
+                read_assignment.cage_found = len(cage_hits) > 0
+                read_assignment.exons = sorted_blocks
+                read_assignment.read_group = self.read_groupper.get_group_id(alignment)
+                read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
+                read_assignment.multimapper = alignment.is_secondary
 
-            if self.params.count_exons:
-                read_assignment.exon_gene_profile = combined_profile.read_exon_profile.gene_profile
-                read_assignment.intron_gene_profile = combined_profile.read_intron_profile.gene_profile
+                if self.params.count_exons:
+                    read_assignment.exon_gene_profile = combined_profile.read_exon_profile.gene_profile
+                    read_assignment.intron_gene_profile = combined_profile.read_intron_profile.gene_profile
 
-            if self.params.sqanti_output:
-                indel_count, junctions_with_indels = self.count_indel_stats(alignment)
-                read_assignment.set_additional_info("indel_count", indel_count)
-                read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
-                read_assignment.introns_match = \
-                    all(e == 1 for e in combined_profile.read_intron_profile.read_profile)
+                if self.params.sqanti_output:
+                    indel_count, junctions_with_indels = self.count_indel_stats(alignment)
+                    read_assignment.set_additional_info("indel_count", indel_count)
+                    read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
+                    read_assignment.introns_match = \
+                        all(e == 1 for e in combined_profile.read_intron_profile.read_profile)
 
-            self.assignment_storage.append(read_assignment)
-            logger.debug("=== Finished read " + read_id + " ===")
+                self.assignment_storage.append(read_assignment)
+                logger.debug("=== Finished read " + read_id + " ===")
 
     def count_indel_stats(self, alignment):
         cigar_event_count = len(alignment.cigartuples)

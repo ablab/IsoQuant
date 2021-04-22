@@ -24,6 +24,7 @@ logger = logging.getLogger('IsoQuant')
 
 class GeneClusterConstructor:
     MAX_GENE_CLUSTER = 50
+    MAX_GENE_LEN = 100000
 
     def __init__(self, gene_db):
         self.gene_db = gene_db
@@ -40,7 +41,9 @@ class GeneClusterConstructor:
         for g in self.gene_db.features_of_type('gene', order_by=('seqid', 'start')):
             gene_name = g.id
             gene_db = self.gene_db[gene_name]
-            if len(current_gene_db_list) > 0 and \
+            if g.end - g.start > self.MAX_GENE_LEN:
+                gene_sets.append([g])
+            elif len(current_gene_db_list) > 0 and \
                     (all(not genes_overlap(cg, gene_db) for cg in current_gene_db_list) or
                      (len(current_gene_db_list) > self.MAX_GENE_CLUSTER and
                       all(not genes_contain(cg, gene_db) for cg in current_gene_db_list))):

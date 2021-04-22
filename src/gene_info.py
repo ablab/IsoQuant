@@ -98,6 +98,8 @@ class FeatureInfo:
 
 # All gene(s) information
 class GeneInfo:
+    MAX_INTRON_LEN = 50000
+
     # chr_bam_prefix: additional string used when bam files were aligned to different reference that has difference in chromosome names (e.g. 1 and chr1)
     def __init__(self, gene_db_list, db, delta=0):
         if db is None:
@@ -130,7 +132,7 @@ class GeneInfo:
         self.set_gene_ids()
         # FIXME: no need to run unless detect_ambiguous option is on
         # self.detect_ambiguous()
-
+        self.genic_regions = self.get_genic_regions(self.split_exon_profiles.features)
         self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
         self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
 
@@ -173,6 +175,7 @@ class GeneInfo:
         cls.gene_id_map = {}
         cls.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
 
+        cls.genic_regions = [(cls.start, cls.end)]
         cls.exon_property_map = None
         cls.intron_property_map = None
 
@@ -380,6 +383,22 @@ class GeneInfo:
                                                 partial(equal_ranges, delta=0))
                 # setting up split exon profiles for current isoform
                 self.split_exon_profiles.set_profiles(t.id, all_isoforms_exons[t.id], transcript_region, contains)
+
+    # select exon-dense regions
+    def get_genic_regions(self, all_exons):
+        genic_regions = []
+        current_region = None
+        for e in all_exons:
+            if not current_region:
+                current_region = e
+            elif e[0] - current_region[1] < self.MAX_INTRON_LEN:
+                current_region = (current_region[0], e[1])
+            else:
+                genic_regions.append(current_region)
+                current_region = e
+        if current_region:
+            genic_regions.append(current_region)
+        return genic_regions
 
     # detect isoforms which are exact sub-isoforms of others
     def detect_ambiguous(self):
