@@ -308,24 +308,25 @@ def concat_gapless_blocks(blocks, cigar_tuples):
 
     while cigar_index < len(cigar_tuples) and block_index < len(blocks):
         # init new block
+        cigar_event = cigar_tuples[cigar_index][0]
         if current_block is None:
             # init new block from match
-            if cigar_tuples[cigar_index][0] in [0, 7, 8]:
+            if cigar_event in [0, 7, 8]:
                 current_block = (blocks[block_index][0] - deletions_before_block, blocks[block_index][1])
                 deletions_before_block = 0
                 block_index += 1
             # keep track of deletions before matched block
-            elif cigar_tuples[cigar_index][0] == 2:
+            elif cigar_event == 2:
                 deletions_before_block = cigar_tuples[cigar_index][1]
         # found intron, add current block
-        elif cigar_tuples[cigar_index][0] == 3:
+        elif cigar_event == 3:
             resulting_blocks.append(current_block)
             current_block = None
         # add deletion to block
-        elif cigar_tuples[cigar_index][0] == 2:
+        elif cigar_event == 2:
             current_block = (current_block[0], current_block[1] + cigar_tuples[cigar_index][1])
         # found match - merge blocks
-        elif cigar_tuples[cigar_index][0] == 0:
+        elif cigar_event in [0, 7, 8]:
             # if abs(current_block[1] - blocks[block_index][0]) > 1:
             #    logger.debug("Distant blocks")
             #    logger.debug(current_block, blocks[block_index])
