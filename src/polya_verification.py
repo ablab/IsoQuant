@@ -64,10 +64,10 @@ class PolyAFixer:
 
         if polyt_exon_count > 0 and polya_exon_count > 0:
             logger.debug("Both PolyA and PolyT fake terminal exons found: %d, %d" % (polya_exon_count, polyt_exon_count))
-            if polyt_exon_count + polya_exon_count == len(read_exons):
-                logger.debug("All exons seem to be consist of polyA/T")
-                polyt_exon_count -= 1
-                polya_exon_count -= 1
+        if polyt_exon_count + polya_exon_count == len(read_exons):
+            logger.debug("All exons seem to be consist of polyA/T")
+            polyt_exon_count -= 1
+            polya_exon_count -= 1
 
         if polya_exon_count > 0:
             polya_info.internal_polya_pos = shift_polya(read_exons, polya_exon_count, polya_info.internal_polya_pos)
