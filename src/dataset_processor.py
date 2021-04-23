@@ -42,7 +42,7 @@ class GeneClusterConstructor:
             gene_name = g.id
             gene_db = self.gene_db[gene_name]
             if g.end - g.start > self.MAX_GENE_LEN:
-                gene_sets.append([g])
+                gene_sets.append([gene_db])
             elif len(current_gene_db_list) > 0 and \
                     (all(not genes_overlap(cg, gene_db) for cg in current_gene_db_list) or
                      (len(current_gene_db_list) > self.MAX_GENE_CLUSTER and
@@ -52,7 +52,8 @@ class GeneClusterConstructor:
             else:
                 current_gene_db_list.append(gene_db)
 
-        gene_sets.append(current_gene_db_list)
+        if current_gene_db_list:
+            gene_sets.append(current_gene_db_list)
         return gene_sets
 
 
