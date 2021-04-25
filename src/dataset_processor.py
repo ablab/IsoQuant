@@ -41,14 +41,16 @@ class GeneClusterConstructor:
         for g in self.gene_db.features_of_type('gene', order_by=('seqid', 'start')):
             gene_name = g.id
             gene_db = self.gene_db[gene_name]
-            if g.end - g.start > self.MAX_GENE_LEN:
-                gene_sets.append([gene_db])
-            elif len(current_gene_db_list) > 0 and \
+
+            if len(current_gene_db_list) > 0 and \
                     (all(not genes_overlap(cg, gene_db) for cg in current_gene_db_list) or
                      (len(current_gene_db_list) > self.MAX_GENE_CLUSTER and
                       all(not genes_contain(cg, gene_db) for cg in current_gene_db_list))):
                 gene_sets.append(current_gene_db_list)
-                current_gene_db_list = [gene_db]
+                current_gene_db_list = []
+
+            if g.end - g.start > self.MAX_GENE_LEN:
+                gene_sets.append([gene_db])
             else:
                 current_gene_db_list.append(gene_db)
 
