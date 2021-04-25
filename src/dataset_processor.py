@@ -137,10 +137,7 @@ class DatasetProcessor:
     def __init__(self, args):
         self.args = args
         logger.info("Loading gene database from " + self.args.genedb)
-        file_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
-        self.gffutils_db = gffutils.create_db(file_db, ":memory:", keep_order=True, merge_strategy='warning',
-                                              sort_attribute_values=False, disable_infer_transcripts=True,
-                                              disable_infer_genes=True)
+        self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
         if self.args.reference:
             logger.info("Loading reference genome from " + self.args.reference)
             _, outer_ext = os.path.splitext(self.args.reference)
