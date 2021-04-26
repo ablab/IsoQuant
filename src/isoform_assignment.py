@@ -376,6 +376,16 @@ class IsoformMatch:
         return all(el.event_type in valid_subtypes for el in self.match_subclassifications)
 
 
+class ShortReadAssignment:
+    def __init__(self, read_assignment):
+        self.read_id = read_assignment.read_id
+        self.chr_id = read_assignment.chr_id
+        self.start = read_assignment.start()
+        self.end = read_assignment.end()
+        self.multimapper = read_assignment.multimapper
+        self.assignment_type = read_assignment.assignment_type
+
+
 class ReadAssignment:
     def __init__(self, read_id, assignment_type, match=None):
         self.read_id = read_id

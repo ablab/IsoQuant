@@ -8,6 +8,7 @@ import _pickle as pickle
 import gc
 import gzip
 from multiprocessing import Pool
+from collections import namedtuple
 
 from src.input_data_storage import *
 from src.alignment_processor import *
@@ -113,9 +114,9 @@ class OverlappingExonsGeneClusterConstructor(GeneClusterConstructor):
         return gene_sets
 
 
-def process_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr_record):
+def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr_record):
     tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
-
+    processed_reads = []
     bam_files = list(map(lambda x: x[0], sample.file_list))
     bam_files = [pysam.AlignmentFile(bam, "rb") for bam in bam_files]
     logger.info("Processing chromosome " + chr_id)
@@ -131,7 +132,9 @@ def process_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
+            processed_reads.append(ShortReadAssignment(read_assignment))
     logger.info("Finished processing chromosome " + chr_id)
+    return processed_reads
 
 
 # Class for processing all samples against gene database
@@ -154,7 +157,7 @@ class DatasetProcessor:
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
         self.read_grouper = create_read_grouper(args)
         self.io_support = IOSupport(self.args)
-
+        self.multimapped_reads = defaultdict(list)
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
@@ -166,6 +169,7 @@ class DatasetProcessor:
     def process_sample(self, sample):
         logger.info("Processing sample " + sample.label)
         logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(map(lambda x: x[0], sample.file_list)))
+        self.multimapped_reads = defaultdict(list)
 
         self.tmp_dir = os.path.join(sample.out_dir, "tmp")
         if not os.path.isdir(self.tmp_dir):
@@ -176,15 +180,7 @@ class DatasetProcessor:
             logger.info('Using read assignments from {}*'.format(saves_file))
             total_alignments, polya_found = self.load_reads(saves_file)
         else:
-            chrom_clusters = self.get_chromosome_gene_clusters()
-            pool = Pool(self.args.threads)
-            pool.starmap(process_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
-                                                (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
-                                                for (chr_id, c) in chrom_clusters])
-            pool.close()
-            pool.join()
-
-            logger.info('Finishing read assignment')
+            self.assign_reads(sample)
             total_alignments, polya_found = self.load_reads(sample.out_raw_file)
             logger.info('Read assignments files saved to {}*.\nYou can reuse it later with option --read_assignments'.
                         format(sample.out_raw_file))
@@ -206,9 +202,36 @@ class DatasetProcessor:
         self.args.require_polyA = intial_polya_required
         logger.info("Processed sample " + sample.label)
 
+    def assign_reads(self, sample):
+        logger.info('Assigning reads to isoforms')
+        chrom_clusters = self.get_chromosome_gene_clusters()
+        pool = Pool(self.args.threads)
+        processed_reads = pool.starmap(assign_reads_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
+                                                                   (self.reference_record_dict[
+                                                                        chr_id] if self.reference_record_dict else None))
+                                                                  for (chr_id, c) in chrom_clusters])
+        pool.close()
+        pool.join()
+
+        logger.info("Resolving multimappers")
+        all_processed_reads = set()
+        self.multimapped_reads = defaultdict(list)
+        for storage in processed_reads:
+            for read_assignment in storage:
+                if read_assignment.read_id in all_processed_reads:
+                    self.multimapped_reads[read_assignment.read_id].append(read_assignment)
+                else:
+                    all_processed_reads.add(read_assignment.read_id)
+
+        multimap_resolver = MultimapResolver(self.args.multimap_strategy)
+        multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "multimappers", "wb"),  -1)
+        multimap_pickler.fast = True
+        for assignment_list in self.multimapped_reads.values():
+            multimap_resolver.resolve(assignment_list)
+            multimap_pickler.dump(assignment_list)
+        logger.info('Finishing read assignment')
+
     def load_reads(self, dump_filename):
-        self.processed_reads = set()
-        self.multimapped_reads = set()
         self.reads_assignments = []
 
         read_storage = []
@@ -216,6 +239,21 @@ class DatasetProcessor:
         polya_found = 0
         gene_info = None
         gc.disable()
+
+        if not self.multimapped_reads:
+            multimap_unpickler = pickle.Unpickler(open(dump_filename + "multimappers", "rb"), fix_imports=False)
+            while True:
+                try:
+                    obj = multimap_unpickler.load()
+                    if isinstance(obj, list):
+                        assignment_list = obj
+                        read_id = assignment_list[0].read_id
+                        self.multimapped_reads[read_id] = assignment_list
+                    else:
+                        raise ValueError("Multimap assignment file {} is corrupted!".format(dump_filename))
+                except EOFError:
+                    break
+
         for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
             logger.info("Loading read assignments from " + chr_dump_file)
@@ -229,14 +267,20 @@ class DatasetProcessor:
                             read_assignment = obj
                             assert gene_info is not None
                             read_assignment.gene_info = gene_info
+                            if read_assignment.read_id in self.multimapped_reads:
+                                resolved_assignment = None
+                                for a in self.multimapped_reads[read_assignment.read_id]:
+                                    if a.start == read_assignment.start() and a.end == read_assignment.end() and a.chr_id == read_assignment.chr_id:
+                                        resolved_assignment = a
+                                        break
+                                if not resolved_assignment or resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
+                                    continue
+                                read_assignment.assignment_type = resolved_assignment.assignment_type
+                                read_assignment.multimapper = resolved_assignment.multimapper
                             read_storage.append(read_assignment)
                             total_assignments += 1
                             if read_assignment.polyA_found:
                                 polya_found += 1
-                            if read_assignment.read_id in self.processed_reads:
-                                self.multimapped_reads.add(read_assignment.read_id)
-                            else:
-                                self.processed_reads.add(read_assignment.read_id)
                         elif isinstance(obj, GeneInfo):
                             if gene_info and read_storage:
                                 self.reads_assignments.append((gene_info, read_storage))
@@ -329,31 +373,13 @@ class DatasetProcessor:
     def aggregate_reads(self, sample):
         self.create_aggregators(sample)
 
-        multimap_reads_assignments = defaultdict(list)
         if self.args.memory_efficient:
             assert False
         else:
-            for storage_id, storage in enumerate(self.reads_assignments):
+            for storage in self.reads_assignments:
                 gene_read_assignments = storage[1]
-                for i, read_assignment in enumerate(gene_read_assignments):
-                    read_id = read_assignment.read_id
-                    if read_id in self.multimapped_reads:
-                        read_assignment.storage_id = storage_id
-                        multimap_reads_assignments[read_id].append(read_assignment)
-                        # remove multimappers from the storage
-                        gene_read_assignments[i] = None
-                    else:
-                        self.pass_to_aggregators(read_assignment)
-
-        logger.info("Resolving multimappers")
-        multimap_resolver = MultimapResolver(self.args.multimap_strategy)
-        for read_id in multimap_reads_assignments.keys():
-            logger.debug("Resolving multimapper " + read_id +
-                         ", total assignments %d" % len(multimap_reads_assignments[read_id]))
-            read_assignments = multimap_resolver.resolve(multimap_reads_assignments[read_id])
-            for a in read_assignments:
-                self.pass_to_aggregators(a)
-                self.reads_assignments[a.storage_id][1].append(a)
+                for read_assignment in gene_read_assignments:
+                    self.pass_to_aggregators(read_assignment)
 
         self.finalize_aggregators(sample)
 

@@ -25,62 +25,65 @@ class MultimapResolver:
     def __init__(self, strategy):
         self.strategy = strategy
 
+    # list of ShortReadAssignments
     def resolve(self, assignment_list):
         if assignment_list is None or len(assignment_list) <= 1:
             return assignment_list
 
         if self.strategy == MultimapResolvingStrategy.ignore_multimapper:
-            return []
-        elif self.strategy == MultimapResolvingStrategy.merge:
-            informative_assignments = list(filter(lambda x: x.assignment_type != ReadAssignmentType.noninformative, assignment_list))
-            if len(informative_assignments) == 1:
-                return informative_assignments
-            return self.merge(informative_assignments)
-        elif self.strategy == MultimapResolvingStrategy.take_best:
-            classified_assignments = defaultdict(list)
             for a in assignment_list:
-                if a.assignment_type == ReadAssignmentType.noninformative:
-                    continue
-                classified_assignments[a.assignment_type].append(a)
+                a.assignment_type = ReadAssignmentType.noninformative
+            return assignment_list
 
-            consistent_assignemnts = classified_assignments[ReadAssignmentType.unique] +\
-                                     classified_assignments[ReadAssignmentType.unique_minor_difference]
-            primary_unique_assignment = self.select_primary(consistent_assignemnts)
-            if primary_unique_assignment is not None:
-                logger.debug("Primary unique assignment selected: %s" % primary_unique_assignment.isoform_matches[0].assigned_transcript)
-                return [primary_unique_assignment]
+        elif self.strategy == MultimapResolvingStrategy.merge:
+            informative_assignments = set()
+            for i in range(len(assignment_list)):
+                if assignment_list[i].assignment_type != ReadAssignmentType.noninformative:
+                    informative_assignments.add(i)
+            if len(informative_assignments) == 1:
+                return self.suspend_assignments(assignment_list, informative_assignments)
+            return self.suspend_assignments(assignment_list, informative_assignments, ReadAssignmentType.ambiguous)
 
-            consistent_assignemnts += classified_assignments[ReadAssignmentType.ambiguous]
-            if consistent_assignemnts:
-                logger.debug("Merging %d consistent assignments " % (len(consistent_assignemnts)))
-                return self.merge(consistent_assignemnts)
+        elif self.strategy == MultimapResolvingStrategy.take_best:
+            primary_unique = None
+            consistent_assignments = set()
+            inconsistent_assignments = set()
+            primary_inconsistent = None
+            for  i, a in enumerate(assignment_list):
+                if a.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference] and \
+                        not a.multimapper:
+                    primary_unique = i
+                elif a.assignment_type == ReadAssignmentType.inconsistent and not a.multimapper:
+                    primary_inconsistent = i
+                if a.assignment_type not in [ReadAssignmentType.inconsistent, ReadAssignmentType.noninformative]:
+                    consistent_assignments.add(i)
+                elif a.assignment_type == ReadAssignmentType.inconsistent:
+                    inconsistent_assignments.add(i)
 
-            inconsistent_assignments = classified_assignments[ReadAssignmentType.inconsistent]
-            primary_inconsistent_assignment = self.select_primary(inconsistent_assignments)
-            if primary_inconsistent_assignment is not None:
-                primary_inconsistent_assignment.multimapper = True
-                logger.debug("Selected primary inconsistent %s" %
-                             primary_inconsistent_assignment.isoform_matches[0].assigned_transcript)
-                return [primary_inconsistent_assignment]
+            if primary_unique is not None:
+                # primary unique is found, rest is noninformative
+                logger.debug("Primary unique assignment selected: %s" % assignment_list[primary_unique].isoform_matches[0].assigned_transcript)
+                return self.suspend_assignments(assignment_list, [primary_unique])
+
+            if consistent_assignments:
+                logger.debug("Merging %d consistent assignments " % (len(consistent_assignments)))
+                return self.suspend_assignments(assignment_list, consistent_assignments, ReadAssignmentType.ambiguous)
+
+            if primary_inconsistent is not None:
+                logger.debug("Primary inconsistent assignment selected: %s" % assignment_list[primary_inconsistent].isoform_matches[0].assigned_transcript)
+                return self.suspend_assignments(assignment_list, [primary_inconsistent])
+
             logger.debug("Merging inconsistent from %d assignments" % len(inconsistent_assignments))
-            return self.merge(inconsistent_assignments, is_inconsistent=True)
+            return self.suspend_assignments(assignment_list, inconsistent_assignments, ReadAssignmentType.inconsistent)
         else:
             raise ValueError("Unsupported multimap strategy")
 
-    def select_primary(self, assignment_list):
-        primary_assignment = None
-        for a in assignment_list:
-            if not a.multimapper:
-                primary_assignment = a
-        return primary_assignment
-
-    def merge(self, assignment_list, is_inconsistent=False):
-        if not assignment_list:
-            return assignment_list
-
-        for a in assignment_list:
-            # set all as multimappers
-            a.multimapper = True
-            a.assignment_type = ReadAssignmentType.inconsistent if is_inconsistent else ReadAssignmentType.ambiguous
-
+    def suspend_assignments(self, assignment_list, assignments_to_keep, new_type=None):
+        for i in range(len(assignment_list)):
+            if i in assignments_to_keep:
+                if new_type is not None:
+                    assignment_list[i].assignment_type = new_type
+                    assignment_list[i].multimapper = True
+                continue
+            assignment_list[i].assignment_type = ReadAssignmentType.noninformative
         return assignment_list
