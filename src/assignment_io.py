@@ -113,14 +113,15 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
-        self.header = "#read_id\tisoform_id\tassignment_type\tassignment_events\texons\tadditional\n"
+        self.header = "#read_id\tchr\tstrand\tisoform_id\tgene_id" \
+                      "\tassignment_type\tassignment_events\texons\tadditional_info\n"
         self.output_file.write(self.header)
         self.io_support = io_support
 
     def unmatched_line(self, read_assignment, additional_info=None):
         read_exons = read_assignment.exons
-        line = read_assignment.read_id + "\t.\t" + read_assignment.assignment_type.name + "\t.\t" + \
-               range_list_to_str(read_exons)
+        line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t.\t.\t.\t" + \
+               read_assignment.assignment_type.name + "\t.\t" + range_list_to_str(read_exons)
         if additional_info:
             line += "\t" + " ".join(additional_info) + "\n"
         else:
@@ -158,8 +159,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             event_string = ",".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
                                                                                read_introns, isoform_introns)
                                      for x in m.match_subclassifications])
-            line = read_assignment.read_id + "\t" + m.assigned_transcript + "\t" \
-                   + read_assignment.assignment_type.name + "\t" + event_string + "\t" + range_list_to_str(read_exons)
+            strand = read_assignment.gene_info.isoform_strands[m.assigned_transcript]
+            line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t" + \
+                   m.assigned_transcript + "\t" + m.assigned_gene + "\t" + \
+                   read_assignment.assignment_type.name + "\t" + event_string + "\t" + range_list_to_str(read_exons)
 
             additional_info = []
             if not self.params.polya_trimmed:
@@ -170,7 +173,6 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 if len(read_introns) == 0:
                     additional_info.append("Canonical=Unspliced;")
                 else:
-                    strand = read_assignment.gene_info.isoform_strands[m.assigned_transcript]
                     all_canonical = self.io_support.check_sites_are_canonical(read_introns, read_assignment.gene_info, strand)
                     additional_info.append("Canonical=" + str(all_canonical) + ";")
 

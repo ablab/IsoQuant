@@ -374,7 +374,10 @@ Although most output files include headers that describe the data, a brief expla
 Tab-separated values, the columns are:
 
 * `read_id` - read id;
-* `isoform_id` - isoform ids from the annotation, can contain several ids separated by comma;
+* `chr` - chromosome id;
+* `strand` - strand of the assigned isoform (not mapping strand);
+* `isoform_id` - isoform id to which the read was assigned;
+* `gene_id` - gene id to which the read was assigned; 
 * `assignment_type` - assignment type, can be:
     - `unique` - reads was unambiguously assigned to a single known isoform;
     - `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
@@ -426,6 +429,8 @@ Tab-separated values, the columns are:
     - `PolyA` - True if poly-A tail is detected;
     - `CAGE` - True if CAGE peak is found;
     - `Canonical` - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use `--check_canonical`) 
+
+Note that a sigle read may occur more than once if assigned ambiguously.
 
 #### Gene and transcript count format
 
