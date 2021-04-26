@@ -140,7 +140,7 @@ class DatasetProcessor:
         self.args = args
         logger.info("Loading gene database from " + self.args.genedb)
         self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
-        if self.args.reference:
+        if self.args.needs_reference:
             logger.info("Loading reference genome from " + self.args.reference)
             _, outer_ext = os.path.splitext(self.args.reference)
             if outer_ext.lower() in ['.gz', '.gzip']:

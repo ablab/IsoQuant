@@ -424,6 +424,11 @@ def set_additional_params(args):
         multimap_strategies[e.name] = e.value
     args.multimap_strategy = MultimapResolvingStrategy(multimap_strategies[args.multimap_strategy])
 
+    args.needs_reference = args.sqanti_output or args.check_canonical
+    if args.needs_reference and not args.reference:
+        logger.warning("Reference genome is not provided! Some stats will not be calculated.")
+        args.needs_reference = False
+
 
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")

@@ -51,7 +51,7 @@ class LongReadAlignmentProcessor:
         for b in self.bams:
             self.process_single_file(b)
 
-        if (self.params.sqanti_output or self.params.check_canonical) and self.chr_record:
+        if self.params.needs_reference:
             self.gene_info.all_read_region_start -= self.params.upstream_region_len
             self.gene_info.all_read_region_end += self.params.upstream_region_len
             self.gene_info.reference_region = \
@@ -83,7 +83,7 @@ class LongReadAlignmentProcessor:
                 # correct coordinates to GTF style (inclusive intervals)
                 sorted_blocks = correct_bam_coords(concat_blocks)
                 logger.debug("Read exons: " + str(sorted_blocks))
-                if self.params.reference and (self.params.sqanti_output or self.params.check_canonical):
+                if self.params.needs_reference:
                     if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
                         self.gene_info.all_read_region_start = sorted_blocks[0][0]
                     if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
