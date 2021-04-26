@@ -131,8 +131,8 @@ class AssignmentData:
                 seq_id = tokens[0] # if is_real_data else id_pattern.search(tokens[0]).group(1)
                 if len(tokens) > 10:  ## SQANTI2
                     self.assigned_isoforms[seq_id] = correct_isoform(tokens[7])
-                elif tokens[2] in self.assignment_types:
-                    self.assigned_isoforms[seq_id] = correct_isoform(tokens[1])
+                elif tokens[5] in self.assignment_types:
+                    self.assigned_isoforms[seq_id] = correct_isoform(tokens[3])
         logger.info("Total assignments loaded: %d" % len(self.assigned_isoforms))
 
 
