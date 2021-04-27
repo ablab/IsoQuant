@@ -64,10 +64,6 @@ class LongReadAlignmentProcessor:
         for genic_region in self.gene_info.genic_regions:
             for alignment in bamfile_in.fetch(self.gene_info.chr_id, genic_region[0], genic_region[1]):
                 read_id = alignment.query_name
-                if read_id in processed_reads:
-                    continue
-                processed_reads.add(read_id)
-
                 if alignment.reference_id == -1:
                     self.assignment_storage.append(ReadAssignment(read_id, None))
                     continue
@@ -85,12 +81,18 @@ class LongReadAlignmentProcessor:
                     continue
                 # correct coordinates to GTF style (inclusive intervals)
                 sorted_blocks = correct_bam_coords(concat_blocks)
+                read_start = sorted_blocks[0][0]
+                read_end = sorted_blocks[-1][1]
+                read_tuple = (read_id, read_start, read_end)
+                if read_tuple in processed_reads:
+                    continue
+                processed_reads.add(read_tuple)
                 logger.debug("Read exons: " + str(sorted_blocks))
                 if self.params.needs_reference:
-                    if sorted_blocks[0][0] < self.gene_info.all_read_region_start:
-                        self.gene_info.all_read_region_start = sorted_blocks[0][0]
-                    if sorted_blocks[-1][1] > self.gene_info.all_read_region_end:
-                        self.gene_info.all_read_region_end = sorted_blocks[-1][1]
+                    if read_start < self.gene_info.all_read_region_start:
+                        self.gene_info.all_read_region_start = read_start
+                    if read_end > self.gene_info.all_read_region_end:
+                        self.gene_info.all_read_region_end = read_end
 
                 polya_info = self.polya_finder.detect_polya(alignment)
                 sorted_blocks, polya_info, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
