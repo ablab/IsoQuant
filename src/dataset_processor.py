@@ -214,19 +214,19 @@ class DatasetProcessor:
         pool.join()
 
         logger.info("Resolving multimappers")
-        all_processed_reads = set()
         self.multimapped_reads = defaultdict(list)
         for storage in processed_reads:
             for read_assignment in storage:
-                if read_assignment.read_id in all_processed_reads:
-                    self.multimapped_reads[read_assignment.read_id].append(read_assignment)
-                else:
-                    all_processed_reads.add(read_assignment.read_id)
+                self.multimapped_reads[read_assignment.read_id].append(read_assignment)
 
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "_multimappers", "wb"),  -1)
         multimap_pickler.fast = True
-        for assignment_list in self.multimapped_reads.values():
+        for read_id in list(self.multimapped_reads.keys()):
+            assignment_list = self.multimapped_reads[read_id]
+            if len(assignment_list) == 1:
+                del self.multimapped_reads[read_id]
+                continue
             multimap_resolver.resolve(assignment_list)
             multimap_pickler.dump(assignment_list)
         logger.info('Finishing read assignment')
@@ -276,10 +276,13 @@ class DatasetProcessor:
                                             logger.warning("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
                                         resolved_assignment = a
 
-                                if not resolved_assignment or resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
+                                if not resolved_assignment:
+                                    logger.warning("Incomplete information on read %s" % read_assignment.read_id)
+                                elif resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
                                     continue
-                                read_assignment.assignment_type = resolved_assignment.assignment_type
-                                read_assignment.multimapper = resolved_assignment.multimapper
+                                else:
+                                    read_assignment.assignment_type = resolved_assignment.assignment_type
+                                    read_assignment.multimapper = resolved_assignment.multimapper
                             read_storage.append(read_assignment)
                             total_assignments += 1
                             if read_assignment.polyA_found:
