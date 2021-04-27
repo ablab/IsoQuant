@@ -60,10 +60,13 @@ class LongReadAlignmentProcessor:
         return self.assignment_storage
 
     def process_single_file(self, bamfile_in):
-        #with pysam.AlignmentFile(bam, "rb") as bamfile_in:
+        processed_reads = set()
         for genic_region in self.gene_info.genic_regions:
             for alignment in bamfile_in.fetch(self.gene_info.chr_id, genic_region[0], genic_region[1]):
                 read_id = alignment.query_name
+                if read_id in processed_reads:
+                    continue
+                processed_reads.add(read_id)
 
                 if alignment.reference_id == -1:
                     self.assignment_storage.append(ReadAssignment(read_id, None))
