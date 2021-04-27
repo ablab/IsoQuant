@@ -384,6 +384,7 @@ class ShortReadAssignment:
         self.end = read_assignment.end()
         self.gene_id = gene_info.gene_db_list[0].id
         self.multimapper = read_assignment.multimapper
+        self.polyA_found = read_assignment.polyA_found
         self.assignment_type = read_assignment.assignment_type
 
 

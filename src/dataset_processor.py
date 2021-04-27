@@ -137,6 +137,66 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
     return processed_reads
 
 
+class ReadAssignmentLoader:
+    def __init__(self, save_file_name, gffutils_db, multimappers_disct):
+        logger.info("Loading read assignments from " + save_file_name)
+        assert os.path.exists(save_file_name)
+        self.save_file_name = save_file_name
+        self.unpickler = pickle.Unpickler(open(save_file_name, "rb"), fix_imports=False)
+        self.current_gene_info_obj = None
+        self.gffutils_db = gffutils_db
+        self.multimapped_reads = multimappers_disct
+
+    def load_next_chunk(self):
+        gc.disable()
+        read_storage = []
+        result = None
+        current_gene_info = None
+        while True:
+            if self.current_gene_info_obj:
+                current_gene_info = self.current_gene_info_obj
+                current_gene_info.db = self.gffutils_db
+            try:
+                obj = self.unpickler.load()
+                if isinstance(obj, ReadAssignment):
+                    read_assignment = obj
+                    assert current_gene_info is not None
+                    read_assignment.gene_info = current_gene_info
+                    if read_assignment.read_id in self.multimapped_reads:
+                        resolved_assignment = None
+                        for a in self.multimapped_reads[read_assignment.read_id]:
+                            if a.start == read_assignment.start() and a.end == read_assignment.end() and \
+                                    a.gene_id == current_gene_info.gene_db_list[0].id and \
+                                    a.chr_id == read_assignment.chr_id:
+                                if resolved_assignment is not None:
+                                    logger.warning("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
+                                resolved_assignment = a
+
+                        if not resolved_assignment:
+                            logger.warning("Incomplete information on read %s" % read_assignment.read_id)
+                        elif resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
+                            continue
+                        else:
+                            read_assignment.assignment_type = resolved_assignment.assignment_type
+                            read_assignment.multimapper = resolved_assignment.multimapper
+                    read_storage.append(read_assignment)
+
+                elif isinstance(obj, GeneInfo):
+                    if current_gene_info and read_storage:
+                        result = (current_gene_info, read_storage)
+                    self.current_gene_info_obj = obj
+                    if result:
+                        break
+                else:
+                    raise ValueError("Read assignment file {} is corrupted!".format(self.save_file_name))
+            except EOFError:
+                break
+        gc.enable()
+        if current_gene_info and read_storage:
+            result = (current_gene_info, read_storage)
+        return result
+
+
 # Class for processing all samples against gene database
 class DatasetProcessor:
     def __init__(self, args):
@@ -158,6 +218,7 @@ class DatasetProcessor:
         self.read_grouper = create_read_grouper(args)
         self.io_support = IOSupport(self.args)
         self.multimapped_reads = defaultdict(list)
+        self.reads_assignments = []
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
@@ -178,12 +239,12 @@ class DatasetProcessor:
         if self.args.read_assignments:
             saves_file = sample.file_list[0][0]
             logger.info('Using read assignments from {}*'.format(saves_file))
-            total_alignments, polya_found = self.load_reads(saves_file)
         else:
             self.assign_reads(sample)
-            total_alignments, polya_found = self.load_reads(sample.out_raw_file)
+            saves_file = sample.out_raw_file
             logger.info('Read assignments files saved to {}*.\nYou can reuse it later with option --read_assignments'.
                         format(sample.out_raw_file))
+        total_alignments, polya_found = self.load_reads(saves_file)
 
         intial_polya_required = self.args.require_polyA
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
@@ -222,22 +283,31 @@ class DatasetProcessor:
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "_multimappers", "wb"),  -1)
         multimap_pickler.fast = True
+        total_assignments = 0
+        polya_assignments = 0
         for read_id in list(self.multimapped_reads.keys()):
             assignment_list = self.multimapped_reads[read_id]
             if len(assignment_list) == 1:
+                total_assignments += 1
+                polya_assignments += 1 if assignment_list[0].polyA_found else 0
                 del self.multimapped_reads[read_id]
                 continue
             multimap_resolver.resolve(assignment_list)
             multimap_pickler.dump(assignment_list)
-        logger.info('Finishing read assignment')
+            for a in assignment_list:
+                if a.assignment_type != ReadAssignmentType.noninformative:
+                    total_assignments += 1
+                    if a.polyA_found:
+                        polya_assignments += 1
+
+        info_pickler = pickle.Pickler(open(sample.out_raw_file + "_info", "wb"),  -1)
+        info_pickler.dump(total_assignments)
+        info_pickler.dump(polya_assignments)
+        logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
+                    (total_assignments, 100 * polya_assignments / total_assignments))
 
     def load_reads(self, dump_filename):
         self.reads_assignments = []
-
-        read_storage = []
-        total_assignments = 0
-        polya_found = 0
-        gene_info = None
         gc.disable()
 
         if not self.multimapped_reads:
@@ -254,53 +324,20 @@ class DatasetProcessor:
                 except EOFError:
                     break
 
+        info_unpickler = pickle.Unpickler(open(dump_filename + "_info", "rb"), fix_imports=False)
+        total_assignments = info_unpickler.load()
+        polya_assignments = info_unpickler.load()
+
         for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
-            logger.info("Loading read assignments from " + chr_dump_file)
-            if not os.path.exists(chr_dump_file): continue
-            with open(chr_dump_file, "rb") as f:
-                p = pickle.Unpickler(f, fix_imports=False)
-                while True:
-                    try:
-                        obj = p.load()
-                        if isinstance(obj, ReadAssignment):
-                            read_assignment = obj
-                            assert gene_info is not None
-                            read_assignment.gene_info = gene_info
-                            if read_assignment.read_id in self.multimapped_reads:
-                                resolved_assignment = None
-                                for a in self.multimapped_reads[read_assignment.read_id]:
-                                    if a.start == read_assignment.start() and a.end == read_assignment.end() and \
-                                            a.gene_id == gene_info.gene_db_list[0].id and a.chr_id == read_assignment.chr_id:
-                                        if resolved_assignment is not None:
-                                            logger.warning("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
-                                        resolved_assignment = a
+            loader = ReadAssignmentLoader(chr_dump_file, self.gffutils_db, self.multimapped_reads)
+            assignment_group = loader.load_next_chunk()
+            while assignment_group:
+                self.reads_assignments.append(assignment_group)
+                assignment_group = loader.load_next_chunk()
 
-                                if not resolved_assignment:
-                                    logger.warning("Incomplete information on read %s" % read_assignment.read_id)
-                                elif resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
-                                    continue
-                                else:
-                                    read_assignment.assignment_type = resolved_assignment.assignment_type
-                                    read_assignment.multimapper = resolved_assignment.multimapper
-                            read_storage.append(read_assignment)
-                            total_assignments += 1
-                            if read_assignment.polyA_found:
-                                polya_found += 1
-                        elif isinstance(obj, GeneInfo):
-                            if gene_info and read_storage:
-                                self.reads_assignments.append((gene_info, read_storage))
-                                read_storage = []
-                            gene_info = obj
-                            gene_info.db = self.gffutils_db
-                        else:
-                            raise ValueError("Read assignment file {} is corrupted!".format(chr_dump_file))
-                    except EOFError:
-                        break
         gc.enable()
-        if gene_info and read_storage:
-            self.reads_assignments.append((gene_info, read_storage))
-        return total_assignments, polya_found
+        return total_assignments, polya_assignments
 
     def get_chromosome_list(self):
         chromosomes = []
