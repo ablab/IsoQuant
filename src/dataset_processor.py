@@ -218,7 +218,6 @@ class DatasetProcessor:
         self.read_grouper = create_read_grouper(args)
         self.io_support = IOSupport(self.args)
         self.multimapped_reads = defaultdict(list)
-        self.reads_assignments = []
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
@@ -242,9 +241,9 @@ class DatasetProcessor:
         else:
             self.assign_reads(sample)
             saves_file = sample.out_raw_file
-            logger.info('Read assignments files saved to {}*.\nYou can reuse it later with option --read_assignments'.
+            logger.info('Read assignments files saved to {}*. You can reuse it later with option --read_assignments'.
                         format(sample.out_raw_file))
-        total_alignments, polya_found = self.load_reads(saves_file)
+        total_alignments, polya_found = self.load_read_info(saves_file)
 
         intial_polya_required = self.args.require_polyA
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
@@ -256,9 +255,7 @@ class DatasetProcessor:
                            "Set --polya_trimmed to avoid this warning in future.")
             self.args.require_polyA = False
 
-        logger.info("Combining output for sample " + sample.label)
-        self.aggregate_reads(sample)
-        self.construct_models(sample)
+        self.process_assigned_reads(sample, saves_file)
         os.rmdir(self.tmp_dir)
         self.args.require_polyA = intial_polya_required
         logger.info("Processed sample " + sample.label)
@@ -306,10 +303,34 @@ class DatasetProcessor:
         logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
                     (total_assignments, 100 * polya_assignments / total_assignments))
 
-    def load_reads(self, dump_filename):
-        self.reads_assignments = []
-        gc.disable()
+    def process_assigned_reads(self, sample, dump_filename):
+        logger.info("Processing assigned reads " + sample.label)
+        self.create_aggregators(sample)
+        gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support)
+        transcript_stat_counter = EnumStats()
 
+        for chr_id in self.get_chromosome_list():
+            chr_dump_file = dump_filename + "_" + chr_id
+            loader = ReadAssignmentLoader(chr_dump_file, self.gffutils_db, self.multimapped_reads)
+            assignment_group = loader.load_next_chunk()
+            while assignment_group:
+                gene_info = assignment_group[0]
+                assignment_storage = assignment_group[1]
+                for read_assignment in assignment_storage:
+                    self.pass_to_aggregators(read_assignment)
+                transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
+                transcript_generator.process()
+                gff_printer.dump(transcript_generator)
+                for t in transcript_generator.transcript_model_storage:
+                    transcript_stat_counter.add(t.transcript_type)
+                assignment_group = loader.load_next_chunk()
+
+        self.finalize_aggregators(sample)
+        logger.info("Transcript model file " + gff_printer.model_fname)
+        transcript_stat_counter.print_start("Transcript model statistics")
+
+    def load_read_info(self, dump_filename):
+        gc.disable()
         if not self.multimapped_reads:
             multimap_unpickler = pickle.Unpickler(open(dump_filename + "_multimappers", "rb"), fix_imports=False)
             while True:
@@ -327,14 +348,6 @@ class DatasetProcessor:
         info_unpickler = pickle.Unpickler(open(dump_filename + "_info", "rb"), fix_imports=False)
         total_assignments = info_unpickler.load()
         polya_assignments = info_unpickler.load()
-
-        for chr_id in self.get_chromosome_list():
-            chr_dump_file = dump_filename + "_" + chr_id
-            loader = ReadAssignmentLoader(chr_dump_file, self.gffutils_db, self.multimapped_reads)
-            assignment_group = loader.load_next_chunk()
-            while assignment_group:
-                self.reads_assignments.append(assignment_group)
-                assignment_group = loader.load_next_chunk()
 
         gc.enable()
         return total_assignments, polya_assignments
@@ -413,30 +426,3 @@ class DatasetProcessor:
         logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
         self.read_stat_counter.print_start("Read assignment statistics")
 
-    def aggregate_reads(self, sample):
-        self.create_aggregators(sample)
-
-        if self.args.memory_efficient:
-            assert False
-        else:
-            for storage in self.reads_assignments:
-                gene_read_assignments = storage[1]
-                for read_assignment in gene_read_assignments:
-                    self.pass_to_aggregators(read_assignment)
-
-        self.finalize_aggregators(sample)
-
-    def construct_models(self, sample):
-        logger.info("Constructing transcript models for " + sample.label)
-        gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support)
-        transcript_stat_counter = EnumStats()
-
-        for gene_info, assignment_storage in self.reads_assignments:
-            transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
-            transcript_generator.process()
-            gff_printer.dump(transcript_generator)
-            for t in transcript_generator.transcript_model_storage:
-                transcript_stat_counter.add(t.transcript_type)
-
-        logger.info("Transcript model file " + gff_printer.model_fname)
-        transcript_stat_counter.print_start("Transcript model statistics")
