@@ -45,6 +45,8 @@ class MultimapResolver:
             return self.suspend_assignments(assignment_list, informative_assignments, ReadAssignmentType.ambiguous)
 
         elif self.strategy == MultimapResolvingStrategy.take_best:
+            logger.debug("Resolving read %s" % assignment_list[0].read_id)
+            logger.debug("Read assignment types %s" % " ".join(a.assignment_type.name for a in assignment_list))
             primary_unique = None
             consistent_assignments = set()
             inconsistent_assignments = set()
@@ -73,7 +75,7 @@ class MultimapResolver:
 
             if primary_inconsistent is not None:
                 logger.debug("Primary inconsistent assignment selected: %s" % assignment_list[primary_inconsistent].gene_id)
-                return self.suspend_assignments(assignment_list, [primary_inconsistent])
+                return self.suspend_assignments(assignment_list, [primary_inconsistent], ReadAssignmentType.inconsistent)
 
             logger.debug("Merging inconsistent from %d assignments" % len(inconsistent_assignments))
             return self.suspend_assignments(assignment_list, inconsistent_assignments, ReadAssignmentType.inconsistent)
