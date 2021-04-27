@@ -216,7 +216,7 @@ class TranscriptModelConstructor:
             if read_assignment.assignment_type == ReadAssignmentType.noninformative or not read_assignment.isoform_matches:
                 continue
             elif read_assignment.assignment_type in {ReadAssignmentType.unique, ReadAssignmentType.ambiguous,
-                                                   ReadAssignmentType.unique_minor_difference}:
+                                                     ReadAssignmentType.unique_minor_difference}:
                 self.correct_matches[read_assignment.isoform_matches[0].assigned_transcript].append(read_assignment)
             else:
                 best_match = read_assignment.isoform_matches[0]

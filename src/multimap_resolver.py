@@ -62,7 +62,7 @@ class MultimapResolver:
 
             if primary_unique is not None:
                 # primary unique is found, rest is noninformative
-                logger.debug("Primary unique assignment selected: %d" % assignment_list[primary_unique].start)
+                logger.debug("Primary unique assignment selected: %s" % assignment_list[primary_unique].gene_id)
                 return self.suspend_assignments(assignment_list, [primary_unique])
 
             if consistent_assignments:
@@ -70,7 +70,7 @@ class MultimapResolver:
                 return self.suspend_assignments(assignment_list, consistent_assignments, ReadAssignmentType.ambiguous)
 
             if primary_inconsistent is not None:
-                logger.debug("Primary inconsistent assignment selected: %d" % assignment_list[primary_inconsistent].start)
+                logger.debug("Primary inconsistent assignment selected: %s" % assignment_list[primary_inconsistent].gene_id)
                 return self.suspend_assignments(assignment_list, [primary_inconsistent])
 
             logger.debug("Merging inconsistent from %d assignments" % len(inconsistent_assignments))

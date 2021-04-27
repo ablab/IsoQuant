@@ -377,11 +377,12 @@ class IsoformMatch:
 
 
 class ShortReadAssignment:
-    def __init__(self, read_assignment):
+    def __init__(self, read_assignment, gene_info):
         self.read_id = read_assignment.read_id
         self.chr_id = read_assignment.chr_id
         self.start = read_assignment.start()
         self.end = read_assignment.end()
+        self.gene_id = gene_info.gene_db_list[0].id
         self.multimapper = read_assignment.multimapper
         self.assignment_type = read_assignment.assignment_type
 

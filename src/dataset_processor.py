@@ -132,7 +132,7 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
-            processed_reads.append(ShortReadAssignment(read_assignment))
+            processed_reads.append(ShortReadAssignment(read_assignment, gene_info))
     logger.info("Finished processing chromosome " + chr_id)
     return processed_reads
 
@@ -224,7 +224,7 @@ class DatasetProcessor:
                     all_processed_reads.add(read_assignment.read_id)
 
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
-        multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "multimappers", "wb"),  -1)
+        multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "_multimappers", "wb"),  -1)
         multimap_pickler.fast = True
         for assignment_list in self.multimapped_reads.values():
             multimap_resolver.resolve(assignment_list)
@@ -241,7 +241,7 @@ class DatasetProcessor:
         gc.disable()
 
         if not self.multimapped_reads:
-            multimap_unpickler = pickle.Unpickler(open(dump_filename + "multimappers", "rb"), fix_imports=False)
+            multimap_unpickler = pickle.Unpickler(open(dump_filename + "_multimappers", "rb"), fix_imports=False)
             while True:
                 try:
                     obj = multimap_unpickler.load()
@@ -270,9 +270,12 @@ class DatasetProcessor:
                             if read_assignment.read_id in self.multimapped_reads:
                                 resolved_assignment = None
                                 for a in self.multimapped_reads[read_assignment.read_id]:
-                                    if a.start == read_assignment.start() and a.end == read_assignment.end() and a.chr_id == read_assignment.chr_id:
+                                    if a.start == read_assignment.start() and a.end == read_assignment.end() and \
+                                            a.gene_id == gene_info.gene_db_list[0].id and a.chr_id == read_assignment.chr_id:
+                                        if resolved_assignment is not None:
+                                            logger.warning("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
                                         resolved_assignment = a
-                                        break
+
                                 if not resolved_assignment or resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
                                     continue
                                 read_assignment.assignment_type = resolved_assignment.assignment_type
