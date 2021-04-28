@@ -309,26 +309,35 @@ class DatasetProcessor:
         self.create_aggregators(sample)
         gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support)
         transcript_stat_counter = EnumStats()
-        thread_pool = futures.ThreadPoolExecutor(self.args.threads-1)
+        thread_pool = futures.ThreadPoolExecutor(max(1, self.args.threads-1))
 
         for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
             loader = ReadAssignmentLoader(chr_dump_file, self.gffutils_db, self.multimapped_reads)
-            future_lists = []
+            future_list = []
             assignment_group = loader.load_next_chunk()
+
             while assignment_group:
                 gene_info = assignment_group[0]
                 assignment_storage = assignment_group[1]
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)
-                transcript_generator = TranscriptModelConstructor(gene_info, self.args)
-                transcript_generator.process(assignment_storage)
-                #future = thread_pool.submit(lambda x:x.process(), transcript_generator)
 
-                gff_printer.dump(transcript_generator)
-                for t in transcript_generator.transcript_model_storage:
-                    transcript_stat_counter.add(t.transcript_type)
+                transcript_generator = TranscriptModelConstructor(gene_info, self.args)
+                if self.args.threads == 1:
+                    transcript_generator.process(assignment_storage)
+                    gff_printer.dump(transcript_generator)
+                    for t in transcript_generator.transcript_model_storage:
+                        transcript_stat_counter.add(t.transcript_type)
+                else:
+                    future_list.append(thread_pool.submit(lambda x, y:x.process(y), transcript_generator, assignment_storage))
                 assignment_group = loader.load_next_chunk()
+
+            for f in future_list:
+                generator = f.result()
+                gff_printer.dump(generator)
+                for t in generator.transcript_model_storage:
+                    transcript_stat_counter.add(t.transcript_type)
 
         self.finalize_aggregators(sample)
         logger.info("Transcript model file " + gff_printer.model_fname)
