@@ -9,6 +9,7 @@ import gc
 import gzip
 from multiprocessing import Pool
 from collections import namedtuple
+from concurrent import futures
 
 from src.input_data_storage import *
 from src.alignment_processor import *
@@ -308,18 +309,22 @@ class DatasetProcessor:
         self.create_aggregators(sample)
         gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support)
         transcript_stat_counter = EnumStats()
+        thread_pool = futures.ThreadPoolExecutor(self.args.threads-1)
 
         for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
             loader = ReadAssignmentLoader(chr_dump_file, self.gffutils_db, self.multimapped_reads)
+            future_lists = []
             assignment_group = loader.load_next_chunk()
             while assignment_group:
                 gene_info = assignment_group[0]
                 assignment_storage = assignment_group[1]
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)
-                transcript_generator = TranscriptModelConstructor(gene_info, assignment_storage, self.args)
-                transcript_generator.process()
+                transcript_generator = TranscriptModelConstructor(gene_info, self.args)
+                transcript_generator.process(assignment_storage)
+                #future = thread_pool.submit(lambda x:x.process(), transcript_generator)
+
                 gff_printer.dump(transcript_generator)
                 for t in transcript_generator.transcript_model_storage:
                     transcript_stat_counter.add(t.transcript_type)

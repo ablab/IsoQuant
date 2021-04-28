@@ -102,13 +102,12 @@ class GFFPrinter:
 
         # write read_id -> transcript_id map
         used_reads = set()
-        for model_id in transcript_model_constructor.transcript_read_ids.keys():
-            for read_id in transcript_model_constructor.transcript_read_ids[model_id]:
+        for model_id, reads in transcript_model_constructor.transcript_read_ids.items():
+            for read_id in reads:
                 used_reads.add(read_id)
                 self.out_r2t.write("%s\t%s\n" % (read_id, model_id))
-        for read_assignment in transcript_model_constructor.read_assignment_storage:
-            if read_assignment is not None and read_assignment.read_id not in used_reads:
-                self.out_r2t.write("%s\t%s\n" % (read_assignment.read_id, "*"))
+        for read_id in transcript_model_constructor.unused_reads:
+            self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
 
         for id in sorted(transcript_model_constructor.transcript_counts.keys()):
             counts = transcript_model_constructor.transcript_counts[id]
@@ -159,7 +158,7 @@ class TranscriptModelConstructor:
                             # tracked but not used generally
                             MatchEventSubtype.exon_misalignment, MatchEventSubtype.intron_shift}
 
-    def __init__(self, gene_info, read_assignment_storage, params):
+    def __init__(self, gene_info, params):
         if params.report_apa:
             self.events_to_track.add(MatchEventSubtype.alternative_polya_site)
             self.events_to_track.add(MatchEventSubtype.alternative_tss)
@@ -167,10 +166,10 @@ class TranscriptModelConstructor:
             self.events_to_track.add(MatchEventSubtype.intron_retention)
             self.events_to_track.add(MatchEventSubtype.unspliced_intron_retention)
         self.gene_info = gene_info
-        self.read_assignment_storage = read_assignment_storage
         self.params = params
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(set)
+        self.unused_reads = []
         self.transcript_counts = defaultdict(float)
         self.representative_reads = set()
         self.intron_profile_constructor = \
@@ -178,9 +177,10 @@ class TranscriptModelConstructor:
                                                   (self.gene_info.start, self.gene_info.end),
                                                   comparator=partial(equal_ranges, delta=self.params.delta))
 
-    def process(self):
+    def process(self, read_assignment_storage):
         # split reads into clusters
-        self.construct_isoform_groups()
+        self.construct_isoform_groups(read_assignment_storage)
+        self.representative_reads = set()
 
         # check correct assignments form reference isoforms
         for isoform_id in sorted(self.correct_matches.keys()):
@@ -199,17 +199,27 @@ class TranscriptModelConstructor:
         # merge constructed transcripts
         self.collapse_similar_isoforms(candidate_model_storage)
 
+        used_reads = set()
+        for reads in self.transcript_read_ids.values():
+            for read_id in reads:
+                used_reads.add(read_id)
+        for read_assignment in read_assignment_storage:
+            if read_assignment is not None and read_assignment.read_id not in used_reads:
+                self.unused_reads.append(read_assignment.read_id)
+        self.representative_reads.clear()
+        return self
+
     def get_transcript_id(self):
         TranscriptModelConstructor.transcript_id_counter += 1
         return TranscriptModelConstructor.transcript_id_counter
 
     # group reads by the isoforms and modification events
-    def construct_isoform_groups(self):
+    def construct_isoform_groups(self, read_assignment_storage):
         logger.debug("Constructing isoform groups")
         self.modified_isoforms_groups = defaultdict(lambda: defaultdict(list))
         self.correct_matches = defaultdict(list)
 
-        for read_assignment in self.read_assignment_storage:
+        for read_assignment in read_assignment_storage:
             if read_assignment is None:
                 continue
 
