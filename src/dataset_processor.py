@@ -145,6 +145,7 @@ class ReadAssignmentLoader:
         self.save_file_name = save_file_name
         self.unpickler = pickle.Unpickler(open(save_file_name, "rb"), fix_imports=False)
         self.current_gene_info_obj = None
+        self.is_updated = False
         self.gffutils_db = gffutils_db
         self.multimapped_reads = multimappers_disct
 
@@ -154,9 +155,10 @@ class ReadAssignmentLoader:
         result = None
         current_gene_info = None
         while True:
-            if self.current_gene_info_obj:
-                current_gene_info = self.current_gene_info_obj
+            if self.is_updated:
+                current_gene_info = copy.copy(self.current_gene_info_obj)
                 current_gene_info.db = self.gffutils_db
+                self.is_updated = False
             try:
                 obj = self.unpickler.load()
                 if isinstance(obj, ReadAssignment):
@@ -186,6 +188,7 @@ class ReadAssignmentLoader:
                     if current_gene_info and read_storage:
                         result = (current_gene_info, read_storage)
                     self.current_gene_info_obj = obj
+                    self.is_updated = True
                     if result:
                         break
                 else:
