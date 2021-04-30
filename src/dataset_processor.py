@@ -156,16 +156,10 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_reads):
     assert os.path.exists(save_file_name)
     save_file_name = save_file_name
     unpickler = pickle.Unpickler(open(save_file_name, "rb"), fix_imports=False)
-    current_gene_info_obj = None
-    is_updated = False
     read_storage = []
     current_gene_info = None
 
     while True:
-        if is_updated:
-            current_gene_info = current_gene_info_obj
-            current_gene_info.db = gffutils_db
-            is_updated = False
         try:
             obj = unpickler.load()
             if isinstance(obj, ReadAssignment):
@@ -194,8 +188,8 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_reads):
                 if current_gene_info and read_storage:
                     yield current_gene_info, read_storage
                 read_storage = []
-                current_gene_info_obj = obj
-                is_updated = True
+                current_gene_info = obj
+                current_gene_info.db = gffutils_db
             else:
                 raise ValueError("Read assignment file {} is corrupted!".format(save_file_name))
         except EOFError:
@@ -327,19 +321,18 @@ class DatasetProcessor:
                     self.pass_to_aggregators(read_assignment)
 
                 transcript_generator = TranscriptModelConstructor(gene_info, self.args)
-                if self.args.threads == 1:
-                    transcript_generator.process(assignment_storage)
-                    gff_printer.dump(transcript_generator)
-                    for t in transcript_generator.transcript_model_storage:
-                        transcript_stat_counter.add(t.transcript_type)
-                else:
-                    future_list.append(thread_pool.submit(lambda x, y:x.process(y), transcript_generator, assignment_storage))
-
-            for f in future_list:
-                generator = f.result()
-                gff_printer.dump(generator)
-                for t in generator.transcript_model_storage:
+                transcript_generator.process(assignment_storage)
+                gff_printer.dump(transcript_generator)
+                for t in transcript_generator.transcript_model_storage:
                     transcript_stat_counter.add(t.transcript_type)
+                #else:
+                #    future_list.append(thread_pool.submit(lambda x, y:x.process(y), transcript_generator, assignment_storage))
+
+            #for f in future_list:
+            #    generator = f.result()
+            #    gff_printer.dump(generator)
+            #    for t in generator.transcript_model_storage:
+            #        transcript_stat_counter.add(t.transcript_type)
 
         self.finalize_aggregators(sample)
         logger.info("Transcript model file " + gff_printer.model_fname)
