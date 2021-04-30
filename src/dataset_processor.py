@@ -149,56 +149,60 @@ class ReadAssignmentLoader:
         self.gffutils_db = gffutils_db
         self.multimapped_reads = multimappers_disct
 
-    def load_next_chunk(self):
-        gc.disable()
-        read_storage = []
-        result = None
-        current_gene_info = None
-        while True:
-            if self.is_updated:
-                current_gene_info = copy.copy(self.current_gene_info_obj)
-                current_gene_info.db = self.gffutils_db
-                self.is_updated = False
-            try:
-                obj = self.unpickler.load()
-                if isinstance(obj, ReadAssignment):
-                    read_assignment = obj
-                    assert current_gene_info is not None
-                    read_assignment.gene_info = current_gene_info
-                    if read_assignment.read_id in self.multimapped_reads:
-                        resolved_assignment = None
-                        for a in self.multimapped_reads[read_assignment.read_id]:
-                            if a.start == read_assignment.start() and a.end == read_assignment.end() and \
-                                    a.gene_id == current_gene_info.gene_db_list[0].id and \
-                                    a.chr_id == read_assignment.chr_id:
-                                if resolved_assignment is not None:
-                                    logger.warning("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
-                                resolved_assignment = a
 
-                        if not resolved_assignment:
-                            logger.warning("Incomplete information on read %s" % read_assignment.read_id)
-                        elif resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
-                            continue
-                        else:
-                            read_assignment.assignment_type = resolved_assignment.assignment_type
-                            read_assignment.multimapper = resolved_assignment.multimapper
-                    read_storage.append(read_assignment)
+def load_assigned_reads(save_file_name, gffutils_db, multimapped_reads):
+    gc.disable()
+    logger.info("Loading read assignments from " + save_file_name)
+    assert os.path.exists(save_file_name)
+    save_file_name = save_file_name
+    unpickler = pickle.Unpickler(open(save_file_name, "rb"), fix_imports=False)
+    current_gene_info_obj = None
+    is_updated = False
+    read_storage = []
+    current_gene_info = None
 
-                elif isinstance(obj, GeneInfo):
-                    if current_gene_info and read_storage:
-                        result = (current_gene_info, read_storage)
-                    self.current_gene_info_obj = obj
-                    self.is_updated = True
-                    if result:
-                        break
-                else:
-                    raise ValueError("Read assignment file {} is corrupted!".format(self.save_file_name))
-            except EOFError:
-                break
-        gc.enable()
-        if current_gene_info and read_storage:
-            result = (current_gene_info, read_storage)
-        return result
+    while True:
+        if is_updated:
+            current_gene_info = current_gene_info_obj
+            current_gene_info.db = gffutils_db
+            is_updated = False
+        try:
+            obj = unpickler.load()
+            if isinstance(obj, ReadAssignment):
+                read_assignment = obj
+                assert current_gene_info is not None
+                read_assignment.gene_info = current_gene_info
+                if read_assignment.read_id in multimapped_reads:
+                    resolved_assignment = None
+                    for a in multimapped_reads[read_assignment.read_id]:
+                        if a.start == read_assignment.start() and a.end == read_assignment.end() and \
+                                a.gene_id == current_gene_info.gene_db_list[0].id and \
+                                a.chr_id == read_assignment.chr_id:
+                            if resolved_assignment is not None:
+                                logger.warning("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
+                            resolved_assignment = a
+
+                    if not resolved_assignment:
+                        logger.warning("Incomplete information on read %s" % read_assignment.read_id)
+                    elif resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
+                        continue
+                    else:
+                        read_assignment.assignment_type = resolved_assignment.assignment_type
+                        read_assignment.multimapper = resolved_assignment.multimapper
+                read_storage.append(read_assignment)
+            elif isinstance(obj, GeneInfo):
+                if current_gene_info and read_storage:
+                    yield current_gene_info, read_storage
+                read_storage = []
+                current_gene_info_obj = obj
+                is_updated = True
+            else:
+                raise ValueError("Read assignment file {} is corrupted!".format(save_file_name))
+        except EOFError:
+            break
+    gc.enable()
+    if current_gene_info and read_storage:
+        yield current_gene_info, read_storage
 
 
 # Class for processing all samples against gene database
@@ -316,13 +320,9 @@ class DatasetProcessor:
 
         for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
-            loader = ReadAssignmentLoader(chr_dump_file, self.gffutils_db, self.multimapped_reads)
             future_list = []
-            assignment_group = loader.load_next_chunk()
 
-            while assignment_group:
-                gene_info = assignment_group[0]
-                assignment_storage = assignment_group[1]
+            for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db, self.multimapped_reads):
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)
 
@@ -334,7 +334,6 @@ class DatasetProcessor:
                         transcript_stat_counter.add(t.transcript_type)
                 else:
                     future_list.append(thread_pool.submit(lambda x, y:x.process(y), transcript_generator, assignment_storage))
-                assignment_group = loader.load_next_chunk()
 
             for f in future_list:
                 generator = f.result()
