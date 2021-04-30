@@ -116,7 +116,7 @@ class GFFPrinter:
 
 # constructor of discovered transcript models from read assignments
 class TranscriptModelConstructor:
-    transcript_id_counter = 0
+    transcript_id_counter = AtomicCounter()
     transcript_prefix = "transcript_"
     known_transcript_suffix = ".known"
     nic_transcript_suffix = ".nic"
@@ -210,8 +210,7 @@ class TranscriptModelConstructor:
         return self
 
     def get_transcript_id(self):
-        TranscriptModelConstructor.transcript_id_counter += 1
-        return TranscriptModelConstructor.transcript_id_counter
+        return TranscriptModelConstructor.transcript_id_counter.increment()
 
     # group reads by the isoforms and modification events
     def construct_isoform_groups(self, read_assignment_storage):

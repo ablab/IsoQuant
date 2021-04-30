@@ -8,8 +8,21 @@ import logging
 import os
 import re
 import subprocess
+import threading
+
 
 logger = logging.getLogger('IsoQuant')
+
+
+class AtomicCounter(object):
+    def __init__(self):
+        self.value = 0
+        self._lock = threading.Lock()
+
+    def increment(self):
+        with self._lock:
+            self.value += 1
+            return self.value
 
 
 # key, value
