@@ -75,8 +75,13 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
     parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
 
-    add_additional_option("--run_aligner_only", action="store_true",
+    add_additional_option("--run_aligner_only", action="store_true", default=False,
                           help="align reads to reference without isoform assignment")
+    add_additional_option("--no_junc_bed", action="store_true", default=False,
+                          help="do NOT use annotation for read mapping")
+    add_additional_option("--junc_bed_file", type=str,
+                          help="annotation in BED format produced by minimap's paftools.js gff2bed "
+                               "(will be created automatically if not given)")
     parser.add_argument('--labels', '-l', nargs='+', type=str,
                         help='sample names to be used; input file names are used if not set')
     parser.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
@@ -172,7 +177,7 @@ class TestMode(argparse.Action):
         with open('isoquant_test/isoquant.log', 'r') as f:
             log = f.read()
 
-        correct_results = ['noninformative: 3', 'unique: 128', 'known: 15', 'Processed 1 sample']
+        correct_results = ['noninformative: 3', 'unique: 141', 'known: 18', 'Processed 1 sample']
         return all([result in log for result in correct_results])
 
 
@@ -433,6 +438,10 @@ def set_additional_params(args):
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
 
+    # convert GTF/GFF if needed
+    if not args.genedb.lower().endswith('db'):
+        args.genedb = convert_gtf_to_db(args)
+
     # map reads if fastqs are provided
     if args.input_data.input_type == "fastq":
         # substitute input reads with bams
@@ -443,9 +452,6 @@ def run_pipeline(args):
     if args.run_aligner_only:
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
     else:
-        # convert GTF/GFF if needed
-        if not args.genedb.endswith('db'):
-            args.genedb = convert_gtf_to_db(args)
         # run isoform assignment
         dataset_processor = DatasetProcessor(args)
         dataset_processor.process_all_samples(args.input_data)

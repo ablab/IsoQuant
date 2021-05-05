@@ -239,6 +239,12 @@ To provide read sequences use one of the following options:
 `--run_aligner_only` 
     Align reads to the reference without running IsoQuant itself.
 
+`--no_junc_bed`
+    Do not use annotation for read mapping.
+
+`--junc_bed_file`
+    Annotation in BED12 format produced by `paftools.js gff2bed` (can be found in `minimap2`), will be created automatically if not given.
+
 `--threads` or `-t`
     Number of threads to use, 16 by default. 
 

@@ -5,7 +5,7 @@ import json
 
 from Bio import SeqIO
 from src.common import get_path_to_program
-from src.gtf2db import convert_db_to_gtf
+from src.gtf2db import *
 from src.input_data_storage import SampleData
 
 logger = logging.getLogger('IsoQuant')
@@ -237,24 +237,25 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
         gtf_fname = args.genedb
         if args.genedb.endswith('.db'):
             gtf_fname = convert_db_to_gtf(args)
+        annotation_opts = "" if args.no_junc_bed else " --sjdbGTFfile " + gtf_fname + " --sjdbOverhang 140 "
         command = '{exec_path} {zcat} --runThreadN {threads} --genomeDir {ref_index_name}  --readFilesIn {transcripts}  ' \
-                  '--outSAMtype BAM Unsorted --outSAMattributes NH HI NM MD --outFilterMultimapScoreRange 1 \
-                   --outFilterMismatchNmax 2000 --scoreGapNoncan -20 --scoreGapGCAG -4 --scoreGapATAC -8 --scoreDelOpen ' \
-                  '-1 --scoreDelBase -1 --scoreInsOpen -1 --scoreInsBase -1 \
-                   --alignEndsType Local --seedSearchStartLmax 50 --seedPerReadNmax 1000000 --seedPerWindowNmax 1000 ' \
-                  '--alignTranscriptsPerReadNmax 100000 --alignTranscriptsPerWindowNmax 10000 ' \
-                  '--sjdbGTFfile {annotation} --sjdbOverhang 140 \
-                   --outFileNamePrefix {alignment_out}'.format(exec_path=star_path,
+                  '--outSAMtype BAM Unsorted --outSAMattributes NH HI NM MD --outFilterMultimapScoreRange 1 ' \
+                  '--outFilterMismatchNmax 2000 --scoreGapNoncan -20 --scoreGapGCAG -4 --scoreGapATAC -8 --scoreDelOpen ' \
+                  '-1 --scoreDelBase -1 --scoreInsOpen -1 --scoreInsBase -1 ' \
+                  ' --alignEndsType Local --seedSearchStartLmax 50 --seedPerReadNmax 1000000 --seedPerWindowNmax 1000 '\
+                  + annotation_opts + \
+                  ' --alignTranscriptsPerReadNmax 100000 --alignTranscriptsPerWindowNmax 10000 ' \
+                  '--outFileNamePrefix {alignment_out}'.format(exec_path=star_path,
                                                                zcat=zcat_option,
                                                                threads=str(args.threads),
                                                                ref_index_name=args.index,
                                                                transcripts=fastq_path,
-                                                               annotation=gtf_fname,
                                                                alignment_out=alignment_prefix)
-
+        logger.info("Running STAR (takes a while)")
         if subprocess.call(command.split(), stdout=log_file, stderr=log_file) != 0:
             logger.critical("STAR finished with errors! See " + log_fpath)
             exit(-1)
+        logger.info("Sorting alignments")
         if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path,
                             alignment_prefix + 'Aligned.out.bam'], stderr=log_file) != 0:
             logger.critical("Samtools finished with errors! See " + log_fpath)
@@ -265,11 +266,28 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
         additional_options = []
         if args.stranded == 'forward':
             additional_options.append('-uf')
+        if not args.no_junc_bed:
+            bed_supplied = False
+            if args.junc_bed_file:
+                if not os.path.exists(args.junc_bed_file):
+                    logger.error("Provided BED file %s does not exist, will generate for the annotation" % args.junc_bed_file)
+                else:
+                    additional_options.append("--junc-bed")
+                    additional_options.append(args.junc_bed_file)
+                    bed_supplied = True
+            if not bed_supplied:
+                bed_filename = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".bed")
+                db2bed(bed_filename, args.genedb)
+                additional_options.append("--junc-bed")
+                additional_options.append(bed_filename)
+
         command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
                    '--secondary=yes', '-Y', '-t', str(args.threads)] + additional_options
+        logger.info("Running minimap2 (takes a while)")
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
             logger.critical("Minimap2 finished with errors! See " + log_fpath)
             exit(-1)
+        logger.info("Soring alignments")
         if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path], stderr=log_file) != 0:
             logger.critical("Samtools finished with errors! See " + log_fpath)
             exit(-1)
@@ -277,7 +295,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
     else:
         logger.critical("Aligner " + aligner + " is not supported")
         exit(-1)
-
+    logger.info("Indexing alignments")
     subprocess.call(['samtools', 'index', alignment_bam_path])
     return alignment_bam_path
 
