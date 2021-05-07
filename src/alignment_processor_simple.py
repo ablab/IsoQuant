@@ -46,7 +46,7 @@ class LongReadSimpleAlignmentProcessor:
         self.assignment_storage = []
         self.gene_region = (gene_info.start, gene_info.end)
 
-    def process(self, intron_printer=None):
+    def process(self, intron_printer):
         self.assignment_storage = []
         self.gene_info.all_read_region_start = self.gene_info.start
         self.gene_info.all_read_region_end = self.gene_info.end

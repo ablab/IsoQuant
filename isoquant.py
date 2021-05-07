@@ -434,14 +434,16 @@ def set_additional_params(args):
         multimap_strategies[e.name] = e.value
     args.multimap_strategy = MultimapResolvingStrategy(multimap_strategies[args.multimap_strategy])
 
+    if args.intron_stats:
+        args.check_canonical = True
+        args.simple_intron_comparison = True
+        
     args.needs_reference = args.sqanti_output or args.check_canonical
     if args.needs_reference and not args.reference:
         logger.warning("Reference genome is not provided! Some stats will not be calculated.")
         args.needs_reference = False
 
-    if args.intron_stats:
-        args.check_canonical = True
-        args.simple_intron_comparison = True
+
 
 
 def run_pipeline(args):
