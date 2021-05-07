@@ -65,6 +65,7 @@ def parse_args(args=None, namespace=None):
                              "polyA tails will not be required for transcript model construction")
     add_additional_option('--has_polya', action='store_true', default=True,
                           help="deprecated option, use --polya_trimmed when reads do not have polyA tails")
+
     parser.add_argument('--check_canonical', action='store_true', default=False,
                         help="report whether splice junctions are canonical (requires reference genome)")
     parser.add_argument('--fl_data', action='store_true', default=False,
@@ -138,7 +139,8 @@ def parse_args(args=None, namespace=None):
                           help="minimal number of reads that support novel isoform")
     add_additional_option("--min_reads_supporting_tsts", type=int, default=None,
                           help="minimal number of reads that support isoform terminal sites")
-
+    add_additional_option('--simple_intron_comparison', action='store_true', default=False,
+                          help="use simple intron chain comparison, report simple stats")
     args = parser.parse_args(args, namespace)
 
     if os.path.exists(args.output):

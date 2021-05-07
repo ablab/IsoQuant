@@ -9,6 +9,8 @@ import pysam
 from Bio import SeqIO
 
 from src.long_read_assigner import *
+from src.long_read_simple_assigner import *
+
 from src.long_read_profiles import *
 from src.read_groups import *
 from src.polya_finder import *
@@ -35,7 +37,10 @@ class LongReadAlignmentProcessor:
         self.params = params
         self.chr_record = chr_record
 
-        self.assigner = LongReadAssigner(self.gene_info, self.params)
+        if self.params.simple_intron_comparison:
+            self.assigner = LongReadSimpleAssigner(self.gene_info, self.params)
+        else:
+            self.assigner = LongReadAssigner(self.gene_info, self.params)
         self.read_groupper = read_groupper
         self.profile_constructor = CombinedProfileConstructor(gene_info, params)
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
