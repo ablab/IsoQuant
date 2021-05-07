@@ -13,6 +13,7 @@ from concurrent import futures
 
 from src.input_data_storage import *
 from src.alignment_processor import *
+from src.alignment_processor_simple import *
 from src.assignment_io import *
 from src.long_read_counter import *
 from src.multimap_resolver import *
@@ -117,6 +118,7 @@ class OverlappingExonsGeneClusterConstructor(GeneClusterConstructor):
 
 def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr_record):
     tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
+    intron_info_printer = IntronInfoPrinter(sample.intron_info_tsv + chr_id + ".tsv", args)
     processed_reads = []
     bam_files = list(map(lambda x: x[0], sample.file_list))
     bam_files = [pysam.AlignmentFile(bam, "rb") for bam in bam_files]
@@ -126,9 +128,14 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
         if len(g) > 100:
             logger.debug("Potential slowdown in %s due to large gene cluster of size %d" % (chr_id, len(g)))
         gene_info = GeneInfo(g, gffutils_db, args.delta)
-        alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, args,
-                                                         current_chr_record, read_grouper)
-        assignment_storage = alignment_processor.process()
+        if args.intron_stats:
+            alignment_processor = LongReadSimpleAlignmentProcessor(gene_info, bam_files, args,
+                                                                   current_chr_record, read_grouper)
+            assignment_storage = alignment_processor.process(intron_info_printer)
+        else:
+            alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, args,
+                                                             current_chr_record, read_grouper)
+            assignment_storage = alignment_processor.process()
         gene_info.db = None
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:

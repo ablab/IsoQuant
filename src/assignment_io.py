@@ -109,6 +109,20 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
         read_assignment.gene_info = None
         self.pickler.dump(read_assignment)
 
+class IntronInfoPrinter(AbstractAssignmentPrinter):
+    def __init__(self, output_file_name, params):
+        AbstractAssignmentPrinter.__init__(self, output_file_name, params)
+        self.header = "#read_id\tchr_id\tstrand\tread_coordinates\tref_coordinates\tintron_type\tdonor_up\tdonor_down\tacceptor_up\tacceptor_down\tdonor_diff\tacceptor_diff\n"
+        self.output_file.write(self.header)
+
+    def add_intron_info(self, read_id, chr_id, strand, intron, ref_intron, intron_type,
+                        donor_up_dist, donor_down_dist, acceptor_up_dist, acceptor_down_dist,
+                        donor_shift, acceptor_shift):
+        self.output_file.write("%s\t%s\t%s\t%d-%d\t%d-%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n" %
+                               (read_id, chr_id, strand, intron[0], intron[1], ref_intron[0], ref_intron[1],intron_type,
+                                donor_up_dist, donor_down_dist, acceptor_up_dist, acceptor_down_dist,
+                                donor_shift, acceptor_shift))
+
 
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support):
@@ -128,6 +142,19 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             line += "\t*\n"
         return line
 
+    def additional_info_for_unassigned(self, read_introns, gene_info):
+        additional_info = []
+        if self.params.check_canonical and gene_info.reference_region:
+            if len(read_introns) == 0:
+                additional_info.append("Noncanonical=Unspliced;")
+                # additional_info.append("Problematic=Unspliced;")
+            else:
+                for strand in ['+', '-']:
+                    nonc = self.io_support.count_noncanonincal(read_introns, gene_info, strand)
+                    additional_info.append("Noncanonical%s=%d;" % (strand, nonc))
+                    # problematic = self.io_support.count_problematic_introns(read_introns, gene_info, strand)
+                    # additional_info.append("Problematic%s=%d;" % (strand, problematic))
+        return additional_info
 
     def add_read_info(self, read_assignment):
         if read_assignment is None:
@@ -147,12 +174,15 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         read_introns = junctions_from_blocks(read_exons)
 
         if not read_assignment.isoform_matches:
-            self.output_file.write(self.unmatched_line(read_assignment))
+            additional_info = self.additional_info_for_unassigned(read_introns, read_assignment.gene_info)
+            self.output_file.write(self.unmatched_line(read_assignment, additional_info))
             return
 
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
+                additional_info = self.additional_info_for_unassigned(read_introns, read_assignment.gene_info)
                 self.output_file.write(self.unmatched_line(read_assignment,
+                                                           additional_info +
                                                            ["Classification=" + str(m.match_classification.name) + ";"]))
                 continue
             isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
@@ -175,6 +205,8 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 else:
                     all_canonical = self.io_support.check_sites_are_canonical(read_introns, read_assignment.gene_info, strand)
                     additional_info.append("Canonical=" + str(all_canonical) + ";")
+                    nonc = self.io_support.count_noncanonincal(read_introns, read_assignment.gene_info, strand)
+                    additional_info.append("Noncanonical=" + str(nonc) + ";")
 
             additional_info.append("Classification=" + str(m.match_classification.name) + ";")
             if additional_info:
@@ -397,3 +429,38 @@ class IOSupport:
             seq = gene_info.reference_region[read_start - self.params.upstream_region_len:read_start]
             a_percentage = float(seq.upper().count('T')) / float(self.params.upstream_region_len)
         return seq, a_percentage
+
+    def count_noncanonincal(self, read_introns, gene_info, strand):
+        count = 0
+        for intron in read_introns:
+            intron_left_pos = intron[0] - gene_info.all_read_region_start
+            intron_right_pos = intron[1] - gene_info.all_read_region_start
+            left_site = gene_info.reference_region[intron_left_pos:intron_left_pos + 2]
+            right_site = gene_info.reference_region[intron_right_pos - 1:intron_right_pos + 1]
+            if strand == '+':
+                count += 0 if (left_site, right_site) == ("GT", "AG") else 1
+            else:
+                count += 0 if (left_site, right_site) == ("CT", "AC") else 1
+        return count
+
+    def count_problematic_introns(self, read_introns, gene_info, strand):
+        count = 0
+        for intron in read_introns:
+            intron_left_pos = intron[0] - gene_info.all_read_region_start
+            intron_right_pos = intron[1] - gene_info.all_read_region_start
+            if strand == "+":
+                left_site = gene_info.reference_region[intron_left_pos - 4:intron_left_pos + 6]
+                right_site = gene_info.reference_region[intron_right_pos - 5:intron_right_pos + 4]
+                donor_site_problematic = left_site[0:6] == "GTAAGT" or left_site[4:10] == "GTAAGT"
+                acceptor_site_problematic = right_site[4:6] == "AG" and (
+                            right_site[1:3] == "AG" or right_site[7:9] == "AG")
+            else:
+                left_site = gene_info.reference_region[intron_left_pos - 3:intron_left_pos + 6]
+                right_site = gene_info.reference_region[intron_right_pos - 5:intron_right_pos + 5]
+                donor_site_problematic = right_site[0:6] == "ACTTAC" or right_site[4:10] == "ACTTAC"
+                acceptor_site_problematic = left_site[3:5] == "CT" and (
+                            left_site[0:2] == "CT" or left_site[6:8] == "CT")
+            count += 1 if donor_site_problematic else 0
+            count += 1 if acceptor_site_problematic else 0
+        return count
+

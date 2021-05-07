@@ -141,6 +141,9 @@ def parse_args(args=None, namespace=None):
                           help="minimal number of reads that support isoform terminal sites")
     add_additional_option('--simple_intron_comparison', action='store_true', default=False,
                           help="use simple intron chain comparison, report simple stats")
+    add_additional_option('--intron_stats', action='store_true', default=False,
+                          help="count intron stats, will force --simple_intron_comparison and --check_canonical")
+
     args = parser.parse_args(args, namespace)
 
     if os.path.exists(args.output):
@@ -435,6 +438,10 @@ def set_additional_params(args):
     if args.needs_reference and not args.reference:
         logger.warning("Reference genome is not provided! Some stats will not be calculated.")
         args.needs_reference = False
+
+    if args.intron_stats:
+        args.check_canonical = True
+        args.simple_intron_comparison = True
 
 
 def run_pipeline(args):
