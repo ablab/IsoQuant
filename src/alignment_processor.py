@@ -119,6 +119,8 @@ class LongReadAlignmentProcessor:
                 read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
                 read_assignment.chr_id = self.gene_info.chr_id
                 read_assignment.multimapper = alignment.is_secondary
+                read_coverage = read_coverage_fraction(sorted_blocks, self.gene_info.split_exon_profiles.features)
+                read_assignment.set_additional_info("read_fraction", read_coverage)
 
                 if self.params.count_exons:
                     read_assignment.exon_gene_profile = combined_profile.read_exon_profile.gene_profile

@@ -399,6 +399,7 @@ class DatasetProcessor:
 
     def create_aggregators(self, sample):
         self.read_stat_counter = EnumStats()
+        self.single_intron_inconsistent_counter = EnumStats()
         self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support)
         self.bed_printer = BEDPrinter(sample.out_mapped_bed, self.args)
         printer_list = [self.basic_printer, self.bed_printer]
@@ -432,6 +433,11 @@ class DatasetProcessor:
         if read_assignment is None:
             return
         self.read_stat_counter.add(read_assignment.assignment_type)
+        if len(read_assignment.exons) == 2 and read_assignment.assignment_type == ReadAssignmentType.inconsistent \
+                and read_assignment.isoform_matches:
+            for mt in read_assignment.isoform_matches[0].match_subclassifications:
+                if mt.event_type in nnic_event_types or mt.event_type in nic_event_types:
+                    self.single_intron_inconsistent_counter.add(mt.event_type)
         self.global_printer.add_read_info(read_assignment)
         self.global_counter.add_read_info(read_assignment)
 
@@ -441,4 +447,5 @@ class DatasetProcessor:
         logger.info("Transcript counts are stored in " + self.transcript_counter.output_file_name)
         logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
         self.read_stat_counter.print_start("Read assignment statistics")
+        self.single_intron_inconsistent_counter.print_start("Single intron inconsistent statistics")
 

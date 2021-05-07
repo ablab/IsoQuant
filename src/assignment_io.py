@@ -175,12 +175,17 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
 
         if not read_assignment.isoform_matches:
             additional_info = self.additional_info_for_unassigned(read_introns, read_assignment.gene_info)
+            additional_info += [str(k) + "=" + str(read_assignment.additional_info[k]) + ";" for k in
+                                read_assignment.additional_info.keys()]
             self.output_file.write(self.unmatched_line(read_assignment, additional_info))
             return
 
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
                 additional_info = self.additional_info_for_unassigned(read_introns, read_assignment.gene_info)
+                additional_info += [str(k) + "=" + str(read_assignment.additional_info[k]) + ";" for k in
+                                    read_assignment.additional_info.keys()]
+
                 self.output_file.write(self.unmatched_line(read_assignment,
                                                            additional_info +
                                                            ["Classification=" + str(m.match_classification.name) + ";"]))
@@ -209,6 +214,8 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                     additional_info.append("Noncanonical=" + str(nonc) + ";")
 
             additional_info.append("Classification=" + str(m.match_classification.name) + ";")
+            additional_info += [str(k) + "=" + str(read_assignment.additional_info[k]) + ";" for k in
+                                read_assignment.additional_info.keys()]
             if additional_info:
                 line += "\t" + " ".join(additional_info) + "\n"
             else:
