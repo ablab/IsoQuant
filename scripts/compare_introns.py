@@ -7,6 +7,8 @@
 ############################################################################
 import pysam
 import gffutils
+import sys
+sys.path.append("../")
 from src.gtf2db import *
 from src.junction_comparator import *
 from src.common import *

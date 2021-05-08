@@ -7,13 +7,14 @@
 ############################################################################
 import pysam
 import gffutils
+import sys
+sys.path.append("../")
 from src.gtf2db import *
 from src.junction_comparator2 import *
 from src.common import *
 from Bio import SeqIO
 from Bio import Seq
 from collections import defaultdict
-import sys
 
 logger = logging.getLogger('IsoQuant')
 
