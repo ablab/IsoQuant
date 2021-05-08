@@ -437,13 +437,11 @@ def set_additional_params(args):
     if args.intron_stats:
         args.check_canonical = True
         args.simple_intron_comparison = True
-        
+
     args.needs_reference = args.sqanti_output or args.check_canonical
     if args.needs_reference and not args.reference:
         logger.warning("Reference genome is not provided! Some stats will not be calculated.")
         args.needs_reference = False
-
-
 
 
 def run_pipeline(args):
