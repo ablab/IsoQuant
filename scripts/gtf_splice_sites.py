@@ -82,6 +82,7 @@ def count_splice_site_stats(ref_records, intron_map, allow_repeats=True):
     donor_set = set()
     donor_counts = defaultdict(int)
     acc_counts = defaultdict(int)
+    non_canonical = 0
     for chr_info in sorted(intron_map.keys()):
         chr_id = chr_info[0]
         annotation_strand = chr_info[1]
@@ -89,6 +90,7 @@ def count_splice_site_stats(ref_records, intron_map, allow_repeats=True):
         for intron in intron_map[chr_info]:
             strand = check_canonical(intron, chr_seq, annotation_strand)
             if not strand:
+                non_canonical += 1
                 continue
             donor_up, donor_down, acceptor_up, acceptor_down = analyse_intron_sites(intron, chr_seq, strand)
             donor_pos = intron[0] if strand == "+" else intron[1]
@@ -115,6 +117,7 @@ def count_splice_site_stats(ref_records, intron_map, allow_repeats=True):
                 else:
                     acc_counts[0] += 1
                 acceptor_set.add((chr_id, strand, acc_pos))
+    print("Non-canonical %d" % non_canonical)
     return donor_counts, acc_counts
 
 
