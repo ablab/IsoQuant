@@ -114,8 +114,8 @@ def get_tss_polya(bam_file):
                 elif strand == "-" and i <= tss_read_coord and abs(tss_read_coord - i) < abs(min_dist_down):
                     min_dist_down = tss_read_coord - i
                     min_tss_down = tss_dict[tss_key]
-        if abs(min_dist_up) < abs(min_dist_down):
-            if min_dist_up < min_dist_down:
+        if min_tss_up or min_tss_down:
+            if abs(min_dist_up) < abs(min_dist_down):
                 read_tss[r.query_name] = min_tss_up
                 tss_dist.append(min_dist_up)
             else:
@@ -187,11 +187,12 @@ tss_assigned_pb,tss_assigned_ont = 0,0
 polya_assigned_pb,polya_assigned_ont = 0,0
 total_tss_pairs = 0
 total_polya_pairs = 0
+matches = set()
 with open(tsv_file) as f:
     for line in f:
         _, _, pb_read, ont_read = line.split()
         if pb_read in wrong_reads_pb or ont_read in wrong_reads_ont: continue
-        if pb_read in read_tss_pb or ont_read in read_tss_ont:
+        if read_tss_pb[pb_read] or read_tss_ont[ont_read]:
             total_tss_pairs +=1
             if read_tss_pb[pb_read]: tss_assigned_pb+=1
             if read_tss_ont[ont_read]: tss_assigned_ont+=1
@@ -200,10 +201,11 @@ with open(tsv_file) as f:
             elif not read_tss_pb[pb_read]:
                 tss_ont += 1
             elif read_tss_ont[ont_read] and read_tss_pb[pb_read] == read_tss_ont[ont_read]:
+                matches.add((pb_read, ont_read))
                 tss_agree += 1
             elif read_tss_ont[ont_read] and read_tss_pb[pb_read] != read_tss_ont[ont_read]:
                 tss_disagree += 1
-        if pb_read in read_polya_pb or ont_read in read_polya_ont:
+        if read_polya_pb[pb_read] or read_polya_ont[ont_read]:
             total_polya_pairs+=1
             if read_polya_pb[pb_read]: polya_assigned_pb+=1
             if read_polya_ont[ont_read]: polya_assigned_ont+=1
