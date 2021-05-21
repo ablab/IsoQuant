@@ -302,8 +302,11 @@ class DatasetProcessor:
         info_pickler = pickle.Pickler(open(sample.out_raw_file + "_info", "wb"),  -1)
         info_pickler.dump(total_assignments)
         info_pickler.dump(polya_assignments)
-        logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
-                    (total_assignments, 100 * polya_assignments / total_assignments))
+        if total_assignments == 0:
+            logger.warning("No reads were assigned to isoforms, check your input files")
+        else:
+            logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
+                        (total_assignments, 100 * polya_assignments / total_assignments))
 
     def process_assigned_reads(self, sample, dump_filename):
         logger.info("Processing assigned reads " + sample.label)
