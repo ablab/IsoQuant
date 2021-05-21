@@ -239,7 +239,7 @@ class DbHandler:
             self.gene_coords[gene_name] = (self.db[gene_name].start, self.db[gene_name].end)
             self.gene_to_isoforms_map[gene_name] = set()
             gene_db = self.db[gene_name]
-            for t in self.db.children(gene_db, featuretype='transcript'):
+            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
                 self.isoform_to_gene_map[correct_isoform(t.id)] = gene_name
                 self.gene_to_isoforms_map[gene_name].add(correct_isoform(t.id))
         logger.info("Gene database loaded: %d genes, %d transcripts" % (len(self.gene_to_isoforms_map), len(self.isoform_to_gene_map)))

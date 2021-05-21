@@ -44,7 +44,7 @@ def db2bed(bed, db):
     logger.info("Converting gene annotation file %s to .bed format" % db)
     genedb = gffutils.FeatureDB(db, keep_order=True)
     with open(bed, "w") as f:
-        for record in genedb.all_features(featuretype="transcript"):
+        for record in genedb.all_features(featuretype=('transcript', 'mRNA')):
             transcript_type = record["transcript_type"][0]
             transcript_name = record.id + "|" + transcript_type + "|" + record["gene_name"][0]
             exons = []

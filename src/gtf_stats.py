@@ -106,7 +106,7 @@ class AnnotationStats:
         if self.reference_record_dict:
             reference_region = current_chr_record[gene_start - 1:gene_data.end].seq
 
-        for t in self.gene_db.children(gene_data, featuretype='transcript', order_by='start'):
+        for t in self.gene_db.children(gene_data, featuretype=('transcript', 'mRNA'), order_by='start'):
             exon_list = []
             transcript_count += 1
             for e in self.gene_db.children(t, order_by='start'):
