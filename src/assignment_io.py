@@ -351,7 +351,7 @@ class IOSupport:
 
         dists_to_gene_tss = []
         dists_to_gene_tts = []
-        for t in gene_info.db.children(gene_info.db[gene_id], featuretype='transcript', order_by='start'):
+        for t in gene_info.db.children(gene_info.db[gene_id], featuretype=('transcript', 'mRNA'), order_by='start'):
             dists_to_gene_tss.append(self.count_tss_dist(read_assignment, t.id))
             dists_to_gene_tts.append(self.count_tts_dist(read_assignment, t.id))
         dist_to_gene_tss = dists_to_gene_tss[argmin([abs(x) for x in dists_to_gene_tss])]

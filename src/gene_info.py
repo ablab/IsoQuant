@@ -217,14 +217,14 @@ class GeneInfo:
     def set_isoform_strands(self):
         self.isoform_strands = {}
         for gene_db in self.gene_db_list:
-            for t in self.db.children(gene_db, featuretype='transcript'):
+            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
                 self.isoform_strands[t.id] = t.strand
 
     # set isoform_id -> gene_id map
     def set_gene_ids(self):
         self.gene_id_map = {}
         for gene_db in self.gene_db_list:
-            for t in self.db.children(gene_db, featuretype='transcript'):
+            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
                 self.gene_id_map[t.id] = gene_db.id
 
     # assigns an ordered list of all known exons and introns to self.exons and self.introns
@@ -236,7 +236,7 @@ class GeneInfo:
         all_isoforms_exons = {}
 
         for gene_db in self.gene_db_list:
-            for t in self.db.children(gene_db, featuretype='transcript', order_by='start'):
+            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
                 all_isoforms_exons[t.id] = []
                 for e in self.db.children(t, order_by='start'):
                     if e.featuretype == 'exon':
@@ -373,7 +373,7 @@ class GeneInfo:
     # calculate junction profiles for known isoforms
     def set_junction_profiles(self, all_isoforms_introns, all_isoforms_exons):
         for gene_db in self.gene_db_list:
-            for t in self.db.children(gene_db, featuretype='transcript', order_by='start'):
+            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
                 transcript_region = self.transcript_region(t.id)
                 # setting up intron profiles for current isoform
                 self.intron_profiles.set_profiles(t.id, all_isoforms_introns[t.id], transcript_region,
