@@ -51,6 +51,8 @@ IsoQuant is a tool for reference-based analysis of long RNA reads, such as PacBi
 
 IsoQuant version 1.2.1 was released under GPLv2 on April 21st, 2021 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
+#### IsoQuant pipeline
+![Pipeline](figs/isoquant_pipeline.png) 
 
 <a name="sec1.1"></a>
 ## Supported data types
