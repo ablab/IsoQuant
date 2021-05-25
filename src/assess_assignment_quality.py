@@ -12,6 +12,7 @@ import sys
 import argparse
 from collections import defaultdict
 from traceback import print_exc
+from collections import namedtuple
 
 import pysam
 from Bio import SeqIO
@@ -53,13 +54,13 @@ class MappingData:
         self.seq_set = set()
         self.seqid_to_isoform = dict()
         self.parse_fasta(args.fasta, args.real_data)
-
+        self.args = args
         self.mapped_seqs = {}
         self.secondary_mapped_seqs = defaultdict(list)
         if not args.real_data:
             self.parse_bam(args.mapping)
 
-    def parse_fasta(self, fasta, is_real_data):
+    def parse_fasta(self, fasta, is_real_data=False):
         logger.info("Loading reads from %s" % fasta)
         basename_plus_inner_ext, outer_ext = os.path.splitext(fasta.lower())
         if outer_ext not in ['.zip', '.gz', '.gzip', '.bz2', '.bzip2']:
@@ -79,18 +80,15 @@ class MappingData:
                 seq_id = record.id
             else:
                 seq_id = record.id
-                if record.id.startswith("E"):
-                    isoform_id = record.id.split('_', 2)[0]
-                else:
-                    tokens = record.id.split('_', 3)
-                    if len(tokens) < 2:
-                        logger.warning("Malformed read id %s" % seq_id)
-                        continue
-                    isoform_id = tokens[1]
+                tokens = record.id.split('_')
+                if len(tokens) <= self.args.isoform_id_index:
+                    logger.warning("Malformed read id %s" % seq_id)
+                    continue
+                isoform_id = tokens[self.args.isoform_id_index]
                 if isoform_id.startswith("E"):
                     self.seqid_to_isoform[seq_id] = correct_isoform(isoform_id)
                 else:
-                    logger.warning("Unexpectred isoform id %s" % isoform_id)
+                    logger.warning("Unexpected isoform id %s" % isoform_id)
             self.seq_set.add(seq_id)
         logger.info("Total %d sequences loaded" % len(self.seq_set))
 
@@ -112,27 +110,30 @@ class MappingData:
 
 
 class AssignmentData:
-    UNIQUE_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference"}
+    # read id column, isoform id column, assignment type column
+    ParseParams = namedtuple("ParseParams", ("read_id_column", "isoform_id_column", "assignment_type_column"))
+    PRESETS = {'isoquant': ParseParams(0, 3, 5), 'talon': ParseParams(0, 10, 16), 'sqanti': (0, 7, 5)}
+    UNIQUE_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "Known", "full-splice_match", "incomplete-splice_match"}
     AMB_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous"}
     ALL_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous", "inconsistent"}
 
-    def __init__(self, tsv_file, is_real_data, assignment_types = UNIQUE_ASSIGNMENTS_TYPES):
+    def __init__(self, tsv_file, preset='isoquant', assignment_types = UNIQUE_ASSIGNMENTS_TYPES):
+        self.parse_params = self.PRESETS[preset]
         self.assigned_isoforms = defaultdict(str)
         self.assignment_types = assignment_types
-        self.parse_tsv(tsv_file, is_real_data)
+        self.parse_tsv(tsv_file)
 
-    def parse_tsv(self, tsv_file, is_real_data):
+    def parse_tsv(self, tsv_file):
         logger.info("Reading assignments from %s" % tsv_file)
         with open(tsv_file) as f:
             for i,l in enumerate(f):
                 if i == 0:
                     continue
                 tokens = l.strip().split()
-                seq_id = tokens[0] # if is_real_data else id_pattern.search(tokens[0]).group(1)
-                if len(tokens) > 10:  ## SQANTI2
-                    self.assigned_isoforms[seq_id] = correct_isoform(tokens[7])
-                elif tokens[5] in self.assignment_types:
-                    self.assigned_isoforms[seq_id] = correct_isoform(tokens[3])
+                seq_id = tokens[self.parse_params.read_id_column] # if is_real_data else id_pattern.search(tokens[0]).group(1)
+                assignment_type = tokens[self.parse_params.assignment_type_column]
+                if assignment_type in self.assignment_types:
+                    self.assigned_isoforms[seq_id] = correct_isoform(tokens[self.parse_params.isoform_id_column])
         logger.info("Total assignments loaded: %d" % len(self.assigned_isoforms))
 
 
@@ -304,6 +305,11 @@ def parse_args():
     parser.add_argument("--mapping", "-m", type=str, help="mapped sequences (SAM or BAM format)") ## SQANTI2 output
     parser.add_argument("--tsv", "-t", type=str, nargs='+', help="assigned isoforms, max number of files to compare: 2")
     parser.add_argument("--gene_db", "-g", type=str, help="gene database")
+    parser.add_argument("--tool", type=str, choices=['isoquant', 'talon', 'sqanti'],
+                        help="tool used for generating TSV (isoquant, talon, sqanti)")
+    parser.add_argument("--isoform_id_index", type=int, default=1,
+                        help="read id is split by underscore, indicate where isoform id is stored")
+
     parser.add_argument("--real_data", default=False, action="store_true",
                         help="real data is used (correct isoforms for each read are not provided)")
     parser.add_argument('--additional_stats', action='store_true', default=False,
@@ -332,7 +338,7 @@ def main():
     for tsv_file in args.tsv:
         #TODO: diff bams
         logger.info("Calculating stats for %s" % tsv_file)
-        assignment_data = AssignmentData(tsv_file, args.real_data)
+        assignment_data = AssignmentData(tsv_file, args.tool)
         prefix = os.path.splitext(os.path.basename(tsv_file))[0]
         stat_counter = StatCounter(prefix, mapping_data, assignment_data)
         if args.real_data:
