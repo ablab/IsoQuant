@@ -53,8 +53,8 @@ class MappingData:
     def __init__(self, args):
         self.seq_set = set()
         self.seqid_to_isoform = dict()
-        self.parse_fasta(args.fasta, args.real_data)
         self.args = args
+        self.parse_fasta(args.fasta, args.real_data)
         self.mapped_seqs = {}
         self.secondary_mapped_seqs = defaultdict(list)
         if not args.real_data:
@@ -94,8 +94,11 @@ class MappingData:
 
     def parse_bam(self, bam_file):
         logger.info("Loading alignments from %s" % bam_file)
-        alignment_file_in = pysam.AlignmentFile(bam_file, "rb")
-        for alignment in alignment_file_in.fetch():
+        if bam_file.endswith("sam"):
+            alignment_file_in = pysam.AlignmentFile(bam_file, "r")
+        else:
+            alignment_file_in = pysam.AlignmentFile(bam_file, "rb")
+        for alignment in alignment_file_in:
             if alignment.reference_id == -1:
                 continue
             read_coords = (alignment.reference_start, alignment.reference_end)
@@ -112,8 +115,8 @@ class MappingData:
 class AssignmentData:
     # read id column, isoform id column, assignment type column
     ParseParams = namedtuple("ParseParams", ("read_id_column", "isoform_id_column", "assignment_type_column"))
-    PRESETS = {'isoquant': ParseParams(0, 3, 5), 'talon': ParseParams(0, 10, 16), 'sqanti': (0, 7, 5)}
-    UNIQUE_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "Known", "full-splice_match", "incomplete-splice_match"}
+    PRESETS = {'isoquant': ParseParams(0, 3, 5), 'talon': ParseParams(0, 10, 16), 'sqanti': ParseParams(0, 7, 5)}
+    UNIQUE_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "Known", "ISM", "full-splice_match", "incomplete-splice_match"}
     AMB_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous"}
     ALL_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous", "inconsistent"}
 
