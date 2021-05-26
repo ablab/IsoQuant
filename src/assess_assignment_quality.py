@@ -115,7 +115,7 @@ class MappingData:
 class AssignmentData:
     # read id column, isoform id column, assignment type column
     ParseParams = namedtuple("ParseParams", ("read_id_column", "isoform_id_column", "assignment_type_column"))
-    PRESETS = {'isoquant': ParseParams(0, 3, 5), 'talon': ParseParams(0, 10, 16), 'sqanti': ParseParams(0, 7, 5)}
+    PRESETS = {'isoquant': ParseParams(0, 3, 5), 'talon': ParseParams(0, 12, 16), 'sqanti': ParseParams(0, 7, 5)}
     UNIQUE_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "Known", "ISM", "full-splice_match", "incomplete-splice_match"}
     AMB_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous"}
     ALL_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous", "inconsistent"}
@@ -136,7 +136,10 @@ class AssignmentData:
                 seq_id = tokens[self.parse_params.read_id_column] # if is_real_data else id_pattern.search(tokens[0]).group(1)
                 assignment_type = tokens[self.parse_params.assignment_type_column]
                 if assignment_type in self.assignment_types:
-                    self.assigned_isoforms[seq_id] = correct_isoform(tokens[self.parse_params.isoform_id_column])
+                    isoform_id = tokens[self.parse_params.isoform_id_column]
+                    if not isoform_id[0] == 'E':
+                        logger.warning("Assigned to weird isoform " + isoform_id)
+                    self.assigned_isoforms[seq_id] = correct_isoform(isoform_id)
         logger.info("Total assignments loaded: %d" % len(self.assigned_isoforms))
 
 
@@ -224,7 +227,7 @@ class StatCounter:
     def print_stats(self, tp, fp, fn, stream, name=""):
         stream.write("correct\t%d\nincorrect\t%d\nunmapped/unassigned\t%d\n" % (tp, fp, fn))
         precision, recall = self.calc_precision(tp, fp), self.calc_recall(tp, fn)
-        stream.write("%sprecision\t%2.4f\n%srecall\t%2.4f\n" % (name, precision, name, recall))
+        stream.write("%sprecis\t%2.4f\n%srecall\t%2.4f\n" % (name, precision, name, recall))
 
 
 class DbHandler:
