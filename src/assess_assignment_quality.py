@@ -311,7 +311,7 @@ def parse_args():
     parser.add_argument("--mapping", "-m", type=str, help="mapped sequences (SAM or BAM format)") ## SQANTI2 output
     parser.add_argument("--tsv", "-t", type=str, nargs='+', help="assigned isoforms, max number of files to compare: 2")
     parser.add_argument("--gene_db", "-g", type=str, help="gene database")
-    parser.add_argument("--tool", type=str, choices=['isoquant', 'talon', 'sqanti'],
+    parser.add_argument("--tool", type=str, choices=['isoquant', 'talon', 'sqanti'], default='isoquant',
                         help="tool used for generating TSV (isoquant, talon, sqanti)")
     parser.add_argument("--isoform_id_index", type=int, default=1,
                         help="read id is split by underscore, indicate where isoform id is stored")
