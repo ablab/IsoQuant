@@ -227,7 +227,7 @@ class StatCounter:
     def print_stats(self, tp, fp, fn, stream, name=""):
         stream.write("correct\t%d\nincorrect\t%d\nunmapped/unassigned\t%d\n" % (tp, fp, fn))
         precision, recall = self.calc_precision(tp, fp), self.calc_recall(tp, fn)
-        stream.write("%sprecis\t%2.4f\n%srecall\t%2.4f\n" % (name, precision, name, recall))
+        stream.write("%sprecision\t%2.4f\n%srecall\t%2.4f\n" % (name, precision, name, recall))
 
 
 class DbHandler:
