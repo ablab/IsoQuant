@@ -41,9 +41,7 @@ class GeneClusterConstructor:
             gene_name = g.id
             gene_db = self.gene_db[gene_name]
             if len(current_gene_db_list) > 0 and \
-                    (all(not genes_overlap(cg, gene_db) for cg in current_gene_db_list) or
-                     (len(current_gene_db_list) > self.MAX_GENE_CLUSTER and
-                      all(not genes_contain(cg, gene_db) for cg in current_gene_db_list))):
+                    all(not genes_overlap(cg, gene_db) for cg in current_gene_db_list):
                 gene_sets.append(current_gene_db_list)
                 current_gene_db_list = [gene_db]
             else:
@@ -118,13 +116,24 @@ def process_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr
         if len(g) > 100:
             logger.debug("Potential slowdown in %s due to large gene cluster of size %d" % (chr_id, len(g)))
         gene_info = GeneInfo(g, gffutils_db, args.delta)
-        alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, args,
-                                                         current_chr_record, read_grouper)
-        assignment_storage = alignment_processor.process()
+        # alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, args,
+        #                                                 current_chr_record, read_grouper)
+        # assignment_storage = alignment_processor.process()
+        if len(gene_info.all_isoforms_exons) < 100:
+            continue
+        out_fname = os.path.join(args.output, "Isoforms_" + gene_info.gene_db_list[0].id + ".txt")
+        with open(out_fname, "w") as outf:
+            outf.write("%d\n" % len(gene_info.all_isoforms_exons))
+            for exon_list in gene_info.all_isoforms_exons.values():
+                exon_strings = []
+                for e in exon_list:
+                    exon_strings.append("%d-%d" % (e[0], e[1]))
+                outf.write("%s\n" % ",".join(exon_strings))
+
         gene_info.db = None
         tmp_printer.add_gene_info(gene_info)
-        for read_assignment in assignment_storage:
-            tmp_printer.add_read_info(read_assignment)
+        # for read_assignment in assignment_storage:
+        #    tmp_printer.add_read_info(read_assignment)
     logger.info("Finished processing chromosome " + chr_id)
 
 
@@ -194,8 +203,8 @@ class DatasetProcessor:
             self.args.require_polyA = False
 
         logger.info("Combining output for sample " + sample.label)
-        self.aggregate_reads(sample)
-        self.construct_models(sample)
+        # self.aggregate_reads(sample)
+        # self.construct_models(sample)
         os.rmdir(self.tmp_dir)
         self.args.require_polyA = intial_polya_required
         logger.info("Processed sample " + sample.label)
