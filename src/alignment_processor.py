@@ -48,6 +48,8 @@ class AlignmentInfo:
             self.polya_info.external_polya_pos = shift_polya(self.read_exons, polya_exon_count,
                                                              self.polya_info.external_polya_pos)
             self.read_exons = self.read_exons[:-polya_exon_count]
+            self.read_blocks = self.read_blocks[:-polya_exon_count]
+            self.cigar_blocks = self.cigar_blocks[:-polya_exon_count]
             logger.debug("Trimming polyA exons %d: %s" % (polya_exon_count, str(self.read_exons)))
             self.exons_changed = True
 
@@ -57,6 +59,8 @@ class AlignmentInfo:
             self.polya_info.external_polyt_pos = shift_polyt(self.read_exons, polyt_exon_count,
                                                              self.polya_info.external_polyt_pos)
             self.read_exons = self.read_exons[polyt_exon_count:]
+            self.read_blocks = self.read_blocks[polyt_exon_count:]
+            self.cigar_blocks = self.cigar_blocks[polyt_exon_count:]
             logger.debug("Trimming polyT exons %d: %s" % (polyt_exon_count, str(self.read_exons)))
             self.exons_changed = True
 
