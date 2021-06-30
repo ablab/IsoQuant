@@ -357,18 +357,19 @@ class LongReadAssigner:
     # =========== MAIN PART ============
 
     # === Isoform matching function ===
-    def assign_to_isoform(self, read_id, combined_read_profile):
+    def assign_to_isoform(self, read_id, alignment_info):
         """ assign read to isoform according to it
 
         Parameters
         ----------
         read_id: str
-        combined_read_profile: CombinedReadProfiles
+        alignment_info: AlignmentInfo
 
         Returns
         -------
 
         """
+        combined_read_profile = alignment_info.combined_profile
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
 

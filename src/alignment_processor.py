@@ -17,6 +17,50 @@ from src.polya_verification import *
 logger = logging.getLogger('IsoQuant')
 
 
+class AlignmentInfo:
+    def __init__(self, alignment):
+        self.alignment = alignment
+        # concat indels
+        self.read_exons, self.read_blocks, self.cigar_blocks = get_read_blocks(alignment.reference_start,
+                                                                               alignment.cigartuples)
+        if not self.read_exons:
+            return
+        self.read_start = self.read_exons[0][0]
+        self.read_end = self.read_exons[-1][1]
+        self.polya_info = None
+        self.exons_changed = False
+        self.cage_hits = []
+        self.combined_profile = None
+
+    def construct_profiles(self, profile_constructor):
+        self.combined_profile = profile_constructor.construct_profiles(self.read_exons, self.polya_info, self.cage_hits)
+
+    def add_cage_info(self, cage_finder):
+        self.cage_hits = cage_finder.find_cage_peak(self.alignment)
+
+    def add_polya_info(self, polya_finder, polya_fixer):
+        self.polya_info = polya_finder.detect_polya(self.alignment)
+        polya_exon_count, polyt_exon_count = polya_fixer.correct_read_info(self.read_exons, self.polya_info)
+
+        if polya_exon_count > 0:
+            self.polya_info.internal_polya_pos = shift_polya(self.read_exons, polya_exon_count,
+                                                             self.polya_info.internal_polya_pos)
+            self.polya_info.external_polya_pos = shift_polya(self.read_exons, polya_exon_count,
+                                                             self.polya_info.external_polya_pos)
+            self.read_exons = self.read_exons[:-polya_exon_count]
+            logger.debug("Trimming polyA exons %d: %s" % (polya_exon_count, str(self.read_exons)))
+            self.exons_changed = True
+
+        if polyt_exon_count > 0:
+            self.polya_info.internal_polyt_pos = shift_polyt(self.read_exons, polyt_exon_count,
+                                                             self.polya_info.internal_polyt_pos)
+            self.polya_info.external_polyt_pos = shift_polyt(self.read_exons, polyt_exon_count,
+                                                             self.polya_info.external_polyt_pos)
+            self.read_exons = self.read_exons[polyt_exon_count:]
+            logger.debug("Trimming polyT exons %d: %s" % (polyt_exon_count, str(self.read_exons)))
+            self.exons_changed = True
+
+
 class LongReadAlignmentProcessor:
     """ class for aggregating all assignment information
 
@@ -73,57 +117,53 @@ class LongReadAlignmentProcessor:
                     continue
 
                 logger.debug("=== Processing read " + read_id + " ===")
+                alignment_info = AlignmentInfo(alignment)
 
-                # concat indels
-                sorted_blocks, read_blocks, cigar_blocks = get_read_blocks(alignment.reference_start,
-                                                                           alignment.cigartuples)
-                if not sorted_blocks:
+                if not alignment_info.read_exons:
                     logger.warning("Read %s has no aligned exons" % read_id)
                     continue
-                read_start = sorted_blocks[0][0]
-                read_end = sorted_blocks[-1][1]
-                read_tuple = (read_id, read_start, read_end)
+                read_tuple = (read_id, alignment_info.read_start, alignment_info.read_end)
                 if read_tuple in processed_reads:
                     continue
                 processed_reads.add(read_tuple)
-                logger.debug("Read exons: " + str(sorted_blocks))
+
+                logger.debug("Read exons: " + str(alignment_info.read_exons))
                 if self.params.needs_reference:
-                    if read_start < self.gene_info.all_read_region_start:
-                        self.gene_info.all_read_region_start = read_start
-                    if read_end > self.gene_info.all_read_region_end:
-                        self.gene_info.all_read_region_end = read_end
+                    if alignment_info.read_start < self.gene_info.all_read_region_start:
+                        self.gene_info.all_read_region_start = alignment_info.read_start
+                    if alignment_info.read_end > self.gene_info.all_read_region_end:
+                        self.gene_info.all_read_region_end = alignment_info.read_end
 
-                polya_info = self.polya_finder.detect_polya(alignment)
-                sorted_blocks, polya_info, exon_changed = self.polya_fixer.correct_read_info(sorted_blocks, polya_info)
-                cage_hits = [] if self.params.cage is None else self.cage_finder.find_cage_peak(alignment)
+                alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
+                if self.params.cage:
+                    alignment_info.add_cage_info(self.cage_finder)
+                alignment_info.construct_profiles(self.profile_constructor)
+                read_assignment = self.assigner.assign_to_isoform(read_id, alignment_info)
 
-                combined_profile = self.profile_constructor.construct_profiles(sorted_blocks, polya_info, cage_hits)
-                read_assignment = self.assigner.assign_to_isoform(read_id, combined_profile)
-
-                if exon_changed:
+                if alignment_info.exons_changed:
                     read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
-                read_assignment.polyA_found = (polya_info.external_polya_pos != -1 or
-                                               polya_info.external_polyt_pos != -1 or
-                                               polya_info.internal_polya_pos != -1 or
-                                               polya_info.internal_polyt_pos != -1)
-                read_assignment.polya_info = polya_info
-                read_assignment.cage_found = len(cage_hits) > 0
-                read_assignment.exons = sorted_blocks
+                read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
+                                               alignment_info.polya_info.external_polyt_pos != -1 or
+                                               alignment_info.polya_info.internal_polya_pos != -1 or
+                                               alignment_info.polya_info.internal_polyt_pos != -1)
+                read_assignment.polya_info = alignment_info.polya_info
+                read_assignment.cage_found = len(alignment_info.cage_hits) > 0
+                read_assignment.exons = alignment_info.read_exons
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
                 read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
                 read_assignment.chr_id = self.gene_info.chr_id
                 read_assignment.multimapper = alignment.is_secondary
 
                 if self.params.count_exons:
-                    read_assignment.exon_gene_profile = combined_profile.read_exon_profile.gene_profile
-                    read_assignment.intron_gene_profile = combined_profile.read_intron_profile.gene_profile
+                    read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
+                    read_assignment.intron_gene_profile = alignment_info.combined_profile.read_intron_profile.gene_profile
 
                 if self.params.sqanti_output:
                     indel_count, junctions_with_indels = self.count_indel_stats(alignment)
                     read_assignment.set_additional_info("indel_count", indel_count)
                     read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
                     read_assignment.introns_match = \
-                        all(e == 1 for e in combined_profile.read_intron_profile.read_profile)
+                        all(e == 1 for e in alignment_info.combined_profile.read_intron_profile.read_profile)
 
                 self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")
