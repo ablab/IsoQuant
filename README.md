@@ -6,7 +6,7 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
 
 
-# IsoQuant 1.2 manual
+# IsoQuant 1.3 manual
 
 1. [About IsoQuant](#sec1) </br>
     1.1. [Supported data types](#sec1.1)</br>
