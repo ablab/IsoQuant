@@ -354,6 +354,77 @@ def concat_gapless_blocks(blocks, cigar_tuples):
     return resulting_blocks
 
 
+def get_read_blocks(ref_start, cigar_tuples):
+    read_pos = 0
+    ref_pos = ref_start + 1
+    cigar_index = 0
+    current_ref_block_start = None
+    current_read_block_start = None
+    current_cigar_block_start = None
+    has_match=False
+    ref_blocks = []
+    cigar_blocks = []
+    read_blocks = []
+
+    while cigar_index < len(cigar_tuples):
+        cigar_event = cigar_tuples[cigar_index][0]
+        event_len = cigar_tuples[cigar_index][1]
+
+        if current_ref_block_start is None and cigar_event in [0, 1, 2, 7, 8]:
+            # init new block from match
+            current_ref_block_start = ref_pos
+            current_read_block_start = read_pos
+            current_cigar_block_start = cigar_index
+            if cigar_event == 1:
+                read_pos += event_len
+            elif cigar_event == 2:
+                ref_pos += event_len
+            else:
+                read_pos += event_len
+                ref_pos += event_len
+                has_match = True
+        # found intron, add current block
+        elif cigar_event in [0, 7, 8]:
+            read_pos += event_len
+            ref_pos += event_len
+            has_match = True
+        elif cigar_event == 1:
+            read_pos += event_len
+        elif cigar_event == 2:
+            ref_pos += event_len
+        elif cigar_event == 3:
+            if current_ref_block_start:
+                if has_match:
+                    ref_blocks.append((current_ref_block_start, ref_pos - 1))
+                    read_blocks.append((current_read_block_start, read_pos - 1))
+                    cigar_blocks.append((current_cigar_block_start, cigar_index - 1))
+                has_match = False
+                current_ref_block_start = None
+                current_read_block_start = None
+                current_cigar_block_start = None
+            ref_pos += event_len
+        elif cigar_event == 4:
+            if current_ref_block_start:
+                if has_match:
+                    ref_blocks.append((current_ref_block_start, ref_pos - 1))
+                    read_blocks.append((current_read_block_start, read_pos - 1))
+                    cigar_blocks.append((current_cigar_block_start, cigar_index - 1))
+                has_match = False
+                current_ref_block_start = None
+                current_read_block_start = None
+                current_cigar_block_start = None
+            read_pos += event_len
+
+        cigar_index += 1
+
+    if current_ref_block_start and has_match:
+        ref_blocks.append((current_ref_block_start, ref_pos - 1))
+        read_blocks.append((current_read_block_start, read_pos - 1))
+        cigar_blocks.append((current_cigar_block_start, cigar_index - 1))
+
+    return ref_blocks, read_blocks, cigar_blocks
+
+
 def correct_bam_coords(blocks):
     return list(map(lambda x: (x[0] + 1, x[1]), blocks))
 

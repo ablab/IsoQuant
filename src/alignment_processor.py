@@ -75,12 +75,11 @@ class LongReadAlignmentProcessor:
                 logger.debug("=== Processing read " + read_id + " ===")
 
                 # concat indels
-                concat_blocks = concat_gapless_blocks(sorted(alignment.get_blocks()), alignment.cigartuples)
-                if not concat_blocks:
+                sorted_blocks, read_blocks, cigar_blocks = get_read_blocks(alignment.reference_start,
+                                                                           alignment.cigartuples)
+                if not sorted_blocks:
                     logger.warning("Read %s has no aligned exons" % read_id)
                     continue
-                # correct coordinates to GTF style (inclusive intervals)
-                sorted_blocks = correct_bam_coords(concat_blocks)
                 read_start = sorted_blocks[0][0]
                 read_end = sorted_blocks[-1][1]
                 read_tuple = (read_id, read_start, read_end)
