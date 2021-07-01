@@ -57,6 +57,44 @@ class OverlappingFeaturesProfileConstructor:
     def match_delta(self, feature1, feature2):
         return abs(feature1[0] - feature2[0]) + abs(feature1[1] - feature2[1])
 
+    def match_genomic_features(self, read_features):
+        matched_features = defaultdict(list)
+
+        # TODO: starting value can be detected using binary search for long profiles
+        gene_pos = 0
+        read_pos = 0
+        while gene_pos < len(self.known_features) and read_pos < len(read_features):
+            if self.comparator(read_features[read_pos], self.known_features[gene_pos]):
+                matched_features[read_pos].append(gene_pos)
+                gene_pos += 1
+            elif overlaps(read_features[read_pos], self.known_features[gene_pos]):
+                gene_pos += 1
+            elif left_of(read_features[read_pos], self.known_features[gene_pos]):
+                read_pos += 1
+            else:
+                gene_pos += 1
+        # eliminating non unique features
+        for read_pos in matched_features.keys():
+            if len(matched_features[read_pos]) > 1:
+                deltas = [self.match_delta(read_features[read_pos], self.known_features[gene_pos])
+                          for gene_pos in matched_features[read_pos]]
+                best_match = min(deltas)
+                filtered_features = []
+                for i, d in enumerate(deltas):
+                    if d == best_match:
+                        filtered_features.append(matched_features[read_pos][i])
+                matched_features[read_pos] = filtered_features
+
+        corrected_features = []
+        for i, intron in enumerate(read_features):
+            if i in matched_features:
+                # known feature
+                # corresponding known feature, always take first for now
+                corrected_features.append(self.known_features[matched_features[i][0]])
+            else:
+                corrected_features.append(intron)
+        return corrected_features
+
     def construct_profile_for_features(self, read_features, mapped_region=(0, 0), polya_position=-1, polyt_position=-1):
         read_profile = [0] * (len(read_features))
         intron_profile = [0] * (len(self.known_features))
@@ -69,6 +107,7 @@ class OverlappingFeaturesProfileConstructor:
             if self.absence_condition(self.gene_region, read_features[i]):
                 read_profile[i] = -1
 
+        # TODO: starting value can be detected using binary search for long profiles
         gene_pos = 0
         read_pos = 0
         while gene_pos < len(self.known_features) and read_pos < len(read_features):
@@ -98,6 +137,15 @@ class OverlappingFeaturesProfileConstructor:
                 for i in range(len(matched_features[read_pos])):
                     if deltas[i] > best_match:
                         intron_profile[matched_features[read_pos][i]] = -1
+
+        corrected_features = []
+        for i, v in enumerate(read_profile):
+            if v == 1:
+                # known feature
+                # corresponding known feature, always take first for now
+                corrected_features.append(self.known_features[matched_features[i][0]])
+            else:
+                corrected_features.append(read_features[i])
 
         # making everying beyond polyA tail as outside feature
         if polya_position != -1:

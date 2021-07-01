@@ -138,6 +138,11 @@ def intervals_total_length(sorted_range_list):
     return total_len
 
 
+# check that all exons are sorted and have correct coordinates
+def validate_exons(self, exons):
+    return exons == sorted(exons) and all(0 < x[0] <= x[1] for x in exons)
+
+
 # sum up all inervals until pos, pos not included
 def sum_intervals_to_point(sorted_range_list, pos):
     if pos <= sorted_range_list[0][0]:

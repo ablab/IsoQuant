@@ -452,7 +452,7 @@ class TranscriptModelConstructor:
         novel_exons.append((current_exon_start, novel_transcript_end))
         novel_exons = self.correct_transcripts_ends(novel_exons, read_assignment.polya_info, isoform_id, modification_events_map)
 
-        if not self.validate_exons(novel_exons):
+        if not validate_exons(novel_exons):
             logger.warning("Error in novel transcript, not sorted or incorrect exon coords")
             logger.warning("Read id: %s, isoform id: %s, chr: %s" %
                            (read_assignment.read_id, isoform_id, self.gene_info.chr_id))
@@ -477,10 +477,6 @@ class TranscriptModelConstructor:
         return TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
                                novel_exons, transcript_type, additional_info=event_string + "; " + representative_read_info)
-
-    # check that all exons are sorted and have correct coordinates
-    def validate_exons(self, novel_exons):
-        return novel_exons == sorted(novel_exons) and all(0 < x[0] <= x[1] for x in novel_exons)
 
     # move transcripts ends to known ends if they are closed and no polyA found
     def correct_transcripts_ends(self, novel_exons, polya_info, isoform_id, modification_events_map):

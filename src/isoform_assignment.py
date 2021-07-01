@@ -392,6 +392,7 @@ class ReadAssignment:
     def __init__(self, read_id, assignment_type, match=None):
         self.read_id = read_id
         self.exons = None
+        self.corrected_exons = None
         self.gene_info = None
         self.polyA_found = False
         self.cage_found = False

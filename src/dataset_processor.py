@@ -397,7 +397,8 @@ class DatasetProcessor:
         self.read_stat_counter = EnumStats()
         self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support)
         self.bed_printer = BEDPrinter(sample.out_mapped_bed, self.args)
-        printer_list = [self.basic_printer, self.bed_printer]
+        self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed, self.args, print_corrected=True)
+        printer_list = [self.basic_printer, self.bed_printer, self.corrected_bed_printer]
         if self.args.sqanti_output:
             self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
             printer_list.append(self.sqanti_printer)

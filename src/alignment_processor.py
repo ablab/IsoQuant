@@ -13,6 +13,7 @@ from src.long_read_profiles import *
 from src.read_groups import *
 from src.polya_finder import *
 from src.polya_verification import *
+from src.exon_corrector import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -64,6 +65,10 @@ class AlignmentInfo:
             logger.debug("Trimming polyT exons %d: %s" % (polyt_exon_count, str(self.read_exons)))
             self.exons_changed = True
 
+        if self.exons_changed:
+            self.read_start = self.read_exons[0][0]
+            self.read_end = self.read_exons[-1][1]
+
 
 class LongReadAlignmentProcessor:
     """ class for aggregating all assignment information
@@ -89,6 +94,7 @@ class LongReadAlignmentProcessor:
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
         self.polya_fixer = PolyAFixer(self.params)
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
+        self.exon_corrector = ExonCorrector(self.gene_info, self.params)
         self.assignment_storage = []
 
     def process(self):
@@ -153,6 +159,10 @@ class LongReadAlignmentProcessor:
                 read_assignment.polya_info = alignment_info.polya_info
                 read_assignment.cage_found = len(alignment_info.cage_hits) > 0
                 read_assignment.exons = alignment_info.read_exons
+                read_assignment.corrected_exons = self.exon_corrector.correct_assigned_read(alignment_info,
+                                                                                            read_assignment)
+                logger.debug("Original exons: %s" % str(alignment_info.read_exons))
+                logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
                 read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
                 read_assignment.chr_id = self.gene_info.chr_id
