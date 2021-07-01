@@ -25,7 +25,7 @@ class AmbiguityResolvingMethod(Enum):
     monoexon_and_fsm = 20
     all = 30
 
-    minimal_score = 0.0
+    minimal_score = -0.5
     top_scored_factor = 1.5
 
 
