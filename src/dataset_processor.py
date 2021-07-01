@@ -323,6 +323,7 @@ class DatasetProcessor:
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)
 
+                continue
                 transcript_generator = TranscriptModelConstructor(gene_info, self.args)
                 transcript_generator.process(assignment_storage)
                 gff_printer.dump(transcript_generator)

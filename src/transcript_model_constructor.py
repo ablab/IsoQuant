@@ -762,6 +762,7 @@ class TranscriptModelConstructor:
             read_exons = assignment.exons
             logger.debug("Checking read %s: %s" % (assignment.read_id, str(read_exons)))
             model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
+            assert False, "Refactor read assignment in transcript model construction fist"
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
             model_assignment.polyA_found = assignment.polyA_found
             model_assignment.polya_info = assignment.polya_info
