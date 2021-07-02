@@ -427,3 +427,14 @@ class GeneInfo:
 
     def total_transcript_length(self, transcript_id):
         return intervals_total_length(self.all_isoforms_exons[transcript_id])
+
+    # closed interval
+    def get_ref_seq(self, ref_start, ref_end):
+        assert self.reference_region
+        if ref_start < self.all_read_region_start or ref_end > self.all_read_region_end:
+            logger.warning("Trying to extract ref seq outside of reference region: %d:%d" % (ref_start, ref_end))
+        left_pos = ref_start - self.all_read_region_start
+        right_pos = ref_end - self.all_read_region_start
+        return self.reference_region[left_pos:right_pos+1]
+
+

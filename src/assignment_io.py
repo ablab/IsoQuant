@@ -372,6 +372,7 @@ class IOSupport:
         introns_match = read_assignment.introns_match
         return str(introns_match)
 
+    # TODO: use built-in function for extracting ref seq
     def check_sites_are_canonical(self, read_introns, gene_info, strand):
         for intron in read_introns:
             if intron not in gene_info.canonical_sites:
