@@ -31,11 +31,7 @@ class ExonCorrector:
                 not read_assignment.isoform_matches:
             return alignment_info.read_exons
 
-        if read_assignment.assignment_type == ReadAssignmentType.unique:
-            read_region, new_introns = self.correct_fuzzy_junctions(alignment_info, read_assignment)
-        else:
-            read_region, new_introns = self.correct_misalignments(alignment_info, read_assignment)
-
+        read_region, new_introns = self.correct_misalignments(alignment_info, read_assignment)
         if new_introns:
             corrected_exons = [(read_region[0], new_introns[0][0] - 1)]
             corrected_exons += junctions_from_blocks(new_introns)
