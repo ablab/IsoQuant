@@ -66,7 +66,7 @@ class BEDPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, print_corrected=False, assignment_checker=PrintAllFunctor()):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker)
         self.print_corrected = print_corrected
-        self.output_file.write("#chrom\tchromStart\tchromEnd\tname\tscore\tstrand\tblockCount\tblockSizes\tblockStarts\n")
+        self.output_file.write("#chrom\tchromStart\tchromEnd\tname\tscore\tstrand\tthickStart\tthickEnd\titemRgb\tblockCount\tblockSizes\tblockStarts\n")
 
     def add_read_info(self, read_assignment):
         if read_assignment is None or read_assignment.assignment_type is None or \
@@ -87,11 +87,13 @@ class BEDPrinter(AbstractAssignmentPrinter):
         chr_id = read_assignment.gene_info.chr_id
         exon_blocks = read_assignment.corrected_exons if self.print_corrected else read_assignment.exons
 
-        self.output_file.write("%s\t%d\t%d\t%s\t0\t%s\t%d\t%s\t%s\n" %
+        self.output_file.write("%s\t%d\t%d\t%s\t0\t%s\t%d\t%d\t%d\t%d\t%s\t%s\n" %
                            (chr_id, exon_blocks[0][0] - 1, exon_blocks[-1][1],
-                            read_assignment.read_id, strand, len(exon_blocks),
+                            read_assignment.read_id, strand,
+                            exon_blocks[0][0] - 1, exon_blocks[0][0] - 1, 0,
+                            len(exon_blocks),
                             ",".join([str(e[1] - e[0] + 1) for e in exon_blocks]),
-                            ",".join([str(e[0] - 1) for e in exon_blocks])))
+                            ",".join([str(e[0] - exon_blocks[0][0]) for e in exon_blocks])))
 
 
 class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
