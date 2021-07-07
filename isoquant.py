@@ -109,6 +109,8 @@ def parse_args(args=None, namespace=None):
                         help="matching strategy to use from most strict to least", type=str, default=None)
     add_additional_option("--delta", type=int, default=None,
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
+    add_additional_option("--no_model_construction", action="store_true", default=False,
+                          help="run only read assignment and quantification")
     add_additional_option("--correct_minor_errors", type=bool, default=None,
                           help="do not treat alignment artefacts as modification events")
     add_additional_option("--max_intron_shift", type=int, default=None,

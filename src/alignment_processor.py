@@ -65,7 +65,8 @@ class LongReadAlignmentProcessor:
     def process_single_file(self, bamfile_in):
         processed_reads = set()
         for genic_region in self.gene_info.genic_regions:
-            for alignment in bamfile_in.fetch(self.gene_info.chr_id, genic_region[0], genic_region[1]):
+            # FIXME: temporary solution - process gene outside
+            for alignment in bamfile_in.fetch(self.gene_info.chr_id, genic_region[0] - 100, genic_region[1] + 100):
                 read_id = alignment.query_name
                 if alignment.reference_id == -1:
                     self.assignment_storage.append(ReadAssignment(read_id, None))
@@ -110,6 +111,7 @@ class LongReadAlignmentProcessor:
                 read_assignment.exons = alignment_info.read_exons
                 read_assignment.corrected_exons = self.exon_corrector.correct_assigned_read(alignment_info,
                                                                                             read_assignment)
+                read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
                 logger.debug("Original exons: %s" % str(alignment_info.read_exons))
                 logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
