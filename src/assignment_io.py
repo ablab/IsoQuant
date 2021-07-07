@@ -75,15 +75,7 @@ class BEDPrinter(AbstractAssignmentPrinter):
         if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
             return
 
-        strands = set()
-        for isoform_match in read_assignment.isoform_matches:
-            isoform_id = isoform_match.assigned_transcript
-            if read_assignment.gene_info is not None and isoform_id is not None:
-                strands.add(read_assignment.gene_info.isoform_strands[isoform_id])
-        if len(strands) != 1:
-            strand = read_assignment.mapped_strand
-        else:
-            strand = list(strands)[0]
+        strand = read_assignment.mapped_strand
         chr_id = read_assignment.gene_info.chr_id
         exon_blocks = read_assignment.corrected_exons if self.print_corrected else read_assignment.exons
 
