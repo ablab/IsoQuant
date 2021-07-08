@@ -116,6 +116,7 @@ class LongReadAlignmentProcessor:
                 logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment)
                 read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
+                read_assignment.strand = self.get_assignment_strand(read_assignment, alignment)
                 read_assignment.chr_id = self.gene_info.chr_id
                 read_assignment.multimapper = alignment.is_secondary
 
@@ -132,6 +133,15 @@ class LongReadAlignmentProcessor:
 
                 self.assignment_storage.append(read_assignment)
                 logger.debug("=== Finished read " + read_id + " ===")
+
+    def get_assignment_strand(self, read_assignment, read_alignment):
+        if read_assignment.isoform_matches:
+            logger.debug(read_assignment.isoform_matches[0].transcript_strand)
+            return read_assignment.isoform_matches[0].transcript_strand
+        try:
+            return read_alignment.get_tag('ts')
+        except KeyError:
+            return '.'
 
     def count_indel_stats(self, alignment):
         cigar_event_count = len(alignment.cigartuples)
