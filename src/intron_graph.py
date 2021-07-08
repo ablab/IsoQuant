@@ -6,6 +6,7 @@
 
 import logging
 from collections import defaultdict
+from src.common import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -88,6 +89,11 @@ class IntronCollector:
         if intron in self.clustered_introns:
             del self.clustered_introns[intron]
 
+    def substitute(self, v):
+        if v in self.intron_correction_map:
+            v = self.intron_correction_map[v]
+        return v
+
     def simplify_correction_map(self):
         all_introns = self.intron_correction_map.keys()
         for intron in all_introns:
@@ -111,12 +117,15 @@ class IntronGraph:
         self.read_assignments = read_assignments
         self.incoming_edges = defaultdict(set)
         self.outgoing_edges = defaultdict(set)
+        self.incoming_starts = defaultdict(lambda: defaultdict(int))
+        self.outgoing_ends = defaultdict(lambda: defaultdict(int))
         self.intron_collector = IntronCollector(gene_info, params.delta)
         logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
         self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
         self.construct()
         self.print_graph()
         self.simplify()
+        self.process_paths()
         self.print_graph()
 
     def add_edge(self, v1, v2):
@@ -235,12 +244,65 @@ class IntronGraph:
 
         return substitute_dict
 
+    def process_paths(self):
+        logger.debug("Constructing paths for %s" % self.gene_info.gene_db_list[0].id)
+        for assignment in self.read_assignments:
+            if any(intron in self.intron_collector.discarded_introns for intron in assignment.corrected_introns):
+                continue
+            if not assignment.corrected_introns:
+                continue
+
+            starting_intron = self.intron_collector.substitute(assignment.corrected_introns[0])
+            read_start = assignment.corrected_exons[0][0]
+            polyt_detected = assignment.polyA_found and assignment.strand == '-'
+            if polyt_detected:
+                logger.debug("PolyT detected")
+                self.incoming_starts[starting_intron][read_start] += 1
+
+            terminating_intron = self.intron_collector.substitute(assignment.corrected_introns[-1])
+            read_end = assignment.corrected_exons[-1][1]
+            polya_detected = assignment.polyA_found and assignment.strand == '+'
+            if polya_detected:
+                logger.debug("PolyA detected")
+                self.outgoing_ends[terminating_intron][read_end] += 1
+
+            for i in range(len(assignment.corrected_introns) - 1):
+                intron1 = assignment.corrected_introns[i]
+                intron2 = assignment.corrected_introns[i + 1]
+                self.add_edge(intron1, intron2)
+
+    def is_start_internal(self, intron, read_start):
+        is_internal = False
+        # checking previous introns
+        for inc in self.incoming_edges[intron]:
+            if inc[1] - self.params.delta <= read_start:
+                is_internal = True
+                break
+        return is_internal
+
+    def is_end_internal(self, intron, read_end):
+        is_internal = False
+        # checking previous introns
+        for out in self.outgoing_edges[intron]:
+            if out[0] + self.params.delta >= read_end:
+                is_internal = True
+                break
+        return is_internal
+
     def print_graph(self):
         logger.debug("Printing graph")
         for intron in sorted(self.intron_collector.clustered_introns.keys()):
             logger.debug("Intron %s, count %d -> %s" % (str(intron), self.intron_collector.clustered_introns[intron],
                                                         ",".join([str(x) for x in self.outgoing_edges[intron]])))
+            if intron in self.outgoing_ends:
+                logger.debug("Intron %s -> %s" % (str(intron),
+                                                            ",".join([str(x) + ":" + str(self.outgoing_ends[intron][x])
+                                                                      for x in sorted(self.outgoing_ends[intron].keys())])))
 
         for intron in sorted(self.intron_collector.clustered_introns.keys()):
             logger.debug("Intron %s, count %d <- %s" % (str(intron), self.intron_collector.clustered_introns[intron],
                                                         ",".join([str(x) for x in self.incoming_edges[intron]])))
+            if intron in self.incoming_starts:
+                logger.debug("Intron %s -> %s" % (str(intron),
+                                                            ",".join([str(x) + ":" + str(self.incoming_starts[intron][x])
+                                                                      for x in sorted(self.incoming_starts[intron].keys())])))
