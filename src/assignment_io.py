@@ -154,7 +154,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             event_string = ",".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
                                                                                read_introns, isoform_introns)
                                      for x in m.match_subclassifications])
-            strand = read_assignment.gene_info.isoform_strands[m.assigned_transcript]
+            strand = read_assignment.strand
             line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t" + \
                    m.assigned_transcript + "\t" + m.assigned_gene + "\t" + \
                    read_assignment.assignment_type.name + "\t" + event_string + "\t" + range_list_to_str(read_exons)

@@ -143,7 +143,28 @@ class LongReadAlignmentProcessor:
         try:
             return read_alignment.get_tag('ts')
         except KeyError:
+            pass
+
+        if not read_assignment.corrected_introns:
             return '.'
+        fwd_noncanonical = self.count_noncanonincal(read_assignment.corrected_introns, self.gene_info, '+')
+        rev_noncanonical = self.count_noncanonincal(read_assignment.corrected_introns, self.gene_info, '-')
+        if fwd_noncanonical == rev_noncanonical:
+            return '.'
+        return '+' if fwd_noncanonical < rev_noncanonical else '-'
+
+    def count_noncanonincal(self, read_introns, gene_info, strand):
+        count = 0
+        for intron in read_introns:
+            intron_left_pos = intron[0] - gene_info.all_read_region_start
+            intron_right_pos = intron[1] - gene_info.all_read_region_start
+            left_site = gene_info.reference_region[intron_left_pos:intron_left_pos + 2]
+            right_site = gene_info.reference_region[intron_right_pos - 1:intron_right_pos + 1]
+            if strand == '+':
+                count += 0 if (left_site, right_site) == ("GT", "AG") else 1
+            else:
+                count += 0 if (left_site, right_site) == ("CT", "AC") else 1
+        return count
 
     def count_indel_stats(self, alignment):
         cigar_event_count = len(alignment.cigartuples)
