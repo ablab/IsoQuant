@@ -399,6 +399,7 @@ class ReadAssignment:
         self.polya_info = None
         self.read_group = "."
         self.mapped_strand = "."
+        self.strand = "."
         self.chr_id = "."
         self.assignment_type = assignment_type
         if match is None:
