@@ -155,6 +155,8 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                                                                                read_introns, isoform_introns)
                                      for x in m.match_subclassifications])
             strand = read_assignment.strand
+            if strand == '.':
+                strand = self.io_support.get_strand(read_assignment)
             line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t" + \
                    m.assigned_transcript + "\t" + m.assigned_gene + "\t" + \
                    read_assignment.assignment_type.name + "\t" + event_string + "\t" + range_list_to_str(read_exons)
@@ -382,6 +384,28 @@ class IOSupport:
             if not gene_info.canonical_sites[intron]:
                 return False
         return True
+
+    def get_strand(self, read_assignment):
+        if not read_assignment.corrected_introns:
+            return '.'
+        fwd_noncanonical = self.count_noncanonincal(read_assignment.corrected_introns, read_assignment.gene_info, '+')
+        rev_noncanonical = self.count_noncanonincal(read_assignment.corrected_introns, read_assignment.gene_info, '-')
+        if fwd_noncanonical == rev_noncanonical:
+            return '.'
+        return '+' if fwd_noncanonical < rev_noncanonical else '-'
+
+    def count_noncanonincal(self, read_introns, gene_info, strand):
+        count = 0
+        for intron in read_introns:
+            intron_left_pos = intron[0] - gene_info.all_read_region_start
+            intron_right_pos = intron[1] - gene_info.all_read_region_start
+            left_site = gene_info.reference_region[intron_left_pos:intron_left_pos + 2]
+            right_site = gene_info.reference_region[intron_right_pos - 1:intron_right_pos + 1]
+            if strand == '+':
+                count += 0 if (left_site, right_site) == ("GT", "AG") else 1
+            else:
+                count += 0 if (left_site, right_site) == ("CT", "AC") else 1
+        return count
 
     def check_downstream_polya(self, read_coords, gene_info, strand):
         if strand == '+':
