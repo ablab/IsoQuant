@@ -139,11 +139,13 @@ class LongReadAlignmentProcessor:
     def get_assignment_strand(self, read_assignment, read_alignment):
         if read_assignment.isoform_matches:
             logger.debug(read_assignment.isoform_matches[0].transcript_strand)
+
             return read_assignment.isoform_matches[0].transcript_strand
         try:
             return read_alignment.get_tag('ts')
         except KeyError:
-            return '.'
+            pass
+        return '.'
 
     def count_indel_stats(self, alignment):
         cigar_event_count = len(alignment.cigartuples)

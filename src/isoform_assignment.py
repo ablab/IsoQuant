@@ -349,7 +349,7 @@ class MatchEvent:
 
 class IsoformMatch:
     def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
-                 match_subclassification = None, transcript_strand=None):
+                 match_subclassification = None, transcript_strand='.'):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
         self.transcript_strand = transcript_strand

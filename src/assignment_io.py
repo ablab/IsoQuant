@@ -115,7 +115,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
 
     def unmatched_line(self, read_assignment, additional_info=None):
         read_exons = read_assignment.exons
-        line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t.\t.\t.\t" + \
+        strand = read_assignment.strand
+        if strand == '.':
+            strand = self.io_support.get_strand(read_assignment)
+        line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t.\t.\t" + \
                read_assignment.assignment_type.name + "\t.\t" + range_list_to_str(read_exons)
         if additional_info:
             line += "\t" + " ".join(additional_info) + "\n"
@@ -386,10 +389,11 @@ class IOSupport:
         return True
 
     def get_strand(self, read_assignment):
-        if not read_assignment.corrected_introns:
+        if len(read_assignment.corrected_exons):
             return '.'
-        fwd_noncanonical = self.count_noncanonincal(read_assignment.corrected_introns, read_assignment.gene_info, '+')
-        rev_noncanonical = self.count_noncanonincal(read_assignment.corrected_introns, read_assignment.gene_info, '-')
+        read_introns = junctions_from_blocks(read_assignment.corrected_exons)
+        fwd_noncanonical = self.count_noncanonincal(read_introns, read_assignment.gene_info, '+')
+        rev_noncanonical = self.count_noncanonincal(read_introns, read_assignment.gene_info, '-')
         if fwd_noncanonical == rev_noncanonical:
             return '.'
         return '+' if fwd_noncanonical < rev_noncanonical else '-'
