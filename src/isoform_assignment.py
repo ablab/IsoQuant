@@ -331,6 +331,7 @@ class SupplementaryMatchConstansts:
     extra_right_region = (extra_right_mod_position, extra_right_mod_position)
     absent_position = -10
 
+
 class MatchEvent:
     def __init__(self, event_type:MatchEventSubtype,
                  isoform_region:tuple=SupplementaryMatchConstansts.undefined_region,
