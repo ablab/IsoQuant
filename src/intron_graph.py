@@ -134,6 +134,9 @@ class IntronGraph:
         self.params.graph_clustering_distance = 50
         self.params.min_novel_isolated_intron_abs = 5
         self.params.min_novel_isolated_intron_rel = 0.2
+        self.params.terminal_position_rel = 0.05
+        self.params.terminal_position_abs = 1
+        self.params.terminal_internal_position_rel = 0.2
         self.gene_info = gene_info
         self.read_assignments = read_assignments
         self.incoming_edges = defaultdict(set)
@@ -277,14 +280,55 @@ class IntronGraph:
         return substitute_dict
 
     def attach_terminal_positions(self):
-        logger.debug("Constructing paths for %s" % self.gene_info.gene_db_list[0].id)
+        logger.debug("Setting terminal positions paths for %s" % self.gene_info.gene_db_list[0].id)
+        polya_ends, read_ends, polyt_starts, read_starts = self.collect_terminal_positions()
+
+        for intron in self.intron_collector.clustered_introns:
+            self.attach_transcpt_ends(intron, polya_ends, read_ends, read_end=True)
+            self.attach_transcpt_ends(intron, polyt_starts, read_starts, read_end=False)
+
+    def attach_transcpt_ends(self, intron, polya_confirmed_positions, read_terminal_positions, read_end=True):
+        read_ends_cutoff = self.params.terminal_position_abs
+        clustered_polyas = self.cluster_polya_positions(polya_confirmed_positions[intron])
+        if clustered_polyas:
+            read_ends_cutoff = max(read_ends_cutoff, max(clustered_polyas.values()) * self.params.terminal_position_rel)
+            extra_end_positions = {}
+            furthers_confirmed_position = max(clustered_polyas.keys()) if read_end else min(clustered_polyas.keys())
+            for position, count in read_terminal_positions[intron].items():
+                if read_end and position >= furthers_confirmed_position + self.params.apa_delta:
+                    extra_end_positions[position] = count
+                elif not read_end and position <= furthers_confirmed_position - self.params.apa_delta :
+                    extra_end_positions[position] = count
+        else:
+            extra_end_positions = read_terminal_positions[intron]
+
+        if intron in self.outgoing_edges:
+            read_ends_cutoff = max(read_ends_cutoff, self.intron_collector.clustered_introns[intron] *
+                                   self.params.terminal_internal_position_rel)
+        terminal_positions = self.cluster_terminal_positions(extra_end_positions,
+                                                             read_end=read_end,
+                                                             cutoff=read_ends_cutoff)
+
+        if read_end:
+            for pos in clustered_polyas.keys():
+                self.outgoing_edges[intron].add((VertexType.polya, pos))
+            for pos in terminal_positions.keys():
+                self.outgoing_edges[intron].add((VertexType.read_end, pos))
+        else:
+            for pos in clustered_polyas.keys():
+                self.incoming_edges[intron].add((VertexType.polyt, pos))
+            for pos in terminal_positions.keys():
+                self.incoming_edges[intron].add((VertexType.read_start, pos))
+
+    def collect_terminal_positions(self):
         polya_ends = defaultdict(lambda: defaultdict(int))
         read_ends = defaultdict(lambda: defaultdict(int))
         polyt_starts = defaultdict(lambda: defaultdict(int))
         read_starts = defaultdict(lambda: defaultdict(int))
 
         for assignment in self.read_assignments:
-            if any(intron in self.intron_collector.discarded_introns for intron in assignment.corrected_introns):
+            if any(intron in self.intron_collector.discarded_introns for intron in
+                   assignment.corrected_introns):
                 continue
             if not assignment.corrected_introns:
                 continue
@@ -305,42 +349,18 @@ class IntronGraph:
             elif not self.is_end_internal(terminating_intron, read_end):
                 read_ends[terminating_intron][read_end] += 1
 
-        logger.debug("Read starts")
-        for intron in read_starts:
-            logger.debug("Intron %s -> %s" % (str(intron),
-                                              ",".join([str(x) + ":" + str(read_starts[intron][x])
-                                                        for x in sorted(read_starts[intron].keys())])))
-        logger.debug("Read polyT")
-        for intron in polyt_starts:
-            logger.debug("Intron %s -> %s" % (str(intron),
-                                              ",".join([str(x) + ":" + str(polyt_starts[intron][x])
-                                                        for x in sorted(polyt_starts[intron].keys())])))
-        logger.debug("Read ends")
-        for intron in read_ends:
-            logger.debug("Intron %s -> %s" % (str(intron),
-                                              ",".join([str(x) + ":" + str(read_ends[intron][x])
-                                                        for x in sorted(read_ends[intron].keys())])))
-        logger.debug("Read polyA")
-        for intron in polya_ends:
-            logger.debug("Intron %s -> %s" % (str(intron),
-                                              ",".join([str(x) + ":" + str(polya_ends[intron][x])
-                                                        for x in sorted(polya_ends[intron].keys())])))
+        self.print_terminal(read_starts, "Read starts")
+        self.print_terminal(polyt_starts, "Read polyT")
+        self.print_terminal(read_ends, "Read ends")
+        self.print_terminal(polya_ends, "Read polyA")
 
-        for intron in polya_ends.keys():
-            clustered_polyas = self.cluster_polya_positions(polya_ends[intron])
-            self.outgoing_edges[intron].update(clustered_polyas.items())
-            rightmost_polya_pos = max(clustered_polyas.keys())
-            extra_end_positions = {}
-            for position, count in read_ends[intron].items():
-                if position + self.params.apa_delta > rightmost_polya_pos:
-                    extra_end_positions[position] = count
-            if not extra_end_positions:
-                continue
-            terminal_positions = self.cluster_terminal_positions(extra_end_positions, read_end=True)
-            self.outgoing_edges[intron].update(terminal_positions.items())
+        return polya_ends, read_ends, polyt_starts, read_starts
 
     def cluster_polya_positions(self, position_dict):
-        result = {}
+        clustered_counts = {}
+        if not position_dict:
+            return clustered_counts
+
         while position_dict:
             best_pair = max(position_dict.items(), key=lambda x:x[1])
             top_position = best_pair[0]
@@ -349,13 +369,26 @@ class IntronGraph:
                 if pos in position_dict:
                     total_count += position_dict[pos]
                     del position_dict[pos]
-            result[top_position] = total_count
+            clustered_counts[top_position] = total_count
+
+        max_count = max(clustered_counts.values())
+        if max_count == self.params.terminal_position_abs:
+            return clustered_counts
+        cutoff = max(max_count * self.params.terminal_position_rel, self.params.terminal_position_abs)
+        result = {}
+        for k,v in clustered_counts.items():
+            if v >= cutoff:
+                result[k] = v
         return result
 
-    def cluster_terminal_positions(self, position_dict, read_end):
+    def cluster_terminal_positions(self, position_dict, read_end, cutoff=0):
         # simple solution for now
+        if not position_dict:
+            return {}
         total_count = sum(position_dict.values())
         pos = max(position_dict.keys()) if read_end else min(position_dict.keys())
+        if total_count < cutoff:
+            return {}
         return {pos: total_count}
 
     def is_start_internal(self, intron, read_start):
@@ -395,3 +428,10 @@ class IntronGraph:
         for intron in sorted(self.intron_collector.clustered_introns.keys()):
             logger.debug("Intron %s, count %d <- %s" % (str(intron), self.intron_collector.clustered_introns[intron],
                                                         ",".join([str(x) for x in self.incoming_edges[intron]])))
+
+    def print_terminal(self, pos_dict, s=""):
+        logger.debug(s)
+        for intron in pos_dict:
+            logger.debug("Intron %s -> %s" % (str(intron),
+                                              ",".join([str(x) + ":" + str(pos_dict[intron][x])
+                                                        for x in sorted(pos_dict[intron].keys())])))
