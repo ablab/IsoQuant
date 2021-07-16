@@ -14,11 +14,11 @@ logger = logging.getLogger('IsoQuant')
 
 @unique
 class VertexType(Enum):
-    intron = 0
-    polya = 10
-    read_end = 11
-    polyt = 20
-    read_start = 21
+    intron = -1
+    polya = -10
+    read_end = -11
+    polyt = -20
+    read_start = -21
 
 
 class IntronCollector:
@@ -160,6 +160,26 @@ class IntronGraph:
 
     def is_isolated(self, v):
         return not self.outgoing_edges[v] and not self.incoming_edges[v]
+
+    def get_outgoing(self, intron, v_type):
+        res = []
+        for v in self.outgoing_edges[intron]:
+            if v[0] == v_type:
+                res.append(v)
+        return res
+
+    def get_incoming(self, intron, v_type):
+        res = []
+        for v in self.incoming_edges[intron]:
+            if v[0] == v_type:
+                res.append(v)
+        return res
+
+    def is_dead_end(self, intron):
+        return not any(x[0] > 0 for x in self.outgoing_edges[intron])
+
+    def is_dead_start(self, intron):
+        return not any(x[0] > 0 for x in self.incoming_edges[intron])
 
     # merge vertex to its substitute, remove if isolated
     def collapse_vertex(self, to_collapse, substitute_vertex):
