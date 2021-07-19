@@ -220,6 +220,11 @@ class IntronGraph:
                 to_remove.add(i)
                 self.collapse_vertex(i, substitute_dict[i])
 
+        for i in to_remove:
+            del self.outgoing_edges[i]
+            del self.incoming_edges[i]
+        to_remove.clear()
+
         # check all incoming edges
         logger.debug("Removing incoming tips and bulges")
         for current_intron in self.incoming_edges.keys():
@@ -233,7 +238,6 @@ class IntronGraph:
             del self.outgoing_edges[i]
             del self.incoming_edges[i]
         to_remove.clear()
-        self.print_graph()
 
         # check all isolated vertices
         isolated = set()
