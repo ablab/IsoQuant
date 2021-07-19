@@ -56,6 +56,7 @@ class GraphBasedModelConstructor:
         self.path_storage.fill(read_assignment_storage)
         self.get_known_spliced_isoforms()
         self.construct_fl_isoforms()
+        self.construct_monoexon_isoforms(read_assignment_storage)
 
         # split reads into clusters
         # self.construct_isoform_groups(read_assignment_storage)
