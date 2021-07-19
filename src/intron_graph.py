@@ -221,6 +221,8 @@ class IntronGraph:
             out_introns = self.outgoing_edges[current_intron]
             substitute_dict = self.collapse_vertex_set(out_introns)
             for i in substitute_dict.keys():
+                if i in to_remove:
+                    continue
                 to_remove.add(i)
                 self.collapse_vertex(i, substitute_dict[i])
 
@@ -235,6 +237,8 @@ class IntronGraph:
             inc_introns = self.incoming_edges[current_intron]
             substitute_dict = self.collapse_vertex_set(inc_introns)
             for i in substitute_dict.keys():
+                if i in to_remove:
+                    continue
                 to_remove.add(i)
                 self.collapse_vertex(i, substitute_dict[i])
 
