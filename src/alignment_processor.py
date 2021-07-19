@@ -66,7 +66,9 @@ class LongReadAlignmentProcessor:
         processed_reads = set()
         for genic_region in self.gene_info.genic_regions:
             # FIXME: temporary solution - process gene outside
-            for alignment in bamfile_in.fetch(self.gene_info.chr_id, genic_region[0] - 100, genic_region[1] + 100):
+            to_fetch_start = max(0, genic_region[0] - 100)
+            to_fetch_end = min(bamfile_in.get_reference_length(self.gene_info.chr_id), genic_region[1] + 100)
+            for alignment in bamfile_in.fetch(self.gene_info.chr_id, to_fetch_start, to_fetch_end):
                 read_id = alignment.query_name
                 if alignment.reference_id == -1:
                     self.assignment_storage.append(ReadAssignment(read_id, None))
