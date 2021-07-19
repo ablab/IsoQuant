@@ -29,6 +29,9 @@ class GraphBasedModelConstructor:
     def __init__(self, gene_info, params):
         self.gene_info = gene_info
         self.params = params
+        self.params.min_known_count = 1
+        self.params.min_novel_count = 5
+        self.params.min_novel_count_rel = 0.01
         self.intron_graph = None
         self.path_processor = None
         self.path_storage = None
@@ -70,17 +73,22 @@ class GraphBasedModelConstructor:
         self.known_introns = set(self.gene_info.intron_profiles.features)
 
     def construct_fl_isoforms(self):
+        novel_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
         for path in self.path_storage.fl_paths:
             # do not include terminal vertices
             intron_path = path[1:-1]
             transcript_range = (path[0][1], path[-1][1])
             if intron_path in self.known_isoforms:
+                if self.path_storage.paths[path] < self.params.min_known_count:
+                    continue
                 transcript_type = TranscriptModelType.known
                 id_suffix = self.known_transcript_suffix
                 isoform_id = self.known_isoforms[intron_path]
                 transcript_strand = self.gene_info.isoform_strands[isoform_id]
                 transcript_gene = self.gene_info.gene_id_map[isoform_id]
             else:
+                if self.path_storage.paths[path] < novel_cutoff:
+                    continue
                 isoform_id = "novel"
                 transcript_strand = self.path_storage.get_path_strand(intron_path)
                 transcript_gene = self.path_storage.get_path_gene(intron_path)

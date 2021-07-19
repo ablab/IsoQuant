@@ -132,7 +132,7 @@ class IntronGraph:
     def __init__(self, params, gene_info, read_assignments):
         self.params = params
         self.params.min_novel_intron_count = 2
-        self.params.graph_clustering_ratio = 0.2
+        self.params.graph_clustering_ratio = 0.5
         self.params.graph_clustering_distance = 50
         self.params.min_novel_isolated_intron_abs = 5
         self.params.min_novel_isolated_intron_rel = 0.2
@@ -144,6 +144,8 @@ class IntronGraph:
         self.incoming_edges = defaultdict(set)
         self.outgoing_edges = defaultdict(set)
         self.intron_collector = IntronCollector(gene_info, params.delta)
+        self.max_coverage = 0
+
         logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
         self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
         self.construct()
@@ -208,6 +210,8 @@ class IntronGraph:
                 intron2 = assignment.corrected_introns[i + 1]
                 self.add_edge(intron1, intron2)
 
+        self.max_coverage =  max(self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
+
     def simplify(self):
         logger.debug("Simplifying graph")
         # check all outgoing edges
@@ -258,9 +262,10 @@ class IntronGraph:
 
         # remove low covered isolated vertices
         logger.debug("Removing isolated introns")
-        max_count = max(self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
+        self.max_coverage = max(
+            self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
         count_cutoff = max(self.params.min_novel_isolated_intron_abs,
-                           max_count * self.params.min_novel_isolated_intron_rel)
+                           self.max_coverage * self.params.min_novel_isolated_intron_rel)
         for intron in isolated:
             if intron not in self.intron_collector.clustered_introns or intron in self.intron_collector.known_introns:
                 # already removed or known
