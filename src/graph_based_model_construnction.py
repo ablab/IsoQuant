@@ -32,20 +32,19 @@ class GraphBasedModelConstructor:
         self.params.min_known_count = 1
         self.params.min_novel_count = 5
         self.params.min_novel_count_rel = 0.01
+
         self.intron_graph = None
         self.path_processor = None
         self.path_storage = None
         self.known_isoforms = {}
         self.known_introns = {}
+        self.mono_exon_isoforms = defaultdict(int)
+
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(set)
         self.unused_reads = []
         self.transcript_counts = defaultdict(float)
-        self.fsm = defaultdict(list)
-        self.consistent = []
-        self.inconsistent = []
-        self.used_reads = set()
-        self.assigned_reads = set()
+
 
     def get_transcript_id(self):
         return GraphBasedModelConstructor.transcript_id_counter.increment()
@@ -118,33 +117,31 @@ class GraphBasedModelConstructor:
         return get_top_count(overlap_dict)
 
     # group reads by the isoforms and modification events
-    def construct_isoform_groups(self, read_assignment_storage):
+    def construct_monoexon_isoforms(self, read_assignment_storage):
         logger.debug("Constructing isoform groups")
-        self.fsm = defaultdict(list)
-        self.consistent = []
-        self.inconsistent = []
+        self.mono_exon_isoforms = defaultdict(int)
 
         for read_assignment in read_assignment_storage:
             if not read_assignment:
                 continue
             if read_assignment.assignment_type in {ReadAssignmentType.unique,
                                                    ReadAssignmentType.unique_minor_difference} and \
-                    MatchEventSubtype.fsm in read_assignment.isoform_matches[0].match_subclassifications:
-                self.fsm[read_assignment.isoform_matches[0].assigned_transcript].append(read_assignment)
-            elif read_assignment.assignment_type in {ReadAssignmentType.unique,
-                                                     ReadAssignmentType.unique_minor_difference,
-                                                     ReadAssignmentType.ambiguous}:
-                self.consistent.append(read_assignment)
-            else:
-                self.inconsistent.append(read_assignment)
+                    MatchEventSubtype.mono_exon_match in read_assignment.isoform_matches[0].match_subclassifications:
+                self.mono_exon_isoforms[read_assignment.isoform_matches[0].assigned_transcript] += 1
 
-    def construct_known_isoforms(self):
-        for isoform_id in self.fsm.keys():
-            isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
-            intron_path = self.path_processor.thread_introns(isoform_introns)
-            if not intron_path:
-                logger.debug("No path founds for isoform: %s" % isoform_id)
+        for isoform_id in self.mono_exon_isoforms:
+            count = self.mono_exon_isoforms[isoform_id]
+            if count < self.params.min_known_count:
                 continue
+            self.transcript_model_storage.append(self.transcript_from_reference(isoform_id, count))
+
+    # create transcript model object from reference isoforms
+    def transcript_from_reference(self, isoform_id, count=0):
+        new_transcript_id = self.transcript_prefix + str(self.get_transcript_id()) + self.known_transcript_suffix
+        return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
+                               new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
+                               self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known,
+                               additional_info="count %d" % count)
 
 
 class IntronPathStorage:
