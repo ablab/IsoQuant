@@ -106,7 +106,8 @@ class GraphBasedModelConstructor:
             novel_exons = get_exons(transcript_range, list(intron_path))
             new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                         new_transcript_id, isoform_id, transcript_gene,
-                                        novel_exons, transcript_type)
+                                        novel_exons, transcript_type,
+                                        additional_info="count %d" % self.path_storage.paths[path])
             self.transcript_model_storage.append(new_model)
 
     def select_reference_gene(self, transcript_rage):
