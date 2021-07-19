@@ -85,9 +85,11 @@ class IntronCollector:
                 self.clustered_introns[intron] = count
 
     def process(self, read_assignments, min_count):
+        logger.debug("Processing introns")
         all_introns = self.collect_introns(read_assignments)
+        logger.debug(all_introns)
         self.cluster_introns(all_introns, min_count)
-        logger.debug(self.intron_correction_map)
+        logger.debug(self.clustered_introns)
 
     def add_substitute(self, original_intron, substitute_intron):
         self.clustered_introns[substitute_intron] += self.clustered_introns[original_intron]

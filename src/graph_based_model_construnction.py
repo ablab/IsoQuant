@@ -31,6 +31,9 @@ class GraphBasedModelConstructor:
         self.params = params
         self.intron_graph = None
         self.path_processor = None
+        self.path_storage = None
+        self.known_isoforms = {}
+        self.known_introns = {}
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(set)
         self.unused_reads = []
@@ -46,9 +49,64 @@ class GraphBasedModelConstructor:
 
     def process(self, read_assignment_storage):
         self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
-        self.path_processor = IntronPathProcessor(self.intron_graph)
+        self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
+        self.path_storage = IntronPathStorage(self.params, self.path_processor)
+        self.path_storage.fill(read_assignment_storage)
+        self.get_known_spliced_isoforms()
+        self.construct_fl_isoforms()
+
         # split reads into clusters
-        self.construct_isoform_groups(read_assignment_storage)
+        # self.construct_isoform_groups(read_assignment_storage)
+
+    def get_known_spliced_isoforms(self):
+        self.known_isoforms = {}
+        for isoform_id in self.gene_info.all_isoforms_introns:
+            isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
+            intron_path = self.path_processor.thread_introns(isoform_introns)
+            if not intron_path:
+                logger.debug("No path founds for isoform: %s" % isoform_id)
+                continue
+            self.known_isoforms[tuple(intron_path)] = isoform_id
+        self.known_introns = set(self.gene_info.intron_profiles.features)
+
+    def construct_fl_isoforms(self):
+        for path in self.path_storage.fl_paths:
+            # do not include terminal vertices
+            intron_path = path[1:-1]
+            transcript_range = (path[0][1], path[-1][1])
+            if intron_path in self.known_isoforms:
+                transcript_type = TranscriptModelType.known
+                id_suffix = self.known_transcript_suffix
+                isoform_id = self.known_isoforms[intron_path]
+                transcript_strand = self.gene_info.isoform_strands[isoform_id]
+                transcript_gene = self.gene_info.gene_id_map[isoform_id]
+            else:
+                isoform_id = "novel"
+                transcript_strand = self.path_storage.get_path_strand(intron_path)
+                transcript_gene = self.path_storage.get_path_gene(intron_path)
+                if transcript_gene is None:
+                    transcript_gene = self.select_reference_gene(transcript_range)
+                    transcript_strand = self.gene_info.gene_strands[transcript_gene]
+                if all(intron in self.known_introns for intron in intron_path):
+                    transcript_type = TranscriptModelType.novel_in_catalog
+                    id_suffix = self.nic_transcript_suffix
+                else:
+                    transcript_type = TranscriptModelType.novel_not_in_catalog
+                    id_suffix = self.nnic_transcript_suffix
+            new_transcript_id =  self.transcript_prefix + str(self.get_transcript_id()) + id_suffix
+
+            novel_exons = get_exons(transcript_range, list(intron_path))
+            new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
+                                        new_transcript_id, isoform_id, transcript_gene,
+                                        novel_exons, transcript_type)
+            self.transcript_model_storage.append(new_model)
+
+    def select_reference_gene(self, transcript_rage):
+        overlap_dict = {}
+        gene_regions = self.gene_info.get_gene_regions()
+        for gene_id in gene_regions.keys():
+            overlap_dict[gene_id] = read_coverage_fraction([transcript_rage], [gene_regions[gene_id]])
+        return get_top_count(overlap_dict)
 
     # group reads by the isoforms and modification events
     def construct_isoform_groups(self, read_assignment_storage):
@@ -80,18 +138,28 @@ class GraphBasedModelConstructor:
                 continue
 
 
-
 class IntronPathStorage:
     def __init__(self, params, path_processor):
         self.params = params
         self.path_processor = path_processor
         self.intron_graph = path_processor.intron_graph
         self.paths = defaultdict(int)
+        self.intron_strands = defaultdict(str)
+        self.intron_genes = defaultdict(str)
         self.fl_paths = set()
 
     def fill(self, read_assignments):
+        intron_strands = defaultdict(lambda: defaultdict(int))
+        intron_genes = defaultdict(lambda: defaultdict(int))
         for a in read_assignments:
             intron_path = self.path_processor.thread_introns(a.corrected_introns)
+            if not intron_path:
+                continue
+            for intron in intron_path:
+                intron_strands[intron][a.strand] += 1
+                if a.isoform_matches:
+                    intron_genes[intron][a.isoform_matches[0].assigned_gene] += 1
+
             read_end = a.corrected_exons[-1][1]
             is_end_trusted = a.strand == '+' and a.polyA_found
             terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted)
@@ -109,6 +177,19 @@ class IntronPathStorage:
             if terminal_vertex and starting_vertex:
                 self.fl_paths.add(path_tuple)
 
+        self.intron_strands = get_best_from_count_dicts(intron_strands)
+        self.intron_genes = get_best_from_count_dicts(intron_genes)
+        for p in self.paths.keys():
+            is_fl = "FL" if p in self.fl_paths else "NO"
+            logger.debug("%s path: %s: %d, %s, %s" %
+                         (is_fl, str(p), self.paths[p], self.get_path_strand(p), self.get_path_gene(p)))
+
+    def get_path_strand(self, intron_path):
+        return get_collective_property(intron_path, self.intron_strands)
+
+    def get_path_gene(self, intron_path):
+        return get_collective_property(intron_path, self.intron_genes)
+
 
 class IntronPathProcessor:
     def __init__(self, params, intron_graph):
@@ -116,8 +197,10 @@ class IntronPathProcessor:
         self.intron_graph = intron_graph
         self.all_vertices = set()
         self.all_vertices.update(self.intron_graph.intron_collector.clustered_introns.keys())
-        self.all_vertices.update(self.intron_graph.outgoing_edges.values())
-        self.all_vertices.update(self.intron_graph.incoming_edges.values())
+        for edge_set in self.intron_graph.outgoing_edges.values():
+            self.all_vertices.update(edge_set)
+        for edge_set in self.intron_graph.incoming_edges.values():
+            self.all_vertices.update(edge_set)
         self.visited = set()
 
     def visit_vertex(self, v):

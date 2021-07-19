@@ -116,6 +116,7 @@ class GeneInfo:
         self.all_read_region_start = self.start
         self.all_read_region_end = self.end
         self.canonical_sites = {}
+        self.gene_regions = {}
         self.reference_region = None
 
         # profiles for all known isoforoms
@@ -208,10 +209,12 @@ class GeneInfo:
 
     # return regions of every gene
     def get_gene_regions(self):
-        gene_regions = {}
+        if self.gene_regions:
+            return self.genic_regions
+        self.gene_regions = {}
         for gene_db in self.gene_db_list:
-            gene_regions[gene_db.id] = (gene_db.start, gene_db.end)
-        return gene_regions
+            self.gene_regions[gene_db.id] = (gene_db.start, gene_db.end)
+        return self.gene_regions
 
     # set strands
     def set_isoform_strands(self):
@@ -219,6 +222,9 @@ class GeneInfo:
         for gene_db in self.gene_db_list:
             for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
                 self.isoform_strands[t.id] = t.strand
+        self.gene_strands = {}
+        for gene_db in self.gene_db_list:
+            self.gene_strands[gene_db.id] = gene_db.strand
 
     # set isoform_id -> gene_id map
     def set_gene_ids(self):

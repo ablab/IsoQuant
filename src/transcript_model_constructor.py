@@ -51,8 +51,8 @@ class GFFPrinter:
             transcript_region = (model.exon_blocks[0][0], model.exon_blocks[-1][1])
             if gene_id not in gene_info_dict:
                 assert model.chr_id == transcript_model_constructor.gene_info.chr_id
-                gene_info_dict[gene_id] = GFFGeneInfo(model.chr_id, model.strand,
-                                                      max_range(gene_regions[gene_id], transcript_region))
+                gene_range = max_range(gene_regions[gene_id], transcript_region) if gene_id in gene_regions else transcript_region
+                gene_info_dict[gene_id] = GFFGeneInfo(model.chr_id, model.strand, gene_range)
             else:
                 gene_record = gene_info_dict[gene_id]
                 assert model.chr_id == gene_record.chr_id

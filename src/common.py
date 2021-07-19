@@ -9,7 +9,8 @@ import os
 import re
 import subprocess
 import threading
-
+import math
+from collections import defaultdict
 
 logger = logging.getLogger('IsoQuant')
 
@@ -49,6 +50,29 @@ def rindex(l, el):
         if l[i] == el:
             return i
     raise ValueError(str(el) + " is not in list")
+
+
+def get_top_count(dict):
+    if not dict:
+        return None
+    return max(dict.items(), key=lambda x: x[1])[0]
+
+
+# dict -> counts dict
+def get_best_from_count_dicts(dict):
+    res = {}
+    for k in dict.keys():
+        res[k] = get_top_count(dict[k])
+    return res
+
+
+def get_collective_property(value_collection, property_dict):
+    counts = defaultdict(int)
+    for v in value_collection:
+        if v not in property_dict:
+            continue
+        counts[property_dict[v]] += 1
+    return get_top_count(counts)
 
 
 def proper_plural_form(name, count):
@@ -314,6 +338,10 @@ def get_exon(read_region, read_junctions, exon_position):
         return (read_junctions[-1][1] + 1, read_region[1])
     else:
         return (read_junctions[exon_position - 1][1] + 1, read_junctions[exon_position][0] - 1)
+
+
+def get_exons(read_region, read_introns):
+    return junctions_from_blocks([(-math.inf, read_region[0] - 1)] + read_introns + [(read_region[1] + 1, math.inf)])
 
 
 def concat_gapless_blocks(blocks, cigar_tuples):

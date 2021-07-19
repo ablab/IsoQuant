@@ -132,7 +132,7 @@ class ExonCorrector:
             elif event.event_type == MatchEventSubtype.terminal_exon_misalignment_right:
                 new_introns.append(isoform_introns[event.isoform_region[0]])
                 corrected_read_region = (corrected_read_region[0], isoform_region[1])
-            elif event.event_type in {MatchEventSubtype.exon_misalignment, MatchEventSubtype.intron_shift} and \
+            elif event.event_type in {MatchEventSubtype.exon_misalignment} and \
                     contains_well_inside(read_region, (isoform_introns[event.isoform_region[0]][0],
                                                        isoform_introns[event.isoform_region[1]][1]), self.params.delta):
                 # misalignments but inside read region
