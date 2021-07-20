@@ -322,12 +322,19 @@ class DatasetProcessor:
             # future_list = []
 
             for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db, self.multimapped_reads):
+                expressed_gene_info = None
+                if self.args.expressed_db:
+                    gene_list = []
+                    for g in gene_info.gene_db_list:
+                        gene_list.append(self.args.expressed_db[g.id])
+                    expressed_gene_info = GeneInfo(gene_list, self.args.expressed_db, delta=self.args.delta)
+
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)
                 if self.args.no_model_construction:
                     continue
 
-                model_constructor = GraphBasedModelConstructor(gene_info, self.args)
+                model_constructor = GraphBasedModelConstructor(gene_info, self.args, expressed_gene_info)
                 model_constructor.process(assignment_storage)
                 gff_printer.dump(model_constructor)
                 for t in model_constructor.transcript_model_storage:

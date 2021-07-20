@@ -31,6 +31,7 @@ def parse_args(args=None, namespace=None):
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
                         required='--run_aligner_only' not in sys.argv)
+    parser.add_argument("--expressed_genedb", help="gene database in gffutils DB format for debugging", type=str)
     parser.add_argument('--complete_genedb', action='store_true', default=False,
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "
@@ -296,6 +297,10 @@ def set_data_dependent_options(args):
 
     if args.resolve_ambiguous == 'default' and args.fl_data:
         args.resolve_ambiguous = 'monoexon_and_fsm'
+
+    args.expressed_db = None
+    if args.expressed_genedb:
+        args.expressed_db = gffutils.FeatureDB(args.expressed_genedb, keep_order=True)
 
 
 def set_matching_options(args):

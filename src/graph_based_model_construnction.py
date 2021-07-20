@@ -27,9 +27,10 @@ class GraphBasedModelConstructor:
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
 
-    def __init__(self, gene_info, params):
+    def __init__(self, gene_info, params, expressed_gene_info=None):
         self.gene_info = gene_info
         self.params = params
+        self.expressed_gene_info = expressed_gene_info
 
         self.intron_graph = None
         self.path_processor = None
@@ -52,21 +53,22 @@ class GraphBasedModelConstructor:
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         self.path_storage = IntronPathStorage(self.params, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
-        self.get_known_spliced_isoforms()
+        self.known_isoforms, self.known_introns = self.get_known_spliced_isoforms()
         self.construct_fl_isoforms()
         self.construct_monoexon_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
 
-    def get_known_spliced_isoforms(self):
-        self.known_isoforms = {}
-        for isoform_id in self.gene_info.all_isoforms_introns:
-            isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
+    def get_known_spliced_isoforms(self, gene_info, s="known"):
+        known_isoforms = {}
+        for isoform_id in gene_info.all_isoforms_introns:
+            isoform_introns = gene_info.all_isoforms_introns[isoform_id]
             intron_path = self.path_processor.thread_introns(isoform_introns)
             if not intron_path:
-                logger.debug("No path founds for isoform: %s" % isoform_id)
+                logger.debug("No path founds for %s isoform: %s" % (s, isoform_id))
                 continue
-            self.known_isoforms[tuple(intron_path)] = isoform_id
-        self.known_introns = set(self.gene_info.intron_profiles.features)
+            known_isoforms[tuple(intron_path)] = isoform_id
+        known_introns = set(gene_info.intron_profiles.features)
+        return known_isoforms, known_introns
 
     def construct_fl_isoforms(self):
         novel_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
