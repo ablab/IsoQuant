@@ -133,7 +133,7 @@ class IntronGraph:
         self.params = params
         self.params.min_novel_intron_count = 2
         self.params.graph_clustering_ratio = 0.5
-        self.params.graph_clustering_distance = 50
+        self.params.graph_clustering_distance = 10
         self.params.min_novel_isolated_intron_abs = 5
         self.params.min_novel_isolated_intron_rel = 0.2
         self.params.terminal_position_rel = 0.05
