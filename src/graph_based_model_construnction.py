@@ -83,6 +83,7 @@ class GraphBasedModelConstructor:
                 isoform_id = self.known_isoforms[intron_path]
                 transcript_strand = self.gene_info.isoform_strands[isoform_id]
                 transcript_gene = self.gene_info.gene_id_map[isoform_id]
+                logger.debug("Adding known spliced isoform %s" % isoform_id, )
             else:
                 if self.path_storage.paths[path] < novel_cutoff:
                     continue
@@ -98,13 +99,15 @@ class GraphBasedModelConstructor:
                 else:
                     transcript_type = TranscriptModelType.novel_not_in_catalog
                     id_suffix = self.nnic_transcript_suffix
-            new_transcript_id =  self.transcript_prefix + str(self.get_transcript_id()) + id_suffix
+                logger.debug("Adding known spliced isoform")
 
+            new_transcript_id =  self.transcript_prefix + str(self.get_transcript_id()) + id_suffix
             novel_exons = get_exons(transcript_range, list(intron_path))
             new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                         new_transcript_id, isoform_id, transcript_gene,
                                         novel_exons, transcript_type,
                                         additional_info="count %d" % self.path_storage.paths[path])
+            logger.debug("%s: %s" % (new_transcript_id, str(novel_exons)))
             self.transcript_model_storage.append(new_model)
 
     def select_reference_gene(self, transcript_rage):
@@ -131,7 +134,7 @@ class GraphBasedModelConstructor:
             count = self.mono_exon_isoforms[isoform_id]
             if count < self.params.min_known_count:
                 continue
-            logger.debug("Adding known monoexon isoform %s" % isoform_id)
+            logger.debug("Adding known monoexon isoform %s: %s" % (isoform_id, str(self.gene_info.all_isoforms_exons[isoform_id])))
             self.transcript_model_storage.append(self.transcript_from_reference(isoform_id, count))
 
     # create transcript model object from reference isoforms

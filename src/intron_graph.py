@@ -255,7 +255,7 @@ class IntronGraph:
             del self.outgoing_edges[i]
             del self.incoming_edges[i]
         to_remove.clear()
-        self.print_graph()
+        # self.print_graph()
 
         # remove low covered isolated vertices
         logger.debug("Removing isolated introns")
