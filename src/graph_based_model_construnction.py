@@ -29,9 +29,6 @@ class GraphBasedModelConstructor:
     def __init__(self, gene_info, params):
         self.gene_info = gene_info
         self.params = params
-        self.params.min_known_count = 1
-        self.params.min_novel_count = 5
-        self.params.min_novel_count_rel = 0.01
 
         self.intron_graph = None
         self.path_processor = None

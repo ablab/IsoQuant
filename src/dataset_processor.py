@@ -324,6 +324,8 @@ class DatasetProcessor:
             for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db, self.multimapped_reads):
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)
+                if self.args.no_model_construction:
+                    continue
 
                 model_constructor = GraphBasedModelConstructor(gene_info, self.args)
                 model_constructor.process(assignment_storage)

@@ -131,16 +131,9 @@ class IntronCollector:
 class IntronGraph:
     def __init__(self, params, gene_info, read_assignments):
         self.params = params
-        self.params.min_novel_intron_count = 2
-        self.params.graph_clustering_ratio = 0.5
-        self.params.graph_clustering_distance = 20
-        self.params.min_novel_isolated_intron_abs = 5
-        self.params.min_novel_isolated_intron_rel = 0.2
-        self.params.terminal_position_rel = 0.05
-        self.params.terminal_position_abs = 1
-        self.params.terminal_internal_position_rel = 0.2
         self.gene_info = gene_info
         self.read_assignments = read_assignments
+
         self.incoming_edges = defaultdict(set)
         self.outgoing_edges = defaultdict(set)
         self.intron_collector = IntronCollector(gene_info, params.delta)

@@ -119,27 +119,14 @@ def parse_args(args=None, namespace=None):
                           help="set maximum length for skipped exon")
     add_additional_option("--resolve_ambiguous", type=str, default='default',
                           help="set ambiguity resolving method: default, none, monoexon_only, monoexon_and_fsm, all")
+
+    parser.add_argument("--splice_correction_strategy", choices=["none", "default_ccs", "default_ont", "all", "assembly"],
+                        help="transcript model construction strategy to use",
+                        type=str, default=None)
     parser.add_argument("--model_construction_strategy", choices=["reliable", "default_ccs", "default_ont",
                                                                   "fl_ccs", "all", "assembly"],
                         help="transcript model construction strategy to use",
                         type=str, default=None)
-    add_additional_option("--report_intron_retention", type=bool, default=None,
-                          help="report intron retention events in transcript model files")
-    add_additional_option("--report_apa", type=bool, default=None,
-                          help="report alternative polyA sites in transcript model files, "
-                               "may significantly increase the number of isoforms ")
-    add_additional_option("--collapse_subisoforms", type=bool, default=None,
-                          help="collapse isoforms whose intron chain is a subsequence of other intron chain")
-    add_additional_option("--min_ref_fsm_supporting_reads", type=int, default=None,
-                          help="minimal number of FSM reads that support known isoform")
-    add_additional_option("--min_ref_supporting_reads", type=int, default=None,
-                          help="minimal number of reads that support known isoform")
-    add_additional_option("--min_novel_fsm_supporting_reads", type=int, default=None,
-                          help="minimal number of FSM reads that support novel isoform")
-    add_additional_option("--min_novel_supporting_reads", type=int, default=None,
-                          help="minimal number of reads that support novel isoform")
-    add_additional_option("--min_reads_supporting_tsts", type=int, default=None,
-                          help="minimal number of reads that support isoform terminal sites")
 
     args = parser.parse_args(args, namespace)
 
@@ -303,6 +290,10 @@ def set_data_dependent_options(args):
         if args.fl_data and args.model_construction_strategy == "default_ccs":
             args.model_construction_strategy = "fl_ccs"
 
+    splice_correction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_ccs", NANOPORE_DATA: "default_ont"}
+    if args.splice_correction_strategy is None:
+        args.splice_correction_strategy = splice_correction_strategies[args.data_type]
+
     if args.resolve_ambiguous == 'default' and args.fl_data:
         args.resolve_ambiguous = 'monoexon_and_fsm'
 
@@ -357,48 +348,59 @@ def set_matching_options(args):
     logger.debug('Using %s strategy. Updated strategy: %s.' % (args.matching_strategy, updated_strategy))
 
 
+def set_splice_correction_options(args):
+    SplicSiteCorrectionStrategy = namedtuple('SplicSiteCorrectionStrategy',
+                                             ('fuzzy_junctions', 'intron_shifts', 'skipped_exons',
+                                              'terminal_exons', 'fake_terminal_exons', 'microintron_retention'))
+    strategies = {
+        'none': SplicSiteCorrectionStrategy(False, False, False, False, False, False),
+        'default_ccs': SplicSiteCorrectionStrategy(False, False, True, False, False, True),
+        'default_ont': SplicSiteCorrectionStrategy(True, False, True, True, True, True),
+        'all': SplicSiteCorrectionStrategy(True, True, True, True, True, True),
+        'assembly': SplicSiteCorrectionStrategy(False, False, True, False, False, True)
+    }
+    strategy = strategies[args.splice_correction_strategy]
+    args.correct_fuzzy_junctions = strategy.fuzzy_junctions
+    args.correct_intron_shifts = strategy.intron_shifts
+    args.correct_skipped_exons = strategy.skipped_exons
+    args.correct_terminal_exons = strategy.terminal_exons
+    args.correct_fake_terminal_exons = strategy.fake_terminal_exons
+    args.correct_microintron_retention = strategy.microintron_retention
+
+
 def set_model_construction_options(args):
     ModelConstructionStrategy = namedtuple('ModelConstructionStrategy',
-                                           ('min_ref_fsm_supporting_reads', 'min_ref_supporting_reads',
-                                            'min_novel_fsm_supporting_reads', 'min_novel_supporting_reads',
-                                            'report_intron_retention', 'max_dist_to_isoforms_tsts',
-                                            'max_dist_to_novel_tsts', 'min_reads_supporting_tsts',
-                                            'collapse_subisoforms', 'count_ambiguous'))
+                                           ('min_novel_intron_count',
+                                            'graph_clustering_ratio', 'graph_clustering_distance',
+                                            'min_novel_isolated_intron_abs', 'min_novel_isolated_intron_rel',
+                                            'terminal_position_abs', 'terminal_position_rel',
+                                            'terminal_internal_position_rel',
+                                            'min_known_count', 'min_novel_count', 'min_novel_count_rel',
+                                            'fl_only'))
     strategies = {
-        'reliable': ModelConstructionStrategy(2, 4, 5, 10, False, 50, 50, 8, True, True),
-        'default_ccs': ModelConstructionStrategy(1, 2, 3, 6, True, 50, 80, 4, True, True),
-        'default_ont': ModelConstructionStrategy(1, 2, 5, 10, True, 50, 80, 6, True, True),
-        'fl_ccs': ModelConstructionStrategy(1, 2, 3, 3, True, 50, 50, 3, False, True),
-        'all': ModelConstructionStrategy(1, 1, 2, 3, True, 50, 50, 3, False, True),
-        'assembly': ModelConstructionStrategy(1, 1, 1, 1, True, 50, 50, 1, True, True)
+        'reliable':    ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  3, 10, 0.05, True),
+        'default_ccs': ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 3, 0.005, False),
+        'default_ont': ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 5, 0.02,  False),
+        'fl_ccs':      ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 2, 0.005, True),
+        'all':         ModelConstructionStrategy(0, 0.05, 5,  3, 0.05, 1, 0.01, 0.05, 1, 1, 0.001, False),
+        'assembly':    ModelConstructionStrategy(0, 0.1, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 0.05,  False)
     }
-
     strategy = strategies[args.model_construction_strategy]
 
-    # transcript model construction
-    args.min_ref_fsm_supporting_reads = args.min_ref_fsm_supporting_reads or strategy.min_ref_supporting_reads
-    args.min_ref_supporting_reads = args.min_ref_supporting_reads or strategy.min_ref_supporting_reads
-    args.min_novel_fsm_supporting_reads = args.min_novel_fsm_supporting_reads or strategy.min_novel_fsm_supporting_reads
-    args.min_novel_supporting_reads = args.min_novel_supporting_reads or strategy.min_novel_supporting_reads
-    args.report_intron_retention = \
-        strategy.report_intron_retention if args.report_intron_retention is None else args.report_intron_retention
-    args.max_dist_to_isoforms_tsts = strategy.max_dist_to_isoforms_tsts
-    args.max_dist_to_novel_tsts = strategy.max_dist_to_novel_tsts
-    args.min_reads_supporting_tsts = args.min_reads_supporting_tsts or strategy.min_reads_supporting_tsts
-    args.collapse_subisoforms = \
-        strategy.collapse_subisoforms if args.collapse_subisoforms is None else args.collapse_subisoforms
-    args.count_ambiguous = strategy.count_ambiguous
+    args.min_novel_intron_count = strategy.min_novel_intron_count
+    args.graph_clustering_ratio = strategy.graph_clustering_ratio
+    args.graph_clustering_distance = strategy.graph_clustering_distance
+    args.min_novel_isolated_intron_abs = strategy.min_novel_isolated_intron_abs
+    args.min_novel_isolated_intron_rel = strategy.min_novel_isolated_intron_rel
+    args.terminal_position_abs = strategy.terminal_position_abs
+    args.terminal_position_rel = strategy.terminal_position_rel
+    args.terminal_internal_position_rel = strategy.terminal_internal_position_rel
 
+    args.min_known_count = strategy.min_known_count
+    args.min_novel_count = strategy.min_novel_count
+    args.min_novel_count_rel = strategy.min_novel_count_rel
+    args.fl_only = strategy.fl_only
     args.require_polyA = not args.polya_trimmed
-    args.require_cage_peak = args.cage is not None
-
-    updated_strategy = ModelConstructionStrategy(args.min_ref_fsm_supporting_reads, args.min_ref_supporting_reads,
-                                                 args.min_novel_fsm_supporting_reads, args.min_novel_fsm_supporting_reads,
-                                                 args.report_intron_retention, args.max_dist_to_isoforms_tsts,
-                                                 args.max_dist_to_novel_tsts, args.min_reads_supporting_tsts,
-                                                 args.require_polyA, args.require_cage_peak)
-    logger.debug('Using %s strategy. Updated strategy: %s.' % (args.model_construction_strategy, updated_strategy))
-
 
 def set_configs_directory(args):
     config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
@@ -418,6 +420,7 @@ def set_additional_params(args):
     set_data_dependent_options(args)
     set_matching_options(args)
     set_model_construction_options(args)
+    set_splice_correction_options(args)
 
     args.print_additional_info = True
     args.memory_efficient = False

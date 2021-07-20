@@ -84,7 +84,8 @@ class ExonCorrector:
             if e.read_region == SupplementaryMatchConstansts.undefined_region:
                 continue
             if e.read_region[0] == SupplementaryMatchConstansts.absent_position and \
-                    e.event_type == MatchEventSubtype.fake_micro_intron_retention:
+                    e.event_type == MatchEventSubtype.fake_micro_intron_retention and \
+                    self.params.correct_microintron_retention:
                 event_map[-e.read_region[1]-1] = e
             event_map[e.read_region[0]] = e
 
@@ -97,10 +98,11 @@ class ExonCorrector:
         return self.process_events(event_map, read_region, read_introns,  isoform_region, isoform_introns)
 
     def process_events(self, event_map, read_region, read_introns, isoform_region, isoform_introns):
-        corrected_introns = self.intron_profile_constructor.match_genomic_features(read_introns)
-        logger.debug(read_introns)
-        logger.debug(corrected_introns)
-        logger.debug(isoform_introns)
+        if self.params.correct_fuzzy_junctions:
+            corrected_introns = self.intron_profile_constructor.match_genomic_features(read_introns)
+        else:
+            corrected_introns = read_introns
+
         corrected_read_region = read_region
         new_introns = []
         i = 0
@@ -117,22 +119,32 @@ class ExonCorrector:
                 i += 1
                 continue
 
+            misalignment_set = []
+            if self.params.correct_intron_shifts:
+                misalignment_set.append(MatchEventSubtype.intron_shift)
+            if self.params.correct_skipped_exons:
+                misalignment_set.append(MatchEventSubtype.exon_misalignment)
+
             event = event_map[i]
-            if event.event_type == MatchEventSubtype.fake_terminal_exon_left:
+            if event.event_type == MatchEventSubtype.fake_terminal_exon_left and \
+                    self.params.correct_fake_terminal_exons:
                 assert event.read_region[0] == event.read_region[1]
                 # fake terminal exon, skip it
                 corrected_read_region = (read_introns[event.read_region[0]][1]+1, corrected_read_region[1])
-            elif event.event_type == MatchEventSubtype.fake_terminal_exon_right:
+            elif event.event_type == MatchEventSubtype.fake_terminal_exon_right and \
+                    self.params.correct_fake_terminal_exons:
                 assert event.read_region[0] == event.read_region[1]
                 # fake terminal exon, skip it
                 corrected_read_region = (corrected_read_region[0], read_introns[event.read_region[0]][0]-1)
-            elif event.event_type == MatchEventSubtype.terminal_exon_misalignment_left:
+            elif event.event_type == MatchEventSubtype.terminal_exon_misalignment_left and \
+                    self.params.correct_terminal_exons:
                 new_introns.append(isoform_introns[event.isoform_region[0]])
                 corrected_read_region = (isoform_region[0], corrected_read_region[1])
-            elif event.event_type == MatchEventSubtype.terminal_exon_misalignment_right:
+            elif event.event_type == MatchEventSubtype.terminal_exon_misalignment_right and \
+                    self.params.correct_terminal_exons:
                 new_introns.append(isoform_introns[event.isoform_region[0]])
                 corrected_read_region = (corrected_read_region[0], isoform_region[1])
-            elif event.event_type in {MatchEventSubtype.exon_misalignment} and \
+            elif event.event_type in misalignment_set and \
                     contains_well_inside(read_region, (isoform_introns[event.isoform_region[0]][0],
                                                        isoform_introns[event.isoform_region[1]][1]), self.params.delta):
                 # misalignments but inside read region
