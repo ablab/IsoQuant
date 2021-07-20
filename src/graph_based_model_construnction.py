@@ -127,13 +127,14 @@ class GraphBasedModelConstructor:
                 continue
             if read_assignment.assignment_type in {ReadAssignmentType.unique,
                                                    ReadAssignmentType.unique_minor_difference} and \
-                    MatchEventSubtype.mono_exon_match in read_assignment.isoform_matches[0].match_subclassifications:
+                    any(e.event_type == MatchEventSubtype.mono_exon_match for e in read_assignment.isoform_matches[0].match_subclassifications):
                 self.mono_exon_isoforms[read_assignment.isoform_matches[0].assigned_transcript] += 1
 
         for isoform_id in self.mono_exon_isoforms:
             count = self.mono_exon_isoforms[isoform_id]
             if count < self.params.min_known_count:
                 continue
+            logger.debug("Adding known monoexon isoform %s" % isoform_id)
             self.transcript_model_storage.append(self.transcript_from_reference(isoform_id, count))
 
     # create transcript model object from reference isoforms
