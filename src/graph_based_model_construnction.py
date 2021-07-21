@@ -60,6 +60,8 @@ class GraphBasedModelConstructor:
         else:
             self.expressed_isoforms, self.expressed_introns = self.get_known_spliced_isoforms(self.expressed_gene_info, "expressed")
         self.expressed_detected_set = set()
+        self.visited_introns = set()
+
         self.construct_fl_isoforms()
         self.construct_monoexon_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
@@ -70,6 +72,10 @@ class GraphBasedModelConstructor:
             else:
                 logger.debug("++ Isoform %s was not detected: %s" % (isoform_id, str(intron_chain)))
 
+        logger.debug("<< UNVISITED VERTICES <<")
+        for v, count in self.intron_graph.intron_collector.clustered_introns.items():
+            if v not in self.visited_introns:
+                logger.debug("<< Vertex %s: %d was NOT visited" % (v, count))
         # split reads into clusters
         # self.construct_isoform_groups(read_assignment_storage)
 
@@ -133,6 +139,8 @@ class GraphBasedModelConstructor:
                 logger.debug("## Isoform %s looks like reference %s, count = %d" % (new_transcript_id, ref_id, count))
             else:
                 logger.debug("## Isoform %s does NOT has a reference chain, count = %d " % (new_transcript_id, count))
+            for v in path:
+                self.visited_introns.add(v)
 
     def select_reference_gene(self, transcript_rage):
         overlap_dict = {}
