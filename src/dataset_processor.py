@@ -317,17 +317,22 @@ class DatasetProcessor:
         transcript_stat_counter = EnumStats()
         # thread_pool = futures.ThreadPoolExecutor(max(1, self.args.threads-1))
 
+        expressed_db = None
+        if self.args.expressed_genedb:
+            logger.info("Loading expreseed genes from %s" % self.args.expressed_genedb)
+            expressed_db = gffutils.FeatureDB(self.args.expressed_genedb, keep_order=True)
+
         for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
             # future_list = []
 
             for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db, self.multimapped_reads):
                 expressed_gene_info = None
-                if self.args.expressed_db:
+                if expressed_db:
                     gene_list = []
                     for g in gene_info.gene_db_list:
-                        gene_list.append(self.args.expressed_db[g.id])
-                    expressed_gene_info = GeneInfo(gene_list, self.args.expressed_db, delta=self.args.delta)
+                        gene_list.append(expressed_db[g.id])
+                    expressed_gene_info = GeneInfo(gene_list, expressed_db, delta=self.args.delta)
 
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)

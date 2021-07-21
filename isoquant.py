@@ -298,10 +298,6 @@ def set_data_dependent_options(args):
     if args.resolve_ambiguous == 'default' and args.fl_data:
         args.resolve_ambiguous = 'monoexon_and_fsm'
 
-    args.expressed_db = None
-    if args.expressed_genedb:
-        args.expressed_db = gffutils.FeatureDB(args.expressed_genedb, keep_order=True)
-
 
 def set_matching_options(args):
     MatchingStrategy = namedtuple('MatchingStrategy',

@@ -53,10 +53,25 @@ class GraphBasedModelConstructor:
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         self.path_storage = IntronPathStorage(self.params, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
-        self.known_isoforms, self.known_introns = self.get_known_spliced_isoforms()
+        self.known_isoforms, self.known_introns = self.get_known_spliced_isoforms(self.gene_info)
+        if not self.expressed_gene_info:
+            self.expressed_isoforms = {}
+            self.expressed_introns = {}
+        else:
+            self.expressed_isoforms, self.expressed_introns = self.get_known_spliced_isoforms(self.expressed_gene_info, "expressed")
+        self.expressed_detected_set = set()
         self.construct_fl_isoforms()
         self.construct_monoexon_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
+
+        for intron_chain, isoform_id in self.expressed_isoforms.items():
+            if isoform_id in self.expressed_detected_set:
+                continue
+            else:
+                logger.debug("++ Isoform %s was not detected: %s" % (isoform_id, str(intron_chain)))
+
+        # split reads into clusters
+        # self.construct_isoform_groups(read_assignment_storage)
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
@@ -64,7 +79,7 @@ class GraphBasedModelConstructor:
             isoform_introns = gene_info.all_isoforms_introns[isoform_id]
             intron_path = self.path_processor.thread_introns(isoform_introns)
             if not intron_path:
-                logger.debug("No path founds for %s isoform: %s" % (s, isoform_id))
+                logger.debug("No path found for %s isoform: %s" % (s, isoform_id))
                 continue
             known_isoforms[tuple(intron_path)] = isoform_id
         known_introns = set(gene_info.intron_profiles.features)
@@ -84,7 +99,7 @@ class GraphBasedModelConstructor:
                 isoform_id = self.known_isoforms[intron_path]
                 transcript_strand = self.gene_info.isoform_strands[isoform_id]
                 transcript_gene = self.gene_info.gene_id_map[isoform_id]
-                logger.debug("Adding known spliced isoform %s" % isoform_id, )
+                logger.debug("%% Adding known spliced isoform %s" % isoform_id, )
             else:
                 if self.path_storage.paths[path] < novel_cutoff:
                     continue
@@ -100,16 +115,24 @@ class GraphBasedModelConstructor:
                 else:
                     transcript_type = TranscriptModelType.novel_not_in_catalog
                     id_suffix = self.nnic_transcript_suffix
-                logger.debug("Adding known spliced isoform")
+                logger.debug("%% Adding known spliced isoform")
 
             new_transcript_id =  self.transcript_prefix + str(self.get_transcript_id()) + id_suffix
             novel_exons = get_exons(transcript_range, list(intron_path))
+            count = self.path_storage.paths[path]
             new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                         new_transcript_id, isoform_id, transcript_gene,
                                         novel_exons, transcript_type,
-                                        additional_info="count %d" % self.path_storage.paths[path])
-            logger.debug("%s: %s" % (new_transcript_id, str(novel_exons)))
+                                        additional_info="count %d" % count)
+            logger.debug("%% %s: %s" % (new_transcript_id, str(novel_exons)))
             self.transcript_model_storage.append(new_model)
+
+            if intron_path in self.expressed_isoforms:
+                ref_id = self.expressed_isoforms[intron_path]
+                self.expressed_detected_set.add(ref_id)
+                logger.debug("## Isoform %s looks like reference %s, count = %d" % (new_transcript_id, ref_id, count))
+            else:
+                logger.debug("## Isoform %s does NOT has a reference chain, count = %d " % (new_transcript_id, count))
 
     def select_reference_gene(self, transcript_rage):
         overlap_dict = {}
@@ -135,8 +158,13 @@ class GraphBasedModelConstructor:
             count = self.mono_exon_isoforms[isoform_id]
             if count < self.params.min_known_count:
                 continue
-            logger.debug("Adding known monoexon isoform %s: %s" % (isoform_id, str(self.gene_info.all_isoforms_exons[isoform_id])))
+            logger.debug(">> Adding known monoexon isoform %s, count = %d: %s" %
+                         (isoform_id, count, str(self.gene_info.all_isoforms_exons[isoform_id])))
             self.transcript_model_storage.append(self.transcript_from_reference(isoform_id, count))
+            if isoform_id not in self.expressed_gene_info.all_isoforms_exons.keys():
+                logger.debug(">> Cannot be found in the reference set")
+            else:
+                self.expressed_detected_set.add(isoform_id)
 
     # create transcript model object from reference isoforms
     def transcript_from_reference(self, isoform_id, count=0):
@@ -222,7 +250,7 @@ class IntronPathStorage:
         self.set_path_info(path_strands, path_genes)
 
         for p in self.paths.keys():
-            is_fl = "FL" if p in self.fl_paths else "NO"
+            is_fl = "   FL" if p in self.fl_paths else "nonFL"
             logger.debug("%s path: %s: %d, %s, %s" %
                          (is_fl, str(p), self.paths[p], self.get_path_strand(p), self.get_path_gene(p)))
 
