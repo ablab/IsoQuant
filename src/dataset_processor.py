@@ -331,8 +331,12 @@ class DatasetProcessor:
                 if expressed_db:
                     gene_list = []
                     for g in gene_info.gene_db_list:
-                        gene_list.append(expressed_db[g.id])
-                    expressed_gene_info = GeneInfo(gene_list, expressed_db, delta=self.args.delta)
+                        try:
+                            gene_list.append(expressed_db[g.id])
+                        except gffutils.exceptions.FeatureNotFoundError:
+                            pass
+                    if gene_list:
+                        expressed_gene_info = GeneInfo(gene_list, expressed_db, delta=self.args.delta)
 
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)

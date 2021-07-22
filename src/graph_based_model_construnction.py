@@ -85,7 +85,7 @@ class GraphBasedModelConstructor:
             isoform_introns = gene_info.all_isoforms_introns[isoform_id]
             intron_path = self.path_processor.thread_introns(isoform_introns)
             if not intron_path:
-                logger.debug("No path found for %s isoform: %s" % (s, isoform_id))
+                logger.debug("No path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
                 continue
             known_isoforms[tuple(intron_path)] = isoform_id
         known_introns = set(gene_info.intron_profiles.features)
