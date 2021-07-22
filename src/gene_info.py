@@ -210,7 +210,7 @@ class GeneInfo:
     # return regions of every gene
     def get_gene_regions(self):
         if self.gene_regions:
-            return self.genic_regions
+            return self.gene_regions
         self.gene_regions = {}
         for gene_db in self.gene_db_list:
             self.gene_regions[gene_db.id] = (gene_db.start, gene_db.end)
