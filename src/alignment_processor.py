@@ -64,7 +64,7 @@ class LongReadAlignmentProcessor:
 
     def process_single_file(self, bamfile_in):
         processed_reads = set()
-        for genic_region in self.gene_info.genic_regions:
+        for genic_region in self.gene_info.regions_for_bam_fetch:
             # FIXME: temporary solution - process gene outside
             to_fetch_start = max(0, genic_region[0] - 100)
             to_fetch_end = min(bamfile_in.get_reference_length(self.gene_info.chr_id), genic_region[1] + 100)
