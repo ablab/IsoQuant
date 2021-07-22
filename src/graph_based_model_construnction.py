@@ -169,7 +169,7 @@ class GraphBasedModelConstructor:
             logger.debug(">> Adding known monoexon isoform %s, count = %d: %s" %
                          (isoform_id, count, str(self.gene_info.all_isoforms_exons[isoform_id])))
             self.transcript_model_storage.append(self.transcript_from_reference(isoform_id, count))
-            if isoform_id not in self.expressed_gene_info.all_isoforms_exons.keys():
+            if self.expressed_gene_info and isoform_id not in self.expressed_gene_info.all_isoforms_exons.keys():
                 logger.debug(">> Cannot be found in the reference set")
             else:
                 self.expressed_detected_set.add(isoform_id)
