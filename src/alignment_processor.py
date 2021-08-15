@@ -43,7 +43,7 @@ class LongReadAlignmentProcessor:
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
         self.polya_fixer = PolyAFixer(self.params)
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
-        self.exon_corrector = ExonCorrector(self.gene_info, self.params)
+        self.exon_corrector = ExonCorrector(self.gene_info, self.params, self.chr_record)
         self.assignment_storage = []
 
     def process(self):

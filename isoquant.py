@@ -434,7 +434,7 @@ def set_additional_params(args):
         multimap_strategies[e.name] = e.value
     args.multimap_strategy = MultimapResolvingStrategy(multimap_strategies[args.multimap_strategy])
 
-    args.needs_reference = True # args.sqanti_output or args.check_canonical
+    args.needs_reference = args.sqanti_output or args.check_canonical or args.correct_fuzzy_junctions
     if args.needs_reference and not args.reference:
         logger.warning("Reference genome is not provided! Some stats will not be calculated.")
         args.needs_reference = False
