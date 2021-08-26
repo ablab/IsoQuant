@@ -513,9 +513,9 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
         if event.read_region != SupplementaryMatchConstansts.undefined_region and \
                 event.read_region[0] >= 0 and event.read_region[1] >= 0:
             introns = read_introns[event.read_region[0]:event.read_region[1]+1]
-            logger.debug(read_introns)
-            logger.debug("+ adding info for %s, introns indices %s, introns %s" %
-                         (str(event.event_type), str(event.read_region), str(introns)))
+            # logger.debug(read_introns)
+            # logger.debug("+ adding info for %s, introns indices %s, introns %s" %
+            #              (str(event.event_type), str(event.read_region), str(introns)))
             additional_info = ":" + regions_to_str(introns)
 
     return match_subtype_to_str(event, strand) + additional_info

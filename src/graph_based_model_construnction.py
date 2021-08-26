@@ -88,8 +88,8 @@ class GraphBasedModelConstructor:
                 if self.path_storage.paths[path] < novel_cutoff:
                     continue
                 isoform_id = "novel"
-                transcript_strand = self.path_storage.get_path_strand(intron_path)
-                transcript_gene = self.path_storage.get_path_gene(intron_path)
+                transcript_strand = self.path_storage.get_path_strand(path)
+                transcript_gene = self.path_storage.get_path_gene(path)
                 if transcript_gene is None:
                     transcript_gene = self.select_reference_gene(transcript_range)
                     transcript_strand = self.gene_info.gene_strands[transcript_gene]
@@ -152,22 +152,17 @@ class IntronPathStorage:
         self.path_processor = path_processor
         self.intron_graph = path_processor.intron_graph
         self.paths = defaultdict(int)
-        self.intron_strands = defaultdict(str)
-        self.intron_genes = defaultdict(str)
+        self.path_strands = defaultdict(str)
+        self.path_genes = defaultdict(str)
         self.fl_paths = set()
 
     def fill(self, read_assignments):
-        intron_strands = defaultdict(lambda: defaultdict(int))
-        intron_genes = defaultdict(lambda: defaultdict(int))
+        path_strands = defaultdict(lambda: defaultdict(int))
+        path_genes = defaultdict(lambda: defaultdict(int))
         for a in read_assignments:
             intron_path = self.path_processor.thread_introns(a.corrected_introns)
             if not intron_path:
                 continue
-            for intron in intron_path:
-                intron_strands[intron][a.strand] += 1
-                if a.isoform_matches:
-                    intron_genes[intron][a.isoform_matches[0].assigned_gene] += 1
-
             read_end = a.corrected_exons[-1][1]
             is_end_trusted = a.strand == '+' and a.polyA_found
             terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted)
@@ -185,18 +180,49 @@ class IntronPathStorage:
             if terminal_vertex and starting_vertex:
                 self.fl_paths.add(path_tuple)
 
-        self.intron_strands = get_best_from_count_dicts(intron_strands)
-        self.intron_genes = get_best_from_count_dicts(intron_genes)
+            path_strands[path_tuple][a.strand] += 1
+            assigned_genes = set([m.assigned_gene for m in a.isoform_matches])
+            for g in assigned_genes:
+                if g:
+                    path_genes[path_tuple][g] += 1
+
+        self.set_path_info(path_strands, path_genes)
+
         for p in self.paths.keys():
             is_fl = "FL" if p in self.fl_paths else "NO"
             logger.debug("%s path: %s: %d, %s, %s" %
                          (is_fl, str(p), self.paths[p], self.get_path_strand(p), self.get_path_gene(p)))
 
+    def set_path_info(self, path_strands, path_genes):
+        for path in self.paths.keys():
+            logger.debug(str(path) + " = " + str(self.paths[path]) + " = " + str(path_strands[path]))
+            associated_strands = sorted(path_strands[path].items(), key=lambda x: x[1], reverse=True)
+            associated_genes = sorted(path_genes[path].items(), key=lambda x: x[1], reverse=True)
+
+            selected_strand = associated_strands[0][0]
+            if selected_strand == '.' or \
+                    (len(associated_strands) > 1 and associated_strands[0][1] / associated_strands[1][1] < 2):
+                # two similar strands appear
+                if associated_genes:
+                    selected_strand = self.intron_graph.gene_info.gene_strands[associated_genes[0][0]]
+            self.path_strands[path] = selected_strand
+
+            for g in associated_genes:
+                logger.debug(str(g))
+                gene_id = g[0]
+                if self.intron_graph.gene_info.gene_strands[gene_id] == self.path_strands[path]:
+                    self.path_genes[path] = gene_id
+                    break
+            if path not in self.path_genes:
+                logger.debug(
+                    "Did not find suitable gene for path " + str(path) + ", strand: " + self.path_strands[path])
+                self.path_genes[path] = 'novel_gene'
+
     def get_path_strand(self, intron_path):
-        return get_collective_property(intron_path, self.intron_strands)
+        return self.path_strands[intron_path]
 
     def get_path_gene(self, intron_path):
-        return get_collective_property(intron_path, self.intron_genes)
+        return self.path_genes[intron_path]
 
 
 class IntronPathProcessor:

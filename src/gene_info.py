@@ -129,7 +129,11 @@ class GeneInfo:
         self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
 
         self.set_junction_profiles(self.all_isoforms_introns, self.all_isoforms_exons)
+
+        self.isoform_strands = {}
+        self.gene_strands = {}
         self.set_isoform_strands()
+        self.gene_id_map = {}
         self.set_gene_ids()
         # FIXME: no need to run unless detect_ambiguous option is on
         # self.detect_ambiguous()
