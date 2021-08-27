@@ -56,7 +56,8 @@ class GFFPrinter:
             else:
                 gene_record = gene_info_dict[gene_id]
                 assert model.chr_id == gene_record.chr_id
-                assert model.strand == gene_record.strand
+                if model.strand != gene_record.strand:
+                    logger.warning("Unequal strands: %s = %s, %s = %s" % (gene_id, gene_record.strand, model.transcript_id, model.strand))
                 gene_info_dict[gene_id] = GFFGeneInfo(model.chr_id, model.strand,
                                                       max_range(gene_record.gene_region, transcript_region))
 
