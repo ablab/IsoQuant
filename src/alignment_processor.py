@@ -100,7 +100,7 @@ class LongReadAlignmentProcessor:
                 if self.params.cage:
                     alignment_info.add_cage_info(self.cage_finder)
                 alignment_info.construct_profiles(self.profile_constructor)
-                read_assignment = self.assigner.assign_to_isoform(read_id, alignment_info)
+                read_assignment = self.assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
 
                 if alignment_info.exons_changed:
                     read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))

@@ -15,6 +15,7 @@ from src.assignment_io import *
 from src.isoform_assignment import *
 from src.intron_graph import *
 from src.gene_info import *
+from src.alignment_info import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -54,9 +55,7 @@ class GraphBasedModelConstructor:
         self.get_known_spliced_isoforms()
         self.construct_fl_isoforms()
         self.construct_monoexon_isoforms(read_assignment_storage)
-
-        # split reads into clusters
-        # self.construct_isoform_groups(read_assignment_storage)
+        self.assign_reads_to_models(read_assignment_storage)
 
     def get_known_spliced_isoforms(self):
         self.known_isoforms = {}
@@ -144,6 +143,38 @@ class GraphBasedModelConstructor:
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
                                self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known,
                                additional_info="count %d" % count)
+
+    # assign reads back to constructed isoforms
+    def assign_reads_to_models(self, read_assignments):
+        logger.debug("Verifying transcript models")
+        self.transcript_read_ids = defaultdict(set)
+        self.unused_reads = []
+        self.transcript_counts = defaultdict(float)
+
+        logger.debug("Creating aritificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
+        transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.params.delta)
+        assigner = LongReadAssigner(transcript_model_gene_info, self.params)
+        profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
+
+        for assignment in read_assignments:
+            read_exons = assignment.corrected_exons
+            read_id = assignment.read_id
+            logger.debug("Checking read %s: %s" % (assignment.read_id, str(read_exons)))
+            model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
+            model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
+            # check that no serious contradiction occurs
+            if model_assignment.assignment_type in [ReadAssignmentType.unique,
+                                                    ReadAssignmentType.unique_minor_difference]:
+                t_id = model_assignment.isoform_matches[0].assigned_transcript
+                self.transcript_read_ids[t_id].add(read_id)
+                self.transcript_counts[t_id] += 1.0
+            elif model_assignment.assignment_type == ReadAssignmentType.ambiguous:
+                # FIXME: add qunatification options
+                total_matches = model_assignment.isoform_matches
+                for m in model_assignment.isoform_matches:
+                    self.transcript_counts[m.isoform_matches] += 1.0 / total_matches
+            else:
+                self.unused_reads.append(read_id)
 
 
 class IntronPathStorage:
