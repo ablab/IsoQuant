@@ -215,7 +215,7 @@ class GraphBasedModelConstructor:
                 self.transcript_counts[t_id] += 1.0
             elif model_assignment.assignment_type == ReadAssignmentType.ambiguous:
                 # FIXME: add qunatification options
-                total_matches = model_assignment.isoform_matches
+                total_matches = len(model_assignment.isoform_matches)
                 for m in model_assignment.isoform_matches:
                     self.transcript_counts[m.assigned_transcript] += 1.0 / total_matches
             else:
