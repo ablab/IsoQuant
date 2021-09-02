@@ -412,7 +412,7 @@ class LongReadAssigner:
             assignment = self.match_inconsistent(read_id, combined_read_profile)
 
         else:
-            logger.debug("+ No contradictory features in read, but no consistent isoforms still can be found")
+            logger.debug("+ No contradictory features in read, but inconsistent isoforms may still be detected")
             assignment = self.match_consistent(read_id, combined_read_profile)
 
             if assignment is None:
@@ -437,7 +437,6 @@ class LongReadAssigner:
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
         isoform_split_exon_profiles = self.gene_info.split_exon_profiles.profiles
-
         overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile, isoform_split_exon_profiles)
         assert overlapping_isoforms
 

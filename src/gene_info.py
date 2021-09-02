@@ -184,9 +184,9 @@ class GeneInfo:
         for transcript_model in transcript_model_storage:
             transcript_region = (transcript_model.get_start(), transcript_model.get_end())
             t_id = transcript_model.transcript_id
-            cls.intron_profiles.set_profiles(t_id, introns, transcript_region, partial(equal_ranges, delta=0))
-            cls.exon_profiles.set_profiles(t_id, exons, transcript_region, partial(equal_ranges, delta=0))
-            cls.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
+            cls.intron_profiles.set_profiles(t_id, cls.all_isoforms_introns[t_id], transcript_region, partial(equal_ranges, delta=0))
+            cls.exon_profiles.set_profiles(t_id, cls.all_isoforms_exons[t_id], transcript_region, partial(equal_ranges, delta=0))
+            cls.split_exon_profiles.set_profiles(t_id, cls.all_isoforms_exons[t_id], transcript_region, contains)
 
         cls.regions_for_bam_fetch = [(cls.start, cls.end)]
         cls.exon_property_map = None
