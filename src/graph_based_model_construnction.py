@@ -186,6 +186,11 @@ class GraphBasedModelConstructor:
 
     # assign reads back to constructed isoforms
     def assign_reads_to_models(self, read_assignments):
+        if not self.transcript_model_storage:
+            logger.debug("No transcripts were assigned")
+            self.unused_reads = [a.read_id for a in read_assignments]
+            return
+        
         logger.debug("Verifying transcript models")
         self.transcript_read_ids = defaultdict(set)
         self.unused_reads = []
