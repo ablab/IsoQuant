@@ -217,7 +217,7 @@ class GraphBasedModelConstructor:
                 # FIXME: add qunatification options
                 total_matches = model_assignment.isoform_matches
                 for m in model_assignment.isoform_matches:
-                    self.transcript_counts[m.isoform_matches] += 1.0 / total_matches
+                    self.transcript_counts[m.assigned_transcript] += 1.0 / total_matches
             else:
                 self.unused_reads.append(read_id)
 
