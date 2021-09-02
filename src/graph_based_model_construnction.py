@@ -105,7 +105,7 @@ class GraphBasedModelConstructor:
                 isoform_id = self.known_isoforms[intron_path]
                 transcript_strand = self.gene_info.isoform_strands[isoform_id]
                 transcript_gene = self.gene_info.gene_id_map[isoform_id]
-                logger.debug("%% Adding known spliced isoform %s" % isoform_id, )
+                logger.debug("%% Adding known spliced isoform %s" % isoform_id)
             else:
                 if self.path_storage.paths[path] < novel_cutoff:
                     continue
@@ -121,7 +121,7 @@ class GraphBasedModelConstructor:
                 else:
                     transcript_type = TranscriptModelType.novel_not_in_catalog
                     id_suffix = self.nnic_transcript_suffix
-                logger.debug("%% Adding known spliced isoform")
+                logger.debug("%% Adding novel spliced isoform")
 
             new_transcript_id =  self.transcript_prefix + str(self.get_transcript_id()) + id_suffix
             novel_exons = get_exons(transcript_range, list(intron_path))
@@ -166,11 +166,13 @@ class GraphBasedModelConstructor:
             count = self.mono_exon_isoforms[isoform_id]
             if count < self.params.min_known_count:
                 continue
-            logger.debug(">> Adding known monoexon isoform %s, count = %d: %s" %
-                         (isoform_id, count, str(self.gene_info.all_isoforms_exons[isoform_id])))
             self.transcript_model_storage.append(self.transcript_from_reference(isoform_id, count))
+            logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
+                         (self.transcript_model_storage[-1].transcript_id, isoform_id,
+                          count, str(self.gene_info.all_isoforms_exons[isoform_id])))
+
             if self.expressed_gene_info and isoform_id not in self.expressed_gene_info.all_isoforms_exons.keys():
-                logger.debug(">> Cannot be found in the reference set")
+                logger.debug("## Cannot be found in the reference set")
             else:
                 self.expressed_detected_set.add(isoform_id)
 
