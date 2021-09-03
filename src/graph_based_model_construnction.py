@@ -91,12 +91,16 @@ class GraphBasedModelConstructor:
         return known_isoforms, known_introns
 
     def construct_fl_isoforms(self):
+        # TODO refactor
         novel_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
+        added_known_isoforms = set()
+
         for path in self.path_storage.fl_paths:
             # do not include terminal vertices
             intron_path = path[1:-1]
             transcript_range = (path[0][1], path[-1][1])
-            if intron_path in self.known_isoforms:
+            known_path = intron_path in self.known_isoforms
+            if known_path:
                 if self.path_storage.paths[path] < self.params.min_known_count:
                     continue
                 transcript_type = TranscriptModelType.known
@@ -104,7 +108,7 @@ class GraphBasedModelConstructor:
                 isoform_id = self.known_isoforms[intron_path]
                 transcript_strand = self.gene_info.isoform_strands[isoform_id]
                 transcript_gene = self.gene_info.gene_id_map[isoform_id]
-                logger.debug("%% Adding known spliced isoform %s" % isoform_id)
+                logger.debug("uuu Adding known spliced isoform %s" % isoform_id)
             else:
                 if self.path_storage.paths[path] < novel_cutoff:
                     continue
@@ -120,17 +124,45 @@ class GraphBasedModelConstructor:
                 else:
                     transcript_type = TranscriptModelType.novel_not_in_catalog
                     id_suffix = self.nnic_transcript_suffix
-                logger.debug("%% Adding novel spliced isoform")
+                logger.debug("uuu Adding novel spliced isoform")
 
-            new_transcript_id =  self.transcript_prefix + str(self.get_transcript_id()) + id_suffix
+            transcript_num = self.get_transcript_id()
+            new_transcript_id =  self.transcript_prefix + str(transcript_num) + id_suffix
             novel_exons = get_exons(transcript_range, list(intron_path))
             count = self.path_storage.paths[path]
-            new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
-                                        new_transcript_id, isoform_id, transcript_gene,
-                                        novel_exons, transcript_type,
-                                        additional_info="count %d" % count)
-            logger.debug("%% %s: %s" % (new_transcript_id, str(novel_exons)))
-            self.transcript_model_storage.append(new_model)
+
+            new_model = None
+            if not known_path:
+                assigner = LongReadAssigner(self.gene_info, self.params)
+                profile_constructor = CombinedProfileConstructor(self.gene_info, self.params)
+
+                combined_profile = profile_constructor.construct_profiles(novel_exons, PolyAInfo(-1, -1, -1, -1), [])
+                assignment = assigner.assign_to_isoform(new_transcript_id, combined_profile)
+                # check that no serious contradiction occurs
+                logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
+                             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
+
+                if assignment.assignment_type == ReadAssignmentType.unique:
+                    ref_tid = assignment.isoform_matches[0].assigned_transcript
+                    if ref_tid not in added_known_isoforms:
+                        logger.debug("uuu Substituting with known isoform %s" % ref_tid)
+                        new_model = self.transcript_from_reference(ref_tid, count, transcript_num)
+                else:
+                    logger.debug("uuu Adding new model %s" % new_transcript_id)
+                    new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
+                                                new_transcript_id, isoform_id, transcript_gene,
+                                                novel_exons, transcript_type,
+                                                additional_info="count %d" % count)
+            elif isoform_id not in added_known_isoforms:
+                added_known_isoforms.add(isoform_id)
+                logger.debug("uuu Adding with known isoform %s -> %s" % (isoform_id, new_transcript_id))
+                new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
+                                            new_transcript_id, isoform_id, transcript_gene,
+                                            novel_exons, transcript_type,
+                                            additional_info="count %d" % count)
+            logger.debug("uuu %s: %s" % (new_transcript_id, str(novel_exons)))
+            if new_model:
+                self.transcript_model_storage.append(new_model)
 
             if intron_path in self.expressed_isoforms:
                 ref_id = self.expressed_isoforms[intron_path]
@@ -138,6 +170,10 @@ class GraphBasedModelConstructor:
                 logger.debug("## Isoform %s looks like reference %s, count = %d" % (new_transcript_id, ref_id, count))
             else:
                 logger.debug("## Isoform %s does NOT has a reference chain, count = %d " % (new_transcript_id, count))
+
+            if id_suffix != self.known_transcript_suffix and len(novel_exons) == 2:
+                # novel single intron transcrtipt
+                pass
             for v in path:
                 self.visited_introns.add(v)
 
@@ -191,8 +227,10 @@ class GraphBasedModelConstructor:
                 self.expressed_detected_set.add(isoform_id)
 
     # create transcript model object from reference isoforms
-    def transcript_from_reference(self, isoform_id, count=0):
-        new_transcript_id = self.transcript_prefix + str(self.get_transcript_id()) + self.known_transcript_suffix
+    def transcript_from_reference(self, isoform_id, count=0, transcript_id=None):
+        if not transcript_id:
+            transcript_id = self.get_transcript_id()
+        new_transcript_id = self.transcript_prefix + str(transcript_id) + self.known_transcript_suffix
         return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
                                self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known,
