@@ -171,9 +171,10 @@ class GraphBasedModelConstructor:
             else:
                 logger.debug("## Isoform %s does NOT has a reference chain, count = %d " % (new_transcript_id, count))
 
-            if id_suffix != self.known_transcript_suffix and len(novel_exons) == 2:
+            if not known_path and len(novel_exons) == 2:
                 # novel single intron transcrtipt
-                pass
+                logger.debug("uuu Added single intron isoform")
+                
             for v in path:
                 self.visited_introns.add(v)
 
