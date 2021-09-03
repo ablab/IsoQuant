@@ -402,6 +402,7 @@ def set_model_construction_options(args):
     args.min_novel_count_rel = strategy.min_novel_count_rel
     args.fl_only = strategy.fl_only
     args.require_polyA = not args.polya_trimmed
+    args.min_mono_exon_coverage = 0.75
 
 def set_configs_directory(args):
     config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')

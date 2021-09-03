@@ -37,7 +37,6 @@ class GraphBasedModelConstructor:
         self.path_storage = None
         self.known_isoforms = {}
         self.known_introns = {}
-        self.mono_exon_isoforms = defaultdict(int)
 
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(set)
@@ -152,7 +151,8 @@ class GraphBasedModelConstructor:
     # group reads by the isoforms and modification events
     def construct_monoexon_isoforms(self, read_assignment_storage):
         logger.debug("Constructing isoform groups")
-        self.mono_exon_isoforms = defaultdict(int)
+        mono_exon_isoform_counts = defaultdict(int)
+        mono_exon_isoform_coverage = {}
 
         for read_assignment in read_assignment_storage:
             if not read_assignment:
@@ -160,11 +160,24 @@ class GraphBasedModelConstructor:
             if read_assignment.assignment_type in {ReadAssignmentType.unique,
                                                    ReadAssignmentType.unique_minor_difference} and \
                     any(e.event_type == MatchEventSubtype.mono_exon_match for e in read_assignment.isoform_matches[0].match_subclassifications):
-                self.mono_exon_isoforms[read_assignment.isoform_matches[0].assigned_transcript] += 1
+                t_id = read_assignment.isoform_matches[0].assigned_transcript
+                mono_exon_isoform_counts[t_id] += 1
+                assert len(self.gene_info.all_isoforms_exons[t_id]) == 1
+                t_range = self.gene_info.all_isoforms_exons[t_id][0]
+                t_len = t_range[1] - t_range[0] + 1
+                if t_id not in mono_exon_isoform_coverage:
+                    mono_exon_isoform_coverage[t_id] = [0 for _ in range(t_len)]
+                start = max(0, read_assignment.corrected_exons[0][0] - t_range[0])
+                end = min(t_len, read_assignment.corrected_exons[-1][1] - t_range[0] + 1)
+                for i in range(start, end):
+                    mono_exon_isoform_coverage[t_id][i] = 1
 
-        for isoform_id in self.mono_exon_isoforms:
-            count = self.mono_exon_isoforms[isoform_id]
-            if count < self.params.min_known_count:
+        for isoform_id in mono_exon_isoform_counts:
+            count = mono_exon_isoform_counts[isoform_id]
+            coverage = float(mono_exon_isoform_coverage[isoform_id].count(1)) / float(len(mono_exon_isoform_coverage[isoform_id]))
+            logger.debug(">> Transcript %s, count %d, coverage %.4f" % (isoform_id, count, coverage))
+            if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage:
+                logger.debug(">> Will not add")
                 continue
             self.transcript_model_storage.append(self.transcript_from_reference(isoform_id, count))
             logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
@@ -174,6 +187,7 @@ class GraphBasedModelConstructor:
             if self.expressed_gene_info and isoform_id not in self.expressed_gene_info.all_isoforms_exons.keys():
                 logger.debug("## Cannot be found in the reference set")
             else:
+                logger.debug("## Found in the reference set")
                 self.expressed_detected_set.add(isoform_id)
 
     # create transcript model object from reference isoforms
