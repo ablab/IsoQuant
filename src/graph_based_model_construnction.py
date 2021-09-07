@@ -65,11 +65,19 @@ class GraphBasedModelConstructor:
         self.construct_monoexon_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
 
+        for t in self.transcript_model_storage:
+            isoform_id = t.reference_transcript
+            if self.expressed_gene_info and isoform_id in self.expressed_gene_info.all_isoforms_exons.keys():
+                self.expressed_detected_set.add(isoform_id)
+                logger.debug("## Isoform %s is the expressed %s" % (t.transcript_id, isoform_id))
+            elif isoform_id != "novel":
+                logger.debug("## Isoform %s (%s) is NOT expressed" % (t.transcript_id, isoform_id))
+
         for intron_chain, isoform_id in self.expressed_isoforms.items():
             if isoform_id in self.expressed_detected_set:
                 continue
             else:
-                logger.debug("++ Isoform %s was not detected: %s" % (isoform_id, str(intron_chain)))
+                logger.debug("++ Expressed isoform %s was not detected: %s" % (isoform_id, str(intron_chain)))
 
         logger.debug("<< UNVISITED VERTICES <<")
         for v, count in self.intron_graph.intron_collector.clustered_introns.items():
@@ -169,12 +177,9 @@ class GraphBasedModelConstructor:
             if intron_path in self.expressed_isoforms:
                 ref_id = self.expressed_isoforms[intron_path]
                 self.expressed_detected_set.add(ref_id)
-                logger.debug("## Isoform %s matches reference chain %s, count = %d" % (new_transcript_id, ref_id, count))
-            elif self.expressed_gene_info and isoform_id in self.expressed_gene_info.all_isoforms_exons.keys():
-                self.expressed_detected_set.add(isoform_id)
-                logger.debug("## Isoform %s is the reference %s, count = %d" % (new_transcript_id, isoform_id, count))
+                logger.debug("## Isoform %s matches expressed chain %s, count = %d" % (new_transcript_id, ref_id, count))
             else:
-                logger.debug("## Isoform %s does match a reference chain, count = %d " % (new_transcript_id, count))
+                logger.debug("## Isoform %s does NOT match expressed chain, count = %d " % (new_transcript_id, count))
 
             if not known_path and len(novel_exons) == 2:
                 # novel single intron transcrtipt
@@ -228,12 +233,6 @@ class GraphBasedModelConstructor:
             logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
                          (self.transcript_model_storage[-1].transcript_id, isoform_id,
                           count, str(self.gene_info.all_isoforms_exons[isoform_id])))
-
-            if self.expressed_gene_info and isoform_id in self.expressed_gene_info.all_isoforms_exons.keys():
-                logger.debug("## Found in the reference set")
-                self.expressed_detected_set.add(isoform_id)
-            else:
-                logger.debug("## Cannot be found in the reference set")
 
     # create transcript model object from reference isoforms
     def transcript_from_reference(self, isoform_id, count=0, transcript_id=None):
