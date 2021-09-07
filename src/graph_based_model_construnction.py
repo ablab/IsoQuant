@@ -100,6 +100,14 @@ class GraphBasedModelConstructor:
         known_introns = set(gene_info.intron_profiles.features)
         return known_isoforms, known_introns
 
+    def is_reference_isoform(self, assignment):
+        if assignment.assignment_type == ReadAssignmentType.unique:
+            return True
+        elif assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
+            allowed_set = {MatchEventSubtype.none, MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right}
+            return all(m.event_type in allowed_set for m in assignment.isoform_matches[0].match_subclassifications)
+        return False
+
     def construct_fl_isoforms(self):
         # TODO refactor
         novel_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
@@ -152,7 +160,7 @@ class GraphBasedModelConstructor:
                 logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
                              (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
 
-                if assignment.assignment_type == ReadAssignmentType.unique:
+                if self.is_reference_isoform(assignment):
                     ref_tid = assignment.isoform_matches[0].assigned_transcript
                     if ref_tid not in added_known_isoforms:
                         logger.debug("uuu Substituting with known isoform %s" % ref_tid)
