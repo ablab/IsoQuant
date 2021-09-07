@@ -121,8 +121,6 @@ class GraphBasedModelConstructor:
             transcript_range = (path[0][1], path[-1][1])
             known_path = intron_path in self.known_isoforms
             if known_path:
-                if self.path_storage.paths[path] < self.params.min_known_count:
-                    continue
                 transcript_type = TranscriptModelType.known
                 id_suffix = self.known_transcript_suffix
                 isoform_id = self.known_isoforms[intron_path]
@@ -130,8 +128,8 @@ class GraphBasedModelConstructor:
                 transcript_gene = self.gene_info.gene_id_map[isoform_id]
                 logger.debug("uuu Adding known spliced isoform %s" % isoform_id)
             else:
-                if self.path_storage.paths[path] < novel_cutoff:
-                    continue
+                # if self.path_storage.paths[path] < novel_cutoff:
+                #    continue
                 isoform_id = "novel"
                 transcript_strand = self.path_storage.get_path_strand(path)
                 transcript_gene = self.path_storage.get_path_gene(path)
@@ -164,16 +162,16 @@ class GraphBasedModelConstructor:
 
                 if self.is_reference_isoform(assignment):
                     ref_tid = assignment.isoform_matches[0].assigned_transcript
-                    if ref_tid not in self.added_known_isoforms:
+                    if ref_tid not in self.added_known_isoforms and count >= self.params.min_known_count:
                         logger.debug("uuu Substituting with known isoform %s" % ref_tid)
                         new_model = self.transcript_from_reference(ref_tid, count, transcript_num)
-                else:
+                elif count >= novel_cutoff:
                     logger.debug("uuu Adding new model %s" % new_transcript_id)
                     new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                                 new_transcript_id, isoform_id, transcript_gene,
                                                 novel_exons, transcript_type,
                                                 additional_info="count %d" % count)
-            elif isoform_id not in self.added_known_isoforms:
+            elif isoform_id not in self.added_known_isoforms and count >= self.params.min_known_count:
                 self.added_known_isoforms.add(isoform_id)
                 logger.debug("uuu Adding with known isoform %s -> %s" % (isoform_id, new_transcript_id))
                 new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
