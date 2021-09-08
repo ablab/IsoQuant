@@ -30,7 +30,6 @@ class GraphBasedModelConstructor:
     def __init__(self, gene_info, params, expressed_gene_info=None):
         self.gene_info = gene_info
         self.params = params
-
         # debug info only
         self.expressed_gene_info = expressed_gene_info
         self.expressed_isoforms = {}
@@ -259,9 +258,9 @@ class GraphBasedModelConstructor:
             else:
                 spliced_isoform_counts[t_id] += 1
                 if abs(self.gene_info.all_isoforms_exons[t_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
-                    spliced_isoform_left_support += 1
+                    spliced_isoform_left_support[t_id] += 1
                 if abs(self.gene_info.all_isoforms_exons[t_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= 50:
-                    spliced_isoform_right_support += 1
+                    spliced_isoform_right_support[t_id] += 1
 
         self.construct_monoexon_isoforms(mono_exon_isoform_counts, mono_exon_isoform_coverage)
         if not self.params.fl_only:
