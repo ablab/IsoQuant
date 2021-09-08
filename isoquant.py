@@ -400,7 +400,7 @@ def set_model_construction_options(args):
     args.terminal_internal_position_rel = strategy.terminal_internal_position_rel
 
     args.min_known_count = strategy.min_known_count
-    args.min_nonfl_count = strategy.min_known_count
+    args.min_nonfl_count = strategy.min_nonfl_count
     args.min_novel_count = strategy.min_novel_count
     args.min_novel_count_rel = strategy.min_novel_count_rel
     args.fl_only = strategy.fl_only

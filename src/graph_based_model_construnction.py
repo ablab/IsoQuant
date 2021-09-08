@@ -173,7 +173,7 @@ class GraphBasedModelConstructor:
             else:
                 # adding FL novel isoform
                 if count < novel_isoform_cutoff:
-                    logger.debug("uuu Novel isoform %s has low coverage %d < %d" % (new_transcript_id, count, novel_isoform_cutoff))
+                    logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
                 else:
                     transcript_strand = self.path_storage.get_path_strand(path)
                     transcript_gene = self.path_storage.get_path_gene(path)
@@ -191,7 +191,7 @@ class GraphBasedModelConstructor:
                     new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                                 new_transcript_id + id_suffix, "novel", transcript_gene,
                                                 novel_exons, transcript_type)
-                    logger.debug("uuu Adding novel spliced isoform")
+                    logger.debug("uuu Adding novel spliced isoform %s : %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
 
             if new_model:
                 self.transcript_model_storage.append(new_model)
@@ -200,7 +200,12 @@ class GraphBasedModelConstructor:
                 # debug info only
                 if not reference_isoform and len(novel_exons) == 2:
                     # novel single intron transcript
-                    logger.debug("uuu Added single intron isoform")
+
+                    contributing_introns = 0
+                    for intron in self.intron_graph.intron_collector.intron_correction_map.values():
+                        if intron == intron_path[0]:
+                            contributing_introns += 1
+                    logger.debug("uuu Added single intron isoform: %d\t%d\t%d" % (count, novel_isoform_cutoff, contributing_introns))
 
             # debug info only
             if intron_path in self.expressed_isoforms:
@@ -209,7 +214,6 @@ class GraphBasedModelConstructor:
                     "## Isoform %s matches expressed chain %s, count = %d" % (new_transcript_id, ref_id, count))
                 if new_model:
                     logger.debug("## And was successfully added")
-                    self.expressed_detected_set.add(ref_id)
                 else:
                     logger.debug("## And was not added unfortunately")
             else:
@@ -225,6 +229,8 @@ class GraphBasedModelConstructor:
 
     def construnct_assignment_based_isoforms(self, read_assignment_storage):
         spliced_isoform_counts = defaultdict(int)
+        spliced_isoform_left_support = defaultdict(int)
+        spliced_isoform_right_support = defaultdict(int)
         mono_exon_isoform_counts = defaultdict(int)
         mono_exon_isoform_coverage = {}
 
@@ -252,10 +258,14 @@ class GraphBasedModelConstructor:
                     mono_exon_isoform_coverage[t_id][i] = 1
             else:
                 spliced_isoform_counts[t_id] += 1
+                if abs(self.gene_info.all_isoforms_exons[t_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
+                    spliced_isoform_left_support += 1
+                if abs(self.gene_info.all_isoforms_exons[t_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= 50:
+                    spliced_isoform_right_support += 1
 
         self.construct_monoexon_isoforms(mono_exon_isoform_counts, mono_exon_isoform_coverage)
         if not self.params.fl_only:
-            self.construct_nonfl_isoforms(spliced_isoform_counts)
+            self.construct_nonfl_isoforms(spliced_isoform_counts, spliced_isoform_left_support, spliced_isoform_right_support)
 
     def construct_monoexon_isoforms(self, mono_exon_isoform_counts, mono_exon_isoform_coverage):
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
@@ -264,22 +274,23 @@ class GraphBasedModelConstructor:
             coverage = float(mono_exon_isoform_coverage[isoform_id].count(1)) / \
                        float(len(mono_exon_isoform_coverage[isoform_id]))
 
-            logger.debug(">> Transcript %s, count %d, coverage %.4f" % (isoform_id, count, coverage))
+            logger.debug(">> Monoexon transcript %s: %d\t%.4f" % (isoform_id, count, coverage))
             if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage:
                 logger.debug(">> Will NOT be added, abs cutoff=%d, novel cutoff=%d" % (self.params.min_known_count, novel_isoform_cutoff))
-                # debug info only
-                if self.expressed_gene_info and isoform_id in self.expressed_gene_info.all_isoforms_exons.keys():
-                    logger.debug(">> But found in the reference set!")
-                    self.expressed_detected_set.add(isoform_id)
-                continue
+            else:
+                self.transcript_model_storage.append(self.transcript_from_reference(isoform_id))
+                self.detected_known_isoforms.add(isoform_id)
+                logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
+                             (self.transcript_model_storage[-1].transcript_id, isoform_id,
+                              count, str(self.gene_info.all_isoforms_exons[isoform_id])))
 
-            self.transcript_model_storage.append(self.transcript_from_reference(isoform_id))
-            self.detected_known_isoforms.add(isoform_id)
-            logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
-                         (self.transcript_model_storage[-1].transcript_id, isoform_id,
-                          count, str(self.gene_info.all_isoforms_exons[isoform_id])))
+            # debug info only
+            if self.expressed_gene_info and isoform_id in self.expressed_gene_info.all_isoforms_exons.keys():
+                logger.debug("<< monoexon is expressed")
+            else:
+                logger.debug("<< monoexon is NOT expressed")
 
-    def construct_nonfl_isoforms(self, spliced_isoform_counts):
+    def construct_nonfl_isoforms(self, spliced_isoform_counts, spliced_isoform_left_support, spliced_isoform_right_support):
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
         logger.debug("Constructing nonFL isoforms")
         for isoform_id, count in spliced_isoform_counts.items():
@@ -296,15 +307,20 @@ class GraphBasedModelConstructor:
                 if intron not in self.visited_introns:
                     unvisited_introns += 1
 
-            logger.debug("<< Known non-FL spliced isoform %s, count=%d, univisited introns = %d/%d" %
-                         (isoform_id, count, unvisited_introns, len(intron_path)))
-            if count < 3:
-                logger.debug("<< Will NOT be added, abs cutoff=%d, novel cutoff=%d" % (3, novel_isoform_cutoff))
-                continue
-
-            logger.debug("<< Adding known non-FL spliced isoform %s" % isoform_id)
-            self.transcript_model_storage.append(self.transcript_from_reference(isoform_id))
-            self.detected_known_isoforms.add(isoform_id)
+            logger.debug("<< Known non-FL spliced isoform %s: %d\t%d\t%d\t%d\t%d\t%d\t%d" %
+                         (isoform_id, novel_isoform_cutoff, self.params.min_nonfl_count, count,
+                          spliced_isoform_left_support[isoform_id], spliced_isoform_right_support[isoform_id],
+                          unvisited_introns, len(intron_path)))
+            if count < self.params.min_nonfl_count or \
+                    spliced_isoform_left_support[isoform_id] < self.params.min_nonfl_count or \
+                    spliced_isoform_right_support[isoform_id] < self.params.min_nonfl_count or \
+                    float(unvisited_introns) / float(len(intron_path)) < 0.5:
+                logger.debug("<< Will NOT be added, abs cutoff=%d, novel cutoff=%d" %
+                             (self.params.min_nonfl_count, novel_isoform_cutoff))
+            else:
+                logger.debug("<< Adding known non-FL spliced isoform %s" % isoform_id)
+                self.transcript_model_storage.append(self.transcript_from_reference(isoform_id))
+                self.detected_known_isoforms.add(isoform_id)
 
             # debug info only
             if self.expressed_gene_info and isoform_id in self.expressed_gene_info.all_isoforms_exons.keys():
