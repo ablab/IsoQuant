@@ -317,6 +317,7 @@ class DatasetProcessor:
         transcript_stat_counter = EnumStats()
         # thread_pool = futures.ThreadPoolExecutor(max(1, self.args.threads-1))
 
+        # debug info only
         expressed_db = None
         if self.args.expressed_genedb:
             logger.info("Loading expreseed genes from %s" % self.args.expressed_genedb)
@@ -327,6 +328,7 @@ class DatasetProcessor:
             # future_list = []
 
             for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db, self.multimapped_reads):
+                # debug info only
                 expressed_gene_info = None
                 if expressed_db:
                     gene_list = []
