@@ -377,15 +377,16 @@ def set_model_construction_options(args):
                                             'min_novel_isolated_intron_abs', 'min_novel_isolated_intron_rel',
                                             'terminal_position_abs', 'terminal_position_rel',
                                             'terminal_internal_position_rel',
-                                            'min_known_count', 'min_novel_count', 'min_novel_count_rel',
+                                            'min_known_count', 'min_nonfl_count',
+                                            'min_novel_count', 'min_novel_count_rel',
                                             'fl_only'))
     strategies = {
-        'reliable':    ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  3, 10, 0.05, True),
-        'default_ccs': ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 3, 0.005, False),
-        'default_ont': ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 5, 0.02,  False),
-        'fl_ccs':      ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 2, 0.005, True),
-        'all':         ModelConstructionStrategy(0, 0.05, 5,  3, 0.05, 1, 0.01, 0.05, 1, 1, 0.001, False),
-        'assembly':    ModelConstructionStrategy(0, 0.1, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 0.05,  False)
+        'reliable':    ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  3, 5, 10, 0.05, True),
+        'default_ccs': ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 2, 3, 0.005, False),
+        'default_ont': ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 3, 5, 0.01,  False),
+        'fl_ccs':      ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 1, 2, 0.005, True),
+        'all':         ModelConstructionStrategy(0, 0.05, 5,  3, 0.05, 1, 0.01, 0.05, 1, 1, 1, 0.001, False),
+        'assembly':    ModelConstructionStrategy(0, 0.1, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 1, 0.05,  False)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -399,6 +400,7 @@ def set_model_construction_options(args):
     args.terminal_internal_position_rel = strategy.terminal_internal_position_rel
 
     args.min_known_count = strategy.min_known_count
+    args.min_nonfl_count = strategy.min_known_count
     args.min_novel_count = strategy.min_novel_count
     args.min_novel_count_rel = strategy.min_novel_count_rel
     args.fl_only = strategy.fl_only

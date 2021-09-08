@@ -287,7 +287,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
             logger.critical("Minimap2 finished with errors! See " + log_fpath)
             exit(-1)
-        logger.info("Soring alignments")
+        logger.info("Sorting alignments")
         if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path], stderr=log_file) != 0:
             logger.critical("Samtools finished with errors! See " + log_fpath)
             exit(-1)

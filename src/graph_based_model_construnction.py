@@ -89,11 +89,12 @@ class GraphBasedModelConstructor:
             elif isoform_id != "novel":
                 logger.debug("## Isoform %s (%s) is NOT expressed" % (t.transcript_id, isoform_id))
 
+        logger.debug("<< MISSED ISOFORMS <<")
         for intron_chain, isoform_id in self.expressed_isoforms.items():
             if isoform_id in self.expressed_detected_set:
                 continue
-            else:
-                logger.debug("++ Expressed isoform %s was not detected: %s" % (isoform_id, str(intron_chain)))
+            itype = "known" if isoform_id in self.gene_info.all_isoforms_exons else "novel"
+            logger.debug("++ Expressed %s isoform %s was not detected: %s" % (itype, isoform_id, str(intron_chain)))
 
         logger.debug("<< UNVISITED VERTICES <<")
         for v, count in self.intron_graph.intron_collector.clustered_introns.items():
@@ -253,7 +254,8 @@ class GraphBasedModelConstructor:
                 spliced_isoform_counts[t_id] += 1
 
         self.construct_monoexon_isoforms(mono_exon_isoform_counts, mono_exon_isoform_coverage)
-        self.construct_nonfl_isoforms(spliced_isoform_counts)
+        if not self.params.fl_only:
+            self.construct_nonfl_isoforms(spliced_isoform_counts)
 
     def construct_monoexon_isoforms(self, mono_exon_isoform_counts, mono_exon_isoform_coverage):
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
