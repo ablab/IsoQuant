@@ -301,7 +301,6 @@ class GraphBasedModelConstructor:
     def construct_nonfl_isoforms(self, spliced_isoform_counts, spliced_isoform_left_support, spliced_isoform_right_support):
         logger.debug("Constructing nonFL isoforms")
         for isoform_id, count in spliced_isoform_counts.items():
-
             if isoform_id in self.detected_known_isoforms:
                 continue
             if isoform_id not in self.known_isoforms_in_graph_ids:
@@ -333,6 +332,11 @@ class GraphBasedModelConstructor:
                 logger.debug("<< nonfl is expressed")
             else:
                 logger.debug("<< nonfl is NOT expressed")
+
+        for isoform_id in self.detected_known_isoforms:
+            path = self.known_isoforms_in_graph_ids[isoform_id]
+            for v in path:
+                self.visited_introns.add(v)
 
     # create transcript model object from reference isoforms
     def transcript_from_reference(self, isoform_id, transcript_id=None):
