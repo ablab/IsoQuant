@@ -95,8 +95,9 @@ class GraphBasedModelConstructor:
             logger.debug("++ Expressed %s isoform %s was not detected: %s" % (itype, isoform_id, str(intron_chain)))
 
         logger.debug("<< UNVISITED VERTICES <<")
-        for v, count in self.intron_graph.intron_collector.clustered_introns.items():
+        for v in sorted(self.intron_graph.intron_collector.clustered_introns.keys()):
             if v not in self.visited_introns:
+                count = self.intron_graph.intron_collector.clustered_introns[v]
                 logger.debug("<< Vertex %s: %d was NOT visited" % (v, count))
         # ===
 
@@ -169,8 +170,11 @@ class GraphBasedModelConstructor:
                     logger.debug("uuu FL is NOT expressed")
             else:
                 # adding FL novel isoform
+                polya_site = path[0][0] == VertexType.polyt or path[-1][0] == VertexType.polya
                 if count < novel_isoform_cutoff:
                     logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
+                elif len(novel_exons) == 2 and not polya_site:
+                    logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                 else:
                     transcript_strand = self.path_storage.get_path_strand(path)
                     transcript_gene = self.path_storage.get_path_gene(path)
@@ -197,12 +201,9 @@ class GraphBasedModelConstructor:
                 # debug info only
                 if not reference_isoform and len(novel_exons) == 2:
                     # novel single intron transcript
-                    contributing_introns = 0
-                    for intron in self.intron_graph.intron_collector.intron_correction_map.values():
-                        if intron == intron_path[0]:
-                            contributing_introns += 1
                     t_type = "in catalog" if intron_path[0] in self.known_introns else "not catalog"
-                    logger.debug("uuu Added single intron %s isoform: %d\t%d\t%d\t%d" % (t_type, count, novel_isoform_cutoff, contributing_introns, self.intron_graph.max_coverage))
+                    logger.debug("uuu Added single intron %s isoform: %d\t%d\t%d" %
+                                 (t_type, count, novel_isoform_cutoff, self.intron_graph.max_coverage))
 
             # debug info only
             if intron_path in self.expressed_isoforms:
@@ -228,6 +229,7 @@ class GraphBasedModelConstructor:
         spliced_isoform_counts = defaultdict(int)
         isoform_left_support = defaultdict(int)
         isoform_right_support = defaultdict(int)
+        polya_sites = defaultdict(int)
         mono_exon_isoform_counts = defaultdict(int)
         mono_exon_isoform_coverage = {}
 
@@ -237,47 +239,51 @@ class GraphBasedModelConstructor:
             if read_assignment.assignment_type not in {ReadAssignmentType.unique,
                                                        ReadAssignmentType.unique_minor_difference}:
                 continue
-            t_id = read_assignment.isoform_matches[0].assigned_transcript
-            if t_id in self.detected_known_isoforms:
+            refrenence_isoform_id = read_assignment.isoform_matches[0].assigned_transcript
+            if refrenence_isoform_id in self.detected_known_isoforms:
                 continue
 
-            if any(e.event_type == MatchEventSubtype.mono_exon_match for e in
-                   read_assignment.isoform_matches[0].match_subclassifications):
-                mono_exon_isoform_counts[t_id] += 1
-                assert len(self.gene_info.all_isoforms_exons[t_id]) == 1
-                transcript_exon = self.gene_info.all_isoforms_exons[t_id][0]
+            events = read_assignment.isoform_matches[0].match_subclassifications
+            if any(e.event_type == MatchEventSubtype.mono_exon_match for e in events):
+                mono_exon_isoform_counts[refrenence_isoform_id] += 1
+                assert len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) == 1
+                transcript_exon = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0]
                 t_len = transcript_exon[1] - transcript_exon[0] + 1
-                if t_id not in mono_exon_isoform_coverage:
-                    mono_exon_isoform_coverage[t_id] = [0 for _ in range(t_len)]
+
+                if refrenence_isoform_id not in mono_exon_isoform_coverage:
+                    mono_exon_isoform_coverage[refrenence_isoform_id] = [0 for _ in range(t_len)]
                 start = max(0, read_assignment.corrected_exons[0][0] - transcript_exon[0])
                 end = min(t_len, read_assignment.corrected_exons[-1][1] - transcript_exon[0] + 1)
                 for i in range(start, end):
-                    mono_exon_isoform_coverage[t_id][i] = 1
-                if abs(transcript_exon[0] - read_assignment.corrected_exons[0][0]) <= 50:
-                    isoform_left_support[t_id] += 1
-                if abs(transcript_exon[1] - read_assignment.corrected_exons[-1][1]) <= 50:
-                    isoform_right_support[t_id] += 1
-            else:
-                spliced_isoform_counts[t_id] += 1
-                if abs(self.gene_info.all_isoforms_exons[t_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
-                    isoform_left_support[t_id] += 1
-                if abs(self.gene_info.all_isoforms_exons[t_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= 50:
-                    isoform_right_support[t_id] += 1
+                    mono_exon_isoform_coverage[refrenence_isoform_id][i] = 1
 
-        self.construct_monoexon_isoforms(mono_exon_isoform_counts, mono_exon_isoform_coverage, isoform_left_support, isoform_right_support)
+                if self.gene_info.isoform_strands[refrenence_isoform_id] == '+':
+                    if any(x.event_type == MatchEventSubtype.correct_polya_site_right for x in events):
+                        polya_sites[refrenence_isoform_id] += 1
+                else:
+                    if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
+                        polya_sites[refrenence_isoform_id] += 1
+            else:
+                spliced_isoform_counts[refrenence_isoform_id] += 1
+                if abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
+                    isoform_left_support[refrenence_isoform_id] += 1
+                if abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= 50:
+                    isoform_right_support[refrenence_isoform_id] += 1
+
+        self.construct_monoexon_isoforms(mono_exon_isoform_counts, mono_exon_isoform_coverage, polya_sites)
         if not self.params.fl_only:
             self.construct_nonfl_isoforms(spliced_isoform_counts, isoform_left_support, isoform_right_support)
 
-    def construct_monoexon_isoforms(self, mono_exon_isoform_counts, mono_exon_isoform_coverage, isoform_left_support, isoform_right_support):
+    def construct_monoexon_isoforms(self, mono_exon_isoform_counts, mono_exon_isoform_coverage, polya_sites):
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
 
         for isoform_id, count in mono_exon_isoform_counts.items():
             coverage = float(mono_exon_isoform_coverage[isoform_id].count(1)) / \
                        float(len(mono_exon_isoform_coverage[isoform_id]))
+            polya_support = polya_sites[isoform_id]
 
-            logger.debug(">> Monoexon transcript %s: %d\t%.4f\%d\%d" % (isoform_id, count, coverage, isoform_left_support[isoform_id], isoform_right_support[isoform_id]))
-            if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or \
-                    isoform_left_support[isoform_id] < 1 or isoform_right_support[isoform_id] < 1:
+            logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.intron_graph.max_coverage, count, coverage, polya_support))
+            if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or polya_support == 0:
                 logger.debug(">> Will NOT be added, abs cutoff=%d, novel cutoff=%d" % (self.params.min_known_count, novel_isoform_cutoff))
             else:
                 self.transcript_model_storage.append(self.transcript_from_reference(isoform_id))
@@ -293,7 +299,6 @@ class GraphBasedModelConstructor:
                 logger.debug("<< monoexon is NOT expressed")
 
     def construct_nonfl_isoforms(self, spliced_isoform_counts, spliced_isoform_left_support, spliced_isoform_right_support):
-        nonfl_isoform_cutoff = max(self.params.min_nonfl_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
         logger.debug("Constructing nonFL isoforms")
         for isoform_id, count in spliced_isoform_counts.items():
 
@@ -309,16 +314,15 @@ class GraphBasedModelConstructor:
                 if intron not in self.visited_introns:
                     unvisited_introns += 1
 
-            logger.debug("<< Known non-FL spliced isoform %s: %d\t%d\t%d\t%d\t%d\t%d\t%d" %
-                         (isoform_id, nonfl_isoform_cutoff, self.params.min_nonfl_count, count,
+            logger.debug("<< Known non-FL spliced isoform %s: %d\t%d\t%d\t%d\t%d\t%d" %
+                         (isoform_id, self.params.min_nonfl_count, count,
                           spliced_isoform_left_support[isoform_id], spliced_isoform_right_support[isoform_id],
                           unvisited_introns, len(intron_path)))
-            if count < nonfl_isoform_cutoff or \
+            if count < self.params.min_known_count or \
                     spliced_isoform_left_support[isoform_id] < 1 or \
                     spliced_isoform_right_support[isoform_id] < 1 or \
-                    float(unvisited_introns) / float(len(intron_path)) <= 0.5:
-                logger.debug("<< Will NOT be added, abs cutoff=%d, novel cutoff=%d" %
-                             (self.params.min_nonfl_count, nonfl_isoform_cutoff))
+                    unvisited_introns < 1:
+                logger.debug("<< Will NOT be added")
             else:
                 logger.debug("<< Adding known non-FL spliced isoform %s" % isoform_id)
                 self.transcript_model_storage.append(self.transcript_from_reference(isoform_id))
