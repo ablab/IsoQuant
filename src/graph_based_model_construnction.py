@@ -125,7 +125,7 @@ class GraphBasedModelConstructor:
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
         self.detected_known_isoforms = set()
 
-        for path in self.path_storage.fl_paths:
+        for path in sorted(self.path_storage.fl_paths):
             # do not include terminal vertices
             intron_path = path[1:-1]
             transcript_range = (path[0][1], path[-1][1])

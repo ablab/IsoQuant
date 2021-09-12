@@ -107,7 +107,7 @@ class IntronCollector:
         return v
 
     def simplify_correction_map(self):
-        all_introns = self.intron_correction_map.keys()
+        all_introns = sorted(self.intron_correction_map.keys())
         to_remove = set()
         for intron in all_introns:
             subs = self.intron_correction_map[intron]
@@ -210,7 +210,7 @@ class IntronGraph:
         # check all outgoing edges
         to_remove = set()
         logger.debug("Removing outgoing tips and bulges")
-        for current_intron in self.outgoing_edges.keys():
+        for current_intron in sorted(self.outgoing_edges.keys()):
             out_introns = self.outgoing_edges[current_intron]
             substitute_dict = self.collapse_vertex_set(out_introns)
             for i in substitute_dict.keys():
@@ -226,7 +226,7 @@ class IntronGraph:
 
         # check all incoming edges
         logger.debug("Removing incoming tips and bulges")
-        for current_intron in self.incoming_edges.keys():
+        for current_intron in sorted(self.incoming_edges.keys()):
             inc_introns = self.incoming_edges[current_intron]
             substitute_dict = self.collapse_vertex_set(inc_introns)
             for i in substitute_dict.keys():
@@ -288,7 +288,7 @@ class IntronGraph:
         vertex_counts = sorted([(self.intron_collector.clustered_introns[i], i) for i in vertex_set], reverse=True)
         for count, vertex in vertex_counts:
             similar_vertices = []
-            for i in approved_set:
+            for i in sorted(approved_set):
                 start_dist = abs(i[0] - vertex[0])
                 end_dist = abs(i[1] - vertex[1])
                 if start_dist < self.params.graph_clustering_distance and \
