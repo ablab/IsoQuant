@@ -20,6 +20,9 @@ class VertexType(Enum):
     polyt = -20
     read_start = -21
 
+    def __lt__(self, other):
+        return self.value < other.value
+
 
 class IntronCollector:
     def __init__(self, gene_info, delta=0):
