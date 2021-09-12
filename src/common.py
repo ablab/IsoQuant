@@ -104,6 +104,14 @@ def argmin(l):
     return min_i
 
 
+def cmp(x,y):
+    if x<y:
+        return -1
+    elif x>y:
+        return 1
+    return 0
+
+
 # == range operations ==
 def overlaps(range1, range2):
     return not (range1[1] < range2[0] or range1[0] > range2[1])

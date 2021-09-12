@@ -8,6 +8,7 @@ import logging
 from collections import defaultdict
 from collections import namedtuple
 from functools import reduce
+from functools import cmp_to_key
 import copy
 
 from src.common import *
@@ -125,7 +126,9 @@ class GraphBasedModelConstructor:
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
         self.detected_known_isoforms = set()
 
-        for path in sorted(self.path_storage.fl_paths):
+        # a minor trick to compare tuples of pairs, whose starting and terminating elements have different type
+        for path in sorted(self.path_storage.fl_paths,
+                           key=cmp_to_key(lambda x,y: cmp(x[1:-1],y[1:-1]) if len(x)==len(y) else cmp(len(y), len(x)))):
             # do not include terminal vertices
             intron_path = path[1:-1]
             transcript_range = (path[0][1], path[-1][1])
