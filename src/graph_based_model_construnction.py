@@ -263,7 +263,7 @@ class GraphBasedModelConstructor:
                 else:
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
                         polya_sites[refrenence_isoform_id] += 1
-            else:
+            elif len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) > 1:
                 spliced_isoform_counts[refrenence_isoform_id] += 1
                 if abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
                     isoform_left_support[refrenence_isoform_id] += 1
@@ -334,6 +334,8 @@ class GraphBasedModelConstructor:
                 logger.debug("<< nonfl is NOT expressed")
 
         for isoform_id in self.detected_known_isoforms:
+            if isoform_id not in self.known_isoforms_in_graph_ids:
+                continue
             path = self.known_isoforms_in_graph_ids[isoform_id]
             for v in path:
                 self.visited_introns.add(v)
