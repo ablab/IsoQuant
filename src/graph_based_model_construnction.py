@@ -127,9 +127,11 @@ class GraphBasedModelConstructor:
         self.detected_known_isoforms = set()
 
         # a minor trick to compare tuples of pairs, whose starting and terminating elements have different type
+        logger.debug("Total FL paths %d" % len(self.path_storage.fl_paths))
         for path in sorted(self.path_storage.fl_paths,
                            key=cmp_to_key(lambda x,y: cmp(x[1:-1],y[1:-1]) if len(x)==len(y) else cmp(len(y), len(x)))):
             # do not include terminal vertices
+            logger.debug(">>> Considering path " + str(path))
             intron_path = path[1:-1]
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))

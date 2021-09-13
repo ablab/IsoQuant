@@ -166,14 +166,14 @@ class IntronGraph:
         for v in self.outgoing_edges[intron]:
             if v[0] == v_type:
                 res.append(v)
-        return res
+        return sorted(res)
 
     def get_incoming(self, intron, v_type):
         res = []
         for v in self.incoming_edges[intron]:
             if v[0] == v_type:
                 res.append(v)
-        return res
+        return sorted(res)
 
     def is_dead_end(self, intron):
         return not any(x[0] > 0 for x in self.outgoing_edges[intron])
@@ -216,7 +216,7 @@ class IntronGraph:
         for current_intron in sorted(self.outgoing_edges.keys()):
             out_introns = self.outgoing_edges[current_intron]
             substitute_dict = self.collapse_vertex_set(out_introns)
-            for i in substitute_dict.keys():
+            for i in sorted(substitute_dict.keys()):
                 if i in to_remove:
                     continue
                 to_remove.add(i)
@@ -232,7 +232,7 @@ class IntronGraph:
         for current_intron in sorted(self.incoming_edges.keys()):
             inc_introns = self.incoming_edges[current_intron]
             substitute_dict = self.collapse_vertex_set(inc_introns)
-            for i in substitute_dict.keys():
+            for i in sorted(substitute_dict.keys()):
                 if i in to_remove:
                     continue
                 to_remove.add(i)
@@ -250,7 +250,7 @@ class IntronGraph:
             if self.is_isolated(intron):
                 isolated.add(intron)
         substitute_dict = self.collapse_vertex_set(isolated)
-        for i in substitute_dict.keys():
+        for i in sorted(substitute_dict.keys()):
             to_remove.add(i)
             self.collapse_vertex(i, substitute_dict[i])
 
@@ -314,7 +314,7 @@ class IntronGraph:
         logger.debug("Setting terminal positions paths for %s" % self.gene_info.gene_db_list[0].id)
         polya_ends, read_ends, polyt_starts, read_starts = self.collect_terminal_positions()
 
-        for intron in self.intron_collector.clustered_introns:
+        for intron in sorted(self.intron_collector.clustered_introns):
             self.attach_transcpt_ends(intron, polya_ends, read_ends, read_end=True)
             self.attach_transcpt_ends(intron, polyt_starts, read_starts, read_end=False)
 
