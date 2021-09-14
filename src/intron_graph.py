@@ -12,16 +12,10 @@ from src.common import *
 
 logger = logging.getLogger('IsoQuant')
 
-@unique
-class VertexType(Enum):
-    intron = -1
-    polya = -10
-    read_end = -11
-    polyt = -20
-    read_start = -21
-
-    def __lt__(self, other):
-        return self.value < other.value
+VERTEX_polya = -10
+VERTEX_read_end = -11
+VERTEX_polyt = -20
+VERTEX_read_start = -21
 
 
 class IntronCollector:
@@ -342,14 +336,14 @@ class IntronGraph:
 
         if read_end:
             for pos in clustered_polyas.keys():
-                self.outgoing_edges[intron].add((VertexType.polya, pos))
+                self.outgoing_edges[intron].add((VERTEX_polya, pos))
             for pos in terminal_positions.keys():
-                self.outgoing_edges[intron].add((VertexType.read_end, pos))
+                self.outgoing_edges[intron].add((VERTEX_read_end, pos))
         else:
             for pos in clustered_polyas.keys():
-                self.incoming_edges[intron].add((VertexType.polyt, pos))
+                self.incoming_edges[intron].add((VERTEX_polyt, pos))
             for pos in terminal_positions.keys():
-                self.incoming_edges[intron].add((VertexType.read_start, pos))
+                self.incoming_edges[intron].add((VERTEX_read_start, pos))
 
     def collect_terminal_positions(self):
         polya_ends = defaultdict(lambda: defaultdict(int))

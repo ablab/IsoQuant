@@ -129,7 +129,7 @@ class GraphBasedModelConstructor:
         # a minor trick to compare tuples of pairs, whose starting and terminating elements have different type
         logger.debug("Total FL paths %d" % len(self.path_storage.fl_paths))
         for path in sorted(self.path_storage.fl_paths,
-                           key=cmp_to_key(lambda x,y: cmp(x[1:-1],y[1:-1]) if len(x)==len(y) else cmp(len(y), len(x)))):
+                           key=cmp_to_key(lambda x,y: cmp(x,y) if len(x)==len(y) else cmp(len(y), len(x)))):
             # do not include terminal vertices
             logger.debug(">>> Considering path " + str(path))
             intron_path = path[1:-1]
@@ -175,7 +175,7 @@ class GraphBasedModelConstructor:
                     logger.debug("uuu FL is NOT expressed")
             else:
                 # adding FL novel isoform
-                polya_site = path[0][0] == VertexType.polyt or path[-1][0] == VertexType.polya
+                polya_site = path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya
                 if count < novel_isoform_cutoff:
                     logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
                 elif len(novel_exons) == 2 and not polya_site:
@@ -500,7 +500,7 @@ class IntronPathProcessor:
         return path
 
     def thread_ends(self, intron, end, trusted=False):
-        possible_polyas = self.intron_graph.get_outgoing(intron, VertexType.polya)
+        possible_polyas = self.intron_graph.get_outgoing(intron, VERTEX_polya)
         if trusted:
             # find closes polyA
             for v in possible_polyas:
@@ -508,7 +508,7 @@ class IntronPathProcessor:
                     return v
 
         # consider all terminal position available for intron
-        all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, VertexType.read_end)) +
+        all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, VERTEX_read_end)) +
                                    list(possible_polyas), key=lambda x:x[1])
         if len(all_possible_ends) == 0:
             return None
@@ -516,7 +516,7 @@ class IntronPathProcessor:
             return all_possible_ends[0]
 
         rightmost_end = all_possible_ends[-1]
-        if trusted and end >= rightmost_end[1] and rightmost_end[0] == VertexType.read_end:
+        if trusted and end >= rightmost_end[1] and rightmost_end[0] == VERTEX_read_end:
             # if we have trusted read, in cannot stop earlier that rightmost end (otherwise it should match polyA)
             return rightmost_end
         elif not trusted and end <= rightmost_end[1] and end > all_possible_ends[-2][1]:
@@ -525,7 +525,7 @@ class IntronPathProcessor:
         return None
 
     def thread_starts(self, intron, start, trusted=False):
-        possible_polyas = self.intron_graph.get_incoming(intron, VertexType.polyt)
+        possible_polyas = self.intron_graph.get_incoming(intron, VERTEX_polyt)
         if trusted:
             # find closes polyT
             for v in possible_polyas:
@@ -533,7 +533,7 @@ class IntronPathProcessor:
                     return v
 
         all_possible_starts = sorted(
-            list(self.intron_graph.get_incoming(intron, VertexType.read_start)) + list(possible_polyas),
+            list(self.intron_graph.get_incoming(intron, VERTEX_read_start)) + list(possible_polyas),
             key=lambda x: x[1])
         if len(all_possible_starts) == 0:
             return None
@@ -541,7 +541,7 @@ class IntronPathProcessor:
             return all_possible_starts[0]
 
         leftmost_start = all_possible_starts[0]
-        if trusted and start <= leftmost_start[1] and leftmost_start[0] == VertexType.read_start:
+        if trusted and start <= leftmost_start[1] and leftmost_start[0] == VERTEX_read_start:
             return leftmost_start
         elif not trusted and start >= leftmost_start[1] and start < all_possible_starts[1][1]:
             return leftmost_start
