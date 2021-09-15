@@ -135,7 +135,7 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
-            processed_reads.append(ShortReadAssignment(read_assignment, gene_info))
+            processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
     logger.info("Finished processing chromosome " + chr_id)
     return processed_reads
 

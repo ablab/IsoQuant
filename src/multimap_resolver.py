@@ -47,16 +47,16 @@ class MultimapResolver:
         elif self.strategy == MultimapResolvingStrategy.take_best:
             logger.debug("Resolving read %s" % assignment_list[0].read_id)
             logger.debug("Read assignment types %s" % " ".join(a.assignment_type.name for a in assignment_list))
-            primary_unique = None
+            primary_unique = set()
             consistent_assignments = set()
             inconsistent_assignments = set()
-            primary_inconsistent = None
+            primary_inconsistent = set()
             for  i, a in enumerate(assignment_list):
                 if a.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference] and \
                         not a.multimapper:
-                    primary_unique = i
+                    primary_unique.add(i)
                 elif a.assignment_type == ReadAssignmentType.inconsistent and not a.multimapper:
-                    primary_inconsistent = i
+                    primary_inconsistent.add(i)
                 if a.assignment_type in [ReadAssignmentType.unique,
                                          ReadAssignmentType.unique_minor_difference,
                                          ReadAssignmentType.ambiguous]:
@@ -64,18 +64,23 @@ class MultimapResolver:
                 elif a.assignment_type == ReadAssignmentType.inconsistent:
                     inconsistent_assignments.add(i)
 
-            if primary_unique is not None:
+            if primary_unique:
+                if len(primary_unique) > 1:
+                    logger.debug("Multiple primary unique " + ",".join([assignment_list[i].read_id for i in primary_unique]))
+                    return self.suspend_assignments(assignment_list, primary_unique, ReadAssignmentType.ambiguous)
                 # primary unique is found, rest is noninformative
                 logger.debug("Primary unique assignment selected: %s" % assignment_list[primary_unique].gene_id)
-                return self.suspend_assignments(assignment_list, [primary_unique])
+                return self.suspend_assignments(assignment_list, primary_unique)
 
             if consistent_assignments:
                 logger.debug("Merging %d consistent assignments " % len(consistent_assignments))
                 return self.suspend_assignments(assignment_list, consistent_assignments, ReadAssignmentType.ambiguous)
 
-            if primary_inconsistent is not None:
+            if primary_inconsistent:
+                if len(primary_inconsistent) > 1:
+                    logger.debug("Multiple primary inconsistent " + ",".join([assignment_list[i].read_id for i in primary_unique]))
                 logger.debug("Primary inconsistent assignment selected: %s" % assignment_list[primary_inconsistent].gene_id)
-                return self.suspend_assignments(assignment_list, [primary_inconsistent], ReadAssignmentType.inconsistent)
+                return self.suspend_assignments(assignment_list, primary_inconsistent, ReadAssignmentType.inconsistent)
 
             logger.debug("Merging inconsistent from %d assignments" % len(inconsistent_assignments))
             return self.suspend_assignments(assignment_list, inconsistent_assignments, ReadAssignmentType.inconsistent)

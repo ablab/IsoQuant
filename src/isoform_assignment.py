@@ -349,11 +349,12 @@ class MatchEvent:
 
 class IsoformMatch:
     def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
-                 match_subclassification = None, transcript_strand='.'):
+                 match_subclassification = None, transcript_strand='.', score=0):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
         self.transcript_strand = transcript_strand
         self.match_classification = match_classification
+        self.score = score
         if match_subclassification is None:
             self.match_subclassifications = []
         elif isinstance(match_subclassification, list):
@@ -377,7 +378,7 @@ class IsoformMatch:
         return all(el.event_type in valid_subtypes for el in self.match_subclassifications)
 
 
-class ShortReadAssignment:
+class BasicReadAssignment:
     def __init__(self, read_assignment, gene_info):
         self.read_id = read_assignment.read_id
         self.chr_id = read_assignment.chr_id
