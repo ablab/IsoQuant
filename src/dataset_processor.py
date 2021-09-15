@@ -287,7 +287,7 @@ class DatasetProcessor:
         multimap_pickler.fast = True
         total_assignments = 0
         polya_assignments = 0
-        for read_id in self.multimapped_reads.keys():
+        for read_id in list(self.multimapped_reads.keys()):
             assignment_list = self.multimapped_reads[read_id]
             if len(assignment_list) == 1:
                 total_assignments += 1
