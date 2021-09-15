@@ -19,6 +19,31 @@ from src.alignment_info import *
 logger = logging.getLogger('IsoQuant')
 
 
+class StrandDetector:
+    def __init__(self, chr_record):
+        self.strand_dict = {}
+        self.chr_record = chr_record
+
+    def get_strand(self, introns):
+        if not self.chr_record:
+            return '.'
+
+        count_fwd = 0
+        count_rev = 0
+        for intron in introns:
+            if not intron in self.strand_dict:
+                strand = get_intron_strand(intron, self.chr_record)
+                self.strand_dict[intron] = strand
+            else:
+                strand = self.strand_dict[intron]
+            if strand == '+':
+                count_fwd += 1
+            elif strand == '-':
+                count_rev += 1
+        if count_fwd == count_rev:
+            return '.'
+        return '+' if count_rev < count_fwd else '-'
+
 class LongReadAlignmentProcessor:
     """ class for aggregating all assignment information
 
@@ -38,6 +63,7 @@ class LongReadAlignmentProcessor:
         self.chr_record = chr_record
 
         self.assigner = LongReadAssigner(self.gene_info, self.params)
+        self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
         self.profile_constructor = CombinedProfileConstructor(gene_info, params)
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
@@ -137,15 +163,18 @@ class LongReadAlignmentProcessor:
                 logger.debug("=== Finished read " + read_id + " ===")
 
     def get_assignment_strand(self, read_assignment, read_alignment):
-        if read_assignment.isoform_matches:
-            logger.debug(read_assignment.isoform_matches[0].transcript_strand)
-
-            return read_assignment.isoform_matches[0].transcript_strand
         try:
             return read_alignment.get_tag('ts')
         except KeyError:
             pass
-        return '.'
+
+        if read_assignment.isoform_matches and read_assignment.assignment_type in \
+                [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference]:
+            return read_assignment.isoform_matches[0].transcript_strand
+
+        if len(read_assignment.exons) == 1:
+            return '.'
+        return self.strand_detector.get_strand(read_assignment.corrected_introns)
 
     def count_indel_stats(self, alignment):
         cigar_event_count = len(alignment.cigartuples)

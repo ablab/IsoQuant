@@ -654,3 +654,47 @@ def get_path_to_program(program, dirpath=None, min_version=None):
     return None
 
 
+def count_noncanonincal(introns, reference_region, strand, ref_region_start=0):
+    count = 0
+    for intron in introns:
+        intron_left_pos = intron[0] - ref_region_start
+        intron_right_pos = intron[1] - ref_region_start
+        left_site = reference_region[intron_left_pos:intron_left_pos + 2]
+        right_site = reference_region[intron_right_pos - 1:intron_right_pos + 1]
+        if strand == '+':
+            count += 0 if (left_site, right_site) == ("GT", "AG") else 1
+        else:
+            count += 0 if (left_site, right_site) == ("CT", "AC") else 1
+    return count
+
+
+def get_intron_strand(intron, reference_region, ref_region_start=0):
+    intron_left_pos = intron[0] - ref_region_start
+    intron_right_pos = intron[1] - ref_region_start
+    left_site = reference_region[intron_left_pos:intron_left_pos + 2]
+    right_site = reference_region[intron_right_pos - 1:intron_right_pos + 1]
+    is_fwd = (left_site, right_site) == ("GT", "AG")
+    is_rev = (left_site, right_site) == ("CT", "AC")
+
+    if is_fwd == is_rev:
+        return '.'
+    return '+' if is_fwd else '-'
+
+
+def get_strand(introns, reference_region, ref_region_start=0):
+    if len(introns) == 0:
+        return '.'
+
+    count_fwd = 0
+    count_rev = 0
+    for intron in introns:
+        intron_left_pos = intron[0] - ref_region_start
+        intron_right_pos = intron[1] - ref_region_start
+        left_site = reference_region[intron_left_pos:intron_left_pos + 2]
+        right_site = reference_region[intron_right_pos - 1:intron_right_pos + 1]
+        count_fwd += 1 if (left_site, right_site) == ("GT", "AG") else 0
+        count_rev += 1 if (left_site, right_site) == ("CT", "AC") else 0
+
+    if count_fwd == count_rev:
+        return '.'
+    return '+' if count_rev < count_fwd else '-'
