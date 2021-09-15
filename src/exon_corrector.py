@@ -88,7 +88,8 @@ class ExonCorrector:
                     e.event_type == MatchEventSubtype.fake_micro_intron_retention and \
                     self.params.correct_microintron_retention:
                 event_map[-e.read_region[1]-1] = e
-            event_map[e.read_region[0]] = e
+            else:
+                event_map[e.read_region[0]] = e
 
         intron_profile = alignment_info.combined_profile.read_intron_profile
         read_introns = intron_profile.read_features
