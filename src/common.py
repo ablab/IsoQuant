@@ -668,7 +668,7 @@ def count_noncanonincal(introns, reference_region, strand, ref_region_start=0):
     return count
 
 
-def get_intron_strand(intron, reference_region, ref_region_start=0):
+def get_intron_strand(intron, reference_region, ref_region_start=1):
     intron_left_pos = intron[0] - ref_region_start
     intron_right_pos = intron[1] - ref_region_start
     left_site = reference_region[intron_left_pos:intron_left_pos + 2]
@@ -681,7 +681,7 @@ def get_intron_strand(intron, reference_region, ref_region_start=0):
     return '+' if is_fwd else '-'
 
 
-def get_strand(introns, reference_region, ref_region_start=0):
+def get_strand(introns, reference_region, ref_region_start=1):
     if len(introns) == 0:
         return '.'
 

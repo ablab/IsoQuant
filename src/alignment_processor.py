@@ -163,11 +163,6 @@ class LongReadAlignmentProcessor:
                 logger.debug("=== Finished read " + read_id + " ===")
 
     def get_assignment_strand(self, read_assignment, read_alignment):
-        try:
-            return read_alignment.get_tag('ts')
-        except KeyError:
-            pass
-
         if read_assignment.isoform_matches and read_assignment.assignment_type in \
                 [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference]:
             return read_assignment.isoform_matches[0].transcript_strand
