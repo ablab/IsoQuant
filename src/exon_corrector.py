@@ -84,10 +84,10 @@ class ExonCorrector:
         for e in read_assignment.isoform_matches[0].match_subclassifications:
             if e.read_region == SupplementaryMatchConstansts.undefined_region:
                 continue
-            if e.read_region[0] == SupplementaryMatchConstansts.absent_position and \
-                    e.event_type == MatchEventSubtype.fake_micro_intron_retention and \
-                    self.params.correct_microintron_retention:
-                event_map[-e.read_region[1]-1] = e
+            if e.read_region[0] == SupplementaryMatchConstansts.absent_position:
+                if e.event_type == MatchEventSubtype.fake_micro_intron_retention and \
+                        self.params.correct_microintron_retention:
+                    event_map[-e.read_region[1]-1] = e
             else:
                 event_map[e.read_region[0]] = e
 
