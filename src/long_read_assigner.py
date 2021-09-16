@@ -535,11 +535,12 @@ class LongReadAssigner:
         logger.debug("* Inconsistencies detected: " + str(read_matches))
 
         # select ones with least number of inconsistent events
-        best_isoforms, best_score = sorted(self.select_best_among_inconsistent(combined_read_profile, read_matches))
+        best_isoforms, best_score = self.select_best_among_inconsistent(combined_read_profile, read_matches)
         if not best_isoforms:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
         logger.debug("* Selected isoforms: " + str(best_isoforms))
 
+        best_isoforms = sorted(best_isoforms)
         assignment_type = self.classify_assignment(best_isoforms, read_matches)
         if not combined_read_profile.read_intron_profile.read_profile:
             isoform_matches = self.create_monoexon_matches(read_matches, best_isoforms)
@@ -591,7 +592,7 @@ class LongReadAssigner:
             matches.append(isoform_match)
         return matches
 
-    def create_inconsistent_matches(self, read_matches, selected_isoforms, score=0):
+    def create_inconsistent_matches(self, read_matches, selected_isoforms, score=0.0):
         matches = []
         for isoform_id in selected_isoforms:
             match_classification = MatchClassification.get_inconsistency_classification(read_matches[isoform_id])
