@@ -77,7 +77,7 @@ class MultimapResolver:
                 return self.suspend_assignments(assignment_list, primary_unique, ReadAssignmentType.ambiguous)
             # primary unique is found, rest is noninformative
             logger.debug("Primary unique assignment selected: %s" %
-                         assignment_list[primary_unique].isoform_matches[0].assigned_gene)
+                         " ".join([assignment_list[i].isoform_matches[0].assigned_gene for i in primary_unique]))
             return self.suspend_assignments(assignment_list, primary_unique)
 
         if consistent_assignments:
@@ -104,8 +104,7 @@ class MultimapResolver:
             return self.suspend_assignments(assignment_list, best_isoforms,
                                             ReadAssignmentType.inconsistent if len(best_isoforms) > 1 else None)
 
-        logger.debug("Primary inconsistent assignment selected: %s" %
-                     assignment_list[inconsistent_assignments].isoform_matches[0].assigned_gene)
+        logger.debug("Primary inconsistent assignment selected")
         return self.suspend_assignments(assignment_list, inconsistent_assignments)
 
     def suspend_assignments(self, assignment_list, assignments_to_keep, new_type=None):
