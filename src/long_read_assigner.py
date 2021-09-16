@@ -535,7 +535,7 @@ class LongReadAssigner:
         logger.debug("* Inconsistencies detected: " + str(read_matches))
 
         # select ones with least number of inconsistent events
-        best_isoforms = sorted(self.select_best_among_inconsistent(combined_read_profile, read_matches))
+        best_isoforms, best_score = sorted(self.select_best_among_inconsistent(combined_read_profile, read_matches))
         if not best_isoforms:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
         logger.debug("* Selected isoforms: " + str(best_isoforms))
@@ -544,7 +544,7 @@ class LongReadAssigner:
         if not combined_read_profile.read_intron_profile.read_profile:
             isoform_matches = self.create_monoexon_matches(read_matches, best_isoforms)
         elif assignment_type == ReadAssignmentType.inconsistent:
-            isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms)
+            isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms, best_score)
         else:
             isoform_matches = self.create_consistent_matches(read_matches, best_isoforms, combined_read_profile)
         return ReadAssignment(read_id, assignment_type, isoform_matches)
@@ -591,12 +591,13 @@ class LongReadAssigner:
             matches.append(isoform_match)
         return matches
 
-    def create_inconsistent_matches(self, read_matches, selected_isoforms):
+    def create_inconsistent_matches(self, read_matches, selected_isoforms, score=0):
         matches = []
         for isoform_id in selected_isoforms:
             match_classification = MatchClassification.get_inconsistency_classification(read_matches[isoform_id])
             isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
-                                         read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id])
+                                         read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id],
+                                         score=score)
             matches.append(isoform_match)
         return matches
 
@@ -702,7 +703,7 @@ class LongReadAssigner:
                                                              similarity_function=self.coverage_based_nucleotide_score)
             logger.debug("* * Resolved by nucl score " + str(best_isoforms))
 
-        return best_isoforms
+        return best_isoforms, best_score
 
     # ==== POLYA STUFF ====
     def verify_read_ends_for_assignment(self, combined_read_profile, assignment):
