@@ -97,8 +97,7 @@ class MultimapResolver:
             assignment_scores = []
             for i in inconsistent_assignments:
                 assignment_scores.append((assignment_list[i].score, i))
-            assignment_scores = min(assignment_scores, key=lambda x: x[0])[0]
-            best_score = assignment_scores[0][0]
+            best_score = min(assignment_scores, key=lambda x: x[0])[0]
             logger.debug("= Best score " + str(best_score))
             best_isoforms = [x[1] for x in filter(lambda x: x[0] == best_score, assignment_scores)]
             return self.suspend_assignments(assignment_list, best_isoforms,
