@@ -72,11 +72,12 @@ class MultimapResolver:
         if primary_unique:
             if len(primary_unique) > 1:
                 # TODO silence warn
-                logger.warning(
-                    "Multiple primary unique " + ",".join([assignment_list[i].read_id for i in primary_unique]))
+                logger.warning("Multiple primary unique " +
+                               ",".join([assignment_list[i].isoform_matches[0].assigned_gene for i in primary_unique]))
                 return self.suspend_assignments(assignment_list, primary_unique, ReadAssignmentType.ambiguous)
             # primary unique is found, rest is noninformative
-            logger.debug("Primary unique assignment selected: %s" % assignment_list[primary_unique].gene_id)
+            logger.debug("Primary unique assignment selected: %s" %
+                         assignment_list[primary_unique].isoform_matches[0].assigned_gene)
             return self.suspend_assignments(assignment_list, primary_unique)
 
         if consistent_assignments:
@@ -91,8 +92,8 @@ class MultimapResolver:
 
     def select_best_inconsistent(self, assignment_list, inconsistent_assignments):
         if len(inconsistent_assignments) > 1:
-            logger.debug(
-                "= Multiple primary inconsistent " + ",".join([assignment_list[i].read_id for i in inconsistent_assignments]))
+            logger.debug("= Multiple primary inconsistent " +
+                         ",".join([assignment_list[i].isoform_matches[0].assigned_gene for i in inconsistent_assignments]))
             assignment_scores = []
             for i in inconsistent_assignments:
                 assignment_scores.append((assignment_list[i].isoform_matches[0].score, i))
@@ -103,7 +104,8 @@ class MultimapResolver:
             return self.suspend_assignments(assignment_list, best_isoforms,
                                             ReadAssignmentType.inconsistent if len(best_isoforms) > 1 else None)
 
-        logger.debug("Primary inconsistent assignment selected: %s" % assignment_list[inconsistent_assignments].gene_id)
+        logger.debug("Primary inconsistent assignment selected: %s" %
+                     assignment_list[inconsistent_assignments].isoform_matches[0].assigned_gene)
         return self.suspend_assignments(assignment_list, inconsistent_assignments)
 
     def suspend_assignments(self, assignment_list, assignments_to_keep, new_type=None):
