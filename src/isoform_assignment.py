@@ -388,6 +388,10 @@ class BasicReadAssignment:
         self.multimapper = read_assignment.multimapper
         self.polyA_found = read_assignment.polyA_found
         self.assignment_type = read_assignment.assignment_type
+        if read_assignment.isoform_matches:
+            self.score = read_assignment.isoform_matches[0].score
+        else:
+            self.score = 0.0
 
 
 class ReadAssignment:

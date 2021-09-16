@@ -73,11 +73,11 @@ class MultimapResolver:
             if len(primary_unique) > 1:
                 # TODO silence warn
                 logger.warning("Multiple primary unique " +
-                               ",".join([assignment_list[i].isoform_matches[0].assigned_gene for i in primary_unique]))
+                               ",".join([assignment_list[i].gene_id for i in primary_unique]))
                 return self.suspend_assignments(assignment_list, primary_unique, ReadAssignmentType.ambiguous)
             # primary unique is found, rest is noninformative
             logger.debug("Primary unique assignment selected: %s" %
-                         " ".join([assignment_list[i].isoform_matches[0].assigned_gene for i in primary_unique]))
+                         " ".join([assignment_list[i].gene_id for i in primary_unique]))
             return self.suspend_assignments(assignment_list, primary_unique)
 
         if consistent_assignments:
@@ -93,10 +93,10 @@ class MultimapResolver:
     def select_best_inconsistent(self, assignment_list, inconsistent_assignments):
         if len(inconsistent_assignments) > 1:
             logger.debug("= Multiple primary inconsistent " +
-                         ",".join([assignment_list[i].isoform_matches[0].assigned_gene for i in inconsistent_assignments]))
+                         ",".join([assignment_list[i].gene_id for i in inconsistent_assignments]))
             assignment_scores = []
             for i in inconsistent_assignments:
-                assignment_scores.append((assignment_list[i].isoform_matches[0].score, i))
+                assignment_scores.append((assignment_list[i].score, i))
             assignment_scores = min(assignment_scores, key=lambda x: x[0])[0]
             best_score = assignment_scores[0][0]
             logger.debug("= Best score " + str(best_score))
