@@ -66,7 +66,7 @@ class GraphBasedModelConstructor:
     def set_gene_properties(self):
         intron_strands_dicts = defaultdict(lambda: defaultdict(int))
         self.intron_genes = defaultdict(set)
-        for t_id, introns in self.gene_info.all_isoforms_intron.items():
+        for t_id, introns in self.gene_info.all_isoforms_introns.items():
             strand = self.gene_info.isoform_strands[t_id]
             gene_id = self.gene_info.gene_id_map[t_id]
             for intron in introns:
