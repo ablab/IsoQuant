@@ -360,7 +360,9 @@ class IntronGraph:
 
             starting_intron = self.intron_collector.substitute(assignment.corrected_introns[0])
             read_start = assignment.corrected_exons[0][0]
-            polyt_detected = assignment.polyA_found and assignment.strand == '-'
+            polyt_detected = assignment.strand == '-' and \
+                             (assignment.polya_info.external_polyt_pos != -1 or
+                              assignment.polya_info.internal_polyt_pos != -1)
             if polyt_detected:
                 polyt_starts[starting_intron][read_start] += 1
             elif not self.is_start_internal(starting_intron, read_start):
@@ -368,7 +370,9 @@ class IntronGraph:
 
             terminating_intron = self.intron_collector.substitute(assignment.corrected_introns[-1])
             read_end = assignment.corrected_exons[-1][1]
-            polya_detected = assignment.polyA_found and assignment.strand == '+'
+            polya_detected = assignment.strand == '+'  and \
+                             (assignment.polya_info.external_polya_pos != -1 or
+                              assignment.polya_info.internal_polya_pos != -1)
             if polya_detected:
                 polya_ends[terminating_intron][read_end] += 1
             elif not self.is_end_internal(terminating_intron, read_end):

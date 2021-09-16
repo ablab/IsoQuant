@@ -58,7 +58,6 @@ class PolyAFixer:
         if len(read_exons) == 1:
             return 0, 0
 
-        changed = False
         polya_exon_count = self.count_polya_exons(read_exons, polya_info.internal_polya_pos)
         polyt_exon_count = self.count_polyt_exons(read_exons, polya_info.internal_polyt_pos)
 
