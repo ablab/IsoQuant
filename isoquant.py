@@ -39,7 +39,8 @@ def parse_args(args=None, namespace=None):
                              "speeds up gene database conversion")
     parser.add_argument("--reference", "-r", help="reference genome in FASTA format, "
                                                   "should be provided to compute some additional stats and "
-                                                  "when reads in FASTA/FASTQ are used as an input", type=str)
+                                                  "when reads in FASTA/FASTQ are used as an input", type=str,
+                        required=True)
     parser.add_argument("--index", help="genome index for specified aligner, "
                                         "should be provided only when reads are used as an input", type=str)
     parser.add_argument('--clean_start', action='store_true', default=False,

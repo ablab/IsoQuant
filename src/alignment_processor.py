@@ -19,31 +19,6 @@ from src.alignment_info import *
 logger = logging.getLogger('IsoQuant')
 
 
-class StrandDetector:
-    def __init__(self, chr_record):
-        self.strand_dict = {}
-        self.chr_record = chr_record
-
-    def get_strand(self, introns):
-        if not self.chr_record:
-            return '.'
-
-        count_fwd = 0
-        count_rev = 0
-        for intron in introns:
-            if not intron in self.strand_dict:
-                strand = get_intron_strand(intron, self.chr_record)
-                self.strand_dict[intron] = strand
-            else:
-                strand = self.strand_dict[intron]
-            if strand == '+':
-                count_fwd += 1
-            elif strand == '-':
-                count_rev += 1
-        if count_fwd == count_rev:
-            return '.'
-        return '+' if count_rev < count_fwd else '-'
-
 class LongReadAlignmentProcessor:
     """ class for aggregating all assignment information
 

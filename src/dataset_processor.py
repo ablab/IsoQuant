@@ -180,6 +180,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_reads):
 
                     if not resolved_assignment:
                         logger.warning("Incomplete information on read %s" % read_assignment.read_id)
+                        continue
                     elif resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
                         continue
                     else:
@@ -325,6 +326,7 @@ class DatasetProcessor:
 
         for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
+            chr_record = self.reference_record_dict[chr_id] if self.reference_record_dict else None
             # future_list = []
 
             for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db, self.multimapped_reads):
@@ -345,7 +347,7 @@ class DatasetProcessor:
                 if self.args.no_model_construction:
                     continue
 
-                model_constructor = GraphBasedModelConstructor(gene_info, self.args, expressed_gene_info)
+                model_constructor = GraphBasedModelConstructor(gene_info, chr_record, self.args, expressed_gene_info)
                 model_constructor.process(assignment_storage)
                 gff_printer.dump(model_constructor)
                 for t in model_constructor.transcript_model_storage:

@@ -370,7 +370,7 @@ class IntronGraph:
 
             terminating_intron = self.intron_collector.substitute(assignment.corrected_introns[-1])
             read_end = assignment.corrected_exons[-1][1]
-            polya_detected = assignment.strand == '+'  and \
+            polya_detected = assignment.strand == '+' and \
                              (assignment.polya_info.external_polya_pos != -1 or
                               assignment.polya_info.internal_polya_pos != -1)
             if polya_detected:

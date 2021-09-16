@@ -28,9 +28,15 @@ class GraphBasedModelConstructor:
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
 
-    def __init__(self, gene_info, params, expressed_gene_info=None):
+    def __init__(self, gene_info, chr_record, params, expressed_gene_info=None):
         self.gene_info = gene_info
+        self.chr_record = chr_record
         self.params = params
+
+        self.strand_detector = StrandDetector(self.chr_record)
+        self.intron_genes = defaultdict(set)
+        self.set_gene_properties()
+
         # debug info only
         self.expressed_gene_info = expressed_gene_info
         self.expressed_isoforms = {}
@@ -56,6 +62,49 @@ class GraphBasedModelConstructor:
 
     def get_transcript_id(self):
         return GraphBasedModelConstructor.transcript_id_counter.increment()
+
+    def set_gene_properties(self):
+        intron_strands_dicts = defaultdict(lambda: defaultdict(int))
+        self.intron_genes = defaultdict(set)
+        for t_id, introns in self.gene_info.all_isoforms_intron.items():
+            strand = self.gene_info.isoform_strands[t_id]
+            gene_id = self.gene_info.gene_id_map[t_id]
+            for intron in introns:
+                intron_strands_dicts[intron][strand] += 1
+                self.intron_genes[intron].add(gene_id)
+
+        for intron in intron_strands_dicts.keys():
+            if len(intron_strands_dicts[intron].keys()) == 1:
+                # intron has a single strand
+                self.strand_detector.set_strand(intron, list(intron_strands_dicts[intron].keys())[0])
+            else:
+                self.strand_detector.set_strand(intron)
+
+    def select_reference_gene(self, transcript_introns, transcript_range, transcript_strand):
+        gene_counts = defaultdict(int)
+        for intron in transcript_introns:
+            if intron not in self.intron_genes:
+                continue
+            for g_id in self.intron_genes[intron]:
+                gene_counts[g_id] += 1
+
+        ordered_genes = sorted(gene_counts.items(), key=lambda x: x[1], reverse=True)
+        for g in ordered_genes:
+            gene_id = g[0]
+            if transcript_strand == '.' or self.gene_info.gene_strands[gene_id] == transcript_strand:
+                return gene_id
+
+        overlap_dict = {}
+        gene_regions = self.gene_info.get_gene_regions()
+        for gene_id in gene_regions.keys():
+            gene_coverage = read_coverage_fraction([transcript_range], [gene_regions[gene_id]])
+            if gene_coverage > 0.0 and \
+                    (transcript_strand == '.' or self.gene_info.gene_strands[gene_id] == transcript_strand):
+                overlap_dict[gene_id] = gene_coverage
+
+        if overlap_dict:
+            return get_top_count(overlap_dict)
+        return None
 
     def process(self, read_assignment_storage):
         self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
@@ -176,15 +225,16 @@ class GraphBasedModelConstructor:
             else:
                 # adding FL novel isoform
                 polya_site = path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya
+                transcript_strand = self.strand_detector.get_strand(intron_path)
                 if count < novel_isoform_cutoff:
                     logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
-                elif len(novel_exons) == 2 and not polya_site:
+                elif len(novel_exons) == 2 and (not polya_site or transcript_strand == '.'):
                     logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                 else:
-                    transcript_strand = self.path_storage.get_path_strand(path)
-                    transcript_gene = self.path_storage.get_path_gene(path)
+                    transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
                     if transcript_gene is None:
-                        transcript_gene = self.select_reference_gene(transcript_range)
+                        transcript_gene = "novel_gene_" + self.get_transcript_id()
+                    elif transcript_strand == '.':
                         transcript_strand = self.gene_info.gene_strands[transcript_gene]
 
                     if all(intron in self.known_introns for intron in intron_path):
@@ -222,13 +272,6 @@ class GraphBasedModelConstructor:
             else:
                 logger.debug("## Isoform %s does NOT match expressed chain, count = %d " % (new_transcript_id, count))
             # ===
-
-    def select_reference_gene(self, transcript_rage):
-        overlap_dict = {}
-        gene_regions = self.gene_info.get_gene_regions()
-        for gene_id in gene_regions.keys():
-            overlap_dict[gene_id] = read_coverage_fraction([transcript_rage], [gene_regions[gene_id]])
-        return get_top_count(overlap_dict)
 
     def construnct_assignment_based_isoforms(self, read_assignment_storage):
         spliced_isoform_counts = defaultdict(int)
@@ -384,7 +427,7 @@ class GraphBasedModelConstructor:
                 self.transcript_read_ids[t_id].add(read_id)
                 self.transcript_counts[t_id] += 1.0
             elif model_assignment.assignment_type == ReadAssignmentType.ambiguous:
-                # FIXME: add qunatification options
+                # FIXME: add quatification options
                 total_matches = len(model_assignment.isoform_matches)
                 for m in model_assignment.isoform_matches:
                     self.transcript_counts[m.assigned_transcript] += 1.0 / total_matches
@@ -398,25 +441,25 @@ class IntronPathStorage:
         self.path_processor = path_processor
         self.intron_graph = path_processor.intron_graph
         self.paths = defaultdict(int)
-        self.path_strands = defaultdict(str)
-        self.path_genes = defaultdict(str)
         self.fl_paths = set()
 
     def fill(self, read_assignments):
-        path_strands = defaultdict(lambda: defaultdict(int))
-        path_genes = defaultdict(lambda: defaultdict(int))
         for a in read_assignments:
             intron_path = self.path_processor.thread_introns(a.corrected_introns)
             if not intron_path:
                 continue
             read_end = a.corrected_exons[-1][1]
-            is_end_trusted = a.strand == '+' and a.polyA_found
+            is_end_trusted = a.strand == '+' and \
+                             (a.polya_info.external_polya_pos != -1 or
+                              a.polya_info.internal_polya_pos != -1)
             terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted)
             if terminal_vertex:
                 intron_path.append(terminal_vertex)
                 
             read_start = a.corrected_exons[0][0]
-            is_start_trusted = a.strand == '-' and a.polyA_found
+            is_start_trusted = a.strand == '-' and \
+                               (a.polya_info.external_polyt_pos != -1 or
+                                a.polya_info.internal_polyt_pos != -1)
             starting_vertex = self.path_processor.thread_starts(intron_path[0], read_start, is_start_trusted)
             if starting_vertex:
                 intron_path = [starting_vertex] + intron_path
@@ -426,49 +469,9 @@ class IntronPathStorage:
             if terminal_vertex and starting_vertex:
                 self.fl_paths.add(path_tuple)
 
-            path_strands[path_tuple][a.strand] += 1
-            assigned_genes = set([m.assigned_gene for m in a.isoform_matches])
-            for g in assigned_genes:
-                if g:
-                    path_genes[path_tuple][g] += 1
-
-        self.set_path_info(path_strands, path_genes)
-
         for p in self.paths.keys():
             is_fl = "   FL" if p in self.fl_paths else "nonFL"
-            logger.debug("%s path: %s: %d, %s, %s" %
-                         (is_fl, str(p), self.paths[p], self.get_path_strand(p), self.get_path_gene(p)))
-
-    def set_path_info(self, path_strands, path_genes):
-        for path in self.paths.keys():
-            logger.debug(str(path) + " = " + str(self.paths[path]) + " = " + str(path_strands[path]))
-            associated_strands = sorted(path_strands[path].items(), key=lambda x: x[1], reverse=True)
-            associated_genes = sorted(path_genes[path].items(), key=lambda x: x[1], reverse=True)
-
-            selected_strand = associated_strands[0][0]
-            if selected_strand == '.' or \
-                    (len(associated_strands) > 1 and associated_strands[0][1] / associated_strands[1][1] < 2):
-                # two similar strands appear
-                if associated_genes:
-                    selected_strand = self.intron_graph.gene_info.gene_strands[associated_genes[0][0]]
-            self.path_strands[path] = selected_strand
-
-            for g in associated_genes:
-                logger.debug(str(g))
-                gene_id = g[0]
-                if self.intron_graph.gene_info.gene_strands[gene_id] == self.path_strands[path]:
-                    self.path_genes[path] = gene_id
-                    break
-            if path not in self.path_genes:
-                logger.debug(
-                    "Did not find suitable gene for path " + str(path) + ", strand: " + self.path_strands[path])
-                self.path_genes[path] = 'novel_gene'
-
-    def get_path_strand(self, intron_path):
-        return self.path_strands[intron_path]
-
-    def get_path_gene(self, intron_path):
-        return self.path_genes[intron_path]
+            logger.debug("%s path: %s: %d" % (is_fl, str(p), self.paths[p]))
 
 
 class IntronPathProcessor:
