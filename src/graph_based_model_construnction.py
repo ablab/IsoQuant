@@ -445,6 +445,8 @@ class IntronPathStorage:
 
     def fill(self, read_assignments):
         for a in read_assignments:
+            if a.multimapper:
+                continue
             intron_path = self.path_processor.thread_introns(a.corrected_introns)
             if not intron_path:
                 continue

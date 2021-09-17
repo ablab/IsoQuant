@@ -33,7 +33,7 @@ class IntronCollector:
     def collect_introns(self, read_assignments):
         all_introns = defaultdict(int)
         for assignment in read_assignments:
-            if not assignment.corrected_introns:
+            if not assignment.corrected_introns or assignment.multimapper:
                 continue
             for intron in assignment.corrected_introns:
                 all_introns[intron] += 1
@@ -192,7 +192,7 @@ class IntronGraph:
     def construct(self):
         logger.debug("Constructing for %s" % self.gene_info.gene_db_list[0].id)
         for assignment in self.read_assignments:
-            if any(intron in self.intron_collector.discarded_introns for intron in assignment.corrected_introns):
+            if assignment.multimapper or any(intron in self.intron_collector.discarded_introns for intron in assignment.corrected_introns):
                 continue
 
             for i in range(len(assignment.corrected_introns) - 1):
@@ -352,10 +352,10 @@ class IntronGraph:
         read_starts = defaultdict(lambda: defaultdict(int))
 
         for assignment in self.read_assignments:
+            if assignment.multimapper or not assignment.corrected_introns:
+                continue
             if any(intron in self.intron_collector.discarded_introns for intron in
                    assignment.corrected_introns):
-                continue
-            if not assignment.corrected_introns:
                 continue
 
             starting_intron = self.intron_collector.substitute(assignment.corrected_introns[0])
