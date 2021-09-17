@@ -31,8 +31,9 @@ def parse_args(args=None, namespace=None):
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
                         required='--run_aligner_only' not in sys.argv)
-    # debug info only
+    # TODO remove debug info only
     parser.add_argument("--expressed_genedb", help="gene database in gffutils DB format for debugging", type=str)
+
     parser.add_argument('--complete_genedb', action='store_true', default=False,
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "
@@ -59,32 +60,7 @@ def parse_args(args=None, namespace=None):
     input_args.add_argument("--read_assignments", nargs='+', type=str,
                             help="reuse read assignments (binary format) to construct transcript models",
                             default=None)
-    parser.add_argument("--data_type", "-d", type=str, required=True, choices=DATATYPE_TO_ALIGNER.keys(),
-                        help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
-    parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
-                        ", ".join(SUPPORTED_STRANDEDNESS), default="none")
-    parser.add_argument('--polya_trimmed', action='store_true', default=False,
-                        help="set if reads were polyA trimmed; "
-                             "polyA tails will not be required for transcript model construction")
-    add_additional_option('--has_polya', action='store_true', default=True,
-                          help="deprecated option, use --polya_trimmed when reads do not have polyA tails")
-    parser.add_argument('--check_canonical', action='store_true', default=False,
-                        help="report whether splice junctions are canonical (requires reference genome)")
-    parser.add_argument('--fl_data', action='store_true', default=False,
-                        help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
-    # PIPELINE AND OUTPUT
-    parser.add_argument("--full_help", action='help', help="show full list of options")
-    parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
-    parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
-
-    add_additional_option("--run_aligner_only", action="store_true", default=False,
-                          help="align reads to reference without isoform assignment")
-    add_additional_option("--no_junc_bed", action="store_true", default=False,
-                          help="do NOT use annotation for read mapping")
-    add_additional_option("--junc_bed_file", type=str,
-                          help="annotation in BED format produced by minimap's paftools.js gff2bed "
-                               "(will be created automatically if not given)")
     parser.add_argument('--labels', '-l', nargs='+', type=str,
                         help='sample names to be used; input file names are used if not set')
     parser.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
@@ -92,44 +68,56 @@ def parse_args(args=None, namespace=None):
                                              "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM), "
                                              "using read id (read_id:DELIM)", type=str)
 
-    parser.add_argument("--sqanti_output", help="produce SQANTI-like TSV output (requires more time)",
-                        action='store_true', default=False)
-    parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
-    add_additional_option("--no_secondary", help="ignore secondary alignments (not recommended)", action='store_true',
-                          default=False)
-
-    # ADDITIONAL OPTIONS
-    add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
-                                            "; chosen based on data type if not set", type=str)
-    #add_additional_option("--path_to_aligner", help="folder with the aligner, $PATH is used by default", type=str)
-    add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
-                          default=False)
-    add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
-    add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
+    # INPUT PROPERTIES
+    parser.add_argument("--data_type", "-d", type=str, required=True, choices=DATATYPE_TO_ALIGNER.keys(),
+                        help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
+    parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
+                        ", ".join(SUPPORTED_STRANDEDNESS), default="none")
+    parser.add_argument('--fl_data', action='store_true', default=False,
+                        help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
     # ALGORITHM
-    parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
-                        help="matching strategy to use from most strict to least", type=str, default=None)
     add_additional_option("--delta", type=int, default=None,
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
-    add_additional_option("--no_model_construction", action="store_true", default=False,
-                          help="run only read assignment and quantification")
-    add_additional_option("--correct_minor_errors", type=bool, default=None,
-                          help="do not treat alignment artefacts as modification events")
-    add_additional_option("--max_intron_shift", type=int, default=None,
-                          help="set maximum length for intron shift")
-    add_additional_option("--max_missed_exon_len", type=int, default=None,
-                          help="set maximum length for skipped exon")
-    add_additional_option("--resolve_ambiguous", type=str, default='default',
-                          help="set ambiguity resolving method: default, none, monoexon_only, monoexon_and_fsm, all")
-
+    parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
+                        help="matching strategy to use from most strict to least", type=str, default=None)
     parser.add_argument("--splice_correction_strategy", choices=["none", "default_ccs", "default_ont", "all", "assembly"],
                         help="transcript model construction strategy to use",
                         type=str, default=None)
     parser.add_argument("--model_construction_strategy", choices=["reliable", "default_ccs", "default_ont",
-                                                                  "fl_ccs", "all", "assembly"],
+                                                                  "sensitive_ont", "fl_ccs", "all", "assembly"],
                         help="transcript model construction strategy to use",
                         type=str, default=None)
+
+    # OUTPUT PROPERTIES
+    parser.add_argument("--full_help", action='help', help="show full list of options")
+    parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
+    parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
+
+    parser.add_argument('--check_canonical', action='store_true', default=False,
+                        help="report whether splice junctions are canonical (requires reference genome)")
+    parser.add_argument("--sqanti_output", help="produce SQANTI-like TSV output (requires more time)",
+                        action='store_true', default=False)
+    parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
+
+    # ADDITIONAL
+    add_additional_option("--no_model_construction", action="store_true", default=False,
+                          help="run only read assignment and quantification")
+    add_additional_option("--run_aligner_only", action="store_true", default=False,
+                          help="align reads to reference without isoform assignment")
+    add_additional_option("--no_junc_bed", action="store_true", default=False,
+                          help="do NOT use annotation for read mapping")
+    add_additional_option("--junc_bed_file", type=str,
+                          help="annotation in BED format produced by minimap's paftools.js gff2bed "
+                               "(will be created automatically if not given)")
+    add_additional_option("--no_secondary", help="ignore secondary alignments (not recommended)", action='store_true',
+                          default=False)
+    add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
+                                            "; chosen based on data type if not set", type=str)
+    add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
+                          default=False)
+    add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
+    add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
     args = parser.parse_args(args, namespace)
 
@@ -239,12 +227,6 @@ def check_input_files(args):
 
 
 def create_output_dirs(args):
-    args.tmp_dir = os.path.join(args.output, "tmp")
-    if os.path.exists(args.tmp_dir):
-        logger.warning("Tmp folder already exists, some files may be overwritten")
-    else:
-        os.makedirs(args.tmp_dir)
-
     for sample in args.input_data.samples:
         sample_dir = sample.out_dir
         if os.path.exists(sample_dir):
@@ -297,8 +279,7 @@ def set_data_dependent_options(args):
     if args.splice_correction_strategy is None:
         args.splice_correction_strategy = splice_correction_strategies[args.data_type]
 
-    if args.resolve_ambiguous == 'default' and args.fl_data:
-        args.resolve_ambiguous = 'monoexon_and_fsm'
+    args.resolve_ambiguous = 'monoexon_and_fsm' if args.fl_data else 'default'
 
 
 def set_matching_options(args):
@@ -319,8 +300,8 @@ def set_matching_options(args):
     args.delta = args.delta if args.delta is not None else strategy.delta
     args.minor_exon_extension = 50
     args.major_exon_extension = 300
-    args.max_intron_shift = args.max_intron_shift if args.max_intron_shift is not None else strategy.max_intron_shift
-    args.max_missed_exon_len = args.max_missed_exon_len if args.max_missed_exon_len is not None else strategy.max_missed_exon_len
+    args.max_intron_shift = strategy.max_intron_shift
+    args.max_missed_exon_len = strategy.max_missed_exon_len
     args.max_fake_terminal_exon_len = strategy.max_fake_terminal_exon_len
     # short introns that are actually long deletions, fix minimaps logic
     args.max_suspicious_intron_abs_len = strategy.max_suspicious_intron_abs_len
@@ -341,8 +322,7 @@ def set_matching_options(args):
         logger.error("Incorrect resolving ambiguity method: " + args.resolve_ambiguous + ", default will be used")
         args.resolve_ambiguous = strategy.resolve_ambiguous
     args.resolve_ambiguous = AmbiguityResolvingMethod[args.resolve_ambiguous]
-    args.correct_minor_errors = \
-        strategy.correct_minor_errors if args.correct_minor_errors is None else args.correct_minor_errors
+    args.correct_minor_errors = strategy.correct_minor_errors
 
     updated_strategy = MatchingStrategy(args.delta, args.max_intron_shift, args.max_missed_exon_len,
                                         args.max_fake_terminal_exon_len,
@@ -383,13 +363,13 @@ def set_model_construction_options(args):
                                             'min_novel_count', 'min_novel_count_rel',
                                             'fl_only'))
     strategies = {
-        'reliable':    ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  2, 5, 10, 0.05, True),
-        'default_ccs': ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 2, 3, 0.005, False),
-        'default_ont': ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 3, 5, 0.02,  False),
-        'recall_ont':  ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 2, 4, 0.01,  False),
-        'fl_ccs':      ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 1, 2, 0.005, True),
-        'all':         ModelConstructionStrategy(0, 0.05, 5,  3, 0.05, 1, 0.01, 0.05, 1, 1, 1, 0.001, False),
-        'assembly':    ModelConstructionStrategy(0, 0.1, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 1, 0.05,  False)
+        'reliable':        ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  2, 5, 10, 0.05, True),
+        'default_ccs':     ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 2, 3, 0.005, False),
+        'default_ont':     ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 3, 5, 0.02,  False),
+        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 2, 4, 0.01,  False),
+        'fl_ccs':          ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 1, 2, 0.005, True),
+        'all':             ModelConstructionStrategy(0, 0.05, 5,  3, 0.05, 1, 0.01, 0.05, 1, 1, 1, 0.001, False),
+        'assembly':        ModelConstructionStrategy(0, 0.1, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 1, 0.05,  False)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -407,7 +387,6 @@ def set_model_construction_options(args):
     args.min_novel_count = strategy.min_novel_count
     args.min_novel_count_rel = strategy.min_novel_count_rel
     args.fl_only = strategy.fl_only
-    args.require_polyA = not args.polya_trimmed
     args.min_mono_exon_coverage = 0.75
 
 def set_configs_directory(args):
@@ -431,7 +410,7 @@ def set_additional_params(args):
     set_splice_correction_options(args)
 
     args.print_additional_info = True
-    args.memory_efficient = False
+    args.no_polya = False
 
     args.indel_near_splice_site_dist = 10
     args.upstream_region_len = 20
@@ -476,18 +455,12 @@ def run_pipeline(args):
     logger.info(" === IsoQuant pipeline finished === ")
 
 
-def clean_up(args):
-    if not args.keep_tmp:
-        rmtree(args.tmp_dir)
-
-
 def main(args):
     args = parse_args(args)
     set_logger(args, logger)
     create_output_dirs(args)
     set_additional_params(args)
     run_pipeline(args)
-    clean_up(args)
 
 
 if __name__ == "__main__":

@@ -224,7 +224,7 @@ class GraphBasedModelConstructor:
                     logger.debug("uuu FL is NOT expressed")
             else:
                 # adding FL novel isoform
-                polya_site = path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya
+                polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya) and not self.params.no_polya
                 transcript_strand = self.strand_detector.get_strand(intron_path)
                 if count < novel_isoform_cutoff:
                     logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))

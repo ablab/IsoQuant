@@ -6,7 +6,9 @@
 
 import _pickle as pickle
 import gc
+import glob
 import gzip
+import os
 from multiprocessing import Pool
 from collections import namedtuple
 from concurrent import futures
@@ -236,10 +238,6 @@ class DatasetProcessor:
         logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(map(lambda x: x[0], sample.file_list)))
         self.multimapped_reads = defaultdict(list)
 
-        self.tmp_dir = os.path.join(sample.out_dir, "tmp")
-        if not os.path.isdir(self.tmp_dir):
-            os.makedirs(self.tmp_dir)
-
         if self.args.read_assignments:
             saves_file = sample.file_list[0][0]
             logger.info('Using read assignments from {}*'.format(saves_file))
@@ -250,19 +248,15 @@ class DatasetProcessor:
                         format(sample.out_raw_file))
         total_alignments, polya_found = self.load_read_info(saves_file)
 
-        intial_polya_required = self.args.require_polyA
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
         logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
-        if polya_fraction < 0.3 and self.args.require_polyA:
-            logger.warning("PolyA tail found in less than 30% of the reads, "
-                           "polyA tails will not be required for transcript model construction. "
-                           "Set --polya_trimmed to avoid this warning in future.")
-            self.args.require_polyA = False
+        self.args.no_polya = polya_fraction < 0.3
 
         self.process_assigned_reads(sample, saves_file)
-        os.rmdir(self.tmp_dir)
-        self.args.require_polyA = intial_polya_required
+        if not self.args.read_assignments and not self.args.keep_tmp:
+            for f in glob.glob(saves_file + "_*"):
+                os.remove(f)
         logger.info("Processed sample " + sample.label)
 
     def assign_reads(self, sample):
@@ -412,9 +406,8 @@ class DatasetProcessor:
     def create_aggregators(self, sample):
         self.read_stat_counter = EnumStats()
         self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support)
-        self.bed_printer = BEDPrinter(sample.out_mapped_bed, self.args)
         self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed, self.args, print_corrected=True)
-        printer_list = [self.basic_printer, self.bed_printer, self.corrected_bed_printer]
+        printer_list = [self.basic_printer, self.corrected_bed_printer]
         if self.args.sqanti_output:
             self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
             printer_list.append(self.sqanti_printer)

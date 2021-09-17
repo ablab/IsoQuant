@@ -216,7 +216,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
     # TODO: fix paired end reads
     fastq_path = os.path.abspath(fastq_file)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
-    alignment_prefix = os.path.join(args.tmp_dir, label)
+    alignment_prefix = os.path.join(out_dir, label)
     alignment_bam_path = os.path.join(out_dir, label + '_%x_%x.bam' % (hash(fastq_path), hash(args.index)))
     logger.info("Aligning %s to the reference, alignments will be saved to %s" % (fastq_path, alignment_bam_path))
     alignment_sam_path = alignment_bam_path[:-4] + '.sam'
@@ -270,7 +270,8 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
             bed_supplied = False
             if args.junc_bed_file:
                 if not os.path.exists(args.junc_bed_file):
-                    logger.error("Provided BED file %s does not exist, will generate for the annotation" % args.junc_bed_file)
+                    logger.warning("Provided BED file %s does not exist, will generate for the annotation" %
+                                   args.junc_bed_file)
                 else:
                     additional_options.append("--junc-bed")
                     additional_options.append(args.junc_bed_file)
@@ -278,6 +279,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
             if not bed_supplied:
                 bed_filename = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".bed")
                 db2bed(bed_filename, args.genedb)
+                args.junc_bed_file = bed_filename
                 additional_options.append("--junc-bed")
                 additional_options.append(bed_filename)
 
