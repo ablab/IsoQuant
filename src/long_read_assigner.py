@@ -30,9 +30,10 @@ class AmbiguityResolvingMethod(Enum):
 
 
 class LongReadAssigner:
-    def __init__(self, gene_info, params):
+    def __init__(self, gene_info, params, quick_mode=False):
         self.gene_info = gene_info
         self.params = params
+        self.quick_mode = quick_mode
         self.intron_comparator = JunctionComparator(params,
                                                     OverlappingFeaturesProfileConstructor
                                                     (self.gene_info.intron_profiles.features,
@@ -522,6 +523,9 @@ class LongReadAssigner:
 
     # resolve when there are -1s in read profile or when there are no exactly matching isoforms, but no -1s in read profiles
     def match_inconsistent(self, read_id, combined_read_profile):
+        if self.quick_mode:
+            return ReadAssignment(read_id, ReadAssignmentType.inconsistent, IsoformMatch(MatchClassification.genic))
+
         # select most similar isoforms based on multiple criteria
         best_candidates = self.select_similar_isoforms(combined_read_profile)
         if not best_candidates:

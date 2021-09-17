@@ -126,7 +126,7 @@ class GraphBasedModelConstructor:
 
         self.construct_fl_isoforms()
         self.construnct_assignment_based_isoforms(read_assignment_storage)
-        # self.assign_reads_to_models(read_assignment_storage)
+        self.assign_reads_to_models(read_assignment_storage)
 
         # debug info only
         for t in self.transcript_model_storage:
@@ -411,7 +411,7 @@ class GraphBasedModelConstructor:
 
         logger.debug("Creating aritificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
         transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.params.delta)
-        assigner = LongReadAssigner(transcript_model_gene_info, self.params)
+        assigner = LongReadAssigner(transcript_model_gene_info, self.params, quick_mode=True)
         profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
 
         for assignment in read_assignments:
