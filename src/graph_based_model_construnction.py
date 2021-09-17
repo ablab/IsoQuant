@@ -88,7 +88,7 @@ class GraphBasedModelConstructor:
             for g_id in self.intron_genes[intron]:
                 gene_counts[g_id] += 1
 
-        ordered_genes = sorted(gene_counts.items(), key=lambda x: x[1], reverse=True)
+        ordered_genes = sorted(gene_counts.items(), key=lambda x: (x[1], x[0]), reverse=True)
         for g in ordered_genes:
             gene_id = g[0]
             if transcript_strand == '.' or self.gene_info.gene_strands[gene_id] == transcript_strand:
