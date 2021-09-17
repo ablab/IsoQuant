@@ -72,8 +72,7 @@ class MultimapResolver:
         if primary_unique:
             if len(primary_unique) > 1:
                 # TODO silence warn
-                logger.warning("Multiple primary unique " +
-                               ",".join([assignment_list[i].gene_id for i in primary_unique]))
+                logger.debug("Multiple primary unique %s: %s " % (assignment_list[0].read_id, ",".join([assignment_list[i].gene_id for i in primary_unique])))
                 return self.suspend_assignments(assignment_list, primary_unique, ReadAssignmentType.ambiguous)
             # primary unique is found, rest is noninformative
             logger.debug("Primary unique assignment selected: %s" %
