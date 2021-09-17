@@ -161,8 +161,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                    read_assignment.assignment_type.name + "\t" + event_string + "\t" + range_list_to_str(read_exons)
 
             additional_info = []
-            if not self.params.polya_trimmed:
-                additional_info.append("PolyA=" + str(read_assignment.polyA_found) + ";")
+            additional_info.append("PolyA=" + str(read_assignment.polyA_found) + ";")
             if self.params.cage is not None:
                 additional_info.append("CAGE=" + str(read_assignment.cage_found) + ";")
             if self.params.check_canonical and read_assignment.gene_info.reference_region:
