@@ -81,7 +81,7 @@ def parse_args(args=None, namespace=None):
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
     parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
                         help="matching strategy to use from most strict to least", type=str, default=None)
-    parser.add_argument("--splice_correction_strategy", choices=["none", "default_ccs", "default_ont", "all", "assembly"],
+    parser.add_argument("--splice_correction_strategy", choices=["none", "default_ccs", "default_ont", "conservative_ont", "all", "assembly"],
                         help="transcript model construction strategy to use",
                         type=str, default=None)
     parser.add_argument("--model_construction_strategy", choices=["reliable", "default_ccs", "default_ont",
@@ -338,10 +338,10 @@ def set_splice_correction_options(args):
     strategies = {
         'none': SplicSiteCorrectionStrategy(False, False, False, False, False, False),
         'default_ccs': SplicSiteCorrectionStrategy(False, False, True, False, False, True),
-        #'default_ont': SplicSiteCorrectionStrategy(True, False, True, True, True, True),
-        'default_ont': SplicSiteCorrectionStrategy(True, False, True, False, False, False),
+        'conservative_ont': SplicSiteCorrectionStrategy(True, False, True, False, False, False),
+        'default_ont': SplicSiteCorrectionStrategy(True, False, True, False, True, False),
         'all': SplicSiteCorrectionStrategy(True, True, True, True, True, True),
-        'assembly': SplicSiteCorrectionStrategy(False, False, True, False, False, True)
+        'assembly': SplicSiteCorrectionStrategy(False, False, True, False, False, False)
     }
     strategy = strategies[args.splice_correction_strategy]
     args.correct_fuzzy_junctions = strategy.fuzzy_junctions
