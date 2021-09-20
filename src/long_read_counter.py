@@ -12,9 +12,10 @@ logger = logging.getLogger('IsoQuant')
 
 
 class AbstractCounter:
-    def __init__(self, output_file_name, ignore_read_groups=False):
+    def __init__(self, output_prefix, ignore_read_groups=False):
         self.ignore_read_groups = ignore_read_groups
-        self.output_file_name = output_file_name
+        self.output_counts_file_name = output_prefix + "_counts.tsv"
+        self.output_tpm_file_name = output_prefix + "_tpm.tsv"
 
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
@@ -49,8 +50,8 @@ class CompositeCounter:
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
-    def __init__(self, output_file_name, get_feature_id, ignore_read_groups=False):
-        AbstractCounter.__init__(self, output_file_name, ignore_read_groups)
+    def __init__(self, output_prefix, get_feature_id, ignore_read_groups=False):
+        AbstractCounter.__init__(self, output_prefix, ignore_read_groups)
         self.get_feature_id = get_feature_id
         self.all_features = set()
 
@@ -104,16 +105,54 @@ class AssignedFeatureCounter(AbstractCounter):
     def add_unaligned(self, n_reads=1):
         self.not_aligned_reads += n_reads
 
+    def format_header(self, all_groups, value_name="count"):
+        if self.ignore_read_groups:
+            return "feature_id\t%s\n" % value_name
+        elif len(all_groups) > 10:
+            return "feature_id\tgroup_id\t%s\n" % value_name
+        else:
+            return "feature_id\t" + "\t".join(all_groups)
+
     def dump(self):
-        with open(self.output_file_name, "w") as f:
-            f.write("feature_id\tgroup_id\tcount\n")
+        total_counts = 0.0
+        with open(self.output_counts_file_name, "w") as f:
+            all_groups = sorted(self.feature_counter.keys())
+            f.write(self.format_header(all_groups))
+
             for feature_id in self.all_features:
-                for group_id in self.feature_counter.keys():
-                    count = self.feature_counter[group_id][feature_id]
-                    f.write("%s\t%s\t%d\n" % (feature_id, group_id, count))
-            f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
-            f.write("__no_feature\t%d\n" % self.not_assigned_reads)
-            f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
+                if self.ignore_read_groups:
+                    count = self.feature_counter[all_groups[0]][feature_id]
+                    total_counts += count
+                    f.write("%s\t%.2f\n" % (feature_id, count))
+                elif len(all_groups) > 10:
+                    for group_id in all_groups:
+                        count = self.feature_counter[group_id][feature_id]
+                        total_counts += count
+                        f.write("%s\t%s\t%.2f\n" % (feature_id, group_id, count))
+                else:
+                    count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
+                    total_counts += sum(count_values)
+                    f.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+
+            if self.ignore_read_groups:
+                f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
+                f.write("__no_feature\t%d\n" % self.not_assigned_reads)
+                f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
+
+        scale_factor = 1000000.0 / total_counts
+        with open(self.output_tpm_file_name, "w") as f:
+            f.write(self.format_header(all_groups, "TPM"))
+            for feature_id in self.all_features:
+                if self.ignore_read_groups:
+                    tpm = scale_factor * self.feature_counter[all_groups[0]][feature_id]
+                    f.write("%s\t%.6f\n" % (feature_id, tpm))
+                elif len(all_groups) > 10:
+                    for group_id in all_groups:
+                        tpm = scale_factor * self.feature_counter[group_id][feature_id]
+                        f.write("%s\t%s\t%.6f\n" % (feature_id, group_id, tpm))
+                else:
+                    tpm_values = [scale_factor * self.feature_counter[group_id][feature_id] for group_id in all_groups]
+                    f.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
 
 
 def create_gene_counter(output_file_name, ignore_read_groups=False):
@@ -126,8 +165,8 @@ def create_transcript_counter(output_file_name, ignore_read_groups=False):
 
 # count simple features inclusion/exclusion (exons / introns)
 class ProfileFeatureCounter(AbstractCounter):
-    def __init__(self, output_file_name, ignore_read_groups=False):
-        AbstractCounter.__init__(self, output_file_name, ignore_read_groups)
+    def __init__(self, output_prefix, ignore_read_groups=False):
+        AbstractCounter.__init__(self, output_prefix, ignore_read_groups)
         # group_id -> (feature_id -> count)
         self.inclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
@@ -146,7 +185,7 @@ class ProfileFeatureCounter(AbstractCounter):
                 self.all_features.add(feature_id)
 
     def dump(self):
-        with open(self.output_file_name, "w") as f:
+        with open(self.output_counts_file_name, "w") as f:
             f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
             all_groups = set(self.inclusion_feature_counter.keys())
             all_groups.update(self.exclusion_feature_counter.keys())
@@ -167,8 +206,8 @@ class ProfileFeatureCounter(AbstractCounter):
 
 
 class ExonCounter(ProfileFeatureCounter):
-    def __init__(self, output_file_name, ignore_read_groups=False):
-        ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
+    def __init__(self, output_prefix, ignore_read_groups=False):
+        ProfileFeatureCounter.__init__(self, output_prefix, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
         if not ProfileFeatureCounter.is_valid(read_assignment):
@@ -179,8 +218,8 @@ class ExonCounter(ProfileFeatureCounter):
 
 
 class IntronCounter(ProfileFeatureCounter):
-    def __init__(self, output_file_name, ignore_read_groups=False):
-        ProfileFeatureCounter.__init__(self, output_file_name, ignore_read_groups)
+    def __init__(self, output_prefix, ignore_read_groups=False):
+        ProfileFeatureCounter.__init__(self, output_prefix, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
         if not ProfileFeatureCounter.is_valid(read_assignment):

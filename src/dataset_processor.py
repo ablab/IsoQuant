@@ -451,8 +451,8 @@ class DatasetProcessor:
     def finalize_aggregators(self, sample):
         self.global_counter.dump()
         self.transcript_model_global_counter.dump()
-        logger.info("Gene counts are stored in " + self.gene_counter.output_file_name)
-        logger.info("Transcript counts are stored in " + self.transcript_counter.output_file_name)
+        logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
+        logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
         logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
         self.read_stat_counter.print_start("Read assignment statistics")
 
