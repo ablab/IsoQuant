@@ -9,7 +9,7 @@ def test_run_without_parameters():
     result = subprocess.run(["python", "isoquant.py"], capture_output=True)
     assert result.returncode == 2
     assert b"usage" in result.stderr
-    assert b"error: the following arguments are required: --genedb/-g, --data_type/-d" in result.stderr
+    assert b"error: the following arguments are required: --genedb/-g, --reference/-r, --data_type/-d" in result.stderr
 
 
 @pytest.mark.parametrize("option", ["-h", "--help", "--full_help"])
@@ -43,9 +43,10 @@ def test_clean_start():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["exon_counts.tsv", "exon_grouped_counts.tsv", "gene_counts.tsv", "gene_grouped_counts.tsv",
-                       "intron_counts.tsv", "intron_grouped_counts.tsv", "mapped_reads.bed", "read_assignments.tsv",
+                       "intron_counts.tsv", "intron_grouped_counts.tsv", "corrected_reads.bed", "read_assignments.tsv",
                        "SQANTI-like.tsv", "transcript_counts.tsv", "transcript_grouped_counts.tsv",
-                       "transcript_models_counts.tsv", "transcript_models.gtf", "transcript_models_reads.tsv"]
+                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv",
+                       "transcript_model_tpm.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
@@ -70,7 +71,7 @@ def test_usual_start():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["gene_counts.tsv", "read_assignments.tsv", "transcript_counts.tsv",
-                       "transcript_models_counts.tsv", "transcript_models.gtf", "transcript_models_reads.tsv"]
+                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
@@ -90,15 +91,15 @@ def test_with_bam_and_polya():
                              "-r",  data_dir + "chr9.4M.fa.gz",
                              "-t", "2",
                              "--labels", sample_name,
-                             "--has_polya", "--sqanti_output", "--count_exons"])
+                             "--sqanti_output", "--count_exons"])
 
     assert result.returncode == 0
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["exon_counts.tsv", "gene_counts.tsv",
-                       "intron_counts.tsv", "mapped_reads.bed", "read_assignments.tsv",
+                       "intron_counts.tsv", "corrected_reads.bed", "read_assignments.tsv",
                        "SQANTI-like.tsv", "transcript_counts.tsv",
-                       "transcript_models_counts.tsv", "transcript_models.gtf", "transcript_models_reads.tsv"]
+                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
@@ -110,7 +111,7 @@ def test_no_polya():
     os.environ['HOME'] = source_dir # dirty hack to set $HOME for tox environment
     sample_name = "MAPT.Mouse.ONT"
 
-    result = subprocess.run(["python", "isoquant.py", '--clean_start', "--polya_trimmed",
+    result = subprocess.run(["python", "isoquant.py", '--clean_start',
                              "-o", out_dir,
                              "--data_type", "nanopore",
                              "--fastq", data_dir + "MAPT.Mouse.ONT.simulated.fastq",
@@ -124,7 +125,7 @@ def test_no_polya():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["gene_counts.tsv", "read_assignments.tsv", "transcript_counts.tsv",
-                       "transcript_models_counts.tsv", "transcript_models.gtf", "transcript_models_reads.tsv"]
+                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
