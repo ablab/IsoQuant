@@ -31,9 +31,6 @@ def parse_args(args=None, namespace=None):
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
                         required='--run_aligner_only' not in sys.argv)
-    # TODO remove debug info only
-    parser.add_argument("--expressed_genedb", help="gene database in gffutils DB format for debugging", type=str)
-
     parser.add_argument('--complete_genedb', action='store_true', default=False,
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "

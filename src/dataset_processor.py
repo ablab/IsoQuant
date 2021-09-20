@@ -312,37 +312,19 @@ class DatasetProcessor:
         transcript_stat_counter = EnumStats()
         # thread_pool = futures.ThreadPoolExecutor(max(1, self.args.threads-1))
 
-        # debug info only
-        expressed_db = None
-        if self.args.expressed_genedb:
-            logger.info("Loading expreseed genes from %s" % self.args.expressed_genedb)
-            expressed_db = gffutils.FeatureDB(self.args.expressed_genedb, keep_order=True)
-
         for chr_id in self.get_chromosome_list():
             chr_dump_file = dump_filename + "_" + chr_id
             chr_record = self.reference_record_dict[chr_id] if self.reference_record_dict else None
             # future_list = []
 
             for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db, self.multimapped_reads):
-                # debug info only
-                expressed_gene_info = None
-                if expressed_db:
-                    gene_list = []
-                    for g in gene_info.gene_db_list:
-                        try:
-                            gene_list.append(expressed_db[g.id])
-                        except gffutils.exceptions.FeatureNotFoundError:
-                            pass
-                    if gene_list:
-                        expressed_gene_info = GeneInfo(gene_list, expressed_db, delta=self.args.delta)
-
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)
                 if self.args.no_model_construction:
                     continue
 
                 model_constructor = GraphBasedModelConstructor(gene_info, chr_record, self.args,
-                                                               self.transcript_model_global_counter, expressed_gene_info)
+                                                               self.transcript_model_global_counter)
                 model_constructor.process(assignment_storage)
                 gff_printer.dump(model_constructor)
                 for t in model_constructor.transcript_model_storage:
