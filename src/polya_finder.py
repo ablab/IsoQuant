@@ -110,7 +110,7 @@ class PolyAFinder:
 
     # == polyA stuff ==
     def find_polya_tail(self, alignment, from_pos, to_pos, check_entire_tail=False):
-        logger.debug("Detecting polyA tail for %s " % alignment.query_name)
+        # logger.debug("Detecting polyA tail for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_tail_len = 0
 
@@ -132,17 +132,15 @@ class PolyAFinder:
         sequence_to_check = alignment.seq[to_check_start:to_check_end].upper()
         pos = self.find_polya(sequence_to_check)
 
-        logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_end, to_check_start, to_check_end, pos))
-        logger.debug(sequence_to_check)
+        # logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" %
+        #              (read_mapped_region_end, to_check_start, to_check_end, pos))
 
         if check_entire_tail and pos != -1:
             entire_tail = sequence_to_check[pos:]
             if entire_tail.count('A') < len(entire_tail) * self.min_polya_fraction:
-                logger.debug("Internal polyA seems unreliable")
                 pos = -1
 
         if pos == -1:
-            logger.debug("No polyA found")
             return -1
 
         # add position of the region we check
@@ -154,13 +152,13 @@ class PolyAFinder:
             shift = pos - read_mapped_region_end
             ref_shift = move_ref_coord_alogn_alignment(alignment, shift)
             reference_polya_start = alignment.reference_end - ref_shift
-            logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polya_start))
+            # logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polya_start))
 
-        logger.debug("PolyA found at position %d" % reference_polya_start)
+        # logger.debug("PolyA found at position %d" % reference_polya_start)
         return reference_polya_start
 
     def find_polyt_head(self, alignment, from_pos, to_pos, check_entire_head=False):
-        logger.debug("Detecting polyT head for %s " % alignment.query_name)
+        # logger.debug("Detecting polyT head for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_head_len = 0
 
@@ -183,17 +181,16 @@ class PolyAFinder:
 
         pos = self.find_polya(sequence_to_check)
 
-        logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_start, to_check_start, to_check_end, pos))
-        logger.debug(sequence_to_check)
+        # logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" %
+        #              (read_mapped_region_start, to_check_start, to_check_end, pos))
 
         if check_entire_head and pos != -1:
             entire_tail = sequence_to_check[pos:]
             if entire_tail.count('A') < len(entire_tail) * self.min_polya_fraction:
-                logger.debug("Internal polyT seems unreliable")
+                # logger.debug("Internal polyT seems unreliable")
                 pos = -1
 
         if pos == -1:
-            logger.debug("No polyT found")
             return -1
 
         # reverse position
@@ -205,9 +202,9 @@ class PolyAFinder:
             shift = pos - read_mapped_region_start
             ref_shift = move_ref_coord_alogn_alignment(alignment, shift)
             reference_polyt_end = alignment.reference_start + ref_shift
-            logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polyt_end))
+            # logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polyt_end))
 
-        logger.debug("PolyT found at position %d" % reference_polyt_end)
+        # logger.debug("PolyT found at position %d" % reference_polyt_end)
         return max(1, reference_polyt_end)
 
     # poly A tail detection

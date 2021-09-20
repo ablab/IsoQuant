@@ -80,7 +80,7 @@ class LongReadAlignmentProcessor:
                 if self.params.no_secondary and alignment.is_secondary:
                     continue
 
-                logger.debug("=== Processing read " + read_id + " ===")
+                # logger.debug("=== Processing read " + read_id + " ===")
                 alignment_info = AlignmentInfo(alignment)
 
                 if not alignment_info.read_exons:
@@ -91,7 +91,7 @@ class LongReadAlignmentProcessor:
                     continue
                 processed_reads.add(read_tuple)
 
-                logger.debug("Read exons: " + str(alignment_info.read_exons))
+                # logger.debug("Read exons: " + str(alignment_info.read_exons))
                 if self.params.needs_reference:
                     if alignment_info.read_start < self.gene_info.all_read_region_start:
                         self.gene_info.all_read_region_start = alignment_info.read_start
@@ -116,8 +116,8 @@ class LongReadAlignmentProcessor:
                 read_assignment.corrected_exons = self.exon_corrector.correct_assigned_read(alignment_info,
                                                                                             read_assignment)
                 read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
-                logger.debug("Original exons: %s" % str(alignment_info.read_exons))
-                logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
+                # logger.debug("Original exons: %s" % str(alignment_info.read_exons))
+                # logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
                 read_assignment.read_group = self.read_groupper.get_group_id(alignment, bam_pair[1])
                 read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
                 read_assignment.strand = self.get_assignment_strand(read_assignment, alignment)
@@ -136,7 +136,7 @@ class LongReadAlignmentProcessor:
                         all(e == 1 for e in alignment_info.combined_profile.read_intron_profile.read_profile)
 
                 self.assignment_storage.append(read_assignment)
-                logger.debug("=== Finished read " + read_id + " ===")
+                # logger.debug("=== Finished read " + read_id + " ===")
 
     def get_assignment_strand(self, read_assignment, read_alignment):
         if read_assignment.isoform_matches and read_assignment.assignment_type in \

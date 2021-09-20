@@ -276,7 +276,6 @@ def elongation_cost(params, elongation_len):
     elif elongation_len >= upper_bound:
         return max_cost
     else:
-        logger.debug(str(elongation_len) + ", " + str(lower_bound) + "," + str(upper_bound) + ", " + str((elongation_len - lower_bound) / (upper_bound - lower_bound)))
         return min_cost + (max_cost - min_cost) * (elongation_len - lower_bound) / (upper_bound - lower_bound)
 
 
