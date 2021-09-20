@@ -13,7 +13,7 @@ logger = logging.getLogger('IsoQuant')
 
 class SampleData:
     def __init__(self, file_list, label, out_dir):
-        # list of lists, since each sample may contain severa libraries, and each library may contain 2 files (paired)
+        # list of lists, since each sample may contain several libraries, and each library may contain 2 files (paired)
         self.file_list = file_list
         self.label = label
         self.out_dir = out_dir
@@ -49,6 +49,7 @@ class InputDataStorage:
         # list of SampleData
         self.samples = []
         self.input_type = ""
+        self.readable_names_dict = {}
         sample_files = []
         labels = []
 
@@ -64,10 +65,10 @@ class InputDataStorage:
                 sample_files.append([[bam]])
         elif args.fastq_list is not None:
             self.input_type = "fastq"
-            sample_files = self.get_samples_from_file(args.fastq_list)
+            sample_files, self.readable_names_dict = self.get_samples_from_file(args.fastq_list)
         elif args.bam_list is not None:
             self.input_type = "bam"
-            sample_files = self.get_samples_from_file(args.bam_list)
+            sample_files, self.readable_names_dict = self.get_samples_from_file(args.bam_list)
         elif args.read_assignments is not None:
             self.input_type = "save"
             for save_file in args.read_assignments:
@@ -90,6 +91,7 @@ class InputDataStorage:
 
     def get_samples_from_file(self, file_name):
         sample_files = []
+        readable_names_dict = {}
         inf = open(file_name, "r")
         current_sample = []
 
@@ -98,7 +100,16 @@ class InputDataStorage:
                 sample_files.append(current_sample)
                 current_sample = []
             else:
-                current_sample.append(l.strip().split())
+                vals = l.strip().split(':')
+                files = vals[0].split()
+                if len(vals) > 1:
+                    readable_name = vals[-1]
+                else:
+                    readable_name = os.path.splitext(os.path.basename(files[0]))[0]
+                current_sample.append(files)
+                for fname in files:
+                    readable_names_dict[fname] = readable_name
+
         if len(current_sample) > 0:
             sample_files.append(current_sample)
 
@@ -106,7 +117,7 @@ class InputDataStorage:
             for lib in sample:
                 for in_file in lib:
                     check_input_type(in_file, self.input_type)
-        return sample_files
+        return sample_files, readable_names_dict
 
     def get_labels(self, sample_files):
         labels = []

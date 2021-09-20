@@ -123,14 +123,14 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
     tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
     processed_reads = []
     bam_files = list(map(lambda x: x[0], sample.file_list))
-    bam_files = [pysam.AlignmentFile(bam, "rb") for bam in bam_files]
+    bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
     logger.info("Processing chromosome " + chr_id)
     gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
     for g in cluster:
         if len(g) > 100:
             logger.debug("Potential slowdown in %s due to large gene cluster of size %d" % (chr_id, len(g)))
         gene_info = GeneInfo(g, gffutils_db, args.delta)
-        alignment_processor = LongReadAlignmentProcessor(gene_info, bam_files, args,
+        alignment_processor = LongReadAlignmentProcessor(gene_info, bam_file_pairs, args,
                                                          current_chr_record, read_grouper)
         assignment_storage = alignment_processor.process()
         gene_info.db = None

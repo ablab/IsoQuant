@@ -111,47 +111,51 @@ class AssignedFeatureCounter(AbstractCounter):
         elif len(all_groups) > 10:
             return "feature_id\tgroup_id\t%s\n" % value_name
         else:
-            return "feature_id\t" + "\t".join(all_groups)
+            return "feature_id\t" + "\t".join(all_groups) + "\n"
 
     def dump(self):
-        total_counts = 0.0
-        with open(self.output_counts_file_name, "w") as f:
-            all_groups = sorted(self.feature_counter.keys())
-            f.write(self.format_header(all_groups))
+        total_counts = defaultdict(float)
+        all_features = sorted(self.all_features)
+        all_groups = sorted(self.feature_counter.keys())
+        print_in_columns = len(all_groups) <= 10
 
-            for feature_id in self.all_features:
+        with open(self.output_counts_file_name, "w") as f:
+            f.write(self.format_header(all_groups))
+            for feature_id in all_features:
                 if self.ignore_read_groups:
                     count = self.feature_counter[all_groups[0]][feature_id]
-                    total_counts += count
+                    total_counts[all_groups[0]] += count
                     f.write("%s\t%.2f\n" % (feature_id, count))
-                elif len(all_groups) > 10:
+                else:
                     for group_id in all_groups:
                         count = self.feature_counter[group_id][feature_id]
-                        total_counts += count
-                        f.write("%s\t%s\t%.2f\n" % (feature_id, group_id, count))
-                else:
-                    count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
-                    total_counts += sum(count_values)
-                    f.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+                        total_counts[group_id] += count
+                        if not print_in_columns:
+                            f.write("%s\t%s\t%.2f\n" % (feature_id, group_id, count))
+                    if print_in_columns:
+                        count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
+                        f.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
             if self.ignore_read_groups:
                 f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
                 f.write("__no_feature\t%d\n" % self.not_assigned_reads)
                 f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
 
-        scale_factor = 1000000.0 / total_counts
+        scale_factors = {}
+        for group_id in all_groups:
+            scale_factors[group_id] = 1000000.0 / total_counts[group_id] if total_counts[group_id] > 0 else 1.0
         with open(self.output_tpm_file_name, "w") as f:
             f.write(self.format_header(all_groups, "TPM"))
-            for feature_id in self.all_features:
+            for feature_id in all_features:
                 if self.ignore_read_groups:
-                    tpm = scale_factor * self.feature_counter[all_groups[0]][feature_id]
+                    tpm = scale_factors[all_groups[0]] * self.feature_counter[all_groups[0]][feature_id]
                     f.write("%s\t%.6f\n" % (feature_id, tpm))
-                elif len(all_groups) > 10:
+                elif not print_in_columns:
                     for group_id in all_groups:
-                        tpm = scale_factor * self.feature_counter[group_id][feature_id]
+                        tpm = scale_factors[group_id] * self.feature_counter[group_id][feature_id]
                         f.write("%s\t%s\t%.6f\n" % (feature_id, group_id, tpm))
                 else:
-                    tpm_values = [scale_factor * self.feature_counter[group_id][feature_id] for group_id in all_groups]
+                    tpm_values = [scale_factors[group_id] * self.feature_counter[group_id][feature_id] for group_id in all_groups]
                     f.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
 
 

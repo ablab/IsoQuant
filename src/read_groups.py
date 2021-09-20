@@ -14,12 +14,12 @@ logger = logging.getLogger('IsoQuant')
 class AbstractReadGrouper:
     default_group_id = 'NA'
 
-    def get_group_id(self, alignment):
+    def get_group_id(self, alignment, filename=None):
         raise NotImplementedError()
 
 
 class DefaultReadGrouper(AbstractReadGrouper):
-    def get_group_id(self, alignment):
+    def get_group_id(self, alignment, filename=None):
         return self.default_group_id
 
 
@@ -27,7 +27,7 @@ class AlignmentTagReadGrouper(AbstractReadGrouper):
     def __init__(self, tag='RG'):
         self.tag = tag
 
-    def get_group_id(self, alignment):
+    def get_group_id(self, alignment, filename=None):
         try:
             tag_value = alignment.get_tag(self.tag)
         except KeyError:
@@ -40,7 +40,7 @@ class ReadIdSplitReadGrouper(AbstractReadGrouper):
     def __init__(self, delim):
         self.delim = delim
 
-    def get_group_id(self, alignment):
+    def get_group_id(self, alignment, filename=None):
         read_id = alignment.query_name
         values = read_id.split(self.delim)
         if len(values) == 1:
@@ -73,10 +73,31 @@ class ReadTableGrouper(AbstractReadGrouper):
             group_id = column_values[group_id_column_index]
             self.read_map[read_id] = group_id
 
-    def get_group_id(self, alignment):
+    def get_group_id(self, alignment, filename=None):
         if alignment.query_name not in self.read_map:
             return self.default_group_id
         return self.read_map[alignment.query_name]
+
+
+class FileNameGroupper(AbstractReadGrouper):
+    def __init__(self, args):
+        if args.input_data.readable_names_dict:
+            self.readable_names_dict = args.input_data.readable_names_dict
+            return
+
+        self.readable_names_dict = {}
+        for sample in args.input_data.samples:
+            for lib in sample.file_list:
+                readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
+                for f in lib:
+                    self.readable_names_dict[f] = readable_name
+
+    def get_group_id(self, alignment, filename=None):
+        if filename in self.readable_names_dict:
+            return self.readable_names_dict[filename]
+        if not filename:
+            return AlignmentTagReadGrouper.default_group_id
+        return filename
 
 
 def create_read_grouper(args):
@@ -85,8 +106,8 @@ def create_read_grouper(args):
 
     option = args.read_group
     values = option.split(':')
-    if len(values) == 1:
-        return ReadTableGrouper(option)
+    if values[0] == "file_name":
+        return FileNameGroupper(args)
     elif values[0] == 'tag':
         return AlignmentTagReadGrouper(tag=values[1])
     elif values[0] == 'read_id':

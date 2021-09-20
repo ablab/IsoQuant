@@ -25,15 +25,15 @@ class LongReadAlignmentProcessor:
     Parameters
     ----------
     gene_info
-    bams
+    bams : pair bam object, filename
     params
     printer
     counter
     """
 
-    def __init__(self, gene_info, bams, params, chr_record=None, read_groupper=DefaultReadGrouper()):
+    def __init__(self, gene_info, bam_pairs, params, chr_record=None, read_groupper=DefaultReadGrouper()):
         self.gene_info = gene_info
-        self.bams = bams
+        self.bam_pairs = bam_pairs
         self.params = params
         self.chr_record = chr_record
 
@@ -52,8 +52,8 @@ class LongReadAlignmentProcessor:
         self.gene_info.all_read_region_start = self.gene_info.start
         self.gene_info.all_read_region_end = self.gene_info.end
 
-        for b in self.bams:
-            self.process_single_file(b)
+        for bam_pair in self.bam_pairs:
+            self.process_single_file(bam_pair)
 
         if self.params.needs_reference:
             self.gene_info.all_read_region_start -= self.params.upstream_region_len
@@ -63,8 +63,9 @@ class LongReadAlignmentProcessor:
             self.gene_info.canonical_sites = {}
         return self.assignment_storage
 
-    def process_single_file(self, bamfile_in):
+    def process_single_file(self, bam_pair):
         processed_reads = set()
+        bamfile_in = bam_pair[0]
         for genic_region in self.gene_info.regions_for_bam_fetch:
             # FIXME: temporary solution - process gene outside
             to_fetch_start = max(0, genic_region[0] - 100)
@@ -117,7 +118,7 @@ class LongReadAlignmentProcessor:
                 read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
                 logger.debug("Original exons: %s" % str(alignment_info.read_exons))
                 logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
-                read_assignment.read_group = self.read_groupper.get_group_id(alignment)
+                read_assignment.read_group = self.read_groupper.get_group_id(alignment, bam_pair[1])
                 read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
                 read_assignment.strand = self.get_assignment_strand(read_assignment, alignment)
                 read_assignment.chr_id = self.gene_info.chr_id
