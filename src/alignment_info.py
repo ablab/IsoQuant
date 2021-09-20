@@ -45,7 +45,7 @@ class AlignmentInfo:
         for i, (read_pos, ref_pos) in enumerate(self.aligned_pairs):
             if ref_pos == self.read_exons[exon_index][0]:
                 self.aligned_pairs_start_index.append(i)
-            elif ref_pos == self.read_exons[exon_index][1]:
+            if ref_pos == self.read_exons[exon_index][1]:
                 self.aligned_pairs_end_index.append(i)
                 exon_index += 1
             if exon_index == len(self.read_exons):
