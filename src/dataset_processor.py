@@ -19,7 +19,7 @@ from src.assignment_io import *
 from src.long_read_counter import *
 from src.multimap_resolver import *
 from src.read_groups import *
-from src.transcript_model_constructor import *
+from src.transcript_printer import *
 from src.stats import *
 from src.intron_graph import *
 from src.graph_based_model_construnction import *
