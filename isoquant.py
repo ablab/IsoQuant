@@ -339,7 +339,7 @@ def set_splice_correction_options(args):
         'none': SplicSiteCorrectionStrategy(False, False, False, False, False, False),
         'default_ccs': SplicSiteCorrectionStrategy(False, False, True, False, False, True),
         'conservative_ont': SplicSiteCorrectionStrategy(True, False, True, False, False, False),
-        'default_ont': SplicSiteCorrectionStrategy(True, False, True, False, True, False),
+        'default_ont': SplicSiteCorrectionStrategy(True, False, True, False, True, True),
         'all': SplicSiteCorrectionStrategy(True, True, True, True, True, True),
         'assembly': SplicSiteCorrectionStrategy(False, False, True, False, False, False)
     }
