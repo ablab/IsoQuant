@@ -15,7 +15,7 @@ class AbstractCounter:
     def __init__(self, output_prefix, ignore_read_groups=False):
         self.ignore_read_groups = ignore_read_groups
         self.output_counts_file_name = output_prefix + "_counts.tsv"
-        self.output_tpm_file_name = output_prefix + "_tpm.tsv"
+        self.output_tpm_file_name = output_prefix + ".tsv"
 
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
@@ -107,11 +107,11 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def format_header(self, all_groups, value_name="count"):
         if self.ignore_read_groups:
-            return "feature_id\t%s\n" % value_name
+            return "ID\t%s\n" % value_name
         elif len(all_groups) > 10:
-            return "feature_id\tgroup_id\t%s\n" % value_name
+            return "ID\tgroup_id\t%s\n" % value_name
         else:
-            return "feature_id\t" + "\t".join(all_groups) + "\n"
+            return "ID\t" + "\t".join(all_groups) + "\n"
 
     def dump(self):
         total_counts = defaultdict(float)

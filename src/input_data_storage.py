@@ -35,7 +35,7 @@ class SampleData:
         self.out_gene_counts_tsv = self._make_path(self.label + ".gene")
         self.out_transcript_counts_tsv = self._make_path(self.label + ".transcript")
         self.out_transcript_model_counts_tsv = self._make_path(self.label + ".transcript_model")
-        self.out_transcript_model_grouped_counts_tsv = self._make_path(self.label + ".transcript_model_grouped")
+        self.out_transcript_model_grouped_counts_tsv = self._make_path("expression")
         self.out_exon_counts_tsv = self._make_path(self.label + ".exon")
         self.out_intron_counts_tsv = self._make_path(self.label + ".intron")
         self.out_gene_grouped_counts_tsv = self._make_path(self.label + ".gene_grouped")

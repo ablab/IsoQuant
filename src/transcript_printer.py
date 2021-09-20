@@ -23,11 +23,11 @@ logger = logging.getLogger('IsoQuant')
 
 class GFFPrinter:
     def __init__(self, outf_prefix, sample_name, io_support):
-        self.model_fname = os.path.join(outf_prefix, sample_name + ".transcript_models.gtf")
+        self.model_fname = os.path.join(outf_prefix, "models.gtf")
         self.out_gff = open(self.model_fname, "w")
-        self.out_gff.write("# " + sample_name + " IsoQuant generated GFF\n")
-        self.out_r2t = open(os.path.join(outf_prefix, sample_name + ".transcript_model_reads.tsv"), "w")
-        self.out_r2t.write("#read_id\ttranscript_id\n")
+        self.out_gff.write("# " + sample_name + " IsoQuant generated GTF\n")
+        self.out_r2t = open(os.path.join(outf_prefix, "read_model_map.tsv"), "w")
+        self.out_r2t.write("read_id\ttranscript_id\n")
         self.io_support = io_support
 
     def __del__(self):
