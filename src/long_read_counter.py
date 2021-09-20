@@ -19,6 +19,9 @@ class AbstractCounter:
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
 
+    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+        raise NotImplementedError()
+
     def dump(self):
         raise NotImplementedError()
 
@@ -33,6 +36,10 @@ class CompositeCounter:
     def add_read_info(self, read_assignment):
         for p in self.counters:
             p.add_read_info(read_assignment)
+
+    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+        for p in self.counters:
+            p.add_read_info_raw(read_id, feature_ids, group_id)
 
     def dump(self):
         for p in self.counters:
@@ -58,13 +65,17 @@ class AssignedFeatureCounter(AbstractCounter):
         if not read_assignment:
             self.not_aligned_reads += 1
         elif read_assignment.assignment_type == ReadAssignmentType.ambiguous:
-            feature_ids = [self.get_feature_id(m) for m in read_assignment.isoform_matches]
-            if set(feature_ids) == 1:  # different isoforms of same gene
-                group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
-                self.feature_counter[group_id][feature_ids[0]] += 1
-                self.all_features.add(feature_ids[0])
+            feature_ids = set([self.get_feature_id(m) for m in read_assignment.isoform_matches])
+            group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+            if len(feature_ids) == 1:  # different isoforms of same gene
+                feature_id = list(feature_ids)[0]
+                self.feature_counter[group_id][feature_id] += 1
+                self.all_features.add(feature_id)
             else:
                 self.ambiguous_reads += 1
+                for feature_id in feature_ids:
+                    self.feature_counter[group_id][feature_id] += 1.0 / float(len(feature_ids))
+                    self.all_features.add(feature_id)
         elif read_assignment.assignment_type == ReadAssignmentType.noninformative:
             self.not_assigned_reads += 1
         elif read_assignment.assignment_type == ReadAssignmentType.unique or\
@@ -73,6 +84,22 @@ class AssignedFeatureCounter(AbstractCounter):
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
             self.feature_counter[group_id][feature_id] += 1
             self.all_features.add(feature_id)
+
+    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+        if not read_id:
+            self.not_aligned_reads += 1
+        elif not feature_ids:
+            self.not_assigned_reads += 1
+        elif len(feature_ids) > 1:
+            self.ambiguous_reads += 1
+            for feature_id in feature_ids:
+                self.feature_counter[group_id][feature_id] += 1.0 / float(len(feature_ids))
+                self.all_features.add(feature_id)
+            else:
+                self.ambiguous_reads += 1
+        else:
+            self.feature_counter[group_id][feature_ids[0]] += 1
+            self.all_features.add(feature_ids[0])
 
     def add_unaligned(self, n_reads=1):
         self.not_aligned_reads += n_reads

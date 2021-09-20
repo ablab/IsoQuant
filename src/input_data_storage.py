@@ -34,6 +34,8 @@ class SampleData:
         self.out_alt_tsv = self._make_path(self.label + ".SQANTI-like.tsv")
         self.out_gene_counts_tsv = self._make_path(self.label + ".gene_counts.tsv")
         self.out_transcript_counts_tsv = self._make_path(self.label + ".transcript_counts.tsv")
+        self.out_transcript_model_counts_tsv = self._make_path(self.label + ".transcript_model_counts.tsv")
+        self.out_transcript_model_grouped_counts_tsv = self._make_path(self.label + ".transcript_model_grouped_counts.tsv")
         self.out_exon_counts_tsv = self._make_path(self.label + ".exon_counts.tsv")
         self.out_intron_counts_tsv = self._make_path(self.label + ".intron_counts.tsv")
         self.out_gene_grouped_counts_tsv = self._make_path(self.label + ".gene_grouped_counts.tsv")

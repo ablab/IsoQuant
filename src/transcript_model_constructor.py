@@ -26,16 +26,13 @@ class GFFPrinter:
         self.model_fname = os.path.join(outf_prefix, sample_name + ".transcript_models.gtf")
         self.out_gff = open(self.model_fname, "w")
         self.out_gff.write("# " + sample_name + " IsoQuant generated GFF\n")
-        self.out_r2t = open(os.path.join(outf_prefix, sample_name + ".transcript_models_reads.tsv"), "w")
+        self.out_r2t = open(os.path.join(outf_prefix, sample_name + ".transcript_model_reads.tsv"), "w")
         self.out_r2t.write("#read_id\ttranscript_id\n")
-        self.out_counts = open(os.path.join(outf_prefix, sample_name + ".transcript_models_counts.tsv"), "w")
-        self.out_counts.write("#ID\t%s\n" % sample_name)
         self.io_support = io_support
 
     def __del__(self):
         self.out_gff.close()
         self.out_r2t.close()
-        self.out_counts.close()
 
     def dump(self, transcript_model_constructor):
         # write exons to GFF
@@ -87,10 +84,10 @@ class GFFPrinter:
                     model.additional_info += canonical_info
 
                 transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
-                                  'reference_gene_id "%s"; reference_transcript_id "%s"; counts=%0.2f; %s\n' % \
+                                  'reference_gene_id "%s"; reference_transcript_id "%s"; %s\n' % \
                             (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,
                              model.gene_id, model.transcript_id, model.reference_gene, model.reference_transcript,
-                             transcript_model_constructor.transcript_counts[model.transcript_id], model.additional_info)
+                             model.additional_info)
                 self.out_gff.write(transcript_line)
 
                 prefix_columns = "%s\tIsoQuant\texon\t" % model.chr_id
@@ -109,10 +106,6 @@ class GFFPrinter:
                 self.out_r2t.write("%s\t%s\n" % (read_id, model_id))
         for read_id in transcript_model_constructor.unused_reads:
             self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
-
-        for id in sorted(transcript_model_constructor.transcript_counts.keys()):
-            counts = transcript_model_constructor.transcript_counts[id]
-            self.out_counts.write("%s\t%.2f\n" % (id, counts))
 
 
 # constructor of discovered transcript models from read assignments

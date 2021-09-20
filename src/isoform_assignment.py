@@ -403,7 +403,7 @@ class ReadAssignment:
         self.polyA_found = False
         self.cage_found = False
         self.polya_info = None
-        self.read_group = "."
+        self.read_group = "NA"
         self.mapped_strand = "."
         self.strand = "."
         self.chr_id = "."

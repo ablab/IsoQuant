@@ -28,7 +28,7 @@ class GraphBasedModelConstructor:
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
 
-    def __init__(self, gene_info, chr_record, params, expressed_gene_info=None):
+    def __init__(self, gene_info, chr_record, params, transcript_counter, expressed_gene_info=None):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
@@ -57,7 +57,7 @@ class GraphBasedModelConstructor:
 
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(list)
-        self.transcript_counts = defaultdict(float)
+        self.transcript_counter = transcript_counter
         self.reads_used_in_construction = set()
         self.unused_reads = []
 
@@ -172,9 +172,10 @@ class GraphBasedModelConstructor:
             return all(m.event_type in allowed_set for m in isoform_assignment.isoform_matches[0].match_subclassifications)
         return False
 
-    def save_assigned_read(self, read_id, transcript_id):
+    def save_assigned_read(self, read_assignment, transcript_id):
+        read_id = read_assignment.read_id
         self.transcript_read_ids[transcript_id].append(read_id)
-        self.transcript_counts[transcript_id] += 1.0
+        self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
 
     def construct_fl_isoforms(self):
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
@@ -256,9 +257,9 @@ class GraphBasedModelConstructor:
 
             if new_model:
                 self.transcript_model_storage.append(new_model)
-                for read_id in self.path_storage.read_ids[path]:
-                    self.save_assigned_read(read_id, new_model.transcript_id)
-                    self.reads_used_in_construction.add(read_id)
+                for read_assignment in self.path_storage.paths_to_reads[path]:
+                    self.save_assigned_read(read_assignment, new_model.transcript_id)
+                    self.reads_used_in_construction.add(read_assignment.read_id)
                 for v in path:
                     self.visited_introns.add(v)
                 # debug info only
@@ -303,7 +304,7 @@ class GraphBasedModelConstructor:
             if any(e.event_type == MatchEventSubtype.mono_exon_match for e in events):
                 if read_assignment.read_id in self.reads_used_in_construction:
                     logger.warning("Monoexon read %s was previously used for construction" % read_assignment.read_id)
-                mono_exon_isoform_reads[refrenence_isoform_id].append(read_assignment.read_id)
+                mono_exon_isoform_reads[refrenence_isoform_id].append(read_assignment)
                 assert len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) == 1
                 transcript_exon = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0]
                 t_len = transcript_exon[1] - transcript_exon[0] + 1
@@ -325,7 +326,7 @@ class GraphBasedModelConstructor:
                 if read_assignment.read_id in self.reads_used_in_construction:
                     logger.debug("Spliced read %s was previously used for construction, assigned id %s" %
                                  (read_assignment.read_id, refrenence_isoform_id))
-                spliced_isoform_reads[refrenence_isoform_id].append(read_assignment.read_id)
+                spliced_isoform_reads[refrenence_isoform_id].append(read_assignment)
                 if abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
                     isoform_left_support[refrenence_isoform_id] += 1
                 if abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= 50:
@@ -351,9 +352,9 @@ class GraphBasedModelConstructor:
                 new_model = self.transcript_from_reference(isoform_id)
                 self.transcript_model_storage.append(new_model)
                 self.detected_known_isoforms.add(isoform_id)
-                for read_id in mono_exon_isoform_reads[isoform_id]:
-                    self.save_assigned_read(read_id, new_model.transcript_id)
-                    self.reads_used_in_construction.add(read_id)
+                for read_assignment in mono_exon_isoform_reads[isoform_id]:
+                    self.save_assigned_read(read_assignment, new_model.transcript_id)
+                    self.reads_used_in_construction.add(read_assignment.read_id)
                 logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
                              (self.transcript_model_storage[-1].transcript_id, isoform_id,
                               count, str(self.gene_info.all_isoforms_exons[isoform_id])))
@@ -394,9 +395,9 @@ class GraphBasedModelConstructor:
                 new_model = self.transcript_from_reference(isoform_id)
                 self.transcript_model_storage.append(new_model)
                 self.detected_known_isoforms.add(isoform_id)
-                for read_id in spliced_isoform_reads[isoform_id]:
-                    self.save_assigned_read(read_id, new_model.transcript_id)
-                    self.reads_used_in_construction.add(read_id)
+                for read_assignment in spliced_isoform_reads[isoform_id]:
+                    self.save_assigned_read(read_assignment, new_model.transcript_id)
+                    self.reads_used_in_construction.add(read_assignment.read_id)
 
             # debug info only
             if self.expressed_gene_info and isoform_id in self.expressed_gene_info.all_isoforms_exons.keys():
@@ -442,17 +443,16 @@ class GraphBasedModelConstructor:
             logger.debug("# Checking read %s: %s" % (assignment.read_id, str(read_exons)))
             model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
+            model_assignment.read_group = assignment.read_group
             # check that no serious contradiction occurs
             if model_assignment.assignment_type in [ReadAssignmentType.unique,
-                                                    ReadAssignmentType.unique_minor_difference]:
-                t_id = model_assignment.isoform_matches[0].assigned_transcript
-                self.save_assigned_read(read_id, t_id)
-
-            elif model_assignment.assignment_type == ReadAssignmentType.ambiguous:
-                # FIXME: add quatification options
-                total_matches = len(model_assignment.isoform_matches)
+                                                    ReadAssignmentType.unique_minor_difference,
+                                                    ReadAssignmentType.ambiguous]:
+                self.transcript_counter.add_read_info_raw(read_id,
+                                                          [m.assigned_transcript for m in model_assignment.isoform_matches],
+                                                          model_assignment.read_group)
                 for m in model_assignment.isoform_matches:
-                    self.transcript_counts[m.assigned_transcript] += 1.0 / total_matches
+                    self.transcript_read_ids[m.assigned_transcript].append(read_id)
             else:
                 self.unused_reads.append(read_id)
 
@@ -464,7 +464,7 @@ class IntronPathStorage:
         self.intron_graph = path_processor.intron_graph
         self.paths = defaultdict(int)
         self.fl_paths = set()
-        self.read_ids = defaultdict(list)
+        self.paths_to_reads = defaultdict(list)
 
     def fill(self, read_assignments):
         for a in read_assignments:
@@ -493,7 +493,7 @@ class IntronPathStorage:
             self.paths[path_tuple] += 1
             if terminal_vertex and starting_vertex:
                 self.fl_paths.add(path_tuple)
-            self.read_ids[path_tuple].append(a.read_id)
+            self.paths_to_reads[path_tuple].append(a)
 
         for p in self.paths.keys():
             is_fl = "   FL" if p in self.fl_paths else "nonFL"
