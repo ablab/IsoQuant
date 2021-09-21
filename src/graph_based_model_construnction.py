@@ -237,8 +237,6 @@ class GraphBasedModelConstructor:
 
             events = read_assignment.isoform_matches[0].match_subclassifications
             if any(e.event_type == MatchEventSubtype.mono_exon_match for e in events):
-                if read_assignment.read_id in self.reads_used_in_construction:
-                    logger.warning("Monoexon read %s was previously used for construction" % read_assignment.read_id)
                 mono_exon_isoform_reads[refrenence_isoform_id].append(read_assignment)
                 assert len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) == 1
                 transcript_exon = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0]
