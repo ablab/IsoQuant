@@ -79,11 +79,11 @@ def parse_args(args=None, namespace=None):
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
     parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
                         help="matching strategy to use from most strict to least", type=str, default=None)
-    parser.add_argument("--splice_correction_strategy", choices=["none", "default_ccs", "default_ont", "conservative_ont", "all", "assembly"],
+    parser.add_argument("--splice_correction_strategy", choices=["none", "default_pacbio", "default_ont", "conservative_ont", "all", "assembly"],
                         help="transcript model construction strategy to use",
                         type=str, default=None)
-    parser.add_argument("--model_construction_strategy", choices=["reliable", "default_ccs", "default_ont",
-                                                                  "sensitive_ont", "fl_ccs", "all", "assembly"],
+    parser.add_argument("--model_construction_strategy", choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
+                                                                  "default_ont", "sensitive_ont", "all", "assembly"],
                         help="transcript model construction strategy to use",
                         type=str, default=None)
 
@@ -267,13 +267,13 @@ def set_data_dependent_options(args):
     if args.matching_strategy is None:
         args.matching_strategy = matching_strategies[args.data_type]
 
-    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_ccs", NANOPORE_DATA: "default_ont"}
+    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_pacbio", NANOPORE_DATA: "default_ont"}
     if args.model_construction_strategy is None:
         args.model_construction_strategy = model_construction_strategies[args.data_type]
-        if args.fl_data and args.model_construction_strategy == "default_ccs":
-            args.model_construction_strategy = "fl_ccs"
+        if args.fl_data and args.model_construction_strategy == "default_pacbio":
+            args.model_construction_strategy = "fl_pacbio"
 
-    splice_correction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_ccs", NANOPORE_DATA: "default_ont"}
+    splice_correction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_pacbio", NANOPORE_DATA: "default_ont"}
     if args.splice_correction_strategy is None:
         args.splice_correction_strategy = splice_correction_strategies[args.data_type]
 
@@ -289,7 +289,7 @@ def set_matching_options(args):
 
     strategies = {
         'exact':   MatchingStrategy(0, 0, 0, 0, 0, 0.0, 'monoexon_only', False),
-        'precise': MatchingStrategy(3, 30, 50, 20, 0, 0.0, 'monoexon_and_fsm', True),
+        'precise': MatchingStrategy(4, 30, 50, 20, 0, 0.0, 'monoexon_and_fsm', True),
         'default': MatchingStrategy(6, 60, 100, 40, 60, 1.0, 'monoexon_and_fsm', True),
         'loose':   MatchingStrategy(12, 60, 100, 40, 60, 1.0, 'all',  True),
     }
@@ -336,7 +336,7 @@ def set_splice_correction_options(args):
                                               'terminal_exons', 'fake_terminal_exons', 'microintron_retention'))
     strategies = {
         'none': SplicSiteCorrectionStrategy(False, False, False, False, False, False),
-        'default_ccs': SplicSiteCorrectionStrategy(False, False, True, False, False, True),
+        'default_pacbio': SplicSiteCorrectionStrategy(True, False, True, False, False, True),
         'conservative_ont': SplicSiteCorrectionStrategy(True, False, True, False, False, False),
         'default_ont': SplicSiteCorrectionStrategy(True, False, True, False, True, True),
         'all': SplicSiteCorrectionStrategy(True, True, True, True, True, True),
@@ -362,13 +362,14 @@ def set_model_construction_options(args):
                                             'min_novel_count', 'min_novel_count_rel',
                                             'fl_only'))
     strategies = {
-        'reliable':        ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  2, 5, 10, 0.05, True),
-        'default_ccs':     ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 2, 3, 0.005, False),
+        'reliable':        ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  2, 4, 8, 0.05, True),
+        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  8, 0.2,  2, 0.1,  0.2,  1, 2, 3, 0.02,  False),
+        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  5, 0.2,  2, 0.1,  0.2,  1, 2, 3, 0.005, False),
         'default_ont':     ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 3, 5, 0.02,  False),
         'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 2, 4, 0.01,  False),
-        'fl_ccs':          ModelConstructionStrategy(1, 0.2, 10,  5, 0.1,  1, 0.05, 0.1,  1, 1, 2, 0.005, True),
-        'all':             ModelConstructionStrategy(0, 0.05, 5,  3, 0.05, 1, 0.01, 0.05, 1, 1, 1, 0.001, False),
-        'assembly':        ModelConstructionStrategy(0, 0.1, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 1, 0.05,  False)
+        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  8, 0.2,  1, 0.1,  0.1,  1, 2, 3, 0.02,  True),
+        'all':             ModelConstructionStrategy(0, 0.3, 10,  5, 0.1,  1, 0.01, 0.05, 1, 1, 1, 0.002, False),
+        'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 1, 0.05,  False)
     }
     strategy = strategies[args.model_construction_strategy]
 
