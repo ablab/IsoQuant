@@ -278,6 +278,7 @@ def set_data_dependent_options(args):
         args.splice_correction_strategy = splice_correction_strategies[args.data_type]
 
     args.resolve_ambiguous = 'monoexon_and_fsm' if args.fl_data else 'default'
+    args.needs_polya_for_construction = False
 
 
 def set_matching_options(args):

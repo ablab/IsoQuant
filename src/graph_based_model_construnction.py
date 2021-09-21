@@ -257,9 +257,17 @@ class GraphBasedModelConstructor:
                         polya_sites[refrenence_isoform_id] += 1
             elif len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) > 1:
                 spliced_isoform_reads[refrenence_isoform_id].append(read_assignment)
-                if abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
+
+                if self.params.needs_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '-':
+                    if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
+                        isoform_left_support[refrenence_isoform_id] += 1
+                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
                     isoform_left_support[refrenence_isoform_id] += 1
-                if abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= 50:
+
+                if self.params.needs_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '+':
+                    if any(x.event_type == MatchEventSubtype.correct_polya_site_right for x in events):
+                        isoform_right_support[refrenence_isoform_id] += 1
+                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= 50:
                     isoform_right_support[refrenence_isoform_id] += 1
 
         self.construct_monoexon_isoforms(mono_exon_isoform_reads, mono_exon_isoform_coverage, polya_sites)
@@ -404,7 +412,9 @@ class IntronPathStorage:
             path_tuple = tuple(intron_path)
             self.paths[path_tuple] += 1
             if terminal_vertex and starting_vertex:
-                self.fl_paths.add(path_tuple)
+                if not self.params.needs_polya_for_construction or\
+                        (terminal_vertex[0] == VERTEX_polya or starting_vertex[0] == VERTEX_polyt):
+                    self.fl_paths.add(path_tuple)
             self.paths_to_reads[path_tuple].append(a)
 
 
