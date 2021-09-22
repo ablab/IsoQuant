@@ -266,7 +266,8 @@ class DatasetProcessor:
         processed_reads = pool.starmap(assign_reads_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
                                                                    (self.reference_record_dict[
                                                                         chr_id] if self.reference_record_dict else None))
-                                                                  for (chr_id, c) in chrom_clusters])
+                                                                  for (chr_id, c) in chrom_clusters],
+                                       chunksize=1)
         pool.close()
         pool.join()
 
