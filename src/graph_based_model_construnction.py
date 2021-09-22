@@ -181,7 +181,7 @@ class GraphBasedModelConstructor:
 
             else:
                 # adding FL novel isoform
-                polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya) and not self.params.no_polya
+                polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya)
                 transcript_strand = self.strand_detector.get_strand(intron_path)
                 if count < novel_isoform_cutoff:
                     logger.debug("Novel isoform %s has low coverage: %d\t%d" %
@@ -190,6 +190,12 @@ class GraphBasedModelConstructor:
                     logger.debug("Avoiding single intron %s isoform: %d\t%s" %
                                  (new_transcript_id, count, str(path)))
                 else:
+                    if self.params.use_technical_replicas and \
+                            len(set([a.read_group for a in self.path_storage.paths_to_reads[path]])) <= 1:
+                        # TODO remove
+                        logger.info("%s was suspended due to technical replicas check" % new_transcript_id)
+                        continue
+
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
                     if transcript_gene is None:
                         transcript_gene = "novel_gene_" + str(self.get_transcript_id())
