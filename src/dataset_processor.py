@@ -236,6 +236,7 @@ class DatasetProcessor:
     def process_sample(self, sample):
         logger.info("Processing sample " + sample.label)
         logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(map(lambda x: x[0], sample.file_list)))
+        self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
         self.multimapped_reads = defaultdict(list)
 
         if self.args.read_assignments:

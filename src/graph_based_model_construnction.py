@@ -192,8 +192,7 @@ class GraphBasedModelConstructor:
                 else:
                     if self.params.use_technical_replicas and \
                             len(set([a.read_group for a in self.path_storage.paths_to_reads[path]])) <= 1:
-                        # TODO remove
-                        logger.info("%s was suspended due to technical replicas check" % new_transcript_id)
+                        logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
                         continue
 
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
