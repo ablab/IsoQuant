@@ -357,7 +357,7 @@ class GraphBasedModelConstructor:
         
         logger.debug("Creating artificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
         transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.params.delta)
-        assigner = LongReadAssigner(transcript_model_gene_info, self.params, quick_mode=False)
+        assigner = LongReadAssigner(transcript_model_gene_info, self.params, quick_mode=True)
         profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
 
         for assignment in read_assignments:
