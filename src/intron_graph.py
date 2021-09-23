@@ -134,6 +134,14 @@ class IntronGraph:
         self.intron_collector = IntronCollector(gene_info, params.delta)
         self.max_coverage = 0
 
+        #self.starting_known_positions = defaultdict(list)
+        #self.terminal_known_positions = defaultdict(list)
+        #for t, introns in self.gene_info.all_isoforms_introns.items():
+        #    if not introns:
+        #        continue
+        #    self.starting_known_positions[introns[0]].append(self.gene_info.all_isoforms_exons[t][0][0])
+        #    self.terminal_known_positions[introns[-1]].append(self.gene_info.all_isoforms_exons[t][-1][1])
+
         logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
         self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
         self.construct()
@@ -322,13 +330,18 @@ class IntronGraph:
         else:
             extra_end_positions = read_terminal_positions[intron]
 
-        if intron in self.outgoing_edges:
+        if read_end and intron in self.outgoing_edges and len(self.outgoing_edges[intron]) > 0:
+            # intron has outgoing edges, hard cut off
             read_ends_cutoff = max(read_ends_cutoff, self.intron_collector.clustered_introns[intron] *
                                    self.params.terminal_internal_position_rel)
+        elif not read_end and intron in self.incoming_edges and len(self.incoming_edges[intron]) > 0:
+            # intron has incoming edges, hard cut off
+            read_ends_cutoff = max(read_ends_cutoff, self.intron_collector.clustered_introns[intron] *
+                                   self.params.terminal_internal_position_rel)
+
         terminal_positions = self.cluster_terminal_positions(extra_end_positions,
                                                              read_end=read_end,
                                                              cutoff=read_ends_cutoff)
-
         if read_end:
             for pos in clustered_polyas.keys():
                 self.outgoing_edges[intron].add((VERTEX_polya, pos))

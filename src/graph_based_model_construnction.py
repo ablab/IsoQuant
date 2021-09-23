@@ -277,6 +277,7 @@ class GraphBasedModelConstructor:
 
         self.construct_monoexon_isoforms(mono_exon_isoform_reads, mono_exon_isoform_coverage, polya_sites)
         if not self.params.fl_only:
+            logger.debug("Constructing nonFL isoforms")
             self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
 
     def construct_monoexon_isoforms(self, mono_exon_isoform_reads, mono_exon_isoform_coverage, polya_sites):
