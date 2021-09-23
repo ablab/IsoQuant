@@ -23,6 +23,9 @@ from src.transcript_printer import *
 from src.stats import *
 from src.intron_graph import *
 from src.graph_based_model_construnction import *
+from src.read_mapper import *
+from src.linked_reads_alignment_processor import *
+
 
 
 logger = logging.getLogger('IsoQuant')
@@ -119,7 +122,7 @@ class OverlappingExonsGeneClusterConstructor(GeneClusterConstructor):
         return gene_sets
 
 
-def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr_record):
+def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr_record, linked_reads=True):
     tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
     processed_reads = []
     bam_files = list(map(lambda x: x[0], sample.file_list))
@@ -130,9 +133,14 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
         if len(g) > 100:
             logger.debug("Potential slowdown in %s due to large gene cluster of size %d" % (chr_id, len(g)))
         gene_info = GeneInfo(g, gffutils_db, args.delta)
-        alignment_processor = LongReadAlignmentProcessor(gene_info, bam_file_pairs, args,
-                                                         current_chr_record, read_grouper)
-        assignment_storage = alignment_processor.process()
+        if linked_reads:
+            # TODO: Chi-Lam
+            alignment_processor = LinkedReadAlignmentProcessor(gene_info, bam_file_pairs, args, current_chr_record)
+            assignment_storage = alignment_processor.process()
+        else:
+            alignment_processor = LongReadAlignmentProcessor(gene_info, bam_file_pairs, args,
+                                                             current_chr_record, read_grouper)
+            assignment_storage = alignment_processor.process()
         gene_info.db = None
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
@@ -266,7 +274,8 @@ class DatasetProcessor:
         pool = Pool(self.args.threads)
         processed_reads = pool.starmap(assign_reads_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
                                                                    (self.reference_record_dict[
-                                                                        chr_id] if self.reference_record_dict else None))
+                                                                        chr_id] if self.reference_record_dict else None),
+                                                                   self.args.data_type == SHORT_LINKED_READS)
                                                                   for (chr_id, c) in chrom_clusters],
                                        chunksize=1)
         pool.close()

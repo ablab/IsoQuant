@@ -10,14 +10,14 @@ from src.input_data_storage import SampleData
 
 logger = logging.getLogger('IsoQuant')
 
+SHORT_LINKED_READS = 'linked_reads'
 PACBIO_CCS_DATA = 'pacbio_ccs'
 NANOPORE_DATA = 'nanopore'
 ASSEMBLY = 'assembly'
 
-DATATYPE_TO_ALIGNER = {ASSEMBLY: 'minimap2', PACBIO_CCS_DATA: 'minimap2', NANOPORE_DATA: 'minimap2'}
-                       # 'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
+DATATYPE_TO_ALIGNER = {ASSEMBLY: 'minimap2', PACBIO_CCS_DATA: 'minimap2', NANOPORE_DATA: 'minimap2', SHORT_LINKED_READS : 'star'}
 
-SUPPORTED_ALIGNERS = ['starlong', 'minimap2']
+SUPPORTED_ALIGNERS = ['starlong', 'minimap2', 'star']
 SUPPORTED_STRANDEDNESS = ['forward', 'reverse', 'none']
 
 KMER_SIZE = {ASSEMBLY: '15', PACBIO_CCS_DATA: '15', NANOPORE_DATA: '14'}
@@ -231,7 +231,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
 
     log_fpath = os.path.join(args.output, "alignment.log")
     log_file = open(log_fpath, "a")
-    # TODO: add star for barcoded reads
+    # TODO Chi-Lam: add star for barcoded reads
     if aligner == "starlong":
         star_path = get_aligner('STARlong')
         zcat_option = " --readFilesCommand zcat " if ext.endswith('gz') else ""
