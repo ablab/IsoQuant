@@ -30,7 +30,7 @@ def parse_args(args=None, namespace=None):
                         help='Debug log output.')
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
-                        required='--run_aligner_only' not in sys.argv)
+                        required=True)
     parser.add_argument('--complete_genedb', action='store_true', default=False,
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "
@@ -98,11 +98,13 @@ def parse_args(args=None, namespace=None):
                         action='store_true', default=False)
     parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
 
-    # ADDITIONAL
-    add_additional_option("--no_model_construction", action="store_true", default=False,
+    # PIPELINE STEPS
+    parser.add_argument("--no_model_construction", action="store_true", default=False,
                           help="run only read assignment and quantification")
-    add_additional_option("--run_aligner_only", action="store_true", default=False,
-                          help="align reads to reference without isoform assignment")
+    parser.add_argument("--run_aligner_only", action="store_true", default=False,
+                          help="align reads to reference without running further analysis")
+
+    # ADDITIONAL
     add_additional_option("--no_junc_bed", action="store_true", default=False,
                           help="do NOT use annotation for read mapping")
     add_additional_option("--junc_bed_file", type=str,
@@ -110,10 +112,10 @@ def parse_args(args=None, namespace=None):
                                "(will be created automatically if not given)")
     add_additional_option("--no_secondary", help="ignore secondary alignments (not recommended)", action='store_true',
                           default=False)
-    add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
-                                            "; chosen based on data type if not set", type=str)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
+    add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
+                                            "; chosen based on data type if not set", type=str)
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
