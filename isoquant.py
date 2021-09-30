@@ -54,9 +54,6 @@ def parse_args(args=None, namespace=None):
                                                          ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
-    input_args.add_argument("--read_assignments", nargs='+', type=str,
-                            help="reuse read assignments (binary format) to construct transcript models",
-                            default=None)
 
     parser.add_argument('--labels', '-l', nargs='+', type=str,
                         help='sample names to be used; input file names are used if not set')
@@ -78,9 +75,9 @@ def parse_args(args=None, namespace=None):
     add_additional_option("--delta", type=int, default=None,
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
     parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
-                        help="matching strategy to use from most strict to least", type=str, default=None)
+                        help="read-to-isoform matching strategy from the most strict to least", type=str, default=None)
     parser.add_argument("--splice_correction_strategy", choices=["none", "default_pacbio", "default_ont", "conservative_ont", "all", "assembly"],
-                        help="transcript model construction strategy to use",
+                        help="read alignment correction strategy to use",
                         type=str, default=None)
     parser.add_argument("--model_construction_strategy", choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
                                                                   "default_ont", "sensitive_ont", "all", "assembly"],
@@ -114,6 +111,9 @@ def parse_args(args=None, namespace=None):
                           default=False)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
+    add_additional_option("--read_assignments", nargs='+', type=str,
+                          help="reuse read assignments (binary format) to construct transcript models",
+                          default=None)
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "; chosen based on data type if not set", type=str)
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
@@ -210,6 +210,8 @@ def check_input_files(args):
                     bamfile_in.close()
 
     if args.cage is not None:
+        logger.critical("CAGE data is not supported yet")
+        exit(-1)
         if not os.path.isfile(args.cage):
             print("ERROR! Bed file with CAGE peaks " + args.cage + " does not exist")
             exit(-1)

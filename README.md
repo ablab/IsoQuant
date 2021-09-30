@@ -38,11 +38,13 @@
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
 
-*   To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
+* To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
 
         isoquant.py --genedb /PATH/TO/gene_annotation.gtf 
         --bam /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam 
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
+
+* If using official annotations containing `gene` and `transcript` features use `--complete_genedb` to save time.
 
 <a name="sec1"></a>
 # About IsoQuant
@@ -58,7 +60,7 @@ IsoQuant version 1.3.0 was released under GPLv2 on June 18th, 2021 and can be do
 ## Supported data types
 
 IsoQuant support all kinds of long RNA data:
-* PacBio CCS / HiFi
+* PacBio CCS 
 * ONT dRNA / ONT cDNA
 * Assembled / corrected transcript sequences
 
@@ -144,6 +146,7 @@ By default, each file with reads is treated as a separate sample. To group multi
 <a name="sec3.2"></a>
 ## IsoQuant command line options
 
+
 ### Basic options
 `--output` (or `-o`) 
     Output folder, will be created automatically.  
@@ -152,7 +155,7 @@ By default, each file with reads is treated as a separate sample. To group multi
     Prints help message.
 
 `--full_help` 
-    Prints all available options.
+    Prints all available options (including hidden ones).
 
 `--test` 
     Runs IsoQuant on the toy data set.   
@@ -183,6 +186,8 @@ To provide aligned reads use one of the following options:
 
 `--bam_list` 
     Text file with list of BAM files, one file per line, leave empty line between samples. 
+You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:tech_replica1`).
+Use this option to obtain per-replica expression table (see `--read_group` option). 
 
 #### Using raw read as an input:  
 To provide read sequences use one of the following options:
@@ -192,18 +197,12 @@ To provide read sequences use one of the following options:
   
 `--fastq_list` 
     Text file with list of FASTQ/FASTA files, one file per line, leave empty line between samples.
-
-#### Using intermediate IsoQuant resuts
-
-`--read_assignments` 
-    Prefix of intermediate read assignments located in `<output_dir>/<sample_dir>/aux/`
+You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:tech_replica1`).
+Use this option to obtain per-replica expression table (see `--read_group` option). 
 
 #### Other input options:
 `--stranded`
     Reads strandness type, supported values are: `forward`, `reverse`, `none`.
-
-`--polya_trimmed`
-    Set this flag if reads were poly-A trimmed; poly-A tails will not be required for transcript model construction.
 
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
@@ -212,16 +211,16 @@ To provide read sequences use one of the following options:
     Sets space-separated sample names; make sure that the number of labels is equal to the number of samples; input file names are used if not set.
 
 `--read_group`
- Sets a way to group feature counts (e.g. by cell type). Available options are: 
- * by BAM file read tag: set `tag:TAG`, where `TAG` is the desired tag name (e.g. `tag:RG` with use `RG` values as groups);
- * by read name suffix: set `read_id:DELIM` where `DELIM` is the symbol/string by which the read id will be split (e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will set as `NEU`);
- * using additional file with group information for every read: `file:FILE:READ_COL:GROUP_COL:DELIM`, where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set), `GROUP_COL` is column with group ids (1 if not set), `DELIM` is separator symbol (tab if not set).
+ Sets a way to group feature counts (e.g. by cell type or technical replica). Available options are:
+ * `file_name`: groups reads by their original file names (or file name aliases) within a sample. 
+This option makes sense when a sample contains multiple files; see `--bam_list` and `--fastq_list` options to learn more.
+This option is designed for obtaining expression tables with a separate column for each file.
+ * `tag`: groups reads by BAM file read tag: set `tag:TAG`, where `TAG` is the desired tag name (e.g. `tag:RG` with use `RG` values as groups);
+ * `read_id`: groups reads by read name suffix: set `read_id:DELIM` where `DELIM` is the symbol/string by which the read id will be split (e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will set as `NEU`);
+ * `file`: uses additional file with group information for every read: `file:FILE:READ_COL:GROUP_COL:DELIM`, where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set), `GROUP_COL` is column with group ids (1 if not set), `DELIM` is separator symbol (tab if not set).
+  
 
-
-### Pipeline and output options
-
-`--clean_start`
-    Do not use previously generated gene database, genome indices or BAM files, run pipeline from the very beginning (will take more time).
+### Output options
 
 `--sqanti_output`
     Produce SQANTI-like TSV output (requires more time).
@@ -232,14 +231,73 @@ To provide read sequences use one of the following options:
 `--count_exons`
     Perform exon and intron counting in addition to gene and transcript counting.
 
-`--no_secondary`
-    Ignore secondary alignments (not recommended).
 
-`--aligner`
-    Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.
+### Pipeline options
+
+`--threads` or `-t`
+    Number of threads to use, 16 by default. 
+
+`--clean_start`
+    Do not use previously generated gene database, genome indices or BAM files, run pipeline from the very beginning (will take more time).
+
+`--no_model_construction`
+    Do not report transcript models, run read assignment only. 
 
 `--run_aligner_only` 
     Align reads to the reference without running IsoQuant itself.
+
+
+### Algorithm parameters
+
+#### Read to isoform matching:
+
+`--matching_strategy` A preset of parameters for read to isoform matching algorithm, should be one of:
+
+* `exact` - delta = 0, all minor errors are treated as inconsistencies;  
+* `precise` - delta = 4, only minor alignment errors are allowed, default for PacBio data;  
+* `default` - delta = 6, alignment errors typical for Nanopore reads are allowed, short novel introns are treated as deletions;   
+* `loose` - delta = 12, even more serious inconsistencies are ignored, ambiguity is resolved based on nucleotide similarity.
+
+Matching strategy is chosen automatically based on specified data type. 
+However, the parameters will be overridden if the matching strategy is set manually.
+
+#### Read alignment correction:
+
+`--splice_correction_strategy` A preset of parameters for read alignment correction algorithms, should be one of: 
+
+* `none` - no correction is applied;  
+* `default_pacbio` - optimal settings for PacBio CCS reads;
+* `default_ont` - optimal settings for ONT reads;
+* `conservative_ont` - conservative settings for ONT reads, only incorrect splice junction and skipped exons are corrected;
+* `assembly` - optimal settings for a transcriptome assembly;    
+* `all` - correct all discovered minor inconsistencies, may result in overcorrection.
+
+This option is chosen automatically based on specified data type, but will be overridden if set manually.
+
+#### Transcript model construction:
+`--model_construction_strategy` A preset of parameters for transcript model construction algorithm, should be one of
+
+* `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive;  
+* `default_pacbio` - optimal settings for PacBio CCS reads;
+* `sensitive_pacbio` - sensitive settings for PacBio CCS reads, more transcripts are reported possibly at a cost of precision;
+* `fl_pacbio` - optimal settings for full-length PacBio CCS reads (e.g. obtained via CapTrap protocol), will be used if `--data_type pacbio_ccs` and `--fl_data` options are set; 
+* `default_ont` - optimal settings for ONT reads;
+* `sensitive_ont` - sensitive settings for ONT reads, more transcripts are reported possibly at a cost of precision;
+* `assembly` - optimal settings for a transcriptome assembly: input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not considered;    
+* `all` - reports almost all novel transcripts, loses precision in favor to recall.
+
+This option is chosen automatically based on specified data type, but will be overridden if set manually.
+
+
+### Hidden options
+Options below are shown only with `--full_help` option. 
+We recommend to not modify these options unless you clearly aware of their effect.
+    
+`--no_secondary`
+    Ignore secondary alignments.
+
+`--aligner`
+    Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.
 
 `--no_junc_bed`
     Do not use annotation for read mapping.
@@ -247,91 +305,46 @@ To provide read sequences use one of the following options:
 `--junc_bed_file`
     Annotation in BED12 format produced by `paftools.js gff2bed` (can be found in `minimap2`), will be created automatically if not given.
 
-`--threads` or `-t`
-    Number of threads to use, 16 by default. 
-
-`--keep_tmp` 
-    Do not remove temporary files in the end.
-
-### Algorithm parameters
-
-#### Read to isoform matching:
-
-`--matching-strategy` A preset of parameters for read to isoform matching algorithm, should be one of 
-* `exact` - delta = 0, all minor errors are treated as inconsistencies;  
-* `precise` - delta = 3, only minor alignment errors are allowed;  
-* `default` - delta = 6, alignment errors typical for Nanopore reads are allowed, short novel introns are treated as deletions;   
-* `loose` - delta = 12, even more serious inconsistencies are ignored, ambiguity is resolved based on nucleotide similarity.
-
-Matching strategy is chosen automatically based on specified data type. However, the parameters will be overridden if the matching strategy is set manually.
-
-You can manually set some of the parameters (will override options in the preset):
-
 `--delta` 
     Delta for inexact splice junction comparison, chosen automatically based on data type.  
 
-`--max-intron-shift` 
-    Set maximum length for intron shift that will be treated as misalignment.
+`--read_assignments` 
+    Prefix of intermediate read assignments located in `<output_dir>/<sample_dir>/aux/`. 
+These files are kept only when `--keep_tmp` is set.
 
-`--max-missed-exon-len` 
-    Set maximum length for skipped exon that will be treated as misalignment.
-
-#### Transcript model construction:
-reliable,default_ccs,default_ont,fl_ccs,all,assembly
-`--model_construction_strategy` A preset of parameters for transcript model construction algorithm, should be one of 
-* `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive; intron retention is not reported;  
-* `default_ccs` - optimal setting for an average PacBio CCS dataset, intron retention is reported;
-* `default_ont` - optimal setting for and average ONT dataset, intron retention is reported;
-* `fl` - input reads are considered as full-length transcripts; intron retention is reported;
-* `assembly` - input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not required; intron retention is reported;    
-* `all` - report most of detected modification as novel transcripts, loses precision in favor to recall; intron retention is reported;
-
-Transcript model construction strategy is chosen automatically based on specified data type. However, parameters will be overridden if set manually.
-
-You can manually set some of the parameters (will override options in the preset):
-
-`--report_intron_retention` 
-    Report intron retention events as novel transcript models.
-
-`--report_apa` 
-    Report alternative polyadenylation events as novel transcript models.
-
-`--collapse_subisoform` 
-    Collapse isoforms whose intron chain is a subsequence of another intron chain.
-
-`--min_ref_fsm_supporting_reads` 
-    Set a minimal number of full splice match reads that support known isoform.
-
-`--min_ref_supporting_reads` 
-    Set a minimal number of matching reads that support known isoform.
-
-`--min_novel_fsm_supporting_reads` 
-    Set a minimal number of full splice match reads that support novel isoform.
-
-`--min_novel_supporting_reads` 
-    Set a minimal number of reads that support a novel isoform.
-
-`--min_reads_supporting_tsts` 
-    Set a minimal number of reads that support isoform terminal sites.
+`--keep_tmp` Do not remove temporary files.
 
 
 ### Examples
 
-* Mapped PacBio CCS reads in BAM format; not poly-A trimmed; pre-converted gene annotation:
+* Mapped PacBio CCS reads in BAM format; pre-converted gene annotation:
 
 ```bash
 isoquant.py -d pacbio_ccs --bam mapped_reads.bam --genedb annotation.db --output output_dir 
 ```
 
-* Nanopore dRNA reads; not poly-A trimmed; official annotation in GTF format, used sample label instead of file name:
+* Nanopore dRNA stranded reads; official annotation in GTF format, used sample label instead of file name:
 ```bash
 isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --labels My_ONT
 ```
 
-* PacBio FL reads, poly-A trimmed; custom annotation in GTF format, which contains only exon features:
+* PacBio FL reads; custom annotation in GTF format, which contains only exon features:
 ```bash
-isoquant.py -d pacbio_ccs --polya_trimmed --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir 
+isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir 
 ```
+
+* ONT cDNA reads; sample with 3 technical replicas; official annotation in GTF format:
+```bash
+isoquant.py -d nanopore --fastq_list list.txt --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
+```
+
+list.txt file :
+```
+/PATH/TO/SAMPLE1/file1.fastq:REPLICA1
+/PATH/TO/SAMPLE1/file2.fastq:REPLICA2
+/PATH/TO/SAMPLE1/file3.fastq:REPLICA3
+```
+Note, that file aliases given after a colon will be used in expression table header. 
 
 <a name="sec3.3"></a>
 ## IsoQuant output
@@ -342,15 +355,17 @@ IsoQuant output files will be stored in `<output_dir>`, which is set by the user
 Output directory will contain one folder per sample with the following files:  
 
 * `SAMPLE_ID.read_assignments.tsv` - TSV file with each read to isoform assignments;
-* `SAMPLE_ID.transcript_counts.tsv` - TSV file with isoform counts;
-* `SAMPLE_ID.gene_counts.tsv` - TSV file with gene counts;
+* `SAMPLE_ID.corrected_reads.bed` - BED file with corrected read alignments;
+* `SAMPLE_ID.transcript_tpm.tsv` - TSV file with isoform expression in TPM;
+* `SAMPLE_ID.transcript_counts.tsv` - TSV file with raw isoform counts;
+* `SAMPLE_ID.gene_tpm.tsv` - TSV file with gene expression in TPM;
+* `SAMPLE_ID.gene_counts.tsv` - TSV file with raw gene counts;
 * `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models;
-* `SAMPLE_ID.transcript_models_reads.tsv` - TSV file indicating which reads contributed to transcript models;
-* `SAMPLE_ID.transcript_models_counts.tsv` - counts for constructed transcript models;
-* `SAMPLE_ID.mapped_reads.bed` - coordinates of mapped reads in BED format;
-* `aux/` - folder with alignment files and intermediate read assignments in binary format.
+* `SAMPLE_ID.transcript_model_reads.tsv` - TSV file indicating which reads contributed to transcript models;
+* `SAMPLE_ID.transcript_model_tpm.tsv` - expression of constructed transcript models in TPM;
+* `SAMPLE_ID.transcript_model_counts.tsv` - raw counts for constructed transcript models;
 
-If `--sqanti_output` is set, IsoQuant will save read assignments in [SQANTI](https://github.com/ConesaLab/SQANTI3#class)-like format:
+If `--sqanti_output` is set, IsoQuant will save read assignments in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format:
 * `SAMPLE_ID.SQANTI-like.tsv`
 
 If `--count_exons` is set, exon and intron counts will be produced:
@@ -358,10 +373,12 @@ If `--count_exons` is set, exon and intron counts will be produced:
 * `SAMPLE_ID.intron_counts.tsv`
 
 If `--read_group` is set, the per-group counts will be also computed:
-* `SAMPLE_ID.exon_grouped_counts.tsv`
+* `SAMPLE_ID.gene_grouped_tpm.tsv`
+* `SAMPLE_ID.transcript_grouped_tpm.tsv`
 * `SAMPLE_ID.gene_grouped_counts.tsv`
-* `SAMPLE_ID.intron_grouped_counts.tsv`
 * `SAMPLE_ID.transcript_grouped_counts.tsv`
+* `SAMPLE_ID.exon_grouped_counts.tsv`
+* `SAMPLE_ID.intron_grouped_counts.tsv`
 
 If multiple samples are provided, aggregated expression matrices will be placed in `<output_dir>`:
 * `combined_gene_counts.tsv`
@@ -383,7 +400,7 @@ Tab-separated values, the columns are:
 
 * `read_id` - read id;
 * `chr` - chromosome id;
-* `strand` - strand of the assigned isoform (not mapping strand);
+* `strand` - strand of the assigned isoform (not to be confused with read mapping strand);
 * `isoform_id` - isoform id to which the read was assigned;
 * `gene_id` - gene id to which the read was assigned; 
 * `assignment_type` - assignment type, can be:
@@ -438,15 +455,21 @@ Tab-separated values, the columns are:
     - `CAGE` - True if CAGE peak is found;
     - `Canonical` - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use `--check_canonical`) 
 
-Note that a sigle read may occur more than once if assigned ambiguously.
+Note, that a single read may occur more than once if assigned ambiguously.
 
-#### Gene and transcript count format
+#### Expression table format
 
 Tab-separated values, the columns are:
 
 * `feature_id` - genomic feature ID;
-* `group_id` - read group if provided (NA by default);
-* `count` - number of reads that were assigned to this feature (float value);
+* `TPM` or `count` - expression value (float).
+
+For grouped counts, each column contains expression values of a respective group.
+In the number of groups exceeds 10, file will contain 3 columns: 
+
+* `feature_id` - genomic feature ID;
+* `group_id` - name of the assigned group;
+* `TPM` or `count` - expression value (float).
 
 #### Exon and intron count format
 
@@ -471,15 +494,15 @@ Tab-separated values, the columns are:
 
 #### Transcript models format
 
-Constructed transcript models are stored in usual [GTF format](https://www.ensembl.org/info/website/upload/gff.html). Currently, only exon features are listed. Metafeatures, such as genes and transcripts will be added later.
-
-Transcript ids given in the `attribute` field have the following format: `transcript_###.TYPE`, where ### is the unique number (not necessarily consecutive) and TYPE can be one of the following:
+Constructed transcript models are stored in usual [GTF format](https://www.ensembl.org/info/website/upload/gff.html).
+Contains `exon`, `transcript` and `gene` features. 
+Transcript ids have the following format: `transcript_###.TYPE`, where `###` is the unique number (not necessarily consecutive) and TYPE can be one of the following:
 * known - previously annotated transcripts;
 * nic - novel in catalog, new transcript that contains only annotated introns;
 * nnic - novel not in catalog, new transcript that contains unannotated introns.
 
-The `attribute` field also contains `gene_id` (matches reference gene id), `reference_gene_id` (same value) and `reference_transcript_id` - the most similar known isoform.
-In addition, it contains `counts` attribute and `canonical` if `--check_canonical` is set. 
+The `attribute` field also contains `gene_id` (either matches reference gene id or can be `novel_gene_###`), `reference_gene_id` (same value) and `reference_transcript_id` (either original isoform id or `novel`).
+In addition, it contains `canonical` property if `--check_canonical` is set. 
 
 ### Event classification figures
 #### Consistent match classifications
@@ -500,7 +523,7 @@ Manuscript is in preparation.
 
 <a name="sec5"></a>
 ## Feedback and bug reports
-Your comments, bug reports, and suggestions are very welcome. They will help us to further improve IsoQuant. If you have any troubles running IsoQuant, please send us isoquant.log from the <output_dir> directory. 
+Your comments, bug reports, and suggestions are very welcome. They will help us to further improve IsoQuant. If you have any troubles running IsoQuant, please send us `isoquant.log` from the `<output_dir>` directory. 
 
 You can leave your comments and bug reports at our [GitHub repository tracker](https://github.com/ablab/IsoQuant/issues) or send them via email: isoquant.rna@gmail.com.
 
