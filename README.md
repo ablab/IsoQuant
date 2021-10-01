@@ -40,7 +40,8 @@
 
 * To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
 
-        isoquant.py --genedb /PATH/TO/gene_annotation.gtf 
+        isoquant.py --reference /PATH/TO/reference_genome.fasta  
+        --genedb /PATH/TO/gene_annotation.gtf 
         --bam /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam 
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
@@ -69,7 +70,7 @@ Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have al
 <a name="sec1.2"></a>
 ## Supported reference data
 
-Reference genome should be provided in multi-FASTA format. When BAM files are provided, reference genome is not mandatory, but can be used to count some additional statistics.
+Reference genome should be provided in multi-FASTA format. Reference genome is mandatory even when BAM files are provided.
 
 Gene annotation can be provided in GFF/GTF format. In this case it will be converted to [gffutils](https://pythonhosted.org/gffutils/installation.html) database. Information on converted databases will be stored in your `~/.config/IsoQuant/db_config.json` to increase speed of future runs. You can also provide gffutils database manually. Make sure that chromosome/scaffold names are identical in FASTA file and gene annotation.
 
