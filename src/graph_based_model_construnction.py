@@ -178,7 +178,8 @@ class GraphBasedModelConstructor:
                     new_model = self.transcript_from_reference(reference_isoform, new_transcript_id)
                     self.detected_known_isoforms.add(reference_isoform)
                     logger.debug("Adding known spliced isoform %s" % reference_isoform)
-
+                    logger.debug("Annotated positions: %d, %d, %s" % (new_model.exon_blocks[0][0], new_model.exon_blocks[-1][1], new_model.strand))
+                    logger.debug("Graph positions: %s, %s" % (str(path[0]), str(path[-1])))
             else:
                 # adding FL novel isoform
                 polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya)

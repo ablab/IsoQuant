@@ -134,13 +134,13 @@ class IntronGraph:
         self.intron_collector = IntronCollector(gene_info, params.delta)
         self.max_coverage = 0
 
-        #self.starting_known_positions = defaultdict(list)
-        #self.terminal_known_positions = defaultdict(list)
-        #for t, introns in self.gene_info.all_isoforms_introns.items():
-        #    if not introns:
-        #        continue
-        #    self.starting_known_positions[introns[0]].append(self.gene_info.all_isoforms_exons[t][0][0])
-        #    self.terminal_known_positions[introns[-1]].append(self.gene_info.all_isoforms_exons[t][-1][1])
+        self.starting_known_positions = defaultdict(list)
+        self.terminal_known_positions = defaultdict(list)
+        for t, introns in self.gene_info.all_isoforms_introns.items():
+            if not introns:
+                continue
+            self.starting_known_positions[introns[0]].append(self.gene_info.all_isoforms_exons[t][0][0])
+            self.terminal_known_positions[introns[-1]].append(self.gene_info.all_isoforms_exons[t][-1][1])
 
         logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
         self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
@@ -343,11 +343,21 @@ class IntronGraph:
                                                              read_end=read_end,
                                                              cutoff=read_ends_cutoff)
         if read_end:
+            if intron in self.terminal_known_positions:
+                logger.debug("Annotated terminal positions: " + str(sorted(self.terminal_known_positions[intron])))
+            logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
+            logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
             for pos in clustered_polyas.keys():
                 self.outgoing_edges[intron].add((VERTEX_polya, pos))
             for pos in terminal_positions.keys():
                 self.outgoing_edges[intron].add((VERTEX_read_end, pos))
         else:
+            if intron in self.starting_known_positions:
+                logger.debug("Annotated terminal positions: " + str(sorted(self.starting_known_positions[intron])))
+            else:
+                logger.debug("No annotated terminal positions")
+            logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
+            logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
             for pos in clustered_polyas.keys():
                 self.incoming_edges[intron].add((VERTEX_polyt, pos))
             for pos in terminal_positions.keys():
