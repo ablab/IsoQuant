@@ -186,8 +186,8 @@ To provide aligned reads use one of the following options:
 
 `--bam_list` 
     Text file with list of BAM files, one file per line, leave empty line between samples. 
-You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:tech_replica1`).
-Use this option to obtain per-replica expression table (see `--read_group` option). 
+You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:replicate1`).
+Use this option to obtain per-replicate expression table (see `--read_group` option). 
 
 #### Using raw read as an input:  
 To provide read sequences use one of the following options:
@@ -197,8 +197,8 @@ To provide read sequences use one of the following options:
   
 `--fastq_list` 
     Text file with list of FASTQ/FASTA files, one file per line, leave empty line between samples.
-You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:tech_replica1`).
-Use this option to obtain per-replica expression table (see `--read_group` option). 
+You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:replicate1`).
+Use this option to obtain per-replicate expression table (see `--read_group` option). 
 
 #### Other input options:
 `--stranded`
@@ -211,7 +211,7 @@ Use this option to obtain per-replica expression table (see `--read_group` optio
     Sets space-separated sample names; make sure that the number of labels is equal to the number of samples; input file names are used if not set.
 
 `--read_group`
- Sets a way to group feature counts (e.g. by cell type or technical replica). Available options are:
+ Sets a way to group feature counts (e.g. by cell type or replicate). Available options are:
  * `file_name`: groups reads by their original file names (or file name aliases) within a sample. 
 This option makes sense when a sample contains multiple files; see `--bam_list` and `--fastq_list` options to learn more.
 This option is designed for obtaining expression tables with a separate column for each file.
@@ -333,16 +333,16 @@ isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz --reference 
 isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir 
 ```
 
-* ONT cDNA reads; sample with 3 technical replicas; official annotation in GTF format:
+* ONT cDNA reads; sample with 3 replicates (biological or technical); official annotation in GTF format:
 ```bash
 isoquant.py -d nanopore --fastq_list list.txt --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
 ```
 
 list.txt file :
 ```
-/PATH/TO/SAMPLE1/file1.fastq:REPLICA1
-/PATH/TO/SAMPLE1/file2.fastq:REPLICA2
-/PATH/TO/SAMPLE1/file3.fastq:REPLICA3
+/PATH/TO/SAMPLE1/file1.fastq:REPLICATE1
+/PATH/TO/SAMPLE1/file2.fastq:REPLICATE2
+/PATH/TO/SAMPLE1/file3.fastq:REPLICATE3
 ```
 Note, that file aliases given after a colon will be used in expression table header. 
 
