@@ -31,29 +31,31 @@ class EnumStats:
             logger.info("%s: %d" % (e.name, self.stats_dict[e]))
 
 
-def transform_counts(path_to_csv, label):
+def transform_counts(path_to_csv, label, column_name='count', full=False):
     df = pd.read_csv(path_to_csv, sep='\t')
-    df_features = df[:-3].copy()
-    df_features.rename(columns={'count': label}, inplace=True)
-    df_features.drop(columns='group_id', inplace=True)
-    df_stats = df[-3:].copy()
-    df_stats.rename(columns={'group_id': label}, inplace=True)
-    df_stats.drop(columns='count', inplace=True)
-    return pd.concat([df_features, df_stats], ignore_index=True)
+    df_features = df.copy() if full else df[:-3].copy()
+    df_features.rename(columns={column_name: label}, inplace=True)
+    return df_features
+
+
+def combine_table(input_data, output, get_file_name, output_file_name, column_name='count', full=False):
+    sample_0 = input_data.samples[0]
+    combined_table = transform_counts(get_file_name(sample_0), sample_0.label, column_name, full)
+    for sample in input_data.samples[1:]:
+        combined_table = pd.merge(combined_table,
+                                  transform_counts(get_file_name(sample), sample.label, column_name, full),
+                                  on='feature_id', how='outer')
+
+    combined_table.to_csv(os.path.join(output, output_file_name), sep='\t', index=False)
 
 
 def combine_counts(input_data, output):
     logger.info("Aggregating counts for " + proper_plural_form("sample", len(input_data.samples)))
-    sample_0 = input_data.samples[0]
-    gene_stats = transform_counts(sample_0.out_gene_counts_tsv, sample_0.label)
-    transcript_stats = transform_counts(sample_0.out_transcript_counts_tsv, sample_0.label)
-
-    for sample in input_data.samples[1:]:
-        gene_stats = pd.merge(gene_stats, transform_counts(sample.out_gene_counts_tsv, sample.label),
-                              on='feature_id', how='outer')
-        transcript_stats = pd.merge(transcript_stats, transform_counts(sample.out_transcript_counts_tsv, sample.label),
-                                    on='feature_id', how='outer')
-
-    gene_stats.to_csv(os.path.join(output, 'combined_gene_counts.tsv'), sep='\t', index=False)
-    transcript_stats.to_csv(os.path.join(output, 'combined_transcript_counts.tsv'), sep='\t', index=False)
+    combine_table(input_data, output, lambda x: x.out_gene_counts_tsv + "_counts.tsv", "combined_gene_counts.tsv")
+    combine_table(input_data, output, lambda x: x.out_gene_counts_tsv + "_tpm.tsv", "combined_gene_tpm.tsv",
+                  column_name='TPM', full=True)
+    combine_table(input_data, output, lambda x: x.out_transcript_counts_tsv + "_counts.tsv",
+                  "combined_transcript_counts.tsv")
+    combine_table(input_data, output, lambda x: x.out_transcript_counts_tsv + "_tpm.tsv",
+                  "combined_transcript_tpm.tsv", column_name='TPM', full=True)
     logger.info("Aggregation finished")

@@ -30,7 +30,7 @@ def parse_args(args=None, namespace=None):
                         help='Debug log output.')
     # REFERENCE
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
-                        required='--run_aligner_only' not in sys.argv)
+                        required=True)
     parser.add_argument('--complete_genedb', action='store_true', default=False,
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "
@@ -54,9 +54,6 @@ def parse_args(args=None, namespace=None):
                                                          ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
-    input_args.add_argument("--read_assignments", nargs='+', type=str,
-                            help="reuse read assignments (binary format) to construct transcript models",
-                            default=None)
 
     parser.add_argument('--labels', '-l', nargs='+', type=str,
                         help='sample names to be used; input file names are used if not set')
@@ -78,9 +75,9 @@ def parse_args(args=None, namespace=None):
     add_additional_option("--delta", type=int, default=None,
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
     parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
-                        help="matching strategy to use from most strict to least", type=str, default=None)
+                        help="read-to-isoform matching strategy from the most strict to least", type=str, default=None)
     parser.add_argument("--splice_correction_strategy", choices=["none", "default_pacbio", "default_ont", "conservative_ont", "all", "assembly"],
-                        help="transcript model construction strategy to use",
+                        help="read alignment correction strategy to use",
                         type=str, default=None)
     parser.add_argument("--model_construction_strategy", choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
                                                                   "default_ont", "sensitive_ont", "all", "assembly"],
@@ -98,11 +95,13 @@ def parse_args(args=None, namespace=None):
                         action='store_true', default=False)
     parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
 
-    # ADDITIONAL
-    add_additional_option("--no_model_construction", action="store_true", default=False,
+    # PIPELINE STEPS
+    parser.add_argument("--no_model_construction", action="store_true", default=False,
                           help="run only read assignment and quantification")
-    add_additional_option("--run_aligner_only", action="store_true", default=False,
-                          help="align reads to reference without isoform assignment")
+    parser.add_argument("--run_aligner_only", action="store_true", default=False,
+                          help="align reads to reference without running further analysis")
+
+    # ADDITIONAL
     add_additional_option("--no_junc_bed", action="store_true", default=False,
                           help="do NOT use annotation for read mapping")
     add_additional_option("--junc_bed_file", type=str,
@@ -110,10 +109,13 @@ def parse_args(args=None, namespace=None):
                                "(will be created automatically if not given)")
     add_additional_option("--no_secondary", help="ignore secondary alignments (not recommended)", action='store_true',
                           default=False)
-    add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
-                                            "; chosen based on data type if not set", type=str)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
+    add_additional_option("--read_assignments", nargs='+', type=str,
+                          help="reuse read assignments (binary format) to construct transcript models",
+                          default=None)
+    add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
+                                            "; chosen based on data type if not set", type=str)
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
@@ -208,6 +210,8 @@ def check_input_files(args):
                     bamfile_in.close()
 
     if args.cage is not None:
+        logger.critical("CAGE data is not supported yet")
+        exit(-1)
         if not os.path.isfile(args.cage):
             print("ERROR! Bed file with CAGE peaks " + args.cage + " does not exist")
             exit(-1)
