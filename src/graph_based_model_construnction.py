@@ -268,13 +268,13 @@ class GraphBasedModelConstructor:
                 if self.params.needs_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '-':
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
                         isoform_left_support[refrenence_isoform_id] += 1
-                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= 50:
+                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= self.params.apa_delta:
                     isoform_left_support[refrenence_isoform_id] += 1
 
                 if self.params.needs_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '+':
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_right for x in events):
                         isoform_right_support[refrenence_isoform_id] += 1
-                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= 50:
+                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= self.params.apa_delta:
                     isoform_right_support[refrenence_isoform_id] += 1
 
         self.construct_monoexon_isoforms(mono_exon_isoform_reads, mono_exon_isoform_coverage, polya_sites)
@@ -377,7 +377,46 @@ class GraphBasedModelConstructor:
                 self.unused_reads.append(read_id)
 
     def correct_novel_transcrip_ends(self, transcript_model, assigned_reads):
-        pass
+        logger.debug("Verifying ends for transcript %s" % transcript_model.transcript_id)
+        transcript_end = transcript_model.exon_blocks[-1][1]
+        transcript_start = transcript_model.exon_blocks[0][0]
+        start_supported = False
+        read_starts = set()
+        end_supported = False
+        read_ends = defaultdict(int)
+
+        for assignment in assigned_reads:
+            read_exons = assignment.corrected_exons
+            if abs(read_exons[0][0] - transcript_start) <= self.params.apa_delta:
+                start_supported = True
+            if not start_supported and read_exons[0][0] < transcript_model.exon_blocks[0][1]:
+                read_starts.add(read_exons[0][0])
+            if abs(read_exons[-1][1] - transcript_end) <= self.params.apa_delta:
+                end_supported = True
+            if not end_supported and read_exons[-1][1] > transcript_model.exon_blocks[-1][0]:
+                read_ends[read_exons[-1][1]] += 1
+
+        new_transcript_start = None
+        if not start_supported:
+            read_starts = sorted(read_starts)
+            for read_start in read_starts:
+                if read_start > transcript_start:
+                    new_transcript_start = read_start
+        if new_transcript_start and new_transcript_start < transcript_model.exon_blocks[0][1]:
+            logger.debug("Changed start for transcript %s: from %d to %d" %
+                         (transcript_model.transcript_id, transcript_model.exon_blocks[0][0], new_transcript_start))
+            transcript_model.exon_blocks[0] = (new_transcript_start, transcript_model.exon_blocks[0][1])
+
+        new_transcript_end = None
+        if not end_supported:
+            read_ends = sorted(read_ends)
+            for read_end in read_ends:
+                if read_end < transcript_end:
+                    new_transcript_end = read_end
+        if new_transcript_end and new_transcript_end > transcript_model.exon_blocks[-1][0]:
+            logger.debug("Changed end for transcript %s: from %d to %d" %
+                         (transcript_model.transcript_id, transcript_model.exon_blocks[-1][1], new_transcript_end))
+            transcript_model.exon_blocks[-1] = (transcript_model.exon_blocks[-1][0], new_transcript_end)
 
 
 class IntronPathStorage:
