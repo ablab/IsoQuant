@@ -322,8 +322,7 @@ class GraphBasedModelConstructor:
             logger.debug("Known non-FL spliced isoform %s" % isoform_id)
             if count < self.params.min_known_count or \
                     spliced_isoform_left_support[isoform_id] < 1 or \
-                    spliced_isoform_right_support[isoform_id] < 1 or \
-                    unvisited_introns < 1:
+                    spliced_isoform_right_support[isoform_id] < 1:
                 logger.debug("Will not be added")
             else:
                 logger.debug("Adding known non-FL spliced isoform %s" % isoform_id)
