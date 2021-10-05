@@ -100,9 +100,9 @@ class GFFPrinter:
 
         # write read_id -> transcript_id map
         used_reads = set()
-        for model_id, reads in transcript_model_constructor.transcript_read_ids.items():
-            for read_id in reads:
-                used_reads.add(read_id)
-                self.out_r2t.write("%s\t%s\n" % (read_id, model_id))
+        for model_id, read_assignments in transcript_model_constructor.transcript_read_ids.items():
+            for a in read_assignments:
+                used_reads.add(a.read_id)
+                self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
         for read_id in transcript_model_constructor.unused_reads:
             self.out_r2t.write("%s\t%s\n" % (read_id, "*"))

@@ -41,7 +41,6 @@ class GraphBasedModelConstructor:
         self.path_processor = None
         self.path_storage = None
         self.detected_known_isoforms = set()
-        self.visited_introns = set()
 
         self.known_isoforms_in_graph = {}
         self.known_introns = set()
@@ -115,6 +114,10 @@ class GraphBasedModelConstructor:
         self.construct_fl_isoforms()
         self.construnct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
+        for model in self.transcript_model_storage:
+            if model.transcript_id.endswith(self.known_transcript_suffix):
+                continue
+            self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
@@ -138,7 +141,7 @@ class GraphBasedModelConstructor:
 
     def save_assigned_read(self, read_assignment, transcript_id):
         read_id = read_assignment.read_id
-        self.transcript_read_ids[transcript_id].append(read_id)
+        self.transcript_read_ids[transcript_id].append(read_assignment)
         self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
 
     def construct_fl_isoforms(self):
@@ -220,8 +223,6 @@ class GraphBasedModelConstructor:
                 for read_assignment in self.path_storage.paths_to_reads[path]:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
                     self.reads_used_in_construction.add(read_assignment.read_id)
-                for v in path:
-                    self.visited_introns.add(v)
 
     def construnct_assignment_based_isoforms(self, read_assignment_storage):
         spliced_isoform_reads = defaultdict(list)
@@ -314,11 +315,6 @@ class GraphBasedModelConstructor:
                 continue
 
             intron_path = self.known_isoforms_in_graph_ids[isoform_id]
-            unvisited_introns = 0
-            for intron in intron_path:
-                if intron not in self.visited_introns:
-                    unvisited_introns += 1
-
             logger.debug("Known non-FL spliced isoform %s" % isoform_id)
             if count < self.params.min_known_count or \
                     spliced_isoform_left_support[isoform_id] < 1 or \
@@ -337,8 +333,6 @@ class GraphBasedModelConstructor:
             if isoform_id not in self.known_isoforms_in_graph_ids:
                 continue
             path = self.known_isoforms_in_graph_ids[isoform_id]
-            for v in path:
-                self.visited_introns.add(v)
 
     # create transcript model object from reference isoforms
     def transcript_from_reference(self, isoform_id, transcript_id=None):
@@ -378,9 +372,12 @@ class GraphBasedModelConstructor:
                                                           [m.assigned_transcript for m in model_assignment.isoform_matches],
                                                           model_assignment.read_group)
                 for m in model_assignment.isoform_matches:
-                    self.transcript_read_ids[m.assigned_transcript].append(read_id)
+                    self.transcript_read_ids[m.assigned_transcript].append(assignment)
             else:
                 self.unused_reads.append(read_id)
+
+    def correct_novel_transcrip_ends(self, transcript_model, assigned_reads):
+        pass
 
 
 class IntronPathStorage:
