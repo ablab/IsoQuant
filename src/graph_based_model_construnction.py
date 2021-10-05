@@ -461,20 +461,27 @@ class IntronPathProcessor:
                 if abs(v[1] - end) <= self.params.apa_delta:
                     return v
 
+        outgoing_introns = self.intron_graph.get_outgoing(intron)
+        if len(outgoing_introns) > 0:
+            # intron has outgoing edges
+            rightmost_exon_end = max([intron[0] for intron in outgoing_introns]) - 1
+            if not trusted and end <= rightmost_exon_end + self.params.delta:
+                # read end lies within next exon and has no polyA
+                return None
+
         # consider all terminal position available for intron
         all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, VERTEX_read_end)) +
                                    list(possible_polyas), key=lambda x:x[1])
         if len(all_possible_ends) == 0:
             return None
-        elif len(all_possible_ends) == 1:
-            return all_possible_ends[0]
 
         rightmost_end = all_possible_ends[-1]
         if trusted and end >= rightmost_end[1] and rightmost_end[0] == VERTEX_read_end:
             # if we have trusted read, in cannot stop earlier that rightmost end (otherwise it should match polyA)
             return rightmost_end
-        elif not trusted and end <= rightmost_end[1] and end > all_possible_ends[-2][1]:
-            # non trusted should end before rightmost position but not earlier than second last
+        elif not trusted and end <= rightmost_end[1] + self.params.apa_delta and \
+                (len(all_possible_ends) <= 1 or end > all_possible_ends[-2][1]):
+            # non trusted should end before rightmost position + apa_delta but not earlier than second last
             return rightmost_end
         return None
 
@@ -486,26 +493,23 @@ class IntronPathProcessor:
                 if abs(v[1] - start) <= self.params.apa_delta:
                     return v
 
-        all_possible_starts = sorted(
-            list(self.intron_graph.get_incoming(intron, VERTEX_read_start)) + list(possible_polyas),
-            key=lambda x: x[1])
+        incoming_introns = self.intron_graph.get_incoming(intron)
+        if len(incoming_introns) > 0:
+            # intron has outgoing edges
+            leftmost_exon_start = min([intron[1] for intron in incoming_introns]) + 1
+            if not trusted and start >= leftmost_exon_start - self.params.delta:
+                # read start lies within previous exon and has no polyA
+                return None
+
+        all_possible_starts = sorted(list(self.intron_graph.get_incoming(intron, VERTEX_read_start)) +
+                                     list(possible_polyas), key=lambda x: x[1])
         if len(all_possible_starts) == 0:
             return None
-        elif len(all_possible_starts) == 1:
-            return all_possible_starts[0]
 
         leftmost_start = all_possible_starts[0]
         if trusted and start <= leftmost_start[1] and leftmost_start[0] == VERTEX_read_start:
             return leftmost_start
-        elif not trusted and start >= leftmost_start[1] and start < all_possible_starts[1][1]:
+        elif not trusted and start >= leftmost_start[1] and \
+                (len(all_possible_starts) <= 1 or start < all_possible_starts[1][1]):
             return leftmost_start
         return None
-
-
-
-
-
-
-
-
-
