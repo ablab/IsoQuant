@@ -159,18 +159,28 @@ class IntronGraph:
     def is_isolated(self, v):
         return not self.outgoing_edges[v] and not self.incoming_edges[v]
 
-    def get_outgoing(self, intron, v_type):
+    def get_outgoing(self, intron, v_type=None):
         res = []
-        for v in self.outgoing_edges[intron]:
-            if v[0] == v_type:
-                res.append(v)
+        if v_type is None:
+            for v in self.outgoing_edges[intron]:
+                if v[0] >= 0:
+                    res.append(v)
+        else:
+            for v in self.outgoing_edges[intron]:
+                if v[0] == v_type:
+                    res.append(v)
         return sorted(res)
 
-    def get_incoming(self, intron, v_type):
+    def get_incoming(self, intron, v_type=None):
         res = []
-        for v in self.incoming_edges[intron]:
-            if v[0] == v_type:
-                res.append(v)
+        if v_type is None:
+            for v in self.incoming_edges[intron]:
+                if v[0] >= 0:
+                    res.append(v)
+        else:
+            for v in self.incoming_edges[intron]:
+                if v[0] == v_type:
+                    res.append(v)
         return sorted(res)
 
     def is_dead_end(self, intron):
