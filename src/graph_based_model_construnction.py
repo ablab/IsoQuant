@@ -402,6 +402,7 @@ class GraphBasedModelConstructor:
             for read_start in read_starts:
                 if read_start > transcript_start:
                     new_transcript_start = read_start
+                    break
         if new_transcript_start and new_transcript_start < transcript_model.exon_blocks[0][1]:
             logger.debug("Changed start for transcript %s: from %d to %d" %
                          (transcript_model.transcript_id, transcript_model.exon_blocks[0][0], new_transcript_start))
@@ -409,10 +410,11 @@ class GraphBasedModelConstructor:
 
         new_transcript_end = None
         if not end_supported:
-            read_ends = sorted(read_ends)
+            read_ends = sorted(read_ends, reverse=True)
             for read_end in read_ends:
                 if read_end < transcript_end:
                     new_transcript_end = read_end
+                    break
         if new_transcript_end and new_transcript_end > transcript_model.exon_blocks[-1][0]:
             logger.debug("Changed end for transcript %s: from %d to %d" %
                          (transcript_model.transcript_id, transcript_model.exon_blocks[-1][1], new_transcript_end))
