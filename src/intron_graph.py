@@ -353,21 +353,19 @@ class IntronGraph:
                                                              read_end=read_end,
                                                              cutoff=read_ends_cutoff)
         if read_end:
-            if intron in self.terminal_known_positions:
-                logger.debug("Annotated terminal positions: " + str(sorted(self.terminal_known_positions[intron])))
-            logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
-            logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
+            # if intron in self.terminal_known_positions:
+            #    logger.debug("Annotated terminal positions: " + str(sorted(self.terminal_known_positions[intron])))
+            # logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
+            # logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
             for pos in clustered_polyas.keys():
                 self.outgoing_edges[intron].add((VERTEX_polya, pos))
             for pos in terminal_positions.keys():
                 self.outgoing_edges[intron].add((VERTEX_read_end, pos))
         else:
-            if intron in self.starting_known_positions:
-                logger.debug("Annotated terminal positions: " + str(sorted(self.starting_known_positions[intron])))
-            else:
-                logger.debug("No annotated terminal positions")
-            logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
-            logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
+            # if intron in self.starting_known_positions:
+            #    logger.debug("Annotated terminal positions: " + str(sorted(self.starting_known_positions[intron])))
+            # logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
+            # logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
             for pos in clustered_polyas.keys():
                 self.incoming_edges[intron].add((VERTEX_polyt, pos))
             for pos in terminal_positions.keys():
@@ -406,10 +404,10 @@ class IntronGraph:
             elif not self.is_end_internal(terminating_intron, read_end):
                 read_ends[terminating_intron][read_end] += 1
 
-        self.print_terminal(read_starts, "Read starts")
-        self.print_terminal(polyt_starts, "Read polyT")
-        self.print_terminal(read_ends, "Read ends")
-        self.print_terminal(polya_ends, "Read polyA")
+        # self.print_terminal(read_starts, "Read starts")
+        # self.print_terminal(polyt_starts, "Read polyT")
+        # self.print_terminal(read_ends, "Read ends")
+        # self.print_terminal(polya_ends, "Read polyA")
 
         return polya_ends, read_ends, polyt_starts, read_starts
 
@@ -424,8 +422,8 @@ class IntronGraph:
             top_position = best_pair[0]
             nearest_position, diff_to_nearest_position = find_closest(top_position, known_positions)
             if nearest_position and diff_to_nearest_position <= self.params.apa_delta:
-                top_position = nearest_position
                 logger.debug("Using reference TSS/TES: %d -> %d" % (top_position, nearest_position))
+                top_position = nearest_position
             if read_end:
                 assert top_position > intron[1]
             else:
