@@ -100,15 +100,37 @@ class InputDataStorage:
                 sample_files.append(current_sample)
                 current_sample = []
             else:
-                vals = l.strip().split(':')
-                files = vals[0].split()
-                if len(vals) > 1:
-                    readable_name = vals[-1]
+                if ',' in l:
+                    read_12 = l.strip().split(',')
+                    if ':' in l:
+                        rep_names = list(map(lambda x: x.split(':')[1], read_12))
+                        if rep_names[0] != rep_names[1]: 
+                            raise Exception("Replicate names " + '/'.join(rep_names) + " are not consistent!")
+                        else:
+                            readable_name = [rep_names[0] + '_R1', rep_names[0] + '_R2']
+                            read_12 = list(map(lambda x: x.split(':')[0], read_12))
+                    else:
+                        base_name = os.path.splitext(os.path.basename(read_12[0]))[0]
+                        readable_name = [base_name + '_R1', base_name + '_R2']
+
+                    # check for the two extensions here
+                    exts = list(map(lambda x: os.path.splitext(x.split('/')[-1][-1], read_12)))
+                    if exts[0] != exts[1]:
+                        raise Exception("Extensions for " + read_12[0] + " & read2 are not the same!")
+
+                    current_sample.append(read_12)
+                    for i in range(len(read_12)):
+                        readable_names_dict[read_12[i]] = readable_name[i]
                 else:
-                    readable_name = os.path.splitext(os.path.basename(files[0]))[0]
-                current_sample.append(files)
-                for fname in files:
-                    readable_names_dict[fname] = readable_name
+                    vals = l.strip().split(':')
+                    files = vals[0].split()
+                    if len(vals) > 1:
+                        readable_name = vals[-1]
+                    else:
+                        readable_name = os.path.splitext(os.path.basename(files[0]))[0]
+                    current_sample.append(files)
+                    for fname in files:
+                        readable_names_dict[fname] = readable_name
 
         if len(current_sample) > 0:
             sample_files.append(current_sample)

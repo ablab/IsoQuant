@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2019 Saint Petersburg State University
+# Copyright (c) 2021 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
@@ -16,7 +16,7 @@ import gffutils
 def read_probs(args):
     values = []
     probs = []
-    for l in open(args.hist):
+    for l in open(args.prob):
         t = l.strip().split()
         values.append(int(t[0]))
         probs.append(float(t[1]))
@@ -50,7 +50,8 @@ def simulate_10x(args, isoforms):
         if os.path.exists(outfq_prefix + '_R2.fastq'):
             os.remove(outfq_prefix + '_R2.fastq')
 
-        os.system('~/miniconda3/bin/iss generate -p 6  --genomes ' + outf + ' --n_reads ' + str(nreads) + ' --model HiSeq  -a uniform -o ' + outfq_prefix + ' 2> /dev/null')
+        # install insilicoseq first e.g. `pip install InSilicoSeq`
+        os.system('$(which iss) generate -p 6  --genomes ' + outf + ' --n_reads ' + str(nreads) + ' --model HiSeq  -a uniform -o ' + outfq_prefix + ' 2> /dev/null')
 
         isoform_name = isoform_id + '_' + str(isoform_counts[isoform_id])
         left_reads = []
@@ -86,7 +87,7 @@ def get_isoform_set(args):
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--fasta", "-f", help="initial file with sequences", type=str)
-    parser.add_argument("--hist", help="probability values", type=str)
+    parser.add_argument("--prob", help="probability values", type=str)
     parser.add_argument("--output", "-o", help="output folder", type=str)
     parser.add_argument("--genedb", "-g", help="gene database in gffutils db format", type=str)
     parser.add_argument("--gene_id", help="gene id to take isoforms from", type=str)
@@ -94,7 +95,7 @@ def parse_args():
 
     args = parser.parse_args()
 
-    if args.fasta is None or args.hist is None:
+    if args.fasta is None or args.prob is None:
         parser.print_help()
         exit(-1)
     if args.output is None:

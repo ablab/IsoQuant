@@ -143,6 +143,9 @@ def store_index(index, args):
 
 
 def find_stored_alignment(fastq_file, args):
+    # if len(fastq_file) == 2:
+    #     read1 & read 2??
+
     fastq = os.path.abspath(fastq_file)
     key = "%s_aligned_to_%s" % (fastq, args.index)
     with open(args.alignment_config_path, 'r') as f_in:
@@ -188,7 +191,7 @@ def index_reference(aligner, args):
 
     command = ""
     index_name = os.path.join(os.path.abspath(args.output), "%s_k%s_idx" % (ref_name, KMER_SIZE[args.data_type]))
-    if aligner == "starlong":
+    if aligner in ["star", "starlong"]:
         if os.path.isdir(index_name) and os.path.exists(os.path.join(index_name, "genomeParameters.txt")):
             logger.debug('Reusing reference index ' + index_name)
             return index_name
@@ -219,7 +222,10 @@ def index_reference(aligner, args):
 
 def align_fasta(aligner, fastq_file, args, label, out_dir):
     # TODO: fix paired end reads
-    fastq_path = os.path.abspath(fastq_file)
+    if len(fastq_file) == 2:
+        fastq_path = os.path.abspath(fastq_file[0])
+    else:
+        fastq_path = os.path.abspath(fastq_file)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
     alignment_prefix = os.path.join(out_dir, label)
     alignment_bam_path = os.path.join(out_dir, label + '_%x_%x.bam' % (hash(fastq_path), hash(args.index)))
@@ -231,8 +237,41 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
 
     log_fpath = os.path.join(args.output, "alignment.log")
     log_file = open(log_fpath, "a")
-    # TODO Chi-Lam: add star for barcoded reads
-    if aligner == "starlong":
+
+    if aligner == "star":
+        star_path = get_aligner('STAR')
+        zcat_option = " --readFilesCommand zcat " if ext.endswith('gz') else "" #### two fastqs!! ####
+        gtf_fname = args.genedb
+        if args.genedb.endswith('.db'):
+            gtf_fname = convert_db_to_gtf(args)
+        annotation_opts = "" if args.no_junc_bed else " --sjdbGTFfile " + gtf_fname + " --sjdbOverhang 140 "
+        fastq_R1_R2 = fastq_file[0] + ' ' + fastq_file[1]
+        
+        command = '{exec_path} {zcat} --runThreadN {threads} --genomeDir {ref_index_name}  --readFilesIn {transcripts}  ' \
+                  '--outSAMtype BAM Unsorted --outSAMattributes NH HI NM MD --outFilterMultimapScoreRange 1 ' \
+                  '--outFilterMismatchNmax 5 --scoreGapNoncan -20 --scoreGapGCAG -4 --scoreGapATAC -8 ' \
+                  '--scoreDelOpen -1 --scoreDelBase -1 --scoreInsOpen -1 --scoreInsBase -1 --outFilterMultimapNmax 1 ' \
+                  '--alignEndsType Local --alignSJDBoverhangMin 6 --alignSJoverhangMin 6 --alignIntronMin 25 ' \
+                  '--outFilterType BySJout --alignIntronMax 1000000 --outSAMstrandField intronMotif --outSAMunmapped Within ' \
+                  '--alignMatesGapMax 1000000 --alignTranscriptsPerReadNmax 100000 --alignTranscriptsPerWindowNmax 10000 ' \
+                  + annotation_opts + \
+                  '--outFileNamePrefix {alignment_out}'.format(exec_path=star_path,
+                                                               zcat=zcat_option,
+                                                               threads=str(args.threads),
+                                                               ref_index_name=args.index,
+                                                               transcripts=fastq_R1_R2,
+                                                               alignment_out=alignment_prefix)
+        logger.info("Running STAR (takes a while)")
+        if subprocess.call(command.split(), stdout=log_file, stderr=log_file) != 0:
+            logger.critical("STAR finished with errors! See " + log_fpath)
+            exit(-1)
+        logger.info("Sorting alignments")
+        if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path,
+                            alignment_prefix + 'Aligned.out.bam'], stderr=log_file) != 0:
+            logger.critical("Samtools finished with errors! See " + log_fpath)
+            exit(-1)
+    
+    elif aligner == "starlong":
         star_path = get_aligner('STARlong')
         zcat_option = " --readFilesCommand zcat " if ext.endswith('gz') else ""
 

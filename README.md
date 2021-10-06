@@ -197,7 +197,7 @@ To provide read sequences use one of the following options:
     Input FASTQ/FASTA file(s); each file will be treated as a separate sample.
   
 `--fastq_list` 
-    Text file with list of FASTQ/FASTA files, one file per line, leave empty line between samples.
+    Text file with list of FASTQ/FASTA files, one file per line, leave empty line between samples. If you have multiple reads for short-read RNA-seq, separate read 1 and read2 files with comma `,`, for instance `/PATH/TO/sample1_R1.fastq,/PATH/TO/sample1_R2.fastq`. Please place both files under the same folder.
 You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:replicate1`).
 Use this option to obtain per-replicate expression table (see `--read_group` option). 
 
