@@ -21,6 +21,10 @@ from src.gene_info import *
 logger = logging.getLogger('IsoQuant')
 
 
+def validate_exons(novel_exons):
+    return novel_exons == sorted(novel_exons) and all(0 < x[0] <= x[1] for x in novel_exons)
+
+
 class GFFPrinter:
     def __init__(self, outf_prefix, sample_name, io_support):
         self.model_fname = os.path.join(outf_prefix, sample_name + ".transcript_models.gtf")
@@ -42,6 +46,10 @@ class GFFPrinter:
         gene_info_dict = {}
 
         for i, model in enumerate(transcript_model_constructor.transcript_model_storage):
+            if not validate_exons(model.exon_blocks):
+                logger.warning("Transcript model %s has incorrect coordinates and will be ignored: %s" %
+                               (model.transcript_id, str(model.exon_blocks)))
+                continue
             gene_id = model.gene_id
             gene_to_model_dict[gene_id].append(i)
 
