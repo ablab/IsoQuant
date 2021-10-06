@@ -327,7 +327,7 @@ class IntronGraph:
 
     def attach_transcpt_ends(self, intron, polya_confirmed_positions, read_terminal_positions, read_end=True):
         read_ends_cutoff = self.params.terminal_position_abs
-        clustered_polyas = self.cluster_polya_positions(polya_confirmed_positions[intron])
+        clustered_polyas = self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
         if clustered_polyas:
             read_ends_cutoff = max(read_ends_cutoff, max(clustered_polyas.values()) * self.params.terminal_position_rel)
             extra_end_positions = {}
@@ -413,14 +413,23 @@ class IntronGraph:
 
         return polya_ends, read_ends, polyt_starts, read_starts
 
-    def cluster_polya_positions(self, position_dict):
+    def cluster_polya_positions(self, position_dict, intron, read_end):
         clustered_counts = {}
         if not position_dict:
             return clustered_counts
 
+        known_positions = self.terminal_known_positions[intron] if read_end else self.starting_known_positions[intron]
         while position_dict:
             best_pair = max(position_dict.items(), key=lambda x:x[1])
             top_position = best_pair[0]
+            nearest_position, diff_to_nearest_position = find_closest(top_position, known_positions)
+            if nearest_position and diff_to_nearest_position <= self.params.apa_delta:
+                top_position = nearest_position
+                logger.debug("Using reference TSS/TES: %d -> %d" % (top_position, nearest_position))
+            if read_end:
+                assert top_position > intron[1]
+            else:
+                assert top_position < intron[0]
             total_count = 0
             for pos in range(top_position - self.params.apa_delta, top_position + self.params.apa_delta + 1):
                 if pos in position_dict:
@@ -442,6 +451,7 @@ class IntronGraph:
         # simple solution for now
         if not position_dict:
             return {}
+
         total_count = sum(position_dict.values())
         pos = max(position_dict.keys()) if read_end else min(position_dict.keys())
         if total_count < cutoff:

@@ -58,6 +58,19 @@ def get_top_count(dict):
     return max(dict.items(), key=lambda x: x[1])[0]
 
 
+def find_closest(value, value_list):
+    if not value_list:
+        return None, math.inf
+    best_diff = math.inf
+    best_el = None
+    for v in value_list:
+        diff = abs(v - value)
+        if diff < best_diff:
+            best_diff = diff
+            best_el = v
+    return best_el, best_diff
+
+
 # dict -> counts dict
 def get_best_from_count_dicts(dict):
     res = {}
