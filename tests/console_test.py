@@ -19,6 +19,7 @@ def test__help(option):
     assert b"usage" in result.stdout
     assert b"optional arguments:" in result.stdout
 
+
 def test_clean_start():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
@@ -50,6 +51,7 @@ def test_clean_start():
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
+
 def test_usual_start():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
@@ -74,6 +76,7 @@ def test_usual_start():
                        "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
+
 
 def test_with_bam_and_polya():
     source_dir = os.path.dirname(os.path.realpath(__file__))
@@ -103,29 +106,30 @@ def test_with_bam_and_polya():
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
-def test_no_polya():
-    source_dir = os.path.dirname(os.path.realpath(__file__))
-    data_dir = os.path.join(source_dir, 'toy_data/')
-    out_dir = os.path.join(source_dir, "out_mapt/")
-    shutil.rmtree(out_dir, ignore_errors=True)
-    os.environ['HOME'] = source_dir # dirty hack to set $HOME for tox environment
-    sample_name = "MAPT.Mouse.ONT"
 
-    result = subprocess.run(["python", "isoquant.py", '--clean_start',
-                             "-o", out_dir,
-                             "--data_type", "nanopore",
-                             "--fastq", data_dir + "MAPT.Mouse.ONT.simulated.fastq",
-                             "--genedb", data_dir + "MAPT.Mouse.genedb.gtf", "--complete_genedb",
-                             "-r",  data_dir + "MAPT.Mouse.reference.fasta",
-                             '--cage', data_dir + "MAPT.Mouse.CAGE.bed",
-                             "-t", "2",
-                             "--labels", sample_name])
-
-    assert result.returncode == 0
-    sample_folder = os.path.join(out_dir, sample_name)
-    assert os.path.isdir(sample_folder)
-    resulting_files = ["gene_counts.tsv", "read_assignments.tsv", "transcript_counts.tsv",
-                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
-    for f in resulting_files:
-        assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
+#def test_cage():
+#    source_dir = os.path.dirname(os.path.realpath(__file__))
+#    data_dir = os.path.join(source_dir, 'toy_data/')
+#    out_dir = os.path.join(source_dir, "out_mapt/")
+#    shutil.rmtree(out_dir, ignore_errors=True)
+#    os.environ['HOME'] = source_dir # dirty hack to set $HOME for tox environment
+#    sample_name = "MAPT.Mouse.ONT"
+#
+#    result = subprocess.run(["python", "isoquant.py", '--clean_start',
+#                             "-o", out_dir,
+#                             "--data_type", "nanopore",
+#                             "--fastq", data_dir + "MAPT.Mouse.ONT.simulated.fastq",
+#                             "--genedb", data_dir + "MAPT.Mouse.genedb.gtf", "--complete_genedb",
+#                             "-r",  data_dir + "MAPT.Mouse.reference.fasta",
+#                             '--cage', data_dir + "MAPT.Mouse.CAGE.bed",
+#                             "-t", "2",
+#                             "--labels", sample_name])
+#
+    # assert result.returncode == 0
+    # sample_folder = os.path.join(out_dir, sample_name)
+    # assert os.path.isdir(sample_folder)
+    # resulting_files = ["gene_counts.tsv", "read_assignments.tsv", "transcript_counts.tsv",
+    #                    "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
+    # for f in resulting_files:
+    #     assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
