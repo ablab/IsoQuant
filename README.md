@@ -70,9 +70,11 @@ Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have al
 <a name="sec1.2"></a>
 ## Supported reference data
 
-Reference genome should be provided in multi-FASTA format. Reference genome is mandatory even when BAM files are provided.
+Reference genome should be provided in multi-FASTA format (can be gzipped). 
+Reference genome is mandatory even when BAM files are provided.
 
-Gene annotation can be provided in GFF/GTF format. In this case it will be converted to [gffutils](https://pythonhosted.org/gffutils/installation.html) database. Information on converted databases will be stored in your `~/.config/IsoQuant/db_config.json` to increase speed of future runs. You can also provide gffutils database manually. Make sure that chromosome/scaffold names are identical in FASTA file and gene annotation.
+Gene annotation can be provided in GFF/GTF format (can be gzipped). 
+In this case it will be converted to [gffutils](https://pythonhosted.org/gffutils/installation.html) database. Information on converted databases will be stored in your `~/.config/IsoQuant/db_config.json` to increase speed of future runs. You can also provide gffutils database manually. Make sure that chromosome/scaffold names are identical in FASTA file and gene annotation.
 
 Pre-constructed aligner index can also be provided to increase mapping time.
 
@@ -138,11 +140,14 @@ If the installation is successful, you will find the following information at th
 <a name="sec3.1"></a>
 ## IsoQuant input
 To run IsoQuant, you should provide:
-* gene annotation in gffutils database or GTF/GFF format;
+* gene annotation in gffutils database or GTF/GFF format (can be gzipped);
 * reads in FASTA/FASTQ (can be gzipped) or sorted and indexed BAM;
-* reference sequence in FASTA format (optional when BAMs are provided).  
+* reference sequence in FASTA format (can be gzipped).  
 
-By default, each file with reads is treated as a separate sample. To group multiple files into a single sample, provide a text files with paths to your FASTQ/FASTA/BAM files. Provide each file in a separate line, leave blank lines between samples.
+By default, each file with reads is treated as a separate sample. 
+To group multiple files into a single sample, provide a text files with paths to your FASTQ/FASTA/BAM files. 
+Provide each file in a separate line, leave blank lines between samples.
+See more in [examples](#examples).
 
 <a name="sec3.2"></a>
 ## IsoQuant command line options
@@ -164,19 +169,25 @@ By default, each file with reads is treated as a separate sample. To group multi
 
 ### Input options
 `--data_type` or `-d`
-    Type of data to process, supported types are: `assembly`, `pacbio_ccs`, `nanopore`. This option affects some of the algorithm parameters.
+    Type of data to process, supported types are: `assembly`, `pacbio_ccs`, `nanopore`. 
+This option affects some of the algorithm parameters.
 
 `--genedb` or `-g`
-    Gene database in gffutils database format or GTF/GFF format. If you use official gene annotations we recommend to set `--complete_genedb` option.
+    Gene database in gffutils database format or GTF/GFF format (can be gzipped). 
+If you use official gene annotations we recommend to set `--complete_genedb` option.
 
 `--complete_genedb`
-    Set this flag if gene annotation contains transcript and gene metafeatures. Use this flag when providing official annotations, e.g. GENCODE. This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options, which dramatically speed up gene database conversion (see more [here](https://pythonhosted.org/gffutils/autodocs/gffutils.create_db.html?highlight=disable_infer_transcripts)).
+    Set this flag if gene annotation contains transcript and gene meta-features. 
+Use this flag when providing official annotations, e.g. GENCODE. 
+This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options, 
+which dramatically speeds up gene database conversion (see more [here](https://pythonhosted.org/gffutils/autodocs/gffutils.create_db.html?highlight=disable_infer_transcripts)).
 
 `--reference` or `-r`
-    Reference genome in FASTA format, should be provided  when raw reads are used as an input and to compute some additional stats.
+    Reference genome in FASTA format (can be gzipped), required even when BAM files are provided.
 
 `--index`
-    Reference genome index for the specified aligner (`minimap2` by default), can be provided only when raw reads are used as an input (constructed automatically if not set).
+    Reference genome index for the specified aligner (`minimap2` by default), 
+can be provided only when raw reads are used as an input (constructed automatically if not set).
 
 
 #### Using mapped reads as input:
@@ -194,10 +205,10 @@ Use this option to obtain per-replicate expression table (see `--read_group` opt
 To provide read sequences use one of the following options:
 
 `--fastq` 
-    Input FASTQ/FASTA file(s); each file will be treated as a separate sample.
+    Input FASTQ/FASTA file(s), can be gzipped; each file will be treated as a separate sample.
   
 `--fastq_list` 
-    Text file with list of FASTQ/FASTA files, one file per line, leave empty line between samples.
+    Text file with list of FASTQ/FASTA files (can be gzipped), one file per line, leave empty line between samples.
 You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:replicate1`).
 Use this option to obtain per-replicate expression table (see `--read_group` option). 
 
@@ -209,13 +220,14 @@ Use this option to obtain per-replicate expression table (see `--read_group` opt
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
 
 `--labels` or `-l`
-    Sets space-separated sample names; make sure that the number of labels is equal to the number of samples; input file names are used if not set.
+    Sets space-separated sample names. Make sure that the number of labels is equal to the number of samples. 
+Input file names are used as labels if not set.
 
 `--read_group`
  Sets a way to group feature counts (e.g. by cell type or replicate). Available options are:
  * `file_name`: groups reads by their original file names (or file name aliases) within a sample. 
-This option makes sense when a sample contains multiple files; see `--bam_list` and `--fastq_list` options to learn more.
-This option is designed for obtaining expression tables with a separate column for each file.
+This option makes sense when a sample contains multiple files (see `--bam_list` and `--fastq_list` options to learn more).
+This option is designed for obtaining expression tables with a separate column for each file (replicate).
  * `tag`: groups reads by BAM file read tag: set `tag:TAG`, where `TAG` is the desired tag name (e.g. `tag:RG` with use `RG` values as groups);
  * `read_id`: groups reads by read name suffix: set `read_id:DELIM` where `DELIM` is the symbol/string by which the read id will be split (e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will set as `NEU`);
  * `file`: uses additional file with group information for every read: `file:FILE:READ_COL:GROUP_COL:DELIM`, where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set), `GROUP_COL` is column with group ids (1 if not set), `DELIM` is separator symbol (tab if not set).
@@ -242,7 +254,7 @@ This option is designed for obtaining expression tables with a separate column f
     Do not use previously generated gene database, genome indices or BAM files, run pipeline from the very beginning (will take more time).
 
 `--no_model_construction`
-    Do not report transcript models, run read assignment only. 
+    Do not report transcript models, run read assignment and quantification of reference features only. 
 
 `--run_aligner_only` 
     Align reads to the reference without running IsoQuant itself.
@@ -252,7 +264,7 @@ This option is designed for obtaining expression tables with a separate column f
 
 #### Read to isoform matching:
 
-`--matching_strategy` A preset of parameters for read to isoform matching algorithm, should be one of:
+`--matching_strategy` A preset of parameters for read-to-isoform matching algorithm, should be one of:
 
 * `exact` - delta = 0, all minor errors are treated as inconsistencies;  
 * `precise` - delta = 4, only minor alignment errors are allowed, default for PacBio data;  
@@ -269,7 +281,7 @@ However, the parameters will be overridden if the matching strategy is set manua
 * `none` - no correction is applied;  
 * `default_pacbio` - optimal settings for PacBio CCS reads;
 * `default_ont` - optimal settings for ONT reads;
-* `conservative_ont` - conservative settings for ONT reads, only incorrect splice junction and skipped exons are corrected;
+* `conservative_ont` - conservative settings for ONT reads, only incorrect splice junction and skipped exons are fixed;
 * `assembly` - optimal settings for a transcriptome assembly;    
 * `all` - correct all discovered minor inconsistencies, may result in overcorrection.
 
@@ -281,7 +293,7 @@ This option is chosen automatically based on specified data type, but will be ov
 * `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive;  
 * `default_pacbio` - optimal settings for PacBio CCS reads;
 * `sensitive_pacbio` - sensitive settings for PacBio CCS reads, more transcripts are reported possibly at a cost of precision;
-* `fl_pacbio` - optimal settings for full-length PacBio CCS reads (e.g. obtained via CapTrap protocol), will be used if `--data_type pacbio_ccs` and `--fl_data` options are set; 
+* `fl_pacbio` - optimal settings for full-length PacBio CCS reads, will be used if `--data_type pacbio_ccs` and `--fl_data` options are set; 
 * `default_ont` - optimal settings for ONT reads;
 * `sensitive_ont` - sensitive settings for ONT reads, more transcripts are reported possibly at a cost of precision;
 * `assembly` - optimal settings for a transcriptome assembly: input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not considered;    
@@ -292,7 +304,7 @@ This option is chosen automatically based on specified data type, but will be ov
 
 ### Hidden options
 Options below are shown only with `--full_help` option. 
-We recommend to not modify these options unless you clearly aware of their effect.
+We recommend to not modify these options unless you are clearly aware of their effect.
     
 `--no_secondary`
     Ignore secondary alignments.
@@ -317,6 +329,7 @@ These files are kept only when `--keep_tmp` is set.
 
 
 ### Examples
+<a name="examples"></a>
 
 * Mapped PacBio CCS reads in BAM format; pre-converted gene annotation:
 
@@ -334,16 +347,41 @@ isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz --reference 
 isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir 
 ```
 
-* ONT cDNA reads; sample with 3 replicates (biological or technical); official annotation in GTF format:
+* ONT cDNA reads; 2 samples with 3 replicates (biological or technical); official annotation in GTF format:
 ```bash
-isoquant.py -d nanopore --fastq_list list.txt --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
+isoquant.py -d nanopore --fastq_list list.txt -l SAMPLE1 SAMPLE2 --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
 ```
 
 list.txt file :
 ```
-/PATH/TO/SAMPLE1/file1.fastq:REPLICATE1
-/PATH/TO/SAMPLE1/file2.fastq:REPLICATE2
-/PATH/TO/SAMPLE1/file3.fastq:REPLICATE3
+/PATH/TO/SAMPLE1/file1.fastq:S1_REPLICATE1
+/PATH/TO/SAMPLE1/file2.fastq:S1_REPLICATE2
+/PATH/TO/SAMPLE1/file3.fastq:S1_REPLICATE3
+
+/PATH/TO/SAMPLE2/file1.fastq:S2_REPLICATE1
+/PATH/TO/SAMPLE2/file2.fastq:S2_REPLICATE2
+/PATH/TO/SAMPLE2/file3.fastq:S2_REPLICATE3
+
+```
+Note, that file aliases given after a colon will be used in expression table header. 
+
+* ONT cDNA reads; 2 samples with 2 replicates, each replicate has 2 files; official annotation in GTF format:
+```bash
+isoquant.py -d nanopore --fastq_list list.txt -l SAMPLE1 SAMPLE2 --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
+```
+
+list.txt file :
+```
+/PATH/TO/SAMPLE1/r1_1.fastq:S1_REPLICATE1
+/PATH/TO/SAMPLE1/r1_2.fastq:S1_REPLICATE1
+/PATH/TO/SAMPLE1/r2_1.fastq:S1_REPLICATE2
+/PATH/TO/SAMPLE1/r2_2.fastq:S1_REPLICATE2
+
+/PATH/TO/SAMPLE2/r1_1.fastq:S2_REPLICATE1
+/PATH/TO/SAMPLE2/r1_2.fastq:S2_REPLICATE1
+/PATH/TO/SAMPLE2/r2_1.fastq:S2_REPLICATE2
+/PATH/TO/SAMPLE2/r2_2.fastq:S2_REPLICATE2
+
 ```
 Note, that file aliases given after a colon will be used in expression table header. 
 
@@ -352,7 +390,8 @@ Note, that file aliases given after a colon will be used in expression table hea
 
 ### Output files
 
-IsoQuant output files will be stored in `<output_dir>`, which is set by the user. If the output directory was not specified the files are stored in `isoquant_output`.   
+IsoQuant output files will be stored in `<output_dir>`, which is set by the user. 
+If the output directory was not specified the files are stored in `isoquant_output`.  
 Output directory will contain one folder per sample with the following files:  
 
 * `SAMPLE_ID.read_assignments.tsv` - TSV file with each read to isoform assignments;
@@ -383,13 +422,15 @@ If `--read_group` is set, the per-group counts will be also computed:
 
 If multiple samples are provided, aggregated expression matrices will be placed in `<output_dir>`:
 * `combined_gene_counts.tsv`
+* `combined_gene_tpm.tsv`
 * `combined_transcript_counts.tsv`
+* `combined_transcript_tpm.tsv`
 
 Additionally, a log file will be saved to the directory.  
 * <output_dir>/isoquant.log   
 
-In case `--keep_tmp` option was specified output directory will also contain temporary files  
-* <output_dir>/tmp/  
+If raw reads were provided, BAM file(s) will be stored in `<output_dir>/<SAMPLE_ID>/aux/`.  
+In case `--keep_tmp` option was specified this directory will also contain temporary files.
 
 ### Output file formats
 
@@ -497,7 +538,8 @@ Tab-separated values, the columns are:
 
 Constructed transcript models are stored in usual [GTF format](https://www.ensembl.org/info/website/upload/gff.html).
 Contains `exon`, `transcript` and `gene` features. 
-Transcript ids have the following format: `transcript_###.TYPE`, where `###` is the unique number (not necessarily consecutive) and TYPE can be one of the following:
+Transcript ids have the following format: `transcript_###.TYPE`, 
+where `###` is the unique number (not necessarily consecutive) and TYPE can be one of the following:
 * known - previously annotated transcripts;
 * nic - novel in catalog, new transcript that contains only annotated introns;
 * nnic - novel not in catalog, new transcript that contains unannotated introns.
