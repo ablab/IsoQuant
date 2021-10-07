@@ -386,6 +386,9 @@ class IntronGraph:
 
             starting_intron = self.intron_collector.substitute(assignment.corrected_introns[0])
             read_start = assignment.corrected_exons[0][0]
+            if read_start >= starting_intron[0]:
+                # corner case when substituted intron appears to be shifted to the left
+                continue
             polyt_detected = assignment.strand == '-' and \
                              (assignment.polya_info.external_polyt_pos != -1 or
                               assignment.polya_info.internal_polyt_pos != -1)
@@ -396,6 +399,9 @@ class IntronGraph:
 
             terminating_intron = self.intron_collector.substitute(assignment.corrected_introns[-1])
             read_end = assignment.corrected_exons[-1][1]
+            if read_end <= terminating_intron[1]:
+                # corner case when substituted intron appears to be shifted to the right
+                continue
             polya_detected = assignment.strand == '+' and \
                              (assignment.polya_info.external_polya_pos != -1 or
                               assignment.polya_info.internal_polya_pos != -1)
