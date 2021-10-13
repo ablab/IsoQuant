@@ -28,7 +28,7 @@ class GraphBasedModelConstructor:
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
 
-    def __init__(self, gene_info, chr_record, params, transcript_counter):
+    def __init__(self, gene_info, chr_record, params, transcript_counter, ref_transcript_counter):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
@@ -51,6 +51,7 @@ class GraphBasedModelConstructor:
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(list)
         self.transcript_counter = transcript_counter
+        self.ref_transcript_counter = ref_transcript_counter
         self.reads_used_in_construction = set()
         self.unused_reads = []
 
@@ -139,10 +140,12 @@ class GraphBasedModelConstructor:
             return all(m.event_type in allowed_set for m in isoform_assignment.isoform_matches[0].match_subclassifications)
         return False
 
-    def save_assigned_read(self, read_assignment, transcript_id):
+    def save_assigned_read(self, read_assignment, transcript_id, ref_transcript_id):
         read_id = read_assignment.read_id
         self.transcript_read_ids[transcript_id].append(read_assignment)
         self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
+        if ref_transcript_id != "novel":
+            self.ref_transcript_counter.add_read_info_raw(read_id, [ref_transcript_id], read_assignment.read_group)
 
     def construct_fl_isoforms(self):
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
@@ -221,7 +224,7 @@ class GraphBasedModelConstructor:
             if new_model:
                 self.transcript_model_storage.append(new_model)
                 for read_assignment in self.path_storage.paths_to_reads[path]:
-                    self.save_assigned_read(read_assignment, new_model.transcript_id)
+                    self.save_assigned_read(read_assignment, new_model.transcript_id, new_model.reference_transcript)
                     self.reads_used_in_construction.add(read_assignment.read_id)
 
     def construnct_assignment_based_isoforms(self, read_assignment_storage):
@@ -299,7 +302,7 @@ class GraphBasedModelConstructor:
                 self.transcript_model_storage.append(new_model)
                 self.detected_known_isoforms.add(isoform_id)
                 for read_assignment in mono_exon_isoform_reads[isoform_id]:
-                    self.save_assigned_read(read_assignment, new_model.transcript_id)
+                    self.save_assigned_read(read_assignment, new_model.transcript_id, new_model.reference_transcript)
                     self.reads_used_in_construction.add(read_assignment.read_id)
                 logger.debug(">> Adding known monoexon isoform %s, %s" %
                              (self.transcript_model_storage[-1].transcript_id, isoform_id))
@@ -326,7 +329,7 @@ class GraphBasedModelConstructor:
                 self.transcript_model_storage.append(new_model)
                 self.detected_known_isoforms.add(isoform_id)
                 for read_assignment in spliced_isoform_reads[isoform_id]:
-                    self.save_assigned_read(read_assignment, new_model.transcript_id)
+                    self.save_assigned_read(read_assignment, new_model.transcript_id, new_model.reference_transcript)
                     self.reads_used_in_construction.add(read_assignment.read_id)
 
         for isoform_id in self.detected_known_isoforms:
@@ -355,6 +358,10 @@ class GraphBasedModelConstructor:
         assigner = LongReadAssigner(transcript_model_gene_info, self.params, quick_mode=True)
         profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
 
+        transcript_to_ref_dict = {}
+        for t in self.transcript_model_storage:
+            transcript_to_ref_dict[t.transcript_id] = t.reference_transcript
+
         for assignment in read_assignments:
             read_id = assignment.read_id
             if read_id in self.reads_used_in_construction:
@@ -371,6 +378,11 @@ class GraphBasedModelConstructor:
                 self.transcript_counter.add_read_info_raw(read_id,
                                                           [m.assigned_transcript for m in model_assignment.isoform_matches],
                                                           model_assignment.read_group)
+                ref_transcripts = [transcript_to_ref_dict[m.assigned_transcript] for m in model_assignment.isoform_matches]
+                ref_transcripts = list(filter(lambda x:x != "novel", ref_transcripts))
+                if ref_transcripts:
+                    self.ref_transcript_counter.add_read_info_raw(read_id, ref_transcripts,
+                                                                  model_assignment.read_group)
                 for m in model_assignment.isoform_matches:
                     self.transcript_read_ids[m.assigned_transcript].append(assignment)
             else:
