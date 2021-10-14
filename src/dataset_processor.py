@@ -412,6 +412,7 @@ class DatasetProcessor:
         else:
             self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
 
+        self.ref_transcript_model_grouped_counter = None
         if self.args.read_group:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv)
@@ -436,7 +437,8 @@ class DatasetProcessor:
 
     def finalize_aggregators(self, sample):
         self.global_counter.dump()
-        self.ref_transcript_model_grouped_counter.dump()
+        if self.ref_transcript_model_grouped_counter:
+            self.ref_transcript_model_grouped_counter.dump()
         self.transcript_model_global_counter.dump()
         logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
         logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)

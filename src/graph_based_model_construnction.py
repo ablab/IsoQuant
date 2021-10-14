@@ -144,7 +144,7 @@ class GraphBasedModelConstructor:
         read_id = read_assignment.read_id
         self.transcript_read_ids[transcript_id].append(read_assignment)
         self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
-        if ref_transcript_id != "novel":
+        if self.ref_transcript_counter and ref_transcript_id != "novel":
             self.ref_transcript_counter.add_read_info_raw(read_id, [ref_transcript_id], read_assignment.read_group)
 
     def construct_fl_isoforms(self):
@@ -378,10 +378,11 @@ class GraphBasedModelConstructor:
                 self.transcript_counter.add_read_info_raw(read_id,
                                                           [m.assigned_transcript for m in model_assignment.isoform_matches],
                                                           model_assignment.read_group)
-                ref_transcripts = [transcript_to_ref_dict[m.assigned_transcript] for m in model_assignment.isoform_matches]
-                ref_transcripts = list(filter(lambda x:x != "novel", ref_transcripts))
-                if ref_transcripts:
-                    self.ref_transcript_counter.add_read_info_raw(read_id, ref_transcripts,
+                if self.ref_transcript_counter:
+                    ref_transcripts = [transcript_to_ref_dict[m.assigned_transcript] for m in model_assignment.isoform_matches]
+                    ref_transcripts = list(filter(lambda x:x != "novel", ref_transcripts))
+                    if ref_transcripts:
+                        self.ref_transcript_counter.add_read_info_raw(read_id, ref_transcripts,
                                                                   model_assignment.read_group)
                 for m in model_assignment.isoform_matches:
                     self.transcript_read_ids[m.assigned_transcript].append(assignment)
