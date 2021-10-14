@@ -49,7 +49,13 @@ def db2bed(bed, db):
                 transcript_type = record["transcript_type"][0]
             else:
                 transcript_type = ""
-            transcript_name = record.id + "|" + transcript_type + "|" + record["gene_name"][0]
+            if "gene_name" in record.attributes:
+                gene_name = record["gene_name"][0]
+            elif "gene_id" in record.attributes:
+                gene_name = record["gene_id"][0]
+            else:
+                gene_name = "unknown_gene"
+            transcript_name = record.id + "|" + transcript_type + "|" + gene_name
             exons = []
             cds = []
             for e in genedb.children(record, order_by='start', featuretype='exon'):
