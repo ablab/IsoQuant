@@ -87,6 +87,8 @@ class AssignedFeatureCounter(AbstractCounter):
             self.all_features.add(feature_id)
 
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+        if self.ignore_read_groups:
+            group_id = AbstractReadGrouper.default_group_id
         if not read_id:
             self.not_aligned_reads += 1
         elif not feature_ids:
@@ -144,6 +146,8 @@ class AssignedFeatureCounter(AbstractCounter):
         scale_factors = {}
         for group_id in all_groups:
             scale_factors[group_id] = 1000000.0 / total_counts[group_id] if total_counts[group_id] > 0 else 1.0
+            logger.debug("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
+
         with open(self.output_tpm_file_name, "w") as f:
             f.write(self.format_header(all_groups, "TPM"))
             for feature_id in all_features:
