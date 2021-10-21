@@ -164,14 +164,16 @@ def convert_db(gtf_filename, genedb_filename, convert_fn, args):
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="output file", default="")
-    parser.add_argument("--gtf", "-g", type=str, help="input gtf file")
+    parser.add_argument("--input", "-i", type=str, help="input gtf/db file")
     parser.add_argument('--complete_genedb', '-c', action='store_true', default=False,
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "
                              "speeds up gene database conversion")
+    parser.add_argument("--reverse", "-r", action='store_true', default=False, help="db2gtf")
+
 
     args = parser.parse_args()
-    if not args.output or not args.gtf:
+    if not args.output or not args.input:
         parser.print_usage()
         exit(-1)
     return args
@@ -179,7 +181,10 @@ def parse_args():
 
 def main():
     args = parse_args()
-    gtf2db(args.gtf, args.output, args.complete_genedb)
+    if args.reverse:
+        db2gtf(args.output, args.input)
+    else:
+        gtf2db(args.input, args.output, args.complete_genedb)
 
 
 if __name__ == "__main__":
