@@ -59,7 +59,8 @@ class AssignedFeatureCounter(AbstractCounter):
         self.not_assigned_reads = 0
         self.not_aligned_reads = 0
         # group_id -> (feature_id -> count)
-        self.feature_counter = defaultdict(lambda: defaultdict(int))
+        self.feature_counter = defaultdict(lambda: defaultdict(float))
+        self.confirmend_features = set()
 
     def add_read_info(self, read_assignment=None):
         # TODO: add __alignment_not_unique / __too_low_aQual ?
@@ -84,6 +85,7 @@ class AssignedFeatureCounter(AbstractCounter):
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
             self.feature_counter[group_id][feature_id] += 1
+            self.confirmend_features.add((group_id, feature_id))
             self.all_features.add(feature_id)
 
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
@@ -97,11 +99,13 @@ class AssignedFeatureCounter(AbstractCounter):
             self.ambiguous_reads += 1
             for feature_id in feature_ids:
                 self.feature_counter[group_id][feature_id] += 1.0 / float(len(feature_ids))
+                self.confirmend_features.add((group_id, feature_id))
                 self.all_features.add(feature_id)
             else:
                 self.ambiguous_reads += 1
         else:
             self.feature_counter[group_id][feature_ids[0]] += 1
+            self.confirmend_features.add((group_id, feature_ids[0]))
             self.all_features.add(feature_ids[0])
 
     def add_unaligned(self, n_reads=1):
@@ -120,6 +124,12 @@ class AssignedFeatureCounter(AbstractCounter):
         all_features = sorted(self.all_features)
         all_groups = sorted(self.feature_counter.keys())
         print_in_columns = len(all_groups) <= 10
+
+        for group_id in all_groups:
+            for feature_id in all_features:
+                if (group_id, feature_id) in self.confirmend_features:
+                    continue
+                self.feature_counter[group_id][feature_id] = 0.0
 
         with open(self.output_counts_file_name, "w") as f:
             f.write(self.format_header(all_groups))
