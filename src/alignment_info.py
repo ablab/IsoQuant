@@ -73,19 +73,26 @@ class AlignmentInfo:
         indel_count = 0
         mismatch_count = 0
         last_ref_pos = 0
+        logger.debug("to check: %d : %d" % (ref_start, ref_end))
         for (read_pos, ref_pos) in selected_pairs:
             # note that ref_pos are 0 based from BAM file, but ref_start and ref_end are 1-based
             true_ref_pos = ref_pos if ref_pos is None else ref_pos + 1
+            logger.debug("< PAIR: " + str(read_pos) + ":" + str(true_ref_pos))
+            logger.debug(last_ref_pos)
             if true_ref_pos is None:
                 # insertion, check previous position is inside or adjacent to the region
                 if ref_start - 1 <= last_ref_pos <= ref_end:
                     indel_count += 1
+                    logger.debug("Insertion")
             elif ref_start <= true_ref_pos <= ref_end:
                 if read_pos is None:
                     indel_count += 1
                 elif chr_record and self.alignment.query_sequence and self.alignment.query_sequence[read_pos] != chr_record[ref_pos]:
+                    logger.debug("Deletion")
+                elif chr_record and self.alignment.query_sequence[read_pos] != chr_record[ref_pos]:
                     # chr_record is also 0-based
                     mismatch_count += 1
+                    logger.debug("Mismatch: " + self.alignment.query_sequence[read_pos] + ", " + chr_record[ref_pos])
             last_ref_pos = true_ref_pos or last_ref_pos
             if last_ref_pos > ref_end:
                 # no need to check further
@@ -126,7 +133,7 @@ class AlignmentInfo:
             self.read_exons = self.read_exons[:-polya_exon_count]
             self.read_blocks = self.read_blocks[:-polya_exon_count]
             self.cigar_blocks = self.cigar_blocks[:-polya_exon_count]
-            # logger.debug("Trimming polyA exons %d: %s" % (polya_exon_count, str(self.read_exons)))
+            logger.debug("Trimming polyA exons %d: %s" % (polya_exon_count, str(self.read_exons)))
             self.exons_changed = True
 
         if polyt_exon_count > 0:
@@ -137,7 +144,7 @@ class AlignmentInfo:
             self.read_exons = self.read_exons[polyt_exon_count:]
             self.read_blocks = self.read_blocks[polyt_exon_count:]
             self.cigar_blocks = self.cigar_blocks[polyt_exon_count:]
-            # logger.debug("Trimming polyT exons %d: %s" % (polyt_exon_count, str(self.read_exons)))
+            logger.debug("Trimming polyT exons %d: %s" % (polyt_exon_count, str(self.read_exons)))
             self.exons_changed = True
 
         if self.exons_changed:

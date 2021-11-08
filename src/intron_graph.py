@@ -85,7 +85,9 @@ class IntronCollector:
     def process(self, read_assignments, min_count):
         logger.debug("Processing introns")
         all_introns = self.collect_introns(read_assignments)
+        logger.debug(all_introns)
         self.cluster_introns(all_introns, min_count)
+        logger.debug(self.clustered_introns)
 
     def add_substitute(self, original_intron, substitute_intron):
         self.clustered_introns[substitute_intron] += self.clustered_introns[original_intron]
@@ -146,8 +148,10 @@ class IntronGraph:
         # logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
         self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
         self.construct()
+        self.print_graph()
         self.simplify()
         self.attach_terminal_positions()
+        self.print_graph()
 
     def add_edge(self, v1, v2):
         if v1 in self.intron_collector.intron_correction_map:
@@ -205,7 +209,7 @@ class IntronGraph:
         self.intron_collector.add_substitute(to_collapse, substitute_vertex)
 
     def construct(self):
-        # logger.debug("Constructing graph for %s" % self.gene_info.gene_db_list[0].id)
+        logger.debug("Constructing for %d" % self.gene_info.start)
         for assignment in self.read_assignments:
             if assignment.multimapper or any(intron in self.intron_collector.discarded_introns for intron in assignment.corrected_introns):
                 continue
@@ -280,6 +284,7 @@ class IntronGraph:
                 # already removed or known
                 continue
             if self.intron_collector.clustered_introns[intron] < count_cutoff:
+                logger.debug("Removing %s : %d" % (str(intron), self.intron_collector.clustered_introns[intron]))
                 self.intron_collector.discard(intron)
                 to_remove.add(intron)
 

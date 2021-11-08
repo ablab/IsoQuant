@@ -230,6 +230,12 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
     else:
         gffutils_db = None
 
+    # debug info only
+    expressed_db = None
+    if args.expressed_genedb:
+        logger.info("Loading expreseed genes from %s" % args.expressed_genedb)
+        expressed_db = gffutils.FeatureDB(args.expressed_genedb, keep_order=True)
+
     logger.info("Processing chromosome " + chr_id)
     transcripts = []
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
@@ -243,7 +249,24 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
             processor.global_counter.add_read_info(read_assignment)
 
         if not args.no_model_construction:
-            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args, processor.transcript_model_global_counter)
+            expressed_gene_info = None
+            if expressed_db:
+                gene_list = []
+                if gffutils_db:
+                    for g in gene_info.gene_db_list:
+                        try:
+                            gene_list.append(expressed_db[g.id])
+                        except gffutils.exceptions.FeatureNotFoundError:
+                            pass
+                else:
+                    gene_list = list(expressed_db.region(region=(gene_info.chr_id, gene_info.start, gene_info.end),
+                                                         completely_within=False, featuretype='gene'))
+                if gene_list:
+                    expressed_gene_info = GeneInfo(gene_list, expressed_db, delta=args.delta)
+
+
+            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args, processor.transcript_model_global_counter,
+                                                           expressed_gene_info=expressed_gene_info)
             model_constructor.process(assignment_storage)
             tmp_gff_printer.dump(model_constructor)
             for t in model_constructor.transcript_model_storage:
