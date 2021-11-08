@@ -64,6 +64,7 @@ class PolyAFixer:
         if polyt_exon_count > 0 and polya_exon_count > 0:
             logger.debug("Both PolyA and PolyT fake terminal exons found: %d, %d" % (polya_exon_count, polyt_exon_count))
         if polyt_exon_count + polya_exon_count == len(read_exons):
+            logger.debug("All exons seem to be consist of polyA/T")
             polyt_exon_count -= 1
             polya_exon_count -= 1
 
@@ -86,7 +87,7 @@ class PolyAFixer:
                 # more than 2/3 of the exon is polyA
                 polya_exon_count += 1
 
-        # logger.debug("Detected polya exons %d" % polya_exon_count)
+        logger.debug("Detected polya exons %d" % polya_exon_count)
         # correcting fake terminal exons
         return polya_exon_count
 
@@ -108,7 +109,7 @@ class PolyAFixer:
                 # more than 2/3 of the exon is polyT
                 polya_exon_count += 1
 
-        # logger.debug("Detected polyt exons %d" % polya_exon_count)
+        logger.debug("Detected polyt exons %d" % polya_exon_count)
         # correcting fake terminal exons
         return polya_exon_count
 
@@ -121,10 +122,12 @@ class PolyAVerifier:
 
     # check consistency with polyA
     def verify_read_ends(self, combined_read_profile, isoform_id, matching_events):
+        logger.debug("+ Validating polyA/T sites")
         if isoform_id is None:
+            logger.debug("+ No sites found, ciao")
             return matching_events
 
-        # logger.debug("+ Checking read ends in isoform %s" % isoform_id)
+        logger.debug("+ Checking read ends in isoform %s" % isoform_id)
         read_exons = combined_read_profile.read_split_exon_profile.read_features
         polya_info = combined_read_profile.polya_info
         isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
@@ -142,6 +145,7 @@ class PolyAVerifier:
                 matching_events = self.verify_polyt(isoform_exons, read_exons, polya_info, matching_events)
 
         if not matching_events:
+            logger.debug("Empty event list after polyA verification")
             matching_events = [MatchEvent(MatchEventSubtype.none)]
         return matching_events
 
@@ -164,20 +168,22 @@ class PolyAVerifier:
 
         if terminal_exon_misaligned > 0 and fake_terminal_exon_count > 0:
             logger.debug("Odd case, both terminal exon misalignment and fake exons are present")
+            logger.debug(isoform_exons)
+            logger.debug(read_exons)
         if event_to_remove != -1:
             del matching_events[event_to_remove]
 
         new_events = self.check_if_close(isoform_end, polya_info.external_polya_pos,  polya_info.internal_polya_pos,
                                          matching_events, MatchEventSubtype.correct_polya_site_right)
         if new_events is not None:
-            # logger.debug("Original polyA looks good")
+            logger.debug("Original polyA looks good")
             return new_events
 
-        # logger.debug("Original polyA seems distant")
+        logger.debug("Original polyA seems distant")
         # if terminal exon is fake, move polyA accordingly
         external_polya_pos, internal_polya_pos = \
             self.correct_polya_positions(read_exons, fake_terminal_exon_count, polya_info)
-        # logger.debug("+ Corrected external %d, corrected internal %d" % (external_polya_pos, internal_polya_pos))
+        logger.debug("+ Corrected external %d, corrected internal %d" % (external_polya_pos, internal_polya_pos))
 
         if terminal_exon_misaligned:
             # we believe isofrom end is a true polyA site
@@ -190,17 +196,17 @@ class PolyAVerifier:
         new_events = self.check_if_close(isoform_end, external_polya_pos, internal_polya_pos,
                                          matching_events, MatchEventSubtype.correct_polya_site_right)
         if new_events is not None:
-            # logger.debug("Corrected polyA seems good")
+            logger.debug("Corrected polyA seems good")
             return new_events
 
         polya_pos = external_polya_pos if internal_polya_pos == -1 else internal_polya_pos
         dist_to_polya = abs(polya_pos - isoform_end)
-        # logger.debug("+ Distance to polyA is %d" % dist_to_polya)
+        logger.debug("+ Distance to polyA is %d" % dist_to_polya)
         if dist_to_polya > self.params.apa_delta:
-            # logger.debug("+ Seems like APA site")
+            logger.debug("+ Seems like APA site")
             matching_events.append(MatchEvent(MatchEventSubtype.alternative_polya_site_right, event_info=polya_pos))
         else:
-            # logger.debug("+ Seems like correct polyA, odd case")
+            logger.debug("+ Seems like correct polyA, odd case")
             matching_events.append(MatchEvent(MatchEventSubtype.correct_polya_site_right, event_info=polya_pos))
         return matching_events
 
@@ -223,20 +229,22 @@ class PolyAVerifier:
 
         if terminal_exon_misaligned > 0 and fake_terminal_exon_count > 0:
             logger.debug("Odd case, both terminal exon misalignment and fake exons are present")
+            logger.debug(isoform_exons)
+            logger.debug(read_exons)
         if event_to_remove != -1:
             del matching_events[event_to_remove]
 
         new_events = self.check_if_close(isoform_start, polya_info.external_polyt_pos, polya_info.internal_polyt_pos,
                                          matching_events, MatchEventSubtype.correct_polya_site_left)
         if new_events is not None:
-            # logger.debug("Orginal polyT seems good")
+            logger.debug("Orginal polyT seems good")
             return new_events
 
-        # logger.debug("Orginal polyT seems distant, checking for fake terminal exons")
+        logger.debug("Orginal polyT seems distant, checking for fake terminal exons")
         # if terminal exon is fake, move polyT accordingly
         external_polyt_pos, internal_polyt_pos = \
             self.correct_polyt_positions(read_exons, fake_terminal_exon_count, polya_info)
-        # logger.debug("+ Corrected external %d, corrected internal %d" % (external_polyt_pos, internal_polyt_pos))
+        logger.debug("+ Corrected external %d, corrected internal %d" % (external_polyt_pos, internal_polyt_pos))
 
         if terminal_exon_misaligned:
             # we believe isofrom end is a true polyT site
@@ -249,17 +257,17 @@ class PolyAVerifier:
         new_events = self.check_if_close(isoform_start, external_polyt_pos, internal_polyt_pos,
                                          matching_events, MatchEventSubtype.correct_polya_site_left)
         if new_events is not None:
-            # logger.debug("Corrected polyT seems good")
+            logger.debug("Corrected polyT seems good")
             return new_events
 
         polyt_pos = external_polyt_pos if internal_polyt_pos == -1 else internal_polyt_pos
         dist_to_polyt = abs(polyt_pos - isoform_start)
-        # logger.debug("+ Distance to polyT is %d" % dist_to_polyt)
+        logger.debug("+ Distance to polyT is %d" % dist_to_polyt)
         if dist_to_polyt > self.params.apa_delta:
-            # logger.debug("+ Seems like APA site")
+            logger.debug("+ Seems like APA site")
             matching_events.append(MatchEvent(MatchEventSubtype.alternative_polya_site_left, event_info=polyt_pos))
         else:
-            # logger.debug("+ Seems like correct polyT, odd case")
+            logger.debug("+ Seems like correct polyT, odd case")
             matching_events.append(MatchEvent(MatchEventSubtype.correct_polya_site_left, event_info=polyt_pos))
         return matching_events
 
@@ -313,6 +321,7 @@ class PolyAVerifier:
         while terminal_exon_count < len(isoform_exons) and isoform_exons[-terminal_exon_count-1][0] >= polya_pos:
             terminal_exon_count += 1
         if terminal_exon_count == len(isoform_exons) or terminal_exon_count == 0:
+            logger.debug("+ No reference short exons")
             return matching_events, external_polya_pos, internal_polya_pos
 
         isoform_terminal_exon_length = intervals_total_length(isoform_exons[-terminal_exon_count:])
@@ -328,10 +337,10 @@ class PolyAVerifier:
                 isoform_region = (len(isoform_exons) - 2 - i, len(isoform_exons) - 2 - i)
                 matching_events.append(MatchEvent(MatchEventSubtype.terminal_exon_misalignment_right, isoform_region))
             corrected_read_end = isoform_exons[-1][1]
-            # logger.debug("+ Looks like missed terminal exons, shifting polyA: %d" % corrected_read_end)
+            logger.debug("+ Looks like missed terminal exons, shifting polyA: %d" % corrected_read_end)
             return matching_events, corrected_read_end, corrected_read_end
 
-        # logger.debug("+ Reference short exons present but not ok")
+        logger.debug("+ Reference short exons present but not ok")
         return matching_events, external_polya_pos, internal_polya_pos
 
     # check isoform exons prior polyT
@@ -342,7 +351,7 @@ class PolyAVerifier:
         while terminal_exon_count < len(isoform_exons) and isoform_exons[terminal_exon_count][1] <= polyt_pos:
             terminal_exon_count += 1
         if terminal_exon_count == 0 or terminal_exon_count == len(isoform_exons):
-            # logger.debug("+ No reference short exons")
+            logger.debug("+ No reference short exons")
             return matching_events, external_polyt_pos, internal_polyt_pos
 
         isoform_terminal_exon_length = intervals_total_length(isoform_exons[:terminal_exon_count])
@@ -357,10 +366,10 @@ class PolyAVerifier:
             for i in range(terminal_exon_count):
                 matching_events.append(MatchEvent(MatchEventSubtype.terminal_exon_misalignment_left, (i, i)))
             corrected_read_start = isoform_exons[0][0]
-            # logger.debug("+ Looks like missed terminal exons, shifting polyT: %d" % corrected_read_start)
+            logger.debug("+ Looks like missed terminal exons, shifting polyT: %d" % corrected_read_start)
             return matching_events, corrected_read_start, corrected_read_start
 
-        # logger.debug("+ Reference short exons present but not ok")
+        logger.debug("+ Reference short exons present but not ok")
         return matching_events, external_polyt_pos, internal_polyt_pos
 
     def check_if_close(self, isoform_end, external_polya_pos, internal_polya_pos, matching_events, event_type):
@@ -369,13 +378,13 @@ class PolyAVerifier:
 
         # polyA position is close, we are satisfied
         if  dist_to_internal_polya <= self.params.apa_delta and dist_to_internal_polya <= dist_to_external_polya:
-            # logger.debug("Internal polyAT is good %d, distance %d" %
-            #              (internal_polya_pos, dist_to_internal_polya))
+            logger.debug("Internal polyAT is good %d, distance %d" %
+                         (internal_polya_pos, dist_to_internal_polya))
             matching_events.append(MatchEvent(event_type, event_info=internal_polya_pos))
             return matching_events
         elif dist_to_external_polya <= self.params.apa_delta and dist_to_internal_polya > dist_to_external_polya:
-            # logger.debug("External polyAT is good %d, distance %d" %
-            #              (external_polya_pos, dist_to_external_polya))
+            logger.debug("External polyAT is good %d, distance %d" %
+                         (external_polya_pos, dist_to_external_polya))
             matching_events.append(MatchEvent(event_type, event_info=external_polya_pos))
             return matching_events
         return None

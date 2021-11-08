@@ -114,7 +114,7 @@ class JunctionComparator:
                 break
             isoform_pos += 1
 
-        # logger.debug("+ + Inspected contradictory read")
+        logger.debug("+ + Inspected contradictory read")
         # logger.debug("+ + Read profile " + str(read_features_present))
         # logger.debug("+ + Read introns " + str(read_junctions))
         # logger.debug("+ + Read region " + str(read_region))
@@ -128,17 +128,17 @@ class JunctionComparator:
         # logger.debug(isoform_features_present)
         if any(el == -1 for el in read_features_present) or any(el == -1 for el in isoform_features_present):
             # classify contradictions
-            # logger.debug("+ + Classifying contradictions")
+            logger.debug("+ + Classifying contradictions")
             matching_events = self.detect_contradiction_type(read_region, read_junctions, isoform_region, isoform_junctions, contradictory_region_pairs)
 
         if read_features_present[0] == 0 or read_features_present[-1] == 0:
             # if all(x == 0 for x in read_features_present):
             #    return [MatchEvent(MatchEventSubtype.undefined)]
-            # logger.debug("+ + Found only extra terminal introns ")
+            logger.debug("+ + Found only extra terminal introns ")
             self.add_extra_out_exon_events(matching_events, read_features_present, read_region, read_junctions, isoform_region[0])
 
         if len(matching_events) == 0:
-            # logger.debug("No contradiction detected")
+            logger.debug("No contradiction detected")
             return [MatchEvent(MatchEventSubtype.none)]
         return matching_events
 
@@ -444,6 +444,7 @@ class JunctionComparator:
 
     def profile_for_junctions_introns(self, junctions, region):
         selected_junctions = []
+        logger.debug("Checking for known introns " + str(region))
         for i in range(region[0], region[1] + 1):
             selected_junctions.append(junctions[i])
 
