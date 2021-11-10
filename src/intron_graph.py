@@ -5,6 +5,7 @@
 ############################################################################
 
 import logging
+import queue
 from collections import defaultdict
 from enum import Enum, unique
 
@@ -479,6 +480,31 @@ class IntronGraph:
                 is_internal = True
                 break
         return is_internal
+
+    def get_max_component_coverage(self, path):
+        intron_queue = queue.SimpleQueue()
+        processed_set = set()
+        max_cov = 0
+        for intron in path:
+            if intron[0] < 0:
+                continue
+            intron_queue.put(intron)
+            processed_set.add(intron)
+            max_cov = max(max_cov, self.intron_collector.clustered_introns[intron])
+
+        while not intron_queue.empty():
+            intron = intron_queue.get()
+            for i in self.outgoing_edges[intron]:
+                if i[0] >= 0 and i not in processed_set:
+                    processed_set.add(i)
+                    intron_queue.put(i)
+                    max_cov = max(max_cov, self.intron_collector.clustered_introns[i])
+            for i in self.incoming_edges[intron]:
+                if i[0] >= 0 and i not in processed_set:
+                    processed_set.add(i)
+                    intron_queue.put(i)
+                    max_cov = max(max_cov, self.intron_collector.clustered_introns[i])
+        return max_cov
 
     def print_graph(self):
         logger.debug("Printing graph")

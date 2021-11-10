@@ -145,7 +145,6 @@ class GraphBasedModelConstructor:
         self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
 
     def construct_fl_isoforms(self):
-        novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
         self.detected_known_isoforms = set()
 
         # a minor trick to compare tuples of pairs, whose starting and terminating elements have different type
@@ -185,8 +184,15 @@ class GraphBasedModelConstructor:
                     logger.debug("Graph positions: %s, %s" % (str(path[0]), str(path[-1])))
             else:
                 # adding FL novel isoform
+                component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
+                novel_isoform_cutoff = max(self.params.min_novel_count,
+                                           self.params.min_novel_count_rel * component_coverage)
+
                 polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya)
                 transcript_strand = self.strand_detector.get_strand(intron_path)
+
+                logger.debug("uuu Novel isoform %s has coverage: %dm cutoff = %d, component cov = %d, max_coverage = %d"
+                             % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))
                 if count < novel_isoform_cutoff:
                     logger.debug("Novel isoform %s has low coverage: %d\t%d" %
                                  (new_transcript_id, count, novel_isoform_cutoff))
