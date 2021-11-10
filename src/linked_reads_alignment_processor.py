@@ -5,6 +5,7 @@
 ############################################################################
 
 import logging
+import re
 import pysam
 from Bio import SeqIO
 
@@ -34,7 +35,7 @@ class LinkedReadAlignmentProcessor:
         self.params = params
         self.chr_record = chr_record
         self.assigner = LinkedReadAssigner(self.gene_info, self.params)
-        self.profile_constructor = CombinedProfileConstructor(gene_info, params)
+        self.profile_constructor = LinkedReadProfileConstructor(gene_info, params)
         self.assignment_storage = []
 
     def process(self):
@@ -62,8 +63,13 @@ class LinkedReadAlignmentProcessor:
             to_fetch_end = min(bamfile_in.get_reference_length(self.gene_info.chr_id), genic_region[1] + 100)
             for alignment in bamfile_in.fetch(self.gene_info.chr_id, to_fetch_start, to_fetch_end):
                 read_id = alignment.query_name
+
+                linked_read_barcode = extract_linked_read_barcode(read_id)
+                if not linked_read_barcode:
+                    continue
+
                 if alignment.reference_id == -1:
-                    self.assignment_storage.append(ReadAssignment(read_id, None))
+                    self.assignment_storage.append(ReadAssignment(read_id, None)) ##???##
                     continue
                 if alignment.is_supplementary:
                     continue
@@ -81,6 +87,52 @@ class LinkedReadAlignmentProcessor:
                     continue
                 processed_reads.add(read_tuple)
 
-                # TODO Chi-Lam: insert cloud processing here
-                raise NotImplementedError()
+                # cloud processing
+
+                cloud_profiles = {}
+                #cloud_profiles[linked_read_barcode].increment_profile(read)
+
+                blocks = sorted(alignment.get_blocks())
+
+                read_id = alignment.query_name
+
+                # if no or low overlapping coding sequence then discard this read
+                read_blocks = alignment.get_blocks()
+                read_exon_blocks = concat_gapless_blocks(sorted(read_blocks), alignment.cigartuples)
+                read_exon_coverage = read_coverage_fraction(read_exon_blocks, exon_union)
+                if read_exon_coverage < 0.1: continue
+
+                linked_read_barcode = extract_linked_read_barcode(read_id)
+                if not linked_read_barcode:
+                    continue
+
+                if not intron_profiles[linked_read_barcode]:
+                    intron_profiles[linked_read_barcode] = {}
+                if gene.id not in intron_profiles[linked_read_barcode]:
+                    intron_profiles[linked_read_barcode][gene.id] = [0] * len(introns)
+
+                # Calculate the overlapping CDS %
+                exon_coverage = read_coverage_fraction(read_exon_blocks, exon_union)
+                construct_intron_profile(intron_profiles[linked_read_barcode][gene.id], \
+                                        read_blocks, intron_boundaries)
+
+
+
+
+    def extract_linked_read_barcode(self, read_id):
+        '''
+        Using spisoseq reads as example, e.g. 
+        @COOPER:54:HCTWVBBXX:1:1103:6208:9051 or COOPER:54:HCTWVBBXX:1:1226:13839:23399___BX:Z:CCAAACCATCGATC-1
+        For other sequencing methods, linked-read barcode should also be in read id
+        '''
+        if '___' not in read_id:
+            return None
+
+        string = read_id.split('___')[-1]
+        barcode = re.sub('^.*:', '', string)
+        barcode=re.sub('-.*$', '', barcode)
+        return barcode
+
+
+
 
