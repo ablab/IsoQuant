@@ -114,9 +114,9 @@ def parse_args(args=None, namespace=None):
                           default=False)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
-    add_additional_option("--read_assignments", nargs='+', type=str,
-                          help="reuse read assignments (binary format) to construct transcript models",
-                          default=None)
+    input_args.add_argument("--read_assignments", nargs='+', type=str,
+                            help="reuse read assignments (binary format) to construct transcript models",
+                            default=None)
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "; chosen based on data type if not set", type=str)
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
