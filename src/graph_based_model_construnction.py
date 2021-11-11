@@ -58,6 +58,7 @@ class GraphBasedModelConstructor:
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(list)
         self.transcript_counter = transcript_counter
+        self.internal_counter = defaultdict(int)
         self.reads_used_in_construction = set()
         self.unused_reads = []
 
@@ -128,10 +129,25 @@ class GraphBasedModelConstructor:
         self.construct_fl_isoforms()
         self.construnct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
+
+        filtered_storage = []
         for model in self.transcript_model_storage:
             if model.transcript_id.endswith(self.known_transcript_suffix):
+                filtered_storage.append(model)
+                continue
+            # check coverage
+            component_coverage = self.intron_graph.get_max_component_coverage(model.intron_path)
+            novel_isoform_cutoff = max(self.params.min_novel_count,
+                                       self.params.min_novel_count_rel * component_coverage)
+            if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
+                logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
+                                                                        self.internal_counter[model.transcript_id],
+                                                                        novel_isoform_cutoff, component_coverage))
                 continue
             self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
+            filtered_storage.append(model)
+
+        self.transcript_model_storage = filtered_storage
 
         # debug info only
         for t in self.transcript_model_storage:
@@ -180,6 +196,7 @@ class GraphBasedModelConstructor:
         read_id = read_assignment.read_id
         self.transcript_read_ids[transcript_id].append(read_assignment)
         self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
+        self.internal_counter[transcript_id] += 1
 
     def construct_fl_isoforms(self):
         self.detected_known_isoforms = set()
@@ -236,8 +253,7 @@ class GraphBasedModelConstructor:
             else:
                 # adding FL novel isoform
                 component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
-                novel_isoform_cutoff = max(self.params.min_novel_count,
-                                           self.params.min_novel_count_rel * component_coverage)
+                novel_isoform_cutoff = self.params.min_novel_count
 
                 polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya)
                 transcript_strand = self.strand_detector.get_strand(intron_path)
@@ -270,6 +286,7 @@ class GraphBasedModelConstructor:
                     new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                                 new_transcript_id + id_suffix, "novel", transcript_gene,
                                                 novel_exons, transcript_type)
+                    new_model.intron_path = intron_path
                     logger.debug("uuu Adding novel spliced isoform %s : %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
 
             if new_model:
@@ -284,8 +301,8 @@ class GraphBasedModelConstructor:
                 if not reference_isoform and len(novel_exons) == 2:
                     # novel single intron transcript
                     t_type = "in catalog" if intron_path[0] in self.known_introns else "not catalog"
-                    logger.debug("uuu Added single intron %s isoform: %d\t%d\t%d" %
-                                 (t_type, count, novel_isoform_cutoff, self.intron_graph.max_coverage))
+                    logger.debug("uuu Added single intron %s isoform: %d\t%d" %
+                                 (t_type, count, self.intron_graph.max_coverage))
 
             # debug info only
             if intron_path in self.expressed_isoforms:
@@ -469,9 +486,12 @@ class GraphBasedModelConstructor:
             if model_assignment.assignment_type in [ReadAssignmentType.unique,
                                                     ReadAssignmentType.unique_minor_difference,
                                                     ReadAssignmentType.ambiguous]:
+                matched_isoforms = [m.assigned_transcript for m in model_assignment.isoform_matches]
                 self.transcript_counter.add_read_info_raw(read_id,
-                                                          [m.assigned_transcript for m in model_assignment.isoform_matches],
+                                                          matched_isoforms,
                                                           model_assignment.read_group)
+                if len(matched_isoforms) == 1:
+                    self.internal_counter[matched_isoforms[0]] += 1
                 for m in model_assignment.isoform_matches:
                     self.transcript_read_ids[m.assigned_transcript].append(assignment)
             else:
