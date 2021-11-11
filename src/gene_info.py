@@ -35,6 +35,7 @@ class TranscriptModel:
         self.exon_blocks = exon_blocks
         self.transcript_type = transcript_type
         self.additional_info = additional_info
+        self.intron_path = ()
 
     def get_start(self):
         return self.exon_blocks[0][0]
