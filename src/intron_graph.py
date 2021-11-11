@@ -482,7 +482,7 @@ class IntronGraph:
         return is_internal
 
     def get_max_component_coverage(self, path):
-        intron_queue = queue.SimpleQueue()
+        intron_queue = queue.Queue()
         processed_set = set()
         max_cov = 0
         for intron in path:
