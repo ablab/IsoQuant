@@ -6,7 +6,7 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
 
 
-# IsoQuant 2.0 manual
+# IsoQuant 2.1 manual
 
 1. [About IsoQuant](#sec1) </br>
     1.1. [Supported data types](#sec1.1)</br>
@@ -52,7 +52,7 @@
 
 IsoQuant is a tool for reference-based analysis of long RNA reads, such as PacBio or Oxford Nanopores. IsoQuant maps reads to the reference genome and assigns them to the annotated isoforms based on their intron and exon structure. IsoQuant is also capable of discovering various modifications, such as intron retention, alternative splice sites, skipped exons etc. IsoQuant further performs gene, isoform, exon and intron quantification. If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. In addition, IsoQuant generates discovered transcript models, including novel ones.
 
-IsoQuant version 2.0.0 was released under GPLv2 on October 7th, 2021 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 2.1.0 was released under GPLv2 on January 18th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
@@ -320,12 +320,6 @@ We recommend to not modify these options unless you are clearly aware of their e
 
 `--delta` 
     Delta for inexact splice junction comparison, chosen automatically based on data type.  
-
-`--read_assignments` 
-    Prefix of intermediate read assignments located in `<output_dir>/<sample_dir>/aux/`. 
-These files are kept only when `--keep_tmp` is set.
-
-`--keep_tmp` Do not remove temporary files.
 
 
 ### Examples
