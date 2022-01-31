@@ -35,6 +35,7 @@ class LinkedReadAlignmentProcessor:
         self.params = params
         self.chr_record = chr_record
         self.assigner = LinkedReadAssigner(self.gene_info, self.params)
+        self.single_read_profile_constructor = CombinedProfileConstructor(gene_info, params)
         self.profile_constructor = LinkedReadProfileConstructor(gene_info, params)
         self.assignment_storage = []
 
@@ -86,6 +87,14 @@ class LinkedReadAlignmentProcessor:
                 if read_tuple in processed_reads:
                     continue
                 processed_reads.add(read_tuple)
+
+                combined_profile = self.single_read_profile_constructor.construct_profiles(alignment_info.read_exons,
+                                                                                           alignment_info.polya_info,
+                                                                                           alignment_info.cage_hits)
+                # intron profile
+                print(combined_profile.read_intron_profile.gene_profile)
+                # exon profile
+                print(combined_profile.read_split_exon_profile.gene_profile)
 
                 # cloud processing
 
