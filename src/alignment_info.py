@@ -83,7 +83,7 @@ class AlignmentInfo:
             elif ref_start <= true_ref_pos <= ref_end:
                 if read_pos is None:
                     indel_count += 1
-                elif chr_record and self.alignment.query_sequence[read_pos] != chr_record[ref_pos]:
+                elif chr_record and self.alignment.query_sequence and self.alignment.query_sequence[read_pos] != chr_record[ref_pos]:
                     # chr_record is also 0-based
                     mismatch_count += 1
             last_ref_pos = true_ref_pos or last_ref_pos
