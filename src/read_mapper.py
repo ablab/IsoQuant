@@ -47,14 +47,15 @@ class DataSetReadMapper:
     def map_reads(self, args):
         samples = []
         readable_names_dict = {}
+        annotation_file = find_annotation(self.aligner, args)
         for sample in args.input_data.samples:
             bam_files = []
             for fastq_files in sample.file_list:
                 for fastq_file in fastq_files:
-                    bam_file = None if args.clean_start else find_stored_alignment(fastq_file, args)
+                    bam_file = None if args.clean_start else find_stored_alignment(fastq_file, annotation_file, args)
                     if bam_file is None:
-                        bam_file = align_fasta(self.aligner, fastq_file, args, sample.label, sample.aux_dir)
-                        store_alignment(bam_file, fastq_file, args)
+                        bam_file = align_fasta(self.aligner, fastq_file, annotation_file, args, sample.label, sample.aux_dir)
+                        store_alignment(bam_file, fastq_file, annotation_file, args)
                     bam_files.append([bam_file])
                     if fastq_file in args.input_data.readable_names_dict:
                         readable_names_dict[bam_file] = args.input_data.readable_names_dict[fastq_file]
@@ -142,9 +143,9 @@ def store_index(index, args):
     logger.debug('New index saved to {}'.format(index))
 
 
-def find_stored_alignment(fastq_file, args):
+def find_stored_alignment(fastq_file, annotation, args):
     fastq = os.path.abspath(fastq_file)
-    key = "%s_aligned_to_%s" % (fastq, args.index)
+    key = "%s_aligned_to_%s%s" % (fastq, args.index, "_" + annotation if annotation else "")
     with open(args.alignment_config_path, 'r') as f_in:
         aligned_fastq_files = json.load(f_in)
 
@@ -164,9 +165,9 @@ def find_stored_alignment(fastq_file, args):
     return None
 
 
-def store_alignment(bam_file, fastq_file, args):
+def store_alignment(bam_file, fastq_file, annotation, args):
     fastq = os.path.abspath(fastq_file)
-    key = "%s_aligned_to_%s" % (fastq, args.index)
+    key = "%s_aligned_to_%s%s" % (fastq, args.index, "_" + annotation if annotation else "")
     bam_file = os.path.abspath(bam_file)
 
     with open(args.alignment_config_path, 'r') as f_in:
@@ -217,12 +218,36 @@ def index_reference(aligner, args):
     return index_name
 
 
-def align_fasta(aligner, fastq_file, args, label, out_dir):
+def find_annotation(aligner, args):
+    if args.no_junc_bed:
+        return
+    if aligner == "starlong":
+        gtf_fname = args.genedb
+        if args.genedb.endswith('.db'):
+            gtf_fname = convert_db_to_gtf(args)
+        return gtf_fname
+    elif aligner == "minimap2":
+        bed_supplied = False
+        if args.junc_bed_file:
+            if not os.path.exists(args.junc_bed_file):
+                logger.warning("Provided BED file %s does not exist, will generate for the annotation" %
+                               args.junc_bed_file)
+            else:
+                bed_supplied = True
+        if not bed_supplied:
+            bed_fname = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".bed")
+            db2bed(bed_fname, args.genedb)
+        return bed_fname
+
+
+def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
     # TODO: fix paired end reads
     fastq_path = os.path.abspath(fastq_file)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
     alignment_prefix = os.path.join(out_dir, label)
-    alignment_bam_path = os.path.join(out_dir, label + '_%x_%x.bam' % (hash(fastq_path), hash(args.index)))
+
+    hash_annotation = ("_%x" % hash(annotation_file))[:10] if annotation_file else ""
+    alignment_bam_path = os.path.join(out_dir, label + '_%x_%x%s.bam' % (hash(fastq_path), hash(args.index), hash_annotation))
     logger.info("Aligning %s to the reference, alignments will be saved to %s" % (fastq_path, alignment_bam_path))
     alignment_sam_path = alignment_bam_path[:-4] + '.sam'
 
@@ -239,10 +264,7 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
         # Simple
         # command = '{star} --runThreadN 16 --genomeDir {ref_index_name}  --readFilesIn {transcripts}  --outSAMtype SAM
         #  --outFileNamePrefix {alignment_out}'.format(star=star_path, ref_index_name=star_index, transcripts=short_id_contigs_name, alignment_out=alignment_sam_path)
-        gtf_fname = args.genedb
-        if args.genedb.endswith('.db'):
-            gtf_fname = convert_db_to_gtf(args)
-        annotation_opts = "" if args.no_junc_bed else " --sjdbGTFfile " + gtf_fname + " --sjdbOverhang 140 "
+        annotation_opts = "" if not annotation_file else " --sjdbGTFfile " + annotation_file + " --sjdbOverhang 140 "
         command = '{exec_path} {zcat} --runThreadN {threads} --genomeDir {ref_index_name}  --readFilesIn {transcripts}  ' \
                   '--outSAMtype BAM Unsorted --outSAMattributes NH HI NM MD --outFilterMultimapScoreRange 1 ' \
                   '--outFilterMismatchNmax 2000 --scoreGapNoncan -20 --scoreGapGCAG -4 --scoreGapATAC -8 --scoreDelOpen ' \
@@ -267,26 +289,14 @@ def align_fasta(aligner, fastq_file, args, label, out_dir):
             exit(-1)
 
     elif aligner == "minimap2":
-        minimap2_path = get_aligner('minimap2')
         additional_options = []
+        minimap2_path = get_aligner('minimap2')
         if args.stranded == 'forward':
             additional_options.append('-uf')
-        if not args.no_junc_bed:
-            bed_supplied = False
-            if args.junc_bed_file:
-                if not os.path.exists(args.junc_bed_file):
-                    logger.warning("Provided BED file %s does not exist, will generate for the annotation" %
-                                   args.junc_bed_file)
-                else:
-                    additional_options.append("--junc-bed")
-                    additional_options.append(args.junc_bed_file)
-                    bed_supplied = True
-            if not bed_supplied:
-                bed_filename = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".bed")
-                db2bed(bed_filename, args.genedb)
-                args.junc_bed_file = bed_filename
-                additional_options.append("--junc-bed")
-                additional_options.append(bed_filename)
+        if annotation_file:
+            args.junc_bed_file = annotation_file
+            additional_options.append("--junc-bed")
+            additional_options.append(annotation_file)
 
         command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
                    '--secondary=yes', '-Y', '-t', str(args.threads)] + additional_options
