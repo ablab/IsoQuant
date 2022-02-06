@@ -57,19 +57,23 @@ def load_tracking(inf):
     for l in open(inf):
         v = l.strip().split()
         tid = v[4].split('|')[1]
-        if v[3] != '=':
+        if v[3] == '=':
             id_dict[tid] = v[2].split('|')[1]
         else:
             id_dict[tid] = 'novel'
     return id_dict
 
 
-def correct_tpm_dict(tpm_dict, id_dict):
+def correct_tpm_dict(tpm_dict, id_dict, use_novel=True):
     print("Converting transcript ids")
     new_tpm_dict = {}
-    for tid in id_dict.keys():
+    for tid in tpm_dict.keys():
+        if tid not in id_dict:
+            print("WARN, %s not in dict" % tid)
+            continue
         if id_dict[tid] == 'novel':
-            new_tpm_dict[tid] = tpm_dict[tid]
+            if use_novel:
+                new_tpm_dict[tid] = tpm_dict[tid]
         else:
             new_tpm_dict[id_dict[tid]] = tpm_dict[tid]
     return new_tpm_dict
@@ -83,26 +87,28 @@ def count_deviation(df):
             continue
         deviation_values.append(100 * row['real_tpm'] / row['ref_tpm'])
 
-    bins = [10 * i for i in range(41)]
+    bins = [10 * i for i in range(21)]
     bins.append(10000)
     dev_vals, bins = np.histogram(deviation_values, bins)
-    mid_bins = map(lambda x: x + 5, bins[:-1])
+    mid_bins = bins[:-1]
     return zip(mid_bins, dev_vals)
 
 
-def count_stats(df):
-    print('Correlation: ', round(np.corrcoef([df['real_tpm'], df['ref_tpm']])[1, 0], 3))
+def count_stats(df, output):
+    outf = open(os.path.join(output, "stats.tsv"), 'w')
+    outf.write('Correlation\t%.3f\n' % round(np.corrcoef([df['real_tpm'], df['ref_tpm']])[1, 0], 3))
     full_matches = (df['real_tpm'] == df['ref_tpm']).astype(int).sum()
     n_isoforms = len(df['ref_tpm'])
-    print('Full matches:', full_matches, 'Fraction:', round(full_matches / n_isoforms, 3))
+    outf.write('Full matches\t%d\t%.3f\n' % (full_matches, round(full_matches / n_isoforms, 3)))
     close_matches = ((df['real_tpm'] <= df['ref_tpm'] * 1.1) & (df['ref_tpm'] * 0.9 <= df['real_tpm'])).astype(int).sum()
-    print('Close matches (10% diff):', close_matches, round(close_matches / n_isoforms, 2))
+    outf.write('Close matches (10)\t%d\t%.3f\n' % (close_matches, round(close_matches / n_isoforms, 3)))
     close_matches = ((df['real_tpm'] <= df['ref_tpm'] * 1.2) & (df['ref_tpm'] * 0.8 <= df['real_tpm'])).astype(int).sum()
-    print('Close matches (20% diff):', close_matches, round(close_matches / n_isoforms, 2))
+    outf.write('Close matches (20)\t%d\t%.3f\n' % (close_matches, round(close_matches / n_isoforms, 3)))
     not_detected = (df['real_tpm'] == 0).astype(int).sum()
-    print('Not detected:', not_detected, round(not_detected / n_isoforms, 2))
+    outf.write('Not detected\t%d\t%.3f\n' % (not_detected, round(not_detected / n_isoforms, 3)))
     false_detected = (df['ref_tpm'] == 0).astype(int).sum()
-    print('False detections:', false_detected, round(false_detected / n_isoforms, 4))
+    outf.write('False detections\t%d\t%.4f\n' % (false_detected, round(false_detected / n_isoforms, 4)))
+    outf.close()
 
 
 def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
@@ -128,7 +134,7 @@ def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
         for hist_pairs in count_deviation(df):
             out_dev.write("%d\t%d\n" % (hist_pairs[0], hist_pairs[1]))
 
-    count_stats(df)
+    count_stats(df, output)
     print("Done")
 
 
@@ -140,6 +146,7 @@ def parse_args():
     parser.add_argument('--tpm_col', type=int, default=2, help='TPM column in output expression table')
     parser.add_argument('--gtf', '-g', type=str, help='output GTF to convert reference transcript ids')
     parser.add_argument('--tracking', type=str, help='tracking file')
+    parser.add_argument('--no_novel', action='store_false', default=True, help='do not use novel transcripts')
 
     parser.add_argument('--output', '-o', type=str, help='output folder', default="quantification_assessment")
     return parser.parse_args()
@@ -155,11 +162,15 @@ def main():
         tpm_dict = load_counts(args.tpm, args.tpm_col)
         if args.gtf:
             id_dict = load_ref_ids_from_gtf(args.gtf)
-            tpm_dict = correct_tpm_dict(tpm_dict, id_dict)
+            tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+        elif args.tracking:
+            id_dict = load_tracking(args.tracking)
+            tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+
     else:
         tpm_dict = load_counts_from_gtf(args.gtf)
         id_dict = load_tracking(args.tracking)
-        tpm_dict = correct_tpm_dict(tpm_dict, id_dict)
+        tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
 
     compare_transcript_counts(ref_tpm_dict, tpm_dict, args.output)
 
