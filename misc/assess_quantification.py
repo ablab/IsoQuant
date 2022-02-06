@@ -53,9 +53,9 @@ def count_deviation(df):
     for index, row in df.iterrows():
         if row['ref_tpm'] == 0:
             continue
-        deviation_values.append(100 * row['ref_tpm'] / row['real_tpm'])
+        deviation_values.append(100 * row['real_tpm'] / row['ref_tpm'])
 
-    bins = [10 * i for i in range(21)]
+    bins = [10 * i for i in range(41)]
     bins.append(10000)
     dev_vals, bins = np.histogram(deviation_values, bins)
     mid_bins = map(lambda x: x + 5, bins[:-1])
@@ -78,7 +78,9 @@ def count_stats(df):
 
 
 def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
+    print("Converting to dataframe")
     df = pd.DataFrame.from_dict(ref_tpm_dict, orient='index', columns=['ref_tpm'])
+    print("Filling true values")
     df['real_tpm'] = 0
     for tid, tpm in tpm_dict.items():
         if tid in df.index:
@@ -86,6 +88,7 @@ def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
         else:
             df.loc[tid] = [0, tpm]
 
+    print("Saving TPM values")
     with open(os.path.join(output, "tpm.values.tsv"), 'w') as out_tpms:
         out_tpms.write("\t".join(map(str, list(df['ref_tpm']))) + "\n")
         out_tpms.write("\t".join(map(str, list(df['real_tpm']))) + "\n")
