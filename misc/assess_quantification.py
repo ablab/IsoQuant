@@ -56,10 +56,11 @@ def load_tracking(inf):
     id_dict = {}
     for l in open(inf):
         v = l.strip().split()
-        if v[3] != '=':
-            continue
         tid = v[4].split('|')[1]
-        id_dict[tid] = v[2].split('|')[1]
+        if v[3] != '=':
+            id_dict[tid] = v[2].split('|')[1]
+        else:
+            id_dict[tid] = 'novel'
     return id_dict
 
 
