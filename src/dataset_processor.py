@@ -154,7 +154,7 @@ class ReadAssignmentLoader:
         self.multimapped_reads = multimappers_disct
 
 
-def load_assigned_reads(save_file_name, gffutils_db, multimapped_reads):
+def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
     gc.disable()
     logger.info("Loading read assignments from " + save_file_name)
     assert os.path.exists(save_file_name)
@@ -170,9 +170,9 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_reads):
                 read_assignment = obj
                 assert current_gene_info is not None
                 read_assignment.gene_info = current_gene_info
-                if read_assignment.read_id in multimapped_reads:
+                if read_assignment.read_id in multimapped_chr_dict:
                     resolved_assignment = None
-                    for a in multimapped_reads[read_assignment.read_id]:
+                    for a in multimapped_chr_dict[read_assignment.read_id]:
                         if a.start == read_assignment.start() and a.end == read_assignment.end() and \
                                 a.gene_id == current_gene_info.gene_db_list[0].id and \
                                 a.chr_id == read_assignment.chr_id:
@@ -225,6 +225,8 @@ class DatasetProcessor:
         self.read_grouper = create_read_grouper(args)
         self.io_support = IOSupport(self.args)
         self.multimapped_reads = defaultdict(list)
+        # chr_id -> read_id -> list of assignments
+        self.multimapped_info_dict = defaultdict(lambda : defaultdict(list))
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
@@ -319,7 +321,8 @@ class DatasetProcessor:
             chr_record = self.reference_record_dict[chr_id] if self.reference_record_dict else None
             # future_list = []
 
-            for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db, self.multimapped_reads):
+            for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db,
+                                                                     self.multimapped_info_dict[chr_id]):
                 for read_assignment in assignment_storage:
                     self.pass_to_aggregators(read_assignment)
                 if self.args.no_model_construction:
@@ -338,15 +341,21 @@ class DatasetProcessor:
 
     def load_read_info(self, dump_filename):
         gc.disable()
-        if not self.multimapped_reads:
+        self.multimapped_info_dict = defaultdict(lambda : defaultdict(list))
+        if self.multimapped_reads:
+            for read_id in self.multimapped_reads:
+                for a in self.multimapped_reads[read_id]:
+                    self.multimapped_info_dict[a.chr_id][a.read_id].append(a)
+            self.multimapped_reads = None
+        else:
             multimap_unpickler = pickle.Unpickler(open(dump_filename + "_multimappers", "rb"), fix_imports=False)
             while True:
                 try:
                     obj = multimap_unpickler.load()
                     if isinstance(obj, list):
                         assignment_list = obj
-                        read_id = assignment_list[0].read_id
-                        self.multimapped_reads[read_id] = assignment_list
+                        for a in assignment_list:
+                            self.multimapped_info_dict[a.chr_id][a.read_id].append(a)
                     else:
                         raise ValueError("Multimap assignment file {} is corrupted!".format(dump_filename))
                 except EOFError:
