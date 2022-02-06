@@ -11,6 +11,7 @@ import numpy as np
 
 
 def load_counts(inf, tpm_col=2, id_col=1):
+    print("Loading TPM values from " + inf)
     tpm_dict = {}
     for l in open(inf):
         if l.startswith("#") or l.startswith("__") or l.startswith("feature_id"):
@@ -21,6 +22,7 @@ def load_counts(inf, tpm_col=2, id_col=1):
 
 
 def load_ref_ids_from_gtf(gtf):
+    print("Loading annotation from " + gtf)
     id_dict = {}
     for l in open(gtf):
         if l.startswith("#"):
@@ -35,6 +37,7 @@ def load_ref_ids_from_gtf(gtf):
 
 
 def correct_tpm_dict(tpm_dict, id_dict):
+    print("Converting transcript ids")
     new_tpm_dict = {}
     for tid in id_dict.keys():
         if id_dict[tid] == 'novel':
@@ -45,6 +48,7 @@ def correct_tpm_dict(tpm_dict, id_dict):
 
 
 def count_deviation(df):
+    print("Counting deviation histogram")
     deviation_values = []
     for index, row in df.iterrows():
         if row['ref_tpm'] == 0:
@@ -83,14 +87,15 @@ def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
             df.loc[tid] = [0, tpm]
 
     with open(os.path.join(output, "tpm.values.tsv"), 'w') as out_tpms:
-        out_tpms.write("\t".join(list(df['ref_tpm'])) + "\n")
-        out_tpms.write("\t".join(list(df['real_tpm'])) + "\n")
+        out_tpms.write("\t".join(map(str, list(df['ref_tpm']))) + "\n")
+        out_tpms.write("\t".join(map(str, list(df['real_tpm']))) + "\n")
 
     with open(os.path.join(output, "deviation.tsv"), 'w') as out_dev:
         for hist_pairs in count_deviation(df):
             out_dev.write("%d\t%d\n" % (hist_pairs[0], hist_pairs[1]))
 
     count_stats(df)
+    print("Done")
 
 
 def parse_args():
