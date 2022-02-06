@@ -36,6 +36,33 @@ def load_ref_ids_from_gtf(gtf):
     return id_dict
 
 
+def load_counts_from_gtf(gtf):
+    print("Loading counts from " + gtf)
+    tpm_dict = {}
+    for l in open(gtf):
+        if l.startswith("#"):
+            continue
+        v = l.strip().split()
+        if v[2] != "transcript":
+            continue
+        tid_index = v.index("transcript_id", 7)
+        tpm_index = v.index("TPM", 7)
+        tpm_dict[v[tid_index+1][1:-2]] = float(v[tpm_index+1][1:-2])
+    return tpm_dict
+
+
+def load_tracking(inf):
+    print("Loading tracking " + inf)
+    id_dict = {}
+    for l in open(inf):
+        v = l.strip().split()
+        if v[3] != '=':
+            continue
+        tid = v[4].split('|')[1]
+        id_dict[tid] = v[2].split('|')[1]
+    return id_dict
+
+
 def correct_tpm_dict(tpm_dict, id_dict):
     print("Converting transcript ids")
     new_tpm_dict = {}
@@ -78,16 +105,19 @@ def count_stats(df):
 
 
 def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
-    print("Converting to dataframe")
-    df = pd.DataFrame.from_dict(ref_tpm_dict, orient='index', columns=['ref_tpm'])
     print("Filling true values")
-    df['real_tpm'] = 0
-    for tid, tpm in tpm_dict.items():
-        if tid in df.index:
-            df.loc[tid, 'real_tpm'] = tpm
+    joint_dict = {}
+    for tid in tpm_dict.keys():
+        if tid in ref_tpm_dict:
+            joint_dict[tid] = (ref_tpm_dict[tid], tpm_dict[tid])
         else:
-            df.loc[tid] = [0, tpm]
+            joint_dict[tid] = (0, tpm_dict[tid])
+    for tid in ref_tpm_dict:
+        if tid not in joint_dict:
+            joint_dict[tid] = (ref_tpm_dict[tid], 0)
 
+    print("Converting to dataframe")
+    df = pd.DataFrame.from_dict(joint_dict, orient='index', columns=['ref_tpm', 'real_tpm'])
     print("Saving TPM values")
     with open(os.path.join(output, "tpm.values.tsv"), 'w') as out_tpms:
         out_tpms.write("\t".join(map(str, list(df['ref_tpm']))) + "\n")
@@ -105,9 +135,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ref_expr', '-r', type=str, help='reference expression table, TPM', required=True)
     parser.add_argument('--ref_col', type=int, default=3, help='TPM column in reference expression table')
-    parser.add_argument('--tpm', '-t', type=str, help='output expression table to assess, TPM', required=True)
+    parser.add_argument('--tpm', '-t', type=str, help='output expression table to assess, TPM')
     parser.add_argument('--tpm_col', type=int, default=2, help='TPM column in output expression table')
     parser.add_argument('--gtf', '-g', type=str, help='output GTF to convert reference transcript ids')
+    parser.add_argument('--tracking', type=str, help='tracking file')
+
     parser.add_argument('--output', '-o', type=str, help='output folder', default="quantification_assessment")
     return parser.parse_args()
 
@@ -118,9 +150,14 @@ def main():
         os.makedirs(args.output)
 
     ref_tpm_dict = load_counts(args.ref_expr, args.ref_col)
-    tpm_dict = load_counts(args.tpm, args.tpm_col)
-    if args.gtf:
-        id_dict = load_ref_ids_from_gtf(args.gtf)
+    if args.tpm:
+        tpm_dict = load_counts(args.tpm, args.tpm_col)
+        if args.gtf:
+            id_dict = load_ref_ids_from_gtf(args.gtf)
+            tpm_dict = correct_tpm_dict(tpm_dict, id_dict)
+    else:
+        tpm_dict = load_counts_from_gtf(args.gtf)
+        id_dict = load_tracking(args.tracking)
         tpm_dict = correct_tpm_dict(tpm_dict, id_dict)
 
     compare_transcript_counts(ref_tpm_dict, tpm_dict, args.output)
