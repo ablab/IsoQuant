@@ -409,7 +409,8 @@ class DatasetProcessor:
 
         self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, ignore_read_groups=True)
         self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv, ignore_read_groups=True)
-        self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv, ignore_read_groups=True)
+        self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
+                                                                  ignore_read_groups=True, output_zeroes=False)
 
         self.transcript_model_global_counter = CompositeCounter([self.transcript_model_counter])
         if self.args.count_exons:
