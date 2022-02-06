@@ -117,9 +117,11 @@ class GraphBasedModelConstructor:
         self.assign_reads_to_models(read_assignment_storage)
 
         filtered_storage = []
+        confirmed_transcipt_ids = set()
         for model in self.transcript_model_storage:
             if model.transcript_id.endswith(self.known_transcript_suffix):
                 filtered_storage.append(model)
+                confirmed_transcipt_ids.add(model.transcript_id)
                 continue
             # check coverage
             component_coverage = self.intron_graph.get_max_component_coverage(model.intron_path)
@@ -132,8 +134,10 @@ class GraphBasedModelConstructor:
                 continue
             self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
             filtered_storage.append(model)
+            confirmed_transcipt_ids.add(model.transcript_id)
 
         self.transcript_model_storage = filtered_storage
+        self.transcript_counter.add_confirmed_features(confirmed_transcipt_ids)
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
