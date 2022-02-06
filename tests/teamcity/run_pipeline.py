@@ -171,7 +171,7 @@ def main():
 
     log.start_block('quality', 'Running quality assessment')
     quality_report = os.path.join(output_folder, "report.tsv")
-    qa_command_list = ["python3", os.path.join(isoquant_dir, "src/assess_assignment_quality.py"),
+    qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/assess_assignment_quality.py"),
                        "-o", quality_report, "--gene_db", genedb, "--tsv", output_tsv,
                        "--mapping", bam, "--fasta", reads]
 
