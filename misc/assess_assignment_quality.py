@@ -22,11 +22,14 @@ import matplotlib.pyplot as plt
 from matplotlib_venn import venn2
 import logging
 
-from common import overlaps
 
 logger = logging.getLogger('IsoQuantQA')
 
 id_pattern = re.compile("[A-Z]+\.?(\d+\.\d+)")
+
+
+def overlaps(range1, range2):
+    return not (range1[1] < range2[0] or range1[0] > range2[1])
 
 
 def set_logger(logger_instance):
