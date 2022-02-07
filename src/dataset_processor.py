@@ -175,6 +175,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                     for a in multimapped_chr_dict[read_assignment.read_id]:
                         if a.start == read_assignment.start() and a.end == read_assignment.end() and \
                                 a.gene_id == current_gene_info.gene_db_list[0].id and \
+                                a.matches == (0 if not read_assignment.isoform_matches else len(read_assignment.isoform_matches)) and \
                                 a.chr_id == read_assignment.chr_id:
                             if resolved_assignment is not None:
                                 logger.warning("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
@@ -183,7 +184,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                     if not resolved_assignment:
                         logger.warning("Incomplete information on read %s" % read_assignment.read_id)
                         continue
-                    elif resolved_assignment.assignment_type == ReadAssignmentType.noninformative:
+                    elif resolved_assignment.assignment_type == ReadAssignmentType.suspended:
                         continue
                     else:
                         read_assignment.assignment_type = resolved_assignment.assignment_type
