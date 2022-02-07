@@ -58,9 +58,9 @@ def parse_args(args=None, namespace=None):
     parser.add_argument('--labels', '-l', nargs='+', type=str,
                         help='sample names to be used; input file names are used if not set')
     parser.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
-                                             "by BAM file tag (tag:TAG), "
-                                             "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM), "
-                                             "using read id (read_id:DELIM)"
+                                             "by BAM file tag (tag:TAG); "
+                                             "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM); "
+                                             "using read id (read_id:DELIM); "
                                              "by original file name (file_name)", type=str)
 
     # INPUT PROPERTIES
