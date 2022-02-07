@@ -76,17 +76,23 @@ def correct_tpm_dict(tpm_dict, id_dict, use_novel=True):
                 new_tpm_dict[tid] = tpm_dict[tid]
         else:
             new_tpm_dict[id_dict[tid]] = tpm_dict[tid]
+    print("Total values %d" % len(new_tpm_dict))
     return new_tpm_dict
 
 
 def count_deviation(df):
     print("Counting deviation histogram")
     deviation_values = []
+    false_detected = 0
     for index, row in df.iterrows():
         if row['ref_tpm'] == 0:
+            if row['real_tpm'] > 0:
+                print(row)
+                false_detected += 1
             continue
         deviation_values.append(100 * row['real_tpm'] / row['ref_tpm'])
 
+    print("Total %d, false %d, missed %d" % (len(deviation_values), false_detected, deviation_values.count(0.0)))
     bins = [10 * i for i in range(21)]
     bins.append(10000)
     dev_vals, bins = np.histogram(deviation_values, bins)
@@ -104,9 +110,9 @@ def count_stats(df, output):
     outf.write('Close matches (10)\t%d\t%.3f\n' % (close_matches, round(close_matches / n_isoforms, 3)))
     close_matches = ((df['real_tpm'] <= df['ref_tpm'] * 1.2) & (df['ref_tpm'] * 0.8 <= df['real_tpm'])).astype(int).sum()
     outf.write('Close matches (20)\t%d\t%.3f\n' % (close_matches, round(close_matches / n_isoforms, 3)))
-    not_detected = (df['real_tpm'] == 0).astype(int).sum()
+    not_detected = ((df['real_tpm'] == 0) & (df['ref_tpm'] > 0)).astype(int).sum()
     outf.write('Not detected\t%d\t%.3f\n' % (not_detected, round(not_detected / n_isoforms, 3)))
-    false_detected = (df['ref_tpm'] == 0).astype(int).sum()
+    false_detected = ((df['ref_tpm'] == 0) & (df['real_tpm'] > 0)).astype(int).sum()
     outf.write('False detections\t%d\t%.4f\n' % (false_detected, round(false_detected / n_isoforms, 4)))
     outf.close()
 
