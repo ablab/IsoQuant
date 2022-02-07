@@ -32,7 +32,7 @@ class MultimapResolver:
 
         if self.strategy == MultimapResolvingStrategy.ignore_multimapper:
             for a in assignment_list:
-                a.assignment_type = ReadAssignmentType.noninformative
+                a.assignment_type = ReadAssignmentType.suspended
             return assignment_list
 
         elif self.strategy == MultimapResolvingStrategy.merge:
@@ -112,5 +112,5 @@ class MultimapResolver:
                     assignment_list[i].assignment_type = new_type
                     assignment_list[i].multimapper = True
                 continue
-            assignment_list[i].assignment_type = ReadAssignmentType.noninformative
+            assignment_list[i].assignment_type = ReadAssignmentType.suspended
         return assignment_list

@@ -19,6 +19,7 @@ class ReadAssignmentType(Enum):
     ambiguous = 10
     unique_minor_difference = 2
     inconsistent = 3
+    suspended = -1
 
 
 # SQANTI-like
@@ -389,7 +390,9 @@ class BasicReadAssignment:
         self.assignment_type = read_assignment.assignment_type
         if read_assignment.isoform_matches:
             self.score = read_assignment.isoform_matches[0].score
+            self.matches = len(read_assignment.isoform_matches)
         else:
+            self.matches = 0
             self.score = 0.0
 
 
