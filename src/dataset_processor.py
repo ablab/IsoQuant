@@ -178,7 +178,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                                 a.matches == (0 if not read_assignment.isoform_matches else len(read_assignment.isoform_matches)) and \
                                 a.chr_id == read_assignment.chr_id:
                             if resolved_assignment is not None:
-                                logger.warning("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
+                                logger.debug("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
                             resolved_assignment = a
 
                     if not resolved_assignment:
@@ -248,8 +248,10 @@ class DatasetProcessor:
         else:
             self.assign_reads(sample)
             saves_file = sample.out_raw_file
-            logger.info('Read assignments files saved to {}*. You can reuse it later with option --read_assignments'.
+            logger.info('Read assignments files saved to {}*. '.
                         format(sample.out_raw_file))
+            if not self.args.keep_tmp:
+                logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
         total_alignments, polya_found = self.load_read_info(saves_file)
 
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
@@ -296,7 +298,7 @@ class DatasetProcessor:
             multimap_resolver.resolve(assignment_list)
             multimap_pickler.dump(assignment_list)
             for a in assignment_list:
-                if a.assignment_type != ReadAssignmentType.noninformative:
+                if a.assignment_type != ReadAssignmentType.suspended:
                     total_assignments += 1
                     if a.polyA_found:
                         polya_assignments += 1
