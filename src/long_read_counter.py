@@ -68,7 +68,7 @@ class AssignedFeatureCounter(AbstractCounter):
         self.not_aligned_reads = 0
         # group_id -> (feature_id -> count)
         self.feature_counter = defaultdict(lambda: defaultdict(float))
-        self.confirmend_features = set()
+        self.confirmed_features = set()
 
     def add_read_info(self, read_assignment=None):
         # TODO: add __alignment_not_unique / __too_low_aQual ?
@@ -93,7 +93,7 @@ class AssignedFeatureCounter(AbstractCounter):
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
             self.feature_counter[group_id][feature_id] += 1
-            self.confirmend_features.add((group_id, feature_id))
+            self.confirmed_features.add((group_id, feature_id))
             self.all_features.add(feature_id)
 
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
@@ -107,13 +107,13 @@ class AssignedFeatureCounter(AbstractCounter):
             self.ambiguous_reads += 1
             for feature_id in feature_ids:
                 self.feature_counter[group_id][feature_id] += 1.0 / float(len(feature_ids))
-                # self.confirmend_features.add((group_id, feature_id))
+                # self.confirmed_features.add((group_id, feature_id))
                 self.all_features.add(feature_id)
             else:
                 self.ambiguous_reads += 1
         else:
             self.feature_counter[group_id][feature_ids[0]] += 1
-            # self.confirmend_features.add((group_id, feature_ids[0]))
+            # self.confirmed_features.add((group_id, feature_ids[0]))
             self.all_features.add(feature_ids[0])
 
     def add_unaligned(self, n_reads=1):
@@ -129,7 +129,7 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def add_confirmed_features(self, features, group_id=AbstractReadGrouper.default_group_id):
         for feature_id in features:
-            self.confirmend_features.add((group_id, feature_id))
+            self.confirmed_features.add((group_id, feature_id))
 
     def dump(self):
         total_counts = defaultdict(float)
@@ -139,7 +139,7 @@ class AssignedFeatureCounter(AbstractCounter):
 
         for group_id in all_groups:
             for feature_id in all_features:
-                if (group_id, feature_id) in self.confirmend_features:
+                if (group_id, feature_id) in self.confirmed_features:
                     continue
                 self.feature_counter[group_id][feature_id] = 0.0
 
@@ -162,31 +162,11 @@ class AssignedFeatureCounter(AbstractCounter):
                         count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
                         f.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
-            if self.ignore_read_groups:
+        if self.ignore_read_groups:
+            with open(self.output_counts_file_name + ".stats", "w") as f:
                 f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
                 f.write("__no_feature\t%d\n" % self.not_assigned_reads)
                 f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
-
-        scale_factors = {}
-        for group_id in all_groups:
-            scale_factors[group_id] = 1000000.0 / total_counts[group_id] if total_counts[group_id] > 0 else 1.0
-            logger.debug("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
-
-        with open(self.output_tpm_file_name, "w") as f:
-            f.write(self.format_header(all_groups, "TPM"))
-            for feature_id in all_features:
-                if self.ignore_read_groups:
-                    tpm = scale_factors[all_groups[0]] * self.feature_counter[all_groups[0]][feature_id]
-                    if not self.output_zeroes and tpm == 0:
-                        continue
-                    f.write("%s\t%.6f\n" % (feature_id, tpm))
-                elif not print_in_columns:
-                    for group_id in all_groups:
-                        tpm = scale_factors[group_id] * self.feature_counter[group_id][feature_id]
-                        f.write("%s\t%s\t%.6f\n" % (feature_id, group_id, tpm))
-                else:
-                    tpm_values = [scale_factors[group_id] * self.feature_counter[group_id][feature_id] for group_id in all_groups]
-                    f.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
 
 
 def create_gene_counter(output_file_name, ignore_read_groups=False):

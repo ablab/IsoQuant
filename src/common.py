@@ -71,6 +71,10 @@ def find_closest(value, value_list):
     return best_el, best_diff
 
 
+def rreplace(s, old, new):
+    return new.join(s.rsplit(old, 1))
+
+
 # dict -> counts dict
 def get_best_from_count_dicts(dict):
     res = {}
