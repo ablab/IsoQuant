@@ -10,18 +10,15 @@ import glob
 import gzip
 import os
 from multiprocessing import Pool
-from collections import namedtuple
-from concurrent import futures
 
+from src.file_utils import *
 from src.input_data_storage import *
 from src.alignment_processor import *
-from src.assignment_io import *
 from src.long_read_counter import *
 from src.multimap_resolver import *
 from src.read_groups import *
 from src.transcript_printer import *
 from src.stats import *
-from src.intron_graph import *
 from src.graph_based_model_construnction import *
 
 
