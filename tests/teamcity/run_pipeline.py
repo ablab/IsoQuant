@@ -175,6 +175,10 @@ def main():
                        "-o", quality_report, "--gene_db", genedb, "--tsv", output_tsv,
                        "--mapping", bam, "--fasta", reads]
 
+    if "qa_options" in config_dict:
+        log.log("Appending additional options: %s" % config_dict["qa_options"])
+        qa_command_list.append(config_dict["qa_options"].replace('"', ''))
+
     log.log("QA command line: " + " ".join(qa_command_list))
     result = subprocess.run(qa_command_list)
     if result.returncode != 0:
