@@ -151,7 +151,9 @@ def main():
 
     if "isoquant_options" in config_dict:
         log.log("Appending additional options: %s" % config_dict["isoquant_options"])
-        isoquant_command_list.append(config_dict["isoquant_options"].replace('"', ''))
+        opts = config_dict["isoquant_options"].replace('"', '').split()
+        for o in opts:
+            isoquant_command_list.append(o)
 
     log.log("IsoQuant command line: " + " ".join(isoquant_command_list))
     result = subprocess.run(isoquant_command_list)
@@ -177,7 +179,9 @@ def main():
 
     if "qa_options" in config_dict:
         log.log("Appending additional options: %s" % config_dict["qa_options"])
-        qa_command_list.append(config_dict["qa_options"].replace('"', ''))
+        opts = config_dict["qa_options"].replace('"', '').split()
+        for o in opts:
+            qa_command_list.append(o)
 
     log.log("QA command line: " + " ".join(qa_command_list))
     result = subprocess.run(qa_command_list)
