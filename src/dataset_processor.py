@@ -427,7 +427,8 @@ class DatasetProcessor:
         if self.args.read_group:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv)
-            self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv)
+            self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
+                                                                              output_zeroes=False)
 
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
             if self.args.count_exons:

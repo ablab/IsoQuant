@@ -24,7 +24,7 @@ class AbstractCounter:
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
         raise NotImplementedError()
 
-    def add_confirmed_features(self, features, group_id=AbstractReadGrouper.default_group_id):
+    def add_confirmed_features(self, features):
         raise NotImplementedError()
 
     def dump(self):
@@ -46,9 +46,9 @@ class CompositeCounter:
         for p in self.counters:
             p.add_read_info_raw(read_id, feature_ids, group_id)
 
-    def add_confirmed_features(self, features, group_id=AbstractReadGrouper.default_group_id):
+    def add_confirmed_features(self, features):
         for p in self.counters:
-            p.add_confirmed_features(features, group_id)
+            p.add_confirmed_features(features)
 
     def dump(self):
         for p in self.counters:
@@ -127,9 +127,10 @@ class AssignedFeatureCounter(AbstractCounter):
         else:
             return "feature_id\t" + "\t".join(all_groups) + "\n"
 
-    def add_confirmed_features(self, features, group_id=AbstractReadGrouper.default_group_id):
+    def add_confirmed_features(self, features):
         for feature_id in features:
-            self.confirmend_features.add((group_id, feature_id))
+            for group_id in self.feature_counter.keys():
+                self.confirmend_features.add((group_id, feature_id))
 
     def dump(self):
         total_counts = defaultdict(float)
