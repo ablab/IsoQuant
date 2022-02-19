@@ -24,6 +24,7 @@ def load_counts(inf, tpm_col=2, id_col=1):
 def load_ref_ids_from_gtf(gtf, ref_keyword="reference_transcript_id"):
     print("Loading annotation from " + gtf)
     total_transcripts = 0
+    known_transcripts = 0
     id_dict = {}
     for l in open(gtf):
         if l.startswith("#"):
@@ -33,10 +34,15 @@ def load_ref_ids_from_gtf(gtf, ref_keyword="reference_transcript_id"):
             continue
         total_transcripts += 1
         tid_index = v.index("transcript_id", 7)
-        ref_tid_index = v.index(ref_keyword, 7)
-        id_dict[v[tid_index+1][1:-2]] = v[ref_tid_index+1][1:-2]
+        try:
+            ref_tid_index = v.index(ref_keyword, 7)
+            ref_id = v[ref_tid_index+1][1:-2]
+            known_transcripts += 1
+        except ValueError:
+            ref_id = "novel"
+        id_dict[v[tid_index+1][1:-2]] = ref_id
     print("Total transcripts: %d, known: %d, novel: %d" %
-          (total_transcripts, len(id_dict), total_transcripts-len(id_dict)))
+          (total_transcripts, known_transcripts, total_transcripts-known_transcripts))
     return id_dict
 
 
