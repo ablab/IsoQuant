@@ -21,8 +21,9 @@ def load_counts(inf, tpm_col=2, id_col=1):
     return tpm_dict
 
 
-def load_ref_ids_from_gtf(gtf):
+def load_ref_ids_from_gtf(gtf, ref_keyword="reference_transcript_id"):
     print("Loading annotation from " + gtf)
+    total_transcripts = 0
     id_dict = {}
     for l in open(gtf):
         if l.startswith("#"):
@@ -30,9 +31,12 @@ def load_ref_ids_from_gtf(gtf):
         v = l.strip().split()
         if v[2] != "transcript":
             continue
+        total_transcripts += 1
         tid_index = v.index("transcript_id", 7)
-        ref_tid_index = v.index("reference_transcript_id", 7)
+        ref_tid_index = v.index(ref_keyword, 7)
         id_dict[v[tid_index+1][1:-2]] = v[ref_tid_index+1][1:-2]
+    print("Total transcripts: %d, known: %d, novel: %d" %
+          (total_transcripts, len(id_dict), total_transcripts-len(id_dict)))
     return id_dict
 
 
@@ -100,8 +104,9 @@ def count_deviation(df):
     return zip(mid_bins, dev_vals)
 
 
-def count_stats(df, output):
+def count_stats(df, output, header=""):
     outf = open(os.path.join(output, "stats.tsv"), 'w')
+    outf.write(header + "\n")
     outf.write('Correlation\t%.3f\n' % round(np.corrcoef([df['real_tpm'], df['ref_tpm']])[1, 0], 3))
     full_matches = (df['real_tpm'] == df['ref_tpm']).astype(int).sum()
     n_isoforms = len(df['ref_tpm'])
@@ -117,7 +122,7 @@ def count_stats(df, output):
     outf.close()
 
 
-def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
+def compare_transcript_counts(ref_tpm_dict, tpm_dict, output, header=""):
     print("Filling true values")
     joint_dict = {}
     for tid in tpm_dict.keys():
@@ -140,7 +145,7 @@ def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
         for hist_pairs in count_deviation(df):
             out_dev.write("%d\t%d\n" % (hist_pairs[0], hist_pairs[1]))
 
-    count_stats(df, output)
+    count_stats(df, output, header)
     print("Done")
 
 
@@ -164,19 +169,34 @@ def main():
         os.makedirs(args.output)
 
     ref_tpm_dict = load_counts(args.ref_expr, args.ref_col)
+    mode = ""
     if args.tpm:
+        # IsoQuant tables
         tpm_dict = load_counts(args.tpm, args.tpm_col)
+        mode = "IsoQuant"
         if args.gtf:
+            # take reference ids from gtf
             id_dict = load_ref_ids_from_gtf(args.gtf)
             tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+            mode += " GTF"
         elif args.tracking:
+            # take reference ids from gffcompare output .tracking
             id_dict = load_tracking(args.tracking)
             tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+            mode += " gffcompare"
 
     else:
+        # StringTie
         tpm_dict = load_counts_from_gtf(args.gtf)
-        id_dict = load_tracking(args.tracking)
-        tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+        mode = "StringTie"
+        if args.tracking:
+            # take reference ids from gffcompare output .tracking
+            id_dict = load_tracking(args.tracking)
+            tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+        else:
+            # take reference ids from gtf
+            id_dict = load_ref_ids_from_gtf(args.gtf, ref_keyword="reference_id")
+            tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
 
     compare_transcript_counts(ref_tpm_dict, tpm_dict, args.output)
 
