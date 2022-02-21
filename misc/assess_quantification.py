@@ -99,18 +99,18 @@ def correct_tpm_dict(tpm_dict, id_dict, use_novel=True):
     return new_tpm_dict
 
 
-def count_deviation(df):
+def count_deviation(joint_dict):
     print("Counting deviation histogram")
     deviation_values = []
     false_detected = 0
-    for index, row in df.iterrows():
-        if row['ref_tpm'] == 0:
-            if row['real_tpm'] > 0:
+
+    for t_id in joint_dict.keys():
+        exp_pair = joint_dict[t_id]
+        if exp_pair[0] == 0:
+            if exp_pair[1] > 0:
                 false_detected += 1
             continue
-        #if row['real_tpm'] / row['ref_tpm'] > 3:
-        #    print(row)
-        deviation_values.append(100 * row['real_tpm'] / row['ref_tpm'])
+        deviation_values.append(100 * exp_pair[1] / exp_pair[0])
 
     print("Total %d, false %d, missed %d" % (len(deviation_values), false_detected, deviation_values.count(0.0)))
     bins = [10 * i for i in range(21)]
@@ -120,20 +120,49 @@ def count_deviation(df):
     return zip(mid_bins, dev_vals)
 
 
-def count_stats(df, output, header=""):
+def count_stats(joint_dict, output, header=""):
+    ref_tpms = []
+    real_tpms = []
+    n_isoforms = 0
+    counts_reported = 0
+    full_matches = 0
+    close_matches_10 = 0
+    close_matches_20 = 0
+    false_detected = 0
+    not_detected = 0
+    for t_id in joint_dict.keys():
+        ref_expr = joint_dict[t_id][0]
+        real_expr = joint_dict[t_id][1]
+        if ref_expr == 0 and real_expr == 0:
+            continue
+
+        ref_tpms.append(ref_expr)
+        real_tpms.append(real_expr)
+        if ref_expr > 0:
+            n_isoforms += 1
+        if real_expr > 0:
+            counts_reported += 1
+
+        if real_expr == ref_expr:
+            full_matches += 1
+        if real_expr <= 1.1 * ref_expr and real_expr >= 0.9 * ref_expr:
+            close_matches_10 += 1
+        if real_expr <= 1.2 * ref_expr and real_expr >= 0.8 * ref_expr:
+            close_matches_20 += 1
+        if real_expr > 0 and ref_expr == 0:
+            false_detected += 1
+        if real_expr == 0 and ref_expr > 0:
+            not_detected += 1
+
     outf = open(os.path.join(output, "stats.tsv"), 'w')
     outf.write(header + "\n")
-    outf.write('Correlation\t%.3f\n' % round(np.corrcoef([df['real_tpm'], df['ref_tpm']])[1, 0], 3))
-    full_matches = (df['real_tpm'] == df['ref_tpm']).astype(int).sum()
-    n_isoforms = len(df['ref_tpm'])
+    outf.write("Total reference isoforms %d" % n_isoforms)
+    outf.write("Total non-zero counts %d" % counts_reported)
+    outf.write('Correlation\t%.3f\n' % round(np.corrcoef([real_tpms, ref_tpms])[1, 0], 3))
     outf.write('Full matches\t%d\t%.3f\n' % (full_matches, round(full_matches / n_isoforms, 3)))
-    close_matches = ((df['real_tpm'] <= df['ref_tpm'] * 1.1) & (df['ref_tpm'] * 0.9 <= df['real_tpm'])).astype(int).sum()
-    outf.write('Close matches (10)\t%d\t%.3f\n' % (close_matches, round(close_matches / n_isoforms, 3)))
-    close_matches = ((df['real_tpm'] <= df['ref_tpm'] * 1.2) & (df['ref_tpm'] * 0.8 <= df['real_tpm'])).astype(int).sum()
-    outf.write('Close matches (20)\t%d\t%.3f\n' % (close_matches, round(close_matches / n_isoforms, 3)))
-    not_detected = ((df['real_tpm'] == 0) & (df['ref_tpm'] > 0)).astype(int).sum()
+    outf.write('Close matches (10)\t%d\t%.3f\n' % (close_matches_10, round(close_matches_10 / n_isoforms, 3)))
+    outf.write('Close matches (20)\t%d\t%.3f\n' % (close_matches_20, round(close_matches_20 / n_isoforms, 3)))
     outf.write('Not detected\t%d\t%.3f\n' % (not_detected, round(not_detected / n_isoforms, 3)))
-    false_detected = ((df['ref_tpm'] == 0) & (df['real_tpm'] > 0)).astype(int).sum()
     outf.write('False detections\t%d\t%.4f\n' % (false_detected, round(false_detected / n_isoforms, 4)))
     outf.close()
 
@@ -150,18 +179,23 @@ def compare_transcript_counts(ref_tpm_dict, tpm_dict, output, header=""):
         if tid not in joint_dict:
             joint_dict[tid] = (ref_tpm_dict[tid], 0)
 
-    print("Converting to dataframe")
-    df = pd.DataFrame.from_dict(joint_dict, orient='index', columns=['ref_tpm', 'real_tpm'])
     print("Saving TPM values")
     with open(os.path.join(output, "tpm.values.tsv"), 'w') as out_tpms:
-        out_tpms.write("\t".join(map(str, list(df['ref_tpm']))) + "\n")
-        out_tpms.write("\t".join(map(str, list(df['real_tpm']))) + "\n")
+        ref_tpms = []
+        real_tpms = []
+        for t_id in joint_dict.keys():
+            if joint_dict[t_id] == (0, 0):
+                continue
+            ref_tpms.append(joint_dict[t_id][0])
+            real_tpms.append(joint_dict[t_id][1])
+        out_tpms.write("\t".join(map(str, ref_tpms)) + "\n")
+        out_tpms.write("\t".join(map(str, real_tpms)) + "\n")
 
     with open(os.path.join(output, "deviation.tsv"), 'w') as out_dev:
-        for hist_pairs in count_deviation(df):
+        for hist_pairs in count_deviation(joint_dict):
             out_dev.write("%d\t%d\n" % (hist_pairs[0], hist_pairs[1]))
 
-    count_stats(df, output, header)
+    count_stats(joint_dict, output, header)
     print("Done")
 
 
