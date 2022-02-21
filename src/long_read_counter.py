@@ -93,8 +93,11 @@ class AssignedFeatureCounter(AbstractCounter):
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
             self.feature_counter[group_id][feature_id] += 1
-            self.confirmend_features.add((group_id, feature_id))
             self.all_features.add(feature_id)
+            transcript_id = read_assignment.isoform_matches[0].assigned_transcript
+            if len(read_assignment.gene_info.all_isoforms_introns[transcript_id]) == 0 or len(read_assignment.corrected_exons) > 1:
+                # only add features to confirmed ones if it has unique spliced match
+                self.confirmend_features.add((group_id, feature_id))
 
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
         if self.ignore_read_groups:
