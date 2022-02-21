@@ -37,9 +37,11 @@ def load_ref_ids_from_gtf(gtf, ref_keyword="reference_transcript_id"):
         try:
             ref_tid_index = v.index(ref_keyword, 7)
             ref_id = v[ref_tid_index+1][1:-2]
-            known_transcripts += 1
         except ValueError:
             ref_id = "novel"
+
+        if ref_id != "novel":
+            known_transcripts += 1
         id_dict[v[tid_index+1][1:-2]] = ref_id
     print("Total transcripts: %d, known: %d, novel: %d" %
           (total_transcripts, known_transcripts, total_transcripts-known_transcripts))
@@ -64,13 +66,20 @@ def load_counts_from_gtf(gtf):
 def load_tracking(inf):
     print("Loading tracking " + inf)
     id_dict = {}
+    total_transcripts = 0
+    novel_transcripts = 0
     for l in open(inf):
         v = l.strip().split()
         tid = v[4].split('|')[1]
+        total_transcripts += 1
         if v[3] == '=':
             id_dict[tid] = v[2].split('|')[1]
-        else:
+        elif tid not in id_dict:
+            novel_transcripts += 1
             id_dict[tid] = 'novel'
+    print("Total transcripts: %d, known: %d, novel: %d" %
+          (total_transcripts, total_transcripts-novel_transcripts, novel_transcripts))
+
     return id_dict
 
 
@@ -97,9 +106,10 @@ def count_deviation(df):
     for index, row in df.iterrows():
         if row['ref_tpm'] == 0:
             if row['real_tpm'] > 0:
-                print(row)
                 false_detected += 1
             continue
+        #if row['real_tpm'] / row['ref_tpm'] > 3:
+        #    print(row)
         deviation_values.append(100 * row['real_tpm'] / row['ref_tpm'])
 
     print("Total %d, false %d, missed %d" % (len(deviation_values), false_detected, deviation_values.count(0.0)))
