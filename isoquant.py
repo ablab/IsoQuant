@@ -79,8 +79,8 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--splice_correction_strategy", choices=["none", "default_pacbio", "default_ont", "conservative_ont", "all", "assembly"],
                         help="read alignment correction strategy to use",
                         type=str, default=None)
-    parser.add_argument("--model_construction_strategy", choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
-                                                                  "default_ont", "sensitive_ont", "all", "assembly"],
+    parser.add_argument("--model_construction_strategy", choices=["reliable", "default_pacbio", "sensitive_pacbio", "seqc_pacbio", "fl_pacbio",
+                                                                  "default_ont", "sensitive_ont", "seqc_ont", "all", "assembly"],
                         help="transcript model construction strategy to use",
                         type=str, default=None)
 
