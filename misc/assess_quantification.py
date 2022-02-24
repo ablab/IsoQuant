@@ -245,7 +245,7 @@ def main():
             tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
         else:
             # take reference ids from gtf
-            id_dict = load_ref_ids_from_gtf(args.gtf, ref_keyword="reference_id")
+            id_dict = load_ref_ids_from_gtf(args.gtf, ref_keyword="transcript_id")
             tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
 
     compare_transcript_counts(ref_tpm_dict, tpm_dict, args.output)
