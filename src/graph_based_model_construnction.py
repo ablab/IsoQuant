@@ -239,8 +239,8 @@ class GraphBasedModelConstructor:
                         id_suffix = self.nnic_transcript_suffix
 
                     new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
-                                                new_transcript_id + id_suffix, "novel", transcript_gene,
-                                                novel_exons, transcript_type)
+                                                new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
+                                                "novel", transcript_gene, novel_exons, transcript_type)
                     new_model.intron_path = intron_path
                     logger.debug("uuu Adding novel spliced isoform %s : %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
 
@@ -364,7 +364,7 @@ class GraphBasedModelConstructor:
     def transcript_from_reference(self, isoform_id, transcript_id=None):
         if not transcript_id:
             transcript_id = self.transcript_prefix + str(self.get_transcript_id())
-        new_transcript_id = transcript_id + self.known_transcript_suffix
+        new_transcript_id = transcript_id + ".%s" % self.gene_info.chr_id + self.known_transcript_suffix
         return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
                                self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known)
@@ -375,7 +375,7 @@ class GraphBasedModelConstructor:
             logger.debug("No transcripts were assigned")
             self.unused_reads = [a.read_id for a in read_assignments]
             return
-        
+
         logger.debug("Creating artificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
         transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.params.delta)
         assigner = LongReadAssigner(transcript_model_gene_info, self.params, quick_mode=True)
@@ -473,7 +473,7 @@ class IntronPathStorage:
             terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted)
             if terminal_vertex:
                 intron_path.append(terminal_vertex)
-                
+
             read_start = a.corrected_exons[0][0]
             is_start_trusted = a.strand == '-' and \
                                (a.polya_info.external_polyt_pos != -1 or

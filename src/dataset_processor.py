@@ -10,18 +10,15 @@ import glob
 import gzip
 import os
 from multiprocessing import Pool
-from collections import namedtuple
-from concurrent import futures
 
+from src.file_utils import *
 from src.input_data_storage import *
 from src.alignment_processor import *
-from src.assignment_io import *
 from src.long_read_counter import *
 from src.multimap_resolver import *
 from src.read_groups import *
 from src.transcript_printer import *
 from src.stats import *
-from src.intron_graph import *
 from src.graph_based_model_construnction import *
 
 
@@ -143,7 +140,7 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
 
 
 class ReadAssignmentLoader:
-    def __init__(self, save_file_name, gffutils_db, multimappers_disct):
+    def __init__(self, save_file_name, gffutils_db, multimappers_dict):
         logger.info("Loading read assignments from " + save_file_name)
         assert os.path.exists(save_file_name)
         self.save_file_name = save_file_name
@@ -151,7 +148,7 @@ class ReadAssignmentLoader:
         self.current_gene_info_obj = None
         self.is_updated = False
         self.gffutils_db = gffutils_db
-        self.multimapped_reads = multimappers_disct
+        self.multimapped_reads = multimappers_dict
 
 
 def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
@@ -205,10 +202,43 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
         yield current_gene_info, read_storage
 
 
+def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, current_chr_record,
+                                 io_support):
+    processor = DatasetProcessor(args, parallel=True)
+    processor.create_aggregators(sample)
+    gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
+    logger.info("Processing chromosome " + chr_id)
+    transcripts = []
+    tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
+    chr_dump_file = dump_filename + "_" + chr_id
+    for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, gffutils_db, multimapped_reads):
+        for read_assignment in assignment_storage:
+            if read_assignment is None:
+                continue
+            processor.read_stat_counter.add(read_assignment.assignment_type)
+            processor.global_printer.add_read_info(read_assignment)
+            processor.global_counter.add_read_info(read_assignment)
+
+        if not args.no_model_construction:
+            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args, processor.transcript_model_global_counter)
+            model_constructor.process(assignment_storage)
+            tmp_gff_printer.dump(model_constructor)
+            for t in model_constructor.transcript_model_storage:
+                transcripts.append(t.transcript_type)
+
+    logger.info("Finished processing chromosome " + chr_id)
+    processor.global_counter.dump()
+    processor.transcript_model_global_counter.dump()
+    return processor.read_stat_counter, transcripts
+
+
 # Class for processing all samples against gene database
 class DatasetProcessor:
-    def __init__(self, args):
+    def __init__(self, args, parallel=False):
         self.args = args
+        self.read_grouper = create_read_grouper(args)
+        self.io_support = IOSupport(self.args)
+        if parallel: return
         logger.info("Loading gene database from " + self.args.genedb)
         self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
         if self.args.needs_reference:
@@ -223,8 +253,6 @@ class DatasetProcessor:
             self.reference_record_dict = None
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
         self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
-        self.read_grouper = create_read_grouper(args)
-        self.io_support = IOSupport(self.args)
         self.multimapped_reads = defaultdict(list)
         # chr_id -> read_id -> list of assignments
         self.multimapped_info_dict = defaultdict(lambda : defaultdict(list))
@@ -243,7 +271,7 @@ class DatasetProcessor:
         self.multimapped_reads = defaultdict(list)
 
         if self.args.read_assignments:
-            saves_file = sample.file_list[0][0]
+            saves_file = self.args.read_assignments[0]
             logger.info('Using read assignments from {}*'.format(saves_file))
         else:
             self.assign_reads(sample)
@@ -272,8 +300,7 @@ class DatasetProcessor:
         processed_reads = pool.starmap(assign_reads_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
                                                                    (self.reference_record_dict[
                                                                         chr_id] if self.reference_record_dict else None))
-                                                                  for (chr_id, c) in chrom_clusters],
-                                       chunksize=1)
+                                                                  for (chr_id, c) in chrom_clusters], chunksize=1)
         pool.close()
         pool.join()
 
@@ -313,30 +340,35 @@ class DatasetProcessor:
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
     def process_assigned_reads(self, sample, dump_filename):
+        chrom_clusters = self.get_chromosome_gene_clusters()
+        chr_ids = [chr_id for chr_id, c in chrom_clusters]
+
+        pool = Pool(self.args.threads)
         logger.info("Processing assigned reads " + sample.label)
+
+        results = pool.starmap(construct_models_in_parallel, [(SampleData(sample.file_list, sample.label + "_" + chr_id,
+                                                                    sample.out_dir), chr_id, dump_filename, self.args, self.multimapped_info_dict[chr_id],
+                                                                    (self.reference_record_dict[chr_id] if self.reference_record_dict else None),
+                                                                    self.io_support)
+                                                                     for chr_id in chr_ids], chunksize=1)
+        pool.close()
+        pool.join()
+
+        read_stat_counters, transcript_model_storages = [x[0] for x in results], [x[1] for x in results]
+
         self.create_aggregators(sample)
+        for read_stat_counter in read_stat_counters:
+            for k, v in read_stat_counter.stats_dict.items():
+                self.read_stat_counter.stats_dict[k] += v
+
         gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support)
         transcript_stat_counter = EnumStats()
-        # thread_pool = futures.ThreadPoolExecutor(max(1, self.args.threads-1))
-
-        for chr_id in self.get_chromosome_list():
-            chr_dump_file = dump_filename + "_" + chr_id
-            chr_record = self.reference_record_dict[chr_id] if self.reference_record_dict else None
-            # future_list = []
-
-            for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, self.gffutils_db,
-                                                                     self.multimapped_info_dict[chr_id]):
-                for read_assignment in assignment_storage:
-                    self.pass_to_aggregators(read_assignment)
-                if self.args.no_model_construction:
-                    continue
-
-                model_constructor = GraphBasedModelConstructor(gene_info, chr_record, self.args,
-                                                               self.transcript_model_global_counter)
-                model_constructor.process(assignment_storage)
-                gff_printer.dump(model_constructor)
-                for t in model_constructor.transcript_model_storage:
-                    transcript_stat_counter.add(t.transcript_type)
+        self.merge_assignments(sample, chr_ids)
+        if not self.args.no_model_construction:
+            for storage in transcript_model_storages:
+                for t in storage:
+                    transcript_stat_counter.add(t)
+            self.merge_transcript_models(sample.label, chr_ids, gff_printer)
 
         self.finalize_aggregators(sample)
         logger.info("Transcript model file " + gff_printer.model_fname)
@@ -439,16 +471,29 @@ class DatasetProcessor:
             else:
                 self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 
-    def pass_to_aggregators(self, read_assignment):
-        if read_assignment is None:
-            return
-        self.read_stat_counter.add(read_assignment.assignment_type)
-        self.global_printer.add_read_info(read_assignment)
-        self.global_counter.add_read_info(read_assignment)
+    def merge_assignments(self, sample, chr_ids):
+        merge_files([rreplace(sample.out_assigned_tsv, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                    sample.out_assigned_tsv)
+        merge_files([rreplace(sample.out_corrected_bed, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                    sample.out_corrected_bed)
+        for p in self.global_counter.counters:
+            merge_files([rreplace(p.output_counts_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                        p.output_counts_file_name, counts=True, ignore_read_groups=p.ignore_read_groups)
+            convert_counts_to_tpm(p.output_counts_file_name, p.output_tpm_file_name,
+                                  p.ignore_read_groups, p.output_zeroes)
+
+    def merge_transcript_models(self, label, chr_ids, gff_printer):
+        merge_files([rreplace(gff_printer.model_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
+                    gff_printer.model_fname)
+        merge_files([rreplace(gff_printer.r2t_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
+                    gff_printer.r2t_fname)
+        for p in self.transcript_model_global_counter.counters:
+            merge_files([rreplace(p.output_counts_file_name, label, label + "_" + chr_id) for chr_id in chr_ids],
+                        p.output_counts_file_name, counts=True, ignore_read_groups=p.ignore_read_groups)
+            convert_counts_to_tpm(p.output_counts_file_name, p.output_tpm_file_name,
+                                  p.ignore_read_groups, p.output_zeroes)
 
     def finalize_aggregators(self, sample):
-        self.global_counter.dump()
-        self.transcript_model_global_counter.dump()
         logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
         logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
         logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)

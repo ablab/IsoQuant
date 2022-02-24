@@ -394,6 +394,7 @@ class BasicReadAssignment:
         else:
             self.matches = 0
             self.score = 0.0
+        self.read_group = read_assignment.read_group
 
 
 class ReadAssignment:
