@@ -145,9 +145,9 @@ def count_stats(joint_dict, output, header=""):
 
         if real_expr == ref_expr:
             full_matches += 1
-        if real_expr <= 1.1 * ref_expr and real_expr >= 0.9 * ref_expr:
+        if real_expr <= 1.1 * ref_expr and real_expr >= 0.9 * ref_expr and real_expr > 0:
             close_matches_10 += 1
-        if real_expr <= 1.2 * ref_expr and real_expr >= 0.8 * ref_expr:
+        if real_expr <= 1.2 * ref_expr and real_expr >= 0.8 * ref_expr and real_expr > 0:
             close_matches_20 += 1
         if real_expr > 0 and ref_expr == 0:
             false_detected += 1
