@@ -370,8 +370,10 @@ def set_model_construction_options(args):
         'reliable':        ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  2, 4, 8, 0.05, True),
         'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  8, 0.2,  2, 0.1,  0.2,  1, 2, 3, 0.02,  False),
         'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  5, 0.2,  2, 0.1,  0.2,  1, 2, 3, 0.005, False),
+        'seqc_pacbio':     ModelConstructionStrategy(1, 0.5, 10,  3, 0.1,  2, 0.1,  0.2,  1, 2, 1, 0.001, False),
         'default_ont':     ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 3, 5, 0.02,  False),
         'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 2, 3, 0.005,  False),
+        'seqc_ont':        ModelConstructionStrategy(1, 0.5, 20, 5,  0.2,  2, 0.1,  0.2,  1, 2, 1, 0.001, False),
         'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  8, 0.2,  1, 0.1,  0.1,  1, 2, 3, 0.02,  True),
         'all':             ModelConstructionStrategy(0, 0.3, 10,  5, 0.1,  1, 0.01, 0.05, 1, 1, 1, 0.002, False),
         'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 1, 0.05,  False)
