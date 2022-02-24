@@ -151,7 +151,9 @@ def main():
 
     if "isoquant_options" in config_dict:
         log.log("Appending additional options: %s" % config_dict["isoquant_options"])
-        isoquant_command_list.append(config_dict["isoquant_options"].replace('"', ''))
+        opts = config_dict["isoquant_options"].replace('"', '').split()
+        for o in opts:
+            isoquant_command_list.append(o)
 
     log.log("IsoQuant command line: " + " ".join(isoquant_command_list))
     result = subprocess.run(isoquant_command_list)
@@ -174,6 +176,12 @@ def main():
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/assess_assignment_quality.py"),
                        "-o", quality_report, "--gene_db", genedb, "--tsv", output_tsv,
                        "--mapping", bam, "--fasta", reads]
+
+    if "qa_options" in config_dict:
+        log.log("Appending additional options: %s" % config_dict["qa_options"])
+        opts = config_dict["qa_options"].replace('"', '').split()
+        for o in opts:
+            qa_command_list.append(o)
 
     log.log("QA command line: " + " ".join(qa_command_list))
     result = subprocess.run(qa_command_list)

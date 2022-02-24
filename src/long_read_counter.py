@@ -24,7 +24,7 @@ class AbstractCounter:
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
         raise NotImplementedError()
 
-    def add_confirmed_features(self, features, group_id=AbstractReadGrouper.default_group_id):
+    def add_confirmed_features(self, features):
         raise NotImplementedError()
 
     def dump(self):
@@ -46,9 +46,9 @@ class CompositeCounter:
         for p in self.counters:
             p.add_read_info_raw(read_id, feature_ids, group_id)
 
-    def add_confirmed_features(self, features, group_id=AbstractReadGrouper.default_group_id):
+    def add_confirmed_features(self, features):
         for p in self.counters:
-            p.add_confirmed_features(features, group_id)
+            p.add_confirmed_features(features)
 
     def dump(self):
         for p in self.counters:
@@ -93,8 +93,11 @@ class AssignedFeatureCounter(AbstractCounter):
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
             self.feature_counter[group_id][feature_id] += 1
-            self.confirmed_features.add((group_id, feature_id))
             self.all_features.add(feature_id)
+            transcript_id = read_assignment.isoform_matches[0].assigned_transcript
+            if len(read_assignment.gene_info.all_isoforms_introns[transcript_id]) == 0 or len(read_assignment.corrected_exons) > 1:
+                # only add features to confirmed ones if it has unique spliced match
+                self.confirmend_features.add((group_id, feature_id))
 
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
         if self.ignore_read_groups:
@@ -127,9 +130,10 @@ class AssignedFeatureCounter(AbstractCounter):
         else:
             return "feature_id\t" + "\t".join(all_groups) + "\n"
 
-    def add_confirmed_features(self, features, group_id=AbstractReadGrouper.default_group_id):
+    def add_confirmed_features(self, features):
         for feature_id in features:
-            self.confirmed_features.add((group_id, feature_id))
+            for group_id in self.feature_counter.keys():
+                self.confirmend_features.add((group_id, feature_id))
 
     def dump(self):
         total_counts = defaultdict(float)

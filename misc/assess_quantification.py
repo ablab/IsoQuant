@@ -21,8 +21,10 @@ def load_counts(inf, tpm_col=2, id_col=1):
     return tpm_dict
 
 
-def load_ref_ids_from_gtf(gtf):
+def load_ref_ids_from_gtf(gtf, ref_keyword="reference_transcript_id"):
     print("Loading annotation from " + gtf)
+    total_transcripts = 0
+    known_transcripts = 0
     id_dict = {}
     for l in open(gtf):
         if l.startswith("#"):
@@ -30,9 +32,19 @@ def load_ref_ids_from_gtf(gtf):
         v = l.strip().split()
         if v[2] != "transcript":
             continue
+        total_transcripts += 1
         tid_index = v.index("transcript_id", 7)
-        ref_tid_index = v.index("reference_transcript_id", 7)
-        id_dict[v[tid_index+1][1:-2]] = v[ref_tid_index+1][1:-2]
+        try:
+            ref_tid_index = v.index(ref_keyword, 7)
+            ref_id = v[ref_tid_index+1][1:-2]
+        except ValueError:
+            ref_id = "novel"
+
+        if ref_id != "novel":
+            known_transcripts += 1
+        id_dict[v[tid_index+1][1:-2]] = ref_id
+    print("Total transcripts: %d, known: %d, novel: %d" %
+          (total_transcripts, known_transcripts, total_transcripts-known_transcripts))
     return id_dict
 
 
@@ -54,13 +66,20 @@ def load_counts_from_gtf(gtf):
 def load_tracking(inf):
     print("Loading tracking " + inf)
     id_dict = {}
+    total_transcripts = 0
+    novel_transcripts = 0
     for l in open(inf):
         v = l.strip().split()
         tid = v[4].split('|')[1]
+        total_transcripts += 1
         if v[3] == '=':
             id_dict[tid] = v[2].split('|')[1]
-        else:
+        elif tid not in id_dict:
+            novel_transcripts += 1
             id_dict[tid] = 'novel'
+    print("Total transcripts: %d, known: %d, novel: %d" %
+          (total_transcripts, total_transcripts-novel_transcripts, novel_transcripts))
+
     return id_dict
 
 
@@ -80,17 +99,18 @@ def correct_tpm_dict(tpm_dict, id_dict, use_novel=True):
     return new_tpm_dict
 
 
-def count_deviation(df):
+def count_deviation(joint_dict):
     print("Counting deviation histogram")
     deviation_values = []
     false_detected = 0
-    for index, row in df.iterrows():
-        if row['ref_tpm'] == 0:
-            if row['real_tpm'] > 0:
-                print(row)
+
+    for t_id in joint_dict.keys():
+        exp_pair = joint_dict[t_id]
+        if exp_pair[0] == 0:
+            if exp_pair[1] > 0:
                 false_detected += 1
             continue
-        deviation_values.append(100 * row['real_tpm'] / row['ref_tpm'])
+        deviation_values.append(100 * exp_pair[1] / exp_pair[0])
 
     print("Total %d, false %d, missed %d" % (len(deviation_values), false_detected, deviation_values.count(0.0)))
     bins = [10 * i for i in range(21)]
@@ -100,24 +120,54 @@ def count_deviation(df):
     return zip(mid_bins, dev_vals)
 
 
-def count_stats(df, output):
+def count_stats(joint_dict, output, header=""):
+    ref_tpms = []
+    real_tpms = []
+    n_isoforms = 0
+    counts_reported = 0
+    full_matches = 0
+    close_matches_10 = 0
+    close_matches_20 = 0
+    false_detected = 0
+    not_detected = 0
+    for t_id in joint_dict.keys():
+        ref_expr = joint_dict[t_id][0]
+        real_expr = joint_dict[t_id][1]
+        if ref_expr == 0 and real_expr == 0:
+            continue
+
+        ref_tpms.append(ref_expr)
+        real_tpms.append(real_expr)
+        if ref_expr > 0:
+            n_isoforms += 1
+        if real_expr > 0:
+            counts_reported += 1
+
+        if real_expr == ref_expr:
+            full_matches += 1
+        if real_expr <= 1.1 * ref_expr and real_expr >= 0.9 * ref_expr and real_expr > 0:
+            close_matches_10 += 1
+        if real_expr <= 1.2 * ref_expr and real_expr >= 0.8 * ref_expr and real_expr > 0:
+            close_matches_20 += 1
+        if real_expr > 0 and ref_expr == 0:
+            false_detected += 1
+        if real_expr == 0 and ref_expr > 0:
+            not_detected += 1
+
     outf = open(os.path.join(output, "stats.tsv"), 'w')
-    outf.write('Correlation\t%.3f\n' % round(np.corrcoef([df['real_tpm'], df['ref_tpm']])[1, 0], 3))
-    full_matches = (df['real_tpm'] == df['ref_tpm']).astype(int).sum()
-    n_isoforms = len(df['ref_tpm'])
+    outf.write(header + "\n")
+    outf.write("Total reference isoforms %d" % n_isoforms)
+    outf.write("Total non-zero counts %d" % counts_reported)
+    outf.write('Correlation\t%.3f\n' % round(np.corrcoef([real_tpms, ref_tpms])[1, 0], 3))
     outf.write('Full matches\t%d\t%.3f\n' % (full_matches, round(full_matches / n_isoforms, 3)))
-    close_matches = ((df['real_tpm'] <= df['ref_tpm'] * 1.1) & (df['ref_tpm'] * 0.9 <= df['real_tpm'])).astype(int).sum()
-    outf.write('Close matches (10)\t%d\t%.3f\n' % (close_matches, round(close_matches / n_isoforms, 3)))
-    close_matches = ((df['real_tpm'] <= df['ref_tpm'] * 1.2) & (df['ref_tpm'] * 0.8 <= df['real_tpm'])).astype(int).sum()
-    outf.write('Close matches (20)\t%d\t%.3f\n' % (close_matches, round(close_matches / n_isoforms, 3)))
-    not_detected = ((df['real_tpm'] == 0) & (df['ref_tpm'] > 0)).astype(int).sum()
+    outf.write('Close matches (10)\t%d\t%.3f\n' % (close_matches_10, round(close_matches_10 / n_isoforms, 3)))
+    outf.write('Close matches (20)\t%d\t%.3f\n' % (close_matches_20, round(close_matches_20 / n_isoforms, 3)))
     outf.write('Not detected\t%d\t%.3f\n' % (not_detected, round(not_detected / n_isoforms, 3)))
-    false_detected = ((df['ref_tpm'] == 0) & (df['real_tpm'] > 0)).astype(int).sum()
     outf.write('False detections\t%d\t%.4f\n' % (false_detected, round(false_detected / n_isoforms, 4)))
     outf.close()
 
 
-def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
+def compare_transcript_counts(ref_tpm_dict, tpm_dict, output, header=""):
     print("Filling true values")
     joint_dict = {}
     for tid in tpm_dict.keys():
@@ -129,18 +179,23 @@ def compare_transcript_counts(ref_tpm_dict, tpm_dict, output):
         if tid not in joint_dict:
             joint_dict[tid] = (ref_tpm_dict[tid], 0)
 
-    print("Converting to dataframe")
-    df = pd.DataFrame.from_dict(joint_dict, orient='index', columns=['ref_tpm', 'real_tpm'])
     print("Saving TPM values")
     with open(os.path.join(output, "tpm.values.tsv"), 'w') as out_tpms:
-        out_tpms.write("\t".join(map(str, list(df['ref_tpm']))) + "\n")
-        out_tpms.write("\t".join(map(str, list(df['real_tpm']))) + "\n")
+        ref_tpms = []
+        real_tpms = []
+        for t_id in joint_dict.keys():
+            if joint_dict[t_id] == (0, 0):
+                continue
+            ref_tpms.append(joint_dict[t_id][0])
+            real_tpms.append(joint_dict[t_id][1])
+        out_tpms.write("\t".join(map(str, ref_tpms)) + "\n")
+        out_tpms.write("\t".join(map(str, real_tpms)) + "\n")
 
     with open(os.path.join(output, "deviation.tsv"), 'w') as out_dev:
-        for hist_pairs in count_deviation(df):
+        for hist_pairs in count_deviation(joint_dict):
             out_dev.write("%d\t%d\n" % (hist_pairs[0], hist_pairs[1]))
 
-    count_stats(df, output)
+    count_stats(joint_dict, output, header)
     print("Done")
 
 
@@ -164,19 +219,34 @@ def main():
         os.makedirs(args.output)
 
     ref_tpm_dict = load_counts(args.ref_expr, args.ref_col)
+    mode = ""
     if args.tpm:
+        # IsoQuant tables
         tpm_dict = load_counts(args.tpm, args.tpm_col)
+        mode = "IsoQuant"
         if args.gtf:
+            # take reference ids from gtf
             id_dict = load_ref_ids_from_gtf(args.gtf)
             tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+            mode += " GTF"
         elif args.tracking:
+            # take reference ids from gffcompare output .tracking
             id_dict = load_tracking(args.tracking)
             tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+            mode += " gffcompare"
 
     else:
+        # StringTie
         tpm_dict = load_counts_from_gtf(args.gtf)
-        id_dict = load_tracking(args.tracking)
-        tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+        mode = "StringTie"
+        if args.tracking:
+            # take reference ids from gffcompare output .tracking
+            id_dict = load_tracking(args.tracking)
+            tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
+        else:
+            # take reference ids from gtf
+            id_dict = load_ref_ids_from_gtf(args.gtf, ref_keyword="transcript_id")
+            tpm_dict = correct_tpm_dict(tpm_dict, id_dict, args.no_novel)
 
     compare_transcript_counts(ref_tpm_dict, tpm_dict, args.output)
 
