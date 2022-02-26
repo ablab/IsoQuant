@@ -482,8 +482,7 @@ class DatasetProcessor:
                         stats_file_names=[rreplace(p.output_stats_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids]
                         if p.output_stats_file_name else None,
                         ignore_read_groups=p.ignore_read_groups)
-            convert_counts_to_tpm(p.output_counts_file_name, p.output_tpm_file_name,
-                                  p.ignore_read_groups, p.output_zeroes)
+            p.convert_counts_to_tpm()
 
     def merge_transcript_models(self, label, chr_ids, gff_printer):
         merge_files([rreplace(gff_printer.model_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
@@ -496,8 +495,7 @@ class DatasetProcessor:
                         stats_file_names=[rreplace(p.output_stats_file_name, label, label + "_" + chr_id) for chr_id in chr_ids]
                         if p.output_stats_file_name else None,
                         ignore_read_groups=p.ignore_read_groups)
-            convert_counts_to_tpm(p.output_counts_file_name, p.output_tpm_file_name,
-                                  p.ignore_read_groups, p.output_zeroes)
+            p.convert_counts_to_tpm()
 
     def finalize_aggregators(self, sample):
         logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)

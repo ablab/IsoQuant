@@ -174,6 +174,56 @@ class AssignedFeatureCounter(AbstractCounter):
                 f.write("__no_feature\t%d\n" % self.not_assigned_reads)
                 f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
 
+    def convert_counts_to_tpm(self):
+        total_counts = defaultdict(float)
+
+        print_in_columns = True
+        with open(self.output_counts_file_name) as f:
+            for i, line in enumerate(f):
+                if line[0] == '_': break
+                fs = line.split()
+                if i == 0:
+                    if fs[1] == "group_id":
+                        print_in_columns = False
+                    continue
+                if self.ignore_read_groups:
+                    total_counts[AbstractReadGrouper.default_group_id] += float(fs[1])
+                elif not self.ignore_read_groups and print_in_columns:
+                    for j in range(len(fs) - 1):
+                        total_counts[j] += float(fs[j + 1])
+                else:
+                    total_counts[fs[1]] += float(fs[2])
+
+        scale_factors = {}
+        for group_id in total_counts.keys():
+            scale_factors[group_id] = 1000000.0 / total_counts[group_id] if total_counts[group_id] > 0 else 1.0
+            logger.info("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
+
+        with open(self.output_tpm_file_name, "w") as outf:
+            with open(self.output_counts_file_name) as f:
+                for i, line in enumerate(f):
+                    fs = line.split()
+                    if fs[0] == '__ambiguous': break
+                    if i == 0:
+                        outf.write(line.replace("count", "TPM"))
+                        continue
+                    if self.ignore_read_groups:
+                        feature_id, count = fs[0], float(fs[1])
+                        tpm = scale_factors[AbstractReadGrouper.default_group_id] * count
+                        if not self.output_zeroes and tpm == 0:
+                            continue
+                        outf.write("%s\t%.6f\n" % (feature_id, tpm))
+                    elif not print_in_columns:
+                        for group_id in total_counts.keys():
+                            feature_id, group_id, count = fs[0], fs[1], float(fs[2])
+                            tpm = scale_factors[group_id] * count
+                            outf.write("%s\t%s\t%.6f\n" % (feature_id, group_id, tpm))
+                            fs = f.readline().split()
+                    else:
+                        feature_id, counts = fs[0], list(map(float, fs[1:]))
+                        tpm_values = [scale_factors[i] * counts[i] for i in range(len(scale_factors))]
+                        outf.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
+
 
 def create_gene_counter(output_file_name, ignore_read_groups=False):
     return AssignedFeatureCounter(output_file_name, get_assigned_gene_id, ignore_read_groups)
@@ -216,6 +266,9 @@ class ProfileFeatureCounter(AbstractCounter):
                     incl_count = self.inclusion_feature_counter[group_id][feature_id]
                     excl_count = self.exclusion_feature_counter[group_id][feature_id]
                     f.write("%s\t%s\t%d\t%d\n" % (feature_id, group_id, incl_count, excl_count))
+
+    def convert_counts_to_tpm(self):
+        return
 
     @staticmethod
     def is_valid(assignment):
