@@ -478,7 +478,10 @@ class DatasetProcessor:
                     sample.out_corrected_bed)
         for p in self.global_counter.counters:
             merge_files([rreplace(p.output_counts_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
-                        p.output_counts_file_name, counts=True, ignore_read_groups=p.ignore_read_groups)
+                        p.output_counts_file_name,
+                        stats_file_names=[rreplace(p.output_stats_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids]
+                        if p.output_stats_file_name else None,
+                        ignore_read_groups=p.ignore_read_groups)
             convert_counts_to_tpm(p.output_counts_file_name, p.output_tpm_file_name,
                                   p.ignore_read_groups, p.output_zeroes)
 
@@ -489,7 +492,10 @@ class DatasetProcessor:
                     gff_printer.r2t_fname)
         for p in self.transcript_model_global_counter.counters:
             merge_files([rreplace(p.output_counts_file_name, label, label + "_" + chr_id) for chr_id in chr_ids],
-                        p.output_counts_file_name, counts=True, ignore_read_groups=p.ignore_read_groups)
+                        p.output_counts_file_name,
+                        stats_file_names=[rreplace(p.output_stats_file_name, label, label + "_" + chr_id) for chr_id in chr_ids]
+                        if p.output_stats_file_name else None,
+                        ignore_read_groups=p.ignore_read_groups)
             convert_counts_to_tpm(p.output_counts_file_name, p.output_tpm_file_name,
                                   p.ignore_read_groups, p.output_zeroes)
 
