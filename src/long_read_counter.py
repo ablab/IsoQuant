@@ -17,6 +17,7 @@ class AbstractCounter:
         self.output_counts_file_name = output_prefix + "_counts.tsv"
         self.output_tpm_file_name = output_prefix + "_tpm.tsv"
         self.output_zeroes = output_zeroes
+        self.output_stats_file_name = None
 
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
@@ -69,6 +70,7 @@ class AssignedFeatureCounter(AbstractCounter):
         # group_id -> (feature_id -> count)
         self.feature_counter = defaultdict(lambda: defaultdict(float))
         self.confirmed_features = set()
+        self.output_stats_file_name = self.output_counts_file_name + ".stats"
 
     def add_read_info(self, read_assignment=None):
         # TODO: add __alignment_not_unique / __too_low_aQual ?
