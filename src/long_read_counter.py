@@ -127,8 +127,6 @@ class AssignedFeatureCounter(AbstractCounter):
     def format_header(self, all_groups, value_name="count"):
         if self.ignore_read_groups:
             return "feature_id\t%s\n" % value_name
-        elif len(all_groups) > 10:
-            return "feature_id\tgroup_id\t%s\n" % value_name
         else:
             return "feature_id\t" + "\t".join(all_groups) + "\n"
 
@@ -141,7 +139,6 @@ class AssignedFeatureCounter(AbstractCounter):
         total_counts = defaultdict(float)
         all_features = sorted(self.all_features)
         all_groups = sorted(self.feature_counter.keys())
-        print_in_columns = len(all_groups) <= 10
 
         for group_id in all_groups:
             for feature_id in all_features:
@@ -162,11 +159,8 @@ class AssignedFeatureCounter(AbstractCounter):
                     for group_id in all_groups:
                         count = self.feature_counter[group_id][feature_id]
                         total_counts[group_id] += count
-                        if not print_in_columns:
-                            f.write("%s\t%s\t%.2f\n" % (feature_id, group_id, count))
-                    if print_in_columns:
-                        count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
-                        f.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+                    count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
+                    f.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
         if self.ignore_read_groups:
             with open(self.output_counts_file_name + ".stats", "w") as f:
@@ -176,23 +170,16 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def convert_counts_to_tpm(self):
         total_counts = defaultdict(float)
-
-        print_in_columns = True
         with open(self.output_counts_file_name) as f:
             for i, line in enumerate(f):
                 if line[0] == '_': break
                 fs = line.split()
-                if i == 0:
-                    if fs[1] == "group_id":
-                        print_in_columns = False
-                    continue
+                if i == 0: continue
                 if self.ignore_read_groups:
                     total_counts[AbstractReadGrouper.default_group_id] += float(fs[1])
-                elif not self.ignore_read_groups and print_in_columns:
+                else:
                     for j in range(len(fs) - 1):
                         total_counts[j] += float(fs[j + 1])
-                else:
-                    total_counts[fs[1]] += float(fs[2])
 
         scale_factors = {}
         for group_id in total_counts.keys():
@@ -202,23 +189,17 @@ class AssignedFeatureCounter(AbstractCounter):
         with open(self.output_tpm_file_name, "w") as outf:
             with open(self.output_counts_file_name) as f:
                 for i, line in enumerate(f):
-                    fs = line.split()
-                    if fs[0] == '__ambiguous': break
+                    if line[0] == '_': break
                     if i == 0:
                         outf.write(line.replace("count", "TPM"))
                         continue
+                    fs = line.split()
                     if self.ignore_read_groups:
                         feature_id, count = fs[0], float(fs[1])
                         tpm = scale_factors[AbstractReadGrouper.default_group_id] * count
                         if not self.output_zeroes and tpm == 0:
                             continue
                         outf.write("%s\t%.6f\n" % (feature_id, tpm))
-                    elif not print_in_columns:
-                        for group_id in total_counts.keys():
-                            feature_id, group_id, count = fs[0], fs[1], float(fs[2])
-                            tpm = scale_factors[group_id] * count
-                            outf.write("%s\t%s\t%.6f\n" % (feature_id, group_id, tpm))
-                            fs = f.readline().split()
                     else:
                         feature_id, counts = fs[0], list(map(float, fs[1:]))
                         tpm_values = [scale_factors[i] * counts[i] for i in range(len(scale_factors))]
