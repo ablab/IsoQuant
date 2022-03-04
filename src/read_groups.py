@@ -14,17 +14,25 @@ logger = logging.getLogger('IsoQuant')
 class AbstractReadGrouper:
     default_group_id = 'NA'
 
+    def __init__(self):
+        self.read_groups = set()
+
     def get_group_id(self, alignment, filename=None):
         raise NotImplementedError()
 
 
 class DefaultReadGrouper(AbstractReadGrouper):
+    def __init__(self):
+        AbstractReadGrouper.__init__(self)
+        self.read_groups = [self.default_group_id]
+
     def get_group_id(self, alignment, filename=None):
         return self.default_group_id
 
 
 class AlignmentTagReadGrouper(AbstractReadGrouper):
     def __init__(self, tag='RG'):
+        AbstractReadGrouper.__init__(self)
         self.tag = tag
 
     def get_group_id(self, alignment, filename=None):
@@ -32,12 +40,15 @@ class AlignmentTagReadGrouper(AbstractReadGrouper):
             tag_value = alignment.get_tag(self.tag)
         except KeyError:
             logger.warning("Tag %s is not present for read %s, skipping" % (self.tag, alignment.query_name))
+            self.read_groups.add(self.default_group_id)
             return self.default_group_id
+        self.read_groups.add(tag_value)
         return tag_value
 
 
 class ReadIdSplitReadGrouper(AbstractReadGrouper):
     def __init__(self, delim):
+        AbstractReadGrouper.__init__(self)
         self.delim = delim
 
     def get_group_id(self, alignment, filename=None):
@@ -47,11 +58,13 @@ class ReadIdSplitReadGrouper(AbstractReadGrouper):
             logger.warning("Delimiter %s is not present in read id %s, skipping" % (self.delim, read_id))
             return
 
+        self.read_groups.add(values[-1])
         return values[-1]
 
 
 class ReadTableGrouper(AbstractReadGrouper):
     def __init__(self, table_tsv_file, read_id_column_index=0, group_id_column_index=1, delim='\t'):
+        AbstractReadGrouper.__init__(self)
         self.read_map = {}
         min_columns = max(read_id_column_index, group_id_column_index)
         logger.info("Reading")
@@ -75,12 +88,15 @@ class ReadTableGrouper(AbstractReadGrouper):
 
     def get_group_id(self, alignment, filename=None):
         if alignment.query_name not in self.read_map:
+            self.read_groups.add(self.default_group_id)
             return self.default_group_id
+        self.read_groups.add(self.read_map[alignment.query_name])
         return self.read_map[alignment.query_name]
 
 
 class FileNameGroupper(AbstractReadGrouper):
     def __init__(self, args):
+        AbstractReadGrouper.__init__(self)
         if args.input_data.readable_names_dict:
             self.readable_names_dict = args.input_data.readable_names_dict
             return
@@ -94,9 +110,12 @@ class FileNameGroupper(AbstractReadGrouper):
 
     def get_group_id(self, alignment, filename=None):
         if filename in self.readable_names_dict:
+            self.read_groups.add(self.readable_names_dict[filename])
             return self.readable_names_dict[filename]
         if not filename:
+            self.read_groups.add(AlignmentTagReadGrouper.default_group_id)
             return AlignmentTagReadGrouper.default_group_id
+        self.read_groups.add(filename)
         return filename
 
 
