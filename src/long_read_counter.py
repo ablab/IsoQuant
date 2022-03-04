@@ -59,10 +59,11 @@ class CompositeCounter:
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, get_feature_id, ignore_read_groups=False, output_zeroes=True):
+    def __init__(self, output_prefix, get_feature_id, read_grouper, ignore_read_groups=False, output_zeroes=True):
         AbstractCounter.__init__(self, output_prefix, ignore_read_groups, output_zeroes)
         self.get_feature_id = get_feature_id
         self.all_features = set()
+        self.all_groups = read_grouper.read_groups if read_grouper else []
 
         self.ambiguous_reads = 0
         self.not_assigned_reads = 0
@@ -138,7 +139,7 @@ class AssignedFeatureCounter(AbstractCounter):
     def dump(self):
         total_counts = defaultdict(float)
         all_features = sorted(self.all_features)
-        all_groups = sorted(self.feature_counter.keys())
+        all_groups = sorted(self.all_groups) if self.all_groups else sorted(self.feature_counter.keys())
 
         for group_id in all_groups:
             for feature_id in all_features:
@@ -206,12 +207,12 @@ class AssignedFeatureCounter(AbstractCounter):
                         outf.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
 
 
-def create_gene_counter(output_file_name, ignore_read_groups=False):
-    return AssignedFeatureCounter(output_file_name, get_assigned_gene_id, ignore_read_groups)
+def create_gene_counter(output_file_name, read_grouper=None, ignore_read_groups=False):
+    return AssignedFeatureCounter(output_file_name, get_assigned_gene_id, read_grouper, ignore_read_groups)
 
 
-def create_transcript_counter(output_file_name, ignore_read_groups=False, output_zeroes=True):
-    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id, ignore_read_groups, output_zeroes)
+def create_transcript_counter(output_file_name, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
+    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id, read_grouper, ignore_read_groups, output_zeroes)
 
 
 # count simple features inclusion/exclusion (exons / introns)
