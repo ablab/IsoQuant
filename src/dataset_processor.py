@@ -136,7 +136,7 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
             tmp_printer.add_read_info(read_assignment)
             processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
     logger.info("Finished processing chromosome " + chr_id)
-    return processed_reads
+    return processed_reads, read_grouper.read_groups
 
 
 class ReadAssignmentLoader:
@@ -202,9 +202,10 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
         yield current_gene_info, read_storage
 
 
-def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, current_chr_record,
+def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_grouper, current_chr_record,
                                  io_support):
     processor = DatasetProcessor(args, parallel=True)
+    processor.read_grouper = read_grouper
     processor.create_aggregators(sample)
     gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
     logger.info("Processing chromosome " + chr_id)
@@ -280,13 +281,14 @@ class DatasetProcessor:
                         format(sample.out_raw_file))
             if not self.args.keep_tmp:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
-        total_alignments, polya_found = self.load_read_info(saves_file)
+        total_alignments, polya_found, all_read_groups = self.load_read_info(saves_file)
 
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
         logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
         self.args.needs_polya_for_construction = polya_fraction >= 0.7
 
+        self.read_grouper.read_groups = all_read_groups
         self.process_assigned_reads(sample, saves_file)
         if not self.args.read_assignments and not self.args.keep_tmp:
             for f in glob.glob(saves_file + "_*"):
@@ -297,12 +299,13 @@ class DatasetProcessor:
         logger.info('Assigning reads to isoforms')
         chrom_clusters = self.get_chromosome_gene_clusters()
         pool = Pool(self.args.threads)
-        processed_reads = pool.starmap(assign_reads_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
+        results = pool.starmap(assign_reads_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
                                                                    (self.reference_record_dict[
                                                                         chr_id] if self.reference_record_dict else None))
                                                                   for (chr_id, c) in chrom_clusters], chunksize=1)
         pool.close()
         pool.join()
+        processed_reads, read_groups = [x[0] for x in results], [x[1] for x in results]
 
         logger.info("Resolving multimappers")
         self.multimapped_reads = defaultdict(list)
@@ -333,6 +336,8 @@ class DatasetProcessor:
         info_pickler = pickle.Pickler(open(sample.out_raw_file + "_info", "wb"),  -1)
         info_pickler.dump(total_assignments)
         info_pickler.dump(polya_assignments)
+        all_read_groups = set([r for sublist in read_groups for r in sublist])
+        info_pickler.dump(all_read_groups)
         if total_assignments == 0:
             logger.warning("No reads were assigned to isoforms, check your input files")
         else:
@@ -347,10 +352,10 @@ class DatasetProcessor:
         logger.info("Processing assigned reads " + sample.label)
 
         results = pool.starmap(construct_models_in_parallel, [(SampleData(sample.file_list, sample.label + "_" + chr_id,
-                                                                    sample.out_dir), chr_id, dump_filename, self.args, self.multimapped_info_dict[chr_id],
-                                                                    (self.reference_record_dict[chr_id] if self.reference_record_dict else None),
-                                                                    self.io_support)
-                                                                     for chr_id in chr_ids], chunksize=1)
+                                                                          sample.out_dir), chr_id, dump_filename,
+                                                               self.args, self.multimapped_info_dict[chr_id], self.read_grouper,
+                                                               (self.reference_record_dict[chr_id] if self.reference_record_dict else None),
+                                                               self.io_support) for chr_id in chr_ids], chunksize=1)
         pool.close()
         pool.join()
 
@@ -399,9 +404,10 @@ class DatasetProcessor:
         info_unpickler = pickle.Unpickler(open(dump_filename + "_info", "rb"), fix_imports=False)
         total_assignments = info_unpickler.load()
         polya_assignments = info_unpickler.load()
+        all_read_groups = info_unpickler.load()
 
         gc.enable()
-        return total_assignments, polya_assignments
+        return total_assignments, polya_assignments, all_read_groups
 
     def get_chromosome_list(self):
         chromosomes = []
@@ -457,10 +463,10 @@ class DatasetProcessor:
             self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
 
         if self.args.read_group:
-            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv)
-            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv)
+            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv, self.read_grouper)
+            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv, self.read_grouper)
             self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
-                                                                              output_zeroes=False)
+                                                                              self.read_grouper, output_zeroes=False)
 
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
             if self.args.count_exons:
