@@ -227,7 +227,7 @@ class GraphBasedModelConstructor:
 
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
                     if transcript_gene is None:
-                        transcript_gene = "novel_gene_" + str(self.get_transcript_id())
+                        transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
                     elif transcript_strand == '.':
                         transcript_strand = self.gene_info.gene_strands[transcript_gene]
 
