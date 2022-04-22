@@ -18,8 +18,6 @@ import pysam
 from Bio import SeqIO
 import gffutils
 from enum import Enum
-import matplotlib.pyplot as plt
-from matplotlib_venn import venn2
 import logging
 
 
@@ -278,8 +276,8 @@ def compare_stats(data_a, data_b):
         elif correct_b:
             b += 1
 
-    venn2(subsets=(a, b, ab), set_labels=(label_a, label_b))
-    plt.savefig("venn.png")
+    # venn2(subsets=(a, b, ab), set_labels=(label_a, label_b))
+    # plt.savefig("venn.png")
     logger.info("%d correct reads by both methods, %d in %s only and %d in %s only" % (ab, a, label_a, b, label_b))
     logger.info("Venn diagram saved to venn.png")
     return
