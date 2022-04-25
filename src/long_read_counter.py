@@ -59,7 +59,8 @@ class CompositeCounter:
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, get_feature_id, read_grouper, ignore_read_groups=False, output_zeroes=True):
+    def __init__(self, output_prefix, get_feature_id, read_grouper,
+                 ignore_read_groups=False, output_zeroes=True):
         AbstractCounter.__init__(self, output_prefix, ignore_read_groups, output_zeroes)
         self.get_feature_id = get_feature_id
         self.all_features = set()
@@ -72,6 +73,7 @@ class AssignedFeatureCounter(AbstractCounter):
         self.feature_counter = defaultdict(lambda: defaultdict(float))
         self.confirmed_features = set()
         self.output_stats_file_name = self.output_counts_file_name + ".stats"
+
 
     def add_read_info(self, read_assignment=None):
         # TODO: add __alignment_not_unique / __too_low_aQual ?
@@ -127,9 +129,9 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def format_header(self, all_groups, value_name="count"):
         if self.ignore_read_groups:
-            return "feature_id\t%s\n" % value_name
+            return "#feature_id\t%s\n" % value_name
         else:
-            return "feature_id\t" + "\t".join(all_groups) + "\n"
+            return "#feature_id\t" + "\t".join(all_groups) + "\n"
 
     def add_confirmed_features(self, features):
         for feature_id in features:
@@ -172,10 +174,10 @@ class AssignedFeatureCounter(AbstractCounter):
     def convert_counts_to_tpm(self):
         total_counts = defaultdict(float)
         with open(self.output_counts_file_name) as f:
-            for i, line in enumerate(f):
+            for line in f:
                 if line[0] == '_': break
                 fs = line.split()
-                if i == 0: continue
+                if line[0] == '#': continue
                 if self.ignore_read_groups:
                     total_counts[AbstractReadGrouper.default_group_id] += float(fs[1])
                 else:
@@ -185,13 +187,13 @@ class AssignedFeatureCounter(AbstractCounter):
         scale_factors = {}
         for group_id in total_counts.keys():
             scale_factors[group_id] = 1000000.0 / total_counts[group_id] if total_counts[group_id] > 0 else 1.0
-            logger.info("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
+            logger.debug("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
 
         with open(self.output_tpm_file_name, "w") as outf:
             with open(self.output_counts_file_name) as f:
-                for i, line in enumerate(f):
+                for line in f:
                     if line[0] == '_': break
-                    if i == 0:
+                    if line[0] == '#':
                         outf.write(line.replace("count", "TPM"))
                         continue
                     fs = line.split()
@@ -208,11 +210,14 @@ class AssignedFeatureCounter(AbstractCounter):
 
 
 def create_gene_counter(output_file_name, read_grouper=None, ignore_read_groups=False):
-    return AssignedFeatureCounter(output_file_name, get_assigned_gene_id, read_grouper, ignore_read_groups)
+    return AssignedFeatureCounter(output_file_name, get_assigned_gene_id,
+                                  read_grouper, ignore_read_groups)
 
 
-def create_transcript_counter(output_file_name, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
-    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id, read_grouper, ignore_read_groups, output_zeroes)
+def create_transcript_counter(output_file_name, read_grouper=None, ignore_read_groups=False,
+                              output_zeroes=True):
+    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id, read_grouper,
+                                  ignore_read_groups, output_zeroes)
 
 
 # count simple features inclusion/exclusion (exons / introns)

@@ -91,7 +91,7 @@ class FeatureInfo:
 
     @staticmethod
     def header():
-        return "chr\tstart\tend\tstrand\tflags\tgene_ids"
+        return "#chr\tstart\tend\tstrand\tflags\tgene_ids"
 
     def to_str(self):
         return "%s\t%d\t%d\t%s\t%s\t%s" % (self.chr_id, self.start, self.end, self.strand, self.type, ",".join(self.gene_ids))

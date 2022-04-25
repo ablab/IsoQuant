@@ -67,6 +67,7 @@ class BEDPrinter(AbstractAssignmentPrinter):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker)
         self.print_corrected = print_corrected
         self.output_file.write("#chrom\tchromStart\tchromEnd\tname\tscore\tstrand\tthickStart\tthickEnd\titemRgb\tblockCount\tblockSizes\tblockStarts\n")
+        self.output_file.flush()
 
     def add_read_info(self, read_assignment):
         if read_assignment is None or read_assignment.assignment_type is None or \
@@ -106,11 +107,13 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
 
 
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
-    def __init__(self, output_file_name, params, io_support):
+    def __init__(self, output_file_name, params, io_support, additional_header = ""):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = "#read_id\tchr\tstrand\tisoform_id\tgene_id" \
                       "\tassignment_type\tassignment_events\texons\tadditional_info\n"
+        self.output_file.write(additional_header)
         self.output_file.write(self.header)
+        self.output_file.flush()
         self.io_support = io_support
 
     def unmatched_line(self, read_assignment, additional_info=None):
@@ -123,7 +126,6 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         else:
             line += "\t*\n"
         return line
-
 
     def add_read_info(self, read_assignment):
         if read_assignment is None:

@@ -130,6 +130,13 @@ def parse_args(args=None, namespace=None):
     if not check_params(args):
         parser.print_usage()
         exit(-1)
+    args._cmd_line = " ".join(sys.argv)
+    args._version = "2.2.1"
+    try:
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
+            args._version = version_f.readline().strip()
+    except FileNotFoundError:
+        pass
     return args
 
 
@@ -249,7 +256,7 @@ def set_logger(args, logger_instance):
         logger_instance.setLevel(logging.INFO)
     log_file = os.path.join(args.output, "isoquant.log")
     f = open(log_file, "w")
-    f.write("CMD: " + ' '.join(sys.argv) + '\n')
+    f.write("Command line: " + args._cmd_line + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
     if args.debug:
@@ -264,6 +271,7 @@ def set_logger(args, logger_instance):
     ch.setFormatter(formatter)
     logger_instance.addHandler(fh)
     logger_instance.addHandler(ch)
+    logger.info("Running IsoQuant version " + args._version)
 
 
 def set_data_dependent_options(args):

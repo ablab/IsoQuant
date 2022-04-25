@@ -21,13 +21,13 @@ def validate_exons(novel_exons):
 
 
 class GFFPrinter:
-    def __init__(self, outf_prefix, sample_name, io_support):
+    def __init__(self, outf_prefix, sample_name, io_support, header = ""):
         self.model_fname = os.path.join(outf_prefix, sample_name + ".transcript_models.gtf")
         self.out_gff = open(self.model_fname, "w")
-        self.out_gff.write("# " + sample_name + " IsoQuant generated GFF\n")
-        self.out_gff.flush()
         self.r2t_fname = os.path.join(outf_prefix, sample_name + ".transcript_model_reads.tsv")
         self.out_r2t = open(self.r2t_fname, "w")
+        self.out_gff.write("# " + sample_name + " IsoQuant generated GTF\n" + header)
+        self.out_gff.flush()
         self.out_r2t.write("#read_id\ttranscript_id\n")
         self.out_r2t.flush()
         self.io_support = io_support

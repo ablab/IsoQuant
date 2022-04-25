@@ -237,6 +237,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
 class DatasetProcessor:
     def __init__(self, args, parallel=False):
         self.args = args
+        self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.read_grouper = create_read_grouper(args)
         self.io_support = IOSupport(self.args)
         if parallel: return
@@ -366,7 +367,8 @@ class DatasetProcessor:
             for k, v in read_stat_counter.stats_dict.items():
                 self.read_stat_counter.stats_dict[k] += v
 
-        gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support)
+        gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support,
+                                 header=self.common_header)
         transcript_stat_counter = EnumStats()
         self.merge_assignments(sample, chr_ids)
         if not self.args.no_model_construction:
@@ -440,7 +442,8 @@ class DatasetProcessor:
 
     def create_aggregators(self, sample):
         self.read_stat_counter = EnumStats()
-        self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support)
+        self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
+                                                       additional_header=self.common_header)
         self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed, self.args, print_corrected=True)
         printer_list = [self.basic_printer, self.corrected_bed_printer]
         if self.args.sqanti_output:
@@ -479,9 +482,9 @@ class DatasetProcessor:
 
     def merge_assignments(self, sample, chr_ids):
         merge_files([rreplace(sample.out_assigned_tsv, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
-                    sample.out_assigned_tsv)
+                    sample.out_assigned_tsv, copy_header=False)
         merge_files([rreplace(sample.out_corrected_bed, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
-                    sample.out_corrected_bed)
+                    sample.out_corrected_bed, copy_header=False)
         for p in self.global_counter.counters:
             merge_files([rreplace(p.output_counts_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
                         p.output_counts_file_name,
@@ -492,9 +495,9 @@ class DatasetProcessor:
 
     def merge_transcript_models(self, label, chr_ids, gff_printer):
         merge_files([rreplace(gff_printer.model_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
-                    gff_printer.model_fname)
+                    gff_printer.model_fname, copy_header=False)
         merge_files([rreplace(gff_printer.r2t_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
-                    gff_printer.r2t_fname)
+                    gff_printer.r2t_fname, copy_header=False)
         for p in self.transcript_model_global_counter.counters:
             merge_files([rreplace(p.output_counts_file_name, label, label + "_" + chr_id) for chr_id in chr_ids],
                         p.output_counts_file_name,

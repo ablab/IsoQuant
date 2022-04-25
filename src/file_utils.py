@@ -9,14 +9,19 @@ from src.read_groups import AbstractReadGrouper
 logger = logging.getLogger('IsoQuant')
 
 
-def merge_files(file_names, merged_file_name, stats_file_names=None, ignore_read_groups=True):
+def merge_files(file_names, merged_file_name, stats_file_names=None, ignore_read_groups=True, copy_header=True):
     file_names.sort(key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split('(\d+)', s)])
-    with open(merged_file_name, 'wb') as outf:
+    with open(merged_file_name, 'ab') as outf:
         for i, file_name in enumerate(file_names):
             if not os.path.exists(file_name): continue
+            header_count = 0
+            with open(file_name, 'r') as f:
+                while f.readline().startswith("#"):
+                    header_count += 1
             with open(file_name, 'rb') as f:
-                if i != 0:
-                    f.readline()
+                if not (copy_header and i == 0):
+                    for j in range(header_count):
+                        f.readline()
                 shutil.copyfileobj(f, outf)
             os.remove(file_name)
 
