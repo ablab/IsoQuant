@@ -130,8 +130,8 @@ class AssignmentData:
     def parse_tsv(self, tsv_file):
         logger.info("Reading assignments from %s" % tsv_file)
         with open(tsv_file) as f:
-            for i,l in enumerate(f):
-                if i == 0:
+            for l in f:
+                if l.startswith('#'):
                     continue
                 tokens = l.strip().split()
                 seq_id = tokens[self.parse_params.read_id_column] # if is_real_data else id_pattern.search(tokens[0]).group(1)
