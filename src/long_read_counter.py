@@ -15,6 +15,7 @@ class AbstractCounter:
     def __init__(self, output_prefix, ignore_read_groups=False, output_zeroes=True):
         self.ignore_read_groups = ignore_read_groups
         self.output_counts_file_name = output_prefix + "_counts.tsv"
+        open(self.output_counts_file_name, "w").close()
         self.output_tpm_file_name = output_prefix + "_tpm.tsv"
         self.output_zeroes = output_zeroes
         self.output_stats_file_name = None
@@ -73,7 +74,6 @@ class AssignedFeatureCounter(AbstractCounter):
         self.feature_counter = defaultdict(lambda: defaultdict(float))
         self.confirmed_features = set()
         self.output_stats_file_name = self.output_counts_file_name + ".stats"
-
 
     def add_read_info(self, read_assignment=None):
         # TODO: add __alignment_not_unique / __too_low_aQual ?
@@ -175,9 +175,9 @@ class AssignedFeatureCounter(AbstractCounter):
         total_counts = defaultdict(float)
         with open(self.output_counts_file_name) as f:
             for line in f:
-                if line[0] == '_': break
+                if line.startswith('_'): break
                 fs = line.split()
-                if line[0] == '#': continue
+                if line.startswith('#'): continue
                 if self.ignore_read_groups:
                     total_counts[AbstractReadGrouper.default_group_id] += float(fs[1])
                 else:
@@ -192,8 +192,8 @@ class AssignedFeatureCounter(AbstractCounter):
         with open(self.output_tpm_file_name, "w") as outf:
             with open(self.output_counts_file_name) as f:
                 for line in f:
-                    if line[0] == '_': break
-                    if line[0] == '#':
+                    if line.startswith('_'): break
+                    if line.startswith('#'):
                         outf.write(line.replace("count", "TPM"))
                         continue
                     fs = line.split()
