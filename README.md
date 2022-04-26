@@ -556,7 +556,7 @@ In addition, it contains `canonical` property if `--check_canonical` is set.
 
 <a name="sec4"></a>
 ## Citation
-Manuscript is in preparation.
+The preprint is available at [https://www.researchsquare.com/article/rs-1571850/v1](https://www.researchsquare.com/article/rs-1571850/v1)
 
 <a name="sec5"></a>
 ## Feedback and bug reports
