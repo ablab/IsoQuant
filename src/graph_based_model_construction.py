@@ -115,7 +115,9 @@ class GraphBasedModelConstructor:
         self.construct_fl_isoforms()
         self.construnct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
+        self.filter_transcripts()
 
+    def filter_transcripts(self):
         filtered_storage = []
         confirmed_transcipt_ids = set()
         for model in self.transcript_model_storage:
@@ -131,7 +133,9 @@ class GraphBasedModelConstructor:
                 logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
                                                                         self.internal_counter[model.transcript_id],
                                                                         novel_isoform_cutoff, component_coverage))
+                del self.transcript_read_ids[model.transcript_id]
                 continue
+
             self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
             filtered_storage.append(model)
             confirmed_transcipt_ids.add(model.transcript_id)
