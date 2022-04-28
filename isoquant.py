@@ -119,6 +119,14 @@ def parse_args(args=None, namespace=None):
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
+    isoquant_version = "2.2.1"
+    try:
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
+            isoquant_version = version_f.readline().strip()
+    except FileNotFoundError:
+        pass
+    parser.add_argument('--version', '-v', action='version', version='IsoQuant ' + isoquant_version)
+
     args = parser.parse_args(args, namespace)
 
     if os.path.exists(args.output):
@@ -131,12 +139,8 @@ def parse_args(args=None, namespace=None):
         parser.print_usage()
         exit(-1)
     args._cmd_line = " ".join(sys.argv)
-    args._version = "2.2.1"
-    try:
-        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
-            args._version = version_f.readline().strip()
-    except FileNotFoundError:
-        pass
+    args._version = isoquant_version
+
     return args
 
 
