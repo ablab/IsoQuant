@@ -451,8 +451,10 @@ class DatasetProcessor:
             printer_list.append(self.sqanti_printer)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
-        self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, ignore_read_groups=True)
-        self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv, ignore_read_groups=True)
+        self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
+                                                ignore_read_groups=True, output_zeroes=False)
+        self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
+                                                            ignore_read_groups=True, output_zeroes=False)
         self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
                                                                   ignore_read_groups=True, output_zeroes=False)
 

@@ -209,13 +209,12 @@ class AssignedFeatureCounter(AbstractCounter):
                         outf.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
 
 
-def create_gene_counter(output_file_name, read_grouper=None, ignore_read_groups=False):
+def create_gene_counter(output_file_name, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
     return AssignedFeatureCounter(output_file_name, get_assigned_gene_id,
-                                  read_grouper, ignore_read_groups)
+                                  read_grouper, ignore_read_groups, output_zeroes)
 
 
-def create_transcript_counter(output_file_name, read_grouper=None, ignore_read_groups=False,
-                              output_zeroes=True):
+def create_transcript_counter(output_file_name, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
     return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id, read_grouper,
                                   ignore_read_groups, output_zeroes)
 
