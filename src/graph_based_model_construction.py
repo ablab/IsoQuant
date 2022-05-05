@@ -210,7 +210,9 @@ class GraphBasedModelConstructor:
             else:
                 # adding FL novel isoform
                 component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
-                novel_isoform_cutoff = self.params.min_novel_count
+                # pre-filtering
+                novel_isoform_cutoff = max(self.params.min_novel_count,
+                                           self.params.min_novel_count_rel * component_coverage / 10)
 
                 polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya)
                 transcript_strand = self.strand_detector.get_strand(intron_path)
