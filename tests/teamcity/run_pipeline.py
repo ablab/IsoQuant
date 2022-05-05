@@ -19,6 +19,11 @@ import subprocess
 _quote = {"'": "|'", "|": "||", "\n": "|n", "\r": "|r", '[': '|[', ']': '|]'}
 
 
+RT_VOID = "void"
+RT_ASSIGNMENT = "assignment"
+RT_TRANSCRIPTS = "transcripts"
+
+
 def escape_value(value):
     return "".join(_quote.get(x, x) for x in value)
 
@@ -103,27 +108,10 @@ def parse_args():
     return args
 
 
-def main():
-    log = TeamCityLog()
-    args = parse_args()
-    if not args.config_file:
-        log.err("Provide configuration file")
-        exit(-2)
-
-    config_file = args.config_file
-    if not os.path.exists(config_file):
-        log.err("Provide correct path to configuration file")
-        exit(-3)
-
+def run_isoquant(args, config_dict, log):
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
-
-    log.log("Loading config from %s" % config_file)
-    config_dict = load_tsv_config(config_file)
-    for k in ["genedb", "reads", "datatype", "output", "name"]:
-        if k not in config_dict:
-            log.err(k + "is not set in the config")
-            return -10
+    config_file = args.config_file
 
     label = config_dict["name"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
@@ -132,7 +120,7 @@ def main():
 
     log.start_block('isoquant', 'Running IsoQuant')
     isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
-                    "--genedb", genedb, "-d", config_dict["datatype"], "-t", "16", "-l", label]
+                             "--genedb", genedb, "-d", config_dict["datatype"], "-t", "16", "-l", label]
     if "bam" in config_dict:
         isoquant_command_list.append("--bam")
         bam = fix_path(config_file, config_dict["bam"])
@@ -161,17 +149,48 @@ def main():
         log.err("IsoQuant exited with non-zero status: %d" % result.returncode)
         return -11
 
+    log.end_block('isoquant')
+    return 0
+
+
+def check_value(etalon_value, output_value, name, log):
+    lower_bound = etalon_value * 0.99
+    upper_bound = etalon_value * 1.01
+    exit_code = 0
+    if output_value < lower_bound:
+        log.err("Value of %s = %2.2f is lower than the expected value %2.2f" % (name, output_value, lower_bound))
+        exit_code = -41
+    else:
+        log.log("Value of %s = %2.2f >= %2.2f as expected" % (name, output_value, lower_bound))
+    if output_value > upper_bound:
+        log.err("Value of %s = %2.2f is higher than the expected value %2.2f" % (name, output_value, upper_bound))
+        exit_code = -42
+    else:
+        log.log("Value of %s = %2.2f <= %2.2f as expected" % (name, output_value, upper_bound))
+    return exit_code
+
+
+def run_assignment_quality(args, config_dict, log):
+    log.start_block('quality', 'Running quality assessment')
+    config_file = args.config_file
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    isoquant_dir = os.path.join(source_dir, "../../")
+
+    label = config_dict["name"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
+    output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
+
+    genedb = fix_path(config_file, config_dict["genedb"])
+    reads = fix_path(config_file, config_dict["reads"])
     if "bam" not in config_dict:
         bam = glob.glob(os.path.join(output_folder, "%s/aux/%s*.bam" % (label, label)))
         if not bam:
             log.err("BAM file was not found")
             return -21
         bam = bam[0]
+    else:
+        bam = fix_path(config_file, config_dict["bam"])
 
-    output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
-    log.end_block('isoquant')
-
-    log.start_block('quality', 'Running quality assessment')
     quality_report = os.path.join(output_folder, "report.tsv")
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/assess_assignment_quality.py"),
                        "-o", quality_report, "--gene_db", genedb, "--tsv", output_tsv,
@@ -202,22 +221,106 @@ def main():
             log.err("Metric %s was not found in the report" % k)
             exit_code = -22
             continue
-        lower_bound = float(v) * 0.99
-        upper_bound = float(v) * 1.01
-        value = float(quality_report_dict[k])
-        if value < lower_bound:
-            log.err("Value of %s = %2.2f is lower than the expected value %2.2f" % (k, value, lower_bound))
-            exit_code = -20
-        else:
-            log.log("Value of %s = %2.2f >= %2.2f as expected" % (k, value, lower_bound))
-        if value > upper_bound:
-            log.err("Value of %s = %2.2f is higher than the expected value %2.2f" % (k, value, upper_bound))
-            exit_code = -21
-        else:
-            log.log("Value of %s = %2.2f <= %2.2f as expected" % (k, value, upper_bound))
-    log.end_block('assessment')
+        exit_code = check_value(float(v), float(quality_report_dict[k]), k, log)
+        if exit_code != 0:
+            break
 
+    log.end_block('assessment')
     return exit_code
+
+
+def parse_gffcomapre(stats_file):
+    for l in open(stats_file):
+        if l.find("Transcript level") == -1:
+            continue
+        v = l.split()
+        assert len(v) > 4
+        return float(v[2]), float(v[4])
+    return -1, -1
+
+
+def run_transcript_quality(args, config_dict, log):
+    log.start_block('quality', 'Running quality assessment')
+    config_file = args.config_file
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    isoquant_dir = os.path.join(source_dir, "../../")
+
+    label = config_dict["name"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
+    out_gtf = os.path.join(output_folder, "%s/%s*.transcript_models.gtf" % (label, label))
+    if not out_gtf:
+        log.err("Output GTF file was not found")
+        return -31
+
+    quality_output = os.path.join(output_folder, "gffcompare")
+    genedb_prefix = config_dict["reduced_db"]
+    qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/reduced_db_gffcompare.py"),
+                       "-o", quality_output, "--gene_db", genedb_prefix, "--gtf", out_gtf, "--tool", "isoquant"]
+
+    log.log("QA command line: " + " ".join(qa_command_list))
+    result = subprocess.run(qa_command_list)
+    if result.returncode != 0:
+        log.err("Transcript evaluation exited with non-zero status: %d" % result.returncode)
+        return -13
+    log.end_block('quality')
+
+    if "etalon" not in config_dict:
+        return 0
+
+    log.start_block('assessment', 'Checking quality metrics')
+    etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
+    for gtf_type in ['full', 'know', 'novel']:
+        recall, precision = parse_gffcomapre(os.path.join(quality_output, "isoquant." + gtf_type + ".stats"))
+        metric_name = gtf_type + "_recall"
+        etalon_recall = float(etalon_qaulity_dict[metric_name])
+        exit_code = check_value(recall, etalon_recall, metric_name, log)
+        if exit_code != 0:
+            break
+        metric_name = gtf_type + "_precision"
+        etalon_precision = float(etalon_qaulity_dict[metric_name])
+        exit_code = check_value(precision, etalon_precision, metric_name, log)
+        if exit_code != 0:
+            break
+    log.end_block('assessment')
+    return exit_code
+
+
+def main():
+    log = TeamCityLog()
+    args = parse_args()
+    if not args.config_file:
+        log.err("Provide configuration file")
+        exit(-2)
+
+    config_file = args.config_file
+    if not os.path.exists(config_file):
+        log.err("Provide correct path to configuration file")
+        exit(-3)
+
+    log.log("Loading config from %s" % config_file)
+    config_dict = load_tsv_config(config_file)
+    for k in ["genedb", "reads", "datatype", "output", "name"]:
+        if k not in config_dict:
+            log.err(k + "is not set in the config")
+            return -10
+
+    err_code = run_isoquant(args, config_dict, log)
+    if err_code != 0:
+        return err_code
+
+    log.start_block('quality', 'Running quality assessment')
+    run_type = config_dict["run_type"]
+    if run_type == RT_VOID:
+        err_code = 0
+    elif run_type == RT_ASSIGNMENT:
+        err_code = run_assignment_quality(args, config_dict, log)
+    elif run_type == RT_ASSIGNMENT:
+        err_code = run_transcript_quality(args, config_dict, log)
+    else:
+        log.err("Test type %s is not supported" % run_type)
+        err_code = -50
+
+    return err_code
 
 
 if __name__ == "__main__":
