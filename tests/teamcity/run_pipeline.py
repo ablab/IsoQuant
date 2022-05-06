@@ -116,26 +116,19 @@ def run_isoquant(args, config_dict, log):
     label = config_dict["name"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
     genedb = fix_path(config_file, config_dict["genedb"])
-    reads = fix_path(config_file, config_dict["reads"])
+    genome = fix_path(config_file, config_dict["genome"])
 
     log.start_block('isoquant', 'Running IsoQuant')
     isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
-                             "--genedb", genedb, "-d", config_dict["datatype"], "-t", "16", "-l", label]
+                             "--genedb", genedb, "-r", genome, "-d", config_dict["datatype"], "-t", "16", "-l", label]
     if "bam" in config_dict:
         isoquant_command_list.append("--bam")
         bam = fix_path(config_file, config_dict["bam"])
         isoquant_command_list.append(bam)
-        if "genome" in config_dict:
-            isoquant_command_list.append("-r")
-            isoquant_command_list.append(fix_path(config_file, config_dict["genome"]))
     else:
-        if "genome" not in config_dict:
-            log.err("genome is not set in the config")
-            return -10
+        reads = fix_path(config_file, config_dict["reads"])
         isoquant_command_list.append("--fastq")
         isoquant_command_list.append(reads)
-        isoquant_command_list.append("-r")
-        isoquant_command_list.append(fix_path(config_file, config_dict["genome"]))
 
     if "isoquant_options" in config_dict:
         log.log("Appending additional options: %s" % config_dict["isoquant_options"])
@@ -247,15 +240,15 @@ def run_transcript_quality(args, config_dict, log):
 
     label = config_dict["name"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
-    out_gtf = os.path.join(output_folder, "%s/%s*.transcript_models.gtf" % (label, label))
+    out_gtf = os.path.join(output_folder, "%s/%s.transcript_models.gtf" % (label, label))
     if not out_gtf:
         log.err("Output GTF file was not found")
         return -31
 
     quality_output = os.path.join(output_folder, "gffcompare")
-    genedb_prefix = config_dict["reduced_db"]
+    genedb_prefix = fix_path(config_file, config_dict["reduced_db"])
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/reduced_db_gffcompare.py"),
-                       "-o", quality_output, "--gene_db", genedb_prefix, "--gtf", out_gtf, "--tool", "isoquant"]
+                       "-o", quality_output, "--genedb", genedb_prefix, "--gtf", out_gtf, "--tool", "isoquant"]
 
     log.log("QA command line: " + " ".join(qa_command_list))
     result = subprocess.run(qa_command_list)
@@ -269,7 +262,7 @@ def run_transcript_quality(args, config_dict, log):
 
     log.start_block('assessment', 'Checking quality metrics')
     etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
-    for gtf_type in ['full', 'know', 'novel']:
+    for gtf_type in ['full', 'known', 'novel']:
         recall, precision = parse_gffcomapre(os.path.join(quality_output, "isoquant." + gtf_type + ".stats"))
         metric_name = gtf_type + "_recall"
         etalon_recall = float(etalon_qaulity_dict[metric_name])
@@ -299,22 +292,21 @@ def main():
 
     log.log("Loading config from %s" % config_file)
     config_dict = load_tsv_config(config_file)
-    for k in ["genedb", "reads", "datatype", "output", "name"]:
+    for k in ["genome", "genedb", "datatype", "output", "name"]:
         if k not in config_dict:
-            log.err(k + "is not set in the config")
+            log.err(k + " is not set in the config")
             return -10
 
     err_code = run_isoquant(args, config_dict, log)
     if err_code != 0:
         return err_code
 
-    log.start_block('quality', 'Running quality assessment')
     run_type = config_dict["run_type"]
     if run_type == RT_VOID:
         err_code = 0
     elif run_type == RT_ASSIGNMENT:
         err_code = run_assignment_quality(args, config_dict, log)
-    elif run_type == RT_ASSIGNMENT:
+    elif run_type == RT_TRANSCRIPTS:
         err_code = run_transcript_quality(args, config_dict, log)
     else:
         log.err("Test type %s is not supported" % run_type)
