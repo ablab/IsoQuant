@@ -267,12 +267,12 @@ def run_transcript_quality(args, config_dict, log):
         recall, precision = parse_gffcomapre(os.path.join(quality_output, "isoquant." + gtf_type + ".stats"))
         metric_name = gtf_type + "_recall"
         etalon_recall = float(etalon_qaulity_dict[metric_name])
-        err_code = check_value(recall, etalon_recall, metric_name, log)
+        err_code = check_value(etalon_recall, recall , metric_name, log)
         if err_code != 0:
             exit_code = err_code
         metric_name = gtf_type + "_precision"
         etalon_precision = float(etalon_qaulity_dict[metric_name])
-        err_code = check_value(precision, etalon_precision, metric_name, log)
+        err_code = check_value(etalon_precision, precision, metric_name, log)
         if err_code != 0:
             exit_code = err_code
     log.end_block('assessment')
