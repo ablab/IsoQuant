@@ -214,9 +214,9 @@ def run_assignment_quality(args, config_dict, log):
             log.err("Metric %s was not found in the report" % k)
             exit_code = -22
             continue
-        exit_code = check_value(float(v), float(quality_report_dict[k]), k, log)
-        if exit_code != 0:
-            break
+        err_code = check_value(float(v), float(quality_report_dict[k]), k, log)
+        if err_code != 0:
+            exit_code = err_code
 
     log.end_block('assessment')
     return exit_code
@@ -262,18 +262,19 @@ def run_transcript_quality(args, config_dict, log):
 
     log.start_block('assessment', 'Checking quality metrics')
     etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
+    exit_code = 0
     for gtf_type in ['full', 'known', 'novel']:
         recall, precision = parse_gffcomapre(os.path.join(quality_output, "isoquant." + gtf_type + ".stats"))
         metric_name = gtf_type + "_recall"
         etalon_recall = float(etalon_qaulity_dict[metric_name])
-        exit_code = check_value(recall, etalon_recall, metric_name, log)
-        if exit_code != 0:
-            break
+        err_code = check_value(recall, etalon_recall, metric_name, log)
+        if err_code != 0:
+            exit_code = err_code
         metric_name = gtf_type + "_precision"
         etalon_precision = float(etalon_qaulity_dict[metric_name])
-        exit_code = check_value(precision, etalon_precision, metric_name, log)
-        if exit_code != 0:
-            break
+        err_code = check_value(precision, etalon_precision, metric_name, log)
+        if err_code != 0:
+            exit_code = err_code
     log.end_block('assessment')
     return exit_code
 
