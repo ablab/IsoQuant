@@ -539,13 +539,13 @@ def is_subprofile(short_isoform_profile, long_isoform_profile):
     return True
 
 
-def difference_in_present_features(profile1, profile2):
+def difference_in_present_features(profile1, profile2, diff_limit=-1):
     """ computes Hamming distance for two profiles
 
     Parameters
     ----------
-    profile1: list of int
-    profile2: list of int
+    profile1: list(int)
+    profile2: list(int)
 
     Returns
     -------
@@ -555,11 +555,15 @@ def difference_in_present_features(profile1, profile2):
     """
     assert len(profile1) == len(profile2)
     d = 0
+    if diff_limit == -1:
+        diff_limit = len(profile1) + 1
     for i in range(len(profile1)):
-        if profile1[i] == 0 or profile2[i] == 0:
+        if profile2[i] == 0 or profile1[i] == 0:
             continue
         if profile1[i] != profile2[i]:
             d += 1
+        if d > diff_limit:
+            break
     return d
 
 

@@ -73,7 +73,7 @@ class LongReadAssigner:
                 isoforms.add(isoform_id)
         return isoforms
 
-    def match_profile(self, read_gene_profile, isoform_profiles, hint=None):
+    def match_profile(self, read_gene_profile, isoform_profiles, hint=None, diff_limit=-1):
         """ match read profiles to a known isoform junction profile
 
         Parameters
@@ -89,11 +89,12 @@ class LongReadAssigner:
             list of tuples (id and difference)
         """
         isoforms = []
-        for isoform_id, isoform_profile in isoform_profiles.items():
-            if hint and isoform_id not in hint:
-                continue
-            diff = difference_in_present_features(isoform_profile, read_gene_profile)
-            isoforms.append(IsoformDiff(isoform_id, diff))
+        isoform_set = hint if hint is not None else isoform_profiles.keys()
+        for isoform_id in isoform_set:
+            isoform_profile = isoform_profiles[isoform_id]
+            diff = difference_in_present_features(isoform_profile, read_gene_profile, diff_limit)
+            if diff_limit == -1 or diff <= diff_limit:
+                isoforms.append(IsoformDiff(isoform_id, diff))
         return sorted(isoforms, key=lambda x: x.diff)
 
     def find_matching_isoforms(self, read_gene_profile, isoform_profiles, hint=None):
@@ -112,9 +113,8 @@ class LongReadAssigner:
             matching isoforms
 
         """
-        isoforms = self.match_profile(read_gene_profile, isoform_profiles, hint)
-        return [x[0] for x in filter(lambda x: x[1] == 0, isoforms)]
-
+        isoforms = self.match_profile(read_gene_profile, isoform_profiles, hint, diff_limit=0)
+        return [x[0] for x in isoforms]
 
     # select most similar isoform based on different criteria
     def select_similar_isoforms(self, combined_read_profile):
