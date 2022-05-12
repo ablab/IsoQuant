@@ -299,7 +299,7 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
             additional_options.append(annotation_file)
 
         command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
-                   '--secondary=yes', '-Y', '-t', str(args.threads)] + additional_options
+                   '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
         logger.info("Running minimap2 (takes a while)")
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
             logger.critical("Minimap2 finished with errors! See " + log_fpath)
