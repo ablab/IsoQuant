@@ -101,7 +101,8 @@ class GFFPrinter:
                                  'reference_gene_id "%s"; reference_transcript_id "%s";\n' % \
                                  (model.strand, model.gene_id, model.transcript_id,
                                   model.reference_gene, model.reference_transcript)
-                for e in model.exon_blocks:
+                exons_to_print = sorted(model.exon_blocks, reverse=True) if model.strand == '-' else model.exon_blocks
+                for e in exons_to_print:
                     self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns)
 
         # write read_id -> transcript_id map
