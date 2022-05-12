@@ -54,7 +54,8 @@ class TestMatchProfileAndFindMatchingIsoforms:
     def check(self, read_gene_profile, isoform_profiles, hint, expected):
         assert expected == self.assigner.match_profile(read_gene_profile, isoform_profiles, hint)
         expected = sorted([x[0] for x in expected if x[1] == 0])
-        assert expected == self.assigner.find_matching_isoforms(read_gene_profile, isoform_profiles, hint)
+        assert expected == self.assigner.find_matching_isoforms(MappedReadProfile(read_gene_profile, None, None, None),
+                                                                isoform_profiles, hint)
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
                              [([-1, 1, -1, 0], dict(id1=[-1, 1, -1, -1], id2=[-1, 1, -1, -2]),
