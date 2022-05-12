@@ -539,13 +539,15 @@ def is_subprofile(short_isoform_profile, long_isoform_profile):
     return True
 
 
-def difference_in_present_features(profile1, profile2, diff_limit=-1):
+def difference_in_present_features(profile1, profile2, diff_limit=-1, profile_range=None):
     """ computes Hamming distance for two profiles
 
     Parameters
     ----------
     profile1: list(int)
     profile2: list(int)
+    diff_limit: int
+    profile_range: tuple
 
     Returns
     -------
@@ -557,7 +559,10 @@ def difference_in_present_features(profile1, profile2, diff_limit=-1):
     d = 0
     if diff_limit == -1:
         diff_limit = len(profile1) + 1
-    for i in range(len(profile1)):
+    if profile_range is None:
+        profile_range = (0, len(profile1))
+
+    for i in range(*profile_range):
         if profile2[i] == 0 or profile1[i] == 0:
             continue
         if profile1[i] != profile2[i]:
@@ -593,9 +598,12 @@ def find_matching_positions(profile1, profile2):
     return matches
 
 
-def has_overlapping_features(profile1, profile2):
+def has_overlapping_features(profile1, profile2, profile_range=None):
     assert len(profile1) == len(profile2)
-    for i in range(len(profile1)):
+    if profile_range is None:
+        profile_range = (0, len(profile1))
+
+    for i in range(*profile_range):
         if profile1[i] == profile2[i] == 1:
             return True
     return False

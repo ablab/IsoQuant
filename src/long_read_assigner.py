@@ -55,9 +55,10 @@ class LongReadAssigner:
     @staticmethod
     def find_overlapping_isoforms(read_exon_split_profile, isoform_profiles, hint=None):
         isoforms = set()
-        isoform_set = hint if hint is not None else isoform_profiles.keys()
+        isoform_set = hint if hint is not None else isoform_profiles.profiles.keys()
         for isoform_id in isoform_set:
-            if has_overlapping_features(isoform_profiles[isoform_id], read_exon_split_profile.gene_profile):
+            if has_overlapping_features(isoform_profiles.profiles[isoform_id], read_exon_split_profile.gene_profile,
+                                        profile_range=isoform_profiles.profile_ranges[isoform_id]):
                 isoforms.add(isoform_id)
         return isoforms
 
@@ -120,7 +121,7 @@ class LongReadAssigner:
     def select_similar_isoforms(self, combined_read_profile):
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
         overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile,
-                                                              self.gene_info.split_exon_profiles.profiles)
+                                                              self.gene_info.split_exon_profiles)
         if not overlapping_isoforms:
             return
         # select isoforms with non-negative nucleotide score
@@ -428,7 +429,7 @@ class LongReadAssigner:
         if not containing_isoforms:
             return None
 
-        overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile, isoform_split_exon_profiles,
+        overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile, self.gene_info.split_exon_profiles,
                                                               hint=containing_isoforms)
         if not overlapping_isoforms:
             return None

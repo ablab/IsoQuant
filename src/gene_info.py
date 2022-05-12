@@ -46,11 +46,9 @@ class TranscriptModel:
 
 # storage for feature profiles of all known isoforms of a gene or a set of overlapping genes
 class FeatureProfiles:
-    profiles = {}
-    features = []
-
     def __init__(self):
         self.profiles = {}
+        self.profile_ranges = {}
         self.features = []
 
     def set_features(self, features):
@@ -58,18 +56,27 @@ class FeatureProfiles:
 
     def set_profiles(self, transcript_id, transcript_features, transcript_region, comaprator):
         self.profiles[transcript_id] = [-1] * len(self.features)
+        current_profile = self.profiles[transcript_id]
 
         for pos, feature in enumerate(self.features):
             if not overlaps(feature, transcript_region):
-                self.profiles[transcript_id][pos] = -2
+                current_profile[pos] = -2
 
         pos = 0
         for feature in transcript_features:
             while pos < len(self.features) and not comaprator(feature, self.features[pos]):
                 pos += 1
             while pos < len(self.features) and comaprator(feature, self.features[pos]):
-                self.profiles[transcript_id][pos] = 1
+                current_profile[pos] = 1
                 pos += 1
+
+        start_pos = 0
+        while start_pos < len(current_profile) and current_profile[start_pos] == -2:
+            start_pos += 1
+        end_pos = len(current_profile) - 1
+        while end_pos >= 0 and current_profile[end_pos] == -2:
+            end_pos -= 1
+        self.profile_ranges[transcript_id] = (start_pos, end_pos + 1)
 
     def print_debug(self):
         logger.debug(str(self.features))
