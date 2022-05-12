@@ -53,19 +53,19 @@ class LongReadAssigner:
         return distances
 
     @staticmethod
-    def find_overlapping_isoforms(read_exon_split_profile, isoform_profiles):
+    def find_overlapping_isoforms(read_exon_split_profile, isoform_profiles, hint=None):
         isoforms = set()
-        for isoform_id, isoform_profile in isoform_profiles.items():
-            if has_overlapping_features(isoform_profile, read_exon_split_profile.gene_profile):
+        isoform_set = hint if hint is not None else isoform_profiles.keys()
+        for isoform_id in isoform_set:
+            if has_overlapping_features(isoform_profiles[isoform_id], read_exon_split_profile.gene_profile):
                 isoforms.add(isoform_id)
         return isoforms
 
     def find_containing_isoforms(self, read_exon_split_profile, isoform_profiles, hint=None):
         isoforms = set()
         read_exons = read_exon_split_profile.read_features
-        for isoform_id, isoform_profile in isoform_profiles.items():
-            if hint and isoform_id not in hint:
-                continue
+        isoform_set = hint if hint is not None else isoform_profiles.keys()
+        for isoform_id in isoform_set:
             isoform_region = (self.gene_info.transcript_start(isoform_id) - self.params.min_abs_exon_overlap,
                               self.gene_info.transcript_end(isoform_id) + self.params.min_abs_exon_overlap)
             read_region = (read_exons[0][0], read_exons[-1][1])
@@ -109,7 +109,7 @@ class LongReadAssigner:
 
         Returns
         -------
-        result: set of str
+        result: list(str)
             matching isoforms
 
         """
@@ -423,17 +423,19 @@ class LongReadAssigner:
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
         isoform_split_exon_profiles = self.gene_info.split_exon_profiles.profiles
-        overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile, isoform_split_exon_profiles)
-        assert overlapping_isoforms
 
-        containing_isoforms = self.find_containing_isoforms(read_split_exon_profile, isoform_split_exon_profiles,
-                                                            hint=overlapping_isoforms)
+        containing_isoforms = self.find_containing_isoforms(read_split_exon_profile, isoform_split_exon_profiles)
         if not containing_isoforms:
+            return None
+
+        overlapping_isoforms = self.find_overlapping_isoforms(read_split_exon_profile, isoform_split_exon_profiles,
+                                                              hint=containing_isoforms)
+        if not overlapping_isoforms:
             return None
 
         consistent_isoforms = self.find_matching_isoforms(read_intron_profile.gene_profile,
                                                           self.gene_info.intron_profiles.profiles,
-                                                          hint=containing_isoforms)
+                                                          hint=overlapping_isoforms)
 
         if not read_intron_profile.read_profile:
             assignment = self.match_consistent_unspliced(read_id, combined_read_profile, consistent_isoforms)
