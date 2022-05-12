@@ -181,6 +181,19 @@ class TestProfiles:
     def test_difference_in_present_features(self, profile1, profile2, expected):
         assert expected == difference_in_present_features(profile1, profile2)
 
+    @pytest.mark.parametrize("profile1, profile2, profile_range, expected",
+                             [([], [], None, 0), ([0], [1], (0, 1), 0), ([1], [1], (0, 1), 0),
+                              ([1, -1], [1, 1], (1, 2), 1),
+                              ([0], [0], (0, 1), 0), ([0, 1], [1, 1], (0, 1), 0),
+                              ([-1, 1], [1, 0], (0, 1), 1), ([1, 0, -1], [0, 1, 1], (2, 3), 1)])
+    def test_difference_in_present_features_with_range(self, profile1, profile2, profile_range, expected):
+        assert expected == difference_in_present_features(profile1, profile2, profile_range=profile_range)
+
+    @pytest.mark.parametrize("profile1, profile2, diff_limit, expected",
+                             [([1, -1, -1], [-1, 1, 1], 0, 1)])
+    def test_difference_in_present_features_with_lim(self, profile1, profile2, diff_limit, expected):
+        assert expected == difference_in_present_features(profile1, profile2, diff_limit=diff_limit)
+
     @pytest.mark.parametrize("profile1, profile2, expected", [([0], [1], 0), ([0, 1], [1, 1], 1),
                                                               ([0, 1], [1, -2], 0), ([0, 1, -1], [-2, 1, 1], 1)])
     def test_count_both_present_features(self, profile1, profile2, expected):
