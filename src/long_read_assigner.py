@@ -57,8 +57,10 @@ class LongReadAssigner:
         isoforms = set()
         isoform_set = hint if hint is not None else isoform_profiles.profiles.keys()
         for isoform_id in isoform_set:
+            profile_range = overlap_intervals(read_exon_split_profile.gene_profile_range,
+                                              isoform_profiles.profile_ranges[isoform_id])
             if has_overlapping_features(isoform_profiles.profiles[isoform_id], read_exon_split_profile.gene_profile,
-                                        profile_range=isoform_profiles.profile_ranges[isoform_id]):
+                                        profile_range=profile_range):
                 isoforms.add(isoform_id)
         return isoforms
 
@@ -74,7 +76,7 @@ class LongReadAssigner:
                 isoforms.add(isoform_id)
         return isoforms
 
-    def match_profile(self, read_gene_profile, isoform_profiles, hint=None, diff_limit=-1):
+    def match_profile(self, read_gene_profile, isoform_profiles, hint=None, diff_limit=-1, profile_range=None):
         """ match read profiles to a known isoform junction profile
 
         Parameters
@@ -93,12 +95,12 @@ class LongReadAssigner:
         isoform_set = hint if hint is not None else isoform_profiles.keys()
         for isoform_id in isoform_set:
             isoform_profile = isoform_profiles[isoform_id]
-            diff = difference_in_present_features(isoform_profile, read_gene_profile, diff_limit)
+            diff = difference_in_present_features(isoform_profile, read_gene_profile, diff_limit, profile_range)
             if diff_limit == -1 or diff <= diff_limit:
                 isoforms.append(IsoformDiff(isoform_id, diff))
         return sorted(isoforms, key=lambda x: x.diff)
 
-    def find_matching_isoforms(self, read_gene_profile, isoform_profiles, hint=None):
+    def find_matching_isoforms(self, read_profile, isoform_profiles, hint=None):
         """ match read profiles to a known isoform junction profile
 
         Parameters
@@ -114,7 +116,8 @@ class LongReadAssigner:
             matching isoforms
 
         """
-        isoforms = self.match_profile(read_gene_profile, isoform_profiles, hint, diff_limit=0)
+        isoforms = self.match_profile(read_profile.gene_profile, isoform_profiles, hint, diff_limit=0,
+                                      profile_range=read_profile.gene_profile_range)
         return [x[0] for x in isoforms]
 
     # select most similar isoform based on different criteria
@@ -434,7 +437,7 @@ class LongReadAssigner:
         if not overlapping_isoforms:
             return None
 
-        consistent_isoforms = self.find_matching_isoforms(read_intron_profile.gene_profile,
+        consistent_isoforms = self.find_matching_isoforms(read_intron_profile,
                                                           self.gene_info.intron_profiles.profiles,
                                                           hint=overlapping_isoforms)
 
@@ -457,7 +460,7 @@ class LongReadAssigner:
         matched_isoforms = consistent_isoforms
         if len(consistent_isoforms) > 1:
             exon_matched_isoforms = \
-                self.find_matching_isoforms(combined_read_profile.read_split_exon_profile.gene_profile,
+                self.find_matching_isoforms(combined_read_profile.read_split_exon_profile,
                                             isoform_split_exon_profiles, hint=consistent_isoforms)
             if len(exon_matched_isoforms) != 0:
                 matched_isoforms = exon_matched_isoforms
