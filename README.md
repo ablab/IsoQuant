@@ -52,7 +52,7 @@
 
 IsoQuant is a tool for reference-based analysis of long RNA reads, such as PacBio or Oxford Nanopores. IsoQuant maps reads to the reference genome and assigns them to the annotated isoforms based on their intron and exon structure. IsoQuant is also capable of discovering various modifications, such as intron retention, alternative splice sites, skipped exons etc. IsoQuant further performs gene, isoform, exon and intron quantification. If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. In addition, IsoQuant generates discovered transcript models, including novel ones.
 
-IsoQuant version 2.2.1 was released under GPLv2 on April 28th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 2.2.2 was released under GPLv2 on May 18th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
