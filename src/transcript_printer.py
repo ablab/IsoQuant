@@ -82,10 +82,9 @@ class GFFPrinter:
                     if len(model_introns) == 0:
                         canonical_info = "Canonical=Unspliced;"
                     else:
-                        strand = transcript_model_constructor.gene_info.isoform_strands[model.reference_transcript]
                         all_canonical = self.io_support.check_sites_are_canonical(model_introns,
                                                                                   transcript_model_constructor.gene_info,
-                                                                                  strand)
+                                                                                  model.strand)
                         canonical_info = "Canonical=" + str(all_canonical) + ";"
                     model.additional_info += canonical_info
 
