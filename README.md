@@ -155,7 +155,10 @@ See more in [examples](#examples).
 
 ### Basic options
 `--output` (or `-o`) 
-    Output folder, will be created automatically.  
+    Output folder, will be created automatically.
+
+Note: if your output folder is located on a shared disk, use `--genedb_output` for storing
+annotation database.
 
 `--help` (or `-h`) 
     Prints help message.
@@ -319,7 +322,12 @@ We recommend to not modify these options unless you are clearly aware of their e
     Annotation in BED12 format produced by `paftools.js gff2bed` (can be found in `minimap2`), will be created automatically if not given.
 
 `--delta` 
-    Delta for inexact splice junction comparison, chosen automatically based on data type.  
+    Delta for inexact splice junction comparison, chosen automatically based on data type.
+
+`--genedb_output`
+    If your output folder is located on a shared storage (e.g. NFS share), use this option to set another path 
+    for storing the annotation database, because SQLite database cannot be created on a shared disks. 
+    The folder will be created automatically.
 
 
 ### Examples

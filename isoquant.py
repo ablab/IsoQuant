@@ -116,6 +116,8 @@ def parse_args(args=None, namespace=None):
                           default=None)
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "; chosen based on data type if not set", type=str)
+    add_additional_option("--genedb_output", help="output folder for converted gene database,"
+                                                  " will be created automatically (same as output by default)", type=str)
     add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
@@ -134,6 +136,11 @@ def parse_args(args=None, namespace=None):
         print("WARNING! Output folder already exists, some files may be overwritten")
     else:
         os.makedirs(args.output)
+
+    if args.genedb_output is None:
+        args.genedb_output = args.output
+    elif not os.path.exists(args.genedb_output):
+        os.makedirs(args.genedb_output)
 
     if not check_params(args):
         parser.print_usage()
