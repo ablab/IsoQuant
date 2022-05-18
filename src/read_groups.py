@@ -5,7 +5,7 @@
 ############################################################################
 
 import logging
-
+import gzip
 from src.common import *
 
 logger = logging.getLogger('IsoQuant')
@@ -67,8 +67,14 @@ class ReadTableGrouper(AbstractReadGrouper):
         AbstractReadGrouper.__init__(self)
         self.read_map = {}
         min_columns = max(read_id_column_index, group_id_column_index)
-        logger.info("Reading")
-        for l in open(table_tsv_file, 'r'):
+        logger.info("Reading read groups from " + table_tsv_file)
+        _, outer_ext = os.path.splitext(table_tsv_file)
+        if outer_ext.lower() in ['.gz', '.gzip']:
+            handle = gzip.open(table_tsv_file, "rt")
+        else:
+            handle = open(table_tsv_file, 'r')
+
+        for l in handle:
             l = l.strip()
             if l.startswith('#') or not l:
                 continue
