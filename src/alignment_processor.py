@@ -70,6 +70,11 @@ class LongReadAlignmentProcessor:
             # FIXME: temporary solution - process gene outside
             to_fetch_start = max(0, genic_region[0] - 100)
             to_fetch_end = min(bamfile_in.get_reference_length(self.gene_info.chr_id), genic_region[1] + 100)
+            if to_fetch_end < to_fetch_start:
+                logger.warning("Invalid region for the BAM file: %s:%d-%d, will be skipped. "
+                               "Check that provided reference genome is the same that was used for the alignment." %
+                               (self.gene_info.chr_id, to_fetch_start, to_fetch_end))
+                continue
             for alignment in bamfile_in.fetch(self.gene_info.chr_id, to_fetch_start, to_fetch_end):
                 read_id = alignment.query_name
                 if alignment.reference_id == -1:
