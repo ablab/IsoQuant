@@ -12,6 +12,7 @@ from src.common import *
 
 logger = logging.getLogger('IsoQuant')
 
+
 @unique
 class ReadAssignmentType(Enum):
     unique = 1

@@ -451,11 +451,13 @@ class DatasetProcessor:
             printer_list.append(self.sqanti_printer)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
-        self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
+        self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, self.args.gene_quantification,
                                                 ignore_read_groups=True, output_zeroes=False)
         self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
+                                                            self.args.transcript_quantification,
                                                             ignore_read_groups=True, output_zeroes=False)
         self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
+                                                                  self.args.transcript_quantification,
                                                                   ignore_read_groups=True, output_zeroes=False)
 
         self.transcript_model_global_counter = CompositeCounter([self.transcript_model_counter])
@@ -468,9 +470,13 @@ class DatasetProcessor:
             self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
 
         if self.args.read_group:
-            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv, self.read_grouper)
-            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv, self.read_grouper)
+            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
+                                                            self.args.gene_quantification, self.read_grouper)
+            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
+                                                                        self.args.transcript_quantification,
+                                                                        self.read_grouper)
             self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
+                                                                              self.args.transcript_quantification,
                                                                               self.read_grouper, output_zeroes=False)
 
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
