@@ -11,6 +11,60 @@ from src.read_groups import *
 logger = logging.getLogger('IsoQuant')
 
 
+@unique
+class CountingStrategies(Enum):
+    unique_only = 1
+    with_ambiguous = 2
+    inconsistent_all = 10
+    inconsistent_minor = 11
+    all = 20
+    all_minor = 21
+
+
+COUNTING_STRATEGIES = ["unique_only", "with_ambiguous", "with_inconsistent", "all"]
+
+
+class ReadWeightCounter:
+    def __init__(self, strategy, gene_counting=True):
+        if strategy == "unique_only":
+            self.strategy = CountingStrategies.unique_only
+        elif strategy == "with_ambiguous":
+            self.strategy = CountingStrategies.with_ambiguous
+        elif strategy == "all":
+            if gene_counting:
+                self.strategy = CountingStrategies.all
+            else:
+                self.strategy = CountingStrategies.all_minor
+        elif strategy == "with_inconsistent":
+            if gene_counting:
+                self.strategy = CountingStrategies.inconsistent_all
+            else:
+                self.strategy = CountingStrategies.inconsistent_minor
+        else:
+            raise KeyError("Unknown quantification strategy: " + strategy)
+
+    def process_inconsistent(self, isoform_match, feature_count):
+        if self.strategy == CountingStrategies.unique_only or self.strategy == CountingStrategies.with_ambiguous \
+                or feature_count > 1:
+            return 0.0
+        elif self.strategy == CountingStrategies.all or self.strategy == CountingStrategies.inconsistent_all:
+            return 1.0
+        elif self.strategy == CountingStrategies.all_minor or self.strategy == CountingStrategies.inconsistent_minor:
+            for m in isoform_match.match_subclassifications:
+                if m.event_type not in nonintronic_events:
+                    return 0.0
+            return 1.0
+        return 0.0
+
+    def process_ambiguous(self, feature_count):
+        if self.strategy in {CountingStrategies.with_ambiguous,
+                             CountingStrategies.all_minor,
+                             CountingStrategies.all}:
+            return 1.0 / float(feature_count)
+        else:
+            return 0.0
+
+
 class AbstractCounter:
     def __init__(self, output_prefix, ignore_read_groups=False, output_zeroes=True):
         self.ignore_read_groups = ignore_read_groups
@@ -60,12 +114,13 @@ class CompositeCounter:
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, get_feature_id, read_grouper,
+    def __init__(self, output_prefix, get_feature_id, read_grouper, read_counter,
                  ignore_read_groups=False, output_zeroes=True):
         AbstractCounter.__init__(self, output_prefix, ignore_read_groups, output_zeroes)
         self.get_feature_id = get_feature_id
         self.all_features = set()
         self.all_groups = read_grouper.read_groups if read_grouper else []
+        self.read_counter = read_counter
 
         self.ambiguous_reads = 0
         self.not_assigned_reads = 0
@@ -82,14 +137,25 @@ class AssignedFeatureCounter(AbstractCounter):
         elif read_assignment.assignment_type == ReadAssignmentType.ambiguous:
             feature_ids = set([self.get_feature_id(m) for m in read_assignment.isoform_matches])
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+
             if len(feature_ids) == 1:  # different isoforms of same gene
                 feature_id = list(feature_ids)[0]
-                self.feature_counter[group_id][feature_id] += 1
+                self.feature_counter[group_id][feature_id] += 1.0
                 self.all_features.add(feature_id)
             else:
-                self.ambiguous_reads += 1
                 for feature_id in feature_ids:
-                    self.feature_counter[group_id][feature_id] += 1.0 / float(len(feature_ids))
+                    count_value = self.read_counter.process_ambiguous(len(feature_ids))
+                    self.feature_counter[group_id][feature_id] += count_value
+                    if count_value > 0:
+                        self.all_features.add(feature_id)
+                self.ambiguous_reads += 1
+        elif read_assignment.assignment_type == ReadAssignmentType.inconsistent:
+            feature_ids = set([self.get_feature_id(m) for m in read_assignment.isoform_matches])
+            group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+            count_value = self.read_counter.process_inconsistent(read_assignment.isoform_matches[0], len(feature_ids))
+            if count_value > 0:
+                for feature_id in feature_ids:
+                    self.feature_counter[group_id][feature_id] += count_value
                     self.all_features.add(feature_id)
         elif read_assignment.assignment_type == ReadAssignmentType.noninformative:
             self.not_assigned_reads += 1
@@ -97,7 +163,7 @@ class AssignedFeatureCounter(AbstractCounter):
                 read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
-            self.feature_counter[group_id][feature_id] += 1
+            self.feature_counter[group_id][feature_id] += 1.0
             self.all_features.add(feature_id)
             transcript_id = read_assignment.isoform_matches[0].assigned_transcript
             if len(read_assignment.gene_info.all_isoforms_introns[transcript_id]) == 0 or len(read_assignment.corrected_exons) > 1:
@@ -114,7 +180,8 @@ class AssignedFeatureCounter(AbstractCounter):
         elif len(feature_ids) > 1:
             self.ambiguous_reads += 1
             for feature_id in feature_ids:
-                self.feature_counter[group_id][feature_id] += 1.0 / float(len(feature_ids))
+                count_value = self.read_counter.process_ambiguous(len(feature_ids))
+                self.feature_counter[group_id][feature_id] += count_value
                 # self.confirmed_features.add((group_id, feature_id))
                 self.all_features.add(feature_id)
             else:
@@ -209,13 +276,17 @@ class AssignedFeatureCounter(AbstractCounter):
                         outf.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
 
 
-def create_gene_counter(output_file_name, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
+def create_gene_counter(output_file_name, strategy, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
+    read_weight_counter = ReadWeightCounter(strategy, gene_counting=True)
     return AssignedFeatureCounter(output_file_name, get_assigned_gene_id,
-                                  read_grouper, ignore_read_groups, output_zeroes)
+                                  read_grouper, read_weight_counter,
+                                  ignore_read_groups, output_zeroes)
 
 
-def create_transcript_counter(output_file_name, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
-    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id, read_grouper,
+def create_transcript_counter(output_file_name, strategy, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
+    read_weight_counter = ReadWeightCounter(strategy, gene_counting=False)
+    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id,
+                                  read_grouper, read_weight_counter,
                                   ignore_read_groups, output_zeroes)
 
 

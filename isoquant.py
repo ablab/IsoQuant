@@ -11,6 +11,7 @@ from shutil import rmtree
 from src.gtf2db import *
 from src.read_mapper import *
 from src.dataset_processor import *
+from src.long_read_counter import COUNTING_STRATEGIES
 
 logger = logging.getLogger('IsoQuant')
 
@@ -83,6 +84,11 @@ def parse_args(args=None, namespace=None):
                                                                   "default_ont", "sensitive_ont", "all", "assembly"],
                         help="transcript model construction strategy to use",
                         type=str, default=None)
+
+    parser.add_argument("--transcript_quantification", choices=COUNTING_STRATEGIES,
+                        help="transcript quantification strategy", type=str, default="unique_only")
+    parser.add_argument("--gene_quantification", choices=COUNTING_STRATEGIES,
+                        help="gene quantification strategy", type=str, default="with_inconsistent")
 
     # OUTPUT PROPERTIES
     parser.add_argument("--full_help", action='help', help="show full list of options")
