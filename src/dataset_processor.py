@@ -246,7 +246,7 @@ class DatasetProcessor:
         if self.args.needs_reference:
             logger.info("Loading reference genome from " + self.args.reference)
             _, outer_ext = os.path.splitext(self.args.reference)
-            if outer_ext.lower() in ['.gz', '.gzip']:
+            if outer_ext.lower() in ['.gz', '.gzip', '.bgz']:
                 with gzip.open(self.args.reference, "rt") as handle:
                     self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(handle, "fasta"))
             else:
