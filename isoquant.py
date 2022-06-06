@@ -94,6 +94,8 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--full_help", action='help', help="show full list of options")
     parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
     parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
+    parser.add_argument("--low_memory", help="decrease RAM consumption (leads to slower processing)",
+                        action='store_true', default=False)
 
     parser.add_argument('--check_canonical', action='store_true', default=False,
                         help="report whether splice junctions are canonical (requires reference genome)")

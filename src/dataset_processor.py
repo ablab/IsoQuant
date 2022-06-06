@@ -243,14 +243,30 @@ class DatasetProcessor:
         if parallel: return
         logger.info("Loading gene database from " + self.args.genedb)
         self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
+
+        self.args.gunzipped_reference = None
         if self.args.needs_reference:
             logger.info("Loading reference genome from " + self.args.reference)
-            _, outer_ext = os.path.splitext(self.args.reference)
-            if outer_ext.lower() in ['.gz', '.gzip', '.bgz']:
+            ref_name, outer_ext = os.path.splitext(os.path.basename(self.args.reference))
+            low_ext = outer_ext.lower()
+            if low_ext in ['.gz', '.gzip', '.bgz']:
                 with gzip.open(self.args.reference, "rt") as handle:
-                    self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(handle, "fasta"))
+                    if self.args.low_memory:
+                        if low_ext == '.bgz':
+                            self.reference_record_dict = SeqIO.index(self.args.reference, "fasta")
+                        else:
+                            self.args.gunzipped_reference = os.path.join(args.output, ref_name)
+                            with open(self.args.gunzipped_reference, "w") as outf:
+                                shutil.copyfileobj(handle, outf)
+                            logger.info("Loading uncompressed reference from " + self.args.gunzipped_reference)
+                            self.reference_record_dict = SeqIO.index(self.args.gunzipped_reference, "fasta")
+                    else:
+                        self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(handle, "fasta"))
             else:
-                self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(self.args.reference, "fasta"))
+                if self.args.low_memory:
+                    self.reference_record_dict = SeqIO.index(self.args.reference, "fasta")
+                else:
+                    self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(self.args.reference, "fasta"))
         else:
             self.reference_record_dict = None
         self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
@@ -258,6 +274,11 @@ class DatasetProcessor:
         self.multimapped_reads = defaultdict(list)
         # chr_id -> read_id -> list of assignments
         self.multimapped_info_dict = defaultdict(lambda : defaultdict(list))
+
+    def __del__(self):
+        if not self.args.keep_tmp and self.args.gunzipped_reference:
+            if os.path.exists(self.args.gunzipped_reference):
+                os.remove(self.args.gunzipped_reference)
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
