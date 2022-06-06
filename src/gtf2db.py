@@ -91,7 +91,7 @@ def db2bed(bed, db):
 
 def gtf2db(gtf, db, complete_db=False):
     logger.info("Converting gene annotation file to .db format (takes a while)...")
-    gffutils.create_db(gtf, db, force=True, keep_order=True, merge_strategy='merge',
+    gffutils.create_db(gtf, db, force=True, keep_order=True, merge_strategy='error',
                        sort_attribute_values=True, disable_infer_transcripts=complete_db,
                        disable_infer_genes=complete_db)
     logger.info("Gene database written to " + db)
