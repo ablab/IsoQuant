@@ -6,7 +6,9 @@
 # See file LICENSE for details.
 ############################################################################
 import glob
+import sys
 from shutil import rmtree
+from io import StringIO
 
 from src.gtf2db import *
 from src.read_mapper import *
@@ -502,6 +504,13 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except:
-        print("IsoQuant failed with the following error, please, submit this issue to https://github.com/ablab/IsoQuant/issues")
-        print_exc()
+        strout = StringIO()
+        if logger.handlers:
+            print_exc(file=strout)
+            logger.critical("IsoQuant failed with the following error, please, submit this issue to "
+                            "https://github.com/ablab/IsoQuant/issues" + strout.read())
+        else:
+            sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
+                             "https://github.com/ablab/IsoQuant/issues")
+            print_exc(file=sys.stderr)
         sys.exit(-1)
