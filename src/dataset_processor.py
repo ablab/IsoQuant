@@ -139,6 +139,24 @@ def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, curren
     return processed_reads, read_grouper.read_groups
 
 
+def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_record):
+    tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
+    processed_reads = []
+    bam_files = list(map(lambda x: x[0], sample.file_list))
+    bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
+    logger.info("Processing chromosome " + chr_id)
+    alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, current_chr_record, read_grouper)
+
+    for region, assignment_storage in alignment_collector.process():
+        gene_info = GeneInfo.from_region(chr_id, region[0], region[1], args.delta)
+        tmp_printer.add_gene_info(gene_info)
+        for read_assignment in assignment_storage:
+            tmp_printer.add_read_info(read_assignment)
+            processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
+    logger.info("Finished processing chromosome " + chr_id)
+    return processed_reads, read_grouper.read_groups
+
+
 class ReadAssignmentLoader:
     def __init__(self, save_file_name, gffutils_db, multimappers_dict):
         logger.info("Loading read assignments from " + save_file_name)
@@ -207,7 +225,11 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
     processor = DatasetProcessor(args, parallel=True)
     processor.read_grouper = read_grouper
     processor.create_aggregators(sample)
-    gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
+    if args.genedb:
+        gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
+    else:
+        gffutils_db = None
+
     logger.info("Processing chromosome " + chr_id)
     transcripts = []
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
@@ -237,14 +259,20 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
 class DatasetProcessor:
     def __init__(self, args, parallel=False):
         self.args = args
+        self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.read_grouper = create_read_grouper(args)
         self.io_support = IOSupport(self.args)
         if parallel: return
-        logger.info("Loading gene database from " + self.args.genedb)
-        self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
+        if args.genedb:
+            logger.info("Loading gene database from " + self.args.genedb)
+            self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
+            self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
+            self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
+        else:
+            self.gffutils_db = None
+            self.gene_clusters = None
 
-        self.args.gunzipped_reference = None
         if self.args.needs_reference:
             logger.info("Loading reference genome from " + self.args.reference)
             ref_name, outer_ext = os.path.splitext(os.path.basename(self.args.reference))
@@ -269,8 +297,7 @@ class DatasetProcessor:
                     self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(self.args.reference, "fasta"))
         else:
             self.reference_record_dict = None
-        self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
-        self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
+
         self.multimapped_reads = defaultdict(list)
         # chr_id -> read_id -> list of assignments
         self.multimapped_info_dict = defaultdict(lambda : defaultdict(list))
@@ -296,13 +323,21 @@ class DatasetProcessor:
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
             logger.info('Using read assignments from {}*'.format(saves_file))
-        else:
+        elif self.gffutils_db is not None:
             self.assign_reads(sample)
             saves_file = sample.out_raw_file
             logger.info('Read assignments files saved to {}*. '.
                         format(sample.out_raw_file))
             if not self.args.keep_tmp:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
+        else:
+            self.collect_reads(sample)
+            saves_file = sample.out_raw_file
+            logger.info('Read alignments files saved to {}*. '.
+                        format(sample.out_raw_file))
+            if not self.args.keep_tmp:
+                logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
+
         total_alignments, polya_found, all_read_groups = self.load_read_info(saves_file)
 
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
@@ -316,6 +351,42 @@ class DatasetProcessor:
             for f in glob.glob(saves_file + "_*"):
                 os.remove(f)
         logger.info("Processed sample " + sample.label)
+
+    def collect_reads(self, sample):
+        logger.info('Collecting read alignments')
+        pool = Pool(self.args.threads)
+        chr_ids = sorted(self.reference_record_dict.keys())
+        results = pool.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
+                                                            (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
+                                                           for chr_id in chr_ids], chunksize=1)
+        pool.close()
+        pool.join()
+        processed_reads, read_groups = [x[0] for x in results], [x[1] for x in results]
+
+        polya_assignments = 0
+        total_assignments = 0
+        used_ids = set()
+        for storage in processed_reads:
+            for a in storage:
+                if a.read_id in used_ids:
+                    continue
+                total_assignments += 1
+                polya_assignments += 1 if a.polyA_found else 0
+                used_ids.add(a.read_id)
+
+        multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "_multimappers", "wb"),  -1)
+        multimap_pickler.fast = True
+        info_pickler = pickle.Pickler(open(sample.out_raw_file + "_info", "wb"),  -1)
+        info_pickler.dump(total_assignments)
+        info_pickler.dump(polya_assignments)
+        all_read_groups = set([r for sublist in read_groups for r in sublist])
+        info_pickler.dump(all_read_groups)
+
+        if total_assignments == 0:
+            logger.warning("No reads were assigned to isoforms, check your input files")
+        else:
+            logger.info('Finished alignment collection, total alignments %d, polyA percentage %.1f' %
+                        (total_assignments, 100 * polya_assignments / total_assignments))
 
     def assign_reads(self, sample):
         logger.info('Assigning reads to isoforms')
@@ -366,9 +437,13 @@ class DatasetProcessor:
             logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
+
     def process_assigned_reads(self, sample, dump_filename):
-        chrom_clusters = self.get_chromosome_gene_clusters()
-        chr_ids = [chr_id for chr_id, c in chrom_clusters]
+        if self.gffutils_db:
+            chrom_clusters = self.get_chromosome_gene_clusters()
+            chr_ids = [chr_id for chr_id, c in chrom_clusters]
+        else:
+            chr_ids = sorted(self.reference_record_dict.keys())
 
         pool = Pool(self.args.threads)
         logger.info("Processing assigned reads " + sample.label)

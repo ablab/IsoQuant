@@ -17,6 +17,7 @@ logger = logging.getLogger('IsoQuant')
 class ReadAssignmentType(Enum):
     unique = 1
     noninformative = 0
+    intergenic = 20
     ambiguous = 10
     unique_minor_difference = 2
     inconsistent = 3
@@ -385,7 +386,7 @@ class BasicReadAssignment:
         self.chr_id = read_assignment.chr_id
         self.start = read_assignment.start()
         self.end = read_assignment.end()
-        self.gene_id = gene_info.gene_db_list[0].id
+        self.gene_id = gene_info.gene_db_list[0].id if gene_info.gene_db_list else ""
         self.multimapper = read_assignment.multimapper
         self.polyA_found = read_assignment.polyA_found
         self.assignment_type = read_assignment.assignment_type
@@ -403,6 +404,7 @@ class ReadAssignment:
         self.read_id = read_id
         self.exons = None
         self.corrected_exons = None
+        self.corrected_introns = None
         self.gene_info = None
         self.polyA_found = False
         self.cage_found = False

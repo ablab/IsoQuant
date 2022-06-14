@@ -143,7 +143,7 @@ class IntronGraph:
             self.starting_known_positions[introns[0]].append(self.gene_info.all_isoforms_exons[t][0][0])
             self.terminal_known_positions[introns[-1]].append(self.gene_info.all_isoforms_exons[t][-1][1])
 
-        logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
+        # logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
         self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
         self.construct()
         self.simplify()
@@ -205,7 +205,7 @@ class IntronGraph:
         self.intron_collector.add_substitute(to_collapse, substitute_vertex)
 
     def construct(self):
-        logger.debug("Constructing graph for %s" % self.gene_info.gene_db_list[0].id)
+        # logger.debug("Constructing graph for %s" % self.gene_info.gene_db_list[0].id)
         for assignment in self.read_assignments:
             if assignment.multimapper or any(intron in self.intron_collector.discarded_introns for intron in assignment.corrected_introns):
                 continue
@@ -319,7 +319,7 @@ class IntronGraph:
         return substitute_dict
 
     def attach_terminal_positions(self):
-        logger.debug("Setting terminal positions paths for %s" % self.gene_info.gene_db_list[0].id)
+        # logger.debug("Setting terminal positions paths for %s" % self.gene_info.gene_db_list[0].id)
         polya_ends, read_ends, polyt_starts, read_starts = self.collect_terminal_positions()
 
         for intron in sorted(self.intron_collector.clustered_introns):

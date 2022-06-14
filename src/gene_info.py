@@ -247,6 +247,36 @@ class GeneInfo:
 
         return cls([], None, delta)
 
+    @classmethod
+    def from_region(cls, chr_id, start, end, delta=0):
+        gene_info = cls.__new__(cls)
+        gene_info.db = None
+        gene_info.gene_db_list = []
+        # gene region
+        gene_info.chr_id = chr_id
+        gene_info.start = start
+        gene_info.end = end
+        gene_info.delta = delta
+
+        # profiles for all known isoforms
+        gene_info.intron_profiles = FeatureProfiles()
+        gene_info.exon_profiles = FeatureProfiles()
+        gene_info.split_exon_profiles = FeatureProfiles()
+        gene_info.ambiguous_isoforms = set()
+
+        gene_info.all_isoforms_exons = {}
+        gene_info.all_isoforms_introns = {}
+        gene_info.isoform_strands = {}
+        gene_info.gene_id_map = {}
+        gene_info.regions_for_bam_fetch = [(start, end)]
+        gene_info.exon_property_map = None
+        gene_info.intron_property_map = None
+
+        return gene_info
+
+    def empty(self):
+        return not self.gene_db_list and not self.intron_profiles.features
+
     def print_debug(self):
         gene_names = []
         for g in self.gene_db_list:

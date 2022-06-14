@@ -39,7 +39,9 @@ class GFFPrinter:
     def dump(self, transcript_model_constructor):
         # write exons to GFF
         gene_to_model_dict = defaultdict(list)
-        gene_regions = transcript_model_constructor.gene_info.get_gene_regions()
+        gene_regions = {}
+        if not transcript_model_constructor.gene_info.empty():
+            gene_regions = transcript_model_constructor.gene_info.get_gene_regions()
         GFFGeneInfo = namedtuple("GFFGeneInfo", ("chr_id", "strand", "gene_region"))
         gene_info_dict = {}
 

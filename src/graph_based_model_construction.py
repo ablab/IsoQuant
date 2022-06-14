@@ -76,6 +76,8 @@ class GraphBasedModelConstructor:
                 self.strand_detector.set_strand(intron)
 
     def select_reference_gene(self, transcript_introns, transcript_range, transcript_strand):
+        if self.gene_info.empty():
+            return None
         gene_counts = defaultdict(int)
         for intron in transcript_introns:
             if intron not in self.intron_genes:

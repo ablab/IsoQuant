@@ -6,6 +6,7 @@
 
 import logging
 import pysam
+from queue import PriorityQueue, Empty
 from Bio import SeqIO
 
 from src.long_read_assigner import *
@@ -181,3 +182,129 @@ class LongReadAlignmentProcessor:
                 junctions_with_indels += 1
 
         return indel_count, junctions_with_indels
+
+
+def make_alignment_tuple(bam_index, alignment):
+    return alignment.reference_start, alignment.reference_end, bam_index, alignment
+
+
+class BAMOnlineMerger:
+    # single interator for several bam files
+    def __init__(self, bam_pairs, chr_id, start, end):
+        self.bam_pairs = bam_pairs
+        self.chr_id = chr_id
+        self.start = start
+        self.end = end
+        self.alignment_iterators = [bp[0].fetch(self.chr_id, self.start, self.end) for bp in self.bam_pairs]
+        self.current_elements = PriorityQueue(len(self.alignment_iterators))
+        for i, it in enumerate(self.alignment_iterators):
+            try:
+                self.current_elements.put_nowait(make_alignment_tuple(i, next(it)))
+            except StopIteration:
+                pass
+
+    def get(self):
+        while not self.current_elements.empty():
+            alignment_tuple = self.current_elements.get_nowait()
+            i = alignment_tuple[2]
+            try:
+                self.current_elements.put_nowait(make_alignment_tuple(i, next(self.alignment_iterators[i])))
+            except StopIteration:
+                pass
+            yield i, alignment_tuple[3]
+
+
+class IntergenicAlignmentCollector:
+    """ class for aggregating all alignmnet information
+
+    Parameters
+    ----------
+    bams : pair bam object, filename
+    params
+    printer
+    counter
+    """
+
+    def __init__(self, chr_id, bam_pairs, params, chr_record=None, read_groupper=DefaultReadGrouper()):
+        self.chr_id = chr_id
+        self.start = 1
+        self.current_region = None
+        self.bam_pairs = bam_pairs
+        self.params = params
+        self.chr_record = chr_record
+
+        self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, self.start,
+                                          self.bam_pairs[0][0].get_reference_length(self.chr_id))
+        self.strand_detector = StrandDetector(self.chr_record)
+        self.read_groupper = read_groupper
+        self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
+        self.polya_fixer = PolyAFixer(self.params)
+        self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
+        self.assignment_storage = []
+
+    def process(self,):
+        self.assignment_storage = []
+        processed_reads = set()
+
+        for bam_index, alignment in self.bam_merger.get():
+            if not self.current_region:
+                self.current_region = (alignment.reference_start, alignment.reference_end)
+            elif overlaps(self.current_region, (alignment.reference_start, alignment.reference_end)):
+                self.current_region = (self.current_region[0], alignment.reference_end)
+            else:
+                yield self.current_region, self.assignment_storage
+                self.assignment_storage = []
+                self.current_region = None
+
+            read_id = alignment.query_name
+            if alignment.reference_id == -1:
+                self.assignment_storage.append(ReadAssignment(read_id, None))
+                continue
+            if alignment.is_supplementary:
+                continue
+            if self.params.no_secondary and alignment.is_secondary:
+                continue
+
+            # logger.debug("=== Processing read " + read_id + " ===")
+            alignment_info = AlignmentInfo(alignment)
+
+            if not alignment_info.read_exons:
+                logger.warning("Read %s has no aligned exons" % read_id)
+                continue
+            read_tuple = (read_id, alignment_info.read_start, alignment_info.read_end)
+            if read_tuple in processed_reads:
+                continue
+            processed_reads.add(read_tuple)
+
+            alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
+            if self.params.cage:
+                alignment_info.add_cage_info(self.cage_finder)
+
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic,
+                                             IsoformMatch(MatchClassification.intergenic))
+
+            if alignment_info.exons_changed:
+                read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
+            read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
+                                           alignment_info.polya_info.external_polyt_pos != -1 or
+                                           alignment_info.polya_info.internal_polya_pos != -1 or
+                                           alignment_info.polya_info.internal_polyt_pos != -1)
+            read_assignment.polya_info = alignment_info.polya_info
+            read_assignment.cage_found = len(alignment_info.cage_hits) > 0
+            read_assignment.exons = alignment_info.read_exons
+            read_assignment.corrected_exons = alignment_info.read_exons
+            read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
+
+            read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+            read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
+            read_assignment.strand = self.get_assignment_strand(read_assignment)
+            read_assignment.chr_id = self.chr_id
+            read_assignment.multimapper = alignment.is_secondary
+            self.assignment_storage.append(read_assignment)
+            # logger.debug("=== Finished read " + read_id + " ===")
+        yield self.current_region, self.assignment_storage
+
+    def get_assignment_strand(self, read_assignment):
+        if len(read_assignment.exons) == 1:
+            return '.'
+        return self.strand_detector.get_strand(read_assignment.corrected_introns)

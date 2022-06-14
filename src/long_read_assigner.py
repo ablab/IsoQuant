@@ -371,6 +371,9 @@ class LongReadAssigner:
         # logger.debug("Gene introns" + str(self.gene_info.intron_profiles.features))
         # logger.debug("Read intron profile" + str(read_intron_profile.read_profile))
         # logger.debug("Gene intron profile" + str(read_intron_profile.gene_profile))
+        if self.gene_info.empty():
+            return ReadAssignment(read_id, ReadAssignmentType.intergenic,
+                                  IsoformMatch(MatchClassification.intergenic))
 
         if all(el != 1 for el in read_split_exon_profile.read_profile) \
                 or all(el == 0 or el == -2 for el in read_split_exon_profile.gene_profile):

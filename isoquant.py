@@ -32,8 +32,7 @@ def parse_args(args=None, namespace=None):
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Debug log output.')
     # REFERENCE
-    parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str,
-                        required=True)
+    parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str)
     parser.add_argument('--complete_genedb', action='store_true', default=False,
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "
@@ -465,7 +464,7 @@ def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
 
     # convert GTF/GFF if needed
-    if not args.genedb.lower().endswith('db'):
+    if args.genedb and not args.genedb.lower().endswith('db'):
         args.genedb = convert_gtf_to_db(args)
 
     # map reads if fastqs are provided
@@ -503,14 +502,20 @@ if __name__ == "__main__":
         main(sys.argv[1:])
     except SystemExit:
         raise
+    except KeyboardInterrupt:
+        raise
     except:
         strout = StringIO()
         if logger.handlers:
             print_exc(file=strout)
-            logger.critical("IsoQuant failed with the following error, please, submit this issue to "
-                            "https://github.com/ablab/IsoQuant/issues" + strout.read())
+            s = strout.read()
+            if s:
+                logger.critical("IsoQuant failed with the following error, please, submit this issue to "
+                                "https://github.com/ablab/IsoQuant/issues" + s)
+            else:
+                print_exc()
         else:
             sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
                              "https://github.com/ablab/IsoQuant/issues")
-            print_exc(file=sys.stderr)
+            print_exc()
         sys.exit(-1)
