@@ -302,7 +302,8 @@ class IntergenicAlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             self.assignment_storage.append(read_assignment)
             # logger.debug("=== Finished read " + read_id + " ===")
-        yield self.current_region, self.assignment_storage
+        if self.current_region:
+            yield self.current_region, self.assignment_storage
 
     def get_assignment_strand(self, read_assignment):
         if len(read_assignment.exons) == 1:
