@@ -578,19 +578,19 @@ class IntronGraph:
         for intron in path:
             if intron[0] < 0:
                 continue
-            intron_queue.put(intron)
+            intron_queue.put_nowait(intron)
             processed_set.add(intron)
 
         while not intron_queue.empty():
-            intron = intron_queue.get()
+            intron = intron_queue.get_nowait()
             for i in self.outgoing_edges[intron]:
                 if i[0] >= 0 and i not in processed_set:
                     processed_set.add(i)
-                    intron_queue.put(i)
+                    intron_queue.put_nowait(i)
             for i in self.incoming_edges[intron]:
                 if i[0] >= 0 and i not in processed_set:
                     processed_set.add(i)
-                    intron_queue.put(i)
+                    intron_queue.put_nowait(i)
         return processed_set
 
     def get_max_component_coverage(self, path):
