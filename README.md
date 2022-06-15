@@ -419,11 +419,15 @@ Output directory will contain one folder per sample with the following files:
 * `SAMPLE_ID.transcript_counts.tsv` - TSV file with raw isoform counts;
 * `SAMPLE_ID.gene_tpm.tsv` - TSV file with gene expression in TPM;
 * `SAMPLE_ID.gene_counts.tsv` - TSV file with raw gene counts;
-* `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models;
+
+
+* `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models (both known and novel * `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models;
+ transcripts);
 * `SAMPLE_ID.transcript_model_reads.tsv` - TSV file indicating which reads contributed to transcript models;
 * `SAMPLE_ID.transcript_model_tpm.tsv` - expression of constructed transcript models in TPM;
 * `SAMPLE_ID.transcript_model_counts.tsv` - raw counts for constructed transcript models;
-
+* `SAMPLE_ID.extended_annotation.gtf` - GTF file with the entire reference annotation and all discovered novel transcripts;
+ 
 If `--sqanti_output` is set, IsoQuant will save read assignments in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format:
 * `SAMPLE_ID.SQANTI-like.tsv`
 

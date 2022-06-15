@@ -49,6 +49,7 @@ class GraphBasedModelConstructor:
         self.profile_constructor = CombinedProfileConstructor(self.gene_info, self.params)
 
         self.transcript_model_storage = []
+        self.extended_annotation_storage = []
         self.transcript_read_ids = defaultdict(list)
         self.transcript_counter = transcript_counter
         self.internal_counter = defaultdict(int)
@@ -116,6 +117,8 @@ class GraphBasedModelConstructor:
         self.construnct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
+        if self.gene_info.all_isoforms_exons:
+            self.create_extended_annotation()
 
     def filter_transcripts(self):
         filtered_storage = []
@@ -142,6 +145,17 @@ class GraphBasedModelConstructor:
 
         self.transcript_model_storage = filtered_storage
         self.transcript_counter.add_confirmed_features(confirmed_transcipt_ids)
+
+    def create_extended_annotation(self):
+        self.extended_annotation_storage = []
+        for isoform_id in self.gene_info.all_isoforms_exons.keys():
+            self.extended_annotation_storage.append(self.transcript_from_reference(isoform_id, isoform_id,
+                                                                                   use_name_as_is=True))
+        for model in self.transcript_model_storage:
+            if model.transcript_id.endswith(self.known_transcript_suffix):
+                continue
+            else:
+                self.extended_annotation_storage.append(model)
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
@@ -365,10 +379,13 @@ class GraphBasedModelConstructor:
             path = self.known_isoforms_in_graph_ids[isoform_id]
 
     # create transcript model object from reference isoforms
-    def transcript_from_reference(self, isoform_id, transcript_id=None):
+    def transcript_from_reference(self, isoform_id, transcript_id=None, use_name_as_is=False):
         if not transcript_id:
             transcript_id = self.transcript_prefix + str(self.get_transcript_id())
-        new_transcript_id = transcript_id + ".%s" % self.gene_info.chr_id + self.known_transcript_suffix
+        if use_name_as_is:
+            new_transcript_id = transcript_id
+        else:
+            new_transcript_id = transcript_id + ".%s" % self.gene_info.chr_id + self.known_transcript_suffix
         return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
                                new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
                                self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known)
