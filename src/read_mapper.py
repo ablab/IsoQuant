@@ -67,36 +67,6 @@ class DataSetReadMapper:
         return args.input_data
 
 
-def get_barcodes(contig_id, delim1, delim2):
-    tokens = contig_id.split(delim1)
-    if len(tokens) != 2:
-        logger.warning("Wrong format " + contig_id)
-
-    return tokens[0], tokens[1].strip().split(delim2) if len(tokens) > 1 else []
-
-
-def convert_fasta_with_barcodes(contigs_file, args):
-    fname, ext = os.path.splitext(contigs_file.split('/')[-1])
-    short_id_contigs_fpath = (args.output, fname + "_short_ids.fasta")
-    map_file_name = os.path.join(args.output, fname + "_map.txt")
-
-    new_fasta = []
-    with open(map_file_name, "w") as out_f:
-        for record in SeqIO.parse(contigs_file, "fasta"):
-            if len(record.seq) > args.max_len:
-                continue
-            name = record.id
-            num = int(name.split('_')[1])
-            if num % 2 == 1:
-                continue
-            record.id, bc = get_barcodes(name, args.delim, args.delim2)
-            new_fasta.append(record)
-            out_f.write(record.id + "_barcodeIDs_" + ",".join(bc) + "\n")
-
-    SeqIO.write(new_fasta, short_id_contigs_fpath, "fasta")
-    return short_id_contigs_fpath
-
-
 def get_aligner(aligner):
     path = get_path_to_program(aligner)
     if not path:
@@ -143,9 +113,48 @@ def store_index(index, args):
     logger.debug('New index saved to {}'.format(index))
 
 
+def find_stored_bed(args):
+    genedb_filename = os.path.abspath(args.genedb)
+
+    with open(args.bed_config_path, 'r') as f_in:
+        converted_beds = json.load(f_in)
+
+    bed_filename = converted_beds.get(genedb_filename, {}).get('bed_filename')
+    logger.debug('Searching for previously created BED for {}'.format(genedb_filename))
+    if bed_filename is None:
+        return None
+    bed_mtime = converted_beds.get(genedb_filename, {}).get('bed_mtime')
+    reference_mtime = converted_beds.get(genedb_filename, {}).get('reference_mtime')
+    if os.path.exists(genedb_filename) and os.path.getmtime(genedb_filename) == reference_mtime:
+        if os.path.exists(bed_filename) and os.path.getmtime(bed_filename) == bed_mtime:
+                logger.info('BED file found. Using {}'.format(bed_filename))
+                return bed_filename
+    return None
+
+
+def store_bed(bed, args):
+    genedb_filename = os.path.abspath(args.genedb)
+    bed = os.path.abspath(bed)
+
+    with open(args.bed_config_path, 'r') as f_in:
+        converted_beds = json.load(f_in)
+    converted_beds[genedb_filename] = {
+        'bed_filename': bed,
+        'reference_mtime': os.path.getmtime(genedb_filename),
+        'bed_mtime': os.path.getmtime(bed)
+    }
+    with open(args.bed_config_path, 'w') as f_out:
+        json.dump(converted_beds, f_out)
+    logger.debug('New BED saved to {}'.format(bed))
+
+
 def find_stored_alignment(fastq_file, annotation, args):
     fastq = os.path.abspath(fastq_file)
-    key = "%s_aligned_to_%s%s" % (fastq, args.index, "_" + annotation if annotation else "")
+    index = os.path.abspath(args.index)
+    ann_path = os.path.abspath(annotation) if annotation else ""
+    ann_str = "_" + ann_path if ann_path else ""
+
+    key = "%s_aligned_to_%s%s" % (fastq, index, ann_str)
     with open(args.alignment_config_path, 'r') as f_in:
         aligned_fastq_files = json.load(f_in)
 
@@ -153,9 +162,15 @@ def find_stored_alignment(fastq_file, annotation, args):
     bam_fpath = aligned_fastq_files.get(key, {}).get('alignment_fpath')
     if bam_fpath is None:
         return None
+
     index_mtime = aligned_fastq_files.get(key, {}).get('index_mtime')
-    if os.path.getmtime(args.index) != index_mtime:
+    if os.path.getmtime(index) != index_mtime:
         return None
+    if ann_path:
+        ann_mtime = aligned_fastq_files.get(key, {}).get('ann_mtime')
+        if os.path.getmtime(ann_path) != ann_mtime:
+            return None
+
     fastq_mtime = aligned_fastq_files.get(key, {}).get('fastq_mtime')
     bam_mtime = aligned_fastq_files.get(key, {}).get('bam_mtime')
     if os.path.exists(fastq) and os.path.getmtime(fastq) == fastq_mtime:
@@ -167,16 +182,20 @@ def find_stored_alignment(fastq_file, annotation, args):
 
 def store_alignment(bam_file, fastq_file, annotation, args):
     fastq = os.path.abspath(fastq_file)
-    key = "%s_aligned_to_%s%s" % (fastq, args.index, "_" + annotation if annotation else "")
+    index = os.path.abspath(args.index)
+    ann_path = os.path.abspath(annotation) if annotation else ""
+
+    key = "%s_aligned_to_%s%s" % (fastq, index, "_" + ann_path if ann_path else "")
     bam_file = os.path.abspath(bam_file)
 
     with open(args.alignment_config_path, 'r') as f_in:
         aligned_fastq_files = json.load(f_in)
     aligned_fastq_files[key] = {
         'alignment_fpath': bam_file,
-        'index_mtime': os.path.getmtime(args.index),
+        'index_mtime': os.path.getmtime(index),
         'fastq_mtime': os.path.getmtime(fastq),
-        'bam_mtime': os.path.getmtime(bam_file)
+        'bam_mtime': os.path.getmtime(bam_file),
+        'ann_mtime': os.path.getmtime(ann_path) if ann_path else ""
     }
     with open(args.alignment_config_path, 'w') as f_out:
         json.dump(aligned_fastq_files, f_out)
@@ -220,24 +239,28 @@ def index_reference(aligner, args):
 
 def find_annotation(aligner, args):
     if args.no_junc_bed:
-        return
+        return None
     if aligner == "starlong":
-        gtf_fname = args.genedb
-        if args.genedb.endswith('.db'):
-            gtf_fname = convert_db_to_gtf(args)
-        return gtf_fname
+        if args.gtf('.db'):
+            args.gtf = convert_db_to_gtf(args)
+        return os.path.abspath(args.gtf)
     elif aligner == "minimap2":
-        bed_supplied = False
+        bed_fname = None
         if args.junc_bed_file:
             if not os.path.exists(args.junc_bed_file):
-                logger.warning("Provided BED file %s does not exist, will generate for the annotation" %
+                logger.warning("Provided BED file %s does not exist, will generate from the annotation" %
                                args.junc_bed_file)
             else:
-                bed_supplied = True
-        if not bed_supplied:
-            bed_fname = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".bed")
-            db2bed(bed_fname, args.genedb)
-        return bed_fname
+                bed_fname = args.junc_bed_file
+
+        if bed_fname is None:
+            bed_fname = find_stored_bed(args)
+            if bed_fname is None:
+                bed_fname = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".bed")
+                db2bed(bed_fname, args.genedb)
+                store_bed(bed_fname, args)
+
+        return os.path.abspath(bed_fname)
 
 
 def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
@@ -246,13 +269,17 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
     alignment_prefix = os.path.join(out_dir, label)
 
-    hash_annotation = ("_%x" % hash(annotation_file))[:10] if annotation_file else ""
-    alignment_bam_path = os.path.join(out_dir, label + '_%x_%x%s.bam' % (hash(fastq_path), hash(args.index), hash_annotation))
-    logger.info("Aligning %s to the reference, alignments will be saved to %s" % (fastq_path, alignment_bam_path))
-    alignment_sam_path = alignment_bam_path[:-4] + '.sam'
+    prefix_name = fname
+    if prefix_name.endswith(".fq") or prefix_name.endswith(".fastq") or prefix_name.endswith(".fa") or prefix_name.endswith(".fasta"):
+        prefix_name, _ = os.path.splitext(prefix_name)
+    hash_annotation = "_" + ("%x" % hash(annotation_file))[2:8] if annotation_file else ""
+    hash_index = ("%x" % hash(args.index))[2:8]
+    hash_fastq = ("%x" % hash(fastq_path))[2:8]
 
-    # if 'barcoded' in args.data_type:
-    #    fastq_path = convert_fasta_with_barcodes(fastq_path, args)
+    alignment_bam_path = os.path.join(out_dir, label + '_' + prefix_name + '_%s_%s%s.bam' % (hash_fastq, hash_index, hash_annotation))
+    logger.info("Aligning %s to the reference, alignments will be saved to %s" % (os.path.abspath(fastq_path),
+                                                                                  os.path.abspath(alignment_bam_path)))
+    alignment_sam_path = alignment_bam_path[:-4] + '.sam'
 
     log_fpath = os.path.join(args.output, "alignment.log")
     log_file = open(log_fpath, "a")
