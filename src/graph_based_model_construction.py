@@ -342,7 +342,7 @@ class GraphBasedModelConstructor:
         for read_assignment in read_assignment_storage:
             if not read_assignment:
                 continue
-            if len(read_assignment.corrected_exons) == 1 and read_assignment.polyA_found and \
+            if len(read_assignment.corrected_exons) == 1 and read_assignment.polyA_found and not read_assignment.multimapper and \
                     read_assignment.assignment_type in {ReadAssignmentType.noninformative, ReadAssignmentType.inconsistent, ReadAssignmentType.intergenic}:
                 novel_mono_exon_reads.append(read_assignment)
 
