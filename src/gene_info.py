@@ -151,101 +151,103 @@ class GeneInfo:
 
     @classmethod
     def from_models(cls, transcript_model_storage, delta=0):
-        cls.db = None
-        cls.gene_db_list = []
+        gene_info = cls.__new__(cls)
+        gene_info.db = None
+        gene_info.gene_db_list = []
         if not transcript_model_storage:
             return cls([], None, delta)
 
         # gene region
-        cls.chr_id = transcript_model_storage[0].chr_id
-        cls.start = transcript_model_storage[0].get_start()
-        cls.end = transcript_model_storage[0].get_end()
-        cls.delta = delta
-        cls.all_isoforms_exons = {}
-        cls.all_isoforms_introns = {}
-        cls.isoform_strands = {}
-        cls.gene_id_map = {}
+        gene_info.chr_id = transcript_model_storage[0].chr_id
+        gene_info.start = transcript_model_storage[0].get_start()
+        gene_info.end = transcript_model_storage[0].get_end()
+        gene_info.delta = delta
+        gene_info.all_isoforms_exons = {}
+        gene_info.all_isoforms_introns = {}
+        gene_info.isoform_strands = {}
+        gene_info.gene_id_map = {}
         introns = set()
         exons = set()
 
         for transcript_model in transcript_model_storage:
-            cls.start = min(cls.start, transcript_model.get_start())
-            cls.end = max(cls.end, transcript_model.get_end())
+            gene_info.start = min(gene_info.start, transcript_model.get_start())
+            gene_info.end = max(gene_info.end, transcript_model.get_end())
             t_id = transcript_model.transcript_id
-            cls.all_isoforms_exons[t_id] = transcript_model.exon_blocks
-            cls.all_isoforms_introns[t_id] = junctions_from_blocks(transcript_model.exon_blocks)
-            exons.update(cls.all_isoforms_exons[t_id])
-            introns.update(cls.all_isoforms_introns[t_id])
-            cls.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
-            cls.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
+            gene_info.all_isoforms_exons[t_id] = transcript_model.exon_blocks
+            gene_info.all_isoforms_introns[t_id] = junctions_from_blocks(transcript_model.exon_blocks)
+            exons.update(gene_info.all_isoforms_exons[t_id])
+            introns.update(gene_info.all_isoforms_introns[t_id])
+            gene_info.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
+            gene_info.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
 
         # profiles for all known isoforoms
-        cls.intron_profiles = FeatureProfiles()
-        cls.exon_profiles = FeatureProfiles()
-        cls.split_exon_profiles = FeatureProfiles()
-        cls.ambiguous_isoforms = set()
+        gene_info.intron_profiles = FeatureProfiles()
+        gene_info.exon_profiles = FeatureProfiles()
+        gene_info.split_exon_profiles = FeatureProfiles()
+        gene_info.ambiguous_isoforms = set()
 
-        cls.intron_profiles.set_features(sorted(list(introns)))
-        cls.exon_profiles.set_features(sorted(list(exons)))
-        cls.split_exon_profiles.set_features(cls.split_exons(cls.exon_profiles.features))
+        gene_info.intron_profiles.set_features(sorted(list(introns)))
+        gene_info.exon_profiles.set_features(sorted(list(exons)))
+        gene_info.split_exon_profiles.set_features(gene_info.split_exons(gene_info.exon_profiles.features))
 
         for transcript_model in transcript_model_storage:
             transcript_region = (transcript_model.get_start(), transcript_model.get_end())
             t_id = transcript_model.transcript_id
-            cls.intron_profiles.set_profiles(t_id, cls.all_isoforms_introns[t_id], transcript_region, partial(equal_ranges, delta=0))
-            cls.exon_profiles.set_profiles(t_id, cls.all_isoforms_exons[t_id], transcript_region, partial(equal_ranges, delta=0))
-            cls.split_exon_profiles.set_profiles(t_id, cls.all_isoforms_exons[t_id], transcript_region, contains)
+            gene_info.intron_profiles.set_profiles(t_id, gene_info.all_isoforms_introns[t_id], transcript_region, partial(equal_ranges, delta=0))
+            gene_info.exon_profiles.set_profiles(t_id, gene_info.all_isoforms_exons[t_id], transcript_region, partial(equal_ranges, delta=0))
+            gene_info.split_exon_profiles.set_profiles(t_id, gene_info.all_isoforms_exons[t_id], transcript_region, contains)
 
-        cls.regions_for_bam_fetch = [(cls.start, cls.end)]
-        cls.exon_property_map = None
-        cls.intron_property_map = None
+        gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
+        gene_info.exon_property_map = None
+        gene_info.intron_property_map = None
 
-        return cls([], None, delta)
+        return gene_info
 
     @classmethod
     def from_model(cls, transcript_model, delta=0):
-        cls.db = None
-        cls.gene_db_list = []
+        gene_info = cls.__new__(cls)
+        gene_info.db = None
+        gene_info.gene_db_list = []
         # gene region
-        cls.chr_id = transcript_model.chr_id
-        cls.start = transcript_model.get_start()
-        cls.end = transcript_model.get_end()
-        cls.delta = delta
+        gene_info.chr_id = transcript_model.chr_id
+        gene_info.start = transcript_model.get_start()
+        gene_info.end = transcript_model.get_end()
+        gene_info.delta = delta
 
         # profiles for all known isoforoms
-        cls.intron_profiles = FeatureProfiles()
-        cls.exon_profiles = FeatureProfiles()
-        cls.split_exon_profiles = FeatureProfiles()
-        cls.ambiguous_isoforms = set()
+        gene_info.intron_profiles = FeatureProfiles()
+        gene_info.exon_profiles = FeatureProfiles()
+        gene_info.split_exon_profiles = FeatureProfiles()
+        gene_info.ambiguous_isoforms = set()
 
         exons = transcript_model.exon_blocks
         introns = junctions_from_blocks(transcript_model.exon_blocks)
         t_id = transcript_model.transcript_id
         transcript_region = (transcript_model.get_start(), transcript_model.get_end())
 
-        cls.all_isoforms_exons = {}
-        cls.all_isoforms_exons[t_id] = exons
-        cls.all_isoforms_introns = {}
-        cls.all_isoforms_introns[t_id] = introns
+        gene_info.all_isoforms_exons = {}
+        gene_info.all_isoforms_exons[t_id] = exons
+        gene_info.all_isoforms_introns = {}
+        gene_info.all_isoforms_introns[t_id] = introns
 
-        cls.exon_profiles.set_features(exons)
-        cls.split_exon_profiles.set_features(exons)
-        cls.intron_profiles.set_features(introns)
+        gene_info.exon_profiles.set_features(exons)
+        gene_info.split_exon_profiles.set_features(exons)
+        gene_info.intron_profiles.set_features(introns)
 
-        cls.intron_profiles.set_profiles(t_id, introns, transcript_region, partial(equal_ranges, delta=0))
-        cls.exon_profiles.set_profiles(t_id, exons, transcript_region, partial(equal_ranges, delta=0))
-        cls.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
+        gene_info.intron_profiles.set_profiles(t_id, introns, transcript_region, partial(equal_ranges, delta=0))
+        gene_info.exon_profiles.set_profiles(t_id, exons, transcript_region, partial(equal_ranges, delta=0))
+        gene_info.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
 
-        cls.isoform_strands = {}
-        cls.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
-        cls.gene_id_map = {}
-        cls.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
+        gene_info.isoform_strands = {}
+        gene_info.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
+        gene_info.gene_id_map = {}
+        gene_info.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
 
-        cls.regions_for_bam_fetch = [(cls.start, cls.end)]
-        cls.exon_property_map = None
-        cls.intron_property_map = None
+        gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
+        gene_info.exon_property_map = None
+        gene_info.intron_property_map = None
 
-        return cls([], None, delta)
+        return gene_info
 
     @classmethod
     def from_region(cls, chr_id, start, end, delta=0):
