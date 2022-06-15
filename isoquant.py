@@ -505,14 +505,20 @@ if __name__ == "__main__":
         main(sys.argv[1:])
     except SystemExit:
         raise
+    except KeyboardInterrupt:
+        raise
     except:
         strout = StringIO()
         if logger.handlers:
             print_exc(file=strout)
-            logger.critical("IsoQuant failed with the following error, please, submit this issue to "
-                            "https://github.com/ablab/IsoQuant/issues" + strout.read())
+            s = strout.read()
+            if s:
+                logger.critical("IsoQuant failed with the following error, please, submit this issue to "
+                                "https://github.com/ablab/IsoQuant/issues" + s)
+            else:
+                print_exc()
         else:
             sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
                              "https://github.com/ablab/IsoQuant/issues")
-            print_exc(file=sys.stderr)
+            print_exc()
         sys.exit(-1)
