@@ -129,6 +129,9 @@ class GraphBasedModelConstructor:
                 continue
             # check coverage
             component_coverage = self.intron_graph.get_max_component_coverage(model.intron_path)
+            if component_coverage == 0:
+                component_coverage = self.intron_graph.max_coverage
+
             novel_isoform_cutoff = max(self.params.min_novel_count,
                                        self.params.min_novel_count_rel * component_coverage)
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
@@ -263,10 +266,15 @@ class GraphBasedModelConstructor:
         polya_sites = defaultdict(int)
         mono_exon_isoform_reads = defaultdict(list)
         mono_exon_isoform_coverage = {}
+        novel_mono_exon_reads = []
 
         for read_assignment in read_assignment_storage:
             if not read_assignment:
                 continue
+            if len(read_assignment.corrected_exons) == 1 and read_assignment.polyA_found and \
+                    read_assignment.assignment_type in {ReadAssignmentType.noninformative, ReadAssignmentType.inconsistent, ReadAssignmentType.intergenic}:
+                novel_mono_exon_reads.append(read_assignment)
+
             if read_assignment.assignment_type not in {ReadAssignmentType.unique,
                                                        ReadAssignmentType.unique_minor_difference}:
                 continue
@@ -313,6 +321,62 @@ class GraphBasedModelConstructor:
         if not self.params.fl_only:
             logger.debug("Constructing nonFL isoforms")
             self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
+        self.construct_monoexon_novel(novel_mono_exon_reads)
+
+    def construct_monoexon_novel(self, novel_mono_exon_reads):
+        polya_reads = defaultdict(list)
+        polyt_reads = defaultdict(list)
+        for a in novel_mono_exon_reads:
+            if a.polya_info.external_polya_pos != -1:
+                polya_reads[a.polya_info.external_polya_pos].append(a)
+            if a.polya_info.external_polyt_pos != -1:
+                polyt_reads[a.polya_info.external_polyt_pos].append(a)
+
+        clustered_polya_reads = self.cluster_monoexons(polya_reads)
+        self.generate_monoexon_from_clustered(clustered_polya_reads, True)
+        clustered_polyt_reads = self.cluster_monoexons(polyt_reads)
+        self.generate_monoexon_from_clustered(clustered_polyt_reads, False)
+
+    def generate_monoexon_from_clustered(self, clustered_reads, forward=True):
+        cutoff = self.params.min_novel_count
+        for three_prime_pos in clustered_reads.keys():
+            count = len(clustered_reads[three_prime_pos])
+            if count < cutoff:
+                continue
+            # TODO improve
+            if forward:
+                five_prime_pos = min([a.corrected_exons[0][0] for a in clustered_reads[three_prime_pos]])
+            else:
+                five_prime_pos = max([a.corrected_exons[0][0] for a in clustered_reads[three_prime_pos]])
+
+            new_transcript_id = self.transcript_prefix + str(self.get_transcript_id())
+            transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
+            transcript_type = TranscriptModelType.novel_not_in_catalog
+            id_suffix = self.nnic_transcript_suffix
+            strand = '+' if forward else '-'
+            coordinates = (five_prime_pos, three_prime_pos) if forward else (three_prime_pos, five_prime_pos)
+
+            new_model = TranscriptModel(self.gene_info.chr_id, strand,
+                                        new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
+                                        "novel", transcript_gene, [coordinates], transcript_type)
+            logger.debug("uuu Adding novel MONOEXON isoform %s : %s, %d\t%d" % (new_transcript_id, str(coordinates), count, cutoff))
+
+            self.transcript_model_storage.append(new_model)
+            for read_assignment in clustered_reads[three_prime_pos]:
+                self.save_assigned_read(read_assignment, new_model.transcript_id)
+                self.reads_used_in_construction.add(read_assignment.read_id)
+
+    def cluster_monoexons(self, grouped_reads):
+        clustered_counts = defaultdict(list)
+        while grouped_reads:
+            best_pair = max(grouped_reads.items(), key=lambda x:len(x[1]))
+            top_position = best_pair[0]
+            for pos in range(top_position - self.params.apa_delta, top_position + self.params.apa_delta + 1):
+                if pos in grouped_reads:
+                    clustered_counts[top_position] += grouped_reads[pos]
+                    del grouped_reads[pos]
+
+        return clustered_counts
 
     def construct_monoexon_isoforms(self, mono_exon_isoform_reads, mono_exon_isoform_coverage, polya_sites):
         novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
