@@ -421,7 +421,7 @@ class GraphBasedModelConstructor:
             if forward:
                 five_prime_pos = min([a.corrected_exons[0][0] for a in clustered_reads[three_prime_pos]])
             else:
-                five_prime_pos = max([a.corrected_exons[0][0] for a in clustered_reads[three_prime_pos]])
+                five_prime_pos = max([a.corrected_exons[-1][1] for a in clustered_reads[three_prime_pos]])
 
             new_transcript_id = self.transcript_prefix + str(self.get_transcript_id())
             transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
