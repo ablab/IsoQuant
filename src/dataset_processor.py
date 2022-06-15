@@ -95,7 +95,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                         read_assignment.multimapper = resolved_assignment.multimapper
                 read_storage.append(read_assignment)
             elif isinstance(obj, GeneInfo):
-                if current_gene_info and read_storage:
+                if current_gene_info:
                     yield current_gene_info, read_storage
                 read_storage = []
                 current_gene_info = obj
@@ -105,7 +105,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
         except EOFError:
             break
     gc.enable()
-    if current_gene_info and read_storage:
+    if current_gene_info:
         yield current_gene_info, read_storage
 
 
@@ -122,6 +122,11 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
     logger.info("Processing chromosome " + chr_id)
     transcripts = []
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
+    tmp_extended_gff_printer = None
+    if gffutils_db:
+        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support,
+                                             gtf_suffix=".extended_annotation.gtf", output_r2t=False)
+
     chr_dump_file = dump_filename + "_" + chr_id
     for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, gffutils_db, multimapped_reads):
         logger.debug("Processing %d reads" % len(assignment_storage))
@@ -136,6 +141,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args, processor.transcript_model_global_counter)
             model_constructor.process(assignment_storage)
             tmp_gff_printer.dump(model_constructor)
+            if tmp_extended_gff_printer:
+                tmp_extended_gff_printer.dump(model_constructor, model_constructor.extended_annotation_storage)
             for t in model_constructor.transcript_model_storage:
                 transcripts.append(t.transcript_type)
 
@@ -303,6 +310,12 @@ class DatasetProcessor:
 
         gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support,
                                  header=self.common_header)
+        extened_gff_printer = None
+        if self.args.genedb:
+            extened_gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support,
+                                             gtf_suffix=".extended_annotation.gtf", output_r2t=False,
+                                             header=self.common_header)
+
         transcript_stat_counter = EnumStats()
         self.merge_assignments(sample, chr_ids)
         if not self.args.no_model_construction:
@@ -310,10 +323,15 @@ class DatasetProcessor:
                 for t in storage:
                     transcript_stat_counter.add(t)
             self.merge_transcript_models(sample.label, chr_ids, gff_printer)
+            merge_files([rreplace(extened_gff_printer.model_fname, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                        extened_gff_printer.model_fname, copy_header=False)
+
+            logger.info("Transcript model file " + gff_printer.model_fname)
+            if extened_gff_printer:
+                logger.info("Extended annotation is saved to " + extened_gff_printer.model_fname)
+            transcript_stat_counter.print_start("Transcript model statistics")
 
         self.finalize_aggregators(sample)
-        logger.info("Transcript model file " + gff_printer.model_fname)
-        transcript_stat_counter.print_start("Transcript model statistics")
 
     def load_read_info(self, dump_filename):
         gc.disable()

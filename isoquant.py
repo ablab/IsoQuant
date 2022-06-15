@@ -96,8 +96,6 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--full_help", action='help', help="show full list of options")
     parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
     parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
-    parser.add_argument("--low_memory", help="decrease RAM consumption (leads to slower processing)",
-                        action='store_true', default=False)
 
     parser.add_argument('--check_canonical', action='store_true', default=False,
                         help="report whether splice junctions are canonical (requires reference genome)")
@@ -112,6 +110,8 @@ def parse_args(args=None, namespace=None):
                           help="align reads to reference without running further analysis")
 
     # ADDITIONAL
+    add_additional_option("--low_memory", help="decrease RAM consumption (leads to slower processing)",
+                          action='store_true', default=False)
     add_additional_option("--no_junc_bed", action="store_true", default=False,
                           help="do NOT use annotation for read mapping")
     add_additional_option("--junc_bed_file", type=str,

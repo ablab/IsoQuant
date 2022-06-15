@@ -21,23 +21,33 @@ def validate_exons(novel_exons):
 
 
 class GFFPrinter:
-    def __init__(self, outf_prefix, sample_name, io_support, header = ""):
-        self.model_fname = os.path.join(outf_prefix, sample_name + ".transcript_models.gtf")
+    def __init__(self, outf_prefix, sample_name, io_support,
+                 gtf_suffix = ".transcript_models.gtf",
+                 r2t_suffix = ".transcript_model_reads.tsv",
+                 output_r2t = True,
+                 header = ""):
+        self.model_fname = os.path.join(outf_prefix, sample_name + gtf_suffix)
         self.out_gff = open(self.model_fname, "w")
-        self.r2t_fname = os.path.join(outf_prefix, sample_name + ".transcript_model_reads.tsv")
-        self.out_r2t = open(self.r2t_fname, "w")
         self.out_gff.write("# " + sample_name + " IsoQuant generated GTF\n" + header)
         self.out_gff.flush()
-        self.out_r2t.write("#read_id\ttranscript_id\n")
-        self.out_r2t.flush()
+
+        self.output_r2t = output_r2t
+        if self.output_r2t:
+            self.r2t_fname = os.path.join(outf_prefix, sample_name + r2t_suffix)
+            self.out_r2t = open(self.r2t_fname, "w")
+            self.out_r2t.write("#read_id\ttranscript_id\n")
+            self.out_r2t.flush()
         self.io_support = io_support
 
     def __del__(self):
         self.out_gff.close()
-        self.out_r2t.close()
+        if self.output_r2t:
+            self.out_r2t.close()
 
-    def dump(self, transcript_model_constructor):
+    def dump(self, transcript_model_constructor, transcript_model_storage=None):
         # write exons to GFF
+        if transcript_model_storage is None:
+            transcript_model_storage = transcript_model_constructor.transcript_model_storage
         gene_to_model_dict = defaultdict(list)
         gene_regions = {}
         if not transcript_model_constructor.gene_info.empty():
@@ -45,7 +55,7 @@ class GFFPrinter:
         GFFGeneInfo = namedtuple("GFFGeneInfo", ("chr_id", "strand", "gene_region"))
         gene_info_dict = {}
 
-        for i, model in enumerate(transcript_model_constructor.transcript_model_storage):
+        for i, model in enumerate(transcript_model_storage):
             if not validate_exons(model.exon_blocks):
                 logger.warning("Transcript model %s has incorrect coordinates and will be ignored: %s" %
                                (model.transcript_id, str(model.exon_blocks)))
@@ -75,7 +85,7 @@ class GFFPrinter:
             self.out_gff.write(gene_line)
 
             for model_index in gene_to_model_dict[gene_id]:
-                model = transcript_model_constructor.transcript_model_storage[model_index]
+                model = transcript_model_storage[model_index]
                 assert model.gene_id == gene_id
 
                 if transcript_model_constructor.params.check_canonical and \
@@ -107,10 +117,11 @@ class GFFPrinter:
                     self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns)
 
         # write read_id -> transcript_id map
-        used_reads = set()
-        for model_id, read_assignments in transcript_model_constructor.transcript_read_ids.items():
-            for a in read_assignments:
-                used_reads.add(a.read_id)
-                self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
-        for read_id in transcript_model_constructor.unused_reads:
-            self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
+        if self.output_r2t:
+            used_reads = set()
+            for model_id, read_assignments in transcript_model_constructor.transcript_read_ids.items():
+                for a in read_assignments:
+                    used_reads.add(a.read_id)
+                    self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
+            for read_id in transcript_model_constructor.unused_reads:
+                self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
