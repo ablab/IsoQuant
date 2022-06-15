@@ -141,6 +141,7 @@ def parse_args(args=None, namespace=None):
 
     args = parser.parse_args(args, namespace)
 
+    args.gtf = args.genedb
     if os.path.exists(args.output):
         # logger is not defined yet
         print("WARNING! Output folder already exists, some files may be overwritten")
@@ -434,8 +435,9 @@ def set_configs_directory(args):
 
     args.db_config_path = os.path.join(config_dir, 'db_config.json')
     args.index_config_path = os.path.join(config_dir, 'index_config.json')
+    args.bed_config_path = os.path.join(config_dir, 'bed_config.json')
     args.alignment_config_path = os.path.join(config_dir, 'alignment_config.json')
-    for config_path in (args.db_config_path, args.index_config_path, args.alignment_config_path):
+    for config_path in (args.db_config_path, args.index_config_path, args.bed_config_path, args.alignment_config_path):
         if not os.path.exists(config_path):
             with open(config_path, 'w') as f_out:
                 json.dump({}, f_out)
