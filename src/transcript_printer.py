@@ -28,15 +28,17 @@ class GFFPrinter:
                  header = ""):
         self.model_fname = os.path.join(outf_prefix, sample_name + gtf_suffix)
         self.out_gff = open(self.model_fname, "w")
-        self.out_gff.write("# " + sample_name + " IsoQuant generated GTF\n" + header)
-        self.out_gff.flush()
+        if header:
+            self.out_gff.write("# " + sample_name + " IsoQuant generated GTF\n" + header)
+            self.out_gff.flush()
 
         self.output_r2t = output_r2t
         if self.output_r2t:
             self.r2t_fname = os.path.join(outf_prefix, sample_name + r2t_suffix)
             self.out_r2t = open(self.r2t_fname, "w")
-            self.out_r2t.write("#read_id\ttranscript_id\n")
-            self.out_r2t.flush()
+            if header:
+                self.out_r2t.write("#read_id\ttranscript_id\n")
+                self.out_r2t.flush()
         self.io_support = io_support
 
     def __del__(self):
