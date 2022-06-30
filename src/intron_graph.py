@@ -136,6 +136,7 @@ class IntronGraph:
         self.outgoing_edges = defaultdict(set)
         self.intron_collector = IntronCollector(gene_info, params.delta)
         self.max_coverage = 0
+        self.edge_weights = defaultdict(int)
 
         self.starting_known_positions = defaultdict(list)
         self.terminal_known_positions = defaultdict(list)
@@ -160,6 +161,7 @@ class IntronGraph:
             v2 = self.intron_collector.intron_correction_map[v2]
         self.outgoing_edges[v1].add(v2)
         self.incoming_edges[v2].add(v1)
+        self.edge_weights[(v1, v2)] += 1
 
     def is_isolated(self, v):
         return not self.outgoing_edges[v] and not self.incoming_edges[v]
@@ -525,7 +527,8 @@ class IntronGraph:
         logger.debug(self.intron_collector.intron_correction_map)
         for intron in sorted(self.intron_collector.clustered_introns.keys()):
             logger.debug("Intron %s, count %d -> %s" % (str(intron), self.intron_collector.clustered_introns[intron],
-                                                        ",".join([str(x) for x in self.outgoing_edges[intron]])))
+                                                        ",".join([str(x) + ":" + str(self.edge_weights[(intron, x)])
+                                                                  for x in self.outgoing_edges[intron]])))
 
         for intron in sorted(self.intron_collector.clustered_introns.keys()):
             logger.debug("Intron %s, count %d <- %s" % (str(intron), self.intron_collector.clustered_introns[intron],
