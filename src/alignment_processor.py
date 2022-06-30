@@ -250,8 +250,9 @@ class IntergenicAlignmentCollector:
             if not self.current_region:
                 self.current_region = (alignment.reference_start, alignment.reference_end)
             elif overlaps(self.current_region, (alignment.reference_start, alignment.reference_end)):
-                self.current_region = (self.current_region[0], alignment.reference_end)
+                self.current_region = (self.current_region[0], max(self.current_region[1], alignment.reference_end))
             else:
+                logger.debug("%s, (%d, %d)" % (str(self.current_region), alignment.reference_start, alignment.reference_end))
                 yield self.current_region, self.assignment_storage
                 self.assignment_storage = []
                 self.current_region = None
