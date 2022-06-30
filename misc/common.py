@@ -86,7 +86,7 @@ class CountTranscriptIdSeparator:
 
         if tid not in self.count_dict or self.count_dict[tid] == 0:
             return TranscriptType.undefined
-        elif tid.startswith('ENS'):
+        elif tid.startswith('ENS') or tid.startswith('SIRV'):
             return TranscriptType.known
         else:
             return TranscriptType.novel
