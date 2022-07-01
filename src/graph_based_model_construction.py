@@ -189,6 +189,8 @@ class GraphBasedModelConstructor:
         known_isoforms = {}
         for isoform_id in gene_info.all_isoforms_introns:
             isoform_introns = gene_info.all_isoforms_introns[isoform_id]
+            if len(isoform_introns) == 1:
+                logger.debug("== Single-intron isoforms ==")
             intron_path = self.path_processor.thread_introns(isoform_introns)
             if not intron_path:
                 logger.debug("== No path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
@@ -398,6 +400,7 @@ class GraphBasedModelConstructor:
         self.construct_monoexon_novel(novel_mono_exon_reads)
 
     def construct_monoexon_novel(self, novel_mono_exon_reads):
+        logger.debug("Constucting NOVEL MONOEXON")
         polya_reads = defaultdict(list)
         polyt_reads = defaultdict(list)
         for a in novel_mono_exon_reads:
@@ -406,13 +409,25 @@ class GraphBasedModelConstructor:
             if a.polya_info.external_polyt_pos != -1:
                 polyt_reads[a.polya_info.external_polyt_pos].append(a)
 
+        novel_monoexon = set()
         clustered_polya_reads = self.cluster_monoexons(polya_reads)
-        self.generate_monoexon_from_clustered(clustered_polya_reads, True)
+        novel_monoexon.add(self.generate_monoexon_from_clustered(clustered_polya_reads, True))
         clustered_polyt_reads = self.cluster_monoexons(polyt_reads)
-        self.generate_monoexon_from_clustered(clustered_polyt_reads, False)
+        novel_monoexon.add(self.generate_monoexon_from_clustered(clustered_polyt_reads, False))
+
+        if self.expressed_gene_info:
+            for t in self.expressed_gene_info.all_isoforms_exons.keys():
+                if len(self.expressed_gene_info.all_isoforms_exons[t]) > 1:
+                    continue
+                ref_exon = self.expressed_gene_info.all_isoforms_exons[t][0]
+                logger.debug("Expressed MONOEXON: %s" % str(ref_exon))
+                for x in novel_monoexon:
+                    if overlaps(ref_exon, x):
+                        logger.debug("Overlaps with %s" % str(x))
 
     def generate_monoexon_from_clustered(self, clustered_reads, forward=True):
         cutoff = self.params.min_novel_count
+        result = set()
         for three_prime_pos in clustered_reads.keys():
             count = len(clustered_reads[three_prime_pos])
             if count < cutoff:
@@ -434,11 +449,13 @@ class GraphBasedModelConstructor:
                                         new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
                                         "novel", transcript_gene, [coordinates], transcript_type)
             logger.debug("uuu Adding novel MONOEXON isoform %s : %s, %d\t%d" % (new_transcript_id, str(coordinates), count, cutoff))
+            result.add(coordinates)
 
             self.transcript_model_storage.append(new_model)
             for read_assignment in clustered_reads[three_prime_pos]:
                 self.save_assigned_read(read_assignment, new_model.transcript_id)
                 self.reads_used_in_construction.add(read_assignment.read_id)
+        return result
 
     def cluster_monoexons(self, grouped_reads):
         clustered_counts = defaultdict(list)

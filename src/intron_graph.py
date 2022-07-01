@@ -286,7 +286,7 @@ class IntronGraph:
                 # already removed or known
                 continue
             if self.intron_collector.clustered_introns[intron] < count_cutoff:
-                logger.debug("Removing %s : %d" % (str(intron), self.intron_collector.clustered_introns[intron]))
+                logger.debug("Removing isolated %s : %d" % (str(intron), self.intron_collector.clustered_introns[intron]))
                 self.intron_collector.discard(intron)
                 to_remove.add(intron)
 
