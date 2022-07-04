@@ -411,9 +411,9 @@ class GraphBasedModelConstructor:
 
         novel_monoexon = set()
         clustered_polya_reads = self.cluster_monoexons(polya_reads)
-        novel_monoexon.add(self.generate_monoexon_from_clustered(clustered_polya_reads, True))
+        novel_monoexon.update(self.generate_monoexon_from_clustered(clustered_polya_reads, True))
         clustered_polyt_reads = self.cluster_monoexons(polyt_reads)
-        novel_monoexon.add(self.generate_monoexon_from_clustered(clustered_polyt_reads, False))
+        novel_monoexon.update(self.generate_monoexon_from_clustered(clustered_polyt_reads, False))
 
         if self.expressed_gene_info:
             for t in self.expressed_gene_info.all_isoforms_exons.keys():
