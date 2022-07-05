@@ -445,11 +445,22 @@ class GraphBasedModelConstructor:
             strand = '+' if forward else '-'
             coordinates = (five_prime_pos, three_prime_pos) if forward else (three_prime_pos, five_prime_pos)
 
+            is_valid = True
+            half_len = interval_len(coordinates) / 2
+            for existing_model in self.transcript_model_storage:
+                if any(intersection_len(exon, coordinates) > half_len for exon in existing_model.exon_blocks):
+                    is_valid = False
+                    break
+            if not is_valid:
+                continue
+
             new_model = TranscriptModel(self.gene_info.chr_id, strand,
                                         new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
                                         "novel", transcript_gene, [coordinates], transcript_type)
             logger.debug("uuu Adding novel MONOEXON isoform %s : %s, %d\t%d" % (new_transcript_id, str(coordinates), count, cutoff))
             result.add(coordinates)
+
+
 
             self.transcript_model_storage.append(new_model)
             for read_assignment in clustered_reads[three_prime_pos]:

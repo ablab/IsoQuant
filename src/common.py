@@ -144,6 +144,10 @@ def overlaps_at_least(range1, range2, delta=0):
     return overlap >= cutoff
 
 
+def intersection_len(range1, range2):
+    return max(0, min(range1[1], range2[1]) - max(range1[0], range2[0]) + 1)
+
+
 def left_of(range1, range2):
     return range1[1] < range2[0]
 
