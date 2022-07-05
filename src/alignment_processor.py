@@ -272,6 +272,15 @@ class IntergenicAlignmentCollector:
             if not alignment_info.read_exons:
                 logger.warning("Read %s has no aligned exons" % read_id)
                 continue
+
+            # TODO port to main processing funcion
+            if len(alignment_info.read_exons) > 2 and not alignment.is_secondary and \
+                    alignment.mapping_quality < self.params.multi_intron_mapping_quality_cutoff:
+                continue
+            if len(alignment_info.read_exons) <= 2 and \
+                    (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
+                continue
+
             read_tuple = (read_id, alignment_info.read_start, alignment_info.read_end)
             if read_tuple in processed_reads:
                 continue

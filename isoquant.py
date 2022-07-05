@@ -464,6 +464,9 @@ def set_additional_params(args):
         logger.warning("Reference genome is not provided! This may affect quality of the results!")
         args.needs_reference = False
 
+    args.multi_intron_mapping_quality_cutoff = 5
+    args.mono_mapping_quality_cutoff = 10
+
 
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")

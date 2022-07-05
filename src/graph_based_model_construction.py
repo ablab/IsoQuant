@@ -460,8 +460,6 @@ class GraphBasedModelConstructor:
             logger.debug("uuu Adding novel MONOEXON isoform %s : %s, %d\t%d" % (new_transcript_id, str(coordinates), count, cutoff))
             result.add(coordinates)
 
-
-
             self.transcript_model_storage.append(new_model)
             for read_assignment in clustered_reads[three_prime_pos]:
                 self.save_assigned_read(read_assignment, new_model.transcript_id)
