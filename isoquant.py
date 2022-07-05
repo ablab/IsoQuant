@@ -250,6 +250,8 @@ def check_input_files(args):
         if not os.path.isfile(args.genedb):
             print("ERROR! Gene database " + args.genedb + " does not exist")
             exit(-1)
+    else:
+        args.no_junc_bed = True
 
     if args.read_assignments is not None:
         for r in args.read_assignments:
