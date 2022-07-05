@@ -379,8 +379,8 @@ class DatasetProcessor:
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
         pool = Pool(self.args.threads)
-        # chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-        chr_ids = ['chr1']
+        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
+        #chr_ids = ['chr1']
         results = pool.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
                                                             (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
                                                            for chr_id in chr_ids], chunksize=1)
@@ -468,8 +468,8 @@ class DatasetProcessor:
             chrom_clusters = self.get_chromosome_gene_clusters()
             chr_ids = [chr_id for chr_id, c in chrom_clusters]
         else:
-            # chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-            chr_ids = ['chr1'] #
+            chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
+            #chr_ids = ['chr1'] #
 
         pool = Pool(self.args.threads)
         logger.info("Processing assigned reads " + sample.label)
