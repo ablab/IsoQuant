@@ -400,14 +400,14 @@ def set_model_construction_options(args):
                                             'min_novel_count', 'min_novel_count_rel',
                                             'fl_only'))
     strategies = {
-        'reliable':        ModelConstructionStrategy(2, 0.5, 20, 10, 0.4,  3, 0.3,  0.5,  2, 4, 8, 0.05, True),
-        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  8, 0.2,  2, 0.1,  0.2,  1, 2, 2, 0.02,  False),
-        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  5, 0.2,  2, 0.1,  0.2,  1, 2, 2, 0.005, False),
-        'default_ont':     ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 3, 3, 0.02,  False),
-        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20, 10, 0.2,  2, 0.1,  0.2,  1, 2, 3, 0.005,  False),
-        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  8, 0.2,  1, 0.1,  0.1,  1, 2, 3, 0.02,  True),
-        'all':             ModelConstructionStrategy(0, 0.3, 10,  5, 0.1,  1, 0.01, 0.05, 1, 1, 1, 0.002, False),
-        'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.1,  1, 0.01, 0.1,  1, 1, 1, 0.05,  False)
+        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  3, 0.3,  0.5,  2, 4, 8, 0.05, True),
+        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  2, 0.1,  0.2,  1, 2, 2, 0.02,  False),
+        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  2, 0.005,  2, 0.1,  0.2,  1, 2, 2, 0.005, False),
+        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  2, 0.1,  0.2,  1, 3, 3, 0.02,  False),
+        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  2, 0.1,  0.2,  1, 2, 3, 0.005,  False),
+        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.1,  0.1,  1, 2, 3, 0.02,  True),
+        'all':             ModelConstructionStrategy(0, 0.3, 10,  1, 0.002,  1, 0.01, 0.05, 1, 1, 1, 0.002, False),
+        'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.05,  1, 0.01, 0.1,  1, 1, 1, 0.05,  False)
     }
     strategy = strategies[args.model_construction_strategy]
 
