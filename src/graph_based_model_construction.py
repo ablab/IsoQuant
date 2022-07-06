@@ -399,15 +399,47 @@ class GraphBasedModelConstructor:
             self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
         self.construct_monoexon_novel(novel_mono_exon_reads)
 
+    def collect_terminal_exons_from_graph(self):
+        polya_exons = []
+        polyt_exons = []
+        for intron in self.intron_graph.outgoing_edges.keys():
+            for v in self.intron_graph.outgoing_edges[intron]:
+                if v[0] == VERTEX_polya:
+                    polya_exons.append((intron[1], v[1]))
+        for intron in self.intron_graph.incoming_edges.keys():
+            for v in self.intron_graph.incoming_edges[intron]:
+                if v[0] == VERTEX_polyt:
+                    polyt_exons.append((v[1], intron[0]))
+        logger.debug("PolyA terminal exons: " + str(polya_exons))
+        logger.debug("PolyT terminal exons: " + str(polyt_exons))
+        return polya_exons, polyt_exons
+
+    def is_internal_monoexonic_read(self, alignment, terminal_exons, forward=True):
+        read_coordinates = alignment.corrected_exons[0]
+        if forward:
+            for e in terminal_exons:
+                if abs(e[1] - alignment.polya_info.external_polya_pos) <= self.params.apa_delta and \
+                        read_coordinates[0] >= e[0] - self.params.delta:
+                    return True
+        else:
+            for e in terminal_exons:
+                if abs(e[0] - alignment.polya_info.external_polyt_pos) <= self.params.apa_delta and \
+                        read_coordinates[1] <= e[1] + self.params.delta:
+                    return True
+        return False
+
     def construct_monoexon_novel(self, novel_mono_exon_reads):
         logger.debug("Constucting NOVEL MONOEXON")
+        polya_exons, polyt_exons = self.collect_terminal_exons_from_graph()
         polya_reads = defaultdict(list)
         polyt_reads = defaultdict(list)
         for a in novel_mono_exon_reads:
             if a.polya_info.external_polya_pos != -1:
-                polya_reads[a.polya_info.external_polya_pos].append(a)
+                if not self.is_internal_monoexonic_read(a, polya_exons, forward=True):
+                    polya_reads[a.polya_info.external_polya_pos].append(a)
             if a.polya_info.external_polyt_pos != -1:
-                polyt_reads[a.polya_info.external_polyt_pos].append(a)
+                if not self.is_internal_monoexonic_read(a, polyt_exons, forward=False):
+                    polyt_reads[a.polya_info.external_polyt_pos].append(a)
 
         novel_monoexon = set()
         clustered_polya_reads = self.cluster_monoexons(polya_reads)
