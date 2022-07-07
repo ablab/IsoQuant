@@ -423,12 +423,12 @@ class GraphBasedModelConstructor:
         read_coordinates = alignment.corrected_exons[0]
         if forward:
             for e in terminal_exons:
-                if abs(e[1] - alignment.polya_info.external_polya_pos) <= self.params.apa_delta and \
+                if abs(e[1] - alignment.corrected_exons[-1][1]) <= self.params.apa_delta and \
                         read_coordinates[0] >= e[0] - self.params.delta:
                     return True
         else:
             for e in terminal_exons:
-                if abs(e[0] - alignment.polya_info.external_polyt_pos) <= self.params.apa_delta and \
+                if abs(e[0] - alignment.corrected_exons[0][0]) <= self.params.apa_delta and \
                         read_coordinates[1] <= e[1] + self.params.delta:
                     return True
         return False
