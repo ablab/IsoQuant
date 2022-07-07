@@ -397,17 +397,18 @@ def set_model_construction_options(args):
                                             'terminal_position_abs', 'terminal_position_rel',
                                             'terminal_internal_position_rel',
                                             'min_known_count', 'min_nonfl_count',
-                                            'min_novel_count', 'min_novel_count_rel', 'singleton_adjacent_cov',
+                                            'min_novel_count', 'min_novel_count_rel',
+                                            'min_mono_count_rel', 'singleton_adjacent_cov',
                                             'fl_only'))
     strategies = {
-        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 50, True),
-        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 100, False),
-        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 100, False),
-        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 10, False),
-        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 10, False),
-        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 100, True),
-        'all':             ModelConstructionStrategy(0, 0.3, 10,  1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 500, False),
-        'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 50, False)
+        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50, True),
+        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100, False),
+        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False),
+        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10, False),
+        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10, False),
+        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True),
+        'all':             ModelConstructionStrategy(0, 0.3, 10,  1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False),
+        'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -423,6 +424,7 @@ def set_model_construction_options(args):
     args.min_known_count = strategy.min_known_count
     args.min_nonfl_count = strategy.min_nonfl_count
     args.min_novel_count = strategy.min_novel_count
+    args.min_mono_count_rel = strategy.min_mono_count_rel
     args.min_novel_count_rel = strategy.min_novel_count_rel
     args.singleton_adjacent_cov = strategy.singleton_adjacent_cov
     args.fl_only = strategy.fl_only
