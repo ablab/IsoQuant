@@ -19,6 +19,14 @@ VERTEX_polyt = -20
 VERTEX_read_start = -21
 
 
+def is_terminal_vertex(v):
+    return v[0] in [VERTEX_polya, VERTEX_read_end]
+
+
+def is_starting_vertex(v):
+    return v[0] in [VERTEX_polyt, VERTEX_read_start]
+
+
 class IntronCollector:
     def __init__(self, gene_info, delta=0):
         self.gene_info = gene_info
@@ -165,6 +173,13 @@ class IntronGraph:
 
     def is_isolated(self, v):
         return not self.outgoing_edges[v] and not self.incoming_edges[v]
+
+    def is_monointron(self, v):
+        no_outgoing = not self.outgoing_edges[v] or \
+                      (all(is_terminal_vertex(x) for x in self.outgoing_edges[v]))
+        no_incoming = not self.incoming_edges[v] or (
+            all(is_starting_vertex(x) for x in self.incoming_edges[v]))
+        return no_incoming and no_outgoing
 
     def is_dead_end(self, v):
         path = []
@@ -520,16 +535,14 @@ class IntronGraph:
                 break
         return is_internal
 
-    def get_max_component_coverage(self, path):
+    def get_connected_component(self, path):
         intron_queue = queue.Queue()
         processed_set = set()
-        max_cov = 0
         for intron in path:
             if intron[0] < 0:
                 continue
             intron_queue.put(intron)
             processed_set.add(intron)
-            max_cov = max(max_cov, self.intron_collector.clustered_introns[intron])
 
         while not intron_queue.empty():
             intron = intron_queue.get()
@@ -537,13 +550,40 @@ class IntronGraph:
                 if i[0] >= 0 and i not in processed_set:
                     processed_set.add(i)
                     intron_queue.put(i)
-                    max_cov = max(max_cov, self.intron_collector.clustered_introns[i])
             for i in self.incoming_edges[intron]:
                 if i[0] >= 0 and i not in processed_set:
                     processed_set.add(i)
                     intron_queue.put(i)
-                    max_cov = max(max_cov, self.intron_collector.clustered_introns[i])
-        return max_cov
+        return processed_set
+
+    def get_max_component_coverage(self, path):
+        component = self.get_connected_component(path)
+        if not component:
+            return 0
+        return max(self.intron_collector.clustered_introns[i] for i in component)
+
+    def get_overlapping_component_max_coverage(self, coordinates):
+        processed_introns = set()
+        for intron in self.outgoing_edges.keys():
+            if intron in processed_introns:
+                continue
+
+            max_right_pos = intron[1]
+            for v in self.outgoing_edges[intron]:
+                if is_terminal_vertex(v):
+                    max_right_pos = max(max_right_pos, v[1])
+                else:
+                    max_right_pos = max(max_right_pos, v[0])
+            min_left_pos = intron[0]
+            for v in self.incoming_edges[intron]:
+                min_left_pos = min(min_left_pos, v[1])
+
+            if overlaps(coordinates, (min_left_pos, max_right_pos)):
+                processed_introns.update(self.get_connected_component([intron]))
+
+        if not processed_introns:
+            return 0
+        return max(self.intron_collector.clustered_introns[i] for i in processed_introns)
 
     def print_graph(self):
         logger.debug("Printing graph")

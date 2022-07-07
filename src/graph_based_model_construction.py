@@ -143,11 +143,16 @@ class GraphBasedModelConstructor:
                 continue
             # check coverage
             component_coverage = self.intron_graph.get_max_component_coverage(model.intron_path)
-            if component_coverage == 0 or (len(model.intron_path) == 1 and self.intron_graph.is_isolated(model.intron_path[0])):
-                component_coverage = self.intron_graph.max_coverage
+            if component_coverage == 0 or len(model.intron_path) == 0 or \
+                    (len(model.intron_path) == 1 and self.intron_graph.is_monointron(model.intron_path[0])):
+                component_coverage = self.intron_graph.get_overlapping_component_max_coverage((model.get_start(), model.get_end()))
 
+            logger.debug(component_coverage)
             novel_isoform_cutoff = max(self.params.min_novel_count,
                                        self.params.min_novel_count_rel * component_coverage)
+            logger.debug("Checking isoform %s, cov %d, cutoff %d: %s" %
+                         (model.transcript_id, self.internal_counter[model.transcript_id],
+                          novel_isoform_cutoff, str(model.intron_path)))
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
                 logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
                                                                         self.internal_counter[model.transcript_id],
