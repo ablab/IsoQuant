@@ -161,6 +161,10 @@ class GraphBasedModelConstructor:
                                                                         novel_isoform_cutoff, component_coverage))
                 del self.transcript_read_ids[model.transcript_id]
                 continue
+            if len(model.exon_blocks) == 1 and not self.check_mapping_quality(model):
+                logger.debug("Novel monoexon model %s has poor quality" % model.transcript_id)
+                del self.transcript_read_ids[model.transcript_id]
+                continue
 
             self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
             filtered_storage.append(model)
@@ -191,6 +195,12 @@ class GraphBasedModelConstructor:
                 count = self.intron_graph.intron_collector.clustered_introns[v]
                 logger.debug("<< Vertex %s: %d was NOT visited" % (v, count))
         # ===
+
+    def check_mapping_quality(self, model):
+        mapq = 0
+        for a in self.transcript_read_ids[model.transcript_id]:
+            mapq += a.mapping_quality
+        return mapq / len(self.transcript_read_ids[model.transcript_id]) >= 20
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
@@ -620,6 +630,7 @@ class GraphBasedModelConstructor:
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
             model_assignment.read_group = assignment.read_group
             # check that no serious contradiction occurs
+            logger.debug(model_assignment.assignment_type)
             if model_assignment.assignment_type in [ReadAssignmentType.unique,
                                                     ReadAssignmentType.unique_minor_difference,
                                                     ReadAssignmentType.ambiguous]:
@@ -627,6 +638,7 @@ class GraphBasedModelConstructor:
                 self.transcript_counter.add_read_info_raw(read_id,
                                                           matched_isoforms,
                                                           model_assignment.read_group)
+
                 if len(matched_isoforms) == 1:
                     self.internal_counter[matched_isoforms[0]] += 1
                 for m in model_assignment.isoform_matches:

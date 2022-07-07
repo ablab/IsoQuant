@@ -310,6 +310,7 @@ class IntergenicAlignmentCollector:
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             read_assignment.chr_id = self.chr_id
             read_assignment.multimapper = alignment.is_secondary
+            read_assignment.mapping_quality = alignment.mapping_quality
             self.assignment_storage.append(read_assignment)
             # logger.debug("=== Finished read " + read_id + " ===")
         if self.current_region:
