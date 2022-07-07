@@ -277,7 +277,7 @@ class GeneInfo:
         return gene_info
 
     def empty(self):
-        return not self.gene_db_list and not self.intron_profiles.features
+        return not self.gene_db_list and not self.exon_profiles.features
 
     def print_debug(self):
         gene_names = []
