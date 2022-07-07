@@ -143,7 +143,7 @@ class GraphBasedModelConstructor:
                 continue
             # check coverage
             component_coverage = self.intron_graph.get_max_component_coverage(model.intron_path)
-            if component_coverage == 0:
+            if component_coverage == 0 or (len(model.intron_path) == 1 and self.intron_graph.is_isolated(model.intron_path[0])):
                 component_coverage = self.intron_graph.max_coverage
 
             novel_isoform_cutoff = max(self.params.min_novel_count,
@@ -273,7 +273,7 @@ class GraphBasedModelConstructor:
                 polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya)
                 transcript_strand = self.strand_detector.get_strand(intron_path)
 
-                logger.debug("uuu Novel isoform %s has coverage: %dm cutoff = %d, component cov = %d, max_coverage = %d"
+                logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
                              % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))
                 if count < novel_isoform_cutoff:
                     logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
@@ -511,8 +511,6 @@ class GraphBasedModelConstructor:
         return clustered_counts
 
     def construct_monoexon_isoforms(self, mono_exon_isoform_reads, mono_exon_isoform_coverage, polya_sites):
-        novel_isoform_cutoff = max(self.params.min_novel_count, self.params.min_novel_count_rel * self.intron_graph.max_coverage)
-
         for isoform_id in mono_exon_isoform_reads.keys():
             count = len(mono_exon_isoform_reads[isoform_id])
             coverage = float(mono_exon_isoform_coverage[isoform_id].count(1)) / \
@@ -521,7 +519,7 @@ class GraphBasedModelConstructor:
 
             logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.intron_graph.max_coverage, count, coverage, polya_support))
             if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or polya_support == 0:
-                logger.debug(">> Will NOT be added, abs cutoff=%d, novel cutoff=%d" % (self.params.min_known_count, novel_isoform_cutoff))
+                logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
             else:
                 new_model = self.transcript_from_reference(isoform_id)
                 self.transcript_model_storage.append(new_model)

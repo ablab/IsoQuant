@@ -307,10 +307,7 @@ class IntronGraph:
 
         # remove low covered isolated vertices
         logger.debug("Removing isolated introns")
-        self.max_coverage = max(
-            self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
-        count_cutoff = max(self.params.min_novel_isolated_intron_abs,
-                           self.max_coverage * self.params.min_novel_isolated_intron_rel)
+        count_cutoff = self.params.min_novel_isolated_intron_abs
         for intron in isolated:
             if intron not in self.intron_collector.clustered_introns or intron in self.intron_collector.known_introns:
                 # already removed or known
