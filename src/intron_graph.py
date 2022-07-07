@@ -181,23 +181,29 @@ class IntronGraph:
             all(is_starting_vertex(x) for x in self.incoming_edges[v]))
         return no_incoming and no_outgoing
 
-    def is_dead_end(self, v):
-        path = []
-        while len(self.outgoing_edges[v]) == 1:
+    def signleton_dead_end(self, v):
+        path = set()
+        while self.intron_collector.clustered_introns[v] == 1:
+            path.add(v)
+            if len(self.outgoing_edges[v]) != 1:
+                break
             v = list(self.outgoing_edges[v])[0]
-            path.append(v)
-        if self.outgoing_edges[v] == 0:
-            return path
-        return []
 
-    def is_dead_start(self, v):
-        path = []
-        while len(self.incoming_edges[v]) == 1:
-            v = list(self.incoming_edges[v])[0]
-            path.append(v)
-        if self.incoming_edges[v] == 0:
+        if len(self.outgoing_edges[v]) == 0:
             return path
-        return []
+        return set()
+
+    def signleton_dead_start(self, v):
+        path = set()
+        while self.intron_collector.clustered_introns[v] == 1:
+            path.add(v)
+            if len(self.incoming_edges[v]) != 1:
+                break
+            v = list(self.incoming_edges[v])[0]
+
+        if len(self.incoming_edges[v]) == 0:
+            return path
+        return set()
 
     def get_outgoing(self, intron, v_type=None):
         res = []
@@ -222,12 +228,6 @@ class IntronGraph:
                 if v[0] == v_type:
                     res.append(v)
         return sorted(res)
-
-    def is_dead_end(self, intron):
-        return not any(x[0] > 0 for x in self.outgoing_edges[intron])
-
-    def is_dead_start(self, intron):
-        return not any(x[0] > 0 for x in self.incoming_edges[intron])
 
     # merge vertex to its substitute, remove if isolated
     def collapse_vertex(self, to_collapse, substitute_vertex):
@@ -259,6 +259,7 @@ class IntronGraph:
     def simplify(self):
         logger.debug("Simplifying graph")
         self.clean_tips_and_bulges()
+        self.remove_singleton_dead_ends()
         self.remove_isolates()
         self.intron_collector.simplify_correction_map()
 
@@ -295,11 +296,47 @@ class IntronGraph:
             del self.outgoing_edges[i]
             del self.incoming_edges[i]
 
-#    def remove_dead_ends(self):
-#        for current_intron in sorted(self.outgoing_edges.keys()):
-#            path = self.is_dead_end(current_intron)
-#            path_cov
+    def remove_singleton_dead_ends(self):
+        to_clean = {}
+        for current_intron in sorted(self.outgoing_edges.keys()):
+            if self.intron_collector.clustered_introns[current_intron] < self.params.singleton_adjacent_cov:
+                # singleton removal can only be used for high-covered introns
+                continue
+            # collect singleton paths (coverage 1, only one outgoing edge)
+            outgoing_paths = [self.signleton_dead_end(i) for i in self.outgoing_edges[current_intron]]
+            if any(len(p) == 0 for p in outgoing_paths):
+                continue
+            to_clean[current_intron] = {}
+            for p in outgoing_paths:
+                to_clean[current_intron].update(p)
 
+        for intron in to_clean.keys():
+            self.outgoing_edges[intron] = set()
+            for i in to_clean[intron]:
+                if i in self.outgoing_edges:
+                    del self.outgoing_edges[i]
+                if i in self.incoming_edges:
+                    del self.incoming_edges[i]
+
+        to_clean = {}
+        for current_intron in sorted(self.incoming_edges.keys()):
+            if self.intron_collector.clustered_introns[current_intron] < self.params.singleton_adjacent_cov:
+                # singleton removal can only be used for high-covered introns
+                continue
+            incoming_paths = [self.signleton_dead_start(i) for i in self.incoming_edges[current_intron]]
+            if any(len(p) == 0 for p in incoming_paths):
+                continue
+            to_clean[current_intron] = {}
+            for p in incoming_paths:
+                to_clean[current_intron].update(p)
+
+        for intron in to_clean.keys():
+            self.incoming_edges[intron] = set()
+            for i in to_clean[intron]:
+                if i in self.outgoing_edges:
+                    del self.outgoing_edges[i]
+                if i in self.incoming_edges:
+                    del self.incoming_edges[i]
 
     def remove_isolates(self):
         to_remove = set()
