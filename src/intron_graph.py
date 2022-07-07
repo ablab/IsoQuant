@@ -166,6 +166,24 @@ class IntronGraph:
     def is_isolated(self, v):
         return not self.outgoing_edges[v] and not self.incoming_edges[v]
 
+    def is_dead_end(self, v):
+        path = []
+        while len(self.outgoing_edges[v]) == 1:
+            v = list(self.outgoing_edges[v])[0]
+            path.append(v)
+        if self.outgoing_edges[v] == 0:
+            return path
+        return []
+
+    def is_dead_start(self, v):
+        path = []
+        while len(self.incoming_edges[v]) == 1:
+            v = list(self.incoming_edges[v])[0]
+            path.append(v)
+        if self.incoming_edges[v] == 0:
+            return path
+        return []
+
     def get_outgoing(self, intron, v_type=None):
         res = []
         if v_type is None:
@@ -225,6 +243,11 @@ class IntronGraph:
 
     def simplify(self):
         logger.debug("Simplifying graph")
+        self.clean_tips_and_bulges()
+        self.remove_isolates()
+        self.intron_collector.simplify_correction_map()
+
+    def clean_tips_and_bulges(self):
         # check all outgoing edges
         to_remove = set()
         logger.debug("Removing outgoing tips and bulges")
@@ -256,8 +279,15 @@ class IntronGraph:
         for i in to_remove:
             del self.outgoing_edges[i]
             del self.incoming_edges[i]
-        to_remove.clear()
 
+#    def remove_dead_ends(self):
+#        for current_intron in sorted(self.outgoing_edges.keys()):
+#            path = self.is_dead_end(current_intron)
+#            path_cov
+
+
+    def remove_isolates(self):
+        to_remove = set()
         # check all isolated vertices
         isolated = set()
         logger.debug("Collapsing isolated introns")
@@ -293,8 +323,6 @@ class IntronGraph:
         for i in to_remove:
             del self.outgoing_edges[i]
             del self.incoming_edges[i]
-
-        self.intron_collector.simplify_correction_map()
 
     def collapse_vertex_set(self, vertex_set):
         if len(vertex_set) <= 1:
@@ -335,31 +363,38 @@ class IntronGraph:
 
     def attach_transcpt_ends(self, intron, polya_confirmed_positions, read_terminal_positions, read_end=True):
         read_ends_cutoff = self.params.terminal_position_abs
+        logger.debug(str(intron) + " => " + str(polya_confirmed_positions[intron]))
         clustered_polyas = self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
         if clustered_polyas:
             read_ends_cutoff = max(read_ends_cutoff, max(clustered_polyas.values()) * self.params.terminal_position_rel)
             extra_end_positions = {}
-            furthers_confirmed_position = max(clustered_polyas.keys()) if read_end else min(clustered_polyas.keys())
+            furtherst_confirmed_position = max(clustered_polyas.keys()) if read_end else min(clustered_polyas.keys())
             for position, count in read_terminal_positions[intron].items():
-                if read_end and position >= furthers_confirmed_position + self.params.apa_delta:
+                if read_end and position >= furtherst_confirmed_position + self.params.apa_delta:
                     extra_end_positions[position] = count
-                elif not read_end and position <= furthers_confirmed_position - self.params.apa_delta :
+                elif not read_end and position <= furtherst_confirmed_position - self.params.apa_delta :
                     extra_end_positions[position] = count
         else:
             extra_end_positions = read_terminal_positions[intron]
 
         if read_end and intron in self.outgoing_edges and len(self.outgoing_edges[intron]) > 0:
             # intron has outgoing edges, hard cut off
-            read_ends_cutoff = max(read_ends_cutoff, self.intron_collector.clustered_introns[intron] *
-                                   self.params.terminal_internal_position_rel)
+            neighboring_cov = max(self.intron_collector.clustered_introns[i] for i in self.outgoing_edges[intron])
+            read_ends_cutoff = max(read_ends_cutoff, neighboring_cov * self.params.terminal_internal_position_rel)
         elif not read_end and intron in self.incoming_edges and len(self.incoming_edges[intron]) > 0:
             # intron has incoming edges, hard cut off
-            read_ends_cutoff = max(read_ends_cutoff, self.intron_collector.clustered_introns[intron] *
-                                   self.params.terminal_internal_position_rel)
+            neighboring_cov = max(self.intron_collector.clustered_introns[i] for i in self.incoming_edges[intron])
+            read_ends_cutoff = max(read_ends_cutoff, neighboring_cov * self.params.terminal_internal_position_rel)
+
+        logger.debug(str(intron) + " +> " + str(extra_end_positions))
 
         terminal_positions = self.cluster_terminal_positions(extra_end_positions,
                                                              read_end=read_end,
                                                              cutoff=read_ends_cutoff)
+        logger.debug("POLYAs clustered:")
+        logger.debug(clustered_polyas)
+        logger.debug("Teminal clustered:")
+        logger.debug(terminal_positions)
         if read_end:
             # if intron in self.terminal_known_positions:
             #    logger.debug("Annotated terminal positions: " + str(sorted(self.terminal_known_positions[intron])))
