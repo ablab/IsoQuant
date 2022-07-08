@@ -300,10 +300,10 @@ class GraphBasedModelConstructor:
             else:
                 # path matches reference exactly
                 isoform_id = self.known_isoforms_in_graph[intron_path]
-                if abs(self.gene_info.transcript_start(isoform_id) - transcript_range[0]) <= self.params.apa_delta and \
-                        abs(self.gene_info.transcript_end(isoform_id) - transcript_range[1]) <= self.params.apa_delta:
-                    reference_isoform = isoform_id
-                    logger.debug("uuu Matches with known isoform %s" % reference_isoform)
+                #if abs(self.gene_info.transcript_start(isoform_id) - transcript_range[0]) <= self.params.apa_delta and \
+                #        abs(self.gene_info.transcript_end(isoform_id) - transcript_range[1]) <= self.params.apa_delta:
+                reference_isoform = isoform_id
+                logger.debug("uuu Matches with known isoform %s" % reference_isoform)
 
             new_model = None
             if reference_isoform:
