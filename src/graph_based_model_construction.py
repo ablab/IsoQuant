@@ -221,7 +221,11 @@ class GraphBasedModelConstructor:
         if isoform_assignment.assignment_type == ReadAssignmentType.unique:
             return True
         elif isoform_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
-            allowed_set = {MatchEventSubtype.none, MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right}
+            allowed_set = {MatchEventSubtype.none,
+                           MatchEventSubtype.exon_elongation_left,
+                           MatchEventSubtype.exon_elongation_right,
+                           MatchEventSubtype.exon_misalignment,
+                           MatchEventSubtype.intron_shift}
             return all(m.event_type in allowed_set for m in isoform_assignment.isoform_matches[0].match_subclassifications)
         return False
 
@@ -261,9 +265,11 @@ class GraphBasedModelConstructor:
                     logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
             else:
                 # path matches reference exactly
-                # TODO: cehck for polyA
-                reference_isoform = self.known_isoforms_in_graph[intron_path]
-                logger.debug("uuu Matches with known isoform %s" % reference_isoform)
+                isoform_id = self.known_isoforms_in_graph[intron_path]
+                if abs(self.gene_info.transcript_start(isoform_id) - transcript_range[0]) <= self.params.apa_delta and \
+                        abs(self.gene_info.transcript_end(isoform_id) - transcript_range[1]) <= self.params.apa_delta:
+                    reference_isoform = isoform_id
+                    logger.debug("uuu Matches with known isoform %s" % reference_isoform)
 
             new_model = None
             if reference_isoform:
