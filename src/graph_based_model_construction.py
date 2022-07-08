@@ -166,6 +166,7 @@ class GraphBasedModelConstructor:
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
+            # TODO: correct ends for novel
             self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
             filtered_storage.append(model)
             confirmed_transcipt_ids.add(model.transcript_id)
@@ -260,6 +261,7 @@ class GraphBasedModelConstructor:
                     logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
             else:
                 # path matches reference exactly
+                # TODO: cehck for polyA
                 reference_isoform = self.known_isoforms_in_graph[intron_path]
                 logger.debug("uuu Matches with known isoform %s" % reference_isoform)
 

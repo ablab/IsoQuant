@@ -92,6 +92,11 @@ class LongReadAlignmentProcessor:
                 if not alignment_info.read_exons:
                     logger.warning("Read %s has no aligned exons" % read_id)
                     continue
+                if len(alignment_info.read_exons) <= 2 and \
+                        (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
+                    continue
+
+
                 read_tuple = (read_id, alignment_info.read_start, alignment_info.read_end)
                 if read_tuple in processed_reads:
                     continue
@@ -109,6 +114,11 @@ class LongReadAlignmentProcessor:
                     alignment_info.add_cage_info(self.cage_finder)
                 alignment_info.construct_profiles(self.profile_constructor)
                 read_assignment = self.assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
+
+                if (not read_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique])\
+                        and not alignment.is_secondary and \
+                        alignment.mapping_quality < self.params.multi_intron_mapping_quality_cutoff:
+                    continue
 
                 if alignment_info.exons_changed:
                     read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
@@ -129,6 +139,7 @@ class LongReadAlignmentProcessor:
                 read_assignment.strand = self.get_assignment_strand(read_assignment, alignment)
                 read_assignment.chr_id = self.gene_info.chr_id
                 read_assignment.multimapper = alignment.is_secondary
+                read_assignment.mapping_quality = alignment.mapping_quality
 
                 if self.params.count_exons:
                     read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
@@ -273,7 +284,6 @@ class IntergenicAlignmentCollector:
                 logger.warning("Read %s has no aligned exons" % read_id)
                 continue
 
-            # TODO port to main processing funcion
             if len(alignment_info.read_exons) > 2 and not alignment.is_secondary and \
                     alignment.mapping_quality < self.params.multi_intron_mapping_quality_cutoff:
                 continue
