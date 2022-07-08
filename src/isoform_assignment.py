@@ -531,3 +531,15 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
             additional_info = ":" + regions_to_str(introns)
 
     return match_subtype_to_str(event, strand) + additional_info
+
+
+def is_matching_assignment(isoform_assignment):
+    if isoform_assignment.assignment_type == ReadAssignmentType.unique:
+        return True
+    elif isoform_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference]:
+        allowed_set = {MatchEventSubtype.none,
+                       MatchEventSubtype.fsm,
+                       MatchEventSubtype.exon_misalignment,
+                       MatchEventSubtype.intron_shift}
+        return all(m.event_type in allowed_set for m in isoform_assignment.isoform_matches[0].match_subclassifications)
+    return False

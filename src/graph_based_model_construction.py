@@ -136,6 +136,8 @@ class GraphBasedModelConstructor:
     def filter_transcripts(self):
         filtered_storage = []
         confirmed_transcipt_ids = set()
+        to_substitute = self.detect_similar_isoforms()
+
         for model in self.transcript_model_storage:
             if model.transcript_id.endswith(self.known_transcript_suffix):
                 filtered_storage.append(model)
@@ -155,18 +157,25 @@ class GraphBasedModelConstructor:
             logger.debug("Checking isoform %s, cov %d, cutoff %d: %s" %
                          (model.transcript_id, self.internal_counter[model.transcript_id],
                           novel_isoform_cutoff, str(model.intron_path)))
+            if model.transcript_id in to_substitute:
+                logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
+                self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
+                del self.transcript_read_ids[model.transcript_id]
+                continue
+
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
                 logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
                                                                         self.internal_counter[model.transcript_id],
                                                                         novel_isoform_cutoff, component_coverage))
                 del self.transcript_read_ids[model.transcript_id]
                 continue
+
             if len(model.exon_blocks) == 1 and not self.check_mapping_quality(model):
                 logger.debug("Novel monoexon model %s has poor quality" % model.transcript_id)
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
-            # TODO: correct ends for novel
+            # TODO: correct ends for known
             self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
             filtered_storage.append(model)
             confirmed_transcipt_ids.add(model.transcript_id)
@@ -203,6 +212,37 @@ class GraphBasedModelConstructor:
             mapq += a.mapping_quality
         return mapq / len(self.transcript_read_ids[model.transcript_id]) >= 20
 
+    def detect_similar_isoforms(self):
+        to_substitute = {}
+        for model in self.transcript_model_storage:
+            if len(model.exon_blocks) <= 2 or model.transcript_id in to_substitute:
+                continue
+            transcript_model_gene_info = GeneInfo.from_models([model], self.params.delta)
+            assigner = LongReadAssigner(transcript_model_gene_info, self.params)
+            profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
+
+            for m in self.transcript_model_storage:
+                if m.transcript_id.endswith(self.known_transcript_suffix) or m.transcript_id == model.transcript_id or \
+                        m.transcript_id in to_substitute or len(m.exon_blocks) == 1 or not m.intron_path or \
+                        len(m.exon_blocks) > len(model.exon_blocks):
+                    continue
+
+                if m.intron_path[0][0] == VERTEX_polyt:
+                    polya_info = PolyAInfo(-1, m.intron_path[0][1], -1, -1)
+                elif m.intron_path[-1][0] == VERTEX_polya:
+                    polya_info = PolyAInfo(m.intron_path[-1][1], -1, -1, -1)
+                else:
+                    polya_info = PolyAInfo(-1, -1, -1, -1)
+                combined_profile = profile_constructor.construct_profiles(m.exon_blocks, polya_info, [])
+                assignment = assigner.assign_to_isoform(m.transcript_id, combined_profile)
+                logger.debug("Matching %s with %s, result %s, %s" %
+                             (model.transcript_id, m.transcript_id, str(assignment.assignment_type),
+                              str(assignment.isoform_matches[0].match_subclassifications)))
+                if is_matching_assignment(assignment):
+                    to_substitute[m.transcript_id] = model.transcript_id
+
+        return  to_substitute
+
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
         for isoform_id in gene_info.all_isoforms_introns:
@@ -216,18 +256,6 @@ class GraphBasedModelConstructor:
             logger.debug("== Path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
             known_isoforms[tuple(intron_path)] = isoform_id
         return known_isoforms
-
-    def is_reference_isoform(self, isoform_assignment):
-        if isoform_assignment.assignment_type == ReadAssignmentType.unique:
-            return True
-        elif isoform_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
-            allowed_set = {MatchEventSubtype.none,
-                           MatchEventSubtype.exon_elongation_left,
-                           MatchEventSubtype.exon_elongation_right,
-                           MatchEventSubtype.exon_misalignment,
-                           MatchEventSubtype.intron_shift}
-            return all(m.event_type in allowed_set for m in isoform_assignment.isoform_matches[0].match_subclassifications)
-        return False
 
     def save_assigned_read(self, read_assignment, transcript_id):
         read_id = read_assignment.read_id
@@ -252,15 +280,21 @@ class GraphBasedModelConstructor:
             logger.debug("uuu %s: %s" % (new_transcript_id, str(novel_exons)))
 
             reference_isoform = None
-            if intron_path not in self.known_isoforms_in_graph:
+            if intron_path and intron_path not in self.known_isoforms_in_graph:
                 # check if new transcript matches a reference one
-                combined_profile = self.profile_constructor.construct_profiles(novel_exons, PolyAInfo(-1, -1, -1, -1), [])
+                if intron_path[0][0] == VERTEX_polyt:
+                    polya_info = PolyAInfo(-1, intron_path[0][1], -1, -1)
+                elif intron_path[-1][0] == VERTEX_polya:
+                    polya_info = PolyAInfo(intron_path[-1][1], -1, -1, -1)
+                else:
+                    polya_info = PolyAInfo(-1, -1, -1, -1)
+                combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
                 assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
                 # check that no serious contradiction occurs
                 logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
                              (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
 
-                if self.is_reference_isoform(assignment):
+                if is_matching_assignment(assignment):
                     reference_isoform = assignment.isoform_matches[0].assigned_transcript
                     logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
             else:
