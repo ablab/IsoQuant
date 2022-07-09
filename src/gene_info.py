@@ -108,7 +108,6 @@ class FeatureInfo:
 class GeneInfo:
     MAX_INTRON_LEN = 50000
 
-    # chr_bam_prefix: additional string used when bam files were aligned to different reference that has difference in chromosome names (e.g. 1 and chr1)
     def __init__(self, gene_db_list, db, delta=0):
         if db is None:
             return
@@ -293,7 +292,7 @@ class GeneInfo:
     # return region of overlapping gene set
     def get_gene_region(self):
         start = self.gene_db_list[0].start
-        end = self.gene_db_list[-1].end
+        end = max(g.end for g in self.gene_db_list)
         chr_id = self.gene_db_list[0].seqid
 
         for gene_db in self.gene_db_list:

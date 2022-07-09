@@ -144,12 +144,12 @@ def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_re
     processed_reads = []
     bam_files = list(map(lambda x: x[0], sample.file_list))
     bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
-    logger.info("Processing chromosome " + chr_id)
-    alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, current_chr_record, read_grouper)
+    gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
 
-    for region, assignment_storage in alignment_collector.process():
-        logger.debug("Collected region %s:%d-%d" % (chr_id, region[0], region[1]))
-        gene_info = GeneInfo.from_region(chr_id, region[0], region[1], args.delta)
+    logger.info("Processing chromosome " + chr_id)
+    alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
+
+    for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
@@ -347,17 +347,10 @@ class DatasetProcessor:
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
             logger.info('Using read assignments from {}*'.format(saves_file))
-        elif self.gffutils_db is not None:
-            self.assign_reads(sample)
-            saves_file = sample.out_raw_file
-            logger.info('Read assignments files saved to {}*. '.
-                        format(sample.out_raw_file))
-            if not self.args.keep_tmp:
-                logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
         else:
             self.collect_reads(sample)
             saves_file = sample.out_raw_file
-            logger.info('Read alignments files saved to {}*. '.
+            logger.info('Read assignments files saved to {}*. '.
                         format(sample.out_raw_file))
             if not self.args.keep_tmp:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
@@ -388,29 +381,42 @@ class DatasetProcessor:
         pool.join()
         processed_reads, read_groups = [x[0] for x in results], [x[1] for x in results]
 
-        polya_assignments = 0
-        total_assignments = 0
-        used_ids = set()
+        logger.info("Resolving multimappers")
+        self.multimapped_reads = defaultdict(list)
         for storage in processed_reads:
-            for a in storage:
-                if a.read_id in used_ids:
-                    continue
-                total_assignments += 1
-                polya_assignments += 1 if a.polyA_found else 0
-                used_ids.add(a.read_id)
+            for read_assignment in storage:
+                self.multimapped_reads[read_assignment.read_id].append(read_assignment)
 
+        multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "_multimappers", "wb"),  -1)
         multimap_pickler.fast = True
+        total_assignments = 0
+        polya_assignments = 0
+
+        for read_id in list(self.multimapped_reads.keys()):
+            assignment_list = self.multimapped_reads[read_id]
+            if len(assignment_list) == 1:
+                total_assignments += 1
+                polya_assignments += 1 if assignment_list[0].polyA_found else 0
+                del self.multimapped_reads[read_id]
+                continue
+            multimap_resolver.resolve(assignment_list)
+            multimap_pickler.dump(assignment_list)
+            for a in assignment_list:
+                if a.assignment_type != ReadAssignmentType.suspended:
+                    total_assignments += 1
+                    if a.polyA_found:
+                        polya_assignments += 1
+
         info_pickler = pickle.Pickler(open(sample.out_raw_file + "_info", "wb"),  -1)
         info_pickler.dump(total_assignments)
         info_pickler.dump(polya_assignments)
         all_read_groups = set([r for sublist in read_groups for r in sublist])
         info_pickler.dump(all_read_groups)
-
         if total_assignments == 0:
             logger.warning("No reads were assigned to isoforms, check your input files")
         else:
-            logger.info('Finished alignment collection, total alignments %d, polyA percentage %.1f' %
+            logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
     def assign_reads(self, sample):
@@ -461,7 +467,6 @@ class DatasetProcessor:
         else:
             logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
                         (total_assignments, 100 * polya_assignments / total_assignments))
-
 
     def process_assigned_reads(self, sample, dump_filename):
         if self.gffutils_db:

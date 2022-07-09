@@ -236,12 +236,12 @@ class IntergenicAlignmentCollector:
     counter
     """
 
-    def __init__(self, chr_id, bam_pairs, params, chr_record=None, read_groupper=DefaultReadGrouper()):
+    def __init__(self, chr_id, bam_pairs, params, genedb=None, chr_record=None, read_groupper=DefaultReadGrouper()):
         self.chr_id = chr_id
         self.start = 1
-        self.current_region = None
         self.bam_pairs = bam_pairs
         self.params = params
+        self.genedb = genedb
         self.chr_record = chr_record
 
         self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, self.start,
@@ -253,20 +253,23 @@ class IntergenicAlignmentCollector:
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
 
-    def process(self,):
+    def process(self):
         self.assignment_storage = []
-        processed_reads = set()
+        current_region = None
+        # TODO: implement low-memory version (i.e. double fetch)
+        alignment_storage = []
 
         for bam_index, alignment in self.bam_merger.get():
-            if not self.current_region:
-                self.current_region = (alignment.reference_start, alignment.reference_end)
-            elif overlaps(self.current_region, (alignment.reference_start, alignment.reference_end)):
-                self.current_region = (self.current_region[0], max(self.current_region[1], alignment.reference_end))
+            if not current_region:
+                current_region = (alignment.reference_start, alignment.reference_end)
+            elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
+                current_region = (current_region[0], max(current_region[1], alignment.reference_end))
             else:
-                logger.debug("%s, (%d, %d)" % (str(self.current_region), alignment.reference_start, alignment.reference_end))
-                yield self.current_region, self.assignment_storage
+                logger.debug("%s, (%d, %d)" % (str(current_region), alignment.reference_start, alignment.reference_end))
+                yield self.forward_alignments(current_region, alignment_storage)
+                alignment_storage = []
                 self.assignment_storage = []
-                self.current_region = None
+                current_region = None
 
             read_id = alignment.query_name
             if alignment.reference_id == -1:
@@ -276,8 +279,37 @@ class IntergenicAlignmentCollector:
                 continue
             if self.params.no_secondary and alignment.is_secondary:
                 continue
+            alignment_storage.append((bam_index, alignment))
 
-            # logger.debug("=== Processing read " + read_id + " ===")
+        if current_region:
+            yield self.forward_alignments(current_region, alignment_storage)
+
+    def forward_alignments(self, current_region, alignment_storage):
+        gene_list = []
+        if self.genedb:
+            gene_list = self.genedb.region(seqid=self.chr_id, start=current_region[0],
+                                           end=current_region[1], featuretype="gene")
+
+        if not gene_list:
+            gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
+                                             self.params.delta)
+            self.process_intergenic(alignment_storage)
+        else:
+            gene_list = sorted(gene_list, key=lambda x: x.start)
+            gene_info = GeneInfo(gene_list, self.genedb, self.params.delta)
+            if self.params.needs_reference:
+                gene_info.all_read_region_start = current_region[0] - self.params.upstream_region_len
+                gene_info.all_read_region_end = current_region[0] + self.params.upstream_region_len
+                gene_info.reference_region = \
+                    str(self.chr_record[gene_info.all_read_region_start - 1:gene_info.all_read_region_end + 1].seq)
+                gene_info.canonical_sites = {}
+            self.process_genic(alignment_storage, gene_info)
+            
+        return gene_info, self.assignment_storage
+
+    def process_intergenic(self, alignment_storage):
+        for bam_index, alignment in alignment_storage:
+            read_id = alignment.query_name
             alignment_info = AlignmentInfo(alignment)
 
             if not alignment_info.read_exons:
@@ -290,11 +322,6 @@ class IntergenicAlignmentCollector:
             if len(alignment_info.read_exons) <= 2 and \
                     (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
                 continue
-
-            read_tuple = (read_id, alignment_info.read_start, alignment_info.read_end)
-            if read_tuple in processed_reads:
-                continue
-            processed_reads.add(read_tuple)
 
             alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
             if self.params.cage:
@@ -323,10 +350,107 @@ class IntergenicAlignmentCollector:
             read_assignment.mapping_quality = alignment.mapping_quality
             self.assignment_storage.append(read_assignment)
             # logger.debug("=== Finished read " + read_id + " ===")
-        if self.current_region:
-            yield self.current_region, self.assignment_storage
+
+    def process_genic(self, alignment_storage, gene_info):
+        assigner = LongReadAssigner(gene_info, self.params)
+        profile_constructor = CombinedProfileConstructor(gene_info, self.params)
+        self.exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
+
+        for bam_index, alignment in alignment_storage:
+            read_id = alignment.query_name
+            logger.debug("=== Processing read " + read_id + " ===")
+            alignment_info = AlignmentInfo(alignment)
+
+            if not alignment_info.read_exons:
+                logger.warning("Read %s has no aligned exons" % read_id)
+                continue
+            if len(alignment_info.read_exons) <= 2 and \
+                    (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
+                continue
+
+            alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
+            if self.params.cage:
+                alignment_info.add_cage_info(self.cage_finder)
+            alignment_info.construct_profiles(profile_constructor)
+            read_assignment = assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
+
+            if (not read_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])\
+                    and not alignment.is_secondary and \
+                    alignment.mapping_quality < self.params.multi_intron_mapping_quality_cutoff:
+                continue
+
+            if alignment_info.exons_changed:
+                read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
+            read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
+                                           alignment_info.polya_info.external_polyt_pos != -1 or
+                                           alignment_info.polya_info.internal_polya_pos != -1 or
+                                           alignment_info.polya_info.internal_polyt_pos != -1)
+            read_assignment.polya_info = alignment_info.polya_info
+            read_assignment.cage_found = len(alignment_info.cage_hits) > 0
+            read_assignment.exons = alignment_info.read_exons
+            read_assignment.corrected_exons = self.exon_corrector.correct_assigned_read(alignment_info,
+                                                                                        read_assignment)
+            read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
+            logger.debug("Original exons: %s" % str(alignment_info.read_exons))
+            logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
+            read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+            read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
+            read_assignment.strand = self.get_assignment_strand(read_assignment)
+            read_assignment.chr_id = gene_info.chr_id
+            read_assignment.multimapper = alignment.is_secondary
+            read_assignment.mapping_quality = alignment.mapping_quality
+
+            if self.params.count_exons:
+                read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
+                read_assignment.intron_gene_profile = alignment_info.combined_profile.read_intron_profile.gene_profile
+
+            if self.params.sqanti_output:
+                indel_count, junctions_with_indels = self.count_indel_stats(alignment)
+                read_assignment.set_additional_info("indel_count", indel_count)
+                read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
+                read_assignment.introns_match = \
+                    all(e == 1 for e in alignment_info.combined_profile.read_intron_profile.read_profile)
+
+            self.assignment_storage.append(read_assignment)
+            logger.debug("=== Finished read " + read_id + " ===")
 
     def get_assignment_strand(self, read_assignment):
+        if read_assignment.isoform_matches and read_assignment.assignment_type in \
+                [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference]:
+            return read_assignment.isoform_matches[0].transcript_strand
+
         if len(read_assignment.exons) == 1:
             return '.'
         return self.strand_detector.get_strand(read_assignment.corrected_introns)
+
+    def count_indel_stats(self, alignment):
+        cigar_event_count = len(alignment.cigartuples)
+        indel_events = [1, 2]
+        indel_count = 0
+        intron_cigar_positions = []
+        for i in range(cigar_event_count):
+            cigar = alignment.cigartuples[i]
+            if cigar[0] in indel_events:
+                indel_count += 1
+            elif cigar[0] == 3:
+                intron_cigar_positions.append(i)
+
+        junctions_with_indels = 0
+        for i in intron_cigar_positions:
+            # indel right near intron
+            if (i > 0 and alignment.cigartuples[i - 1][0] in indel_events) or \
+                    (i < cigar_event_count - 1 and alignment.cigartuples[i + 1][0] in indel_events):
+                junctions_with_indels += 1
+
+            # indel separated by at most 'indel_near_splice_site_dist' matches from intron
+            if (i > 1 and alignment.cigartuples[i - 2][0] in indel_events and
+                alignment.cigartuples[i - 1][0] in [0, 7, 8] and
+                alignment.cigartuples[i - 1][1] <= self.params.indel_near_splice_site_dist) or \
+                    (i < cigar_event_count - 2 and alignment.cigartuples[i + 2][0] in indel_events and
+                     alignment.cigartuples[i + 1][0]  in [0, 7, 8] and
+                     alignment.cigartuples[i + 1][1] <= self.params.indel_near_splice_site_dist):
+                junctions_with_indels += 1
+
+        return indel_count, junctions_with_indels
+
+

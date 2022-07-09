@@ -66,7 +66,7 @@ class MultimapResolver:
                                      ReadAssignmentType.unique_minor_difference,
                                      ReadAssignmentType.ambiguous]:
                 consistent_assignments.add(i)
-            elif a.assignment_type == ReadAssignmentType.inconsistent:
+            elif a.assignment_type in [ReadAssignmentType.inconsistent, ReadAssignmentType.noninformative, ReadAssignmentType.intergenic]:
                 inconsistent_assignments.add(i)
 
         if primary_unique:
