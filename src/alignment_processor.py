@@ -71,6 +71,7 @@ class LongReadAlignmentProcessor:
             # FIXME: temporary solution - process gene outside
             to_fetch_start = max(0, genic_region[0] - 100)
             to_fetch_end = min(bamfile_in.get_reference_length(self.gene_info.chr_id), genic_region[1] + 100)
+            logger.debug("TO FETCH: %d %d" % (to_fetch_start, to_fetch_end))
             if to_fetch_end < to_fetch_start:
                 logger.warning("Invalid region for the BAM file: %s:%d-%d, will be skipped. "
                                "Check that provided reference genome is the same that was used for the alignment." %
@@ -96,7 +97,6 @@ class LongReadAlignmentProcessor:
                         (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
                     continue
 
-
                 read_tuple = (read_id, alignment_info.read_start, alignment_info.read_end)
                 if read_tuple in processed_reads:
                     continue
@@ -115,7 +115,7 @@ class LongReadAlignmentProcessor:
                 alignment_info.construct_profiles(self.profile_constructor)
                 read_assignment = self.assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
 
-                if (not read_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique])\
+                if (not read_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])\
                         and not alignment.is_secondary and \
                         alignment.mapping_quality < self.params.multi_intron_mapping_quality_cutoff:
                     continue
