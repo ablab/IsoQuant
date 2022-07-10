@@ -287,8 +287,8 @@ class IntergenicAlignmentCollector:
     def forward_alignments(self, current_region, alignment_storage):
         gene_list = []
         if self.genedb:
-            gene_list = self.genedb.region(seqid=self.chr_id, start=current_region[0],
-                                           end=current_region[1], featuretype="gene")
+            gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
+                                                end=current_region[1], featuretype="gene"))
 
         if not gene_list:
             gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],

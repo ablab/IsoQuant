@@ -190,9 +190,9 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                     resolved_assignment = None
                     for a in multimapped_chr_dict[read_assignment.read_id]:
                         if a.start == read_assignment.start() and a.end == read_assignment.end() and \
-                                a.gene_id == current_gene_info.gene_db_list[0].id and \
-                                a.matches == (0 if not read_assignment.isoform_matches else len(read_assignment.isoform_matches)) and \
-                                a.chr_id == read_assignment.chr_id:
+                                a.chr_id == read_assignment.chr_id \
+                                and current_gene_info.gene_db_list and a.gene_id == current_gene_info.gene_db_list[0].id and \
+                                a.matches == (0 if not read_assignment.isoform_matches else len(read_assignment.isoform_matches)):
                             if resolved_assignment is not None:
                                 logger.debug("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
                             resolved_assignment = a
@@ -469,12 +469,8 @@ class DatasetProcessor:
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
     def process_assigned_reads(self, sample, dump_filename):
-        if self.gffutils_db:
-            chrom_clusters = self.get_chromosome_gene_clusters()
-            chr_ids = [chr_id for chr_id, c in chrom_clusters]
-        else:
-            chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-            #chr_ids = ['chr1'] #
+        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
+        #chr_ids = ['chr1'] #
 
         pool = Pool(self.args.threads)
         logger.info("Processing assigned reads " + sample.label)
