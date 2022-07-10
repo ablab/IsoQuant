@@ -189,11 +189,11 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                 if read_assignment.read_id in multimapped_chr_dict:
                     resolved_assignment = None
                     for a in multimapped_chr_dict[read_assignment.read_id]:
-                        if a.assignment_type in [ReadAssignmentType.intergenic, ReadAssignmentType.noninformative] or \
-                                (a.start == read_assignment.start() and a.end == read_assignment.end() and
-                                 a.chr_id == read_assignment.chr_id
-                                 and (not current_gene_info.gene_db_list or a.gene_id == current_gene_info.gene_db_list[0].id) and
-                                 a.matches == (0 if not read_assignment.isoform_matches else len(read_assignment.isoform_matches))):
+                        if a.start == read_assignment.start() and a.end == read_assignment.end() and \
+                                a.chr_id == read_assignment.chr_id and \
+                                (a.assignment_type in [ReadAssignmentType.intergenic, ReadAssignmentType.noninformative] or
+                                 ((not current_gene_info.gene_db_list or a.gene_id == current_gene_info.gene_db_list[0].id) and
+                                  a.matches == (0 if not read_assignment.isoform_matches else len(read_assignment.isoform_matches)))):
                             if resolved_assignment is not None:
                                 logger.debug("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
                             resolved_assignment = a
