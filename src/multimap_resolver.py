@@ -66,7 +66,7 @@ class MultimapResolver:
                                      ReadAssignmentType.unique_minor_difference,
                                      ReadAssignmentType.ambiguous]:
                 consistent_assignments.add(i)
-            elif a.assignment_type in [ReadAssignmentType.inconsistent, ReadAssignmentType.noninformative, ReadAssignmentType.intergenic]:
+            elif a.assignment_type in [ReadAssignmentType.inconsistent]:
                 inconsistent_assignments.add(i)
 
         if primary_unique:
@@ -87,7 +87,9 @@ class MultimapResolver:
             return self.select_best_inconsistent(assignment_list, primary_inconsistent)
 
         logger.debug("Merging inconsistent from %d assignments" % len(inconsistent_assignments))
-        return self.select_best_inconsistent(assignment_list, inconsistent_assignments)
+        if inconsistent_assignments:
+            return self.select_best_inconsistent(assignment_list, inconsistent_assignments)
+        return assignment_list
 
     def select_best_inconsistent(self, assignment_list, inconsistent_assignments):
         if len(inconsistent_assignments) > 1:
