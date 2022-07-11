@@ -170,10 +170,13 @@ class GraphBasedModelConstructor:
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
-            if len(model.exon_blocks) == 1 and not self.check_mapping_quality(model):
-                logger.debug("Novel monoexon model %s has poor quality" % model.transcript_id)
-                del self.transcript_read_ids[model.transcript_id]
-                continue
+            if len(model.exon_blocks) <= 2:
+                mapq = self.mapping_quality(model)
+                logger.info("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
+                if mapq < self.params.simple_models_mapq_cutoff:
+                    logger.debug("Novel model %s has poor quality" % model.transcript_id)
+                    del self.transcript_read_ids[model.transcript_id]
+                    continue
 
             # TODO: correct ends for known
             self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
@@ -206,11 +209,11 @@ class GraphBasedModelConstructor:
                 logger.debug("<< Vertex %s: %d was NOT visited" % (v, count))
         # ===
 
-    def check_mapping_quality(self, model):
+    def mapping_quality(self, model):
         mapq = 0
         for a in self.transcript_read_ids[model.transcript_id]:
             mapq += a.mapping_quality
-        return mapq / len(self.transcript_read_ids[model.transcript_id]) >= 20
+        return mapq / len(self.transcript_read_ids[model.transcript_id])
 
     def detect_similar_isoforms(self):
         to_substitute = {}

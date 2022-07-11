@@ -468,7 +468,8 @@ def set_additional_params(args):
         args.needs_reference = False
 
     args.multi_intron_mapping_quality_cutoff = 5
-    args.mono_mapping_quality_cutoff = 10
+    args.mono_mapping_quality_cutoff = 1
+    args.simple_models_mapq_cutoff = 30
 
 
 def run_pipeline(args):
