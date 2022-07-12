@@ -78,8 +78,8 @@ class IntergenicAlignmentCollector:
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
 
-        self.COVERAGE_BIN = 100
-        self.MAX_REGION_LEN = 65000
+        self.COVERAGE_BIN = 256
+        self.MAX_REGION_LEN = 32768
 
     def process(self):
         self.assignment_storage = []

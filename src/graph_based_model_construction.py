@@ -116,7 +116,7 @@ class GraphBasedModelConstructor:
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
         self.construct_fl_isoforms()
-        self.construnct_assignment_based_isoforms(read_assignment_storage)
+        self.construct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
 
@@ -326,7 +326,7 @@ class GraphBasedModelConstructor:
                 for v in path:
                     self.visited_introns.add(v)
 
-    def construnct_assignment_based_isoforms(self, read_assignment_storage):
+    def construct_assignment_based_isoforms(self, read_assignment_storage):
         spliced_isoform_reads = defaultdict(list)
         isoform_left_support = defaultdict(int)
         isoform_right_support = defaultdict(int)
