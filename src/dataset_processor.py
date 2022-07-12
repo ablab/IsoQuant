@@ -382,8 +382,8 @@ class DatasetProcessor:
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
         pool = Pool(self.args.threads)
-        #chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-        chr_ids = ['chr11']
+        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
+        #chr_ids = ['chr11']
         results = pool.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
                                                             (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
                                                            for chr_id in chr_ids], chunksize=1)
@@ -479,8 +479,8 @@ class DatasetProcessor:
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
     def process_assigned_reads(self, sample, dump_filename):
-        #chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-        chr_ids = ['chr11']
+        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
+        #chr_ids = ['chr11']
 
         pool = Pool(self.args.threads)
         logger.info("Processing assigned reads " + sample.label)

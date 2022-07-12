@@ -254,7 +254,7 @@ class IntergenicAlignmentCollector:
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
 
-        self.COVERAGE_BIN = 1000
+        self.COVERAGE_BIN = 100
         self.MAX_REGION_LEN = 65000
 
     def process(self):
@@ -318,24 +318,28 @@ class IntergenicAlignmentCollector:
             else:
                 current_index = alignment_index[pos]
 
-        #for i in coverage_positions:
-        #    logger.debug("%d: %d" % (i, coverage_dict[i]))
-        #for i in coverage_positions:
-        #    logger.debug("%d: %d" % (i, alignment_index[i]))
+        for i in coverage_positions:
+            logger.debug("%d: %d" % (i, coverage_dict[i]))
+        for i in coverage_positions:
+            logger.debug("%d: %d" % (i, alignment_index[i]))
 
         current_start = coverage_positions[0]
         min_bins = int(self.MAX_REGION_LEN / self.COVERAGE_BIN)
-        pos = current_start + min_bins - 1
+        pos = current_start + 1
+        max_cov = coverage_dict[current_start]
         while pos < coverage_positions[-1]:
-            while pos - current_start < min_bins or coverage_dict[pos] > 1 :
+            while (pos < coverage_positions[-1] and pos - current_start < min_bins) or coverage_dict[pos] > max(1, max_cov * 0.01):
+                max_cov = max(max_cov, coverage_dict[pos])
                 pos += 1
+
             new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
                           min(pos * self.COVERAGE_BIN, current_region[1]))
             alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]+1]
             yield self.process_alignments_in_region(new_region, alignments)
             self.assignment_storage = []
             current_start = pos
-            pos = min(current_start + min_bins - 1, coverage_positions[-1])
+            max_cov = coverage_dict[current_start]
+            pos = min(current_start + 1, coverage_positions[-1])
 
         if current_start < coverage_positions[-1]:
             new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
@@ -345,12 +349,12 @@ class IntergenicAlignmentCollector:
             self.assignment_storage = []
 
     def process_alignments_in_region(self, current_region, alignment_storage):
-        logger.info("Processing region %s with %d reads" % (str(current_region), len(alignment_storage)))
+        logger.debug("Processing region %s with %d reads" % (str(current_region), len(alignment_storage)))
         gene_list = []
         if self.genedb:
             gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
                                                 end=current_region[1], featuretype="gene"))
-        logger.info("Contains %d genes" % len(gene_list))
+        logger.debug("Contains %d genes" % len(gene_list))
         start = time.time()
 
         if not gene_list:
@@ -369,9 +373,9 @@ class IntergenicAlignmentCollector:
             self.process_genic(alignment_storage, gene_info)
 
         time_elapsed = time.time() - start
-        logger.info("Region processed in %.2f seconds" % time_elapsed)
+        logger.debug("Region processed in %.2f seconds" % time_elapsed)
         if time_elapsed > 100:
-            logger.warning("SLOW REGION")
+            logger.debug("SLOW REGION")
             
         return gene_info, self.assignment_storage
 
