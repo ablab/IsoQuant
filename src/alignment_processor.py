@@ -8,7 +8,6 @@ import logging
 import pysam
 from queue import PriorityQueue, Empty
 from Bio import SeqIO
-import time
 
 from src.long_read_assigner import *
 from src.long_read_profiles import *
@@ -111,7 +110,6 @@ class IntergenicAlignmentCollector:
             elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
                 current_region = (current_region[0], max(current_region[1], alignment.reference_end))
             else:
-                logger.debug("%s, (%d, %d)" % (str(current_region), alignment.reference_start, alignment.reference_end))
                 for res in  self.forward_alignments(current_region, alignment_storage, coverage_dict, alignment_index):
                     yield res
                 alignment_storage = []
@@ -174,8 +172,6 @@ class IntergenicAlignmentCollector:
         if self.genedb:
             gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
                                                 end=current_region[1], featuretype="gene"))
-        logger.debug("Contains %d genes" % len(gene_list))
-        start = time.time()
 
         if not gene_list:
             gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
@@ -191,11 +187,6 @@ class IntergenicAlignmentCollector:
                     str(self.chr_record[gene_info.all_read_region_start - 1:gene_info.all_read_region_end + 1].seq)
                 gene_info.canonical_sites = {}
             self.process_genic(alignment_storage, gene_info)
-
-        time_elapsed = time.time() - start
-        logger.debug("Region processed in %.2f seconds" % time_elapsed)
-        if time_elapsed > 100:
-            logger.debug("SLOW REGION")
             
         return gene_info, self.assignment_storage
 
@@ -241,14 +232,11 @@ class IntergenicAlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
             self.assignment_storage.append(read_assignment)
-            # logger.debug("=== Finished read " + read_id + " ===")
 
     def process_genic(self, alignment_storage, gene_info):
         assigner = LongReadAssigner(gene_info, self.params)
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
-        logger.debug("Genic introns %d" % len(gene_info.intron_profiles.features))
-        logger.debug("Genic split exons %d" % len(gene_info.split_exon_profiles.features))
 
         for bam_index, alignment in alignment_storage:
             read_id = alignment.query_name
@@ -262,25 +250,11 @@ class IntergenicAlignmentCollector:
                     (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
                 continue
 
-            start = time.time()
             alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
             if self.params.cage:
                 alignment_info.add_cage_info(self.cage_finder)
-            ct = time.time()
-            logger.debug(">>> PolyA: %.4f" % (ct - start))
-            start = ct
-
             alignment_info.construct_profiles(profile_constructor)
-
-            ct = time.time()
-            logger.debug(">>> Profiles: %.4f" % (ct - start))
-            start = ct
             read_assignment = assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
-
-            ct = time.time()
-            logger.debug(">>> Assigned: %.4f" % (ct - start))
-            start = ct
-
 
             if (not read_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])\
                     and not alignment.is_secondary and \
@@ -298,13 +272,8 @@ class IntergenicAlignmentCollector:
             read_assignment.exons = alignment_info.read_exons
             read_assignment.corrected_exons = exon_corrector.correct_assigned_read(alignment_info,
                                                                                    read_assignment)
-            ct = time.time()
-            logger.debug(">>> Corrected: %.4f" % (ct - start))
-            start = ct
-
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
-            logger.debug("Original exons: %s" % str(alignment_info.read_exons))
-            logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
+
             read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
@@ -324,10 +293,6 @@ class IntergenicAlignmentCollector:
                     all(e == 1 for e in alignment_info.combined_profile.read_intron_profile.read_profile)
 
             self.assignment_storage.append(read_assignment)
-            ct = time.time()
-            logger.debug(">>> Done: %.4f" % (ct - start))
-            start = ct
-
             logger.debug("=== Finished read " + read_id + " ===")
 
     def get_assignment_strand(self, read_assignment):

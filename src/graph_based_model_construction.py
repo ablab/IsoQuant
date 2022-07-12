@@ -141,27 +141,24 @@ class GraphBasedModelConstructor:
                 novel_isoform_cutoff = max(self.params.min_novel_count,
                                            self.params.min_novel_count_rel * component_coverage)
 
-            logger.debug("Checking isoform %s, cov %d, cutoff %d: %s" %
-                         (model.transcript_id, self.internal_counter[model.transcript_id],
-                          novel_isoform_cutoff, str(model.intron_path)))
             if model.transcript_id in to_substitute:
-                logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
+                #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
                 self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
-                logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
-                                                                        self.internal_counter[model.transcript_id],
-                                                                        novel_isoform_cutoff, component_coverage))
+                #logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
+                #                                                        self.internal_counter[model.transcript_id],
+                #                                                        novel_isoform_cutoff, component_coverage))
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
             if len(model.exon_blocks) <= 2:
                 mapq = self.mapping_quality(model)
-                logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
+                #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.params.simple_models_mapq_cutoff:
-                    logger.debug("Novel model %s has poor quality" % model.transcript_id)
+                    #logger.debug("Novel model %s has poor quality" % model.transcript_id)
                     del self.transcript_read_ids[model.transcript_id]
                     continue
 
@@ -202,9 +199,7 @@ class GraphBasedModelConstructor:
                     polya_info = PolyAInfo(-1, -1, -1, -1)
                 combined_profile = profile_constructor.construct_profiles(m.exon_blocks, polya_info, [])
                 assignment = assigner.assign_to_isoform(m.transcript_id, combined_profile)
-                logger.debug("Matching %s with %s, result %s, %s" %
-                             (model.transcript_id, m.transcript_id, str(assignment.assignment_type),
-                              str(assignment.isoform_matches[0].match_subclassifications)))
+
                 if is_matching_assignment(assignment):
                     to_substitute[m.transcript_id] = model.transcript_id
 
@@ -214,13 +209,11 @@ class GraphBasedModelConstructor:
         known_isoforms = {}
         for isoform_id in gene_info.all_isoforms_introns:
             isoform_introns = gene_info.all_isoforms_introns[isoform_id]
-            if len(isoform_introns) == 1:
-                logger.debug("== Single-intron isoforms ==")
             intron_path = self.path_processor.thread_introns(isoform_introns)
             if not intron_path:
-                logger.debug("== No path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
+                #logger.debug("== No path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
                 continue
-            logger.debug("== Path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
+            #logger.debug("== Path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
             known_isoforms[tuple(intron_path)] = isoform_id
         return known_isoforms
 
@@ -238,13 +231,13 @@ class GraphBasedModelConstructor:
         for path in sorted(self.path_storage.fl_paths,
                            key=cmp_to_key(lambda x,y: cmp(x,y) if len(x)==len(y) else cmp(len(y), len(x)))):
             # do not include terminal vertices
-            logger.debug(">>> Considering path " + str(path))
+            # logger.debug(">>> Considering path " + str(path))
             intron_path = path[1:-1]
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
             count = self.path_storage.paths[path]
             new_transcript_id = self.transcript_prefix + str(self.get_transcript_id())
-            logger.debug("uuu %s: %s" % (new_transcript_id, str(novel_exons)))
+            # logger.debug("uuu %s: %s" % (new_transcript_id, str(novel_exons)))
 
             reference_isoform = None
             if intron_path and intron_path not in self.known_isoforms_in_graph:
@@ -258,23 +251,19 @@ class GraphBasedModelConstructor:
                 combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
                 assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
                 # check that no serious contradiction occurs
-                logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
-                             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
+                # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
+                #             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
 
                 if is_matching_assignment(assignment):
                     reference_isoform = assignment.isoform_matches[0].assigned_transcript
-                    logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
+                    # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
             else:
                 # path matches reference exactly
                 isoform_id = self.known_isoforms_in_graph[intron_path]
-                #                logger.info("uuu Matches with known isoform %s\n%s\n%s\nTerminal diff: %d, %d " %
-                #            (reference_isoform, self.gene_info.all_isoforms_exons[isoform_id], novel_exons,
-                #             self.gene_info.transcript_start(isoform_id) - transcript_range[0],
-                #             self.gene_info.transcript_end(isoform_id) - transcript_range[1]))
                 #if abs(self.gene_info.transcript_start(isoform_id) - transcript_range[0]) <= self.params.apa_delta and \
                 #        abs(self.gene_info.transcript_end(isoform_id) - transcript_range[1]) <= self.params.apa_delta:
                 reference_isoform = isoform_id
-                logger.debug("uuu Matches with known isoform %s" % reference_isoform)
+                # logger.debug("uuu Matches with known isoform %s" % reference_isoform)
 
             new_model = None
             if reference_isoform:
@@ -282,13 +271,13 @@ class GraphBasedModelConstructor:
                 if reference_isoform in self.detected_known_isoforms:
                     pass
                 elif count < self.params.min_known_count:
-                    logger.debug("uuu Isoform %s has low coverage %d" % (reference_isoform, count))
+                    pass # logger.debug("uuu Isoform %s has low coverage %d" % (reference_isoform, count))
                 else:
                     new_model = self.transcript_from_reference(reference_isoform, new_transcript_id)
                     self.detected_known_isoforms.add(reference_isoform)
-                    logger.debug("Adding known spliced isoform %s" % reference_isoform)
-                    logger.debug("Annotated positions: %d, %d, %s" % (new_model.exon_blocks[0][0], new_model.exon_blocks[-1][1], new_model.strand))
-                    logger.debug("Graph positions: %s, %s" % (str(path[0]), str(path[-1])))
+                    #logger.debug("Adding known spliced isoform %s" % reference_isoform)
+                    #logger.debug("Annotated positions: %d, %d, %s" % (new_model.exon_blocks[0][0], new_model.exon_blocks[-1][1], new_model.strand))
+                    #logger.debug("Graph positions: %s, %s" % (str(path[0]), str(path[-1])))
             else:
                 # adding FL novel isoform
                 component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
@@ -297,16 +286,16 @@ class GraphBasedModelConstructor:
                 polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya)
                 transcript_strand = self.strand_detector.get_strand(intron_path)
 
-                logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
-                             % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))
+                #logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
+                #             % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))
                 if count < novel_isoform_cutoff:
-                    logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
+                    pass #logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
                 elif len(novel_exons) == 2 and (not polya_site or transcript_strand == '.'):
-                    logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
+                    pass #logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                 else:
                     if self.params.use_technical_replicas and \
                             len(set([a.read_group for a in self.path_storage.paths_to_reads[path]])) <= 1:
-                        logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
+                        #logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
                         continue
 
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
@@ -382,8 +371,9 @@ class GraphBasedModelConstructor:
                         polya_sites[refrenence_isoform_id] += 1
             elif len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) > 1:
                 if read_assignment.read_id in self.reads_used_in_construction:
-                    logger.debug("Spliced read %s was previously used for construction, assigned id %s" %
-                                 (read_assignment.read_id, refrenence_isoform_id))
+                    pass
+                    # logger.debug("Spliced read %s was previously used for construction, assigned id %s" %
+                    #             (read_assignment.read_id, refrenence_isoform_id))
                 spliced_isoform_reads[refrenence_isoform_id].append(read_assignment)
 
                 if self.params.needs_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '-':
@@ -415,8 +405,8 @@ class GraphBasedModelConstructor:
             for v in self.intron_graph.incoming_edges[intron]:
                 if v[0] == VERTEX_polyt:
                     polyt_exons.append((v[1], intron[0]))
-        logger.debug("PolyA terminal exons: " + str(polya_exons))
-        logger.debug("PolyT terminal exons: " + str(polyt_exons))
+        # logger.debug("PolyA terminal exons: " + str(polya_exons))
+        # logger.debug("PolyT terminal exons: " + str(polyt_exons))
         return polya_exons, polyt_exons
 
     def is_internal_monoexonic_read(self, alignment, terminal_exons, forward=True):
@@ -434,7 +424,7 @@ class GraphBasedModelConstructor:
         return False
 
     def construct_monoexon_novel(self, novel_mono_exon_reads):
-        logger.debug("Constucting NOVEL MONOEXON")
+        logger.debug("Constructing novel monoexon")
         polya_exons, polyt_exons = self.collect_terminal_exons_from_graph()
         polya_reads = defaultdict(list)
         polyt_reads = defaultdict(list)
@@ -484,7 +474,7 @@ class GraphBasedModelConstructor:
             new_model = TranscriptModel(self.gene_info.chr_id, strand,
                                         new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
                                         "novel", transcript_gene, [coordinates], transcript_type)
-            logger.debug("uuu Adding novel MONOEXON isoform %s : %s, %d\t%d" % (new_transcript_id, str(coordinates), count, cutoff))
+            # logger.debug("uuu Adding novel MONOEXON isoform %s : %s, %d\t%d" % (new_transcript_id, str(coordinates), count, cutoff))
             result.add(coordinates)
 
             self.transcript_model_storage.append(new_model)
@@ -512,9 +502,9 @@ class GraphBasedModelConstructor:
                        float(len(mono_exon_isoform_coverage[isoform_id]))
             polya_support = polya_sites[isoform_id]
 
-            logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.intron_graph.max_coverage, count, coverage, polya_support))
+            # logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.intron_graph.max_coverage, count, coverage, polya_support))
             if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or polya_support == 0:
-                logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
+                pass # logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
             else:
                 new_model = self.transcript_from_reference(isoform_id)
                 self.transcript_model_storage.append(new_model)
@@ -522,9 +512,9 @@ class GraphBasedModelConstructor:
                 for read_assignment in mono_exon_isoform_reads[isoform_id]:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
                     self.reads_used_in_construction.add(read_assignment.read_id)
-                logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
-                             (self.transcript_model_storage[-1].transcript_id, isoform_id,
-                              count, str(self.gene_info.all_isoforms_exons[isoform_id])))
+                # logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
+                #             (self.transcript_model_storage[-1].transcript_id, isoform_id,
+                #              count, str(self.gene_info.all_isoforms_exons[isoform_id])))
 
     def construct_nonfl_isoforms(self, spliced_isoform_reads, spliced_isoform_left_support, spliced_isoform_right_support):
         logger.debug("Constructing nonFL isoforms")
@@ -533,20 +523,15 @@ class GraphBasedModelConstructor:
                 continue
             count = len(spliced_isoform_reads[isoform_id])
             if isoform_id not in self.known_isoforms_in_graph_ids:
-                logger.debug("<< Isoform %s has %d assignments but is not in the graph" % (isoform_id, count))
+                #logger.debug("<< Isoform %s has %d assignments but is not in the graph" % (isoform_id, count))
                 continue
 
             intron_path = self.known_isoforms_in_graph_ids[isoform_id]
-            logger.debug("Known non-FL spliced isoform %s" % isoform_id)
+            #logger.debug("Known non-FL spliced isoform %s" % isoform_id)
             if count < self.params.min_known_count or \
                     spliced_isoform_left_support[isoform_id] < 1 or \
                     spliced_isoform_right_support[isoform_id] < 1:
                 logger.debug("Will not be added")
-
-                logger.debug("<< Known non-FL spliced isoform %s: %d\t%d\t%d\t%d\t%d" %
-                             (isoform_id, self.params.min_nonfl_count, count,
-                              spliced_isoform_left_support[isoform_id], spliced_isoform_right_support[isoform_id],
-                              len(intron_path)))
             else:
                 logger.debug("<< Adding known non-FL spliced isoform %s" % isoform_id)
                 new_model = self.transcript_from_reference(isoform_id)
@@ -587,16 +572,15 @@ class GraphBasedModelConstructor:
         for assignment in read_assignments:
             read_id = assignment.read_id
             if read_id in self.reads_used_in_construction:
-                logger.debug("# Read %s was assigned to based on path construction" % read_id)
+                # logger.debug("# Read %s was assigned to based on path construction" % read_id)
                 continue
 
             read_exons = assignment.corrected_exons
-            logger.debug("# Checking read %s: %s" % (assignment.read_id, str(read_exons)))
+            #logger.debug("# Checking read %s: %s" % (assignment.read_id, str(read_exons)))
             model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
             model_assignment.read_group = assignment.read_group
             # check that no serious contradiction occurs
-            logger.debug(model_assignment.assignment_type)
             if model_assignment.assignment_type in [ReadAssignmentType.unique,
                                                     ReadAssignmentType.unique_minor_difference,
                                                     ReadAssignmentType.ambiguous]:
@@ -696,10 +680,6 @@ class IntronPathStorage:
                         (terminal_vertex[0] == VERTEX_polya or starting_vertex[0] == VERTEX_polyt):
                     self.fl_paths.add(path_tuple)
             self.paths_to_reads[path_tuple].append(a)
-
-        for p in self.paths.keys():
-            is_fl = "   FL" if p in self.fl_paths else "nonFL"
-            logger.debug("%s path: %s: %d" % (is_fl, str(p), self.paths[p]))
 
 
 class IntronPathProcessor:
