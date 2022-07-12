@@ -26,120 +26,6 @@ from src.graph_based_model_construction import *
 logger = logging.getLogger('IsoQuant')
 
 
-class GeneClusterConstructor:
-    MAX_GENE_CLUSTER = 50
-    MAX_GENE_LEN = 100000
-
-    def __init__(self, gene_db):
-        self.gene_db = gene_db
-        self.gene_sets = None
-
-    def get_gene_sets(self):
-        if self.gene_sets is None:
-            self.gene_sets = self.fill_gene_sets()
-        return self.gene_sets
-
-    def fill_gene_sets(self):
-        gene_sets = []
-        current_gene_db_list = []
-        for g in self.gene_db.features_of_type('gene', order_by=('seqid', 'start')):
-            gene_name = g.id
-            gene_db = self.gene_db[gene_name]
-
-            if len(current_gene_db_list) > 0 and \
-                    (all(not genes_overlap(cg, gene_db) for cg in current_gene_db_list) or
-                     (len(current_gene_db_list) > self.MAX_GENE_CLUSTER and
-                      all(not genes_contain(cg, gene_db) for cg in current_gene_db_list))):
-                gene_sets.append(current_gene_db_list)
-                current_gene_db_list = []
-
-            if g.end - g.start > self.MAX_GENE_LEN:
-                gene_sets.append([gene_db])
-            else:
-                current_gene_db_list.append(gene_db)
-
-        if current_gene_db_list:
-            gene_sets.append(current_gene_db_list)
-        return gene_sets
-
-
-class OverlappingExonsGeneClusterConstructor(GeneClusterConstructor):
-    def get_gene_sets(self):
-        if self.gene_sets is None:
-            self.gene_sets = self.cluster_on_shared_exons()
-        return self.gene_sets
-
-    def cluster_on_shared_exons(self):
-        gene_clusters = self.fill_gene_sets()
-        new_gene_sets = []
-
-        for cluster in gene_clusters:
-            new_gene_sets += self.split_cluster(cluster)
-        return new_gene_sets
-
-    def split_cluster(self, gene_cluster):
-        gene_sets = []
-        gene_exon_sets = []
-
-        for gene_db in gene_cluster:
-            gene_exons = set()
-            for e in self.gene_db.children(gene_db):
-                if e.featuretype == 'exon':
-                    gene_exons.add((e.start, e.end))
-
-            overlapping_sets = []
-            for i in range(len(gene_exon_sets)):
-                if any(e in gene_exon_sets[i] for e in gene_exons):
-                    overlapping_sets.append(i)
-
-            if len(overlapping_sets) == 0:
-                # non-overlapping gene
-                gene_sets.append([gene_db])
-                gene_exon_sets.append(gene_exons)
-            elif len(overlapping_sets) == 1:
-                # overlaps with 1 gene
-                index = overlapping_sets[0]
-                gene_sets[index].append(gene_db)
-                gene_exon_sets[index].update(gene_exons)
-            else:
-                # merge all overlapping genes
-                new_gene_set = [gene_db]
-                new_exons_set = gene_exons
-                for index in overlapping_sets:
-                    new_gene_set += gene_sets[index]
-                    new_exons_set.update(gene_exon_sets[index])
-                for index in overlapping_sets[::-1]:
-                    del gene_sets[index]
-                    del gene_exon_sets[index]
-                gene_sets.append(new_gene_set)
-                gene_exon_sets.append(new_exons_set)
-
-        return gene_sets
-
-
-def assign_reads_in_parallel(sample, chr_id, cluster, args, read_grouper, current_chr_record):
-    tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
-    processed_reads = []
-    bam_files = list(map(lambda x: x[0], sample.file_list))
-    bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
-    logger.info("Processing chromosome " + chr_id)
-    gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
-    for g in cluster:
-        if len(g) > 100:
-            logger.debug("Potential slowdown in %s due to large gene cluster of size %d" % (chr_id, len(g)))
-        gene_info = GeneInfo(g, gffutils_db, args.delta)
-        alignment_processor = LongReadAlignmentProcessor(gene_info, bam_file_pairs, args,
-                                                         current_chr_record, read_grouper)
-        assignment_storage = alignment_processor.process()
-        gene_info.db = None
-        tmp_printer.add_gene_info(gene_info)
-        for read_assignment in assignment_storage:
-            tmp_printer.add_read_info(read_assignment)
-            processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
-    logger.info("Finished processing chromosome " + chr_id)
-    return processed_reads, read_grouper.read_groups
-
-
 def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_record):
     tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
     processed_reads = []
@@ -301,11 +187,8 @@ class DatasetProcessor:
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
             self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
-            self.gene_cluster_constructor = GeneClusterConstructor(self.gffutils_db)
-            self.gene_clusters = self.gene_cluster_constructor.get_gene_sets()
         else:
             self.gffutils_db = None
-            self.gene_clusters = None
 
         if self.args.needs_reference:
             logger.info("Loading reference genome from " + self.args.reference)
@@ -383,7 +266,6 @@ class DatasetProcessor:
         logger.info('Collecting read alignments')
         pool = Pool(self.args.threads)
         chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-        #chr_ids = ['chr11']
         results = pool.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
                                                             (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
                                                            for chr_id in chr_ids], chunksize=1)
@@ -429,59 +311,8 @@ class DatasetProcessor:
             logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
-    def assign_reads(self, sample):
-        logger.info('Assigning reads to isoforms')
-        chrom_clusters = self.get_chromosome_gene_clusters()
-        pool = Pool(self.args.threads)
-        results = pool.starmap(assign_reads_in_parallel, [(sample, chr_id, c, self.args, self.read_grouper,
-                                                                   (self.reference_record_dict[
-                                                                        chr_id] if self.reference_record_dict else None))
-                                                                  for (chr_id, c) in chrom_clusters], chunksize=1)
-        pool.close()
-        pool.join()
-        processed_reads, read_groups = [x[0] for x in results], [x[1] for x in results]
-
-        logger.info("Resolving multimappers")
-        self.multimapped_reads = defaultdict(list)
-        for storage in processed_reads:
-            for read_assignment in storage:
-                self.multimapped_reads[read_assignment.read_id].append(read_assignment)
-
-        multimap_resolver = MultimapResolver(self.args.multimap_strategy)
-        multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "_multimappers", "wb"),  -1)
-        multimap_pickler.fast = True
-        total_assignments = 0
-        polya_assignments = 0
-        for read_id in list(self.multimapped_reads.keys()):
-            assignment_list = self.multimapped_reads[read_id]
-            if len(assignment_list) == 1:
-                total_assignments += 1
-                polya_assignments += 1 if assignment_list[0].polyA_found else 0
-                del self.multimapped_reads[read_id]
-                continue
-            multimap_resolver.resolve(assignment_list)
-            multimap_pickler.dump(assignment_list)
-            for a in assignment_list:
-                if a.assignment_type != ReadAssignmentType.suspended:
-                    total_assignments += 1
-                    if a.polyA_found:
-                        polya_assignments += 1
-
-        info_pickler = pickle.Pickler(open(sample.out_raw_file + "_info", "wb"),  -1)
-        info_pickler.dump(total_assignments)
-        info_pickler.dump(polya_assignments)
-        all_read_groups = set([r for sublist in read_groups for r in sublist])
-        info_pickler.dump(all_read_groups)
-        if total_assignments == 0:
-            logger.warning("No reads were assigned to isoforms, check your input files")
-        else:
-            logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
-                        (total_assignments, 100 * polya_assignments / total_assignments))
-
     def process_assigned_reads(self, sample, dump_filename):
         chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-        #chr_ids = ['chr11']
-
         pool = Pool(self.args.threads)
         logger.info("Processing assigned reads " + sample.label)
 
@@ -543,35 +374,6 @@ class DatasetProcessor:
 
         gc.enable()
         return total_assignments, polya_assignments, all_read_groups
-
-    def get_chromosome_list(self):
-        chromosomes = []
-        current_chromosome = ""
-        for g in self.gene_clusters:
-            chr_id = g[0].seqid
-            if chr_id != current_chromosome:
-                chromosomes.append(chr_id)
-                current_chromosome = chr_id
-        return chromosomes
-
-    def get_chromosome_gene_clusters(self):
-        chrom_clusters = []
-        cur_cluster = []
-        current_chromosome = ""
-        for g in self.gene_clusters:
-            chr_id = g[0].seqid
-            if chr_id != current_chromosome:
-                if cur_cluster:
-                    chrom_clusters.append((current_chromosome, cur_cluster))
-                    cur_cluster = []
-                current_chromosome = chr_id
-            cur_cluster.append(g)
-        if cur_cluster:
-            chrom_clusters.append((current_chromosome, cur_cluster))
-
-        # chromosomes with large clusters take more time and should go first
-        chrom_clusters = sorted(chrom_clusters, key=lambda x: sum(len(cluster) ** 2 for cluster in x[1]), reverse=True)
-        return chrom_clusters
 
     def create_aggregators(self, sample):
         self.read_stat_counter = EnumStats()
