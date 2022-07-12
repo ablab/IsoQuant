@@ -172,7 +172,7 @@ class GraphBasedModelConstructor:
 
             if len(model.exon_blocks) <= 2:
                 mapq = self.mapping_quality(model)
-                logger.info("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
+                logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.params.simple_models_mapq_cutoff:
                     logger.debug("Novel model %s has poor quality" % model.transcript_id)
                     del self.transcript_read_ids[model.transcript_id]

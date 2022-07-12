@@ -9,6 +9,7 @@ import gc
 import glob
 import gzip
 import os
+import time
 from multiprocessing import Pool
 
 from src.file_utils import *
@@ -243,12 +244,16 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
     chr_dump_file = dump_filename + "_" + chr_id
     for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, gffutils_db, multimapped_reads):
+        logger.info("Processing %d reads" % len(assignment_storage))
         for read_assignment in assignment_storage:
             if read_assignment is None:
                 continue
             processor.read_stat_counter.add(read_assignment.assignment_type)
             processor.global_printer.add_read_info(read_assignment)
             processor.global_counter.add_read_info(read_assignment)
+
+        logger.info("Constructing models, reference genes: %d" % len(gene_info.gene_db_list) if gene_info.gene_db_list else 0)
+        start = time.time()
 
         if not args.no_model_construction:
             expressed_gene_info = None
@@ -266,13 +271,17 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
                 if gene_list:
                     expressed_gene_info = GeneInfo(gene_list, expressed_db, delta=args.delta)
 
-
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args, processor.transcript_model_global_counter,
                                                            expressed_gene_info=expressed_gene_info)
             model_constructor.process(assignment_storage)
             tmp_gff_printer.dump(model_constructor)
             for t in model_constructor.transcript_model_storage:
                 transcripts.append(t.transcript_type)
+
+        time_elapsed = time.time() - start
+        logger.info("Region processed in %.2f seconds" % time_elapsed)
+        if time_elapsed > 100:
+            logger.warning("SLOW CONSTRUCTION")
 
     logger.info("Finished processing chromosome " + chr_id)
     processor.global_counter.dump()

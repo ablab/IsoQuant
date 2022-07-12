@@ -8,6 +8,7 @@ import logging
 import pysam
 from queue import PriorityQueue, Empty
 from Bio import SeqIO
+import time
 
 from src.long_read_assigner import *
 from src.long_read_profiles import *
@@ -285,10 +286,13 @@ class IntergenicAlignmentCollector:
             yield self.forward_alignments(current_region, alignment_storage)
 
     def forward_alignments(self, current_region, alignment_storage):
+        logger.info("Processing region %s with %d reads" % (str(current_region), len(alignment_storage)))
         gene_list = []
         if self.genedb:
             gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
                                                 end=current_region[1], featuretype="gene"))
+        logger.info("Contains %d genes" % len(gene_list))
+        start = time.time()
 
         if not gene_list:
             gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
@@ -304,6 +308,11 @@ class IntergenicAlignmentCollector:
                     str(self.chr_record[gene_info.all_read_region_start - 1:gene_info.all_read_region_end + 1].seq)
                 gene_info.canonical_sites = {}
             self.process_genic(alignment_storage, gene_info)
+
+        time_elapsed = time.time() - start
+        logger.info("Region processed in %.2f seconds" % time_elapsed)
+        if time_elapsed > 100:
+            logger.warning("SLOW REGION")
             
         return gene_info, self.assignment_storage
 
