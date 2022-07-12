@@ -77,13 +77,11 @@ class IntergenicAlignmentCollector:
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
         self.polya_fixer = PolyAFixer(self.params)
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
-        self.assignment_storage = []
 
         self.COVERAGE_BIN = 100
         self.MAX_REGION_LEN = 65000
 
     def process(self):
-        self.assignment_storage = []
         # coverage every COVERAGE_BIN bases
         coverage_dict = defaultdict(int)
         # index of the first alignment with the start >= of certain bin (key)
@@ -94,17 +92,9 @@ class IntergenicAlignmentCollector:
         alignment_storage = []
 
         for bam_index, alignment in self.bam_merger.get():
-            if alignment.reference_id == -1:
-                self.assignment_storage.append(ReadAssignment(alignment.query_name, None))
+            if alignment.reference_id == -1 or alignment.is_supplementary or \
+                    (self.params.no_secondary and alignment.is_secondary):
                 continue
-            if alignment.is_supplementary:
-                continue
-            if self.params.no_secondary and alignment.is_secondary:
-                continue
-
-            for i in range(math.floor(alignment.reference_start / self.COVERAGE_BIN),
-                           math.floor(alignment.reference_end / self.COVERAGE_BIN) + 1):
-                coverage_dict[i] += 1
 
             if not current_region:
                 current_region = (alignment.reference_start, alignment.reference_end)
@@ -112,11 +102,17 @@ class IntergenicAlignmentCollector:
                 current_region = (current_region[0], max(current_region[1], alignment.reference_end))
             else:
                 logger.debug("%s, (%d, %d)" % (str(current_region), alignment.reference_start, alignment.reference_end))
-                for res in  self.forward_alignments(current_region, alignment_storage, coverage_dict, alignment_index):
+                for res in self.forward_alignments(current_region, alignment_storage, coverage_dict, alignment_index):
                     yield res
+                counter = 0
                 alignment_storage = []
-                self.assignment_storage = []
+                alignment_index = {}
+                coverage_dict = defaultdict(int)
                 current_region = None
+
+            for i in range(math.floor(alignment.reference_start / self.COVERAGE_BIN),
+                           math.floor(alignment.reference_end / self.COVERAGE_BIN) + 1):
+                coverage_dict[i] += 1
 
             bin_position = math.floor(alignment.reference_start / self.COVERAGE_BIN)
             if bin_position not in alignment_index:
@@ -131,13 +127,12 @@ class IntergenicAlignmentCollector:
     def forward_alignments(self, current_region, alignment_storage, coverage_dict, alignment_index):
         if interval_len(current_region) < self.MAX_REGION_LEN:
             yield self.process_alignments_in_region(current_region, alignment_storage)
-            self.assignment_storage = []
             return
 
         coverage_positions = sorted(coverage_dict.keys())
         # completing index
-        current_index = len(alignment_storage) - 1
-        for pos in range(coverage_positions[-1], coverage_positions[0] - 1, -1):
+        current_index = len(alignment_storage)
+        for pos in range(coverage_positions[-1] + 1, coverage_positions[0] - 1, -1):
             if pos not in alignment_index:
                 alignment_index[pos] = current_index
             else:
@@ -147,26 +142,27 @@ class IntergenicAlignmentCollector:
         min_bins = int(self.MAX_REGION_LEN / self.COVERAGE_BIN)
         pos = current_start + 1
         max_cov = coverage_dict[current_start]
-        while pos < coverage_positions[-1]:
-            while (pos < coverage_positions[-1] and pos - current_start < min_bins) or coverage_dict[pos] > max(1, max_cov * 0.01):
+
+        while pos <= coverage_positions[-1]:
+            while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or coverage_dict[pos] > max(1, max_cov * 0.01):
                 max_cov = max(max_cov, coverage_dict[pos])
                 pos += 1
-
             new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
                           min(pos * self.COVERAGE_BIN, current_region[1]))
-            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]+1]
-            yield self.process_alignments_in_region(new_region, alignments)
-            self.assignment_storage = []
+            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
+            if alignments:
+                yield self.process_alignments_in_region(new_region, alignments)
             current_start = pos
             max_cov = coverage_dict[current_start]
-            pos = min(current_start + 1, coverage_positions[-1])
+            pos = min(current_start + 1, coverage_positions[-1] + 1)
 
-        if current_start < coverage_positions[-1]:
+
+        if current_start < pos:
             new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
                           min(pos * self.COVERAGE_BIN, current_region[1]))
-            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]+1]
-            yield self.process_alignments_in_region(new_region, alignments)
-            self.assignment_storage = []
+            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
+            if alignments:
+                yield self.process_alignments_in_region(new_region, alignments)
 
     def process_alignments_in_region(self, current_region, alignment_storage):
         logger.debug("Processing region %s with %d reads" % (str(current_region), len(alignment_storage)))
@@ -174,13 +170,11 @@ class IntergenicAlignmentCollector:
         if self.genedb:
             gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
                                                 end=current_region[1], featuretype="gene"))
-        logger.debug("Contains %d genes" % len(gene_list))
-        start = time.time()
 
         if not gene_list:
             gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
                                              self.params.delta)
-            self.process_intergenic(alignment_storage)
+            assignment_storage = self.process_intergenic(alignment_storage)
         else:
             gene_list = sorted(gene_list, key=lambda x: x.start)
             gene_info = GeneInfo(gene_list, self.genedb, self.params.delta)
@@ -190,16 +184,13 @@ class IntergenicAlignmentCollector:
                 gene_info.reference_region = \
                     str(self.chr_record[gene_info.all_read_region_start - 1:gene_info.all_read_region_end + 1].seq)
                 gene_info.canonical_sites = {}
-            self.process_genic(alignment_storage, gene_info)
 
-        time_elapsed = time.time() - start
-        logger.debug("Region processed in %.2f seconds" % time_elapsed)
-        if time_elapsed > 100:
-            logger.debug("SLOW REGION")
-            
-        return gene_info, self.assignment_storage
+            assignment_storage = self.process_genic(alignment_storage, gene_info)
+
+        return gene_info, assignment_storage
 
     def process_intergenic(self, alignment_storage):
+        assignment_storage = []
         for bam_index, alignment in alignment_storage:
             read_id = alignment.query_name
             alignment_info = AlignmentInfo(alignment)
@@ -240,15 +231,14 @@ class IntergenicAlignmentCollector:
             read_assignment.chr_id = self.chr_id
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
-            self.assignment_storage.append(read_assignment)
-            # logger.debug("=== Finished read " + read_id + " ===")
+            assignment_storage.append(read_assignment)
+        return assignment_storage
 
     def process_genic(self, alignment_storage, gene_info):
         assigner = LongReadAssigner(gene_info, self.params)
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
-        logger.debug("Genic introns %d" % len(gene_info.intron_profiles.features))
-        logger.debug("Genic split exons %d" % len(gene_info.split_exon_profiles.features))
+        assignment_storage = []
 
         for bam_index, alignment in alignment_storage:
             read_id = alignment.query_name
@@ -262,24 +252,11 @@ class IntergenicAlignmentCollector:
                     (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
                 continue
 
-            start = time.time()
             alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
             if self.params.cage:
                 alignment_info.add_cage_info(self.cage_finder)
-            ct = time.time()
-            logger.debug(">>> PolyA: %.4f" % (ct - start))
-            start = ct
-
             alignment_info.construct_profiles(profile_constructor)
-
-            ct = time.time()
-            logger.debug(">>> Profiles: %.4f" % (ct - start))
-            start = ct
             read_assignment = assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
-
-            ct = time.time()
-            logger.debug(">>> Assigned: %.4f" % (ct - start))
-            start = ct
 
 
             if (not read_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])\
@@ -298,9 +275,6 @@ class IntergenicAlignmentCollector:
             read_assignment.exons = alignment_info.read_exons
             read_assignment.corrected_exons = exon_corrector.correct_assigned_read(alignment_info,
                                                                                    read_assignment)
-            ct = time.time()
-            logger.debug(">>> Corrected: %.4f" % (ct - start))
-            start = ct
 
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
             logger.debug("Original exons: %s" % str(alignment_info.read_exons))
@@ -323,12 +297,9 @@ class IntergenicAlignmentCollector:
                 read_assignment.introns_match = \
                     all(e == 1 for e in alignment_info.combined_profile.read_intron_profile.read_profile)
 
-            self.assignment_storage.append(read_assignment)
-            ct = time.time()
-            logger.debug(">>> Done: %.4f" % (ct - start))
-            start = ct
-
+            assignment_storage.append(read_assignment)
             logger.debug("=== Finished read " + read_id + " ===")
+        return assignment_storage
 
     def get_assignment_strand(self, read_assignment):
         if read_assignment.isoform_matches and read_assignment.assignment_type in \
