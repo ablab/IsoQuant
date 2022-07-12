@@ -254,38 +254,97 @@ class IntergenicAlignmentCollector:
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.assignment_storage = []
 
+        self.COVERAGE_BIN = 1000
+        self.MAX_REGION_LEN = 65000
+
     def process(self):
         self.assignment_storage = []
+        # coverage every COVERAGE_BIN bases
+        coverage_dict = defaultdict(int)
+        # index of the first alignment with the start >= of certain bin (key)
+        alignment_index = {}
+        counter = 0
         current_region = None
         # TODO: implement low-memory version (i.e. double fetch)
         alignment_storage = []
 
         for bam_index, alignment in self.bam_merger.get():
+            if alignment.reference_id == -1:
+                self.assignment_storage.append(ReadAssignment(alignment.query_name, None))
+                continue
+            if alignment.is_supplementary:
+                continue
+            if self.params.no_secondary and alignment.is_secondary:
+                continue
+
+            for i in range(math.floor(alignment.reference_start / self.COVERAGE_BIN),
+                           math.floor(alignment.reference_end / self.COVERAGE_BIN) + 1):
+                coverage_dict[i] += 1
+
             if not current_region:
                 current_region = (alignment.reference_start, alignment.reference_end)
             elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
                 current_region = (current_region[0], max(current_region[1], alignment.reference_end))
             else:
                 logger.debug("%s, (%d, %d)" % (str(current_region), alignment.reference_start, alignment.reference_end))
-                yield self.forward_alignments(current_region, alignment_storage)
+                for res in  self.forward_alignments(current_region, alignment_storage, coverage_dict, alignment_index):
+                    yield res
                 alignment_storage = []
                 self.assignment_storage = []
                 current_region = None
 
-            read_id = alignment.query_name
-            if alignment.reference_id == -1:
-                self.assignment_storage.append(ReadAssignment(read_id, None))
-                continue
-            if alignment.is_supplementary:
-                continue
-            if self.params.no_secondary and alignment.is_secondary:
-                continue
+            bin_position = math.floor(alignment.reference_start / self.COVERAGE_BIN)
+            if bin_position not in alignment_index:
+                alignment_index[bin_position] = counter
             alignment_storage.append((bam_index, alignment))
+            counter += 1
 
         if current_region:
-            yield self.forward_alignments(current_region, alignment_storage)
+            for res in self.forward_alignments(current_region, alignment_storage, coverage_dict, alignment_index):
+                yield res
 
-    def forward_alignments(self, current_region, alignment_storage):
+    def forward_alignments(self, current_region, alignment_storage, coverage_dict, alignment_index):
+        if interval_len(current_region) < self.MAX_REGION_LEN:
+            yield self.process_alignments_in_region(current_region, alignment_storage)
+            self.assignment_storage = []
+            return
+
+        coverage_positions = sorted(coverage_dict.keys())
+        # completing index
+        current_index = len(alignment_storage) - 1
+        for pos in range(coverage_positions[-1], coverage_positions[0] - 1, -1):
+            if pos not in alignment_index:
+                alignment_index[pos] = current_index
+            else:
+                current_index = alignment_index[pos]
+
+        #for i in coverage_positions:
+        #    logger.debug("%d: %d" % (i, coverage_dict[i]))
+        #for i in coverage_positions:
+        #    logger.debug("%d: %d" % (i, alignment_index[i]))
+
+        current_start = coverage_positions[0]
+        min_bins = int(self.MAX_REGION_LEN / self.COVERAGE_BIN)
+        pos = current_start + min_bins - 1
+        while pos < coverage_positions[-1]:
+            while pos - current_start < min_bins or coverage_dict[pos] > 1 :
+                pos += 1
+            new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
+                          min(pos * self.COVERAGE_BIN, current_region[1]))
+            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]+1]
+            yield self.process_alignments_in_region(new_region, alignments)
+            self.assignment_storage = []
+            current_start = pos
+            pos = min(current_start + min_bins - 1, coverage_positions[-1])
+
+        if current_start < coverage_positions[-1]:
+            new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
+                          min(pos * self.COVERAGE_BIN, current_region[1]))
+            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]+1]
+            yield self.process_alignments_in_region(new_region, alignments)
+            self.assignment_storage = []
+
+    def process_alignments_in_region(self, current_region, alignment_storage):
         logger.info("Processing region %s with %d reads" % (str(current_region), len(alignment_storage)))
         gene_list = []
         if self.genedb:
@@ -363,7 +422,7 @@ class IntergenicAlignmentCollector:
     def process_genic(self, alignment_storage, gene_info):
         assigner = LongReadAssigner(gene_info, self.params)
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
-        self.exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
+        exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
 
         for bam_index, alignment in alignment_storage:
             read_id = alignment.query_name
@@ -397,8 +456,8 @@ class IntergenicAlignmentCollector:
             read_assignment.polya_info = alignment_info.polya_info
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.exons = alignment_info.read_exons
-            read_assignment.corrected_exons = self.exon_corrector.correct_assigned_read(alignment_info,
-                                                                                        read_assignment)
+            read_assignment.corrected_exons = exon_corrector.correct_assigned_read(alignment_info,
+                                                                                   read_assignment)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
             logger.debug("Original exons: %s" % str(alignment_info.read_exons))
             logger.debug("Corrected exons: %s" % str(read_assignment.corrected_exons ))
