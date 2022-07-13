@@ -725,6 +725,11 @@ class IntronPathProcessor:
             if intron in self.intron_graph.intron_collector.discarded_introns:
                 return None
             path.append(self.intron_graph.intron_collector.substitute(intron))
+
+        # check connectivity
+        for i in range(len(path) - 1):
+            if path[i+1] not in self.intron_graph.outgoing_edges[path[i]]:
+                return None
         return path
 
     def thread_ends(self, intron, end, trusted=False):

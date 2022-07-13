@@ -157,10 +157,10 @@ class IntronGraph:
         # logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
         self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
         self.construct()
-        self.print_graph()
+        #self.print_graph()
         self.simplify()
         self.attach_terminal_positions()
-        self.print_graph()
+        #self.print_graph()
 
     def add_edge(self, v1, v2):
         if v1 in self.intron_collector.intron_correction_map:
@@ -235,11 +235,16 @@ class IntronGraph:
         for i in self.outgoing_edges[to_collapse]:
             self.incoming_edges[i].remove(to_collapse)
             self.incoming_edges[i].add(substitute_vertex)
+            self.edge_weights[(substitute_vertex, i)] += self.edge_weights[(to_collapse, i)]
+            self.edge_weights[(to_collapse, i)] = 0
 
         self.incoming_edges[substitute_vertex].update(self.incoming_edges[to_collapse])
         for i in self.incoming_edges[to_collapse]:
             self.outgoing_edges[i].remove(to_collapse)
             self.outgoing_edges[i].add(substitute_vertex)
+            self.edge_weights[(i, substitute_vertex)] += self.edge_weights[(i, to_collapse)]
+            self.edge_weights[(i, to_collapse)] = 0
+
 
         self.intron_collector.add_substitute(to_collapse, substitute_vertex)
 
@@ -260,6 +265,7 @@ class IntronGraph:
         logger.debug("Simplifying graph")
         self.clean_tips_and_bulges()
         self.remove_singleton_dead_ends()
+        self.disconnect_weak()
         self.remove_isolates()
         self.intron_collector.simplify_correction_map()
 
@@ -337,6 +343,33 @@ class IntronGraph:
                     del self.outgoing_edges[i]
                 if i in self.incoming_edges:
                     del self.incoming_edges[i]
+
+    def disconnect_weak(self):
+        to_remove = set()
+        for intron in self.outgoing_edges.keys():
+            for i in self.outgoing_edges[intron]:
+                if is_terminal_vertex(i):
+                    continue
+                intron_coverage = min(self.intron_collector.clustered_introns[intron], self.intron_collector.clustered_introns[i])
+                connection_coverage = self.edge_weights[(intron, i)]
+                if intron_coverage * self.params.weak_connection_cutoff > connection_coverage:
+                    to_remove.add((intron, i))
+
+        for intron in self.incoming_edges.keys():
+            for i in self.incoming_edges[intron]:
+                if is_starting_vertex(i):
+                    continue
+                intron_coverage = min(self.intron_collector.clustered_introns[intron], self.intron_collector.clustered_introns[i])
+                connection_coverage = self.edge_weights[(i, intron)]
+                if intron_coverage * self.params.weak_connection_cutoff > connection_coverage:
+                    to_remove.add((i, intron))
+
+        for e in to_remove:
+            v1 = e[0]
+            v2 = e[1]
+            self.outgoing_edges[v1].remove(v2)
+            self.incoming_edges[v2].remove(v1)
+            self.edge_weights[(v1,v2)] = 0
 
     def remove_isolates(self):
         to_remove = set()
