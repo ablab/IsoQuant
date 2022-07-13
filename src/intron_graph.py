@@ -601,7 +601,9 @@ class IntronGraph:
 
     def get_overlapping_component_max_coverage(self, coordinates):
         processed_introns = set()
-        for intron in self.outgoing_edges.keys():
+        all_vertices = set(self.outgoing_edges.keys())
+        all_vertices.update(self.incoming_edges.keys())
+        for intron in all_vertices:
             if intron in processed_introns:
                 continue
 
