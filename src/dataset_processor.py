@@ -323,11 +323,12 @@ class DatasetProcessor:
                 for t in storage:
                     transcript_stat_counter.add(t)
             self.merge_transcript_models(sample.label, chr_ids, gff_printer)
-            merge_files([rreplace(extened_gff_printer.model_fname, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
-                        extened_gff_printer.model_fname, copy_header=False)
-
             logger.info("Transcript model file " + gff_printer.model_fname)
             if extened_gff_printer:
+                merge_files(
+                    [rreplace(extened_gff_printer.model_fname, sample.label, sample.label + "_" + chr_id) for chr_id in
+                     chr_ids],
+                    extened_gff_printer.model_fname, copy_header=False)
                 logger.info("Extended annotation is saved to " + extened_gff_printer.model_fname)
             transcript_stat_counter.print_start("Transcript model statistics")
 
