@@ -372,7 +372,7 @@ class IntronGraph:
         for e in to_remove:
             logger.debug("Removing weak connection %s" % str(e))
             v1 = e[0]
-            v2 = e[0]
+            v2 = e[1]
             self.outgoing_edges[v1].remove(v2)
             self.incoming_edges[v2].remove(v1)
             self.edge_weights[(v1,v2)] = 0
