@@ -1,12 +1,12 @@
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/isoquant.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/isoquant)
-[![TeamCity Simple Build Status](http://chihua.cab.spbu.ru:3000/app/rest/builds/buildType:(id:IsoQuant_SimpleTest)/statusIcon)](http://chihua.cab.spbu.ru:3000/project/IsoQuant?mode=builds)
+[![TeamCity Simple Build Status](http://chihua.cab.spbu.ru:3000/app/rest/builds/buildType:(id:IsoQuant_MouseOntTestData)/statusIcon)](http://chihua.cab.spbu.ru:3000/project/IsoQuant?mode=builds)
 [![Python version](https://img.shields.io/badge/python-3.7-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
 
 
-# IsoQuant 2.3 manual
+# IsoQuant 3.0 manual
 
 1. [About IsoQuant](#sec1) </br>
 1.1. [Supported data types](#sec1.1)</br>
@@ -47,12 +47,24 @@
 
 * If using official annotations containing `gene` and `transcript` features use `--complete_genedb` to save time.
 
+* Using refrence annotation is optional since version 3.0, you may preform de novo transcript discovery without providing `--genedb` option':
+
+        isoquant.py --reference /PATH/TO/reference_genome.fasta 
+        --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz 
+        --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
+
 <a name="sec1"></a>
 # About IsoQuant
 
-IsoQuant is a tool for reference-based analysis of long RNA reads, such as PacBio or Oxford Nanopores. IsoQuant maps reads to the reference genome and assigns them to the annotated isoforms based on their intron and exon structure. IsoQuant is also capable of discovering various modifications, such as intron retention, alternative splice sites, skipped exons etc. IsoQuant further performs gene, isoform, exon and intron quantification. If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. In addition, IsoQuant generates discovered transcript models, including novel ones.
+IsoQuant is a tool for the genome-based analysis of long RNA reads, such as PacBio or 
+Oxford Nanopores. IsoQuant allows to reconstruct and quantify transcript models with 
+high precision and decent recall. If the reference annotation is given, IsoQuant also 
+assigns reads to the annotated isoforms based on their intron and exon structure. 
+IsoQuant further performs annotated gene, isoform, exon and intron quantification. 
+If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. 
 
-IsoQuant version 2.3.0 was released under GPLv2 on May 27th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+
+IsoQuant version 3.0.0 was released under GPLv2 on July 14th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
@@ -73,7 +85,8 @@ Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have al
 Reference genome should be provided in multi-FASTA format (can be gzipped). 
 Reference genome is mandatory even when BAM files are provided.
 
-Gene annotation can be provided in GFF/GTF format (can be gzipped). 
+Reference gene annotation is not mandatory, but may increase precision and recall.
+It can be provided in GFF/GTF format (can be gzipped). 
 In this case it will be converted to [gffutils](https://pythonhosted.org/gffutils/installation.html) database. Information on converted databases will be stored in your `~/.config/IsoQuant/db_config.json` to increase speed of future runs. You can also provide gffutils database manually. Make sure that chromosome/scaffold names are identical in FASTA file and gene annotation.
 
 Pre-constructed aligner index can also be provided to increase mapping time.
@@ -140,9 +153,11 @@ If the installation is successful, you will find the following information at th
 <a name="sec3.1"></a>
 ## IsoQuant input
 To run IsoQuant, you should provide:
-* gene annotation in gffutils database or GTF/GFF format (can be gzipped);
 * reads in FASTA/FASTQ (can be gzipped) or sorted and indexed BAM;
-* reference sequence in FASTA format (can be gzipped).  
+* reference sequence in FASTA format (can be gzipped).
+
+Optionally, you may provide a reference gene annotation in gffutils database or GTF/GFF format (can be gzipped);
+
 
 By default, each file with reads is treated as a separate sample. 
 To group multiple files into a single sample, provide a text files with paths to your FASTQ/FASTA/BAM files. 
@@ -158,7 +173,7 @@ See more in [examples](#examples).
     Output folder, will be created automatically.
 
 Note: if your output folder is located on a shared disk, use `--genedb_output` for storing
-annotation database.
+reference annotation database.
 
 `--help` (or `-h`) 
     Prints help message.
@@ -175,6 +190,13 @@ annotation database.
     Type of data to process, supported types are: `assembly`, `pacbio_ccs`, `nanopore`. 
 This option affects some of the algorithm parameters.
 
+`--reference` or `-r`
+    Reference genome in FASTA format (can be gzipped), required even when BAM files are provided.
+
+`--index`
+    Reference genome index for the specified aligner (`minimap2` by default), 
+can be provided only when raw reads are used as an input (constructed automatically if not set).
+
 `--genedb` or `-g`
     Gene database in gffutils database format or GTF/GFF format (can be gzipped). 
 If you use official gene annotations we recommend to set `--complete_genedb` option.
@@ -184,14 +206,6 @@ If you use official gene annotations we recommend to set `--complete_genedb` opt
 Use this flag when providing official annotations, e.g. GENCODE. 
 This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options, 
 which dramatically speeds up gene database conversion (see more [here](https://pythonhosted.org/gffutils/autodocs/gffutils.create_db.html?highlight=disable_infer_transcripts)).
-
-`--reference` or `-r`
-    Reference genome in FASTA format (can be gzipped), required even when BAM files are provided.
-
-`--index`
-    Reference genome index for the specified aligner (`minimap2` by default), 
-can be provided only when raw reads are used as an input (constructed automatically if not set).
-
 
 #### Using mapped reads as input:
 To provide aligned reads use one of the following options:
@@ -361,6 +375,11 @@ isoquant.py -d pacbio_ccs --bam mapped_reads.bam --genedb annotation.db --output
 isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --labels My_ONT
 ```
 
+* Nanopore cDNA reads; no reference annotation:
+```bash
+isoquant.py -d nanopore --fastq ONT.cDNA.raw.fastq.gz --reference reference.fasta --output output_dir --labels My_ONT_cDNA
+```
+
 * PacBio FL reads; custom annotation in GTF format, which contains only exon features:
 ```bash
 isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir 
@@ -413,6 +432,12 @@ IsoQuant output files will be stored in `<output_dir>`, which is set by the user
 If the output directory was not specified the files are stored in `isoquant_output`.  
 Output directory will contain one folder per sample with the following files:  
 
+* `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models (both known and novel transcripts);
+* `SAMPLE_ID.transcript_model_reads.tsv` - TSV file indicating which reads contributed to transcript models;
+* `SAMPLE_ID.transcript_model_tpm.tsv` - expression of constructed transcript models in TPM;
+* `SAMPLE_ID.transcript_model_counts.tsv` - raw counts for constructed transcript models;
+* `SAMPLE_ID.extended_annotation.gtf` - GTF file with the entire reference annotation plus all discovered novel transcripts;
+
 * `SAMPLE_ID.read_assignments.tsv` - TSV file with each read to isoform assignments;
 * `SAMPLE_ID.corrected_reads.bed` - BED file with corrected read alignments;
 * `SAMPLE_ID.transcript_tpm.tsv` - TSV file with isoform expression in TPM;
@@ -420,14 +445,6 @@ Output directory will contain one folder per sample with the following files:
 * `SAMPLE_ID.gene_tpm.tsv` - TSV file with gene expression in TPM;
 * `SAMPLE_ID.gene_counts.tsv` - TSV file with raw gene counts;
 
-
-* `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models (both known and novel * `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models;
- transcripts);
-* `SAMPLE_ID.transcript_model_reads.tsv` - TSV file indicating which reads contributed to transcript models;
-* `SAMPLE_ID.transcript_model_tpm.tsv` - expression of constructed transcript models in TPM;
-* `SAMPLE_ID.transcript_model_counts.tsv` - raw counts for constructed transcript models;
-* `SAMPLE_ID.extended_annotation.gtf` - GTF file with the entire reference annotation and all discovered novel transcripts;
- 
 If `--sqanti_output` is set, IsoQuant will save read assignments in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format:
 * `SAMPLE_ID.SQANTI-like.tsv`
 
