@@ -79,6 +79,8 @@ class IntergenicAlignmentCollector:
 
         self.COVERAGE_BIN = 256
         self.MAX_REGION_LEN = 32768
+        self.ABS_COV_VALLEY = 1
+        self.REL_COV_VALLEY = 0.01
 
     def process(self):
         # coverage every COVERAGE_BIN bases
@@ -108,11 +110,10 @@ class IntergenicAlignmentCollector:
                 coverage_dict = defaultdict(int)
                 current_region = None
 
-            for i in range(math.floor(alignment.reference_start / self.COVERAGE_BIN),
-                           math.floor(alignment.reference_end / self.COVERAGE_BIN) + 1):
+            for i in range(alignment.reference_start // self.COVERAGE_BIN, alignment.reference_end // self.COVERAGE_BIN + 1):
                 coverage_dict[i] += 1
 
-            bin_position = math.floor(alignment.reference_start / self.COVERAGE_BIN)
+            bin_position = alignment.reference_start // self.COVERAGE_BIN
             if bin_position not in alignment_index:
                 alignment_index[bin_position] = counter
             alignment_storage.append((bam_index, alignment))
@@ -142,7 +143,8 @@ class IntergenicAlignmentCollector:
         max_cov = coverage_dict[current_start]
 
         while pos <= coverage_positions[-1]:
-            while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or coverage_dict[pos] > max(1, max_cov * 0.01):
+            while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or \
+                    coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
                 max_cov = max(max_cov, coverage_dict[pos])
                 pos += 1
             new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
