@@ -83,16 +83,12 @@ class AlignmentInfo:
                 # insertion, check previous position is inside or adjacent to the region
                 if ref_start - 1 <= last_ref_pos <= ref_end:
                     indel_count += 1
-                    logger.debug("Insertion")
             elif ref_start <= true_ref_pos <= ref_end:
                 if read_pos is None:
                     indel_count += 1
                 elif chr_record and self.alignment.query_sequence and self.alignment.query_sequence[read_pos] != chr_record[ref_pos]:
-                    logger.debug("Deletion")
-                elif chr_record and self.alignment.query_sequence[read_pos] != chr_record[ref_pos]:
                     # chr_record is also 0-based
                     mismatch_count += 1
-                    logger.debug("Mismatch: " + self.alignment.query_sequence[read_pos] + ", " + chr_record[ref_pos])
             last_ref_pos = true_ref_pos or last_ref_pos
             if last_ref_pos > ref_end:
                 # no need to check further
