@@ -158,8 +158,9 @@ class AssignedFeatureCounter(AbstractCounter):
             count_value = self.read_counter.process_inconsistent(read_assignment.isoform_matches[0], len(feature_ids))
             if count_value > 0:
                 for feature_id in feature_ids:
-                    self.feature_counter[group_id][feature_id] += count_value
-                    self.all_features.add(feature_id)
+                    if feature_id:
+                        self.feature_counter[group_id][feature_id] += count_value
+                        self.all_features.add(feature_id)
         elif read_assignment.assignment_type == ReadAssignmentType.unique or\
                 read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
