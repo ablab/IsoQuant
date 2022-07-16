@@ -23,20 +23,24 @@ def parse_args():
 
 
 def filter_gtf(ingtf_path, isoform_ids, out_full_path):
+    print("Filtering %d transcripts from %s to %s" % (len(isoform_ids), ingtf_path, out_full_path))
+    #print(list(isoform_ids)[:10])
     out_full = open(out_full_path, "w")
+    count = 0
     for l in open(ingtf_path):
         if l.startswith("#"):
             continue
 
-        tpos = l.find('transcript_id')
+        tpos = l.find(' transcript_id')
         if tpos == -1:
-            return TranscriptType.undefined
-        idpos = tpos + len('transcript_id') + 2
+            continue
+        idpos = tpos + len(' transcript_id') + 2
         endpos = l.find(";", idpos)
+        
         if endpos == -1:
             print("Warning, unable to find ;")
-            return TranscriptType.undefined
         tid = l[idpos:endpos-1]
+        count += 1
         if tid not in isoform_ids:
             continue
         out_full.write(l)
@@ -66,7 +70,7 @@ def process_tracking(gtfs, tracking, outdir):
                 missed_transcripts[index].add(vals[-2].split("|")[1])
 
     for i in range(gtf_num):
-        filter_gtf(gtfs[i][0], unique_transcripts[i], os.path.join(outdir, gtfs[0][1] + ".unique.gtf"))
+        filter_gtf(gtfs[i][0], unique_transcripts[i], os.path.join(outdir, gtfs[i][1] + ".unique.gtf"))
         if i != gtf_num - 1:
             filter_gtf(gtfs[-1][0], missed_transcripts[i], os.path.join(outdir, gtfs[i][1] + ".missed.gtf"))
         else:
