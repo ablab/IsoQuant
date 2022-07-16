@@ -350,7 +350,7 @@ class GraphBasedModelConstructor:
         novel_mono_exon_reads = []
 
         for read_assignment in read_assignment_storage:
-            if len(read_assignment.read_exons) <= 2 and \
+            if len(read_assignment.corrected_exons) <= 2 and \
                     (read_assignment.multimapper or read_assignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
                 continue
 

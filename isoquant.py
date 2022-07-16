@@ -88,7 +88,7 @@ def parse_args(args=None, namespace=None):
                         type=str, default=None)
 
     parser.add_argument("--transcript_quantification", choices=COUNTING_STRATEGIES,
-                        help="transcript quantification strategy", type=str, default="unique_only")
+                        help="transcript quantification strategy", type=str, default="with_ambiguous")
     parser.add_argument("--gene_quantification", choices=COUNTING_STRATEGIES,
                         help="gene quantification strategy", type=str, default="with_inconsistent")
 
