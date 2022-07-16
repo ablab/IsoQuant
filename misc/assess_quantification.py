@@ -18,6 +18,7 @@ def load_counts(inf, tpm_col=2, id_col=1):
             continue
         v = l.strip().split()
         tpm_dict[v[id_col-1]] = float(v[tpm_col-1])
+    print("TPMs loadede, checksum %.2f" % sum(tpm_dict.values()))
     return tpm_dict
 
 
@@ -156,8 +157,8 @@ def count_stats(joint_dict, output, header=""):
 
     outf = open(os.path.join(output, "stats.tsv"), 'w')
     outf.write(header + "\n")
-    outf.write("Total reference isoforms %d" % n_isoforms)
-    outf.write("Total non-zero counts %d" % counts_reported)
+    outf.write("Total reference isoforms %d\n" % n_isoforms)
+    outf.write("Total non-zero counts %d\n" % counts_reported)
     outf.write('Correlation\t%.3f\n' % round(np.corrcoef([real_tpms, ref_tpms])[1, 0], 3))
     outf.write('Full matches\t%d\t%.3f\n' % (full_matches, round(full_matches / n_isoforms, 3)))
     outf.write('Close matches (10)\t%d\t%.3f\n' % (close_matches_10, round(close_matches_10 / n_isoforms, 3)))
