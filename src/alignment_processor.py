@@ -247,9 +247,6 @@ class IntergenicAlignmentCollector:
             if not alignment_info.read_exons:
                 logger.warning("Read %s has no aligned exons" % read_id)
                 continue
-            if len(alignment_info.read_exons) <= 2 and \
-                    (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
-                continue
 
             alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
             if self.params.cage:
