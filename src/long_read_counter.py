@@ -157,6 +157,7 @@ class AssignedFeatureCounter(AbstractCounter):
                 for feature_id in feature_ids:
                     self.feature_counter[group_id][feature_id] += count_value
                     self.all_features.add(feature_id)
+                    self.confirmed_features.add((group_id, feature_id))
         elif read_assignment.assignment_type == ReadAssignmentType.noninformative:
             self.not_assigned_reads += 1
         elif read_assignment.assignment_type == ReadAssignmentType.unique or\
