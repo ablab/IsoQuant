@@ -161,6 +161,7 @@ class AssignedFeatureCounter(AbstractCounter):
                     if feature_id:
                         self.feature_counter[group_id][feature_id] += count_value
                         self.all_features.add(feature_id)
+                        self.confirmed_features.add((group_id, feature_id))
         elif read_assignment.assignment_type == ReadAssignmentType.unique or\
                 read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
