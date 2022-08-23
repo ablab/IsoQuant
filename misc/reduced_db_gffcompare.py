@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument("--output", "-o", type=str, help="output folder", default="gtf_stats")
     parser.add_argument("--genedb", "-d", type=str, help="prefix to reduced gene db")
     parser.add_argument("--gtf", "-g", type=str, help="gtf to assess")
-    parser.add_argument("--tool", type=str, choices=['isoquant', 'talon', 'sqanti', 'flair', 'bambu', 'stringtie'],
+    parser.add_argument("--tool", type=str, choices=SEPARATE_FUNCTORS.keys(),
                         help="tool used for generating GTF")
 
     args = parser.parse_args()
