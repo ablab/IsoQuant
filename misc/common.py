@@ -62,6 +62,17 @@ class TranscriptIdSeparator:
             return TranscriptType.novel
 
 
+class FlamesSeparator:
+    def __init__(self, _):
+        pass
+
+    def separate(self, l):
+        if l.split('\t')[1] == "known":
+            return TranscriptType.known
+        else:
+            return TranscriptType.novel
+
+
 class CountTranscriptIdSeparator:
     def __init__(self, gtf_path):
         print("Reading counts")
@@ -96,7 +107,8 @@ SEPARATE_FUNCTORS = {'isoquant':IsoQuantSeparator,
                      'stringtie':StringTieSeparator,
                      'flair':TranscriptIdSeparator,
                      'talon':TranscriptIdSeparator,
-                     'bambu':CountTranscriptIdSeparator}
+                     'bambu':CountTranscriptIdSeparator,
+                     'flames':FlamesSeparator}
 
 
 def split_gtf(ingtf_path, seaprator, out_full_path, out_known_path, out_novel_path):
