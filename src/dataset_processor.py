@@ -11,6 +11,7 @@ import gzip
 import os
 import time
 from multiprocessing import Pool
+import itertools
 
 from src.file_utils import *
 from src.input_data_storage import *
@@ -241,14 +242,21 @@ class DatasetProcessor:
 
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
-        pool = Pool(self.args.threads)
-        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-        results = pool.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
-                                                            (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
-                                                           for chr_id in chr_ids], chunksize=1)
-        pool.close()
-        pool.join()
-        processed_reads, read_groups = [x[0] for x in results], [x[1] for x in results]
+        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]),
+                         reverse=True)
+        if self.args.threads == 1:
+            results = itertools.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
+                                                                     (self.reference_record_dict[
+                                                                          chr_id] if self.reference_record_dict else None))
+                                                                    for chr_id in chr_ids])
+        else:
+            pool = Pool(self.args.threads)
+            results = pool.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
+                                                                (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
+                                                               for chr_id in chr_ids], chunksize=1)
+            pool.close()
+            pool.join()
+        processed_reads, read_groups = zip(*results)
 
         logger.info("Resolving multimappers")
         self.multimapped_reads = defaultdict(list)
@@ -290,19 +298,24 @@ class DatasetProcessor:
 
     def process_assigned_reads(self, sample, dump_filename):
         chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
-        pool = Pool(self.args.threads)
         logger.info("Processing assigned reads " + sample.label)
+        if self.args.threads == 1:
+            results = itertools.starmap(construct_models_in_parallel, [(SampleData(sample.file_list, sample.label + "_" + chr_id,
+                                                                                   sample.out_dir), chr_id, dump_filename,
+                                                                        self.args, self.multimapped_info_dict[chr_id], self.read_grouper,
+                                                                        (self.reference_record_dict[chr_id] if self.reference_record_dict else None),
+                                                                        self.io_support) for chr_id in chr_ids])
+        else:
+            pool = Pool(self.args.threads)
+            results = pool.starmap(construct_models_in_parallel, [(SampleData(sample.file_list, sample.label + "_" + chr_id,
+                                                                              sample.out_dir), chr_id, dump_filename,
+                                                                   self.args, self.multimapped_info_dict[chr_id], self.read_grouper,
+                                                                   (self.reference_record_dict[chr_id] if self.reference_record_dict else None),
+                                                                   self.io_support) for chr_id in chr_ids], chunksize=1)
+            pool.close()
+            pool.join()
 
-        results = pool.starmap(construct_models_in_parallel, [(SampleData(sample.file_list, sample.label + "_" + chr_id,
-                                                                          sample.out_dir), chr_id, dump_filename,
-                                                               self.args, self.multimapped_info_dict[chr_id], self.read_grouper,
-                                                               (self.reference_record_dict[chr_id] if self.reference_record_dict else None),
-                                                               self.io_support) for chr_id in chr_ids], chunksize=1)
-        pool.close()
-        pool.join()
-
-        read_stat_counters, transcript_model_storages = [x[0] for x in results], [x[1] for x in results]
-
+        read_stat_counters, transcript_model_storages = zip(*results)
         self.create_aggregators(sample)
         for read_stat_counter in read_stat_counters:
             for k, v in read_stat_counter.stats_dict.items():
