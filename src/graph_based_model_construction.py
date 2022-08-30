@@ -122,6 +122,9 @@ class GraphBasedModelConstructor:
         self.filter_transcripts()
         if self.gene_info.all_isoforms_exons:
             self.create_extended_annotation()
+        else:
+            transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
+            self.transcript_model_storage = transcript_joiner.join_transcripts()
 
     def filter_transcripts(self):
         filtered_storage = []
@@ -791,3 +794,73 @@ class IntronPathProcessor:
                 (len(all_possible_starts) <= 1 or start < all_possible_starts[1][1]):
             return leftmost_start
         return None
+
+
+class TranscriptToGeneJoiner:
+    def __init__(self, transcipt_model_storage):
+        self.transcipt_model_storage = transcipt_model_storage
+        self.gene_introns = {}
+        self.gene_regions = {}
+        self.gene_to_transcripts = {}
+        for t in self.transcipt_model_storage:
+            self.gene_regions[t.gene_id] = (t.get_start(), t.get_end())
+            self.gene_introns[t.gene_id] = set(junctions_from_blocks(t.exon_blocks))
+            self.gene_to_transcripts[t.gene_id] = {t.transcript_id}
+        self.scores = {}
+
+    def count_score(self, gene1, gene2):
+        logger.debug("Counting score %s %s" % (gene2, gene1))
+        intronic_overlap = len(self.gene_introns[gene1].intersection(self.gene_introns[gene2])) / \
+                           max(1, len(self.gene_introns[gene1].union(self.gene_introns[gene2])))
+        range1 = self.gene_regions[gene1]
+        range2 = self.gene_regions[gene2]
+        position_overlap = intersection_len(range1, range2) / (max(range1[1], range2[1]) - min(range1[0], range2[0]) + 1)
+        return position_overlap + intronic_overlap
+
+    def count_scores(self):
+        for g1_id in self.gene_to_transcripts.keys():
+            for g2_id in self.gene_to_transcripts.keys():
+                if g1_id == g2_id:
+                    continue
+                gene_pair = tuple(sorted([g1_id, g2_id]))
+                if gene_pair not in self.scores:
+                    self.scores[gene_pair] = self.count_score(g1_id, g2_id)
+
+    def merge_genes(self, gene1, gene2):
+        logger.debug("Merging %s into %s" % (gene2, gene1))
+        range1 = self.gene_regions[gene1]
+        range2 = self.gene_regions[gene2]
+        self.gene_regions[gene1] = (min(range1[0], range2[0]), max(range1[1], range2[1]))
+        self.gene_introns[gene1].update(self.gene_introns[gene2])
+        self.gene_to_transcripts[gene1].update(self.gene_to_transcripts[gene2])
+        del self.gene_regions[gene2]
+        del self.gene_introns[gene2]
+        del self.gene_to_transcripts[gene2]
+
+        # update scores
+        new_scores = {}
+        for gene_pair in self.scores.keys():
+            if gene2 in gene_pair:
+                continue
+            elif gene1 in gene_pair:
+                new_scores[gene_pair] = self.count_score(*gene_pair)
+            else:
+                new_scores[gene_pair] = self.scores[gene_pair]
+        self.scores = new_scores
+
+    def join_transcripts(self):
+        self.count_scores()
+        while len(self.gene_to_transcripts) > 1:
+            best_gene_pair = max(self.scores, key=self.scores.get)
+            if self.scores[best_gene_pair] < 0.1:
+                break
+            self.merge_genes(*best_gene_pair)
+
+        transcript_to_new_gene_id = {}
+        for gene_id, t_list in self.gene_to_transcripts.items():
+            for transcript_id in t_list:
+                transcript_to_new_gene_id[transcript_id] = gene_id
+        for model in self.transcipt_model_storage:
+            model.gene_id = transcript_to_new_gene_id[model.transcript_id]
+
+        return self.transcipt_model_storage
