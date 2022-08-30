@@ -27,6 +27,7 @@ class GFFPrinter:
                  output_r2t = True,
                  header = ""):
         self.model_fname = os.path.join(outf_prefix, sample_name + gtf_suffix)
+        self.printed_gene_ids = set()
         self.out_gff = open(self.model_fname, "w")
         if header:
             self.out_gff.write("# " + sample_name + " IsoQuant generated GTF\n" + header)
@@ -74,17 +75,20 @@ class GFFPrinter:
                 gene_record = gene_info_dict[gene_id]
                 assert model.chr_id == gene_record.chr_id
                 if model.strand != gene_record.strand:
-                    logger.warning("Unequal strands: %s = %s, %s = %s" % (gene_id, gene_record.strand, model.transcript_id, model.strand))
+                    logger.warning("Gene and transcript records have unequal strands: %s: %s, %s: %s" %
+                                   (gene_id, gene_record.strand, model.transcript_id, model.strand))
                 gene_info_dict[gene_id] = GFFGeneInfo(model.chr_id, model.strand,
                                                       max_range(gene_record.gene_region, transcript_region))
 
         gene_order = sorted([(g, gene_info_dict[g].gene_region) for g in gene_info_dict.keys()], key=lambda x:x[1])
 
         for gene_id, coords in gene_order:
-            gene_line = '%s\tIsoQuant\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts: %d;\n' % \
-                        (gene_info_dict[gene_id].chr_id, coords[0], coords[1], gene_info_dict[gene_id].strand,
-                         gene_id, len(gene_to_model_dict[gene_id]))
-            self.out_gff.write(gene_line)
+            if gene_id not in self.printed_gene_ids:
+                gene_line = '%s\tIsoQuant\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts: %d;\n' % \
+                            (gene_info_dict[gene_id].chr_id, coords[0], coords[1], gene_info_dict[gene_id].strand,
+                             gene_id, len(gene_to_model_dict[gene_id]))
+                self.out_gff.write(gene_line)
+                self.printed_gene_ids.add(gene_id)
 
             for model_index in gene_to_model_dict[gene_id]:
                 model = transcript_model_storage[model_index]
