@@ -800,16 +800,20 @@ class TranscriptToGeneJoiner:
     def __init__(self, transcipt_model_storage):
         self.transcipt_model_storage = transcipt_model_storage
         self.gene_introns = {}
+        self.gene_strands = {}
         self.gene_regions = {}
         self.gene_to_transcripts = {}
         for t in self.transcipt_model_storage:
             self.gene_regions[t.gene_id] = (t.get_start(), t.get_end())
             self.gene_introns[t.gene_id] = set(junctions_from_blocks(t.exon_blocks))
+            self.gene_strands[t.gene_id] = t.strand
             self.gene_to_transcripts[t.gene_id] = {t.transcript_id}
         self.scores = {}
 
     def count_score(self, gene1, gene2):
         logger.debug("Counting score %s %s" % (gene2, gene1))
+        if self.gene_strands[gene1] != self.gene_strands[gene2]:
+            return 0.0
         intronic_overlap = len(self.gene_introns[gene1].intersection(self.gene_introns[gene2])) / \
                            max(1, len(self.gene_introns[gene1].union(self.gene_introns[gene2])))
         range1 = self.gene_regions[gene1]
@@ -833,9 +837,12 @@ class TranscriptToGeneJoiner:
         self.gene_regions[gene1] = (min(range1[0], range2[0]), max(range1[1], range2[1]))
         self.gene_introns[gene1].update(self.gene_introns[gene2])
         self.gene_to_transcripts[gene1].update(self.gene_to_transcripts[gene2])
+        if self.gene_strands[gene2] != self.gene_strands[gene1]:
+            logger.error("Merging genes with different strands: %s, %s" % (gene1, gene2))
         del self.gene_regions[gene2]
         del self.gene_introns[gene2]
         del self.gene_to_transcripts[gene2]
+        del self.gene_strands[gene2]
 
         # update scores
         new_scores = {}
