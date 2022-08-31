@@ -1,5 +1,4 @@
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/isoquant.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/isoquant)
-[![TeamCity Simple Build Status](http://chihua.cab.spbu.ru:3000/app/rest/builds/buildType:(id:IsoQuant_MouseOntTestData)/statusIcon)](http://chihua.cab.spbu.ru:3000/project/IsoQuant?mode=builds)
 [![Python version](https://img.shields.io/badge/python-3.7-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
@@ -64,7 +63,7 @@ IsoQuant further performs annotated gene, isoform, exon and intron quantificatio
 If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. 
 
 
-IsoQuant version 3.0.0 was released under GPLv2 on July 14th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 3.0.0 was released under GPLv2 on August 31st, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
