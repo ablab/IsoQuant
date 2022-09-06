@@ -107,6 +107,7 @@ class FeatureInfo:
 # All gene(s) information
 class GeneInfo:
     MAX_INTRON_LEN = 50000
+    EXTRA_BASES_FOR_SEQ = 20
 
     def __init__(self, gene_db_list, db, delta=0):
         if db is None:
@@ -200,6 +201,13 @@ class GeneInfo:
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
 
+        # additional info for canonical splice site detection
+        gene_info.all_read_region_start = gene_info.start
+        gene_info.all_read_region_end = gene_info.end
+        gene_info.canonical_sites = {}
+        gene_info.gene_regions = {}
+        gene_info.reference_region = None
+
         return gene_info
 
     @classmethod
@@ -246,10 +254,17 @@ class GeneInfo:
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
 
+        # additional info for canonical splice site detection
+        gene_info.all_read_region_start = gene_info.start
+        gene_info.all_read_region_end = gene_info.end
+        gene_info.canonical_sites = {}
+        gene_info.gene_regions = {}
+        gene_info.reference_region = None
+
         return gene_info
 
     @classmethod
-    def from_region(cls, chr_id, start, end, delta=0):
+    def from_region(cls, chr_id, start, end, delta=0, chr_record=None):
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
@@ -272,6 +287,15 @@ class GeneInfo:
         gene_info.regions_for_bam_fetch = [(start, end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
+
+        # additional info for canonical splice site detection
+        gene_info.all_read_region_start = gene_info.start
+        gene_info.all_read_region_end = gene_info.end
+        gene_info.canonical_sites = {}
+        gene_info.gene_regions = {}
+        gene_info.reference_region = None
+        if chr_record:
+            gene_info.reference_region = str(chr_record[gene_info.all_read_region_start - 1:gene_info.all_read_region_end + 1].seq)
 
         return gene_info
 
@@ -539,6 +563,13 @@ class GeneInfo:
         left_pos = ref_start - self.all_read_region_start
         right_pos = ref_end - self.all_read_region_start
         return self.reference_region[left_pos:right_pos+1]
+
+    def set_reference_sequence(self, start, end, chr_record):
+        self.all_read_region_start = start
+        self.all_read_region_end = end
+        self.reference_region = \
+            str(chr_record[self.all_read_region_start - 1:self.all_read_region_end + 1].seq)
+        self.canonical_sites = {}
 
 
 class StrandDetector:

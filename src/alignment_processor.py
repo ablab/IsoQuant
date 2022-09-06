@@ -173,17 +173,13 @@ class IntergenicAlignmentCollector:
 
         if not gene_list:
             gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
-                                             self.params.delta)
+                                             self.params.delta, self.chr_record)
             assignment_storage = self.process_intergenic(alignment_storage)
         else:
             gene_list = sorted(gene_list, key=lambda x: x.start)
             gene_info = GeneInfo(gene_list, self.genedb, self.params.delta)
             if self.params.needs_reference:
-                gene_info.all_read_region_start = current_region[0] - self.params.upstream_region_len
-                gene_info.all_read_region_end = current_region[0] + self.params.upstream_region_len
-                gene_info.reference_region = \
-                    str(self.chr_record[gene_info.all_read_region_start - 1:gene_info.all_read_region_end + 1].seq)
-                gene_info.canonical_sites = {}
+                gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
             assignment_storage = self.process_genic(alignment_storage, gene_info)
 
         return gene_info, assignment_storage
