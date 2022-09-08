@@ -386,7 +386,7 @@ isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fast
 
 * ONT cDNA reads; 2 samples with 3 replicates (biological or technical); official annotation in GTF format:
 ```bash
-isoquant.py -d nanopore --fastq_list list.txt -l SAMPLE1 SAMPLE2 --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
+isoquant.py -d nanopore --fastq_list list.txt --read_group file_name -l SAMPLE1 SAMPLE2 --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
 ```
 
 list.txt file :
@@ -404,7 +404,7 @@ Note, that file aliases given after a colon will be used in expression table hea
 
 * ONT cDNA reads; 2 samples with 2 replicates, each replicate has 2 files; official annotation in GTF format:
 ```bash
-isoquant.py -d nanopore --fastq_list list.txt -l SAMPLE1 SAMPLE2 --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
+isoquant.py -d nanopore --fastq_list list.txt --read_group file_name -l SAMPLE1 SAMPLE2 --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
 ```
 
 list.txt file :
