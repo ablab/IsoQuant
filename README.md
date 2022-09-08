@@ -366,27 +366,35 @@ We recommend to not modify these options unless you are clearly aware of their e
 * Mapped PacBio CCS reads in BAM format; pre-converted gene annotation:
 
 ```bash
-isoquant.py -d pacbio_ccs --bam mapped_reads.bam --genedb annotation.db --output output_dir 
+isoquant.py -d pacbio_ccs --bam mapped_reads.bam \
+ --genedb annotation.db --output output_dir 
 ```
 
 * Nanopore dRNA stranded reads; official annotation in GTF format, used sample label instead of file name:
 ```bash
-isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --labels My_ONT
+isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz \
+ --reference reference.fasta --genedb annotation.gtf --complete_genedb \ 
+ --output output_dir --labels My_ONT
 ```
 
 * Nanopore cDNA reads; no reference annotation:
 ```bash
-isoquant.py -d nanopore --fastq ONT.cDNA.raw.fastq.gz --reference reference.fasta --output output_dir --labels My_ONT_cDNA
+isoquant.py -d nanopore --fastq ONT.cDNA.raw.fastq.gz \
+ --reference reference.fasta --output output_dir --labels My_ONT_cDNA
 ```
 
 * PacBio FL reads; custom annotation in GTF format, which contains only exon features:
 ```bash
-isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq --reference reference.fasta --genedb genes.gtf --output output_dir 
+isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq \
+ --reference reference.fasta --genedb genes.gtf --output output_dir 
 ```
 
 * ONT cDNA reads; 2 samples with 3 replicates (biological or technical); official annotation in GTF format:
 ```bash
-isoquant.py -d nanopore --fastq_list list.txt --read_group file_name -l SAMPLE1 SAMPLE2 --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
+isoquant.py -d nanopore --fastq_list list.txt  \
+ --read_group file_name -l SAMPLE1 SAMPLE2   \
+ --complete_genedb --genedb genes.gtf \
+ --reference reference.fasta --output output_dir 
 ```
 
 list.txt file :
@@ -404,7 +412,10 @@ Note, that file aliases given after a colon will be used in expression table hea
 
 * ONT cDNA reads; 2 samples with 2 replicates, each replicate has 2 files; official annotation in GTF format:
 ```bash
-isoquant.py -d nanopore --fastq_list list.txt --read_group file_name -l SAMPLE1 SAMPLE2 --reference reference.fasta  --complete_genedb --genedb genes.gtf --output output_dir 
+isoquant.py -d nanopore --fastq_list list.txt \
+ --read_group file_name -l SAMPLE1 SAMPLE2 \
+ --complete_genedb --genedb genes.gtf \
+ --reference reference.fasta --output output_dir 
 ```
 
 list.txt file :
