@@ -36,11 +36,27 @@ ISOQUANT_GTF="IsoQuant_out_"$DATASET_NAME/$DATASET_NAME/$DATASET_NAME".transcrip
 STRINGTIE_GTF="StringTie_out_"$DATASET_NAME".gtf"
 $STRINGTIE_PATH"stringtie" -G $REF_ANNOTATION -L $INPUT_BAM -p $THREADS -o $STRINGTIE_OUT
 
-BAMBU_GTF=""
+BAMBU_GTF="Bambu_out_"$DATASET_NAME".gtf"
+awk ' $3 >= 1 ' counts_transcript.txt | sort -k3,3n > expressed_annotations.gtf.counts
+cut -f1 expressed_annotations.gtf.counts > expressed_transcripts.txt
+grep -Ff expressed_transcripts.txt extended_annotations.gtf > $BAMBU_GTF
 
-TALON_GTF=""
+FLAIR_PREFIX="Flair_out_"$DATASET_NAME
+FLAIR_GTF=$FLAIR_PREFIX".gtf"
+$FLAIR_PATH"bin/bam2Bed12.py" -i $INPUT_BAM > $FLAIR_PREFIX".bed"
+$FLAIR_PATH"flair.py" correct -q $FLAIR_PREFIX".bed" -g $REF_GENOME -f $REF_ANNOTATION -o $FLAIR_PREFIX -t $THREADS
+$FLAIR_PATH"flair.py" collapse -g $REF_GENOME -f $REF_ANNOTATION -r $INPUT_READS -q $FLAIR_PREFIX"_all_corrected.bed" -o $FLAIR_PREFIX -t $THREADS
 
-FLAIR_GTF=""
+#TALON requires config file: dataset name, sample description, platform, sam file (comma-delimited)
+TALON_PREFIX="Talon_out_"$DATASET_NAME
+TALON_GTF=$TALON_PREFIX".gtf"
+$TALON_PATH"talon_label_reads" --f $INPUT_BAM --t=$THREADS --o=$TALON_PREFIX --g $REF_GENOME
+samtools calmd -@ $THREADS --reference $REF_GENOME $TALON_PREFIX"_labeled.sam"  > $TALON_PREFIX"_labeled.md.sam"
+$TALON_PATH"talon_initialize_database" --f $REF_ANNOTATION --g $DATASET_NAME --a $DATASET_NAME --o $DATASET_NAME
+echo $DATASET_NAME","$DATASET_NAME",ONT,"$TALON_PREFIX"_labeled.md.sam" > $TALON_PREFIX".csv"
+$TALON_PATH"talon" --build $DATASET_NAME --db $DATASET_NAME".db" --o $TALON_PREFIX"_raw" --f $TALON_PREFIX".csv"
+$TALON_PATH"talon_filter_transcripts" --db $DATASET_NAME".db" -a $DATASET_NAME --datasets $DATASET_NAME --o $TALON_PREFIX"_filter" --f $TALON_CSV
+$TALON_PATH"talon_create_GTF" --build $DATASET_NAME --db $DATASET_NAME".db" -a $DATASET_NAME --o $TALON_PREFIX  --whitelist=$TALON_PREFIX"_filter"
 
 # reduced annotation analysis, path to gffcompare must be in $PATH
 $ISOQUANT_PATH/misc/reduced_db_gffcompare.py --genedb $REDUCED_ANNOTATION_PREFIX --gtf $ISOQUANT_GTF --tool isoquant -o $DATASET_NAME"_isoquant_reduced_db"
