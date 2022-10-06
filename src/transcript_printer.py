@@ -84,7 +84,7 @@ class GFFPrinter:
 
         for gene_id, coords in gene_order:
             if gene_id not in self.printed_gene_ids:
-                gene_line = '%s\tIsoQuant\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts: %d;\n' % \
+                gene_line = '%s\tIsoQuant\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts "%d";\n' % \
                             (gene_info_dict[gene_id].chr_id, coords[0], coords[1], gene_info_dict[gene_id].strand,
                              gene_id, len(gene_to_model_dict[gene_id]))
                 self.out_gff.write(gene_line)
@@ -98,12 +98,12 @@ class GFFPrinter:
                         transcript_model_constructor.gene_info.reference_region:
                     model_introns = junctions_from_blocks(model.exon_blocks)
                     if len(model_introns) == 0:
-                        canonical_info = "Canonical=Unspliced;"
+                        canonical_info = 'Canonical "Unspliced";'
                     else:
                         all_canonical = self.io_support.check_sites_are_canonical(model_introns,
                                                                                   transcript_model_constructor.gene_info,
                                                                                   model.strand)
-                        canonical_info = "Canonical=" + str(all_canonical) + ";"
+                        canonical_info = 'Canonical "' + str(all_canonical) + '";'
                     model.additional_info += canonical_info
 
                 transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
