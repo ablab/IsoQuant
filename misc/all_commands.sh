@@ -36,10 +36,22 @@ ISOQUANT_GTF="IsoQuant_out_"$DATASET_NAME/$DATASET_NAME/$DATASET_NAME".transcrip
 STRINGTIE_GTF="StringTie_out_"$DATASET_NAME".gtf"
 $STRINGTIE_PATH"stringtie" -G $REF_ANNOTATION -L $INPUT_BAM -p $THREADS -o $STRINGTIE_OUT
 
-BAMBU_GTF="Bambu_out_"$DATASET_NAME".gtf"
-awk ' $3 >= 1 ' counts_transcript.txt | sort -k3,3n > expressed_annotations.gtf.counts
-cut -f1 expressed_annotations.gtf.counts > expressed_transcripts.txt
-grep -Ff expressed_transcripts.txt extended_annotations.gtf > $BAMBU_GTF
+# needs R
+BAMBU_OUT_DIR="Bambu_out"
+echo "library(bambu)" > bambu.R
+echo "fa.file<-\"$REF_GENOME\"" >> bambu.R
+echo "gtf.file<-\"$REF_ANNOTATION\"" >> bambu.R
+echo "bambuAnnotations <- prepareAnnotations(gtf.file)"
+echo "ont.bam<-\"$INPUT_BAM\"" >> bambu.R
+echo "ont.se <- bambu(reads = ont.bam, rcOutDir = \"$BAMBU_OUT_DIR\", annotations = bambuAnnotations, genome = fa.file, ncore=$THREADS)" >> bambu.R
+echo "writeBambuOutput(ont.se, path =\"$BAMBU_OUT_DIR\")" >> bambu.R
+R < bambu.R --no-save
+
+BAMBU_GTF=$BAMBU_OUT_DIR/"Bambu_out_"$DATASET_NAME".gtf"
+awk ' $3 >= 1 ' $BAMBU_OUT_DIR/counts_transcript.txt | sort -k3,3n > $BAMBU_OUT_DIR/expressed_annotations.gtf.counts
+cut -f1 $BAMBU_OUT_DIR/expressed_annotations.gtf.counts > $BAMBU_OUT_DIR/expressed_transcripts.txt
+grep -Ff $BAMBU_OUT_DIR/expressed_transcripts.txt $BAMBU_OUT_DIR/extended_annotations.gtf > $BAMBU_GTF
+cp $BAMBU_OUT_DIR/expressed_annotations.gtf.counts $BAMBU_GTF".counts"
 
 FLAIR_PREFIX="Flair_out_"$DATASET_NAME
 FLAIR_GTF=$FLAIR_PREFIX".gtf"
@@ -68,7 +80,7 @@ $ISOQUANT_PATH/misc/reduced_db_gffcompare.py --genedb $REDUCED_ANNOTATION_PREFIX
 
 
 # de novo annotation analysis, path to gffcompare must be in $PATH
-echo $TALON_GTF >> gtfs.list
+echo $TALON_GTF > gtfs.list
 echo $FLAIR_GTF >> gtfs.list
 echo $BAMBU_GTF >> gtfs.list
 echo $STRINGTIE_GTF >> gtfs.list
