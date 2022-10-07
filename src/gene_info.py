@@ -24,12 +24,12 @@ class TranscriptModelType(Enum):
 
 # simple class for storing all information needed for GFF
 class TranscriptModel:
-    def __init__(self, chr_id, strand, transcript_id, reference_transcript, reference_gene, exon_blocks,
+    def __init__(self, chr_id, strand, transcript_id, reference_transcript, gene_id, reference_gene, exon_blocks,
                  transcript_type, additional_info = ""):
         self.chr_id = chr_id
         self.strand = strand
         self.transcript_id = transcript_id
-        self.gene_id = reference_gene
+        self.gene_id = gene_id
         self.reference_transcript = reference_transcript
         self.reference_gene = reference_gene
         self.exon_blocks = exon_blocks

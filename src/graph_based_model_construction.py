@@ -330,7 +330,7 @@ class GraphBasedModelConstructor:
 
                     new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                                 new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
-                                                "novel", transcript_gene, novel_exons, transcript_type)
+                                                "novel", transcript_gene, "novel", novel_exons, transcript_type)
                     new_model.intron_path = intron_path
                     logger.debug("uuu Adding novel spliced isoform %s : %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
 
@@ -494,7 +494,7 @@ class GraphBasedModelConstructor:
 
             new_model = TranscriptModel(self.gene_info.chr_id, strand,
                                         new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
-                                        "novel", transcript_gene, [coordinates], transcript_type)
+                                        "novel", transcript_gene, "novel", [coordinates], transcript_type)
             # logger.debug("uuu Adding novel MONOEXON isoform %s : %s, %d\t%d" % (new_transcript_id, str(coordinates), count, cutoff))
             result.add(coordinates)
 
@@ -577,8 +577,9 @@ class GraphBasedModelConstructor:
             new_transcript_id = transcript_id
         else:
             new_transcript_id = transcript_id + ".%s" % self.gene_info.chr_id + self.known_transcript_suffix
+        gene_id = self.gene_info.gene_id_map[isoform_id]
         return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
-                               new_transcript_id, isoform_id, self.gene_info.gene_id_map[isoform_id],
+                               new_transcript_id, isoform_id, gene_id, gene_id,
                                self.gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known)
 
     # assign reads back to constructed isoforms
