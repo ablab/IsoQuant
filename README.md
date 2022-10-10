@@ -46,7 +46,7 @@
 
 * If using official annotations containing `gene` and `transcript` features use `--complete_genedb` to save time.
 
-* Using refrence annotation is optional since version 3.0, you may preform de novo transcript discovery without providing `--genedb` option':
+* Using reference annotation is optional since version 3.0, you may preform de novo transcript discovery without providing `--genedb` option':
 
         isoquant.py --reference /PATH/TO/reference_genome.fasta 
         --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz 
@@ -63,7 +63,7 @@ IsoQuant further performs annotated gene, isoform, exon and intron quantificatio
 If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. 
 
 
-IsoQuant version 3.0.1 was released under GPLv2 on August 6th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 3.0.2 was released under GPLv2 on October 10th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
