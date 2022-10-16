@@ -63,7 +63,7 @@ IsoQuant further performs annotated gene, isoform, exon and intron quantificatio
 If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. 
 
 
-IsoQuant version 3.0.2 was released under GPLv2 on October 10th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 3.0.3 was released under GPLv2 on October 17th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
