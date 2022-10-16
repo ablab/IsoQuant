@@ -47,10 +47,10 @@ class ExonCorrector:
         isofrom_profile = self.gene_info.intron_profiles.profiles[isoform_id]
         ref_introns = self.gene_info.intron_profiles.features
 
-        logger.debug("Correcting fuzzy junctions in the following profiles")
-        logger.debug(intron_profile.read_profile)
-        logger.debug(intron_profile.gene_profile)
-        logger.debug(isofrom_profile)
+        # logger.debug("Correcting fuzzy junctions in the following profiles")
+        # logger.debug(intron_profile.read_profile)
+        # logger.debug(intron_profile.gene_profile)
+        # logger.debug(isofrom_profile)
 
         new_introns = []
         read_pos, ref_pos = self.find_next(intron_profile, -1, -1)
@@ -101,9 +101,9 @@ class ExonCorrector:
 
     def process_events(self, alignment_info, event_map, read_region, read_introns, isoform_region, isoform_introns):
         if self.params.correct_fuzzy_junctions:
-            logger.debug("*** Correcting fuzzy junctions")
+            # logger.debug("*** Correcting fuzzy junctions")
             potential_introns = self.intron_profile_constructor.match_genomic_features(read_introns)
-            logger.debug(potential_introns)
+            # logger.debug(potential_introns)
             corrected_introns = []
             assert len(potential_introns) == len(read_introns)
             for i in range(len(read_introns)):
@@ -112,37 +112,37 @@ class ExonCorrector:
 
                 if read_intron[0] == ref_intron[0]:
                     left_site = read_intron[0]
-                    logger.debug("Equal left sites %d" % read_intron[0])
+                    # logger.debug("Equal left sites %d" % read_intron[0])
                 else:
                     start = min(read_intron[0], ref_intron[0])
                     end = max(read_intron[0], ref_intron[0]) - 1
-                    logger.debug("Unequal left sites %d - %d" % (start, end))
+                    # logger.debug("Unequal left sites %d - %d" % (start, end))
                     indel_count, mm_count = alignment_info.get_error_count(start, end, intron_index=i,
                                                                            left_site=True, chr_record=self.chr_record)
                     # TODO: check condition
                     left_site = read_intron[0] if indel_count == 0 and mm_count <= 1 else ref_intron[0]
-                    logger.debug("Errors: %d, %d; res: %d" % (indel_count, mm_count, left_site))
+                    # logger.debug("Errors: %d, %d; res: %d" % (indel_count, mm_count, left_site))
 
                 if read_intron[1] == ref_intron[1]:
                     right_site = read_intron[1]
-                    logger.debug("Equal right sites %d" % right_site)
+                    # logger.debug("Equal right sites %d" % right_site)
                 else:
                     start = min(read_intron[1], ref_intron[1]) + 1
                     end = max(read_intron[1], ref_intron[1])
-                    logger.debug("Unequal right sites %d - %d" % (start, end))
+                    # logger.debug("Unequal right sites %d - %d" % (start, end))
                     indel_count, mm_count = alignment_info.get_error_count(start, end, intron_index=i,
                                                                            left_site=False, chr_record=self.chr_record)
                     # TODO: check condition
                     right_site = read_intron[1] if indel_count == 0 and mm_count <= 1 else ref_intron[1]
-                    logger.debug("Errors: %d, %d; res: %d" % (indel_count, mm_count, left_site))
+                    # logger.debug("Errors: %d, %d; res: %d" % (indel_count, mm_count, left_site))
 
                 corrected_introns.append((left_site, right_site))
         else:
             corrected_introns = read_introns
 
         assert len(corrected_introns) == len(read_introns)
-        logger.debug(read_introns)
-        logger.debug(corrected_introns)
+        # logger.debug(read_introns)
+        # logger.debug(corrected_introns)
 
         corrected_read_region = read_region
         new_introns = []
@@ -151,7 +151,7 @@ class ExonCorrector:
         while i < len(corrected_introns):
             if -i-1 in event_map:
                 # special case for fake IR
-                logger.debug(event_map[-i-1].isoform_region)
+                # logger.debug(event_map[-i-1].isoform_region)
                 new_introns.append(isoform_introns[event_map[-i-1].isoform_region[0]])
 
             if i not in event_map:

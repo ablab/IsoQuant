@@ -110,7 +110,7 @@ class PolyAFinder:
 
     # == polyA stuff ==
     def find_polya_tail(self, alignment, from_pos, to_pos, check_entire_tail=False):
-        logger.debug("Detecting polyA tail for %s " % alignment.query_name)
+        # logger.debug("Detecting polyA tail for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_tail_len = 0
 
@@ -159,7 +159,7 @@ class PolyAFinder:
         return reference_polya_start
 
     def find_polyt_head(self, alignment, from_pos, to_pos, check_entire_head=False):
-        logger.debug("Detecting polyT head for %s " % alignment.query_name)
+        # logger.debug("Detecting polyT head for %s " % alignment.query_name)
         cigar_tuples = alignment.cigartuples
         soft_clipped_head_len = 0
 
