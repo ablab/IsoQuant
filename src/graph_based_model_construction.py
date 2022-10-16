@@ -128,7 +128,7 @@ class GraphBasedModelConstructor:
             self.transcript_model_storage = transcript_joiner.join_transcripts()
 
     def compare_models_with_known(self):
-        if not self.gene_info.all_isoforms_exons:
+        if not self.gene_info.all_isoforms_introns:
             return
 
         for model in self.transcript_model_storage:
@@ -141,10 +141,14 @@ class GraphBasedModelConstructor:
 
             combined_profile = self.profile_constructor.construct_profiles(model.exon_blocks, polya_info, [])
             assignment = self.assigner.assign_to_isoform(model.transcript_id, combined_profile)
+
             if assignment is None or not assignment.isoform_matches:
                 continue
 
             assigned_transcript_id = assignment.isoform_matches[0].assigned_transcript
+            if not assigned_transcript_id or assigned_transcript_id not in self.gene_info.all_isoforms_introns:
+                continue
+
             reference_introns = self.gene_info.all_isoforms_introns[assigned_transcript_id]
             isoform_introns = junctions_from_blocks(model.exon_blocks)
             event_string = ",".join([match_subtype_to_str_with_additional_info(x, model.strand,
