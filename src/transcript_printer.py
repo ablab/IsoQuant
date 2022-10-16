@@ -108,17 +108,14 @@ class GFFPrinter:
 
                 exon_count = len(model.exon_blocks)
                 transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
-                                  'reference_gene_id "%s"; reference_transcript_id "%s"; exons "%d"; %s\n' % \
+                                  'exons "%d"; %s\n' % \
                             (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,
-                             model.gene_id, model.transcript_id, model.reference_gene, model.reference_transcript,
-                             exon_count, model.additional_info)
+                             model.gene_id, model.transcript_id, exon_count, model.additional_info)
                 self.out_gff.write(transcript_line)
 
                 prefix_columns = "%s\tIsoQuant\texon\t" % model.chr_id
-                suffix_columns = '.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
-                                 'reference_gene_id "%s"; reference_transcript_id "%s";' % \
-                                 (model.strand, model.gene_id, model.transcript_id,
-                                  model.reference_gene, model.reference_transcript)
+                suffix_columns = '.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' % \
+                                 (model.strand, model.gene_id, model.transcript_id)
                 exons_to_print = sorted(model.exon_blocks, reverse=True) if model.strand == '-' else model.exon_blocks
                 for i, e in enumerate(exons_to_print):
                     self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns + ' exon "%d";\n' % (i + 1))
