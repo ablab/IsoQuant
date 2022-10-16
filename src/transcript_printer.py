@@ -114,7 +114,7 @@ class GFFPrinter:
                 self.out_gff.write(transcript_line)
 
                 prefix_columns = "%s\tIsoQuant\texon\t" % model.chr_id
-                suffix_columns = '.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' % \
+                suffix_columns = '.\t%s\t.\tgene_id "%s"; transcript_id "%s";' % \
                                  (model.strand, model.gene_id, model.transcript_id)
                 exons_to_print = sorted(model.exon_blocks, reverse=True) if model.strand == '-' else model.exon_blocks
                 for i, e in enumerate(exons_to_print):
