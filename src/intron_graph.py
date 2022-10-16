@@ -157,10 +157,12 @@ class IntronGraph:
         # logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
         self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
         self.construct()
-        self.print_graph()
+        if self.params.debug:
+            self.print_graph()
         self.simplify()
         self.attach_terminal_positions()
-        self.print_graph()
+        if self.params.debug:
+            self.print_graph()
 
     def add_edge(self, v1, v2):
         if v1 in self.intron_collector.intron_correction_map:
