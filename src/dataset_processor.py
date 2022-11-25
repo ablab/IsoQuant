@@ -159,9 +159,10 @@ class DatasetProcessor:
         self.args = args
         self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
-        self.read_grouper = create_read_grouper(args)
+#        self.read_grouper = create_read_grouper(args)
         self.io_support = IOSupport(self.args)
         if parallel: return
+        self.read_grouper = create_read_grouper(args)
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
             self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
