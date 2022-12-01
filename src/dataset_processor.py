@@ -28,21 +28,44 @@ logger = logging.getLogger('IsoQuant')
 
 
 def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_record):
-    tmp_printer = TmpFileAssignmentPrinter("{}_{}".format(sample.out_raw_file, chr_id), args)
+    lock_file = "{}_{}_lock".format(sample.out_raw_file, chr_id)
+    save_file = "{}_{}".format(sample.out_raw_file, chr_id)
+    group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     processed_reads = []
-    bam_files = list(map(lambda x: x[0], sample.file_list))
-    bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
-    gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
 
-    logger.info("Processing chromosome " + chr_id)
-    alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
+    if os.path.exists(lock_file) and not args.clean_start:
+        logger.info("Detected processed reads for " + chr_id)
+        if os.path.exists(group_file) and os.path.exists(save_file):
+            read_grouper.read_groups.clear()
+            for g in open(group_file):
+                read_grouper.read_groups.append(g.strip())
+            for gene_info, assignment_storage in load_assigned_reads(save_file, None, None):
+                for a in assignment_storage:
+                    processed_reads.append(BasicReadAssignment(a, gene_info))
+            logger.info("Loaded data for " + chr_id)
+        else:
+            logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
+    else:
+        tmp_printer = TmpFileAssignmentPrinter(save_file, args)
+        bam_files = list(map(lambda x: x[0], sample.file_list))
+        bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
+        gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
 
-    for gene_info, assignment_storage in alignment_collector.process():
-        tmp_printer.add_gene_info(gene_info)
-        for read_assignment in assignment_storage:
-            tmp_printer.add_read_info(read_assignment)
-            processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
-    logger.info("Finished processing chromosome " + chr_id)
+        logger.info("Processing chromosome " + chr_id)
+        alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
+
+        for gene_info, assignment_storage in alignment_collector.process():
+            tmp_printer.add_gene_info(gene_info)
+            for read_assignment in assignment_storage:
+                tmp_printer.add_read_info(read_assignment)
+                processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
+        with open(group_file, "w") as group_dump:
+            for g in read_grouper.read_groups:
+                group_dump.write("%s\n" % g)
+
+        logger.info("Finished processing chromosome " + chr_id)
+        open(lock_file, "w").close()
+
     return processed_reads, read_grouper.read_groups
 
 
@@ -74,7 +97,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                 read_assignment = obj
                 assert current_gene_info is not None
                 read_assignment.gene_info = current_gene_info
-                if read_assignment.read_id in multimapped_chr_dict:
+                if multimapped_chr_dict is not None and read_assignment.read_id in multimapped_chr_dict:
                     resolved_assignment = None
                     for a in multimapped_chr_dict[read_assignment.read_id]:
                         if a.start == read_assignment.start() and a.end == read_assignment.end() and \
@@ -147,9 +170,9 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
             for t in model_constructor.transcript_model_storage:
                 transcripts.append(t.transcript_type)
 
-    logger.info("Finished processing chromosome " + chr_id)
     processor.global_counter.dump()
     processor.transcript_model_global_counter.dump()
+    logger.info("Finished processing chromosome " + chr_id)
     return processor.read_stat_counter, transcripts
 
 
@@ -243,6 +266,12 @@ class DatasetProcessor:
 
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
+        info_file = sample.out_raw_file + "_info"
+        lock_file = sample.out_raw_file + "_lock"
+        if os.path.exists(lock_file) and not self.args.clean_start:
+            logger.info("Collected reads detected, will not process")
+            return
+
         chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]),
                          reverse=True)
         if self.args.threads == 1:
@@ -286,11 +315,12 @@ class DatasetProcessor:
                     if a.polyA_found:
                         polya_assignments += 1
 
-        info_pickler = pickle.Pickler(open(sample.out_raw_file + "_info", "wb"),  -1)
+        info_pickler = pickle.Pickler(open(info_file, "wb"),  -1)
         info_pickler.dump(total_assignments)
         info_pickler.dump(polya_assignments)
         all_read_groups = set([r for sublist in read_groups for r in sublist])
         info_pickler.dump(all_read_groups)
+        open(lock_file, "w").close()
         if total_assignments == 0:
             logger.warning("No reads were assigned to isoforms, check your input files")
         else:
