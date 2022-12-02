@@ -23,6 +23,7 @@ def merge_files(file_names, merged_file_name, stats_file_names=None, ignore_read
                     for j in range(header_count):
                         f.readline()
                 shutil.copyfileobj(f, outf)
+        for file_name in file_names:
             os.remove(file_name)
 
     ambiguous_reads, not_assigned_reads, not_aligned_reads = 0, 0, 0

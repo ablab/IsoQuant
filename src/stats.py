@@ -7,6 +7,7 @@
 import os
 import logging
 from collections import defaultdict
+import _pickle as pickle
 
 import pandas as pd
 
@@ -17,8 +18,10 @@ logger = logging.getLogger('IsoQuant')
 
 
 class EnumStats:
-    def __init__(self):
+    def __init__(self, inf=None):
         self.stats_dict = defaultdict(int)
+        if inf is not None:
+            self.load(inf)
 
     # element must be Enum
     def add(self, element):
@@ -29,6 +32,14 @@ class EnumStats:
             logger.info(header_string)
         for e in sorted(self.stats_dict.keys(), key=lambda x: x.name):
             logger.info("%s: %d" % (e.name, self.stats_dict[e]))
+
+    def dump(self, out_file):
+        pickler = pickle.Pickler(open(out_file, "wb"), -1)
+        pickler.dump(self.stats_dict)
+
+    def load(self, in_file):
+        unpickler = pickle.Unpickler(open(in_file, "rb"), fix_imports=False)
+        self.stats_dict = unpickler.load()
 
 
 def transform_counts(path_to_csv, label, column_name='count', full=False):

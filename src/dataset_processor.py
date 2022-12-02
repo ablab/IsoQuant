@@ -28,7 +28,7 @@ logger = logging.getLogger('IsoQuant')
 
 
 def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_record):
-    lock_file = "{}_{}_lock".format(sample.out_raw_file, chr_id)
+    lock_file = "{}_{}_collected".format(sample.out_raw_file, chr_id)
     save_file = "{}_{}".format(sample.out_raw_file, chr_id)
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     processed_reads = []
@@ -135,6 +135,14 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
 
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_grouper, current_chr_record,
                                  io_support):
+    chr_dump_file = dump_filename + "_" + chr_id
+    lock_file = "{}_processed".format(chr_dump_file)
+    read_stat_file = "{}_read_stat".format(chr_dump_file)
+    transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
+    if os.path.exists(lock_file) and not args.clean_start:
+        logger.info("Processed assignments from chromosome " + chr_id + " detected")
+        return EnumStats(read_stat_file), EnumStats(transcript_stat_file)
+
     processor = DatasetProcessor(args, parallel=True)
     processor.read_grouper = read_grouper
     processor.create_aggregators(sample)
@@ -144,14 +152,13 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
         gffutils_db = None
 
     logger.info("Processing chromosome " + chr_id)
-    transcripts = []
+    transcript_stat_counter = EnumStats()
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
     tmp_extended_gff_printer = None
     if gffutils_db:
         tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support,
                                              gtf_suffix=".extended_annotation.gtf", output_r2t=False)
 
-    chr_dump_file = dump_filename + "_" + chr_id
     for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, gffutils_db, multimapped_reads):
         logger.debug("Processing %d reads" % len(assignment_storage))
         for read_assignment in assignment_storage:
@@ -168,12 +175,16 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
             if tmp_extended_gff_printer:
                 tmp_extended_gff_printer.dump(model_constructor, model_constructor.extended_annotation_storage)
             for t in model_constructor.transcript_model_storage:
-                transcripts.append(t.transcript_type)
+                transcript_stat_counter.add(t.transcript_type)
 
     processor.global_counter.dump()
     processor.transcript_model_global_counter.dump()
+    processor.read_stat_counter.dump(read_stat_file)
+    transcript_stat_counter.dump(transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
-    return processor.read_stat_counter, transcripts
+    open(lock_file, "w").close()
+    # TODO: switch to returning transcript_stat_counter
+    return processor.read_stat_counter, transcript_stat_counter
 
 
 # Class for processing all samples against gene database
@@ -232,7 +243,7 @@ class DatasetProcessor:
             self.process_sample(sample)
         logger.info("Processed " + proper_plural_form("sample", len(input_data.samples)))
 
-    # Run though all genes in db and count stats according to alignments given in bamfile_name
+    # Run through all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
         logger.info("Processing sample " + sample.label)
         logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(map(lambda x: x[0], sample.file_list)))
@@ -346,7 +357,7 @@ class DatasetProcessor:
             pool.close()
             pool.join()
 
-        read_stat_counters, transcript_model_storages = zip(*results)
+        read_stat_counters, transcript_stat_counters = zip(*results)
         self.create_aggregators(sample)
         for read_stat_counter in read_stat_counters:
             for k, v in read_stat_counter.stats_dict.items():
@@ -354,26 +365,28 @@ class DatasetProcessor:
 
         gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support,
                                  header=self.common_header)
-        extened_gff_printer = None
+        extended_gff_printer = None
         if self.args.genedb:
-            extened_gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support,
-                                             gtf_suffix=".extended_annotation.gtf", output_r2t=False,
-                                             header=self.common_header)
+            extended_gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support,
+                                              gtf_suffix=".extended_annotation.gtf", output_r2t=False,
+                                              header=self.common_header)
 
         transcript_stat_counter = EnumStats()
         self.merge_assignments(sample, chr_ids)
+
         if not self.args.no_model_construction:
-            for storage in transcript_model_storages:
-                for t in storage:
-                    transcript_stat_counter.add(t)
+            for tsc in transcript_stat_counters:
+                for k, v in tsc.stats_dict.items():
+                    transcript_stat_counter.stats_dict[k] += v
+
             self.merge_transcript_models(sample.label, chr_ids, gff_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
-            if extened_gff_printer:
+            if extended_gff_printer:
                 merge_files(
-                    [rreplace(extened_gff_printer.model_fname, sample.label, sample.label + "_" + chr_id) for chr_id in
+                    [rreplace(extended_gff_printer.model_fname, sample.label, sample.label + "_" + chr_id) for chr_id in
                      chr_ids],
-                    extened_gff_printer.model_fname, copy_header=False)
-                logger.info("Extended annotation is saved to " + extened_gff_printer.model_fname)
+                    extended_gff_printer.model_fname, copy_header=False)
+                logger.info("Extended annotation is saved to " + extended_gff_printer.model_fname)
             transcript_stat_counter.print_start("Transcript model statistics")
 
         self.finalize_aggregators(sample)
