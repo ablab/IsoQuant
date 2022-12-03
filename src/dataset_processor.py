@@ -33,6 +33,7 @@ def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_re
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     processed_reads = []
 
+    # TODO: load save only if command line was the same or continue option is enabled
     if os.path.exists(lock_file) and not args.clean_start:
         logger.info("Detected processed reads for " + chr_id)
         if os.path.exists(group_file) and os.path.exists(save_file):
@@ -139,6 +140,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
     lock_file = "{}_processed".format(chr_dump_file)
     read_stat_file = "{}_read_stat".format(chr_dump_file)
     transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
+    # TODO: load save only if command line was the same or continue option is enabled
     if os.path.exists(lock_file) and not args.clean_start:
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
         return EnumStats(read_stat_file), EnumStats(transcript_stat_file)
@@ -279,6 +281,7 @@ class DatasetProcessor:
         logger.info('Collecting read alignments')
         info_file = sample.out_raw_file + "_info"
         lock_file = sample.out_raw_file + "_lock"
+        # TODO: load save only if command line was the same or continue option is enabled
         if os.path.exists(lock_file) and not self.args.clean_start:
             logger.info("Collected reads detected, will not process")
             return
