@@ -6,6 +6,7 @@
 # See file LICENSE for details.
 ############################################################################
 import glob
+import logging
 import sys
 from shutil import rmtree
 from io import StringIO
@@ -38,16 +39,13 @@ def parse_args(args=None, namespace=None):
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "
                              "speeds up gene database conversion")
-    parser.add_argument("--reference", "-r", help="reference genome in FASTA format, "
-                                                  "should be provided to compute some additional stats and "
-                                                  "when reads in FASTA/FASTQ are used as an input", type=str,
-                        required=True)
-    parser.add_argument("--index", help="genome index for specified aligner, "
-                                        "should be provided only when reads are used as an input", type=str)
+    parser.add_argument("--reference", "-r", help="reference genome in FASTA format (can be gzipped)",
+                        type=str)
+    parser.add_argument("--index", help="genome index for specified aligner (optional)", type=str)
     parser.add_argument('--clean_start', action='store_true', default=False,
                         help='Do not use previously generated index, feature db or alignments.')
     # INPUT READS
-    input_args = parser.add_mutually_exclusive_group(required=True)
+    input_args = parser.add_mutually_exclusive_group()
     input_args.add_argument('--bam', nargs='+', type=str,
                             help='sorted and indexed BAM file(s), each file will be treated as a separate sample')
     input_args.add_argument('--fastq', nargs='+', type=str,
@@ -67,7 +65,7 @@ def parse_args(args=None, namespace=None):
                                              "by original file name (file_name)", type=str)
 
     # INPUT PROPERTIES
-    parser.add_argument("--data_type", "-d", type=str, required=True, choices=DATATYPE_TO_ALIGNER.keys(),
+    parser.add_argument("--data_type", "-d", type=str, choices=DATATYPE_TO_ALIGNER.keys(),
                         help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
     parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
@@ -98,12 +96,14 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
 
     parser.add_argument('--check_canonical', action='store_true', default=False,
-                        help="report whether splice junctions are canonical (requires reference genome)")
+                        help="report whether splice junctions are canonical")
     parser.add_argument("--sqanti_output", help="produce SQANTI-like TSV output (requires more time)",
                         action='store_true', default=False)
     parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
 
     # PIPELINE STEPS
+    parser.add_argument("--resume", action="store_true", default=False,
+                        help="resume failed run, specify output folder, input option will not take any effect")
     parser.add_argument("--no_model_construction", action="store_true", default=False,
                           help="run only read assignment and quantification")
     parser.add_argument("--run_aligner_only", action="store_true", default=False,
@@ -141,77 +141,114 @@ def parse_args(args=None, namespace=None):
 
     args = parser.parse_args(args, namespace)
 
-    args.gtf = args.genedb
-    if os.path.exists(args.output):
-        # logger is not defined yet
-        print("WARNING! Output folder already exists, some files may be overwritten")
-    else:
+    if args.resume:
+        resume_parser = argparse.ArgumentParser(add_help=False)
+        resume_parser.add_argument("--resume", action="store_true", default=False,
+                                   help="resume failed run, specify only output folder, "
+                                        "input option will not take any effect")
+        resume_parser.add_argument("--output", "-o",
+                                   help="output folder, will be created automatically [default=isoquant_output]",
+                                   type=str, required=True)
+        resume_parser.add_argument('--debug', action='store_true', default=argparse.SUPPRESS,
+                                   help='Debug log output.')
+        resume_parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default=argparse.SUPPRESS)
+        resume_parser.add_argument("--low_memory", help="decrease RAM consumption (leads to slower processing)",
+                                   action='store_true', default=argparse.SUPPRESS)
+        resume_parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
+                                   default=argparse.SUPPRESS)
+        args, unknown_args = resume_parser.parse_known_args(sys.argv[1:])
+        if unknown_args:
+            logger.error("You cannot specify options other than --output/--threads/--debug/--low_memorty "
+                         "with --resume option")
+            exit(-2)
+
+    args._cmd_line = " ".join(sys.argv)
+    args._version = isoquant_version
+
+    args.output_exists = os.path.exists(args.output)
+    if not args.output_exists:
         os.makedirs(args.output)
 
+    return args
+
+
+def check_and_load_args(args):
+    args.param_file = os.path.join(args.output, ".params")
+    if args.resume:
+        if not os.path.exists(args.output) or not os.path.exists(args.param_file):
+            # logger is not defined yet
+            logger.error("ERROR! Previous run config was not detected, cannot resume. "
+                         "Check that output folder is correctly specified.")
+            exit(-1)
+        args = load_previous_run(args)
+    elif args.output_exists:
+        if os.path.exists(args.param_file):
+            # TODO: load config and check whether to resume or restart the run
+            logger.warning("WARNING! Output folder already contains previous run.")
+        else:
+            logger.warning("WARNING! Output folder already exists, some files may be overwritten.")
+
+    args.gtf = args.genedb
     if args.genedb_output is None:
         args.genedb_output = args.output
     elif not os.path.exists(args.genedb_output):
         os.makedirs(args.genedb_output)
 
-    if not check_params(args):
-        parser.print_usage()
+    if not check_input_params(args):
         exit(-1)
-    args._cmd_line = " ".join(sys.argv)
-    args._version = isoquant_version
 
+    save_params(args)
     return args
 
 
-# Test mode is triggered by --test option
-class TestMode(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        source_dir = os.path.dirname(os.path.realpath(__file__))
-        options = ['--output', 'isoquant_test', '--threads', '2', 
-                   '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
-                   '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
-                   '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
-                   '--clean_start', '--data_type', 'nanopore', '--complete_genedb']
-        print('=== Running in test mode === ')
-        print('Any other option is ignored ')
-        main(options)
-        if self._check_log():
-            logger.info(' === TEST PASSED CORRECTLY === ')
-        else:
-            logger.error(' === TEST FAILED ===')
-            exit(-1)
-        parser.exit()
+def load_previous_run(args):
+    logger.info("Loading parameters of the previous run, all arguments will be ignored")
+    unpickler = pickle.Unpickler(open(args.param_file, "rb"), fix_imports=False)
+    loaded_args = unpickler.load()
+    loaded_args.threads = args.threads
 
-    @staticmethod
-    def _check_log():
-        with open('isoquant_test/isoquant.log', 'r') as f:
-            log = f.read()
+    for option in args.__dict__:
+        loaded_args.__dict__[option] = args.__dict__[option]
 
-        correct_results = ['total assignments 4', 'inconsistent: 1', 'unique: 1', 'known: 2', 'Processed 1 sample']
-        return all([result in log for result in correct_results])
+    if loaded_args.debug:
+        logger.setLevel(logging.DEBUG)
+        logger.handlers[0].setLevel(logging.DEBUG)
+
+    return loaded_args
+
+
+def save_params(args):
+    pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
+    pickler.dump(args)
+    pass
 
 
 # Check user's params
-def check_params(args):
-    args.input_data = InputDataStorage(args)
-    if args.input_data.input_type == "fastq" and args.reference is None and args.index is None:
-        print("ERROR! Reference genome or index were not provided, reads cannot be processed")
+def check_input_params(args):
+    if not args.reference:
+        logger.error("Reference genome was not provided")
         return False
-
-    if args.aligner is not None and args.aligner not in SUPPORTED_ALIGNERS:
-        print("ERROR! Unsupported aligner " + args.aligner + ", choose one of: " + " ".join(SUPPORTED_ALIGNERS))
-        return False
-    if args.data_type is None:
-        print("ERROR! Data type is not provided, choose one of " + " ".join(DATATYPE_TO_ALIGNER.keys()))
+    if not args.data_type:
+        logger.error("Data type is not provided, choose one of " + " ".join(DATATYPE_TO_ALIGNER.keys()))
         return False
     elif args.data_type not in DATATYPE_TO_ALIGNER.keys():
-        print("ERROR! Unsupported data type " + args.data_type + ", choose one of: " + " ".join(DATATYPE_TO_ALIGNER.keys()))
+        logger.error("Unsupported data type " + args.data_type + ", choose one of: " + " ".join(DATATYPE_TO_ALIGNER.keys()))
+        return False
+
+    if not args.fastq and not args.fastq_list and not args.bam and not args.bam_list:
+        logger.error("No input data was provided")
+        return False
+
+    args.input_data = InputDataStorage(args)
+    if args.aligner is not None and args.aligner not in SUPPORTED_ALIGNERS:
+        logger.error(" Unsupported aligner " + args.aligner + ", choose one of: " + " ".join(SUPPORTED_ALIGNERS))
         return False
 
     if args.run_aligner_only and args.input_data.input_type == "bam":
-        print("ERROR! Do not use BAM files with --run_aligner_only option.")
+        logger.error("Do not use BAM files with --run_aligner_only option.")
         return False
     if args.stranded not in SUPPORTED_STRANDEDNESS:
-        print("ERROR! Unsupported strandedness " + args.stranded + ", choose one of: " + " ".join(SUPPORTED_STRANDEDNESS))
+        logger.error("Unsupported strandness " + args.stranded + ", choose one of: " + " ".join(SUPPORTED_STRANDEDNESS))
         return False
 
     check_input_files(args)
@@ -262,31 +299,31 @@ def check_input_files(args):
 def create_output_dirs(args):
     for sample in args.input_data.samples:
         sample_dir = sample.out_dir
-        if os.path.exists(sample_dir):
+        if os.path.exists(sample_dir) and not args.resume:
             logger.warning(sample_dir + " folder already exists, some files may be overwritten")
         else:
             os.makedirs(sample_dir)
         sample_aux_dir = sample.aux_dir
-        if os.path.exists(sample_aux_dir):
+        if os.path.exists(sample_aux_dir) and not args.resume:
             logger.warning(sample_aux_dir + " folder already exists, some files may be overwritten")
         else:
             os.makedirs(sample_aux_dir)
 
 
 def set_logger(args, logger_instance):
-    if args.debug:
-        logger_instance.setLevel(logging.DEBUG)
+    if "debug" not in args.__dict__ or not args.debug:
+        output_level = logging.INFO
     else:
-        logger_instance.setLevel(logging.INFO)
+        output_level = logging.DEBUG
+
+    logger_instance.setLevel(output_level)
     log_file = os.path.join(args.output, "isoquant.log")
-    f = open(log_file, "w")
+    file_mode = "a" if args.resume else "w"
+    f = open(log_file, file_mode)
     f.write("Command line: " + args._cmd_line + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
-    if args.debug:
-        fh.setLevel(logging.DEBUG)
-    else:
-        fh.setLevel(logging.INFO)
+    fh.setLevel(output_level)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
 
@@ -295,6 +332,7 @@ def set_logger(args, logger_instance):
     ch.setFormatter(formatter)
     logger_instance.addHandler(fh)
     logger_instance.addHandler(ch)
+
     logger.info("Running IsoQuant version " + args._version)
 
 
@@ -500,9 +538,39 @@ def run_pipeline(args):
     logger.info(" === IsoQuant pipeline finished === ")
 
 
+
+# Test mode is triggered by --test option
+class TestMode(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        source_dir = os.path.dirname(os.path.realpath(__file__))
+        options = ['--output', 'isoquant_test', '--threads', '2',
+                   '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
+                   '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
+                   '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
+                   '--clean_start', '--data_type', 'nanopore', '--complete_genedb']
+        print('=== Running in test mode === ')
+        print('Any other option is ignored ')
+        main(options)
+        if self._check_log():
+            logger.info(' === TEST PASSED CORRECTLY === ')
+        else:
+            logger.error(' === TEST FAILED ===')
+            exit(-1)
+        parser.exit()
+
+    @staticmethod
+    def _check_log():
+        with open('isoquant_test/isoquant.log', 'r') as f:
+            log = f.read()
+
+        correct_results = ['total assignments 4', 'inconsistent: 1', 'unique: 1', 'known: 2', 'Processed 1 sample']
+        return all([result in log for result in correct_results])
+
+
 def main(args):
     args = parse_args(args)
     set_logger(args, logger)
+    args = check_and_load_args(args)
     create_output_dirs(args)
     set_additional_params(args)
     run_pipeline(args)
