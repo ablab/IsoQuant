@@ -102,8 +102,12 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
 
     # PIPELINE STEPS
-    parser.add_argument("--resume", action="store_true", default=False,
-                        help="resume failed run, specify output folder, input option will not take any effect")
+    resume_args = parser.add_mutually_exclusive_group()
+    resume_args.add_argument("--resume", action="store_true", default=False,
+                             help="resume failed run, specify output folder, input options are not allowed")
+    resume_args.add_argument("--force", action="store_true", default=False,
+                             help="force to overwrite the previous run")
+
     parser.add_argument("--no_model_construction", action="store_true", default=False,
                           help="run only read assignment and quantification")
     parser.add_argument("--run_aligner_only", action="store_true", default=False,
@@ -145,7 +149,7 @@ def parse_args(args=None, namespace=None):
         resume_parser = argparse.ArgumentParser(add_help=False)
         resume_parser.add_argument("--resume", action="store_true", default=False,
                                    help="resume failed run, specify only output folder, "
-                                        "input option will not take any effect")
+                                        "input options are not allowed")
         resume_parser.add_argument("--output", "-o",
                                    help="output folder, will be created automatically [default=isoquant_output]",
                                    type=str, required=True)
@@ -177,16 +181,20 @@ def check_and_load_args(args):
     if args.resume:
         if not os.path.exists(args.output) or not os.path.exists(args.param_file):
             # logger is not defined yet
-            logger.error("ERROR! Previous run config was not detected, cannot resume. "
+            logger.error("Previous run config was not detected, cannot resume. "
                          "Check that output folder is correctly specified.")
             exit(-1)
         args = load_previous_run(args)
     elif args.output_exists:
         if os.path.exists(args.param_file):
-            # TODO: load config and check whether to resume or restart the run
-            logger.warning("WARNING! Output folder already contains previous run.")
+            if args.force:
+                logger.warning("Output folder already contains previous run. Will be overwritten.")
+            else:
+                logger.error("Output folder already contains previous run. Set --force to overwrite or use "
+                             "--resume to continue unfinished run.")
+                exit(-2)
         else:
-            logger.warning("WARNING! Output folder already exists, some files may be overwritten.")
+            logger.warning("Output folder already exists, some files may be overwritten.")
 
     args.gtf = args.genedb
     if args.genedb_output is None:
@@ -299,13 +307,15 @@ def check_input_files(args):
 def create_output_dirs(args):
     for sample in args.input_data.samples:
         sample_dir = sample.out_dir
-        if os.path.exists(sample_dir) and not args.resume:
-            logger.warning(sample_dir + " folder already exists, some files may be overwritten")
+        if os.path.exists(sample_dir):
+            if not args.resume:
+                logger.warning(sample_dir + " folder already exists, some files may be overwritten")
         else:
             os.makedirs(sample_dir)
         sample_aux_dir = sample.aux_dir
-        if os.path.exists(sample_aux_dir) and not args.resume:
-            logger.warning(sample_aux_dir + " folder already exists, some files may be overwritten")
+        if os.path.exists(sample_aux_dir):
+            if not args.resume:
+                logger.warning(sample_aux_dir + " folder already exists, some files may be overwritten")
         else:
             os.makedirs(sample_aux_dir)
 
