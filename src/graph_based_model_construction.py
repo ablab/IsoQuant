@@ -329,8 +329,10 @@ class GraphBasedModelConstructor:
                 component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
                 novel_isoform_cutoff = self.params.min_novel_count
 
-                polya_site = (path[0][0] == VERTEX_polyt or path[-1][0] == VERTEX_polya)
-                transcript_strand = self.strand_detector.get_strand(intron_path)
+                has_polyt = path[0][0] == VERTEX_polyt
+                has_polya = path[-1][0] == VERTEX_polya
+                polya_site = has_polya or has_polyt
+                transcript_strand = self.strand_detector.get_strand(intron_path, has_polya, has_polyt)
 
                 #logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
                 #             % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))

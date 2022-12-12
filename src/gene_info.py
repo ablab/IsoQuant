@@ -580,7 +580,7 @@ class StrandDetector:
         elif self.chr_record:
             self.strand_dict[intron] = get_intron_strand(intron, self.chr_record)
 
-    def get_strand(self, introns):
+    def get_strand(self, introns, has_polya=False, has_polyt=False):
         count_fwd = 0
         count_rev = 0
         for intron in introns:
@@ -594,5 +594,9 @@ class StrandDetector:
             elif strand == '-':
                 count_rev += 1
         if count_fwd == count_rev:
+            if has_polya and not has_polyt:
+                return '+'
+            elif has_polyt and not has_polya:
+                return '-'
             return '.'
         return '+' if count_rev < count_fwd else '-'

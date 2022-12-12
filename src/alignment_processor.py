@@ -295,13 +295,15 @@ class IntergenicAlignmentCollector:
                 [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference]:
             return read_assignment.isoform_matches[0].transcript_strand
 
+        has_polya = read_assignment.polya_info.external_polya_pos != -1 or read_assignment.polya_info.internal_polya_pos != -1
+        has_polyt = read_assignment.polya_info.external_polyt_pos != -1 or read_assignment.polya_info.internal_polyt_pos != -1
         if len(read_assignment.exons) == 1:
-            if read_assignment.polya_info.external_polya_pos != -1 or read_assignment.polya_info.internal_polya_pos != -1:
-                return "+"
-            elif read_assignment.polya_info.external_polyt_pos != -1 or read_assignment.polya_info.internal_polyt_pos != -1:
-                return "-"
+            if has_polya and not has_polyt:
+                return '+'
+            elif has_polyt and not has_polya:
+                return '-'
             return '.'
-        return self.strand_detector.get_strand(read_assignment.corrected_introns)
+        return self.strand_detector.get_strand(read_assignment.corrected_introns, has_polya, has_polyt)
 
     def count_indel_stats(self, alignment):
         cigar_event_count = len(alignment.cigartuples)
