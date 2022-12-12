@@ -296,6 +296,10 @@ class IntergenicAlignmentCollector:
             return read_assignment.isoform_matches[0].transcript_strand
 
         if len(read_assignment.exons) == 1:
+            if read_assignment.polya_info.external_polya_pos != -1 or read_assignment.polya_info.internal_polya_pos != -1:
+                return "+"
+            elif read_assignment.polya_info.external_polyt_pos != -1 or read_assignment.polya_info.internal_polyt_pos != -1:
+                return "-"
             return '.'
         return self.strand_detector.get_strand(read_assignment.corrected_introns)
 
