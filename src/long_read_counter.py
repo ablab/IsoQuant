@@ -299,12 +299,13 @@ def create_transcript_counter(output_file_name, strategy, read_grouper=None, ign
 
 # count simple features inclusion/exclusion (exons / introns)
 class ProfileFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, ignore_read_groups=False):
+    def __init__(self, output_prefix, ignore_read_groups=False, print_zeroes=False):
         AbstractCounter.__init__(self, output_prefix, ignore_read_groups)
         # group_id -> (feature_id -> count)
         self.inclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.all_features = set()
+        self.print_zeroes = print_zeroes
 
     def add_read_info_from_profile(self, gene_feature_profile, feature_property_map,
                                    read_group = AbstractReadGrouper.default_group_id):
@@ -329,7 +330,8 @@ class ProfileFeatureCounter(AbstractCounter):
                 for group_id in all_groups:
                     incl_count = self.inclusion_feature_counter[group_id][feature_id]
                     excl_count = self.exclusion_feature_counter[group_id][feature_id]
-                    f.write("%s\t%s\t%d\t%d\n" % (feature_id, group_id, incl_count, excl_count))
+                    if self.print_zeroes or incl_count > 0 or excl_count > 0:
+                        f.write("%s\t%s\t%d\t%d\n" % (feature_id, group_id, incl_count, excl_count))
 
     def convert_counts_to_tpm(self):
         return
