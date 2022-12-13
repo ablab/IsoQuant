@@ -140,7 +140,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
     lock_file = "{}_processed".format(chr_dump_file)
     read_stat_file = "{}_read_stat".format(chr_dump_file)
     transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
-    # TODO: load save only if command line was the same or continue option is enabled
+
     if os.path.exists(lock_file) and args.resume:
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
         return EnumStats(read_stat_file), EnumStats(transcript_stat_file)
@@ -376,6 +376,10 @@ class DatasetProcessor:
 
         transcript_stat_counter = EnumStats()
         self.merge_assignments(sample, chr_ids)
+        if self.args.sqanti_output:
+            merge_files(
+                [rreplace(sample.out_alt_tsv, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                sample.out_alt_tsv, copy_header=False)
 
         if not self.args.no_model_construction:
             for tsc in transcript_stat_counters:
