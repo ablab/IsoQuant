@@ -213,7 +213,6 @@ def load_previous_run(args):
     logger.info("Loading parameters of the previous run, all arguments will be ignored")
     unpickler = pickle.Unpickler(open(args.param_file, "rb"), fix_imports=False)
     loaded_args = unpickler.load()
-    loaded_args.threads = args.threads
 
     for option in args.__dict__:
         loaded_args.__dict__[option] = args.__dict__[option]
