@@ -33,7 +33,6 @@ def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_re
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     processed_reads = []
 
-    # TODO: load save only if command line was the same or continue option is enabled
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
         if os.path.exists(group_file) and os.path.exists(save_file):
@@ -44,28 +43,29 @@ def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_re
                 for a in assignment_storage:
                     processed_reads.append(BasicReadAssignment(a, gene_info))
             logger.info("Loaded data for " + chr_id)
+            return processed_reads, read_grouper.read_groups
         else:
             logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
-    else:
-        tmp_printer = TmpFileAssignmentPrinter(save_file, args)
-        bam_files = list(map(lambda x: x[0], sample.file_list))
-        bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
-        gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
 
-        logger.info("Processing chromosome " + chr_id)
-        alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
+    tmp_printer = TmpFileAssignmentPrinter(save_file, args)
+    bam_files = list(map(lambda x: x[0], sample.file_list))
+    bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
+    gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
 
-        for gene_info, assignment_storage in alignment_collector.process():
-            tmp_printer.add_gene_info(gene_info)
-            for read_assignment in assignment_storage:
-                tmp_printer.add_read_info(read_assignment)
-                processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
-        with open(group_file, "w") as group_dump:
-            for g in read_grouper.read_groups:
-                group_dump.write("%s\n" % g)
+    logger.info("Processing chromosome " + chr_id)
+    alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
 
-        logger.info("Finished processing chromosome " + chr_id)
-        open(lock_file, "w").close()
+    for gene_info, assignment_storage in alignment_collector.process():
+        tmp_printer.add_gene_info(gene_info)
+        for read_assignment in assignment_storage:
+            tmp_printer.add_read_info(read_assignment)
+            processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
+    with open(group_file, "w") as group_dump:
+        for g in read_grouper.read_groups:
+            group_dump.write("%s\n" % g)
+
+    logger.info("Finished processing chromosome " + chr_id)
+    open(lock_file, "w").close()
 
     return processed_reads, read_grouper.read_groups
 
