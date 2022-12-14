@@ -65,8 +65,8 @@ def parse_args(args=None, namespace=None):
                                              "by original file name (file_name)", type=str)
 
     # INPUT PROPERTIES
-    parser.add_argument("--data_type", "-d", type=str, choices=DATATYPE_TO_ALIGNER.keys(),
-                        help="type of data to process, supported types are: " + ", ".join(DATATYPE_TO_ALIGNER.keys()))
+    parser.add_argument("--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
+                        help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
     parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
     parser.add_argument('--fl_data', action='store_true', default=False,
@@ -236,11 +236,12 @@ def check_input_params(args):
         logger.error("Reference genome was not provided")
         return False
     if not args.data_type:
-        logger.error("Data type is not provided, choose one of " + " ".join(DATATYPE_TO_ALIGNER.keys()))
+        logger.error("Data type is not provided, choose one of " + " ".join(DATA_TYPE_ALIASES.keys()))
         return False
-    elif args.data_type not in DATATYPE_TO_ALIGNER.keys():
-        logger.error("Unsupported data type " + args.data_type + ", choose one of: " + " ".join(DATATYPE_TO_ALIGNER.keys()))
+    elif args.data_type not in DATA_TYPE_ALIASES.keys():
+        logger.error("Unsupported data type " + args.data_type + ", choose one of: " + " ".join(DATA_TYPE_ALIASES.keys()))
         return False
+    args.data_type = DATA_TYPE_ALIASES[args.data_type]
 
     if not args.fastq and not args.fastq_list and not args.bam and not args.bam_list:
         logger.error("No input data was provided")

@@ -186,8 +186,8 @@ reference annotation database.
 
 ### Input options
 `--data_type` or `-d`
-    Type of data to process, supported types are: `assembly`, `pacbio_ccs`, `nanopore`. 
-This option affects some of the algorithm parameters.
+    Type of data to process, supported values are:  `pacbio_ccs` (same `pacbio` as), `nanopore` (same as `ont`) 
+and  `assembly` (same as `transcripts`). This option affects the algorithm parameters.
 
 `--reference` or `-r`
     Reference genome in FASTA format (can be gzipped), required even when BAM files are provided.

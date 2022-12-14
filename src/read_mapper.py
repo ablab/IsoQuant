@@ -14,6 +14,8 @@ PACBIO_CCS_DATA = 'pacbio_ccs'
 NANOPORE_DATA = 'nanopore'
 ASSEMBLY = 'assembly'
 
+DATA_TYPE_ALIASES = {PACBIO_CCS_DATA: PACBIO_CCS_DATA, "pacbio": PACBIO_CCS_DATA, NANOPORE_DATA: NANOPORE_DATA,
+                     "ont": NANOPORE_DATA, ASSEMBLY: ASSEMBLY, "transcripts": ASSEMBLY}
 DATATYPE_TO_ALIGNER = {ASSEMBLY: 'minimap2', PACBIO_CCS_DATA: 'minimap2', NANOPORE_DATA: 'minimap2'}
                        # 'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
 
