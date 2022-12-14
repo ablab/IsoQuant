@@ -263,6 +263,14 @@ This option is designed for obtaining expression tables with a separate column f
 
 ### Pipeline options
 
+`--resume`
+    Resume a previously unfinished run. Output folder with previous run must be specified.
+    Allowed options are `--threads`, `--low_memory` and `--debug`, other options cannot be changed.
+    IsoQuant will run from the beginning if the output folder does not contain the previous run.
+
+`--force`
+    force to overwrite the folder with previous run.
+
 `--threads` or `-t`
     Number of threads to use, 16 by default. 
 
