@@ -186,7 +186,7 @@ reference annotation database.
 
 ### Input options
 `--data_type` or `-d`
-    Type of data to process, supported values are:  `pacbio_ccs` (same `pacbio` as), `nanopore` (same as `ont`) 
+    Type of data to process, supported values are:  `pacbio_ccs` (same as `pacbio`), `nanopore` (same as `ont`) 
 and  `assembly` (same as `transcripts`). This option affects the algorithm parameters.
 
 `--reference` or `-r`
