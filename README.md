@@ -5,7 +5,7 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
 
 
-# IsoQuant 3.0 manual
+# IsoQuant 3.1 manual
 
 1. [About IsoQuant](#sec1) </br>
 1.1. [Supported data types](#sec1.1)</br>
@@ -63,7 +63,7 @@ IsoQuant further performs annotated gene, isoform, exon and intron quantificatio
 If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. 
 
 
-IsoQuant version 3.0.3 was released under GPLv2 on October 17th, 2022 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 3.1.0 was released under GPLv2 on January 3rd, 2023 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
@@ -620,7 +620,7 @@ In addition, it contains `canonical` property if `--check_canonical` is set.
 
 <a name="sec4"></a>
 ## Citation
-The preprint is available at [https://www.researchsquare.com/article/rs-1571850/v1](https://www.researchsquare.com/article/rs-1571850/v1)
+The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
 
 <a name="sec5"></a>
 ## Feedback and bug reports
