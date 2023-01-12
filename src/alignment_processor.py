@@ -28,6 +28,9 @@ class BAMOnlineMerger:
     # single interator for several bam files
     def __init__(self, bam_pairs, chr_id, start, end):
         self.bam_pairs = bam_pairs
+        self._set(chr_id, start, end)
+
+    def _set(self, chr_id, start, end):
         self.chr_id = chr_id
         self.start = start
         self.end = end
@@ -49,6 +52,15 @@ class BAMOnlineMerger:
                 pass
             yield i, alignment_tuple[3]
 
+    def reset(self):
+        for bp in self.bam_pairs:
+            bp[0].reset()
+
+    def reset_region(self, chr_id, start, end):
+        self._set(chr_id, start, end)
+
+
+
 
 class IntergenicAlignmentCollector:
     """ class for aggregating all alignmnet information
@@ -63,13 +75,12 @@ class IntergenicAlignmentCollector:
 
     def __init__(self, chr_id, bam_pairs, params, genedb=None, chr_record=None, read_groupper=DefaultReadGrouper()):
         self.chr_id = chr_id
-        self.start = 1
         self.bam_pairs = bam_pairs
         self.params = params
         self.genedb = genedb
         self.chr_record = chr_record
 
-        self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, self.start,
+        self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, 1,
                                           self.bam_pairs[0][0].get_reference_length(self.chr_id))
         self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
@@ -89,7 +100,6 @@ class IntergenicAlignmentCollector:
         alignment_index = {}
         counter = 0
         current_region = None
-        # TODO: implement low-memory version (i.e. double fetch)
         alignment_storage = []
 
         for bam_index, alignment in self.bam_merger.get():
@@ -156,7 +166,6 @@ class IntergenicAlignmentCollector:
             max_cov = coverage_dict[current_start]
             pos = min(current_start + 1, coverage_positions[-1] + 1)
 
-
         if current_start < pos:
             new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
                           min(pos * self.COVERAGE_BIN, current_region[1]))
@@ -164,8 +173,41 @@ class IntergenicAlignmentCollector:
             if alignments:
                 yield self.process_alignments_in_region(new_region, alignments)
 
+    def process_slow(self):
+        # coverage every COVERAGE_BIN bases
+        coverage_dict = defaultdict(int)
+        current_region = None
+        coverage_islands = []
+
+        for bam_index, alignment in self.bam_merger.get():
+            if alignment.reference_id == -1 or alignment.is_supplementary or \
+                    (self.params.no_secondary and alignment.is_secondary):
+                continue
+
+            if not current_region:
+                current_region = (alignment.reference_start, alignment.reference_end)
+            elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
+                current_region = (current_region[0], max(current_region[1], alignment.reference_end))
+            else:
+                coverage_islands += self.split_coverage_regions(current_region, coverage_dict)
+                if interval_len(current_region) < self.MAX_REGION_LEN:
+                    coverage_islands.append(current_region, coverage_dict)
+                coverage_dict = defaultdict(int)
+                current_region = None
+
+            for i in range(alignment.reference_start // self.COVERAGE_BIN, alignment.reference_end // self.COVERAGE_BIN + 1):
+                coverage_dict[i] += 1
+
+        if current_region:
+            coverage_islands += self.split_coverage_regions(current_region, coverage_dict)
+
+        self.bam_merger.reset()
+        for region in coverage_islands:
+            self.bam_merger.reset_region(self.bam_merger.chr_id, region[0], region[1])
+            yield self.process_alignments_in_region(region, self.bam_merger.get())
+
     def process_alignments_in_region(self, current_region, alignment_storage):
-        logger.debug("Processing region %s with %d reads" % (str(current_region), len(alignment_storage)))
+        logger.debug("Processing region %s" % str(current_region))
         gene_list = []
         if self.genedb:
             gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
@@ -335,4 +377,25 @@ class IntergenicAlignmentCollector:
 
         return indel_count, junctions_with_indels
 
+    def split_coverage_regions(self, genomic_region, coverage_dict):
+        if interval_len(genomic_region) < self.MAX_REGION_LEN:
+            return [genomic_region]
 
+        split_regions = []
+        coverage_positions = sorted(coverage_dict.keys())
+        current_start = coverage_positions[0]
+        min_bins = int(self.MAX_REGION_LEN / self.COVERAGE_BIN)
+        pos = current_start + 1
+        max_cov = coverage_dict[current_start]
+        while pos <= coverage_positions[-1]:
+            while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or \
+                    coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
+                max_cov = max(max_cov, coverage_dict[pos])
+                pos += 1
+            split_regions.append((max(current_start * self.COVERAGE_BIN, genomic_region[0]),
+                                  min(pos * self.COVERAGE_BIN, genomic_region[1])))
+            current_start = pos
+            max_cov = coverage_dict[current_start]
+            pos = min(current_start + 1, coverage_positions[-1] + 1)
+
+        return split_regions

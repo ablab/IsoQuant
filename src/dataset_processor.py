@@ -55,7 +55,11 @@ def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_re
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
 
-    for gene_info, assignment_storage in alignment_collector.process():
+    if args.low_memory:
+        alignment_iterator = alignment_collector.process_slow()
+    else:
+        alignment_iterator = alignment_collector.process()
+    for gene_info, assignment_storage in alignment_iterator:
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
