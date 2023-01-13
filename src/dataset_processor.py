@@ -38,7 +38,7 @@ def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_re
         if os.path.exists(group_file) and os.path.exists(save_file):
             read_grouper.read_groups.clear()
             for g in open(group_file):
-                read_grouper.read_groups.append(g.strip())
+                read_grouper.read_groups.add(g.strip())
             for gene_info, assignment_storage in load_assigned_reads(save_file, None, None):
                 for a in assignment_storage:
                     processed_reads.append(BasicReadAssignment(a, gene_info))
