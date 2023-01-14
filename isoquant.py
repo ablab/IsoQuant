@@ -10,6 +10,7 @@ import logging
 import sys
 from shutil import rmtree
 from io import StringIO
+import time
 
 from src.gtf2db import *
 from src.read_mapper import *
@@ -162,7 +163,7 @@ def parse_args(args=None, namespace=None):
                                    default=argparse.SUPPRESS)
         args, unknown_args = resume_parser.parse_known_args(sys.argv[1:])
         if unknown_args:
-            logger.error("You cannot specify options other than --output/--threads/--debug/--low_memorty "
+            logger.error("You cannot specify options other than --output/--threads/--debug/--low_memory "
                          "with --resume option")
             exit(-2)
 
@@ -188,11 +189,17 @@ def check_and_load_args(args):
     elif args.output_exists:
         if os.path.exists(args.param_file):
             if args.force:
-                logger.warning("Output folder already contains previous run. Will be overwritten.")
+                logger.warning("Output folder already contains a previous run, will be overwritten.")
             else:
-                logger.error("Output folder already contains previous run. Set --force to overwrite or use "
-                             "--resume to continue unfinished run.")
-                exit(-2)
+                logger.warning("Output folder already contains a previous run, some files may be overwritten. "
+                               "Use --resume to resume a failed run. Use --force to avoid this message. "
+                               "Press Ctrl+C to interrupt the run now.")
+                delay = 9
+                for i in range(delay):
+                    sys.stdout.write("Resuming the run in %d seconds\r" % (delay - i))
+                    time.sleep(1)
+                logger.info("Overwriting the previous run")
+                time.sleep(1)
         else:
             logger.warning("Output folder already exists, some files may be overwritten.")
 
