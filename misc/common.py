@@ -33,7 +33,7 @@ class IsoQuantSeparator:
     def separate(self, l):
         if l.find(".nic") != -1 or l.find(".nnic") != -1:
             return TranscriptType.novel
-        elif l.find(".known") != -1:
+        elif l.find('transcript_id "SIRV') != -1 or l.find('transcript_id "ENS') != -1:
             return TranscriptType.known
         return TranscriptType.undefined
 
