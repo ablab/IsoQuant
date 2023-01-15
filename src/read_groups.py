@@ -24,7 +24,7 @@ class AbstractReadGrouper:
 class DefaultReadGrouper(AbstractReadGrouper):
     def __init__(self):
         AbstractReadGrouper.__init__(self)
-        self.read_groups = [self.default_group_id]
+        self.read_groups = {self.default_group_id}
 
     def get_group_id(self, alignment, filename=None):
         return self.default_group_id
