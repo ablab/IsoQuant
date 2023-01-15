@@ -165,6 +165,7 @@ def parse_args(args=None, namespace=None):
         if unknown_args:
             logger.error("You cannot specify options other than --output/--threads/--debug/--low_memory "
                          "with --resume option")
+            parser.print_usage()
             exit(-2)
 
     args._cmd_line = " ".join(sys.argv)
@@ -174,17 +175,17 @@ def parse_args(args=None, namespace=None):
     if not args.output_exists:
         os.makedirs(args.output)
 
-    return args
+    return args, parser
 
 
-def check_and_load_args(args):
+def check_and_load_args(args, parser):
     args.param_file = os.path.join(args.output, ".params")
     if args.resume:
         if not os.path.exists(args.output) or not os.path.exists(args.param_file):
             # logger is not defined yet
             logger.error("Previous run config was not detected, cannot resume. "
                          "Check that output folder is correctly specified.")
-            exit(-1)
+            exit(-3)
         args = load_previous_run(args)
     elif args.output_exists:
         if os.path.exists(args.param_file):
@@ -210,6 +211,7 @@ def check_and_load_args(args):
         os.makedirs(args.genedb_output)
 
     if not check_input_params(args):
+        parser.print_usage()
         exit(-1)
 
     save_params(args)
@@ -585,9 +587,9 @@ class TestMode(argparse.Action):
 
 
 def main(args):
-    args = parse_args(args)
+    args, parser = parse_args(args)
     set_logger(args, logger)
-    args = check_and_load_args(args)
+    args = check_and_load_args(args, parser)
     create_output_dirs(args)
     set_additional_params(args)
     run_pipeline(args)
