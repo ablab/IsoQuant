@@ -317,7 +317,7 @@ class LongReadAssigner:
         read_region = (read_exons[0][0], read_exons[-1][1])
 
         if len(combined_read_profile.read_intron_profile.read_profile) == 0 or \
-                len(self.gene_info.all_isoforms_introns[isoform_id]) == 0:
+                len(self.gene_info.all_isoforms_exons[isoform_id]) == 1:
             # logger.debug(" + Mono exon")
             match_classification = MatchClassification.mono_exon_match
             match_subclassifications = MatchEvent(MatchEventSubtype.mono_exon_match)
@@ -341,8 +341,8 @@ class LongReadAssigner:
         return isoform_matches
 
     def categorize_correct_unspliced_match(self, combined_read_profile, isoform_id):
-        isoform_introns = self.gene_info.all_isoforms_introns[isoform_id]
-        if len(isoform_introns) == 0:
+        isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
+        if len(isoform_exons) == 1:
             # both isoform and read are monoexon
             events = [MatchEvent(MatchEventSubtype.mono_exon_match)]
         else:
