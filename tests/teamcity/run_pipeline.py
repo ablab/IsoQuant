@@ -125,7 +125,7 @@ def run_isoquant(args, config_dict, log):
         for f in os.listdir(src_dir):
             fpath = os.path.join(src_dir, f)
             if os.path.isdir(fpath):
-                shutil.copytree(fpath, os.path.join(output_folder, f))
+                shutil.copytree(fpath, os.path.join(output_folder, f), dirs_exist_ok=True)
             else:
                 shutil.copy2(fpath, os.path.join(output_folder, f))
     else:
