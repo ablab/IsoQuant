@@ -9,6 +9,7 @@
 # takes teamcity config as input and check isoquant results
 
 import os
+import shutil
 import sys
 import argparse
 import glob
@@ -96,7 +97,7 @@ def fix_path(config_file, path):
     if path.startswith('/'):
         return path
 
-    return os.path.join(os.path.dirname(config_file), path)
+    return os.path.abspath(os.path.join(os.path.dirname(config_file), path))
 
 
 def parse_args():
@@ -115,20 +116,33 @@ def run_isoquant(args, config_dict, log):
 
     label = config_dict["name"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
-    genedb = fix_path(config_file, config_dict["genedb"])
-    genome = fix_path(config_file, config_dict["genome"])
-
-    log.start_block('isoquant', 'Running IsoQuant')
-    isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
-                             "--genedb", genedb, "-r", genome, "-d", config_dict["datatype"], "-t", "16", "-l", label]
-    if "bam" in config_dict:
-        isoquant_command_list.append("--bam")
-        bam = fix_path(config_file, config_dict["bam"])
-        isoquant_command_list.append(bam)
+    if "resume" in config_dict:
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder, "--resume"]
+        src_dir = fix_path(config_file, config_dict["resume"])
+        print(src_dir)
+        for f in os.listdir(src_dir):
+            fpath = os.path.join(src_dir, f)
+            if os.path.isdir(fpath):
+                shutil.copytree(fpath, os.path.join(output_folder, f))
+            else:
+                shutil.copy2(fpath, os.path.join(output_folder, f))
     else:
-        reads = fix_path(config_file, config_dict["reads"])
-        isoquant_command_list.append("--fastq")
-        isoquant_command_list.append(reads)
+        genedb = fix_path(config_file, config_dict["genedb"])
+        genome = fix_path(config_file, config_dict["genome"])
+
+        log.start_block('isoquant', 'Running IsoQuant')
+        isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
+                                 "--genedb", genedb, "-r", genome, "-d", config_dict["datatype"], "-t", "16", "-l", label]
+        if "bam" in config_dict:
+            isoquant_command_list.append("--bam")
+            bam = fix_path(config_file, config_dict["bam"])
+            isoquant_command_list.append(bam)
+        elif "reads" in config_dict:
+            reads = fix_path(config_file, config_dict["reads"])
+            isoquant_command_list.append("--fastq")
+            isoquant_command_list.append(reads)
 
     if "isoquant_options" in config_dict:
         log.log("Appending additional options: %s" % config_dict["isoquant_options"])
@@ -300,7 +314,10 @@ def main():
 
     log.log("Loading config from %s" % config_file)
     config_dict = load_tsv_config(config_file)
-    for k in ["genome", "genedb", "datatype", "output", "name"]:
+    required = ["output", "name"]
+    if "resume" not in config_dict:
+        required += ["genome", "genedb", "datatype"]
+    for k in required:
         if k not in config_dict:
             log.err(k + " is not set in the config")
             return -10
