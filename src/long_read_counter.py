@@ -233,9 +233,13 @@ class AssignedFeatureCounter(AbstractCounter):
                     total_counts[all_groups[0]] += count
                     f.write("%s\t%.2f\n" % (feature_id, count))
                 else:
+                    row_count = 0
                     for group_id in all_groups:
                         count = self.feature_counter[group_id][feature_id]
                         total_counts[group_id] += count
+                        row_count += count
+                    if not self.output_zeroes and row_count == 0:
+                        continue
                     count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
                     f.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
