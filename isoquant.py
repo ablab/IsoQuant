@@ -7,6 +7,7 @@
 ############################################################################
 import glob
 import logging
+import os.path
 import sys
 from shutil import rmtree
 from io import StringIO
@@ -234,6 +235,20 @@ def load_previous_run(args):
 
 
 def save_params(args):
+    for file_opt in ["genedb", "reference", "index", "bam", "fastq", "bam_list", "fastq_list", "junc_bed_file",
+                     "cage", "genedb_output", "read_assignments"]:
+        if file_opt in args.__dict__ and args.__dict__[file_opt]:
+            if isinstance(args.__dict__[file_opt], list):
+                args.__dict__[file_opt] = list(map(os.path.abspath, args.__dict__[file_opt]))
+            else:
+                args.__dict__[file_opt] = os.path.abspath(args.__dict__[file_opt])
+
+    if "read_group" in args.__dict__ and args.__dict__["read_group"]:
+        vals = args.read_group.split(":")
+        if len(vals) > 1 and vals[0] == 'file':
+            vals[1] = os.path.abspath(vals[1])
+            args.read_group = ":".join(vals)
+
     pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
     pickler.dump(args)
     pass
