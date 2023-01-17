@@ -114,14 +114,14 @@ def run_isoquant(args, config_dict, log):
     isoquant_dir = os.path.join(source_dir, "../../")
     config_file = args.config_file
 
-    label = config_dict["name"]
-    output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
+    run_name = config_dict["name"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)
     if "resume" in config_dict:
+        assert "label" in config_dict
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
         isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder, "--resume"]
         src_dir = fix_path(config_file, config_dict["resume"])
-        print(src_dir)
         for f in os.listdir(src_dir):
             fpath = os.path.join(src_dir, f)
             if os.path.isdir(fpath):
@@ -131,10 +131,11 @@ def run_isoquant(args, config_dict, log):
     else:
         genedb = fix_path(config_file, config_dict["genedb"])
         genome = fix_path(config_file, config_dict["genome"])
+        config_dict["label"] = run_name
 
         log.start_block('isoquant', 'Running IsoQuant')
         isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
-                                 "--genedb", genedb, "-r", genome, "-d", config_dict["datatype"], "-t", "16", "-l", label]
+                                 "--genedb", genedb, "-r", genome, "-d", config_dict["datatype"], "-t", "16", "-l", run_name]
         if "bam" in config_dict:
             isoquant_command_list.append("--bam")
             bam = fix_path(config_file, config_dict["bam"])
@@ -183,7 +184,7 @@ def run_assignment_quality(args, config_dict, log):
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
 
-    label = config_dict["name"]
+    label = config_dict["label"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
     output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
 
@@ -255,7 +256,7 @@ def run_transcript_quality(args, config_dict, log):
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
 
-    label = config_dict["name"]
+    label = config_dict["label"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
     out_gtf = os.path.join(output_folder, "%s/%s.transcript_models.gtf" % (label, label))
     if not out_gtf:
