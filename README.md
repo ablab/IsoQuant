@@ -3,6 +3,9 @@
 [![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
+[![TeamCity](http://chihua.cab.spbu.ru:3000/app/rest/builds/buildType:(id:IsoQuant_PipelineTest)/statusIcon)](http://chihua.cab.spbu.ru:3000/project/IsoQuant?mode=builds)
+[![UnitTests](https://github.com/ablab/IsoQuant/actions/workflows/python-app.yml/badge.svg)](https://github.com/ablab/IsoQuant/actions/workflows/python-app.yml)
+
 
 
 # IsoQuant 3.1 manual
