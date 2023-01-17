@@ -1,5 +1,5 @@
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/isoquant.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/isoquant)
-[![Python version](https://img.shields.io/badge/python-3.7-blue)](https://www.python.org/downloads/)
+[![Python version](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
@@ -28,7 +28,7 @@
 
 *   IsoQuant can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda:
 
-        conda create -c conda-forge -c bioconda -n isoquant python=3 isoquant
+        conda create -c conda-forge -c bioconda -n isoquant python=3.8 isoquant
 
 *   If installing manually, you will need Python3 (3.7 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
   
@@ -220,7 +220,7 @@ To provide aligned reads use one of the following options:
 You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:replicate1`).
 Use this option to obtain per-replicate expression table (see `--read_group` option). 
 
-#### Using raw read as an input:  
+#### Using raw reads as an input:  
 To provide read sequences use one of the following options:
 
 `--fastq` 
