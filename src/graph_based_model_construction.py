@@ -246,9 +246,8 @@ class GraphBasedModelConstructor:
         for isoform_id in self.gene_info.all_isoforms_exons.keys():
             self.extended_annotation_storage.append(self.transcript_from_reference(isoform_id))
         for model in self.transcript_model_storage:
-            if model.transcript_id.endswith(self.known_transcript_suffix):
-                continue
-            else:
+            if model.transcript_id.endswith(self.nic_transcript_suffix) or \
+                    model.transcript_id.endswith(self.nnic_transcript_suffix):
                 self.extended_annotation_storage.append(model)
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
