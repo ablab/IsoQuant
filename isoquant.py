@@ -30,6 +30,10 @@ def parse_args(args=None, namespace=None):
             kwargs['help'] = argparse.SUPPRESS
         parser.add_argument(*args, **kwargs)
 
+    def add_hidden_option(*args, **kwargs):  # show command only with --full-help
+        kwargs['help'] = argparse.SUPPRESS
+        parser.add_argument(*args, **kwargs)
+
     parser.add_argument("--output", "-o", help="output folder, will be created automatically [default=isoquant_output]",
                         type=str, default="isoquant_output")
     parser.add_argument('--debug', action='store_true', default=False,
@@ -134,8 +138,8 @@ def parse_args(args=None, namespace=None):
                                             "; chosen based on data type if not set", type=str)
     add_additional_option("--genedb_output", help="output folder for converted gene database,"
                                                   " will be created automatically (same as output by default)", type=str)
-    add_additional_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
-    add_additional_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
+    add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
+    add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
     isoquant_version = "3.0.0"
     try:

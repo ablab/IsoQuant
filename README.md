@@ -546,7 +546,7 @@ Tab-separated values, the columns are:
         - `exon_detach` - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length;
         - `terminal_exon_shift` - read has alternative terminal exon;   
         - `alternative_structure` - reads has different intron chain that does not fall into any of categories above;
-    - alternative transcription start / end (reported when CAGE data / poly-A tails are present):
+    - alternative transcription start / end (reported when poly-A tails are present):
         - `alternative_polya_site` - read has alternative polyadenylation site;
         - `internal_polya_site` - poly-A tail detected but seems to be originated from A-rich intronic region;
         - `correct_polya_site` - poly-A site matches reference transcript end;
@@ -555,7 +555,6 @@ Tab-separated values, the columns are:
 * `exons` - list of coordinates for normalized read exons (1-based, indels and polyA exons are excluded);
 * `additional` - field for supplementary information, which may include:
     - `PolyA` - True if poly-A tail is detected;
-    - `CAGE` - True if CAGE peak is found;
     - `Canonical` - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use `--check_canonical`) 
 
 Note, that a single read may occur more than once if assigned ambiguously.
