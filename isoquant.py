@@ -304,7 +304,6 @@ def check_input_files(args):
                     print("ERROR! Input file " + in_file + " does not exist")
                     exit(-1)
                 if args.input_data.input_type == "bam":
-                    # TODO: sort and index file if needed
                     bamfile_in = pysam.AlignmentFile(in_file, "rb")
                     if not bamfile_in.has_index():
                         print("ERROR! BAM file " + in_file + " is not indexed, run samtools sort and samtools index")

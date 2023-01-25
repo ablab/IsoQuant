@@ -2,7 +2,7 @@ import logging
 import os
 import subprocess
 import json
-
+import pysam
 from Bio import SeqIO
 from src.common import get_path_to_program
 from src.gtf2db import *
@@ -312,9 +312,10 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
             logger.critical("STAR finished with errors! See " + log_fpath)
             exit(-1)
         logger.info("Sorting alignments")
-        if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path,
-                            alignment_prefix + 'Aligned.out.bam'], stderr=log_file) != 0:
-            logger.critical("Samtools finished with errors! See " + log_fpath)
+        try:
+            pysam.sort('-@', str(args.threads), '-o', alignment_bam_path, alignment_prefix + 'Aligned.out.bam')
+        except pysam.SamtoolsError as err:
+            logger.error(err.value)
             exit(-1)
 
     elif aligner == "minimap2":
@@ -334,14 +335,22 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
             logger.critical("Minimap2 finished with errors! See " + log_fpath)
             exit(-1)
         logger.info("Sorting alignments")
-        if subprocess.call(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path], stderr=log_file) != 0:
-            logger.critical("Samtools finished with errors! See " + log_fpath)
+        try:
+            pysam.sort('-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path)
+        except pysam.SamtoolsError as err:
+            logger.error(err.value)
             exit(-1)
+
         os.remove(alignment_sam_path)
     else:
         logger.critical("Aligner " + aligner + " is not supported")
         exit(-1)
     logger.info("Indexing alignments")
-    subprocess.call(['samtools', 'index', alignment_bam_path])
+    try:
+        pysam.index(alignment_bam_path)
+    except OSError as err:
+        logger.error(err)
+        exit(-1)
+
     return alignment_bam_path
 
