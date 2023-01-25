@@ -21,6 +21,9 @@ def validate_exons(novel_exons):
 
 
 class GFFPrinter:
+    transcript_id_counter = AtomicCounter()
+    transcript_id_dict = {}
+
     def __init__(self, outf_prefix, sample_name, io_support,
                  gtf_suffix = ".transcript_models.gtf",
                  r2t_suffix = ".transcript_model_reads.tsv",
@@ -121,7 +124,15 @@ class GFFPrinter:
                                  (model.strand, model.gene_id, model.transcript_id)
                 exons_to_print = sorted(model.exon_blocks, reverse=True) if model.strand == '-' else model.exon_blocks
                 for i, e in enumerate(exons_to_print):
-                    self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns + ' exon "%d";\n' % (i + 1))
+                    exon_tuple = (model.chr_id, e[0], e[1], model.strand)
+                    if exon_tuple not in GFFPrinter.transcript_id_dict:
+                        exon_id = GFFPrinter.transcript_id_counter.increment()
+                        GFFPrinter.transcript_id_dict[exon_tuple] = exon_id
+                    else:
+                        exon_id = GFFPrinter.transcript_id_dict[exon_tuple]
+                    exon_str_id = model.chr_id + ".%d" % exon_id
+                    self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns +
+                                       ' exon "%d"; exon_id "%s";\n' % ((i + 1), exon_str_id))
 
         # write read_id -> transcript_id map
         if self.output_r2t:

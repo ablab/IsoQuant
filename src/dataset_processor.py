@@ -175,7 +175,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
             processor.global_counter.add_read_info(read_assignment)
 
         if not args.no_model_construction:
-            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args, processor.transcript_model_global_counter)
+            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
+                                                           processor.transcript_model_global_counter)
             model_constructor.process(assignment_storage)
             tmp_gff_printer.dump(model_constructor)
             if tmp_extended_gff_printer:
@@ -189,7 +190,6 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
     transcript_stat_counter.dump(transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
-    # TODO: switch to returning transcript_stat_counter
     return processor.read_stat_counter, transcript_stat_counter
 
 
