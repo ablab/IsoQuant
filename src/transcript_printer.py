@@ -84,9 +84,12 @@ class GFFPrinter:
 
         for gene_id, coords in gene_order:
             if gene_id not in self.printed_gene_ids:
-                gene_line = '%s\tIsoQuant\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts "%d";\n' % \
+                gene_additiional_info = ""
+                if transcript_model_constructor.gene_info and gene_id in transcript_model_constructor.gene_info.gene_attributes:
+                    gene_additiional_info = transcript_model_constructor.gene_info.gene_attributes[gene_id]
+                gene_line = '%s\tIsoQuant\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts "%d"; %s\n' % \
                             (gene_info_dict[gene_id].chr_id, coords[0], coords[1], gene_info_dict[gene_id].strand,
-                             gene_id, len(gene_to_model_dict[gene_id]))
+                             gene_id, len(gene_to_model_dict[gene_id]), gene_additiional_info)
                 self.out_gff.write(gene_line)
                 self.printed_gene_ids.add(gene_id)
 

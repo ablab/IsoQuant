@@ -140,7 +140,8 @@ class GeneInfo:
         self.set_isoform_strands()
         self.gene_id_map = {}
         self.set_gene_ids()
-        # FIXME: no need to run unless detect_ambiguous option is on
+        self.gene_attributes = {}
+        self.set_gene_attributes()
         # self.detect_ambiguous()
         self.regions_for_bam_fetch = self.get_regions_for_bam_fetch(self.split_exon_profiles.features)
         self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
@@ -229,10 +230,8 @@ class GeneInfo:
         t_id = transcript_model.transcript_id
         transcript_region = (transcript_model.get_start(), transcript_model.get_end())
 
-        gene_info.all_isoforms_exons = {}
-        gene_info.all_isoforms_exons[t_id] = exons
-        gene_info.all_isoforms_introns = {}
-        gene_info.all_isoforms_introns[t_id] = introns
+        gene_info.all_isoforms_exons = {t_id: exons}
+        gene_info.all_isoforms_introns = {t_id: introns}
 
         gene_info.exon_profiles.set_features(exons)
         gene_info.split_exon_profiles.set_features(exons)
@@ -349,6 +348,14 @@ class GeneInfo:
         for gene_db in self.gene_db_list:
             for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
                 self.gene_id_map[t.id] = gene_db.id
+
+    def set_gene_attributes(self):
+        self.gene_attributes = defaultdict(str)
+        for gene_db in self.gene_db_list:
+            for attr in gene_db.attributes.keys():
+                if attr in ['gene_id', 'ID', 'level']:
+                    continue
+                self.gene_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
 
     # assigns an ordered list of all known exons and introns to self.exons and self.introns
     # returns 2 maps, isoform id -> intron / exon list
