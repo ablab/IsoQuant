@@ -164,6 +164,7 @@ class GeneInfo:
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
         gene_info.gene_id_map = {}
+        gene_info.gene_attributes = {}
         introns = set()
         exons = set()
 
@@ -245,6 +246,7 @@ class GeneInfo:
         gene_info.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
         gene_info.gene_id_map = {}
         gene_info.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
+        gene_info.gene_attributes = {}
 
         gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
         gene_info.exon_property_map = None
@@ -280,6 +282,7 @@ class GeneInfo:
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
         gene_info.gene_id_map = {}
+        gene_info.gene_attributes = {}
         gene_info.regions_for_bam_fetch = [(start, end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
