@@ -188,7 +188,8 @@ def run_assignment_quality(args, config_dict, log):
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
     output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
 
-    genedb = fix_path(config_file, config_dict["genedb"])
+
+    genedb = fix_path(config_file, config_dict["genedb"]) if "genedb" in config_dict else None
     reads = fix_path(config_file, config_dict["reads"])
     if "bam" not in config_dict:
         bam = glob.glob(os.path.join(output_folder, "%s/aux/%s*.bam" % (label, label)))
@@ -201,8 +202,10 @@ def run_assignment_quality(args, config_dict, log):
 
     quality_report = os.path.join(output_folder, "report.tsv")
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/assess_assignment_quality.py"),
-                       "-o", quality_report, "--gene_db", genedb, "--tsv", output_tsv,
+                       "-o", quality_report, "--tsv", output_tsv,
                        "--mapping", bam, "--fasta", reads]
+    if genedb:
+        qa_command_list += ["--gene_db", genedb]
 
     if "qa_options" in config_dict:
         log.log("Appending additional options: %s" % config_dict["qa_options"])
