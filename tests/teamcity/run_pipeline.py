@@ -320,7 +320,7 @@ def main():
     config_dict = load_tsv_config(config_file)
     required = ["output", "name"]
     if "resume" not in config_dict:
-        required += ["genome", "genedb", "datatype"]
+        required += ["genome", "datatype"]
     for k in required:
         if k not in config_dict:
             log.err(k + " is not set in the config")
