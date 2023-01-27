@@ -288,17 +288,19 @@ def run_transcript_quality(args, config_dict, log):
     for gtf_type in ['full', 'known', 'novel']:
         recall, precision = parse_gffcomapre(os.path.join(quality_output, "isoquant." + gtf_type + ".stats"))
         metric_name = gtf_type + "_recall"
-        new_etalon_outf.write("%s\t%.2f\n" % (metric_name, recall))
-        etalon_recall = float(etalon_qaulity_dict[metric_name])
-        err_code = check_value(etalon_recall, recall , metric_name, log)
-        if err_code != 0:
-            exit_code = err_code
+        if metric_name in etalon_qaulity_dict:
+            new_etalon_outf.write("%s\t%.2f\n" % (metric_name, recall))
+            etalon_recall = float(etalon_qaulity_dict[metric_name])
+            err_code = check_value(etalon_recall, recall , metric_name, log)
+            if err_code != 0:
+                exit_code = err_code
         metric_name = gtf_type + "_precision"
-        new_etalon_outf.write("%s\t%.2f\n" % (metric_name, precision))
-        etalon_precision = float(etalon_qaulity_dict[metric_name])
-        err_code = check_value(etalon_precision, precision, metric_name, log)
-        if err_code != 0:
-            exit_code = err_code
+        if metric_name in etalon_qaulity_dict:
+            new_etalon_outf.write("%s\t%.2f\n" % (metric_name, precision))
+            etalon_precision = float(etalon_qaulity_dict[metric_name])
+            err_code = check_value(etalon_precision, precision, metric_name, log)
+            if err_code != 0:
+                exit_code = err_code
     new_etalon_outf.close()
     log.end_block('assessment')
     return exit_code
