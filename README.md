@@ -293,8 +293,8 @@ This option is designed for obtaining expression tables with a separate column f
 
 `--transcript_quantification` Transcript quantification strategy, should be one of:
 
-* `unique_only` - only reads that are uniquely assigned and consistent with a transcript are used for quantification (default);
-* `with_ambiguous` - ambiguously assigned reads are split between transcripts with equal weights (e.g. 1/2 when a read is assigned to 2 transcripts simultaneously);
+* `unique_only` - only reads that are uniquely assigned and consistent with a transcript are used for quantification;
+* `with_ambiguous` - ambiguously assigned reads are split between transcripts with equal weights (e.g. 1/2 when a read is assigned to 2 transcripts simultaneously, default mode);
 * `with_inconsistent` - uniquely assigned reads with non-intronic inconsistencies (i.e. alternative poly-A site, TSS etc) are also included;
 * `all` - all of above.
                        
