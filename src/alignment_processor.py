@@ -60,8 +60,6 @@ class BAMOnlineMerger:
         self._set(chr_id, start, end)
 
 
-
-
 class IntergenicAlignmentCollector:
     """ class for aggregating all alignmnet information
 
@@ -103,10 +101,6 @@ class IntergenicAlignmentCollector:
         alignment_storage = []
 
         for bam_index, alignment in self.bam_merger.get():
-            if alignment.reference_id == -1 or alignment.is_supplementary or \
-                    (self.params.no_secondary and alignment.is_secondary):
-                continue
-
             if not current_region:
                 current_region = (alignment.reference_start, alignment.reference_end)
             elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
@@ -138,6 +132,7 @@ class IntergenicAlignmentCollector:
             yield self.process_alignments_in_region(current_region, alignment_storage)
             return
 
+        logger.debug("Splitting " + str(current_region))
         coverage_positions = sorted(coverage_dict.keys())
         # completing index
         current_index = len(alignment_storage)
@@ -157,7 +152,7 @@ class IntergenicAlignmentCollector:
                     coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
                 max_cov = max(max_cov, coverage_dict[pos])
                 pos += 1
-            new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
+            new_region = (max(current_start * self.COVERAGE_BIN + 1, current_region[0]),
                           min(pos * self.COVERAGE_BIN, current_region[1]))
             alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
             if alignments:
@@ -167,8 +162,9 @@ class IntergenicAlignmentCollector:
             pos = min(current_start + 1, coverage_positions[-1] + 1)
 
         if current_start < pos:
-            new_region = (max(current_start * self.COVERAGE_BIN, current_region[0]),
+            new_region = (max(current_start * self.COVERAGE_BIN + 1, current_region[0]),
                           min(pos * self.COVERAGE_BIN, current_region[1]))
+
             alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
             if alignments:
                 yield self.process_alignments_in_region(new_region, alignments)
@@ -190,8 +186,6 @@ class IntergenicAlignmentCollector:
                 current_region = (current_region[0], max(current_region[1], alignment.reference_end))
             else:
                 coverage_islands += self.split_coverage_regions(current_region, coverage_dict)
-                if interval_len(current_region) < self.MAX_REGION_LEN:
-                    coverage_islands.append(current_region, coverage_dict)
                 coverage_dict = defaultdict(int)
                 current_region = None
 
@@ -229,6 +223,10 @@ class IntergenicAlignmentCollector:
     def process_intergenic(self, alignment_storage):
         assignment_storage = []
         for bam_index, alignment in alignment_storage:
+            if alignment.reference_id == -1 or alignment.is_supplementary or \
+                    (self.params.no_secondary and alignment.is_secondary):
+                continue
+
             read_id = alignment.query_name
             alignment_info = AlignmentInfo(alignment)
 
@@ -278,6 +276,10 @@ class IntergenicAlignmentCollector:
         assignment_storage = []
 
         for bam_index, alignment in alignment_storage:
+            if alignment.reference_id == -1 or alignment.is_supplementary or \
+                    (self.params.no_secondary and alignment.is_secondary):
+                continue
+
             read_id = alignment.query_name
             logger.debug("=== Processing read " + read_id + " ===")
             alignment_info = AlignmentInfo(alignment)
@@ -392,7 +394,7 @@ class IntergenicAlignmentCollector:
                     coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
                 max_cov = max(max_cov, coverage_dict[pos])
                 pos += 1
-            split_regions.append((max(current_start * self.COVERAGE_BIN, genomic_region[0]),
+            split_regions.append((max(current_start * self.COVERAGE_BIN + 1, genomic_region[0]),
                                   min(pos * self.COVERAGE_BIN, genomic_region[1])))
             current_start = pos
             max_cov = coverage_dict[current_start]
