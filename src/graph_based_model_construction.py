@@ -162,7 +162,7 @@ class GraphBasedModelConstructor:
         to_substitute = self.detect_similar_isoforms()
 
         for model in self.transcript_model_storage:
-            if model.transcript_id.endswith(self.known_transcript_suffix):
+            if model.transcript_type == TranscriptModelType.known:
                 filtered_storage.append(model)
                 confirmed_transcipt_ids.add(model.transcript_id)
                 continue
@@ -222,7 +222,7 @@ class GraphBasedModelConstructor:
             profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
 
             for m in self.transcript_model_storage:
-                if m.transcript_id.endswith(self.known_transcript_suffix) or m.transcript_id == model.transcript_id or \
+                if m.transcript_type == TranscriptModelType.known or m.transcript_id == model.transcript_id or \
                         m.transcript_id in to_substitute or len(m.exon_blocks) == 1 or not m.intron_path or \
                         len(m.exon_blocks) > len(model.exon_blocks):
                     continue
