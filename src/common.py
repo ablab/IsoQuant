@@ -715,8 +715,8 @@ def get_intron_strand(intron, reference_region, ref_region_start=1):
     intron_right_pos = intron[1] - ref_region_start
     left_site = str(reference_region[intron_left_pos:intron_left_pos + 2].seq)
     right_site = str(reference_region[intron_right_pos - 1:intron_right_pos + 1].seq)
-    is_fwd = (left_site, right_site) == CANONICAL_FWD_SITES
-    is_rev = (left_site, right_site) == CANONICAL_REV_SITES
+    is_fwd = (left_site, right_site) in CANONICAL_FWD_SITES
+    is_rev = (left_site, right_site) in CANONICAL_REV_SITES
 
     if is_fwd == is_rev:
         return '.'
@@ -734,8 +734,8 @@ def get_strand(introns, reference_region, ref_region_start=1):
         intron_right_pos = intron[1] - ref_region_start
         left_site = str(reference_region[intron_left_pos:intron_left_pos + 2].seq)
         right_site = str(reference_region[intron_right_pos - 1:intron_right_pos + 1].seq)
-        count_fwd += 1 if (left_site, right_site) == CANONICAL_FWD_SITES else 0
-        count_rev += 1 if (left_site, right_site) == CANONICAL_REV_SITES else 0
+        count_fwd += 1 if (left_site, right_site) in CANONICAL_FWD_SITES else 0
+        count_rev += 1 if (left_site, right_site) in CANONICAL_REV_SITES else 0
 
     if count_fwd == count_rev:
         return '.'
