@@ -706,8 +706,8 @@ def count_noncanonincal(introns, reference_region, strand, ref_region_start=0):
 
 
 # left site always first
-CANONICAL_FWD_SITES = {("GT", "AG"), ("GC", "AG"), ("AT", "AC")}
-CANONICAL_REV_SITES = {("CT", "AC"), ("CT", "GC"), ("GT", "AT")}
+CANONICAL_FWD_SITES = {("GT", "AG")} #, ("GC", "AG"), ("AT", "AC")}
+CANONICAL_REV_SITES = {("CT", "AC")} #, ("CT", "GC"), ("GT", "AT")}
 
 
 def get_intron_strand(intron, reference_region, ref_region_start=1):
