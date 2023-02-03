@@ -604,9 +604,9 @@ class StrandDetector:
             elif strand == '-':
                 count_rev += 1
         if count_fwd == count_rev:
-            if has_polya and not has_polyt:
-                return '+'
-            elif has_polyt and not has_polya:
-                return '-'
+            #if has_polya and not has_polyt:
+            #    return '+'
+            #elif has_polyt and not has_polya:
+            #    return '-'
             return '.'
         return '+' if count_rev < count_fwd else '-'
