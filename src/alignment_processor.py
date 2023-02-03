@@ -342,10 +342,10 @@ class IntergenicAlignmentCollector:
         has_polya = read_assignment.polya_info.external_polya_pos != -1 or read_assignment.polya_info.internal_polya_pos != -1
         has_polyt = read_assignment.polya_info.external_polyt_pos != -1 or read_assignment.polya_info.internal_polyt_pos != -1
         if len(read_assignment.exons) == 1:
-            if has_polya and not has_polyt:
-                return '+'
-            elif has_polyt and not has_polya:
-                return '-'
+            # if has_polya and not has_polyt:
+            #    return '+'
+            # elif has_polyt and not has_polya:
+            #    return '-'
             return '.'
         return self.strand_detector.get_strand(read_assignment.corrected_introns, has_polya, has_polyt)
 
