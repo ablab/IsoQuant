@@ -100,23 +100,15 @@ class GFFPrinter:
                 model = transcript_model_storage[model_index]
                 assert model.gene_id == gene_id
 
+                if not model.check_additional("exons"):
+                    model.add_additional_attribute("exons", str(len(model.exon_blocks)))
                 if transcript_model_constructor.params.check_canonical and \
                         transcript_model_constructor.gene_info.reference_region:
-                    model_introns = junctions_from_blocks(model.exon_blocks)
-                    if len(model_introns) == 0:
-                        canonical_info = 'Canonical "Unspliced";'
-                    else:
-                        all_canonical = self.io_support.check_sites_are_canonical(model_introns,
-                                                                                  transcript_model_constructor.gene_info,
-                                                                                  model.strand)
-                        canonical_info = 'Canonical "' + str(all_canonical) + '";'
-                    model.additional_info += canonical_info
+                    self.add_canonical_info(model, transcript_model_constructor.gene_info)
 
-                exon_count = len(model.exon_blocks)
-                transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; ' \
-                                  'exons "%d"; %s\n' % \
-                            (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,
-                             model.gene_id, model.transcript_id, exon_count, model.additional_info)
+                transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; %s\n' \
+                                  % (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,
+                                     model.gene_id, model.transcript_id, model.additional_attributes_str())
                 self.out_gff.write(transcript_line)
 
                 prefix_columns = "%s\tIsoQuant\texon\t" % model.chr_id
@@ -143,3 +135,15 @@ class GFFPrinter:
                     self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
             for read_id in transcript_model_constructor.unused_reads:
                 self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
+
+    def add_canonical_info(self, model, gene_info):
+        key_word = 'Canonical'
+        if model.check_additional(key_word):
+            return
+        model_introns = junctions_from_blocks(model.exon_blocks)
+        if len(model_introns) == 0:
+            canonical_info = "Unspliced"
+        else:
+            all_canonical = self.io_support.check_sites_are_canonical(model_introns, gene_info, model.strand)
+            canonical_info = str(all_canonical)
+        model.add_additional_attribute(key_word, canonical_info)

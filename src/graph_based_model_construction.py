@@ -154,7 +154,8 @@ class GraphBasedModelConstructor:
             event_string = ",".join([match_subtype_to_str_with_additional_info(x, model.strand,
                                                                                isoform_introns, reference_introns)
                                      for x in assignment.isoform_matches[0].match_subclassifications])
-            model.additional_info += 'similar_reference_id "' + assigned_transcript_id + '"; alternatives "'+ event_string + '"; '
+            model.add_additional_attribute("similar_reference_id", assigned_transcript_id)
+            model.add_additional_attribute("alternatives", event_string)
 
     def filter_transcripts(self):
         filtered_storage = []

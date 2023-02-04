@@ -9,6 +9,7 @@ import gffutils
 from enum import Enum, unique
 from functools import partial
 from collections import defaultdict
+from collections import OrderedDict
 
 from src.common import *
 
@@ -24,14 +25,14 @@ class TranscriptModelType(Enum):
 
 # simple class for storing all information needed for GFF
 class TranscriptModel:
-    def __init__(self, chr_id, strand, transcript_id, gene_id, exon_blocks, transcript_type, additional_info = ""):
+    def __init__(self, chr_id, strand, transcript_id, gene_id, exon_blocks, transcript_type):
         self.chr_id = chr_id
         self.strand = strand
         self.transcript_id = transcript_id
         self.gene_id = gene_id
         self.exon_blocks = exon_blocks
         self.transcript_type = transcript_type
-        self.additional_info = additional_info
+        self.additional_info = OrderedDict()
         self.intron_path = ()
 
     def get_start(self):
@@ -39,6 +40,15 @@ class TranscriptModel:
 
     def get_end(self):
         return self.exon_blocks[-1][1]
+
+    def check_additional(self, attribute):
+        return attribute in self.additional_info
+
+    def add_additional_attribute(self, attribute, value):
+        self.additional_info[attribute] = value
+
+    def additional_attributes_str(self):
+        return " ".join(['%s "%s";' % (k, v) for k,v in self.additional_info.items()])
 
 
 # storage for feature profiles of all known isoforms of a gene or a set of overlapping genes
