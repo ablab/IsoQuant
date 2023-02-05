@@ -333,12 +333,13 @@ class GraphBasedModelConstructor:
                 has_polya = path[-1][0] == VERTEX_polya
                 polya_site = has_polya or has_polyt
                 transcript_strand = self.strand_detector.get_strand(intron_path, has_polya, has_polyt)
+                transcript_ss_strand = self.strand_detector.get_strand(intron_path)
 
                 #logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
                 #             % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))
                 if count < novel_isoform_cutoff:
                     pass #logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
-                elif len(novel_exons) == 2 and (not polya_site or transcript_strand == '.'):
+                elif len(novel_exons) == 2 and (not polya_site or transcript_ss_strand == '.'):
                     pass #logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                 else:
                     if self.params.use_technical_replicas and \
