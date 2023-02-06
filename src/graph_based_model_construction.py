@@ -310,13 +310,13 @@ class GraphBasedModelConstructor:
             new_model = None
             if reference_isoform:
                 # adding FL reference isoform
-                if reference_isoform in self.detected_known_isoforms:
+                if reference_isoform in GraphBasedModelConstructor.detected_known_isoforms:
                     pass
                 elif count < self.params.min_known_count:
                     pass # logger.debug("uuu Isoform %s has low coverage %d" % (reference_isoform, count))
                 else:
                     new_model = self.transcript_from_reference(reference_isoform)
-                    self.detected_known_isoforms.add(reference_isoform)
+                    GraphBasedModelConstructor.detected_known_isoforms.add(reference_isoform)
                     #logger.debug("Adding known spliced isoform %s" % reference_isoform)
                     #logger.debug("Annotated positions: %d, %d, %s" % (new_model.exon_blocks[0][0], new_model.exon_blocks[-1][1], new_model.strand))
                     #logger.debug("Graph positions: %s, %s" % (str(path[0]), str(path[-1])))
@@ -392,7 +392,7 @@ class GraphBasedModelConstructor:
                                                        ReadAssignmentType.unique_minor_difference}:
                 continue
             refrenence_isoform_id = read_assignment.isoform_matches[0].assigned_transcript
-            if refrenence_isoform_id in self.detected_known_isoforms:
+            if refrenence_isoform_id in GraphBasedModelConstructor.detected_known_isoforms:
                 continue
 
             events = read_assignment.isoform_matches[0].match_subclassifications
@@ -551,10 +551,10 @@ class GraphBasedModelConstructor:
             # logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.intron_graph.max_coverage, count, coverage, polya_support))
             if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or polya_support == 0:
                 pass # logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
-            elif isoform_id not in self.detected_known_isoforms:
+            elif isoform_id not in GraphBasedModelConstructor.detected_known_isoforms:
                 new_model = self.transcript_from_reference(isoform_id)
                 self.transcript_model_storage.append(new_model)
-                self.detected_known_isoforms.add(isoform_id)
+                GraphBasedModelConstructor.detected_known_isoforms.add(isoform_id)
                 for read_assignment in mono_exon_isoform_reads[isoform_id]:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
                     self.reads_used_in_construction.add(read_assignment.read_id)
@@ -565,7 +565,7 @@ class GraphBasedModelConstructor:
     def construct_nonfl_isoforms(self, spliced_isoform_reads, spliced_isoform_left_support, spliced_isoform_right_support):
         logger.debug("Constructing nonFL isoforms")
         for isoform_id in spliced_isoform_reads.keys():
-            if isoform_id in self.detected_known_isoforms:
+            if isoform_id in GraphBasedModelConstructor.detected_known_isoforms:
                 continue
             count = len(spliced_isoform_reads[isoform_id])
             if isoform_id not in self.known_isoforms_in_graph_ids:
@@ -583,7 +583,7 @@ class GraphBasedModelConstructor:
                 logger.debug("<< Adding known non-FL spliced isoform %s" % isoform_id)
                 new_model = self.transcript_from_reference(isoform_id)
                 self.transcript_model_storage.append(new_model)
-                self.detected_known_isoforms.add(isoform_id)
+                GraphBasedModelConstructor.detected_known_isoforms.add(isoform_id)
                 for read_assignment in spliced_isoform_reads[isoform_id]:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
                     self.reads_used_in_construction.add(read_assignment.read_id)
