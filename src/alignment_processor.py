@@ -128,9 +128,10 @@ class IntergenicAlignmentCollector:
                 yield res
 
     def forward_alignments(self, current_region, alignment_storage, coverage_dict, alignment_index):
-        if interval_len(current_region) < self.MAX_REGION_LEN:
-            yield self.process_alignments_in_region(current_region, alignment_storage)
-            return
+        if interval_len(current_region) > 100000 or len(alignment_storage) > 100000:
+            logger.info("Processing large chunk!")
+        yield self.process_alignments_in_region(current_region, alignment_storage)
+        return
 
         logger.debug("Splitting " + str(current_region))
         coverage_positions = sorted(coverage_dict.keys())
