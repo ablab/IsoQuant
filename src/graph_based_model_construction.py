@@ -240,15 +240,14 @@ class GraphBasedModelConstructor:
                 if is_matching_assignment(assignment):
                     to_substitute[m.transcript_id] = model.transcript_id
 
-        return  to_substitute
+        return to_substitute
 
     def create_extended_annotation(self):
         self.extended_annotation_storage = []
         for isoform_id in self.gene_info.all_isoforms_exons.keys():
             self.extended_annotation_storage.append(self.transcript_from_reference(isoform_id))
         for model in self.transcript_model_storage:
-            if model.transcript_id.endswith(self.nic_transcript_suffix) or \
-                    model.transcript_id.endswith(self.nnic_transcript_suffix):
+            if model.transcript_type != TranscriptModelType.known:
                 self.extended_annotation_storage.append(model)
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
@@ -270,8 +269,6 @@ class GraphBasedModelConstructor:
         self.internal_counter[transcript_id] += 1
 
     def construct_fl_isoforms(self):
-        self.detected_known_isoforms = set()
-
         # a minor trick to compare tuples of pairs, whose starting and terminating elements have different type
         logger.debug("Total FL paths %d" % len(self.path_storage.fl_paths))
         for path in sorted(self.path_storage.fl_paths,
@@ -558,7 +555,7 @@ class GraphBasedModelConstructor:
             # logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.intron_graph.max_coverage, count, coverage, polya_support))
             if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or polya_support == 0:
                 pass # logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
-            else:
+            elif isoform_id not in self.detected_known_isoforms:
                 new_model = self.transcript_from_reference(isoform_id)
                 self.transcript_model_storage.append(new_model)
                 self.detected_known_isoforms.add(isoform_id)
