@@ -624,6 +624,8 @@ In addition, it contains `canonical` property if `--check_canonical` is set.
 ## Citation
 The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
 
+To try IsoQuant you can use the data that was used in the publication [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
+
 <a name="sec5"></a>
 ## Feedback and bug reports
 Your comments, bug reports, and suggestions are very welcome. They will help us to further improve IsoQuant. If you have any troubles running IsoQuant, please send us `isoquant.log` from the `<output_dir>` directory. 
