@@ -27,6 +27,7 @@ class GraphBasedModelConstructor:
     known_transcript_suffix = ".known"
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
+    detected_known_isoforms = set()
 
     def __init__(self, gene_info, chr_record, params, transcript_counter):
         self.gene_info = gene_info
@@ -40,15 +41,13 @@ class GraphBasedModelConstructor:
         self.intron_graph = None
         self.path_processor = None
         self.path_storage = None
-        self.detected_known_isoforms = set()
 
         self.known_isoforms_in_graph = {}
         self.known_introns = set()
         self.known_isoforms_in_graph_ids = {}
         self.assigner = LongReadAssigner(self.gene_info, self.params)
         self.profile_constructor = CombinedProfileConstructor(self.gene_info, self.params)
-        self.visited_introns = set()
-        
+
         self.transcript_model_storage = []
         self.extended_annotation_storage = []
         self.transcript_read_ids = defaultdict(list)
@@ -369,9 +368,6 @@ class GraphBasedModelConstructor:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
                     self.reads_used_in_construction.add(read_assignment.read_id)
 
-                for v in path:
-                    self.visited_introns.add(v)
-
     def construct_assignment_based_isoforms(self, read_assignment_storage):
         spliced_isoform_reads = defaultdict(list)
         isoform_left_support = defaultdict(int)
@@ -591,13 +587,6 @@ class GraphBasedModelConstructor:
                 for read_assignment in spliced_isoform_reads[isoform_id]:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
                     self.reads_used_in_construction.add(read_assignment.read_id)
-
-        for isoform_id in self.detected_known_isoforms:
-            if isoform_id not in self.known_isoforms_in_graph_ids:
-                continue
-            path = self.known_isoforms_in_graph_ids[isoform_id]
-            for v in path:
-                self.visited_introns.add(v)
 
     # create transcript model object from reference isoforms
     def transcript_from_reference(self, isoform_id):
