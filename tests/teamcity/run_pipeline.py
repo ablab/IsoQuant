@@ -259,8 +259,9 @@ def run_transcript_quality(args, config_dict, log):
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
 
-    label = config_dict["label"]
-    output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
+    name = config_dict["name"]
+    label = name if "label" not in config_dict else config_dict["name"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
     out_gtf = os.path.join(output_folder, "%s/%s.transcript_models.gtf" % (label, label))
     if not out_gtf:
         log.err("Output GTF file was not found")
