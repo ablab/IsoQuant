@@ -28,6 +28,7 @@ class GraphBasedModelConstructor:
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
     detected_known_isoforms = set()
+    extended_transcript_ids = set()
 
     def __init__(self, gene_info, chr_record, params, transcript_counter):
         self.gene_info = gene_info
@@ -244,7 +245,9 @@ class GraphBasedModelConstructor:
     def create_extended_annotation(self):
         self.extended_annotation_storage = []
         for isoform_id in self.gene_info.all_isoforms_exons.keys():
-            self.extended_annotation_storage.append(self.transcript_from_reference(isoform_id))
+            if isoform_id not in GraphBasedModelConstructor.extended_transcript_ids:
+                self.extended_annotation_storage.append(self.transcript_from_reference(isoform_id))
+                GraphBasedModelConstructor.extended_transcript_ids.add(isoform_id)
         for model in self.transcript_model_storage:
             if model.transcript_type != TranscriptModelType.known:
                 self.extended_annotation_storage.append(model)
