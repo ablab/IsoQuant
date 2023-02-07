@@ -128,8 +128,8 @@ class IntergenicAlignmentCollector:
                 yield res
 
     def forward_alignments(self, current_region, alignment_storage, coverage_dict, alignment_index):
-        if interval_len(current_region) > 100000 or len(alignment_storage) > 100000:
-            logger.info("Processing large chunk!")
+        if interval_len(current_region) > 1000000 or len(alignment_storage) > 100000:
+            logger.info("Processing large chunk %s, reads %d" % (str(current_region), len(alignment_storage)))
         yield self.process_alignments_in_region(current_region, alignment_storage)
         return
 
@@ -202,7 +202,7 @@ class IntergenicAlignmentCollector:
             yield self.process_alignments_in_region(region, self.bam_merger.get())
 
     def process_alignments_in_region(self, current_region, alignment_storage):
-        logger.debug("Processing region %s" % str(current_region))
+        logger.info("Processing region %s" % str(current_region))
         gene_list = []
         if self.genedb:
             gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
@@ -218,7 +218,7 @@ class IntergenicAlignmentCollector:
             if self.params.needs_reference:
                 gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
             assignment_storage = self.process_genic(alignment_storage, gene_info)
-
+        logger.info("Done region %s" % str(current_region))
         return gene_info, assignment_storage
 
     def process_intergenic(self, alignment_storage):
