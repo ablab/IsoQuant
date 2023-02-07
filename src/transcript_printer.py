@@ -125,7 +125,7 @@ class GFFPrinter:
                     exon_str_id = model.chr_id + ".%d" % exon_id
                     self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns +
                                        ' exon "%d"; exon_id "%s";\n' % ((i + 1), exon_str_id))
-
+        self.out_gff.flush()
         # write read_id -> transcript_id map
         if self.output_r2t:
             used_reads = set()
@@ -135,6 +135,7 @@ class GFFPrinter:
                     self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
             for read_id in transcript_model_constructor.unused_reads:
                 self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
+            self.out_r2t.flush()
 
     def add_canonical_info(self, model, gene_info):
         key_word = 'Canonical'
