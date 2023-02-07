@@ -27,8 +27,24 @@ from src.graph_based_model_construction import *
 logger = logging.getLogger('IsoQuant')
 
 
+def reads_collected_lock_file_name(sample_out_raw, chr_id):
+    return "{}_{}_collected".format(sample_out_raw, chr_id)
+
+
+def reads_processed_lock_file_name(dump_filename, chr_id):
+    chr_dump_file = dump_filename + "_" + chr_id
+    return "{}_processed".format(chr_dump_file)
+
+
+def clean_locks(chr_ids, base_name, fname_function):
+    for chr_id in chr_ids:
+        fname = fname_function(base_name, chr_id)
+        if os.path.exists(fname):
+            os.remove(fname)
+
+
 def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_record):
-    lock_file = "{}_{}_collected".format(sample.out_raw_file, chr_id)
+    lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
     save_file = "{}_{}".format(sample.out_raw_file, chr_id)
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     processed_reads = []
@@ -141,7 +157,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_grouper, current_chr_record,
                                  io_support):
     chr_dump_file = dump_filename + "_" + chr_id
-    lock_file = "{}_processed".format(chr_dump_file)
+    lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
     read_stat_file = "{}_read_stat".format(chr_dump_file)
     transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
 
@@ -190,6 +206,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
     transcript_stat_counter.dump(transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
+    time.sleep(1)
+
     return processor.read_stat_counter, transcript_stat_counter
 
 
@@ -285,13 +303,20 @@ class DatasetProcessor:
         logger.info('Collecting read alignments')
         info_file = sample.out_raw_file + "_info"
         lock_file = sample.out_raw_file + "_lock"
-        # TODO: load save only if command line was the same or continue option is enabled
-        if os.path.exists(lock_file) and self.args.resume:
-            logger.info("Collected reads detected, will not process")
-            return
+
+        if os.path.exists(lock_file):
+            if self.args.resume:
+                logger.info("Collected reads detected, will not process")
+                return
+            else:
+                os.remove(lock_file)
 
         chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]),
                          reverse=True)
+        if not self.args.resume:
+            clean_locks(chr_ids, sample.out_raw_file, reads_collected_lock_file_name)
+            clean_locks(chr_ids, sample.out_raw_file, reads_processed_lock_file_name)
+
         if self.args.threads == 1:
             results = itertools.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
                                                                      (self.reference_record_dict[
