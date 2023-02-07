@@ -167,6 +167,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
 
     for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, gffutils_db, multimapped_reads):
         logger.debug("Processing %d reads" % len(assignment_storage))
+        st = time.time()
         for read_assignment in assignment_storage:
             if read_assignment is None:
                 continue
@@ -183,6 +184,11 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
                 tmp_extended_gff_printer.dump(model_constructor, model_constructor.extended_annotation_storage)
             for t in model_constructor.transcript_model_storage:
                 transcript_stat_counter.add(t.transcript_type)
+
+        t_diff = time.time() - st
+        if t_diff > 30:
+            logger.info("Region %d - %d with %d reads processed in %.1f" % (gene_info.all_read_region_start, gene_info.all_read_region_end,
+                                                                            len(assignment_storage), t_diff))
 
     processor.global_counter.dump()
     processor.transcript_model_global_counter.dump()
@@ -290,8 +296,8 @@ class DatasetProcessor:
             logger.info("Collected reads detected, will not process")
             return
 
-        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]),
-                         reverse=True)
+        chr_ids = ["chr1"] # sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]),
+                         # reverse=True)
         if self.args.threads == 1:
             results = itertools.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
                                                                      (self.reference_record_dict[
@@ -346,7 +352,7 @@ class DatasetProcessor:
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
     def process_assigned_reads(self, sample, dump_filename):
-        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
+        chr_ids = ["chr1"] # sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
         logger.info("Processing assigned reads " + sample.label)
         if self.args.threads == 1:
             results = itertools.starmap(construct_models_in_parallel, [(SampleData(sample.file_list, sample.label + "_" + chr_id,

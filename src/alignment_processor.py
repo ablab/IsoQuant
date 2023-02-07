@@ -5,6 +5,8 @@
 ############################################################################
 
 import logging
+import time
+
 import pysam
 from queue import PriorityQueue, Empty
 from Bio import SeqIO
@@ -131,8 +133,8 @@ class IntergenicAlignmentCollector:
         if interval_len(current_region) > 1000000 or len(alignment_storage) > 100000:
             logger.info("Processing large chunk %s, reads %d" % (str(current_region), len(alignment_storage)))
         yield self.process_alignments_in_region(current_region, alignment_storage)
-        return
 
+        read_blocks = []
         logger.debug("Splitting " + str(current_region))
         coverage_positions = sorted(coverage_dict.keys())
         # completing index
@@ -155,9 +157,10 @@ class IntergenicAlignmentCollector:
                 pos += 1
             new_region = (max(current_start * self.COVERAGE_BIN + 1, current_region[0]),
                           min(pos * self.COVERAGE_BIN, current_region[1]))
-            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
-            if alignments:
-                yield self.process_alignments_in_region(new_region, alignments)
+            read_blocks.append(alignment_index[pos] - alignment_index[current_start])
+            # alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
+            #if alignments:
+            #    yield self.process_alignments_in_region(new_region, alignments)
             current_start = pos
             max_cov = coverage_dict[current_start]
             pos = min(current_start + 1, coverage_positions[-1] + 1)
@@ -165,10 +168,12 @@ class IntergenicAlignmentCollector:
         if current_start < pos:
             new_region = (max(current_start * self.COVERAGE_BIN + 1, current_region[0]),
                           min(pos * self.COVERAGE_BIN, current_region[1]))
-
-            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
-            if alignments:
-                yield self.process_alignments_in_region(new_region, alignments)
+            read_blocks.append(alignment_index[pos] - alignment_index[current_start])
+            # alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
+            #if alignments:
+            #    yield self.process_alignments_in_region(new_region, alignments)
+        if interval_len(current_region) > 1000000 or len(alignment_storage) > 100000:
+            logger.info("Can be splitted in %d blocks: %s" % (len(read_blocks), str(read_blocks)))
 
     def process_slow(self):
         # coverage every COVERAGE_BIN bases
@@ -202,7 +207,8 @@ class IntergenicAlignmentCollector:
             yield self.process_alignments_in_region(region, self.bam_merger.get())
 
     def process_alignments_in_region(self, current_region, alignment_storage):
-        logger.info("Processing region %s" % str(current_region))
+        # logger.info("Processing region %s" % str(current_region))
+        st = time.time()
         gene_list = []
         if self.genedb:
             gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
@@ -218,7 +224,11 @@ class IntergenicAlignmentCollector:
             if self.params.needs_reference:
                 gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
             assignment_storage = self.process_genic(alignment_storage, gene_info)
-        logger.info("Done region %s" % str(current_region))
+
+        time_diff = time.time() - st
+        if time_diff > 60:
+            logger.info("Done region %s with reads in %.1f" % (str(current_region), time_diff))
+            logger.info("Reads: %d, exons %d" % (len(alignment_storage), len(gene_info.exon_profiles.features)))
         return gene_info, assignment_storage
 
     def process_intergenic(self, alignment_storage):
