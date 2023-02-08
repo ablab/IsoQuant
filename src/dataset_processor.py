@@ -526,10 +526,12 @@ class DatasetProcessor:
 
     def create_aggregators(self, sample):
         self.read_stat_counter = EnumStats()
-        self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
-                                                       additional_header=self.common_header)
         self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed, self.args, print_corrected=True)
-        printer_list = [self.basic_printer, self.corrected_bed_printer]
+        printer_list = [self.corrected_bed_printer]
+        if self.args.genedb:
+            self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
+                                                           additional_header=self.common_header)
+            printer_list.append(self.basic_printer)
         if self.args.sqanti_output:
             self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
             printer_list.append(self.sqanti_printer)
@@ -573,8 +575,9 @@ class DatasetProcessor:
                 self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 
     def merge_assignments(self, sample, chr_ids):
-        merge_files([rreplace(sample.out_assigned_tsv, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
-                    sample.out_assigned_tsv, copy_header=False)
+        if self.args.genedb:
+            merge_files([rreplace(sample.out_assigned_tsv, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                        sample.out_assigned_tsv, copy_header=False)
         merge_files([rreplace(sample.out_corrected_bed, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
                     sample.out_corrected_bed, copy_header=False)
         for p in self.global_counter.counters:
@@ -601,6 +604,7 @@ class DatasetProcessor:
     def finalize_aggregators(self, sample):
         logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
         logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
-        logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
+        if self.args.genedb:
+            logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
         self.read_stat_counter.print_start("Read assignment statistics")
 
