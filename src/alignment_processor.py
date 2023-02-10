@@ -236,24 +236,21 @@ class IntergenicAlignmentCollector:
         if not self.genedb:
             gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
                                              self.params.delta, self.chr_record)
-            assignment_storage = self.process_intergenic(alignment_storage.get_alignments(current_region))
+            assignment_iterator = self.process_intergenic(alignment_storage.get_alignments(current_region))
         else:
             gene_info = self.get_gene_info_for_region(current_region)
-            assignment_storage = self.split_and_process_genic(current_region, alignment_storage, gene_info)
+            assignment_iterator = self.split_and_process_genic(current_region, alignment_storage, gene_info)
 
-        return gene_info, assignment_storage
+        return gene_info, assignment_iterator
 
     def split_and_process_genic(self, current_region, alignment_storage, gene_info):
-        assignment_storage = []
         new_regions = self.split_region(current_region, alignment_storage, gene_info)
         for new_region in new_regions:
             new_gene_info = self.get_gene_info_for_region(new_region)
-            assignment_storage += self.process_genic(alignment_storage.get_alignments(new_region), new_gene_info)
-
-        return assignment_storage
+            for assignment in self.process_genic(alignment_storage.get_alignments(new_region), new_gene_info):
+                yield assignment
 
     def process_intergenic(self, alignment_storage):
-        assignment_storage = []
         for bam_index, alignment in alignment_storage:
             if alignment.reference_id == -1 or alignment.is_supplementary or \
                     (self.params.no_secondary and alignment.is_secondary):
@@ -298,17 +295,14 @@ class IntergenicAlignmentCollector:
             read_assignment.chr_id = self.chr_id
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
-            assignment_storage.append(read_assignment)
-        return assignment_storage
+            yield read_assignment
 
     def process_genic(self, alignment_storage, gene_info):
         assigner = LongReadAssigner(gene_info, self.params)
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
-        assignment_storage = []
-        count = 0
+
         for bam_index, alignment in alignment_storage:
-            count += 1
             if alignment.reference_id == -1 or alignment.is_supplementary or \
                     (self.params.no_secondary and alignment.is_secondary):
                 continue
@@ -363,9 +357,8 @@ class IntergenicAlignmentCollector:
                 read_assignment.introns_match = \
                     all(e == 1 for e in alignment_info.combined_profile.read_intron_profile.read_profile)
 
-            assignment_storage.append(read_assignment)
+            yield read_assignment
             logger.debug("=== Finished read " + read_id + " ===")
-        return assignment_storage
 
     def get_assignment_strand(self, read_assignment):
         if read_assignment.isoform_matches and read_assignment.assignment_type in \
