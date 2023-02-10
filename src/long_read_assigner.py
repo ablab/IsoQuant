@@ -394,7 +394,7 @@ class LongReadAssigner:
                 or all(el == 0 or el == -2 for el in read_split_exon_profile.gene_profile):
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             gene_region = (self.gene_info.split_exon_profiles.features[0][0],
-                              self.gene_info.split_exon_profiles.features[-1][1])
+                           self.gene_info.split_exon_profiles.features[-1][1])
             # none of the blocks matched
             if not overlaps(read_region, gene_region):
                 # logger.debug("EMPTY - noninformative")

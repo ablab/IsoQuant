@@ -5,6 +5,8 @@
 ############################################################################
 
 import logging
+import math
+
 import pysam
 from queue import PriorityQueue, Empty
 from Bio import SeqIO
@@ -60,6 +62,100 @@ class BAMOnlineMerger:
         self._set(chr_id, start, end)
 
 
+class AbstractAlignmentStorage:
+    COVERAGE_BIN = 256
+
+    def __init__(self):
+        self.coverage_dict = defaultdict(int)
+        self.current_bin_region_start = 4294967296 # infinity
+        self.current_bin_region_end = 0
+
+    def reset(self):
+        self.coverage_dict = defaultdict(int)
+        self.current_bin_region_start = math.inf
+        self.current_bin_region_end = 0
+
+    def add_alignment(self, bam_index, alignment):
+        bin_start = alignment.reference_start // self.COVERAGE_BIN
+        bin_end = alignment.reference_end // self.COVERAGE_BIN
+        self.current_bin_region_start = min(bin_start, self.current_bin_region_start)
+        self.current_bin_region_end = max(bin_end, self.current_bin_region_end)
+        for i in range(bin_start, bin_end + 1):
+            self.coverage_dict[i] += 1
+
+    def get_alignments(self, region):
+        raise NotImplementedError()
+
+    def get_read_count(self):
+        raise NotImplementedError()
+
+
+class BAMAlignmentStorage(AbstractAlignmentStorage):
+    def __init__(self, bam_merger):
+        AbstractAlignmentStorage.__init__(self)
+        self.bam_merger = bam_merger
+        self.counter = 0
+
+    def reset(self):
+        AbstractAlignmentStorage.reset(self)
+        self.counter = 0
+
+    def add_alignment(self, bam_index, alignment):
+        AbstractAlignmentStorage.add_alignment(self, bam_index, alignment)
+        self.counter += 1
+
+    def get_alignments(self, region):
+        return BAMOnlineMerger(self.bam_merger.bam_pairs, self.bam_merger.chr_id, region[0], region[1]).get()
+
+    def get_read_count(self):
+        return self.counter
+
+
+class InMemoryAlignmentStorage(AbstractAlignmentStorage):
+    def __init__(self):
+        AbstractAlignmentStorage.__init__(self)
+        self.alignment_index = {}
+        self.counter = 0
+        self.alignment_storage = []
+        self.index_filled = False
+
+    def reset(self):
+        AbstractAlignmentStorage.reset(self)
+        self.alignment_index = {}
+        self.counter = 0
+        self.alignment_storage = []
+        self.index_filled = False
+
+    def add_alignment(self, bam_index, alignment):
+        AbstractAlignmentStorage.add_alignment(self, bam_index, alignment)
+        bin_position = alignment.reference_start // self.COVERAGE_BIN
+        if bin_position not in self.alignment_index:
+            self.alignment_index[bin_position] = self.counter
+        self.alignment_storage.append((bam_index, alignment))
+        self.counter += 1
+        self.index_filled = False
+
+    def _fill_index(self):
+        if self.index_filled:
+            return
+        current_index = len(self.alignment_storage)
+        for pos in range(self.current_bin_region_end + 1, self.current_bin_region_start - 1, -1):
+            if pos not in self.alignment_index:
+                self.alignment_index[pos] = current_index
+            else:
+                current_index = self.alignment_index[pos]
+
+    def get_alignments(self, region):
+        self._fill_index()
+        index_start = region[0] // self.COVERAGE_BIN
+        index_end = region[1] // self.COVERAGE_BIN + 1
+        # TODO: improve indexing, yield an iterator to mimic fetch() behaviour
+        return self.alignment_storage[self.alignment_index[index_start]:self.alignment_index[index_end]]
+
+    def get_read_count(self):
+        return len(self.alignment_storage)
+
+
 class IntergenicAlignmentCollector:
     """ class for aggregating all alignmnet information
 
@@ -70,6 +166,12 @@ class IntergenicAlignmentCollector:
     printer
     counter
     """
+
+    MAX_REGION_LEN = 32768
+    MIN_READS_TO_SPLIT = 16384
+    MIN_INTRONS_TO_SPLIT = 128
+    ABS_COV_VALLEY = 1
+    REL_COV_VALLEY = 0.01
 
     def __init__(self, chr_id, bam_pairs, params, genedb=None, chr_record=None, read_groupper=DefaultReadGrouper()):
         self.chr_id = chr_id
@@ -86,19 +188,10 @@ class IntergenicAlignmentCollector:
         self.polya_fixer = PolyAFixer(self.params)
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
 
-        self.COVERAGE_BIN = 256
-        self.MAX_REGION_LEN = 32768
-        self.ABS_COV_VALLEY = 1
-        self.REL_COV_VALLEY = 0.01
-
     def process(self):
         # coverage every COVERAGE_BIN bases
-        coverage_dict = defaultdict(int)
-        # index of the first alignment with the start >= of certain bin (key)
-        alignment_index = {}
-        counter = 0
         current_region = None
-        alignment_storage = []
+        alignment_storage = BAMAlignmentStorage(self.bam_merger) if self.params.low_memory else InMemoryAlignmentStorage()
 
         for bam_index, alignment in self.bam_merger.get():
             if not current_region:
@@ -106,119 +199,34 @@ class IntergenicAlignmentCollector:
             elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
                 current_region = (current_region[0], max(current_region[1], alignment.reference_end))
             else:
-                for res in self.forward_alignments(current_region, alignment_storage, coverage_dict, alignment_index):
-                    yield res
-                counter = 0
-                alignment_storage = []
-                alignment_index = {}
-                coverage_dict = defaultdict(int)
+                yield self.process_alignments_in_region(current_region, alignment_storage)
+                alignment_storage.reset()
                 current_region = None
 
-            for i in range(alignment.reference_start // self.COVERAGE_BIN, alignment.reference_end // self.COVERAGE_BIN + 1):
-                coverage_dict[i] += 1
-
-            bin_position = alignment.reference_start // self.COVERAGE_BIN
-            if bin_position not in alignment_index:
-                alignment_index[bin_position] = counter
-            alignment_storage.append((bam_index, alignment))
-            counter += 1
+            alignment_storage.add_alignment(bam_index, alignment)
 
         if current_region:
-            for res in self.forward_alignments(current_region, alignment_storage, coverage_dict, alignment_index):
-                yield res
-
-    def forward_alignments(self, current_region, alignment_storage, coverage_dict, alignment_index):
-        if interval_len(current_region) < self.MAX_REGION_LEN:
             yield self.process_alignments_in_region(current_region, alignment_storage)
-            return
-
-        logger.debug("Splitting " + str(current_region))
-        coverage_positions = sorted(coverage_dict.keys())
-        # completing index
-        current_index = len(alignment_storage)
-        for pos in range(coverage_positions[-1] + 1, coverage_positions[0] - 1, -1):
-            if pos not in alignment_index:
-                alignment_index[pos] = current_index
-            else:
-                current_index = alignment_index[pos]
-
-        current_start = coverage_positions[0]
-        min_bins = int(self.MAX_REGION_LEN / self.COVERAGE_BIN)
-        pos = current_start + 1
-        max_cov = coverage_dict[current_start]
-
-        while pos <= coverage_positions[-1]:
-            while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or \
-                    coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
-                max_cov = max(max_cov, coverage_dict[pos])
-                pos += 1
-            new_region = (max(current_start * self.COVERAGE_BIN + 1, current_region[0]),
-                          min(pos * self.COVERAGE_BIN, current_region[1]))
-            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
-            if alignments:
-                yield self.process_alignments_in_region(new_region, alignments)
-            current_start = pos
-            max_cov = coverage_dict[current_start]
-            pos = min(current_start + 1, coverage_positions[-1] + 1)
-
-        if current_start < pos:
-            new_region = (max(current_start * self.COVERAGE_BIN + 1, current_region[0]),
-                          min(pos * self.COVERAGE_BIN, current_region[1]))
-
-            alignments = alignment_storage[alignment_index[current_start]:alignment_index[pos]]
-            if alignments:
-                yield self.process_alignments_in_region(new_region, alignments)
-
-    def process_slow(self):
-        # coverage every COVERAGE_BIN bases
-        coverage_dict = defaultdict(int)
-        current_region = None
-        coverage_islands = []
-
-        for bam_index, alignment in self.bam_merger.get():
-            if alignment.reference_id == -1 or alignment.is_supplementary or \
-                    (self.params.no_secondary and alignment.is_secondary):
-                continue
-
-            if not current_region:
-                current_region = (alignment.reference_start, alignment.reference_end)
-            elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
-                current_region = (current_region[0], max(current_region[1], alignment.reference_end))
-            else:
-                coverage_islands += self.split_coverage_regions(current_region, coverage_dict)
-                coverage_dict = defaultdict(int)
-                current_region = None
-
-            for i in range(alignment.reference_start // self.COVERAGE_BIN, alignment.reference_end // self.COVERAGE_BIN + 1):
-                coverage_dict[i] += 1
-
-        if current_region:
-            coverage_islands += self.split_coverage_regions(current_region, coverage_dict)
-
-        self.bam_merger.reset()
-        for region in coverage_islands:
-            self.bam_merger.reset_region(self.bam_merger.chr_id, region[0], region[1])
-            yield self.process_alignments_in_region(region, self.bam_merger.get())
 
     def process_alignments_in_region(self, current_region, alignment_storage):
         logger.debug("Processing region %s" % str(current_region))
-        gene_list = []
-        if self.genedb:
-            gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
-                                                end=current_region[1], featuretype="gene"))
-
-        if not gene_list:
+        if not self.genedb:
             gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
                                              self.params.delta, self.chr_record)
-            assignment_storage = self.process_intergenic(alignment_storage)
+            assignment_storage = self.process_intergenic(alignment_storage.get_alignments(current_region))
         else:
-            gene_list = sorted(gene_list, key=lambda x: x.start)
-            gene_info = GeneInfo(gene_list, self.genedb, self.params.delta)
-            if self.params.needs_reference:
-                gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
-            assignment_storage = self.process_genic(alignment_storage, gene_info)
+            gene_info = self.get_gene_info_for_region(current_region)
+            assignment_storage = self.split_and_process_genic(current_region, alignment_storage, gene_info)
 
         return gene_info, assignment_storage
+
+    def split_and_process_genic(self, current_region, alignment_storage, gene_info):
+        assignment_storage = []
+        for new_region in self.split_region(current_region, alignment_storage, gene_info):
+            new_gene_info = self.get_gene_info_for_region(new_region)
+            assignment_storage += self.process_genic(alignment_storage.get_alignments(new_region), new_gene_info)
+
+        return assignment_storage
 
     def process_intergenic(self, alignment_storage):
         assignment_storage = []
@@ -379,25 +387,38 @@ class IntergenicAlignmentCollector:
 
         return indel_count, junctions_with_indels
 
-    def split_coverage_regions(self, genomic_region, coverage_dict):
-        if interval_len(genomic_region) < self.MAX_REGION_LEN:
+    def get_gene_info_for_region(self, current_region):
+        assert self.genedb is not None
+        gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
+                                            end=current_region[1], featuretype="gene"))
+        gene_list = sorted(gene_list, key=lambda x: x.start)
+        gene_info = GeneInfo(gene_list, self.genedb, self.params.delta)
+        if self.params.needs_reference:
+            gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
+        return gene_info
+
+    def split_region(self, genomic_region, alignment_storage, gene_info):
+        if interval_len(genomic_region) <= IntergenicAlignmentCollector.MAX_REGION_LEN: # or \
+                #alignment_storage.get_read_count() <= IntergenicAlignmentCollector.MIN_READS_TO_SPLIT or \
+                #len(gene_info.intron_profiles.features) <= IntergenicAlignmentCollector.MIN_INTRONS_TO_SPLIT:
             return [genomic_region]
 
         split_regions = []
-        coverage_positions = sorted(coverage_dict.keys())
+        coverage_positions = sorted(alignment_storage.coverage_dict.keys())
         current_start = coverage_positions[0]
-        min_bins = int(self.MAX_REGION_LEN / self.COVERAGE_BIN)
+        min_bins = int(self.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
         pos = current_start + 1
-        max_cov = coverage_dict[current_start]
+        max_cov = alignment_storage.coverage_dict[current_start]
+
         while pos <= coverage_positions[-1]:
             while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or \
-                    coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
-                max_cov = max(max_cov, coverage_dict[pos])
+                    alignment_storage.coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
+                max_cov = max(max_cov, alignment_storage.coverage_dict[pos])
                 pos += 1
-            split_regions.append((max(current_start * self.COVERAGE_BIN + 1, genomic_region[0]),
-                                  min(pos * self.COVERAGE_BIN, genomic_region[1])))
+            split_regions.append((max(current_start * AbstractAlignmentStorage.COVERAGE_BIN + 1, genomic_region[0]),
+                                  min(pos * AbstractAlignmentStorage.COVERAGE_BIN, genomic_region[1])))
             current_start = pos
-            max_cov = coverage_dict[current_start]
+            max_cov = alignment_storage.coverage_dict[current_start]
             pos = min(current_start + 1, coverage_positions[-1] + 1)
 
         return split_regions

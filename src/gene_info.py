@@ -153,6 +153,7 @@ class GeneInfo:
         self.gene_attributes = {}
         self.set_gene_attributes()
         # self.detect_ambiguous()
+        # TODO remove obsolote
         self.regions_for_bam_fetch = self.get_regions_for_bam_fetch(self.split_exon_profiles.features)
         self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
         self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
