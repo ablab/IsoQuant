@@ -65,7 +65,7 @@ class BAMOnlineMerger:
 
 
 class AbstractAlignmentStorage:
-    COVERAGE_BIN = 256
+    COVERAGE_BIN = 512
 
     def __init__(self):
         self.coverage_dict = defaultdict(int)
@@ -189,7 +189,7 @@ class IntergenicAlignmentCollector:
     counter
     """
 
-    MAX_REGION_LEN = 32768
+    MAX_REGION_LEN = 65536
     MIN_READS_TO_SPLIT = 16384
     MIN_INTRONS_TO_SPLIT = 128
     ABS_COV_VALLEY = 1
@@ -416,9 +416,9 @@ class IntergenicAlignmentCollector:
         return gene_info
 
     def split_region(self, genomic_region, alignment_storage, gene_info):
-        if interval_len(genomic_region) <= IntergenicAlignmentCollector.MAX_REGION_LEN: # or \
-                #alignment_storage.get_read_count() <= IntergenicAlignmentCollector.MIN_READS_TO_SPLIT or \
-                #len(gene_info.intron_profiles.features) <= IntergenicAlignmentCollector.MIN_INTRONS_TO_SPLIT:
+        if interval_len(genomic_region) <= IntergenicAlignmentCollector.MAX_REGION_LEN or \
+                alignment_storage.get_read_count() <= IntergenicAlignmentCollector.MIN_READS_TO_SPLIT or \
+                len(gene_info.intron_profiles.features) <= IntergenicAlignmentCollector.MIN_INTRONS_TO_SPLIT:
             return [genomic_region]
 
         split_regions = []
