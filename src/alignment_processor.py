@@ -28,15 +28,17 @@ def make_alignment_tuple(bam_index, alignment):
 
 class BAMOnlineMerger:
     # single interator for several bam files
-    def __init__(self, bam_pairs, chr_id, start, end):
+    def __init__(self, bam_pairs, chr_id, start, end, multiple_iterators=False):
         self.bam_pairs = bam_pairs
+        self.multiple_iterators = multiple_iterators
         self._set(chr_id, start, end)
 
     def _set(self, chr_id, start, end):
         self.chr_id = chr_id
         self.start = start
         self.end = end
-        self.alignment_iterators = [bp[0].fetch(self.chr_id, self.start, self.end) for bp in self.bam_pairs]
+        self.alignment_iterators = [bp[0].fetch(self.chr_id, self.start, self.end,
+                                                multiple_iterators=self.multiple_iterators) for bp in self.bam_pairs]
         self.current_elements = PriorityQueue(len(self.alignment_iterators))
         for i, it in enumerate(self.alignment_iterators):
             try:
@@ -105,7 +107,8 @@ class BAMAlignmentStorage(AbstractAlignmentStorage):
         self.counter += 1
 
     def get_alignments(self, region):
-        return BAMOnlineMerger(self.bam_merger.bam_pairs, self.bam_merger.chr_id, region[0], region[1]).get()
+        return BAMOnlineMerger(self.bam_merger.bam_pairs, self.bam_merger.chr_id, region[0], region[1],
+                               multiple_iterators=True).get()
 
     def get_read_count(self):
         return self.counter
@@ -114,23 +117,29 @@ class BAMAlignmentStorage(AbstractAlignmentStorage):
 class InMemoryAlignmentStorage(AbstractAlignmentStorage):
     def __init__(self):
         AbstractAlignmentStorage.__init__(self)
-        self.alignment_index = {}
+        self.alignment_start_index = {}
+        self.alignment_end_index = {}
         self.counter = 0
         self.alignment_storage = []
         self.index_filled = False
 
     def reset(self):
         AbstractAlignmentStorage.reset(self)
-        self.alignment_index = {}
+        self.alignment_start_index = {}
+        self.alignment_end_index = {}
         self.counter = 0
         self.alignment_storage = []
         self.index_filled = False
 
     def add_alignment(self, bam_index, alignment):
         AbstractAlignmentStorage.add_alignment(self, bam_index, alignment)
-        bin_position = alignment.reference_start // self.COVERAGE_BIN
-        if bin_position not in self.alignment_index:
-            self.alignment_index[bin_position] = self.counter
+        bin_start_position = alignment.reference_start // self.COVERAGE_BIN
+        if bin_start_position not in self.alignment_start_index:
+            self.alignment_start_index[bin_start_position] = self.counter
+        bin_end_position = alignment.reference_end // self.COVERAGE_BIN
+        if bin_end_position not in self.alignment_end_index:
+            self.alignment_end_index[bin_end_position] = self.counter
+
         self.alignment_storage.append((bam_index, alignment))
         self.counter += 1
         self.index_filled = False
@@ -140,17 +149,30 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
             return
         current_index = len(self.alignment_storage)
         for pos in range(self.current_bin_region_end + 1, self.current_bin_region_start - 1, -1):
-            if pos not in self.alignment_index:
-                self.alignment_index[pos] = current_index
+            if pos not in self.alignment_start_index:
+                self.alignment_start_index[pos] = current_index
             else:
-                current_index = self.alignment_index[pos]
+                current_index = self.alignment_start_index[pos]
+        current_index = 0
+        for pos in range(0, self.current_bin_region_end + 2):
+            if pos not in self.alignment_end_index:
+                self.alignment_end_index[pos] = current_index
+            else:
+                current_index = self.alignment_end_index[pos]
 
     def get_alignments(self, region):
         self._fill_index()
-        index_start = region[0] // self.COVERAGE_BIN
-        index_end = region[1] // self.COVERAGE_BIN + 1
-        # TODO: improve indexing, yield an iterator to mimic fetch() behaviour
-        return self.alignment_storage[self.alignment_index[index_start]:self.alignment_index[index_end]]
+        # first alignment among sorted that has its end inside the start_bin, e.g. close to region[0]
+        start_bin = region[0] // self.COVERAGE_BIN
+        start_index = self.alignment_end_index[start_bin]
+        # first alignment that has its start after region[1]
+        end_bin = region[1] // self.COVERAGE_BIN + 1
+        end_index = self.alignment_start_index[end_bin]
+
+        for i in range(start_index, end_index):
+            bam_index, alignment = self.alignment_storage[i]
+            if overlaps(region, (alignment.reference_start, alignment.reference_end)):
+                yield bam_index, alignment
 
     def get_read_count(self):
         return len(self.alignment_storage)
@@ -181,7 +203,8 @@ class IntergenicAlignmentCollector:
         self.chr_record = chr_record
 
         self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, 1,
-                                          self.bam_pairs[0][0].get_reference_length(self.chr_id))
+                                          self.bam_pairs[0][0].get_reference_length(self.chr_id),
+                                          multiple_iterators=self.params.low_memory)
         self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
@@ -222,7 +245,8 @@ class IntergenicAlignmentCollector:
 
     def split_and_process_genic(self, current_region, alignment_storage, gene_info):
         assignment_storage = []
-        for new_region in self.split_region(current_region, alignment_storage, gene_info):
+        new_regions = self.split_region(current_region, alignment_storage, gene_info)
+        for new_region in new_regions:
             new_gene_info = self.get_gene_info_for_region(new_region)
             assignment_storage += self.process_genic(alignment_storage.get_alignments(new_region), new_gene_info)
 
@@ -282,8 +306,9 @@ class IntergenicAlignmentCollector:
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
         assignment_storage = []
-
+        count = 0
         for bam_index, alignment in alignment_storage:
+            count += 1
             if alignment.reference_id == -1 or alignment.is_supplementary or \
                     (self.params.no_secondary and alignment.is_secondary):
                 continue
