@@ -372,8 +372,14 @@ def set_logger(args, logger_instance):
 
     logger_instance.setLevel(output_level)
     log_file = os.path.join(args.output, "isoquant.log")
-    file_mode = "a" if args.resume else "w"
-    f = open(log_file, file_mode)
+    if os.path.exists(log_file):
+        old_log_file = os.path.join(args.output, "isoquant.log.old")
+        with open(old_log_file, "a") as olf:
+            olf.write("\n")
+            for l in open(log_file, "r"):
+                olf.write(l)
+
+    f = open(log_file, "w")
     f.write("Command line: " + args._cmd_line + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
