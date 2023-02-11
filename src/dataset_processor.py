@@ -14,7 +14,7 @@ import pickle
 import shutil
 import time
 from collections import defaultdict
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 
 import gffutils
 import pysam
@@ -241,9 +241,11 @@ class DatasetProcessor:
         self.args = args
         self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
-#        self.read_grouper = create_read_grouper(args)
+
         self.io_support = IOSupport(self.args)
-        if parallel: return
+        if parallel:
+            return
+
         self.read_grouper = create_read_grouper(args)
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
@@ -335,59 +337,66 @@ class DatasetProcessor:
             else:
                 os.remove(lock_file)
 
-        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]),
-                         reverse=True)
+        chr_ids = sorted(
+            self.reference_record_dict,
+            key=lambda x: len(self.reference_record_dict[x]),
+            reverse=True,
+        )
         if not self.args.resume:
             clean_locks(chr_ids, sample.out_raw_file, reads_collected_lock_file_name)
             clean_locks(chr_ids, sample.out_raw_file, reads_processed_lock_file_name)
 
-        if self.args.threads == 1:
-            results = itertools.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
-                                                                     (self.reference_record_dict[
-                                                                          chr_id] if self.reference_record_dict else None))
-                                                                    for chr_id in chr_ids])
-        else:
-            pool = Pool(self.args.threads)
-            results = pool.starmap(collect_reads_in_parallel, [(sample, chr_id, self.args, self.read_grouper,
-                                                                (self.reference_record_dict[chr_id] if self.reference_record_dict else None))
-                                                               for chr_id in chr_ids], chunksize=1)
-            pool.close()
-            pool.join()
-        processed_reads, read_groups = zip(*results)
+        all_read_groups = set()
+        self.multimapped_reads = defaultdict(list)
+
+        with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+            results = proc.map(
+                collect_reads_in_parallel,
+                itertools.repeat(sample),
+                chr_ids,
+                itertools.repeat(self.args),
+                itertools.repeat(self.read_grouper),
+                (self.reference_record_dict[chr_id] for chr_id in chr_ids),
+                chunksize=1,
+            )
+
+            for storage, sublist in results:
+                for read_assignment in storage:
+                    self.multimapped_reads[read_assignment.read_id].append(read_assignment)
+
+                all_read_groups.update(sublist)
 
         logger.info("Resolving multimappers")
-        self.multimapped_reads = defaultdict(list)
-        for storage in processed_reads:
-            for read_assignment in storage:
-                self.multimapped_reads[read_assignment.read_id].append(read_assignment)
-
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "_multimappers", "wb"),  -1)
         multimap_pickler.fast = True
         total_assignments = 0
         polya_assignments = 0
 
-        for read_id in list(self.multimapped_reads.keys()):
-            assignment_list = self.multimapped_reads[read_id]
-            if len(assignment_list) == 1:
-                total_assignments += 1
-                polya_assignments += 1 if assignment_list[0].polyA_found else 0
-                del self.multimapped_reads[read_id]
-                continue
-            multimap_resolver.resolve(assignment_list)
-            multimap_pickler.dump(assignment_list)
+        for assignment_list in self.multimapped_reads.values():
+            if len(assignment_list) > 1:
+                multimap_resolver.resolve(assignment_list)
+                multimap_pickler.dump(assignment_list)
+
             for a in assignment_list:
                 if a.assignment_type != ReadAssignmentType.suspended:
                     total_assignments += 1
                     if a.polyA_found:
                         polya_assignments += 1
 
+        self.multimapped_reads = {
+            read_id: assignment_list
+            for read_id, assignment_list in self.merge_assignments.items()
+            if len(assignment_list) > 1
+        }
+
         info_pickler = pickle.Pickler(open(info_file, "wb"),  -1)
         info_pickler.dump(total_assignments)
         info_pickler.dump(polya_assignments)
-        all_read_groups = set([r for sublist in read_groups for r in sublist])
         info_pickler.dump(all_read_groups)
+
         open(lock_file, "w").close()
+
         if total_assignments == 0:
             logger.warning("No reads were assigned to isoforms, check your input files")
         else:
@@ -395,7 +404,11 @@ class DatasetProcessor:
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
     def process_assigned_reads(self, sample, dump_filename):
-        chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
+        chr_ids = sorted(
+            self.reference_record_dict,
+            key=lambda x: len(self.reference_record_dict[x]),
+            reverse=True
+        )
         logger.info("Processing assigned reads " + sample.label)
 
         # set up aggregators and outputs
@@ -414,37 +427,27 @@ class DatasetProcessor:
         else:
             extended_gff_printer = None
 
-        sample_gen = (
-            (
-                SampleData(sample.file_list, f"{sample.label}_{chr_id}", sample.out_dir), 
-                chr_id,
-                dump_filename,
-                self.args,
-                self.multimapped_info_dict[chr_id],
-                self.read_grouper,
-                self.reference_record_dict[chr_id] if self.reference_record_dict else None,
-                self.io_support
+        with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+            results = proc.map(
+                construct_models_in_parallel,
+                (SampleData(sample.file_list, f"{sample.label}_{chr_id}", sample.out_dir) for chr_id in chr_ids),
+                chr_ids,
+                itertools.repeat(dump_filename),
+                itertools.repeat(self.args),
+                (self.multimapped_info_dict[chr_id] for chr_id in chr_ids),
+                itertools.repeat(self.read_grouper),
+                (self.reference_record_dict[chr_id] for chr_id in chr_ids),
+                itertools.repeat(self.io_support),
+                chunksize=1,
             )
-            for chr_id in chr_ids
-        )
 
-        if self.args.threads == 1:
-            results = itertools.starmap(construct_models_in_parallel, sample_gen)            
-        else:
-            pool = Pool(self.args.threads)
-            results = pool.starmap(construct_models_in_parallel, sample_gen, chunksize=1)
+            for read_stat_counter, tsc in results:
+                for k, v in read_stat_counter.stats_dict.items():
+                    self.read_stat_counter.stats_dict[k] += v
 
-        for read_stat_counter, tsc in results:
-            for k, v in read_stat_counter.stats_dict.items():
-                self.read_stat_counter.stats_dict[k] += v
-
-            if not self.args.no_model_construction:
-                for k, v in tsc.stats_dict.items():
-                    transcript_stat_counter.stats_dict[k] += v
-
-        if self.args.threads != 1:
-            pool.close()
-            pool.join()
+                if not self.args.no_model_construction:
+                    for k, v in tsc.stats_dict.items():
+                        transcript_stat_counter.stats_dict[k] += v
 
         if not self.args.no_model_construction:
             self.merge_transcript_models(sample.label, chr_ids, gff_printer)
@@ -470,7 +473,6 @@ class DatasetProcessor:
                 ],
                 sample.out_alt_tsv, copy_header=False
             )
-
 
         self.finalize_aggregators(sample)
 
