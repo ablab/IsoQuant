@@ -7,7 +7,7 @@
 import os
 import logging
 from collections import defaultdict
-import _pickle as pickle
+import pickle
 
 import pandas as pd
 
