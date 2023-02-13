@@ -6,12 +6,36 @@
 
 import logging
 from collections import namedtuple
+from enum import Enum, unique
+from functools import partial
 
-from src.isoform_assignment import *
-from src.gene_info import *
-from src.long_read_profiles import *
-from src.junction_comparator import *
-from src.polya_verification import *
+from .common import (
+    contains,
+    difference_in_present_features,
+    equal_ranges,
+    extra_exon_percentage,
+    has_overlapping_features,
+    jaccard_similarity,
+    overlap_intervals,
+    overlaps,
+    read_coverage_fraction,
+    rindex,
+)
+from .isoform_assignment import (
+    IsoformMatch,
+    MatchEvent,
+    MatchEventSubtype,
+    MatchClassification,
+    ReadAssignment,
+    ReadAssignmentType,
+    SupplementaryMatchConstants,
+    event_subtype_cost,
+    elongation_cost,
+)
+from .long_read_profiles import OverlappingFeaturesProfileConstructor
+from .junction_comparator import JunctionComparator
+from .polya_verification import PolyAVerifier
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -671,12 +695,12 @@ class LongReadAssigner:
             score = 0.0
             for e in match_events:
                 event_count = 1
-                if e.isoform_region != SupplementaryMatchConstansts.undefined_region and \
-                        SupplementaryMatchConstansts.absent_position not in e.isoform_region and \
+                if e.isoform_region != SupplementaryMatchConstants.undefined_region and \
+                        SupplementaryMatchConstants.absent_position not in e.isoform_region and \
                         e.event_type in {MatchEventSubtype.exon_skipping_known, MatchEventSubtype.exon_skipping_novel}:
                     event_count = e.isoform_region[1] - e.isoform_region[0] + 1
-                elif e.read_region != SupplementaryMatchConstansts.undefined_region and \
-                        SupplementaryMatchConstansts.absent_position not in e.read_region:
+                elif e.read_region != SupplementaryMatchConstants.undefined_region and \
+                        SupplementaryMatchConstants.absent_position not in e.read_region:
                     event_count = e.read_region[1] - e.read_region[0] + 1
                     if e.event_type in {MatchEventSubtype.exon_gain_novel,
                                         MatchEventSubtype.exon_gain_known,

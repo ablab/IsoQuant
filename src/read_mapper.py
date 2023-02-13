@@ -3,9 +3,10 @@ import os
 import subprocess
 import json
 import pysam
-from src.common import get_path_to_program
-from src.gtf2db import *
-from src.input_data_storage import SampleData
+
+from .common import get_path_to_program
+from .gtf2db import convert_db_to_gtf, db2bed
+from .input_data_storage import SampleData
 
 logger = logging.getLogger('IsoQuant')
 

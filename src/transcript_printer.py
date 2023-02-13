@@ -5,13 +5,11 @@
 ############################################################################
 
 import logging
+import os
 from collections import defaultdict
 from collections import namedtuple
 
-from src.common import *
-from src.assignment_io import *
-from src.long_read_assigner import *
-from src.gene_info import *
+from .common import AtomicCounter, junctions_from_blocks, max_range
 
 logger = logging.getLogger('IsoQuant')
 

@@ -7,8 +7,7 @@
 import logging
 from enum import Enum
 
-from src.common import *
-from src.isoform_assignment import *
+from .isoform_assignment import ReadAssignmentType
 
 logger = logging.getLogger('IsoQuant')
 

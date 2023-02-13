@@ -5,7 +5,7 @@
 ############################################################################
 
 import logging
-from common import *
+from common import concat_gapless_blocks
 
 logger = logging.getLogger('10XProfile')
 

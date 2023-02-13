@@ -8,12 +8,24 @@ import logging
 from collections import defaultdict
 from functools import cmp_to_key
 
-from src.common import *
-from src.assignment_io import *
-from src.isoform_assignment import *
-from src.intron_graph import *
-from src.gene_info import *
-from src.alignment_info import *
+from .common import (
+    AtomicCounter,
+    cmp,
+    get_exons,
+    get_top_count,
+    intersection_len,
+    interval_len,
+    junctions_from_blocks,
+    read_coverage_fraction,
+)
+from .assignment_io import ReadAssignmentType
+from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
+from .intron_graph import IntronGraph, VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
+from .isoform_assignment import is_matching_assignment, match_subtype_to_str_with_additional_info, MatchEventSubtype
+from .long_read_assigner import LongReadAssigner
+from .long_read_profiles import CombinedProfileConstructor
+from .polya_finder import PolyAInfo
+
 
 logger = logging.getLogger('IsoQuant')
 

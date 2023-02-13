@@ -9,7 +9,15 @@ from enum import Enum, unique
 from functools import partial
 from collections import OrderedDict, defaultdict
 
-from src.common import *
+from .common import (
+    contains,
+    equal_ranges,
+    get_intron_strand,
+    intervals_total_length,
+    is_subprofile,
+    overlaps,
+    junctions_from_blocks,
+)
 
 logger = logging.getLogger('IsoQuant')
 

@@ -4,8 +4,20 @@
 # See file LICENSE for details.
 ############################################################################
 
+import logging
 import pickle
-from src.long_read_assigner import *
+
+from .common import (
+    CANONICAL_FWD_SITES,
+    CANONICAL_REV_SITES,
+    argmin,
+    junctions_from_blocks,
+    range_list_to_str,
+    sum_intervals_from_point,
+    sum_intervals_to_point
+)
+from .isoform_assignment import match_subtype_to_str_with_additional_info
+from .long_read_assigner import ReadAssignmentType
 
 
 logger = logging.getLogger('IsoQuant')

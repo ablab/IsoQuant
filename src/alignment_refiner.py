@@ -8,9 +8,7 @@ import logging
 
 from Bio import pairwise2
 
-from src.isoform_assignment import *
-from src.gene_info import *
-from src.long_read_profiles import *
+from .isoform_assignment import MatchEventSubtype
 
 logger = logging.getLogger('IsoQuant')
 pairwise2.MAX_ALIGNMENTS = 1
