@@ -5,9 +5,7 @@
 ############################################################################
 
 import logging
-from collections import namedtuple
 
-import pysam
 from Bio import pairwise2
 
 from src.isoform_assignment import *

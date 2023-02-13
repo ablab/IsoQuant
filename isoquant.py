@@ -9,7 +9,6 @@ import glob
 import logging
 import os.path
 import sys
-from shutil import rmtree
 from io import StringIO
 import time
 

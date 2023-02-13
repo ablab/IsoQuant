@@ -5,7 +5,6 @@
 ############################################################################
 
 import logging
-from collections import namedtuple
 
 from src.isoform_assignment import *
 from src.gene_info import *

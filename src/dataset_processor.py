@@ -4,7 +4,7 @@
 # See file LICENSE for details.
 ############################################################################
 
-import _pickle as pickle
+import pickle
 import gc
 import glob
 import gzip

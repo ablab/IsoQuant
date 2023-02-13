@@ -5,7 +5,6 @@
 ############################################################################
 
 import logging
-from functools import partial
 
 import pybedtools as pbt
 from Bio import Seq

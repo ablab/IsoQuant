@@ -6,9 +6,7 @@
 
 import logging
 from enum import Enum, unique
-from collections import namedtuple
 
-from src.common import *
 
 logger = logging.getLogger('IsoQuant')
 

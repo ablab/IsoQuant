@@ -7,8 +7,6 @@
 
 import sys
 import os
-import shutil
-import random
 import argparse
 from traceback import print_exc
 from common import *

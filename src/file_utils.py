@@ -2,9 +2,6 @@ import logging
 import os
 import re
 import shutil
-from collections import defaultdict
-
-from src.read_groups import AbstractReadGrouper
 
 logger = logging.getLogger('IsoQuant')
 

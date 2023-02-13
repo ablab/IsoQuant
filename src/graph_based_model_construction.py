@@ -6,10 +6,7 @@
 
 import logging
 from collections import defaultdict
-from collections import namedtuple
-from functools import reduce
 from functools import cmp_to_key
-import copy
 
 from src.common import *
 from src.assignment_io import *

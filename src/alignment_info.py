@@ -5,8 +5,6 @@
 ############################################################################
 
 import logging
-import pysam
-from Bio import SeqIO
 
 from src.polya_finder import *
 from src.polya_verification import *
