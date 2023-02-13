@@ -1,4 +1,4 @@
-from collections import namedtuple, Counter
+from collections import namedtuple
 
 import pytest
 import gffutils

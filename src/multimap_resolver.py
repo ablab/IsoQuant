@@ -6,7 +6,6 @@
 
 import logging
 from enum import Enum
-from collections import defaultdict
 
 from src.common import *
 from src.isoform_assignment import *

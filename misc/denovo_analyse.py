@@ -7,11 +7,9 @@
 
 import sys
 import os
-import shutil
-import random
 import argparse
 from traceback import print_exc
-from common import *
+
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)

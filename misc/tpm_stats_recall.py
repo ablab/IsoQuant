@@ -6,14 +6,10 @@
 # See file LICENSE for details.
 ############################################################################
 
-import os
-import subprocess
 import sys
 import argparse
 from collections import defaultdict
 from traceback import print_exc
-from enum import Enum, unique
-from common import *
 
 
 def parse_args():

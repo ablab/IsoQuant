@@ -5,9 +5,7 @@
 ############################################################################
 
 import logging
-import pysam
-from queue import PriorityQueue, Empty
-from Bio import SeqIO
+from queue import PriorityQueue
 
 from src.long_read_assigner import *
 from src.long_read_profiles import *

@@ -14,7 +14,6 @@ from traceback import print_exc
 
 import gffutils
 from Bio import SeqIO
-from Bio import Seq
 from collections import defaultdict
 from gtf2db import *
 from common import *

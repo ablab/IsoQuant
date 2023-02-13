@@ -9,7 +9,6 @@
 import json
 import logging
 import os
-import sys
 import gffutils
 import argparse
 from traceback import print_exc

@@ -7,16 +7,10 @@
 ############################################################################
 
 import os
-import subprocess
 import sys
 import argparse
-from collections import defaultdict
 from traceback import print_exc
-from collections import namedtuple
 
-import pysam
-import gffutils
-from enum import Enum, unique
 from common import *
 
 

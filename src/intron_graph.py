@@ -7,7 +7,6 @@
 import logging
 import queue
 from collections import defaultdict
-from enum import Enum, unique
 
 from src.common import *
 

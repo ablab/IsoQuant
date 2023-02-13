@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
 import os
-import subprocess
 import argparse
-import pathlib
 
-from collections import Counter
-
-import pandas as pd
 import numpy as np
 
 

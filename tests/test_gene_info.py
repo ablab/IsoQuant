@@ -1,4 +1,3 @@
-import pytest
 import gffutils
 from src.gene_info import *
 

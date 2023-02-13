@@ -3,7 +3,6 @@ import os
 import subprocess
 import json
 import pysam
-from Bio import SeqIO
 from src.common import get_path_to_program
 from src.gtf2db import *
 from src.input_data_storage import SampleData

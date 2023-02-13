@@ -5,11 +5,9 @@
 ############################################################################
 
 import logging
-import gffutils
 from enum import Enum, unique
 from functools import partial
-from collections import defaultdict
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 from src.common import *
 

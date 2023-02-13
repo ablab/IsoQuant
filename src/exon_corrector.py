@@ -5,7 +5,6 @@
 ############################################################################
 
 import logging
-from collections import namedtuple
 
 from src.common import *
 from src.gene_info import *
