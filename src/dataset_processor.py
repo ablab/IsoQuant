@@ -4,24 +4,48 @@
 # See file LICENSE for details.
 ############################################################################
 
-import pickle
 import gc
 import glob
 import gzip
-import os
-import time
-from multiprocessing import Pool
 import itertools
+import logging
+import os
+import pickle
+import shutil
+import time
+from collections import defaultdict
+from multiprocessing import Pool
 
-from src.file_utils import *
-from src.input_data_storage import *
-from src.alignment_processor import *
-from src.long_read_counter import *
-from src.multimap_resolver import *
-from src.read_groups import *
-from src.transcript_printer import *
-from src.stats import *
-from src.graph_based_model_construction import *
+import gffutils
+import pysam
+import Bio.SeqIO as SeqIO
+
+from .common import proper_plural_form, rreplace
+from .isoform_assignment import BasicReadAssignment, ReadAssignment, ReadAssignmentType
+from .gene_info import GeneInfo
+from .stats import EnumStats
+from .file_utils import merge_files
+from .input_data_storage import SampleData
+from .alignment_processor import IntergenicAlignmentCollector
+from .long_read_counter import (
+    ExonCounter,
+    IntronCounter,
+    CompositeCounter,
+    create_gene_counter,
+    create_transcript_counter,
+)
+from .multimap_resolver import MultimapResolver
+from .read_groups import create_read_grouper
+from .assignment_io import (
+    IOSupport,
+    BEDPrinter,
+    ReadAssignmentCompositePrinter,
+    SqantiTSVPrinter,
+    BasicTSVAssignmentPrinter,
+    TmpFileAssignmentPrinter,
+)
+from .transcript_printer import GFFPrinter
+from .graph_based_model_construction import GraphBasedModelConstructor
 
 
 logger = logging.getLogger('IsoQuant')

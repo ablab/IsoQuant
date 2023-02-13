@@ -4,9 +4,18 @@
 # See file LICENSE for details.
 ############################################################################
 
-from src.isoform_assignment import *
-from src.gene_info import *
-from src.read_groups import *
+import logging
+from collections import defaultdict
+from enum import Enum, unique
+
+from .isoform_assignment import (
+    ReadAssignmentType,
+    nonintronic_events,
+    get_assigned_gene_id,
+    get_assigned_transcript_id
+)
+from .gene_info import FeatureInfo
+from .read_groups import AbstractReadGrouper
 
 logger = logging.getLogger('IsoQuant')
 

@@ -323,7 +323,7 @@ alternative_sites = {("left", True): MatchEventSubtype.alt_left_site_known,
                      ("right", False): MatchEventSubtype.alt_right_site_novel}
 
 
-class SupplementaryMatchConstansts:
+class SupplementaryMatchConstants:
     extra_left_mod_position = -1000000
     extra_right_mod_position = 1000000
     undefined_position = -2000000
@@ -335,8 +335,8 @@ class SupplementaryMatchConstansts:
 
 class MatchEvent:
     def __init__(self, event_type:MatchEventSubtype,
-                 isoform_region:tuple=SupplementaryMatchConstansts.undefined_region,
-                 read_region:tuple=SupplementaryMatchConstansts.undefined_region,
+                 isoform_region:tuple=SupplementaryMatchConstants.undefined_region,
+                 read_region:tuple=SupplementaryMatchConstants.undefined_region,
                  event_info=0):
         self.event_type = event_type
         self.isoform_region = isoform_region
@@ -508,7 +508,7 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
                          MatchEventSubtype.incomplete_intron_retention_left,
                          MatchEventSubtype.incomplete_intron_retention_right,
                          MatchEventSubtype.fake_micro_intron_retention}:
-        if event.isoform_region != SupplementaryMatchConstansts.undefined_region:
+        if event.isoform_region != SupplementaryMatchConstants.undefined_region:
             introns = isoform_introns[event.isoform_region[0]:event.isoform_region[1]+1]
             additional_info = ":" + regions_to_str(introns)
     elif event_subtype in {MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
@@ -520,7 +520,7 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
         # elongation events
         additional_info = ":" + str(event.event_info)
     else:
-        if event.read_region != SupplementaryMatchConstansts.undefined_region and \
+        if event.read_region != SupplementaryMatchConstants.undefined_region and \
                 event.read_region[0] >= 0 and event.read_region[1] >= 0:
             introns = read_introns[event.read_region[0]:event.read_region[1]+1]
             # logger.debug(read_introns)

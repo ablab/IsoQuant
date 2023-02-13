@@ -7,9 +7,8 @@
 import logging
 import math
 
-from src.isoform_assignment import *
-from src.gene_info import *
-from src.long_read_profiles import *
+from .common import interval_len, intervals_total_length
+from .isoform_assignment import MatchEvent, MatchEventSubtype
 
 logger = logging.getLogger('IsoQuant')
 

@@ -6,8 +6,8 @@
 
 import logging
 
-from src.polya_finder import *
-from src.polya_verification import *
+from .common import get_read_blocks
+from .polya_verification import shift_polya, shift_polyt
 
 logger = logging.getLogger('IsoQuant')
 

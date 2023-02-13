@@ -6,7 +6,7 @@
 
 import logging
 import gzip
-from src.common import *
+import os
 
 logger = logging.getLogger('IsoQuant')
 

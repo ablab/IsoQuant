@@ -8,7 +8,14 @@ import logging
 from functools import partial
 from collections import defaultdict
 
-from src.common import *
+from .common import (
+    contains,
+    equal_ranges,
+    junctions_from_blocks,
+    left_of,
+    overlaps,
+    overlaps_at_least,
+)
 
 logger = logging.getLogger('IsoQuant')
 

@@ -11,7 +11,7 @@ import pickle
 
 import pandas as pd
 
-from src.common import proper_plural_form
+from .common import proper_plural_form
 
 
 logger = logging.getLogger('IsoQuant')

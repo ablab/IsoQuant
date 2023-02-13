@@ -5,15 +5,26 @@
 ############################################################################
 
 import logging
+from collections import defaultdict
 from queue import PriorityQueue
 
-from src.long_read_assigner import *
-from src.long_read_profiles import *
-from src.read_groups import *
-from src.polya_finder import *
-from src.polya_verification import *
-from src.exon_corrector import *
-from src.alignment_info import *
+from .common import interval_len, junctions_from_blocks, overlaps
+from .gene_info import GeneInfo, StrandDetector
+from .long_read_assigner import LongReadAssigner
+from .long_read_profiles import CombinedProfileConstructor
+from .isoform_assignment import (
+    IsoformMatch,
+    MatchClassification,
+    MatchEvent,
+    MatchEventSubtype,
+    ReadAssignment,
+    ReadAssignmentType,
+)
+from .read_groups import DefaultReadGrouper
+from .polya_finder import PolyAFinder, CagePeakFinder
+from .polya_verification import PolyAFixer
+from .exon_corrector import ExonCorrector
+from .alignment_info import AlignmentInfo
 
 logger = logging.getLogger('IsoQuant')
 

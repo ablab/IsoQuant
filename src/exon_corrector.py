@@ -5,11 +5,11 @@
 ############################################################################
 
 import logging
+from functools import partial
 
-from src.common import *
-from src.gene_info import *
-from src.isoform_assignment import *
-from src.long_read_profiles import *
+from .common import equal_ranges, junctions_from_blocks, contains_well_inside
+from .isoform_assignment import ReadAssignmentType, MatchEventSubtype, SupplementaryMatchConstants
+from .long_read_profiles import OverlappingFeaturesProfileConstructor
 
 logger = logging.getLogger('IsoQuant')
 
@@ -81,9 +81,9 @@ class ExonCorrector:
     def correct_misalignments(self, alignment_info, read_assignment):
         event_map = {}
         for e in read_assignment.isoform_matches[0].match_subclassifications:
-            if e.read_region == SupplementaryMatchConstansts.undefined_region:
+            if e.read_region == SupplementaryMatchConstants.undefined_region:
                 continue
-            if e.read_region[0] == SupplementaryMatchConstansts.absent_position:
+            if e.read_region[0] == SupplementaryMatchConstants.absent_position:
                 if e.event_type == MatchEventSubtype.fake_micro_intron_retention and \
                         self.params.correct_microintron_retention:
                     event_map[-e.read_region[1]-1] = e

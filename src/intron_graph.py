@@ -8,7 +8,7 @@ import logging
 import queue
 from collections import defaultdict
 
-from src.common import *
+from .common import find_closest, overlaps
 
 logger = logging.getLogger('IsoQuant')
 
