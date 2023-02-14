@@ -386,7 +386,7 @@ class DatasetProcessor:
 
         self.multimapped_reads = {
             read_id: assignment_list
-            for read_id, assignment_list in self.merge_assignments.items()
+            for read_id, assignment_list in self.multimapped_reads.items()
             if len(assignment_list) > 1
         }
 
