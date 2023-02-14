@@ -3,9 +3,20 @@ from collections import namedtuple
 import pytest
 import gffutils
 import os
+from functools import partial
 
-from src.long_read_assigner import *
-from src.gene_info import *
+from src.common import equal_ranges, overlaps_at_least
+from src.isoform_assignment import MatchEventSubtype, ReadAssignmentType
+from src.long_read_assigner import (
+    AmbiguityResolvingMethod,
+    CombinedReadProfiles,
+    IsoformDiff,
+    LongReadAssigner,
+    MappedReadProfile,
+    OverlappingFeaturesProfileConstructor,
+    NonOverlappingFeaturesProfileConstructor,
+)
+from src.gene_info import GeneInfo
 from src.polya_finder import PolyAInfo
 
 
