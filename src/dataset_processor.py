@@ -397,57 +397,80 @@ class DatasetProcessor:
     def process_assigned_reads(self, sample, dump_filename):
         chr_ids = sorted(self.reference_record_dict.keys(), key=lambda x: len(self.reference_record_dict[x]), reverse=True)
         logger.info("Processing assigned reads " + sample.label)
+
+        # set up aggregators and outputs
+        self.create_aggregators(sample)
+        transcript_stat_counter = EnumStats()
+
+        gff_printer = GFFPrinter(
+            sample.out_dir, sample.label, self.io_support, header=self.common_header
+        )
+        if self.args.genedb:
+            extended_gff_printer = GFFPrinter(
+                sample.out_dir, sample.label, self.io_support, 
+                gtf_suffix=".extended_annotation.gtf", output_r2t=False,
+                header=self.common_header
+            )
+        else:
+            extended_gff_printer = None
+
+        sample_gen = (
+            (
+                SampleData(sample.file_list, f"{sample.label}_{chr_id}", sample.out_dir), 
+                chr_id,
+                dump_filename,
+                self.args,
+                self.multimapped_info_dict[chr_id],
+                self.read_grouper,
+                self.reference_record_dict[chr_id] if self.reference_record_dict else None,
+                self.io_support
+            )
+            for chr_id in chr_ids
+        )
+
         if self.args.threads == 1:
-            results = itertools.starmap(construct_models_in_parallel, [(SampleData(sample.file_list, sample.label + "_" + chr_id,
-                                                                                   sample.out_dir), chr_id, dump_filename,
-                                                                        self.args, self.multimapped_info_dict[chr_id], self.read_grouper,
-                                                                        (self.reference_record_dict[chr_id] if self.reference_record_dict else None),
-                                                                        self.io_support) for chr_id in chr_ids])
+            results = itertools.starmap(construct_models_in_parallel, sample_gen)            
         else:
             pool = Pool(self.args.threads)
-            results = pool.starmap(construct_models_in_parallel, [(SampleData(sample.file_list, sample.label + "_" + chr_id,
-                                                                              sample.out_dir), chr_id, dump_filename,
-                                                                   self.args, self.multimapped_info_dict[chr_id], self.read_grouper,
-                                                                   (self.reference_record_dict[chr_id] if self.reference_record_dict else None),
-                                                                   self.io_support) for chr_id in chr_ids], chunksize=1)
-            pool.close()
-            pool.join()
+            results = pool.starmap(construct_models_in_parallel, sample_gen, chunksize=1)
 
-        read_stat_counters, transcript_stat_counters = zip(*results)
-        self.create_aggregators(sample)
-        for read_stat_counter in read_stat_counters:
+        for read_stat_counter, tsc in results:
             for k, v in read_stat_counter.stats_dict.items():
                 self.read_stat_counter.stats_dict[k] += v
 
-        gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support,
-                                 header=self.common_header)
-        extended_gff_printer = None
-        if self.args.genedb:
-            extended_gff_printer = GFFPrinter(sample.out_dir, sample.label, self.io_support,
-                                              gtf_suffix=".extended_annotation.gtf", output_r2t=False,
-                                              header=self.common_header)
-
-        transcript_stat_counter = EnumStats()
-        self.merge_assignments(sample, chr_ids)
-        if self.args.sqanti_output:
-            merge_files(
-                [rreplace(sample.out_alt_tsv, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
-                sample.out_alt_tsv, copy_header=False)
-
-        if not self.args.no_model_construction:
-            for tsc in transcript_stat_counters:
+            if not self.args.no_model_construction:
                 for k, v in tsc.stats_dict.items():
                     transcript_stat_counter.stats_dict[k] += v
 
+        if self.args.threads != 1:
+            pool.close()
+            pool.join()
+
+        if not self.args.no_model_construction:
             self.merge_transcript_models(sample.label, chr_ids, gff_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
             if extended_gff_printer:
                 merge_files(
-                    [rreplace(extended_gff_printer.model_fname, sample.label, sample.label + "_" + chr_id) for chr_id in
-                     chr_ids],
-                    extended_gff_printer.model_fname, copy_header=False)
+                    [ 
+                        rreplace(extended_gff_printer.model_fname, sample.label, f"{sample.label}_{chr_id}")
+                        for chr_id in chr_ids
+                    ],
+                    extended_gff_printer.model_fname,
+                    copy_header=False
+                )
                 logger.info("Extended annotation is saved to " + extended_gff_printer.model_fname)
             transcript_stat_counter.print_start("Transcript model statistics")
+
+        self.merge_assignments(sample, chr_ids)
+        if self.args.sqanti_output:
+            merge_files(
+                [
+                    rreplace(sample.out_alt_tsv, sample.label, f"{sample.label}_{chr_id}")
+                    for chr_id in chr_ids
+                ],
+                sample.out_alt_tsv, copy_header=False
+            )
+
 
         self.finalize_aggregators(sample)
 
