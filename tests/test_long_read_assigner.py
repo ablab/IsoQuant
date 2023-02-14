@@ -9,11 +9,13 @@ from src.common import equal_ranges, overlaps_at_least
 from src.isoform_assignment import MatchEventSubtype, ReadAssignmentType
 from src.long_read_assigner import (
     AmbiguityResolvingMethod,
-    CombinedReadProfiles,
     IsoformDiff,
     LongReadAssigner,
-    MappedReadProfile,
+)
+from src.long_read_profiles import (
+    CombinedReadProfiles,
     OverlappingFeaturesProfileConstructor,
+    MappedReadProfile,
     NonOverlappingFeaturesProfileConstructor,
 )
 from src.gene_info import GeneInfo
