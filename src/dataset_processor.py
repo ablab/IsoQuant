@@ -349,18 +349,26 @@ class DatasetProcessor:
         all_read_groups = set()
         self.multimapped_reads = defaultdict(list)
 
-        with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
-            results = proc.map(
-                collect_reads_in_parallel,
-                itertools.repeat(sample),
-                chr_ids,
-                itertools.repeat(self.args),
-                itertools.repeat(self.read_grouper),
-                (self.reference_record_dict[chr_id] for chr_id in chr_ids),
-                chunksize=1,
-            )
+        read_gen = (
+            collect_reads_in_parallel,
+            itertools.repeat(sample),
+            chr_ids,
+            itertools.repeat(self.args),
+            itertools.repeat(self.read_grouper),
+            (self.reference_record_dict[chr_id] for chr_id in chr_ids)
+        )
 
-            for storage, sublist in results:
+        if self.args.threads > 1:
+            with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+                results = proc.map(*read_gen, chunksize=1)
+
+                for storage, sublist in results:
+                    for read_assignment in storage:
+                        self.multimapped_reads[read_assignment.read_id].append(read_assignment)
+
+                    all_read_groups.update(sublist)
+        else:
+            for storage, sublist in map(*read_gen):
                 for read_assignment in storage:
                     self.multimapped_reads[read_assignment.read_id].append(read_assignment)
 
@@ -427,21 +435,31 @@ class DatasetProcessor:
         else:
             extended_gff_printer = None
 
-        with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
-            results = proc.map(
-                construct_models_in_parallel,
-                (SampleData(sample.file_list, f"{sample.label}_{chr_id}", sample.out_dir) for chr_id in chr_ids),
-                chr_ids,
-                itertools.repeat(dump_filename),
-                itertools.repeat(self.args),
-                (self.multimapped_info_dict[chr_id] for chr_id in chr_ids),
-                itertools.repeat(self.read_grouper),
-                (self.reference_record_dict[chr_id] for chr_id in chr_ids),
-                itertools.repeat(self.io_support),
-                chunksize=1,
-            )
+        model_gen = (
+            construct_models_in_parallel,
+            (SampleData(sample.file_list, f"{sample.label}_{chr_id}", sample.out_dir) for chr_id in chr_ids),
+            chr_ids,
+            itertools.repeat(dump_filename),
+            itertools.repeat(self.args),
+            (self.multimapped_info_dict[chr_id] for chr_id in chr_ids),
+            itertools.repeat(self.read_grouper),
+            (self.reference_record_dict[chr_id] for chr_id in chr_ids),
+            itertools.repeat(self.io_support),
+        )
 
-            for read_stat_counter, tsc in results:
+        if self.args.threads > 1:
+            with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+                results = proc.map(*model_gen, chunksize=1)
+
+                for read_stat_counter, tsc in results:
+                    for k, v in read_stat_counter.stats_dict.items():
+                        self.read_stat_counter.stats_dict[k] += v
+
+                    if not self.args.no_model_construction:
+                        for k, v in tsc.stats_dict.items():
+                            transcript_stat_counter.stats_dict[k] += v
+        else:
+            for read_stat_counter, tsc in map(*model_gen):
                 for k, v in read_stat_counter.stats_dict.items():
                     self.read_stat_counter.stats_dict[k] += v
 
