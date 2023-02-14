@@ -1,5 +1,6 @@
 import gffutils
-from src.gene_info import *
+import os
+from src.gene_info import GeneInfo
 
 
 class TestGeneInfo:
