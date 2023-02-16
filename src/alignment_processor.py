@@ -409,6 +409,9 @@ class IntergenicAlignmentCollector:
         assert self.genedb is not None
         gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
                                             end=current_region[1], featuretype="gene"))
+        if not gene_list:
+            return GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
+                                        self.params.delta, self.chr_record)
         gene_list = sorted(gene_list, key=lambda x: x.start)
         gene_info = GeneInfo(gene_list, self.genedb, self.params.delta)
         if self.params.needs_reference:
