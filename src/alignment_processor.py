@@ -247,7 +247,11 @@ class IntergenicAlignmentCollector:
         new_regions = self.split_region(current_region, alignment_storage, gene_info)
         for new_region in new_regions:
             new_gene_info = self.get_gene_info_for_region(new_region)
-            for assignment in self.process_genic(alignment_storage.get_alignments(new_region), new_gene_info):
+            if new_gene_info.gene_db_list:
+                assignment_iterator = self.process_genic(alignment_storage.get_alignments(new_region), new_gene_info)
+            else:
+                assignment_iterator = self.process_intergenic(alignment_storage.get_alignments(current_region))
+            for assignment in assignment_iterator:
                 yield assignment
 
     def process_intergenic(self, alignment_storage):
