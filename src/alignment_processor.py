@@ -74,7 +74,7 @@ class AbstractAlignmentStorage:
 
     def reset(self):
         self.coverage_dict = defaultdict(int)
-        self.current_bin_region_start = math.inf
+        self.current_bin_region_start = 4294967296 # infinity
         self.current_bin_region_end = 0
 
     def add_alignment(self, bam_index, alignment):
