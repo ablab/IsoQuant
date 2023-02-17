@@ -277,7 +277,6 @@ def elongation_cost(params, elongation_len):
     elif elongation_len >= upper_bound:
         return max_cost
     else:
-        logger.debug(str(elongation_len) + ", " + str(lower_bound) + "," + str(upper_bound) + ", " + str((elongation_len - lower_bound) / (upper_bound - lower_bound)))
         return min_cost + (max_cost - min_cost) * (elongation_len - lower_bound) / (upper_bound - lower_bound)
 
 
@@ -380,26 +379,23 @@ class IsoformMatch:
 
 
 class BasicReadAssignment:
-    def __init__(self, read_assignment, gene_info):
+    def __init__(self, read_assignment):
+        self.assignment_id = read_assignment.assignment_id
         self.read_id = read_assignment.read_id
         self.chr_id = read_assignment.chr_id
-        self.start = read_assignment.start()
-        self.end = read_assignment.end()
-        self.gene_id = gene_info.gene_db_list[0].id if gene_info.gene_db_list else ""
         self.multimapper = read_assignment.multimapper
         self.polyA_found = read_assignment.polyA_found
         self.assignment_type = read_assignment.assignment_type
         if read_assignment.isoform_matches:
             self.score = read_assignment.isoform_matches[0].score
-            self.matches = len(read_assignment.isoform_matches)
         else:
-            self.matches = 0
             self.score = 0.0
-        self.read_group = read_assignment.read_group
 
 
 class ReadAssignment:
+    assignment_id_generator = AtomicCounter()
     def __init__(self, read_id, assignment_type, match=None):
+        self.assignment_id = ReadAssignment.assignment_id_generator.increment()
         self.read_id = read_id
         self.exons = None
         self.corrected_exons = None
@@ -523,9 +519,6 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
         if event.read_region != SupplementaryMatchConstants.undefined_region and \
                 event.read_region[0] >= 0 and event.read_region[1] >= 0:
             introns = read_introns[event.read_region[0]:event.read_region[1]+1]
-            # logger.debug(read_introns)
-            # logger.debug("+ adding info for %s, introns indices %s, introns %s" %
-            #              (str(event.event_type), str(event.read_region), str(introns)))
             additional_info = ":" + regions_to_str(introns)
 
     return match_subtype_to_str(event, strand) + additional_info

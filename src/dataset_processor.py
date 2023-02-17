@@ -89,7 +89,7 @@ def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
                 read_grouper.read_groups.add(g.strip())
             for gene_info, assignment_storage in load_assigned_reads(save_file, None, None):
                 for a in assignment_storage:
-                    processed_reads.append(BasicReadAssignment(a, gene_info))
+                    processed_reads.append(BasicReadAssignment(a))
             logger.info("Loaded data for " + chr_id)
             return processed_reads, read_grouper.read_groups
         else:
@@ -112,7 +112,7 @@ def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
-            processed_reads.append(BasicReadAssignment(read_assignment, gene_info))
+            processed_reads.append(BasicReadAssignment(read_assignment))
     with open(group_file, "w") as group_dump:
         for g in read_grouper.read_groups:
             group_dump.write("%s\n" % g)
@@ -153,13 +153,9 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                 if multimapped_chr_dict is not None and read_assignment.read_id in multimapped_chr_dict:
                     resolved_assignment = None
                     for a in multimapped_chr_dict[read_assignment.read_id]:
-                        if a.start == read_assignment.start() and a.end == read_assignment.end() and \
-                                a.chr_id == read_assignment.chr_id and \
-                                (a.assignment_type in [ReadAssignmentType.intergenic, ReadAssignmentType.noninformative] or
-                                 ((not current_gene_info.gene_db_list or a.gene_id == current_gene_info.gene_db_list[0].id) and
-                                  a.matches == (0 if not read_assignment.isoform_matches else len(read_assignment.isoform_matches)))):
+                        if a.assignment_id == read_assignment.assignment_id and a.chr_id == read_assignment.chr_id:
                             if resolved_assignment is not None:
-                                logger.debug("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
+                                logger.info("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
                             resolved_assignment = a
 
                     if not resolved_assignment:
