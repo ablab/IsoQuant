@@ -135,7 +135,7 @@ def run_isoquant(args, config_dict, log):
 
         log.start_block('isoquant', 'Running IsoQuant')
         isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
-                                 "-r", genome, "-d", config_dict["datatype"], "-t", "16", "-l", run_name]
+                                 "-r", genome, "-d", config_dict["datatype"], "-l", run_name]
         if genedb:
             isoquant_command_list += ["--genedb", genedb]
         if "bam" in config_dict:
