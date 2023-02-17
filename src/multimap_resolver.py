@@ -49,7 +49,6 @@ class MultimapResolver:
 
     def select_best_assignment(self, assignment_list):
         logger.debug("Resolving read %s" % assignment_list[0].read_id)
-        logger.debug("Read assignment types %s" % " ".join(a.assignment_type.name for a in assignment_list))
         primary_unique = set()
         consistent_assignments = set()
         inconsistent_assignments = set()
@@ -69,40 +68,30 @@ class MultimapResolver:
 
         if primary_unique:
             if len(primary_unique) > 1:
-                # TODO silence warn
-                logger.debug("Multiple primary unique %s: %s " % (assignment_list[0].read_id, ",".join([assignment_list[i].gene_id for i in primary_unique])))
                 return self.suspend_assignments(assignment_list, primary_unique, ReadAssignmentType.ambiguous)
             # primary unique is found, rest is noninformative
-            logger.debug("Primary unique assignment selected: %s" %
-                         " ".join([assignment_list[i].gene_id for i in primary_unique]))
             return self.suspend_assignments(assignment_list, primary_unique)
 
         if consistent_assignments:
-            logger.debug("Merging %d consistent assignments " % len(consistent_assignments))
             return self.suspend_assignments(assignment_list, consistent_assignments, ReadAssignmentType.ambiguous)
 
         if primary_inconsistent:
             return self.select_best_inconsistent(assignment_list, primary_inconsistent)
 
-        logger.debug("Merging inconsistent from %d assignments" % len(inconsistent_assignments))
         if inconsistent_assignments:
             return self.select_best_inconsistent(assignment_list, inconsistent_assignments)
         return assignment_list
 
     def select_best_inconsistent(self, assignment_list, inconsistent_assignments):
         if len(inconsistent_assignments) > 1:
-            logger.debug("= Multiple primary inconsistent " +
-                         ",".join([assignment_list[i].gene_id for i in inconsistent_assignments]))
             assignment_scores = []
             for i in inconsistent_assignments:
                 assignment_scores.append((assignment_list[i].score, i))
             best_score = min(assignment_scores, key=lambda x: x[0])[0]
-            logger.debug("= Best score " + str(best_score))
             best_isoforms = [x[1] for x in filter(lambda x: x[0] == best_score, assignment_scores)]
             return self.suspend_assignments(assignment_list, best_isoforms,
                                             ReadAssignmentType.inconsistent if len(best_isoforms) > 1 else None)
 
-        logger.debug("Primary inconsistent assignment selected")
         return self.suspend_assignments(assignment_list, inconsistent_assignments)
 
     def suspend_assignments(self, assignment_list, assignments_to_keep, new_type=None):
