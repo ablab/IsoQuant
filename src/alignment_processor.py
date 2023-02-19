@@ -34,6 +34,7 @@ class BAMOnlineMerger:
         self._set(chr_id, start, end)
 
     def _set(self, chr_id, start, end):
+        assert end >= start
         self.chr_id = chr_id
         self.start = start
         self.end = end
@@ -161,6 +162,7 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
                 current_index = self.alignment_end_index[pos]
 
     def get_alignments(self, region):
+        assert region[1] >= region[0]
         self._fill_index()
         # first alignment among sorted that has its end inside the start_bin, e.g. close to region[0]
         start_bin = region[0] // self.COVERAGE_BIN
@@ -224,7 +226,7 @@ class IntergenicAlignmentCollector:
             else:
                 yield self.process_alignments_in_region(current_region, alignment_storage)
                 alignment_storage.reset()
-                current_region = None
+                current_region = (alignment.reference_start, alignment.reference_end)
 
             alignment_storage.add_alignment(bam_index, alignment)
 
