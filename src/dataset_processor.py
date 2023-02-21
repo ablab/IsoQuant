@@ -35,7 +35,10 @@ from .long_read_counter import (
     create_transcript_counter,
 )
 from .multimap_resolver import MultimapResolver
-from .read_groups import create_read_grouper
+from .read_groups import (
+    create_read_grouper,
+    DefaultReadGrouper
+)
 from .assignment_io import (
     IOSupport,
     BEDPrinter,
@@ -130,7 +133,6 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
     gc.disable()
     logger.info("Loading read assignments from " + save_file_name)
     assert os.path.exists(save_file_name)
-    save_file_name = save_file_name
     unpickler = pickle.Unpickler(open(save_file_name, "rb"), fix_imports=False)
     read_storage = []
     current_gene_info = None
@@ -189,9 +191,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
         return EnumStats(read_stat_file), EnumStats(transcript_stat_file)
 
-    processor = DatasetProcessor(args, parallel=True)
-    processor.read_grouper = read_grouper
-    processor.create_aggregators(sample)
+    aggregator = ReadAssignmentAggregator(args, sample, read_grouper)
     if args.genedb:
         gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
     else:
@@ -210,13 +210,13 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
         for read_assignment in assignment_storage:
             if read_assignment is None:
                 continue
-            processor.read_stat_counter.add(read_assignment.assignment_type)
-            processor.global_printer.add_read_info(read_assignment)
-            processor.global_counter.add_read_info(read_assignment)
+            aggregator.read_stat_counter.add(read_assignment.assignment_type)
+            aggregator.global_printer.add_read_info(read_assignment)
+            aggregator.global_counter.add_read_info(read_assignment)
 
         if not args.no_model_construction:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
-                                                           processor.transcript_model_global_counter)
+                                                           aggregator.transcript_model_global_counter)
             model_constructor.process(assignment_storage)
             tmp_gff_printer.dump(model_constructor)
             if tmp_extended_gff_printer:
@@ -224,29 +224,90 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
             for t in model_constructor.transcript_model_storage:
                 transcript_stat_counter.add(t.transcript_type)
 
-    processor.global_counter.dump()
-    processor.transcript_model_global_counter.dump()
-    processor.read_stat_counter.dump(read_stat_file)
+    aggregator.global_counter.dump()
+    aggregator.transcript_model_global_counter.dump()
+    aggregator.read_stat_counter.dump(read_stat_file)
     transcript_stat_counter.dump(transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
     time.sleep(1)
 
-    return processor.read_stat_counter, transcript_stat_counter
+    return aggregator.read_stat_counter, transcript_stat_counter
+
+
+class ReadAssignmentAggregator:
+    def __init__(self, args, sample, read_grouper):
+        self.args = args
+        self.read_grouper = read_grouper
+        self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
+        self.io_support = IOSupport(self.args)
+
+        self.read_stat_counter = EnumStats()
+        self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed, self.args, print_corrected=True)
+        printer_list = [self.corrected_bed_printer]
+        if self.args.genedb:
+            self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
+                                                           additional_header=self.common_header)
+            printer_list.append(self.basic_printer)
+        if self.args.sqanti_output:
+            self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
+            printer_list.append(self.sqanti_printer)
+        self.global_printer = ReadAssignmentCompositePrinter(printer_list)
+
+        self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, self.args.gene_quantification,
+                                                ignore_read_groups=True, output_zeroes=False)
+        self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
+                                                            self.args.transcript_quantification,
+                                                            ignore_read_groups=True, output_zeroes=False)
+        self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
+                                                                  self.args.transcript_quantification,
+                                                                  ignore_read_groups=True, output_zeroes=False)
+
+        self.transcript_model_global_counter = CompositeCounter([self.transcript_model_counter])
+        if self.args.count_exons:
+            self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
+            self.intron_counter = IntronCounter(sample.out_intron_counts_tsv, ignore_read_groups=True)
+            self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter,
+                                                    self.exon_counter, self.intron_counter])
+        else:
+            self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
+
+        if self.args.read_group:
+            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
+                                                            self.args.gene_quantification, self.read_grouper)
+            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
+                                                                        self.args.transcript_quantification,
+                                                                        self.read_grouper)
+            self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
+                                                                              self.args.transcript_quantification,
+                                                                              self.read_grouper, output_zeroes=False)
+
+            self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
+            if self.args.count_exons:
+                self.exon_grouped_counter = ExonCounter(sample.out_exon_grouped_counts_tsv)
+                self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
+                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter,
+                                                  self.exon_grouped_counter, self.intron_grouped_counter])
+            else:
+                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
+
+    def finalize_aggregators(self, sample):
+        logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
+        logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
+        if self.args.genedb:
+            logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
+        self.read_stat_counter.print_start("Read assignment statistics")
 
 
 # Class for processing all samples against gene database
 class DatasetProcessor:
-    def __init__(self, args, parallel=False):
+    def __init__(self, args):
         self.args = args
         self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
-
         self.io_support = IOSupport(self.args)
-        if parallel:
-            return
+        self.read_grouper = create_read_grouper(self.args)
 
-        self.read_grouper = create_read_grouper(args)
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
             self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
@@ -420,7 +481,7 @@ class DatasetProcessor:
         logger.info("Processing assigned reads " + sample.label)
 
         # set up aggregators and outputs
-        self.create_aggregators(sample)
+        aggregator = ReadAssignmentAggregator(self.args, sample, self.read_grouper)
         transcript_stat_counter = EnumStats()
 
         gff_printer = GFFPrinter(
@@ -453,7 +514,7 @@ class DatasetProcessor:
 
                 for read_stat_counter, tsc in results:
                     for k, v in read_stat_counter.stats_dict.items():
-                        self.read_stat_counter.stats_dict[k] += v
+                        aggregator.read_stat_counter.stats_dict[k] += v
 
                     if not self.args.no_model_construction:
                         for k, v in tsc.stats_dict.items():
@@ -461,14 +522,14 @@ class DatasetProcessor:
         else:
             for read_stat_counter, tsc in map(*model_gen):
                 for k, v in read_stat_counter.stats_dict.items():
-                    self.read_stat_counter.stats_dict[k] += v
+                    aggregator.read_stat_counter.stats_dict[k] += v
 
                 if not self.args.no_model_construction:
                     for k, v in tsc.stats_dict.items():
                         transcript_stat_counter.stats_dict[k] += v
 
         if not self.args.no_model_construction:
-            self.merge_transcript_models(sample.label, chr_ids, gff_printer)
+            self.merge_transcript_models(sample.label, aggregator, chr_ids, gff_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
             if extended_gff_printer:
                 merge_files(
@@ -482,7 +543,7 @@ class DatasetProcessor:
                 logger.info("Extended annotation is saved to " + extended_gff_printer.model_fname)
             transcript_stat_counter.print_start("Transcript model statistics")
 
-        self.merge_assignments(sample, chr_ids)
+        self.merge_assignments(sample, aggregator, chr_ids)
         if self.args.sqanti_output:
             merge_files(
                 [
@@ -492,7 +553,7 @@ class DatasetProcessor:
                 sample.out_alt_tsv, copy_header=False
             )
 
-        self.finalize_aggregators(sample)
+        aggregator.finalize_aggregators(sample)
 
     def load_read_info(self, dump_filename):
         gc.disable()
@@ -524,63 +585,13 @@ class DatasetProcessor:
         gc.enable()
         return total_assignments, polya_assignments, all_read_groups
 
-    def create_aggregators(self, sample):
-        self.read_stat_counter = EnumStats()
-        self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed, self.args, print_corrected=True)
-        printer_list = [self.corrected_bed_printer]
-        if self.args.genedb:
-            self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
-                                                           additional_header=self.common_header)
-            printer_list.append(self.basic_printer)
-        if self.args.sqanti_output:
-            self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
-            printer_list.append(self.sqanti_printer)
-        self.global_printer = ReadAssignmentCompositePrinter(printer_list)
-
-        self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, self.args.gene_quantification,
-                                                ignore_read_groups=True, output_zeroes=False)
-        self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
-                                                            self.args.transcript_quantification,
-                                                            ignore_read_groups=True, output_zeroes=False)
-        self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
-                                                                  self.args.transcript_quantification,
-                                                                  ignore_read_groups=True, output_zeroes=False)
-
-        self.transcript_model_global_counter = CompositeCounter([self.transcript_model_counter])
-        if self.args.count_exons:
-            self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
-            self.intron_counter = IntronCounter(sample.out_intron_counts_tsv, ignore_read_groups=True)
-            self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter,
-                                                    self.exon_counter, self.intron_counter])
-        else:
-            self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
-
-        if self.args.read_group:
-            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
-                                                            self.args.gene_quantification, self.read_grouper)
-            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
-                                                                        self.args.transcript_quantification,
-                                                                        self.read_grouper)
-            self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
-                                                                              self.args.transcript_quantification,
-                                                                              self.read_grouper, output_zeroes=False)
-
-            self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
-            if self.args.count_exons:
-                self.exon_grouped_counter = ExonCounter(sample.out_exon_grouped_counts_tsv)
-                self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
-                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter,
-                                                  self.exon_grouped_counter, self.intron_grouped_counter])
-            else:
-                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
-
-    def merge_assignments(self, sample, chr_ids):
+    def merge_assignments(self, sample, aggregator, chr_ids):
         if self.args.genedb:
             merge_files([rreplace(sample.out_assigned_tsv, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
                         sample.out_assigned_tsv, copy_header=False)
         merge_files([rreplace(sample.out_corrected_bed, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
                     sample.out_corrected_bed, copy_header=False)
-        for p in self.global_counter.counters:
+        for p in aggregator.global_counter.counters:
             merge_files([rreplace(p.output_counts_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
                         p.output_counts_file_name,
                         stats_file_names=[rreplace(p.output_stats_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids]
@@ -588,23 +599,15 @@ class DatasetProcessor:
                         ignore_read_groups=p.ignore_read_groups)
             p.convert_counts_to_tpm()
 
-    def merge_transcript_models(self, label, chr_ids, gff_printer):
+    def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
         merge_files([rreplace(gff_printer.model_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
                     gff_printer.model_fname, copy_header=False)
         merge_files([rreplace(gff_printer.r2t_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
                     gff_printer.r2t_fname, copy_header=False)
-        for p in self.transcript_model_global_counter.counters:
+        for p in aggregator.transcript_model_global_counter.counters:
             merge_files([rreplace(p.output_counts_file_name, label, label + "_" + chr_id) for chr_id in chr_ids],
                         p.output_counts_file_name,
                         stats_file_names=[rreplace(p.output_stats_file_name, label, label + "_" + chr_id) for chr_id in chr_ids]
                         if p.output_stats_file_name else None,
                         ignore_read_groups=p.ignore_read_groups)
             p.convert_counts_to_tpm()
-
-    def finalize_aggregators(self, sample):
-        logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
-        logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
-        if self.args.genedb:
-            logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
-        self.read_stat_counter.print_start("Read assignment statistics")
-
