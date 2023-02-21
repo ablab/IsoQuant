@@ -37,7 +37,7 @@ from .long_read_counter import (
 from .multimap_resolver import MultimapResolver
 from .read_groups import (
     create_read_grouper,
-    DefaultReadGrouper
+    prepare_read_groups
 )
 from .assignment_io import (
     IOSupport,
@@ -71,7 +71,7 @@ def clean_locks(chr_ids, base_name, fname_function):
 
 
 def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
-    read_grouper = create_read_grouper(args) # add sample, chr_id
+    read_grouper = create_read_grouper(args, sample, chr_id)
     lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
     save_file = "{}_{}".format(sample.out_raw_file, chr_id)
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
@@ -363,6 +363,7 @@ class DatasetProcessor:
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
         self.multimapped_reads = defaultdict(list)
         self.all_read_groups = set()
+        prepare_read_groups(self.args, sample)
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
