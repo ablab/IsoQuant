@@ -7,10 +7,8 @@
 import logging
 import gzip
 import os
-import pickle
-import gc
-from .gene_info import GeneInfo
-from .isoform_assignment import ReadAssignment
+import pysam
+from collections import defaultdict
 
 
 logger = logging.getLogger('IsoQuant')
@@ -70,32 +68,8 @@ class ReadIdSplitReadGrouper(AbstractReadGrouper):
 class ReadTableGrouper(AbstractReadGrouper):
     def __init__(self, table_tsv_file, read_id_column_index=0, group_id_column_index=1, delim='\t'):
         AbstractReadGrouper.__init__(self)
-        self.read_map = {}
-        min_columns = max(read_id_column_index, group_id_column_index)
-        logger.info("Reading read groups from " + table_tsv_file)
-        _, outer_ext = os.path.splitext(table_tsv_file)
-        if outer_ext.lower() in ['.gz', '.gzip']:
-            handle = gzip.open(table_tsv_file, "rt")
-        else:
-            handle = open(table_tsv_file, 'r')
-
-        for line in handle:
-            line = line.strip()
-            if line.startswith('#') or not line:
-                continue
-
-            column_values = line.split(delim)
-            if len(column_values) <= min_columns:
-                logger.warning("Malformed input read information table, minimum, of %d columns expected, "
-                               "file %s, line: %s" % (min_columns, table_tsv_file, line))
-                continue
-
-            read_id = column_values[read_id_column_index]
-            if read_id in self.read_map:
-                logger.warning("Duplicate information for read %s" % read_id)
-
-            group_id = column_values[group_id_column_index]
-            self.read_map[read_id] = group_id
+        logger.debug("Reading read groups from " + table_tsv_file)
+        self.read_map = load_table(table_tsv_file, read_id_column_index, group_id_column_index, delim)
 
     def get_group_id(self, alignment, filename=None):
         if alignment.query_name not in self.read_map:
@@ -105,7 +79,7 @@ class ReadTableGrouper(AbstractReadGrouper):
         return self.read_map[alignment.query_name]
 
 
-class FileNameGroupper(AbstractReadGrouper):
+class FileNameGrouper(AbstractReadGrouper):
     def __init__(self, args):
         AbstractReadGrouper.__init__(self)
         if args.input_data.readable_names_dict:
@@ -130,31 +104,50 @@ class FileNameGroupper(AbstractReadGrouper):
         return filename
 
 
-def create_read_grouper(args):
+def get_file_grouping_properties(values):
+    assert len(values) >= 2
+    if len(values) > 4:
+        return values[1], int(values[2]), int(values[3]), values[4]
+    elif len(values) > 3:
+        return values[1], int(values[2]), int(values[3]), "\t"
+    else:
+        return values[1], 0, 1, "\t"
+
+
+def prepare_read_groups(args, sample):
+    if not hasattr(args, "read_group") or args.read_group is None:
+        return
+    option = args.read_group
+    values = option.split(':')
+    if values[0] != 'file':
+        return
+    table_filename, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
+    logger.info("Splitting read group file %s for better memory consumption" % table_filename)
+    split_read_group_table(table_filename, sample, read_id_column_index, group_id_column_index, delim)
+
+
+def create_read_grouper(args, sample, chr_id):
     if not hasattr(args, "read_group") or args.read_group is None:
         return DefaultReadGrouper()
 
     option = args.read_group
     values = option.split(':')
     if values[0] == "file_name":
-        return FileNameGroupper(args)
+        return FileNameGrouper(args)
     elif values[0] == 'tag':
         return AlignmentTagReadGrouper(tag=values[1])
     elif values[0] == 'read_id':
         return ReadIdSplitReadGrouper(delim=values[1])
     elif values[0] == 'file':
-        if len(values) > 4:
-            return ReadTableGrouper(values[1], int(values[2]), int(values[3]), values[4])
-        elif len(values) > 3:
-            return ReadTableGrouper(values[1], int(values[2]), int(values[3]))
-        else:
-            return ReadTableGrouper(values[1])
+        _, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
+        read_group_chr_filename = sample.read_group_file + "_" + chr_id
+        return ReadTableGrouper(read_group_chr_filename, read_id_column_index, group_id_column_index, delim)
     else:
-        logger.critical("Unsupported read groupping option")
+        logger.critical("Unsupported read grouping option")
         return DefaultReadGrouper()
 
 
-def load_table(table_tsv_file, delim, read_id_column_index, group_id_column_index):
+def load_table(table_tsv_file, read_id_column_index, group_id_column_index, delim):
     min_columns = max(read_id_column_index, group_id_column_index)
     _, outer_ext = os.path.splitext(table_tsv_file)
     if outer_ext.lower() in ['.gz', '.gzip']:
@@ -183,34 +176,25 @@ def load_table(table_tsv_file, delim, read_id_column_index, group_id_column_inde
     return read_map
 
 
-def split_read_group_table(table_file, dump_filename, read_group_prefix, chr_list,
-                           read_id_column_index=0, group_id_column_index=1, delim='\t'):
-    read_groups = load_table(table_file, delim, read_id_column_index, group_id_column_index)
+def split_read_group_table(table_file, sample, read_id_column_index, group_id_column_index, delim):
+    read_groups = load_table(table_file, read_id_column_index, group_id_column_index, delim)
+    read_group_files = {}
+    processed_reads = defaultdict(set)
+    bam_files = list(map(lambda x: x[0], sample.file_list))
 
-    gc.disable()
-    for chr_id in chr_list:
-        save_file_name = dump_filename + "_" + chr_id
-        assert os.path.exists(save_file_name)
-        unpickler = pickle.Unpickler(open(save_file_name, "rb"), fix_imports=False)
+    for bam_file in bam_files:
+        bam = pysam.AlignmentFile(bam_file, "rb")
+        for read_alignment in bam:
+            chr_id = read_alignment.reference_name
+            if not chr_id:
+                continue
 
-        chr_read_set = set()
-        while True:
-            try:
-                obj = unpickler.load()
-                if isinstance(obj, ReadAssignment):
-                    chr_read_set.add(obj.read_id)
-                elif isinstance(obj, GeneInfo):
-                    pass
-                else:
-                    raise ValueError("Read assignment file {} is corrupted!".format(save_file_name))
-            except EOFError:
-                break
+            if chr_id not in read_group_files:
+                read_group_files[chr_id] = open(sample.read_group_file + "_" + chr_id, "w")
+            read_id = read_alignment.query_name
+            if read_id in read_groups and read_id not in processed_reads[chr_id]:
+                read_group_files[chr_id].write("%s\t%s\n" % (read_id, read_groups[read_id]))
+                processed_reads[chr_id].add(read_id)
 
-        with open("{}_{}".format(read_group_prefix, chr_id), "w") as read_group_chr_outf:
-            for read_id in read_groups.keys():
-                if read_id not in chr_read_set:
-                    continue
-                read_group_chr_outf.write("%s\t%s\n" % (read_id, read_groups[read_id]))
-    gc.enable()
-
-
+    for f in read_group_files.values():
+        f.close()
