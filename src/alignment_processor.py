@@ -443,12 +443,13 @@ class IntergenicAlignmentCollector:
 
         split_regions = []
         coverage_positions = sorted(alignment_storage.coverage_dict.keys())
+        min_bins = int(self.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
         current_start = coverage_positions[0]
         pos = current_start + 1
         max_cov = alignment_storage.coverage_dict[current_start]
 
         while pos <= coverage_positions[-1]:
-            while pos <= coverage_positions[-1] and \
+            while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or \
                     alignment_storage.coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
                 max_cov = max(max_cov, alignment_storage.coverage_dict[pos])
                 pos += 1
