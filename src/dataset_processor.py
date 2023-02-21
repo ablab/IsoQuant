@@ -70,7 +70,8 @@ def clean_locks(chr_ids, base_name, fname_function):
             os.remove(fname)
 
 
-def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_record):
+def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
+    read_grouper = create_read_grouper(args) # add sample, chr_id
     lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
     save_file = "{}_{}".format(sample.out_raw_file, chr_id)
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
@@ -96,7 +97,8 @@ def collect_reads_in_parallel(sample, chr_id, args, read_grouper, current_chr_re
     gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
 
     logger.info("Processing chromosome " + chr_id)
-    alignment_collector = IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
+    alignment_collector = \
+        IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
 
     if args.low_memory:
         alignment_iterator = alignment_collector.process_slow()
@@ -180,7 +182,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
         yield current_gene_info, read_storage
 
 
-def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_grouper, current_chr_record,
+def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_groups, current_chr_record,
                                  io_support):
     chr_dump_file = dump_filename + "_" + chr_id
     lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
@@ -191,7 +193,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
         return EnumStats(read_stat_file), EnumStats(transcript_stat_file)
 
-    aggregator = ReadAssignmentAggregator(args, sample, read_grouper)
+    aggregator = ReadAssignmentAggregator(args, sample, read_groups)
     if args.genedb:
         gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
     else:
@@ -236,9 +238,9 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
 
 
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, read_grouper):
+    def __init__(self, args, sample, read_groups):
         self.args = args
-        self.read_grouper = read_grouper
+        self.read_groups = read_groups
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
 
@@ -274,13 +276,13 @@ class ReadAssignmentAggregator:
 
         if self.args.read_group:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
-                                                            self.args.gene_quantification, self.read_grouper)
+                                                            self.args.gene_quantification, self.read_groups)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
                                                                         self.args.transcript_quantification,
-                                                                        self.read_grouper)
+                                                                        self.read_groups)
             self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
                                                                               self.args.transcript_quantification,
-                                                                              self.read_grouper, output_zeroes=False)
+                                                                              self.read_groups, output_zeroes=False)
 
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
             if self.args.count_exons:
@@ -306,7 +308,7 @@ class DatasetProcessor:
         self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
-        self.read_grouper = create_read_grouper(self.args)
+        self.all_read_groups = set()
 
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
@@ -360,6 +362,7 @@ class DatasetProcessor:
         logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(map(lambda x: x[0], sample.file_list)))
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
         self.multimapped_reads = defaultdict(list)
+        self.all_read_groups = set()
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
@@ -372,14 +375,13 @@ class DatasetProcessor:
             if not self.args.keep_tmp:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
 
-        total_alignments, polya_found, all_read_groups = self.load_read_info(saves_file)
+        total_alignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
         logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
         self.args.needs_polya_for_construction = polya_fraction >= 0.7
 
-        self.read_grouper.read_groups = all_read_groups
         self.process_assigned_reads(sample, saves_file)
         if not self.args.read_assignments and not self.args.keep_tmp:
             for f in glob.glob(saves_file + "_*"):
@@ -415,7 +417,6 @@ class DatasetProcessor:
             itertools.repeat(sample),
             chr_ids,
             itertools.repeat(self.args),
-            itertools.repeat(self.read_grouper),
             (self.reference_record_dict[chr_id] for chr_id in chr_ids)
         )
 
@@ -423,17 +424,17 @@ class DatasetProcessor:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
 
-                for storage, sublist in results:
+                for storage, read_groups in results:
                     for read_assignment in storage:
                         self.multimapped_reads[read_assignment.read_id].append(read_assignment)
 
-                    all_read_groups.update(sublist)
+                    all_read_groups.update(read_groups)
         else:
-            for storage, sublist in map(*read_gen):
+            for storage, read_groups in map(*read_gen):
                 for read_assignment in storage:
                     self.multimapped_reads[read_assignment.read_id].append(read_assignment)
 
-                all_read_groups.update(sublist)
+                all_read_groups.update(read_groups)
 
         logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
@@ -481,7 +482,7 @@ class DatasetProcessor:
         logger.info("Processing assigned reads " + sample.label)
 
         # set up aggregators and outputs
-        aggregator = ReadAssignmentAggregator(self.args, sample, self.read_grouper)
+        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups)
         transcript_stat_counter = EnumStats()
 
         gff_printer = GFFPrinter(
@@ -503,7 +504,7 @@ class DatasetProcessor:
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),
             (self.multimapped_info_dict[chr_id] for chr_id in chr_ids),
-            itertools.repeat(self.read_grouper),
+            itertools.repeat(self.all_read_groups),
             (self.reference_record_dict[chr_id] for chr_id in chr_ids),
             itertools.repeat(self.io_support),
         )
