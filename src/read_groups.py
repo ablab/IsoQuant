@@ -7,6 +7,11 @@
 import logging
 import gzip
 import os
+import pickle
+import gc
+from .gene_info import GeneInfo
+from .isoform_assignment import ReadAssignment
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -74,15 +79,15 @@ class ReadTableGrouper(AbstractReadGrouper):
         else:
             handle = open(table_tsv_file, 'r')
 
-        for l in handle:
-            l = l.strip()
-            if l.startswith('#') or not l:
+        for line in handle:
+            line = line.strip()
+            if line.startswith('#') or not line:
                 continue
 
-            column_values = l.split(delim)
+            column_values = line.split(delim)
             if len(column_values) <= min_columns:
                 logger.warning("Malformed input read information table, minimum, of %d columns expected, "
-                               "file %s, line: %s" % (min_columns, table_tsv_file, l))
+                               "file %s, line: %s" % (min_columns, table_tsv_file, line))
                 continue
 
             read_id = column_values[read_id_column_index]
@@ -147,3 +152,65 @@ def create_read_grouper(args):
     else:
         logger.critical("Unsupported read groupping option")
         return DefaultReadGrouper()
+
+
+def load_table(table_tsv_file, delim, read_id_column_index, group_id_column_index):
+    min_columns = max(read_id_column_index, group_id_column_index)
+    _, outer_ext = os.path.splitext(table_tsv_file)
+    if outer_ext.lower() in ['.gz', '.gzip']:
+        handle = gzip.open(table_tsv_file, "rt")
+    else:
+        handle = open(table_tsv_file, 'r')
+
+    read_map = {}
+    for line in handle:
+        line = line.strip()
+        if line.startswith('#') or not line:
+            continue
+
+        column_values = line.split(delim)
+        if len(column_values) <= min_columns:
+            logger.warning("Malformed input read information table, minimum, of %d columns expected, "
+                           "file %s, line: %s" % (min_columns, table_tsv_file, line))
+            continue
+
+        read_id = column_values[read_id_column_index]
+        if read_id in read_map:
+            logger.warning("Duplicate information for read %s" % read_id)
+
+        group_id = column_values[group_id_column_index]
+        read_map[read_id] = group_id
+    return read_map
+
+
+def split_read_group_table(table_file, dump_filename, read_group_prefix, chr_list,
+                           read_id_column_index=0, group_id_column_index=1, delim='\t'):
+    read_groups = load_table(table_file, delim, read_id_column_index, group_id_column_index)
+
+    gc.disable()
+    for chr_id in chr_list:
+        save_file_name = dump_filename + "_" + chr_id
+        assert os.path.exists(save_file_name)
+        unpickler = pickle.Unpickler(open(save_file_name, "rb"), fix_imports=False)
+
+        chr_read_set = set()
+        while True:
+            try:
+                obj = unpickler.load()
+                if isinstance(obj, ReadAssignment):
+                    chr_read_set.add(obj.read_id)
+                elif isinstance(obj, GeneInfo):
+                    pass
+                else:
+                    raise ValueError("Read assignment file {} is corrupted!".format(save_file_name))
+            except EOFError:
+                break
+
+        with open("{}_{}".format(read_group_prefix, chr_id), "w") as read_group_chr_outf:
+            for read_id in read_groups.keys():
+                if read_id not in chr_read_set:
+                    continue
+                read_group_chr_outf.write("%s\t%s\n" % (read_id, read_groups[read_id]))
+    gc.enable()
+
+

@@ -123,12 +123,12 @@ class CompositeCounter:
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, get_feature_id, read_grouper, read_counter,
+    def __init__(self, output_prefix, get_feature_id, read_groups, read_counter,
                  ignore_read_groups=False, output_zeroes=True):
         AbstractCounter.__init__(self, output_prefix, ignore_read_groups, output_zeroes)
         self.get_feature_id = get_feature_id
         self.all_features = set()
-        self.all_groups = read_grouper.read_groups if read_grouper else []
+        self.all_groups = read_groups if read_groups else []
         self.read_counter = read_counter
 
         self.ambiguous_reads = 0
@@ -296,17 +296,17 @@ class AssignedFeatureCounter(AbstractCounter):
                         outf.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
 
 
-def create_gene_counter(output_file_name, strategy, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
+def create_gene_counter(output_file_name, strategy, read_groups=None, ignore_read_groups=False, output_zeroes=True):
     read_weight_counter = ReadWeightCounter(strategy, gene_counting=True)
     return AssignedFeatureCounter(output_file_name, get_assigned_gene_id,
-                                  read_grouper, read_weight_counter,
+                                  read_groups, read_weight_counter,
                                   ignore_read_groups, output_zeroes)
 
 
-def create_transcript_counter(output_file_name, strategy, read_grouper=None, ignore_read_groups=False, output_zeroes=True):
+def create_transcript_counter(output_file_name, strategy, read_groups=None, ignore_read_groups=False, output_zeroes=True):
     read_weight_counter = ReadWeightCounter(strategy, gene_counting=False)
     return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id,
-                                  read_grouper, read_weight_counter,
+                                  read_groups, read_weight_counter,
                                   ignore_read_groups, output_zeroes)
 
 
