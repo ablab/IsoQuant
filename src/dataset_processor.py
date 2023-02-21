@@ -362,8 +362,13 @@ class DatasetProcessor:
         logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(map(lambda x: x[0], sample.file_list)))
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
         self.multimapped_reads = defaultdict(list)
+
         self.all_read_groups = set()
-        prepare_read_groups(self.args, sample)
+        if self.args.resume and os.path.exists(sample.read_group_file + "_lock"):
+            logger.info("Read group table was split during the previous run, existing files will be used")
+        else:
+            prepare_read_groups(self.args, sample)
+            open(sample.read_group_file + "_lock", "w").close()
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
