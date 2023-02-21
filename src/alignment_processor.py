@@ -231,37 +231,32 @@ class IntergenicAlignmentCollector:
             elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
                 current_region = (current_region[0], max(current_region[1], alignment.reference_end))
             else:
-                yield self.process_alignments_in_region(current_region, alignment_storage)
+                for gene_info, assignment_iterator in self.process_alignments_in_region(current_region,
+                                                                                        alignment_storage):
+                    yield gene_info, assignment_iterator
                 alignment_storage.reset()
                 current_region = (alignment.reference_start, alignment.reference_end)
 
             alignment_storage.add_alignment(bam_index, alignment)
 
         if current_region:
-            yield self.process_alignments_in_region(current_region, alignment_storage)
+            for gene_info, assignment_iterator in self.process_alignments_in_region(current_region, alignment_storage):
+                yield gene_info, assignment_iterator
 
     def process_alignments_in_region(self, current_region, alignment_storage):
         logger.debug("Processing region %s" % str(current_region))
-        if not self.genedb:
-            gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
-                                             self.params.delta, self.chr_record)
-            assignment_iterator = self.process_intergenic(alignment_storage.get_alignments(current_region))
-        else:
-            gene_info = self.get_gene_info_for_region(current_region)
-            assignment_iterator = self.split_and_process_genic(current_region, alignment_storage, gene_info)
-
-        return gene_info, assignment_iterator
-
-    def split_and_process_genic(self, current_region, alignment_storage, gene_info):
+        gene_info = self.get_gene_info_for_region(current_region)
         new_regions = self.split_region(current_region, alignment_storage, gene_info)
+
         for new_region in new_regions:
+            logger.debug("Processing sub-region %s" % str(new_region))
             new_gene_info = self.get_gene_info_for_region(new_region)
             if new_gene_info.gene_db_list:
                 assignment_iterator = self.process_genic(alignment_storage.get_alignments(new_region), new_gene_info)
             else:
                 assignment_iterator = self.process_intergenic(alignment_storage.get_alignments(current_region))
-            for assignment in assignment_iterator:
-                yield assignment
+            yield new_gene_info, assignment_iterator
+
 
     def process_intergenic(self, alignment_storage):
         for bam_index, alignment in alignment_storage:
@@ -419,7 +414,10 @@ class IntergenicAlignmentCollector:
         return indel_count, junctions_with_indels
 
     def get_gene_info_for_region(self, current_region):
-        assert self.genedb is not None
+        if not self.genedb:
+            return GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
+                                        self.params.delta, self.chr_record)
+
         gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
                                             end=current_region[1], featuretype="gene"))
         if not gene_list:
