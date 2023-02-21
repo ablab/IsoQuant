@@ -66,7 +66,7 @@ class BAMOnlineMerger:
 
 
 class AbstractAlignmentStorage:
-    COVERAGE_BIN = 512
+    COVERAGE_BIN = 256
 
     def __init__(self):
         self.coverage_dict = defaultdict(int)
@@ -79,8 +79,11 @@ class AbstractAlignmentStorage:
         self.current_bin_region_end = 0
 
     def add_alignment(self, bam_index, alignment):
-        bin_start = alignment.reference_start // self.COVERAGE_BIN
-        bin_end = alignment.reference_end // self.COVERAGE_BIN
+        self.add_region(alignment.reference_start, alignment.reference_end)
+
+    def add_region(self, start, end):
+        bin_start = start // self.COVERAGE_BIN
+        bin_end = end // self.COVERAGE_BIN
         self.current_bin_region_start = min(bin_start, self.current_bin_region_start)
         self.current_bin_region_end = max(bin_end, self.current_bin_region_end)
         for i in range(bin_start, bin_end + 1):
@@ -91,6 +94,9 @@ class AbstractAlignmentStorage:
 
     def get_read_count(self):
         raise NotImplementedError()
+
+    def get_coverage(self, pos):
+        return self.coverage_dict[pos // self.COVERAGE_BIN]
 
 
 class BAMAlignmentStorage(AbstractAlignmentStorage):
@@ -191,9 +197,10 @@ class IntergenicAlignmentCollector:
     counter
     """
 
-    MAX_REGION_LEN = 65536
-    MIN_READS_TO_SPLIT = 16384
+    MAX_REGION_LEN = 32768
+    MIN_READS_TO_SPLIT = 8192
     MIN_INTRONS_TO_SPLIT = 128
+    MAX_GENE_LEN = 524288
     ABS_COV_VALLEY = 1
     REL_COV_VALLEY = 0.01
 
@@ -426,19 +433,24 @@ class IntergenicAlignmentCollector:
 
     def split_region(self, genomic_region, alignment_storage, gene_info):
         if interval_len(genomic_region) <= IntergenicAlignmentCollector.MAX_REGION_LEN or \
-                alignment_storage.get_read_count() <= IntergenicAlignmentCollector.MIN_READS_TO_SPLIT or \
-                len(gene_info.intron_profiles.features) <= IntergenicAlignmentCollector.MIN_INTRONS_TO_SPLIT:
+                (alignment_storage.get_read_count() <= IntergenicAlignmentCollector.MIN_READS_TO_SPLIT and
+                 len(gene_info.intron_profiles.features) <= IntergenicAlignmentCollector.MIN_INTRONS_TO_SPLIT):
             return [genomic_region]
+
+        gene_coverage_storage = AbstractAlignmentStorage()
+        for gene in gene_info.gene_db_list:
+            if abs(gene.end - gene.start) > IntergenicAlignmentCollector.MAX_GENE_LEN:
+                continue
+            gene_coverage_storage.add_region(gene.start, gene.end)
 
         split_regions = []
         coverage_positions = sorted(alignment_storage.coverage_dict.keys())
         current_start = coverage_positions[0]
-        min_bins = int(self.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
         pos = current_start + 1
         max_cov = alignment_storage.coverage_dict[current_start]
 
         while pos <= coverage_positions[-1]:
-            while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or \
+            while pos <= coverage_positions[-1] and \
                     alignment_storage.coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
                 max_cov = max(max_cov, alignment_storage.coverage_dict[pos])
                 pos += 1
