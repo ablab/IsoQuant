@@ -317,7 +317,7 @@ class ProfileFeatureCounter(AbstractCounter):
         # group_id -> (feature_id -> count)
         self.inclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
-        self.feature_name_dict = OrderedDict(str)
+        self.feature_name_dict = OrderedDict()
         self.print_zeroes = print_zeroes
 
     def add_read_info_from_profile(self, gene_feature_profile, feature_property_map,
@@ -343,10 +343,11 @@ class ProfileFeatureCounter(AbstractCounter):
 
             for feature_id in self.feature_name_dict.keys():
                 for group_id in all_groups:
+                    feature_name = self.feature_name_dict[feature_id]
                     incl_count = self.inclusion_feature_counter[group_id][feature_id]
                     excl_count = self.exclusion_feature_counter[group_id][feature_id]
                     if self.print_zeroes or incl_count > 0 or excl_count > 0:
-                        f.write("%s\t%s\t%d\t%d\n" % (feature_id, group_id, incl_count, excl_count))
+                        f.write("%s\t%s\t%d\t%d\n" % (feature_name, group_id, incl_count, excl_count))
 
     def convert_counts_to_tpm(self):
         return
