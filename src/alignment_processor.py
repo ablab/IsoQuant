@@ -5,7 +5,6 @@
 ############################################################################
 
 import logging
-import math
 
 import pysam
 from queue import PriorityQueue, Empty
@@ -198,8 +197,10 @@ class IntergenicAlignmentCollector:
     """
 
     MAX_REGION_LEN = 32768
+    MIN_SPLIT_REGION_LEN = 16384
     MIN_READS_TO_SPLIT = 8192
-    MIN_INTRONS_TO_SPLIT = 128
+    MIN_INTRONS_TO_SPLIT = 64
+    READS_TO_FORCE_SPLIT = 65536
     MAX_GENE_LEN = 524288
     ABS_COV_VALLEY = 1
     REL_COV_VALLEY = 0.01
@@ -430,8 +431,8 @@ class IntergenicAlignmentCollector:
         return gene_info
 
     def split_region(self, genomic_region, alignment_storage, gene_info):
-        if interval_len(genomic_region) <= IntergenicAlignmentCollector.MAX_REGION_LEN or \
-                (alignment_storage.get_read_count() <= IntergenicAlignmentCollector.MIN_READS_TO_SPLIT and
+        if interval_len(genomic_region) <= IntergenicAlignmentCollector.MAX_REGION_LEN and \
+                (alignment_storage.get_read_count() <= IntergenicAlignmentCollector.MIN_READS_TO_SPLIT or
                  len(gene_info.intron_profiles.features) <= IntergenicAlignmentCollector.MIN_INTRONS_TO_SPLIT):
             return [genomic_region]
 
@@ -443,7 +444,7 @@ class IntergenicAlignmentCollector:
 
         split_regions = []
         coverage_positions = sorted(alignment_storage.coverage_dict.keys())
-        min_bins = int(self.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
+        min_bins = int(IntergenicAlignmentCollector.MIN_SPLIT_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
         current_start = coverage_positions[0]
         pos = current_start + 1
         max_cov = alignment_storage.coverage_dict[current_start]
