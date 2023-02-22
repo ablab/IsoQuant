@@ -5,7 +5,7 @@
 ############################################################################
 
 import logging
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from enum import Enum, unique
 
 from .isoform_assignment import (
@@ -317,20 +317,22 @@ class ProfileFeatureCounter(AbstractCounter):
         # group_id -> (feature_id -> count)
         self.inclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
-        self.all_features = set()
+        self.feature_name_dict = OrderedDict(str)
         self.print_zeroes = print_zeroes
 
     def add_read_info_from_profile(self, gene_feature_profile, feature_property_map,
                                    read_group = AbstractReadGrouper.default_group_id):
         for i in range(len(gene_feature_profile)):
             if gene_feature_profile[i] == 1:
-                feature_id = feature_property_map[i].to_str()
+                feature_id = feature_property_map[i].id
                 self.inclusion_feature_counter[read_group][feature_id] += 1
-                self.all_features.add(feature_id)
+                if feature_id not in self.feature_name_dict:
+                    self.feature_name_dict[feature_id] = feature_property_map[i].to_str()
             elif gene_feature_profile[i] == -1:
-                feature_id = feature_property_map[i].to_str()
+                feature_id = feature_property_map[i].id
                 self.exclusion_feature_counter[read_group][feature_id] += 1
-                self.all_features.add(feature_id)
+                if feature_id not in self.feature_name_dict:
+                    self.feature_name_dict[feature_id] = feature_property_map[i].to_str()
 
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
@@ -339,7 +341,7 @@ class ProfileFeatureCounter(AbstractCounter):
             all_groups.update(self.exclusion_feature_counter.keys())
             all_groups = sorted(all_groups)
 
-            for feature_id in sorted(self.all_features):
+            for feature_id in self.feature_name_dict.keys():
                 for group_id in all_groups:
                     incl_count = self.inclusion_feature_counter[group_id][feature_id]
                     excl_count = self.exclusion_feature_counter[group_id][feature_id]
