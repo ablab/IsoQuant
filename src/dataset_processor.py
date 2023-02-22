@@ -63,6 +63,10 @@ def reads_processed_lock_file_name(dump_filename, chr_id):
     return "{}_processed".format(chr_dump_file)
 
 
+def read_group_lock_filename(sample):
+    return sample.read_group_file + "_lock"
+
+
 def clean_locks(chr_ids, base_name, fname_function):
     for chr_id in chr_ids:
         fname = fname_function(base_name, chr_id)
@@ -367,8 +371,11 @@ class DatasetProcessor:
         if self.args.resume and os.path.exists(sample.read_group_file + "_lock"):
             logger.info("Read group table was split during the previous run, existing files will be used")
         else:
+            fname = read_group_lock_filename(sample)
+            if os.path.exists(fname):
+                os.remove(fname)
             prepare_read_groups(self.args, sample)
-            open(sample.read_group_file + "_lock", "w").close()
+            open(fname, "w").close()
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
@@ -391,6 +398,8 @@ class DatasetProcessor:
         self.process_assigned_reads(sample, saves_file)
         if not self.args.read_assignments and not self.args.keep_tmp:
             for f in glob.glob(saves_file + "_*"):
+                os.remove(f)
+            for f in glob.glob(sample.read_group_file + "*"):
                 os.remove(f)
         logger.info("Processed sample " + sample.label)
 
