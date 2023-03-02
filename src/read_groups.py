@@ -139,9 +139,8 @@ def create_read_grouper(args, sample, chr_id):
     elif values[0] == 'read_id':
         return ReadIdSplitReadGrouper(delim=values[1])
     elif values[0] == 'file':
-        _, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
         read_group_chr_filename = sample.read_group_file + "_" + chr_id
-        return ReadTableGrouper(read_group_chr_filename, read_id_column_index, group_id_column_index, delim)
+        return ReadTableGrouper(read_group_chr_filename, 0, 1, '\t')
     else:
         logger.critical("Unsupported read grouping option")
         return DefaultReadGrouper()
