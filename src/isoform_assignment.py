@@ -6,7 +6,7 @@
 
 import logging
 from enum import Enum, unique
-
+from src.common import AtomicCounter
 
 logger = logging.getLogger('IsoQuant')
 
