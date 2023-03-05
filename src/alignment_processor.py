@@ -149,9 +149,7 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
         if self.index_filled:
             return
         current_index = len(self.alignment_storage)
-        bin_start = min(self.coverage_dict.keys())
-        bin_end = max(self.coverage_dict.keys())
-        for pos in range(bin_end + 1, bin_start - 1, -1):
+        for pos in range(self.current_bin_region_end + 1, self.current_bin_region_start - 1, -1):
             if pos not in self.alignment_index:
                 self.alignment_index[pos] = current_index
             else:
@@ -161,7 +159,7 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
     def get_alignments(self, region):
         self.fill_index()
         index_start = region[0] // AbstractAlignmentStorage.COVERAGE_BIN
-        index_end = region[1] // AbstractAlignmentStorage.COVERAGE_BIN + 1
+        index_end = region[1] // AbstractAlignmentStorage.COVERAGE_BIN
         # TODO: improve indexing, yield an iterator to mimic fetch() behaviour
         return self.alignment_storage[self.alignment_index[index_start]:self.alignment_index[index_end]]
 
@@ -226,13 +224,9 @@ class IntergenicAlignmentCollector:
             return
 
         logger.debug("Splitting " + str(current_region))
-        alignment_storage.fill_index()
-
         split_regions = self.split_coverage_regions(current_region, alignment_storage.coverage_dict)
         for new_region in split_regions:
-            current_start = new_region[0] // AbstractAlignmentStorage.COVERAGE_BIN
-            pos = new_region[1] // AbstractAlignmentStorage.COVERAGE_BIN
-            alignments = alignment_storage.alignment_storage[alignment_storage.alignment_index[current_start]:alignment_storage.alignment_index[pos]]
+            alignments = alignment_storage.get_alignments(new_region)
             if alignments:
                 yield self.process_alignments_in_region(new_region, alignments)
 
