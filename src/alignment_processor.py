@@ -226,32 +226,12 @@ class IntergenicAlignmentCollector:
             return
 
         logger.debug("Splitting " + str(current_region))
-        coverage_positions = sorted(alignment_storage.coverage_dict.keys())
         alignment_storage.fill_index()
 
-        current_start = coverage_positions[0]
-        min_bins = int(IntergenicAlignmentCollector.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
-        pos = current_start + 1
-        max_cov = alignment_storage.coverage_dict[current_start]
-
-        while pos <= coverage_positions[-1]:
-            while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or \
-                    alignment_storage.coverage_dict[pos] > max(self.ABS_COV_VALLEY, max_cov * self.REL_COV_VALLEY):
-                max_cov = max(max_cov, alignment_storage.coverage_dict[pos])
-                pos += 1
-            new_region = (max(current_start * AbstractAlignmentStorage.COVERAGE_BIN + 1, current_region[0]),
-                          min(pos * AbstractAlignmentStorage.COVERAGE_BIN, current_region[1]))
-            alignments = alignment_storage.alignment_storage[alignment_storage.alignment_index[current_start]:alignment_storage.alignment_index[pos]]
-            if alignments:
-                yield self.process_alignments_in_region(new_region, alignments)
-            current_start = pos
-            max_cov = alignment_storage.coverage_dict[current_start]
-            pos = min(current_start + 1, coverage_positions[-1] + 1)
-
-        if current_start < pos:
-            new_region = (max(current_start * AbstractAlignmentStorage.COVERAGE_BIN + 1, current_region[0]),
-                          min(pos * AbstractAlignmentStorage.COVERAGE_BIN, current_region[1]))
-
+        split_regions = self.split_coverage_regions(current_region, alignment_storage.coverage_dict)
+        for new_region in split_regions:
+            current_start = new_region[0] // AbstractAlignmentStorage.COVERAGE_BIN
+            pos = new_region[1] // AbstractAlignmentStorage.COVERAGE_BIN
             alignments = alignment_storage.alignment_storage[alignment_storage.alignment_index[current_start]:alignment_storage.alignment_index[pos]]
             if alignments:
                 yield self.process_alignments_in_region(new_region, alignments)
