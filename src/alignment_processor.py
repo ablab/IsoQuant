@@ -213,7 +213,7 @@ class IntergenicAlignmentCollector:
                 for res in self.forward_alignments(current_region, alignment_storage):
                     yield res
                 alignment_storage.reset()
-                current_region = None
+                current_region = (alignment.reference_start, alignment.reference_end)
             alignment_storage.add_alignment(bam_index, alignment)
 
         if current_region:
