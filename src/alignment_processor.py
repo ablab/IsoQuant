@@ -44,7 +44,8 @@ class BAMOnlineMerger:
         self.chr_id = chr_id
         self.start = start
         self.end = end
-        self.alignment_iterators = [bp[0].fetch(self.chr_id, self.start, self.end,
+        # fetch uses 0-based semi-closed interval
+        self.alignment_iterators = [bp[0].fetch(self.chr_id, self.start, self.end + 1,
                                                 multiple_iterators=self.multiple_iterators) for bp in self.bam_pairs]
         self.current_elements = PriorityQueue(len(self.alignment_iterators))
         for i, it in enumerate(self.alignment_iterators):
@@ -84,13 +85,15 @@ class AbstractAlignmentStorage:
 
     def add_alignment(self, bam_index, alignment):
         bin_start = alignment.reference_start // AbstractAlignmentStorage.COVERAGE_BIN
-        bin_end = alignment.reference_end // AbstractAlignmentStorage.COVERAGE_BIN
+        # closed interval, 0-based
+        alignment_end = alignment.reference_end - 1
+        bin_end = alignment_end // AbstractAlignmentStorage.COVERAGE_BIN
         for i in range(bin_start, bin_end + 1):
             self.coverage_dict[i] += 1
         if not self.region:
-            self.region = (alignment.reference_start, alignment.reference_end)
+            self.region = (alignment.reference_start, alignment_end)
         else:
-            self.region = (min(self.region[0], alignment.reference_start), max(self.region[1], alignment.reference_end))
+            self.region = (min(self.region[0], alignment.reference_start), max(self.region[1], alignment_end))
 
     def get_alignments(self, region=None):
         raise NotImplementedError()
@@ -99,7 +102,8 @@ class AbstractAlignmentStorage:
         raise NotImplementedError()
 
     def alignment_is_not_adjacent(self, alignment):
-        return self.region is not None and not overlaps(self.region, (alignment.reference_start, alignment.reference_end))
+        return self.region is not None and \
+            not overlaps(self.region, (alignment.reference_start, alignment.reference_end - 1))
 
 
 class BAMAlignmentStorage(AbstractAlignmentStorage):
@@ -148,7 +152,7 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
         bin_start_position = alignment.reference_start // self.COVERAGE_BIN
         if bin_start_position not in self.alignment_start_index:
             self.alignment_start_index[bin_start_position] = self.counter
-        bin_end_position = alignment.reference_end // self.COVERAGE_BIN
+        bin_end_position = (alignment.reference_end - 1) // self.COVERAGE_BIN
         if bin_end_position not in self.alignment_end_index:
             self.alignment_end_index[bin_end_position] = self.counter
         self.alignment_storage.append((bam_index, alignment))
@@ -190,7 +194,7 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
 
         for i in range(start_index, end_index):
             bam_index, alignment = self.alignment_storage[i]
-            if overlaps(region, (alignment.reference_start, alignment.reference_end)):
+            if overlaps(region, (alignment.reference_start, alignment.reference_end - 1)):
                 yield bam_index, alignment
 
     def get_read_count(self):
@@ -219,7 +223,7 @@ class IntergenicAlignmentCollector:
         self.genedb = genedb
         self.chr_record = chr_record
 
-        self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, 1,
+        self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, 0,
                                           self.bam_pairs[0][0].get_reference_length(self.chr_id),
                                           multiple_iterators=self.params.low_memory)
         self.strand_detector = StrandDetector(self.chr_record)
