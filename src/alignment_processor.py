@@ -92,7 +92,7 @@ class AbstractAlignmentStorage:
         for i in range(bin_start, bin_end + 1):
             self.coverage_dict[i] += 1
 
-    def get_alignments(self, region):
+    def get_alignments(self, region=None):
         raise NotImplementedError()
 
     def get_read_count(self):
@@ -113,7 +113,9 @@ class BAMAlignmentStorage(AbstractAlignmentStorage):
         AbstractAlignmentStorage.add_alignment(self, bam_index, alignment)
         self.counter += 1
 
-    def get_alignments(self, region):
+    def get_alignments(self, region=None):
+        if not region:
+            region = (self.bam_merger.start, self.bam_merger.end)
         return BAMOnlineMerger(self.bam_merger.bam_pairs, self.bam_merger.chr_id, region[0], region[1],
                                multiple_iterators=True).get()
 
@@ -156,10 +158,12 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
                 current_index = self.alignment_index[pos]
         self.index_filled = True
 
-    def get_alignments(self, region):
-        self.fill_index()
+    def get_alignments(self, region=None):
+        if not region:
+            return self.alignment_storage
         index_start = region[0] // AbstractAlignmentStorage.COVERAGE_BIN
         index_end = region[1] // AbstractAlignmentStorage.COVERAGE_BIN
+        self.fill_index()
         # TODO: improve indexing, yield an iterator to mimic fetch() behaviour
         return self.alignment_storage[self.alignment_index[index_start]:self.alignment_index[index_end]]
 
@@ -219,15 +223,14 @@ class IntergenicAlignmentCollector:
                 yield res
 
     def forward_alignments(self, current_region, alignment_storage):
-        if interval_len(current_region) < IntergenicAlignmentCollector.MAX_REGION_LEN:
-            yield self.process_alignments_in_region(current_region, alignment_storage.alignment_storage)
-            return
-
         logger.debug("Splitting " + str(current_region))
         split_regions = self.split_coverage_regions(current_region, alignment_storage.coverage_dict)
-        for new_region in split_regions:
-            alignments = alignment_storage.get_alignments(new_region)
-            if alignments:
+
+        if len(split_regions) == 1:
+            yield self.process_alignments_in_region(current_region, alignment_storage.get_alignments())
+        else:
+            for new_region in split_regions:
+                alignments = alignment_storage.get_alignments(new_region)
                 yield self.process_alignments_in_region(new_region, alignments)
 
     def process_alignments_in_region(self, current_region, alignment_storage):
