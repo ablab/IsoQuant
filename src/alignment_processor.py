@@ -104,18 +104,24 @@ class BAMAlignmentStorage(AbstractAlignmentStorage):
         AbstractAlignmentStorage.__init__(self)
         self.bam_merger = bam_merger
         self.counter = 0
+        self.region = None
 
     def reset(self):
         AbstractAlignmentStorage.reset(self)
         self.counter = 0
+        self.region = None
 
     def add_alignment(self, bam_index, alignment):
         AbstractAlignmentStorage.add_alignment(self, bam_index, alignment)
         self.counter += 1
+        if not self.region:
+            self.region = (alignment.reference_start, alignment.reference_end)
+        else:
+            self.region = (min(self.region[0], alignment.reference_start), max(self.region[1], alignment.reference_end))
 
     def get_alignments(self, region=None):
         if not region:
-            region = (self.bam_merger.start, self.bam_merger.end)
+            region = self.region
         return BAMOnlineMerger(self.bam_merger.bam_pairs, self.bam_merger.chr_id, region[0], region[1],
                                multiple_iterators=True).get()
 
