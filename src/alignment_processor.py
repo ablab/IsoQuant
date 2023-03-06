@@ -126,23 +126,28 @@ class BAMAlignmentStorage(AbstractAlignmentStorage):
 class InMemoryAlignmentStorage(AbstractAlignmentStorage):
     def __init__(self):
         AbstractAlignmentStorage.__init__(self)
-        self.alignment_index = {}
+        self.alignment_start_index = {}
+        self.alignment_end_index = {}
         self.counter = 0
         self.alignment_storage = []
         self.index_filled = False
 
     def reset(self):
         AbstractAlignmentStorage.reset(self)
-        self.alignment_index = {}
+        self.alignment_start_index = {}
+        self.alignment_end_index = {}
         self.counter = 0
         self.alignment_storage = []
         self.index_filled = False
 
     def add_alignment(self, bam_index, alignment):
         AbstractAlignmentStorage.add_alignment(self, bam_index, alignment)
-        bin_position = alignment.reference_start // self.COVERAGE_BIN
-        if bin_position not in self.alignment_index:
-            self.alignment_index[bin_position] = self.counter
+        bin_start_position = alignment.reference_start // self.COVERAGE_BIN
+        if bin_start_position not in self.alignment_start_index:
+            self.alignment_start_index[bin_start_position] = self.counter
+        bin_end_position = alignment.reference_end // self.COVERAGE_BIN
+        if bin_end_position not in self.alignment_end_index:
+            self.alignment_end_index[bin_end_position] = self.counter
         self.alignment_storage.append((bam_index, alignment))
         self.counter += 1
         self.index_filled = False
@@ -152,20 +157,34 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
             return
         current_index = len(self.alignment_storage)
         for pos in range(self.current_bin_region_end + 1, self.current_bin_region_start - 1, -1):
-            if pos not in self.alignment_index:
-                self.alignment_index[pos] = current_index
+            if pos not in self.alignment_start_index:
+                self.alignment_start_index[pos] = current_index
             else:
-                current_index = self.alignment_index[pos]
+                current_index = self.alignment_start_index[pos]
+        current_index = 0
+        for pos in range(self.current_bin_region_start, self.current_bin_region_end + 2):
+            if pos not in self.alignment_end_index:
+                self.alignment_end_index[pos] = current_index
+            else:
+                current_index = self.alignment_end_index[pos]
         self.index_filled = True
 
     def get_alignments(self, region=None):
         if not region:
             return self.alignment_storage
-        index_start = region[0] // AbstractAlignmentStorage.COVERAGE_BIN
-        index_end = region[1] // AbstractAlignmentStorage.COVERAGE_BIN
+
         self.fill_index()
-        # TODO: improve indexing, yield an iterator to mimic fetch() behaviour
-        return self.alignment_storage[self.alignment_index[index_start]:self.alignment_index[index_end]]
+        # first alignment among sorted that has its end inside the start_bin, e.g. close to region[0]
+        start_bin = region[0] // self.COVERAGE_BIN
+        start_index = self.alignment_end_index[start_bin]
+        # first alignment that has its start after region[1]
+        end_bin = region[1] // self.COVERAGE_BIN
+        end_index = self.alignment_start_index[end_bin]
+
+        for i in range(start_index, end_index):
+            bam_index, alignment = self.alignment_storage[i]
+            if overlaps(region, (alignment.reference_start, alignment.reference_end)):
+                yield bam_index, alignment
 
     def get_read_count(self):
         return len(self.alignment_storage)
