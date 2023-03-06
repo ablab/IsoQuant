@@ -176,7 +176,9 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
 
     def get_alignments(self, region=None):
         if not region or region == self.region:
-            return self.alignment_storage
+            for a in self.alignment_storage:
+                yield a
+            return
 
         self.fill_index()
         # first alignment among sorted that has its end inside the start_bin, e.g. close to region[0]
