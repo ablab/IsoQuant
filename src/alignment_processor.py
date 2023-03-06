@@ -213,6 +213,7 @@ class IntergenicAlignmentCollector:
     """
 
     MAX_REGION_LEN = 32768
+    MIN_READS_TO_SPLIT = 1024
     ABS_COV_VALLEY = 1
     REL_COV_VALLEY = 0.01
 
@@ -250,7 +251,7 @@ class IntergenicAlignmentCollector:
     def forward_alignments(self, alignment_storage):
         current_region = alignment_storage.region
         logger.debug("Splitting " + str(current_region))
-        split_regions = self.split_coverage_regions(current_region, alignment_storage.coverage_dict)
+        split_regions = self.split_coverage_regions(current_region, alignment_storage)
 
         if len(split_regions) == 1:
             yield self.process_alignments_in_region(current_region, alignment_storage.get_alignments())
@@ -444,11 +445,13 @@ class IntergenicAlignmentCollector:
             gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
         return gene_info
 
-    def split_coverage_regions(self, genomic_region, coverage_dict):
-        if interval_len(genomic_region) < IntergenicAlignmentCollector.MAX_REGION_LEN:
+    def split_coverage_regions(self, genomic_region, alignment_storage):
+        if interval_len(genomic_region) < IntergenicAlignmentCollector.MAX_REGION_LEN and \
+                alignment_storage.get_read_count() < IntergenicAlignmentCollector.MIN_READS_TO_SPLIT:
             return [genomic_region]
 
         split_regions = []
+        coverage_dict = alignment_storage.coverage_dict
         coverage_positions = sorted(coverage_dict.keys())
         current_start = coverage_positions[0]
         min_bins = int(IntergenicAlignmentCollector.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
