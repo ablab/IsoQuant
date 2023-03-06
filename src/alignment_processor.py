@@ -200,7 +200,7 @@ class IntergenicAlignmentCollector:
 
     def process(self):
         current_region = None
-        alignment_storage = InMemoryAlignmentStorage()
+        alignment_storage = BAMAlignmentStorage(self.bam_merger) if self.params.low_memory else InMemoryAlignmentStorage()
 
         for bam_index, alignment in self.bam_merger.get():
             if not current_region:
@@ -229,38 +229,6 @@ class IntergenicAlignmentCollector:
             alignments = alignment_storage.get_alignments(new_region)
             if alignments:
                 yield self.process_alignments_in_region(new_region, alignments)
-
-    def process_slow(self):
-        # coverage every COVERAGE_BIN bases
-        coverage_dict = defaultdict(int)
-        current_region = None
-        coverage_islands = []
-
-        for bam_index, alignment in self.bam_merger.get():
-            if alignment.reference_id == -1 or alignment.is_supplementary or \
-                    (self.params.no_secondary and alignment.is_secondary):
-                continue
-
-            if not current_region:
-                current_region = (alignment.reference_start, alignment.reference_end)
-            elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
-                current_region = (current_region[0], max(current_region[1], alignment.reference_end))
-            else:
-                coverage_islands += self.split_coverage_regions(current_region, coverage_dict)
-                coverage_dict = defaultdict(int)
-                current_region = None
-
-            for i in range(alignment.reference_start // AbstractAlignmentStorage.COVERAGE_BIN,
-                           alignment.reference_end // AbstractAlignmentStorage.COVERAGE_BIN + 1):
-                coverage_dict[i] += 1
-
-        if current_region:
-            coverage_islands += self.split_coverage_regions(current_region, coverage_dict)
-
-        self.bam_merger.reset()
-        for region in coverage_islands:
-            self.bam_merger.reset_region(self.bam_merger.chr_id, region[0], region[1])
-            yield self.process_alignments_in_region(region, self.bam_merger.get())
 
     def process_alignments_in_region(self, current_region, alignment_storage):
         logger.debug("Processing region %s" % str(current_region))
