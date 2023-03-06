@@ -201,7 +201,7 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
         return len(self.alignment_storage)
 
 
-class IntergenicAlignmentCollector:
+class AlignmentCollector:
     """ class for aggregating all alignmnet information
 
     Parameters
@@ -446,20 +446,20 @@ class IntergenicAlignmentCollector:
         return gene_info
 
     def split_coverage_regions(self, genomic_region, alignment_storage):
-        if interval_len(genomic_region) < IntergenicAlignmentCollector.MAX_REGION_LEN and \
-                alignment_storage.get_read_count() < IntergenicAlignmentCollector.MIN_READS_TO_SPLIT:
+        if interval_len(genomic_region) < AlignmentCollector.MAX_REGION_LEN and \
+                alignment_storage.get_read_count() < AlignmentCollector.MIN_READS_TO_SPLIT:
             return [genomic_region]
 
         split_regions = []
         coverage_dict = alignment_storage.coverage_dict
         coverage_positions = sorted(coverage_dict.keys())
         current_start = coverage_positions[0]
-        min_bins = int(IntergenicAlignmentCollector.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
+        min_bins = int(AlignmentCollector.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
         pos = current_start + 1
         max_cov = coverage_dict[current_start]
         while pos <= coverage_positions[-1]:
             while (pos <= coverage_positions[-1] and pos - current_start < min_bins) or \
-                    coverage_dict[pos] > max(IntergenicAlignmentCollector.ABS_COV_VALLEY, max_cov * IntergenicAlignmentCollector.REL_COV_VALLEY):
+                    coverage_dict[pos] > max(AlignmentCollector.ABS_COV_VALLEY, max_cov * AlignmentCollector.REL_COV_VALLEY):
                 max_cov = max(max_cov, coverage_dict[pos])
                 pos += 1
             split_regions.append((max(current_start * AbstractAlignmentStorage.COVERAGE_BIN + 1, genomic_region[0]),

@@ -26,7 +26,7 @@ from .gene_info import GeneInfo
 from .stats import EnumStats
 from .file_utils import merge_files
 from .input_data_storage import SampleData
-from .alignment_processor import IntergenicAlignmentCollector
+from .alignment_processor import AlignmentCollector
 from .long_read_counter import (
     ExonCounter,
     IntronCounter,
@@ -102,7 +102,7 @@ def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
 
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
-        IntergenicAlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
+        AlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)
