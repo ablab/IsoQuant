@@ -76,21 +76,21 @@ class AbstractAlignmentStorage:
 
     def __init__(self):
         self.coverage_dict = defaultdict(int)
-        self.current_bin_region_start = 4294967296 # infinity
-        self.current_bin_region_end = 0
+        self.region = None
 
     def reset(self):
         self.coverage_dict = defaultdict(int)
-        self.current_bin_region_start = 4294967296
-        self.current_bin_region_end = 0
+        self.region = None
 
     def add_alignment(self, bam_index, alignment):
         bin_start = alignment.reference_start // AbstractAlignmentStorage.COVERAGE_BIN
         bin_end = alignment.reference_end // AbstractAlignmentStorage.COVERAGE_BIN
-        self.current_bin_region_start = min(bin_start, self.current_bin_region_start)
-        self.current_bin_region_end = max(bin_end, self.current_bin_region_end)
         for i in range(bin_start, bin_end + 1):
             self.coverage_dict[i] += 1
+        if not self.region:
+            self.region = (alignment.reference_start, alignment.reference_end)
+        else:
+            self.region = (min(self.region[0], alignment.reference_start), max(self.region[1], alignment.reference_end))
 
     def get_alignments(self, region=None):
         raise NotImplementedError()
@@ -98,26 +98,23 @@ class AbstractAlignmentStorage:
     def get_read_count(self):
         raise NotImplementedError()
 
+    def alignment_is_not_adjacent(self, alignment):
+        return self.region is not None and not overlaps(self.region, (alignment.reference_start, alignment.reference_end))
+
 
 class BAMAlignmentStorage(AbstractAlignmentStorage):
     def __init__(self, bam_merger):
         AbstractAlignmentStorage.__init__(self)
         self.bam_merger = bam_merger
         self.counter = 0
-        self.region = None
 
     def reset(self):
         AbstractAlignmentStorage.reset(self)
         self.counter = 0
-        self.region = None
 
     def add_alignment(self, bam_index, alignment):
         AbstractAlignmentStorage.add_alignment(self, bam_index, alignment)
         self.counter += 1
-        if not self.region:
-            self.region = (alignment.reference_start, alignment.reference_end)
-        else:
-            self.region = (min(self.region[0], alignment.reference_start), max(self.region[1], alignment.reference_end))
 
     def get_alignments(self, region=None):
         if not region:
@@ -162,13 +159,15 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
         if self.index_filled:
             return
         current_index = len(self.alignment_storage)
-        for pos in range(self.current_bin_region_end + 1, self.current_bin_region_start - 1, -1):
+        current_bin_region_start = self.region[0] // AbstractAlignmentStorage.COVERAGE_BIN
+        current_bin_region_end = self.region[1] // AbstractAlignmentStorage.COVERAGE_BIN
+        for pos in range(current_bin_region_end + 1, current_bin_region_start - 1, -1):
             if pos not in self.alignment_start_index:
                 self.alignment_start_index[pos] = current_index
             else:
                 current_index = self.alignment_start_index[pos]
         current_index = 0
-        for pos in range(self.current_bin_region_start, self.current_bin_region_end + 2):
+        for pos in range(current_bin_region_start, current_bin_region_end + 2):
             if pos not in self.alignment_end_index:
                 self.alignment_end_index[pos] = current_index
             else:
@@ -176,7 +175,7 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
         self.index_filled = True
 
     def get_alignments(self, region=None):
-        if not region:
+        if not region or region == self.region:
             return self.alignment_storage
 
         self.fill_index()
@@ -232,22 +231,18 @@ class IntergenicAlignmentCollector:
         alignment_storage = BAMAlignmentStorage(self.bam_merger) if self.params.low_memory else InMemoryAlignmentStorage()
 
         for bam_index, alignment in self.bam_merger.get():
-            if not current_region:
-                current_region = (alignment.reference_start, alignment.reference_end)
-            elif overlaps(current_region, (alignment.reference_start, alignment.reference_end)):
-                current_region = (current_region[0], max(current_region[1], alignment.reference_end))
-            else:
-                for res in self.forward_alignments(current_region, alignment_storage):
+            if alignment_storage.alignment_is_not_adjacent(alignment):
+                for res in self.forward_alignments(alignment_storage):
                     yield res
                 alignment_storage.reset()
-                current_region = (alignment.reference_start, alignment.reference_end)
             alignment_storage.add_alignment(bam_index, alignment)
 
-        if current_region:
-            for res in self.forward_alignments(current_region, alignment_storage):
+        if alignment_storage.region:
+            for res in self.forward_alignments(alignment_storage):
                 yield res
 
-    def forward_alignments(self, current_region, alignment_storage):
+    def forward_alignments(self, alignment_storage):
+        current_region = alignment_storage.region
         logger.debug("Splitting " + str(current_region))
         split_regions = self.split_coverage_regions(current_region, alignment_storage.coverage_dict)
 
