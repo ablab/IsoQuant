@@ -166,9 +166,9 @@ class InMemoryAlignmentStorage(AbstractAlignmentStorage):
                 self.alignment_start_index[pos] = current_index
             else:
                 current_index = self.alignment_start_index[pos]
-        current_index = 0
-        for pos in range(current_bin_region_start, current_bin_region_end + 2):
-            if pos not in self.alignment_end_index:
+        current_index = len(self.alignment_storage)
+        for pos in range(current_bin_region_end + 1, current_bin_region_start - 1, -1):
+            if pos not in self.alignment_end_index or self.alignment_end_index[pos] > current_index:
                 self.alignment_end_index[pos] = current_index
             else:
                 current_index = self.alignment_end_index[pos]
