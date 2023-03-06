@@ -232,20 +232,10 @@ class IntergenicAlignmentCollector:
 
     def process_alignments_in_region(self, current_region, alignment_storage):
         logger.debug("Processing region %s" % str(current_region))
-        gene_list = []
-        if self.genedb:
-            gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
-                                                end=current_region[1], featuretype="gene"))
-
-        if not gene_list:
-            gene_info = GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
-                                             self.params.delta, self.chr_record)
+        gene_info = self.get_gene_info_for_region(current_region)
+        if gene_info.empty():
             assignment_storage = self.process_intergenic(alignment_storage)
         else:
-            gene_list = sorted(gene_list, key=lambda x: x.start)
-            gene_info = GeneInfo(gene_list, self.genedb, self.params.delta)
-            if self.params.needs_reference:
-                gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
             assignment_storage = self.process_genic(alignment_storage, gene_info)
 
         return gene_info, assignment_storage
@@ -408,6 +398,22 @@ class IntergenicAlignmentCollector:
                 junctions_with_indels += 1
 
         return indel_count, junctions_with_indels
+
+    def get_gene_info_for_region(self, current_region):
+        if not self.genedb:
+            return GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
+                                        self.params.delta, self.chr_record)
+
+        gene_list = list(self.genedb.region(seqid=self.chr_id, start=current_region[0],
+                                            end=current_region[1], featuretype="gene"))
+        if not gene_list:
+            return GeneInfo.from_region(self.chr_id, current_region[0], current_region[1],
+                                        self.params.delta, self.chr_record)
+        gene_list = sorted(gene_list, key=lambda x: x.start)
+        gene_info = GeneInfo(gene_list, self.genedb, self.params.delta)
+        if self.params.needs_reference:
+            gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
+        return gene_info
 
     def split_coverage_regions(self, genomic_region, coverage_dict):
         if interval_len(genomic_region) < IntergenicAlignmentCollector.MAX_REGION_LEN:
