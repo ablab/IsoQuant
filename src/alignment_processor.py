@@ -213,7 +213,7 @@ class AlignmentCollector:
     """
 
     MAX_REGION_LEN = 32768
-    MIN_READS_TO_SPLIT = 1024
+    MIN_READS_TO_SPLIT = 256
     ABS_COV_VALLEY = 1
     REL_COV_VALLEY = 0.01
 
@@ -446,7 +446,7 @@ class AlignmentCollector:
         return gene_info
 
     def split_coverage_regions(self, genomic_region, alignment_storage):
-        if interval_len(genomic_region) < AlignmentCollector.MAX_REGION_LEN and \
+        if interval_len(genomic_region) < AlignmentCollector.MAX_REGION_LEN or \
                 alignment_storage.get_read_count() < AlignmentCollector.MIN_READS_TO_SPLIT:
             return [genomic_region]
 
