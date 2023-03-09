@@ -21,7 +21,7 @@ import pysam
 import Bio.SeqIO as SeqIO
 
 from .common import proper_plural_form, rreplace
-from .serialization import write_int, read_int, TERMINATION_INT
+from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignment, ReadAssignmentType
 from .gene_info import GeneInfo
 from .stats import EnumStats
@@ -460,11 +460,11 @@ class DatasetProcessor:
             if len(assignment_list) > 1
         }
 
-        info_pickler = pickle.Pickler(open(info_file, "wb"),  -1)
-        info_pickler.dump(total_assignments)
-        info_pickler.dump(polya_assignments)
-        info_pickler.dump(all_read_groups)
-
+        info_dumper = open(info_file, "wb")
+        write_int(total_assignments, info_dumper)
+        write_int(polya_assignments, info_dumper)
+        write_list(list(all_read_groups), info_dumper, write_string)
+        info_dumper.close()
         open(lock_file, "w").close()
 
         if total_assignments == 0:
@@ -573,10 +573,11 @@ class DatasetProcessor:
                     self.multimapped_info_dict[a.chr_id][a.read_id].append(a)
                 list_size = read_int(multimap_loader)
 
-        info_unpickler = pickle.Unpickler(open(dump_filename + "_info", "rb"), fix_imports=False)
-        total_assignments = info_unpickler.load()
-        polya_assignments = info_unpickler.load()
-        all_read_groups = info_unpickler.load()
+        info_loader = open(dump_filename + "_info", "rb")
+        total_assignments = read_int(info_loader)
+        polya_assignments = read_int(info_loader)
+        all_read_groups = set(read_list(info_loader, read_string))
+        info_loader.close()
 
         gc.enable()
         return total_assignments, polya_assignments, all_read_groups
