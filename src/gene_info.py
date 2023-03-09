@@ -313,6 +313,21 @@ class GeneInfo:
 
         return gene_info
 
+    @classmethod
+    def deserialize(cls, infile, genedb):
+        gene_info = cls.__new__(cls)
+        gene_info.db = genedb
+        gene_info.gene_db_list = []
+
+    def serialize(self, outfile):
+        write_int(self.delta, outfile)
+        write_int(len(self.gene_db_list), outfile)
+        for g in self.gene_db_list:
+            write_string(g.id, outfile)
+        write_string(self.chr_id, outfile)
+        write_int(self.start, outfile)
+        write_int(self.end, outfile)
+
     def empty(self):
         return not self.gene_db_list and not self.exon_profiles.features
 
