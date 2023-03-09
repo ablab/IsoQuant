@@ -441,9 +441,7 @@ class DatasetProcessor:
         for assignment_list in self.multimapped_reads.values():
             if len(assignment_list) > 1:
                 multimap_resolver.resolve(assignment_list)
-                write_int(len(assignment_list), multimap_dumper)
-                for assignment in assignment_list:
-                    assignment.serialize(multimap_dumper)
+                write_list(assignment_list, multimap_dumper, BasicReadAssignment.serialize)
 
             for a in assignment_list:
                 if a.assignment_type != ReadAssignmentType.suspended:
