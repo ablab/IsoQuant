@@ -21,6 +21,7 @@ import pysam
 import Bio.SeqIO as SeqIO
 
 from .common import proper_plural_form, rreplace
+from .serialization import write_int, read_int, TERMINATION_INT
 from .isoform_assignment import BasicReadAssignment, ReadAssignment, ReadAssignmentType
 from .gene_info import GeneInfo
 from .stats import EnumStats
@@ -433,21 +434,25 @@ class DatasetProcessor:
 
         logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
-        multimap_pickler = pickle.Pickler(open(sample.out_raw_file + "_multimappers", "wb"),  -1)
-        multimap_pickler.fast = True
+        multimap_dumper = open(sample.out_raw_file + "_multimappers", "wb")
         total_assignments = 0
         polya_assignments = 0
 
         for assignment_list in self.multimapped_reads.values():
             if len(assignment_list) > 1:
                 multimap_resolver.resolve(assignment_list)
-                multimap_pickler.dump(assignment_list)
+                write_int(len(assignment_list), multimap_dumper)
+                for assignment in assignment_list:
+                    assignment.serialize(multimap_dumper)
 
             for a in assignment_list:
                 if a.assignment_type != ReadAssignmentType.suspended:
                     total_assignments += 1
                     if a.polyA_found:
                         polya_assignments += 1
+
+        write_int(TERMINATION_INT, multimap_dumper)
+        multimap_dumper.close()
 
         self.multimapped_reads = {
             read_id: assignment_list
@@ -560,18 +565,13 @@ class DatasetProcessor:
                     self.multimapped_info_dict[a.chr_id][a.read_id].append(a)
             self.multimapped_reads = None
         else:
-            multimap_unpickler = pickle.Unpickler(open(dump_filename + "_multimappers", "rb"), fix_imports=False)
-            while True:
-                try:
-                    obj = multimap_unpickler.load()
-                    if isinstance(obj, list):
-                        assignment_list = obj
-                        for a in assignment_list:
-                            self.multimapped_info_dict[a.chr_id][a.read_id].append(a)
-                    else:
-                        raise ValueError("Multimap assignment file {} is corrupted!".format(dump_filename))
-                except EOFError:
-                    break
+            multimap_loader = open(dump_filename + "_multimappers", "rb")
+            list_size = read_int(multimap_loader)
+            while list_size != TERMINATION_INT:
+                for i in range(list_size):
+                    a = BasicReadAssignment.deserialize(multimap_loader)
+                    self.multimapped_info_dict[a.chr_id][a.read_id].append(a)
+                list_size = read_int(multimap_loader)
 
         info_unpickler = pickle.Unpickler(open(dump_filename + "_info", "rb"), fix_imports=False)
         total_assignments = info_unpickler.load()
