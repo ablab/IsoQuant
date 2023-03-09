@@ -317,7 +317,44 @@ class GeneInfo:
     def deserialize(cls, infile, genedb):
         gene_info = cls.__new__(cls)
         gene_info.db = genedb
+        gene_info.delta = read_int(infile)
         gene_info.gene_db_list = []
+
+        gene_count = read_int(infile)
+        for i in range(gene_count):
+            gene_id = read_string(infile)
+            gene_info.gene_db_list.append(gene_info.db[gene_id])
+        gene_info.chr_id = read_string(infile)
+        gene_info.start = read_int(infile)
+        gene_info.end = read_int(infile)
+
+        gene_info.all_read_region_start = gene_info.start
+        gene_info.all_read_region_end = gene_info.end
+        if read_int(infile, SHORT_INT_BYTES):
+            gene_info.reference_region = (read_int(infile), read_int(infile))
+        else:
+            gene_info.reference_region = None
+
+        # the rest is computed based on the database
+        gene_info.canonical_sites = {}
+        gene_info.gene_regions = {}
+        gene_info.intron_profiles = FeatureProfiles()
+        gene_info.exon_profiles = FeatureProfiles()
+        gene_info.split_exon_profiles = FeatureProfiles()
+        gene_info.all_isoforms_introns, gene_info.all_isoforms_exons = gene_info.set_introns_and_exons()
+        gene_info.split_exon_profiles.set_features(gene_info.split_exons(gene_info.exon_profiles.features))
+        gene_info.set_junction_profiles(gene_info.all_isoforms_introns, gene_info.all_isoforms_exons)
+
+        gene_info.isoform_strands = {}
+        gene_info.gene_strands = {}
+        gene_info.set_isoform_strands()
+        gene_info.gene_id_map = {}
+        gene_info.set_gene_ids()
+        gene_info.gene_attributes = {}
+        gene_info.set_gene_attributes()
+        gene_info.exon_property_map = gene_info.set_feature_properties(gene_info.all_isoforms_exons, gene_info.exon_profiles)
+        gene_info.intron_property_map = gene_info.set_feature_properties(gene_info.all_isoforms_introns, gene_info.intron_profiles)
+        return gene_info
 
     def serialize(self, outfile):
         write_int(self.delta, outfile)
@@ -327,6 +364,12 @@ class GeneInfo:
         write_string(self.chr_id, outfile)
         write_int(self.start, outfile)
         write_int(self.end, outfile)
+        if self.reference_region:
+            write_int(1, outfile, SHORT_INT_BYTES)
+            write_int(self.reference_region[0], outfile)
+            write_int(self.reference_region[1], outfile)
+        else:
+            write_int(0, outfile, SHORT_INT_BYTES)
 
     def empty(self):
         return not self.gene_db_list and not self.exon_profiles.features
