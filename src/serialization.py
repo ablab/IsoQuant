@@ -54,6 +54,3 @@ def read_bool_array(inf, arr_size=1):
         mask = 1 << i
         bool_arr.append(byte_val & mask != 0)
     return bool_arr
-
-
-

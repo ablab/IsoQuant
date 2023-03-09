@@ -7,6 +7,7 @@
 import logging
 from enum import Enum, unique
 from src.common import AtomicCounter
+from src.serialization import *
 
 logger = logging.getLogger('IsoQuant')
 
@@ -390,6 +391,26 @@ class BasicReadAssignment:
             self.score = read_assignment.isoform_matches[0].score
         else:
             self.score = 0.0
+
+    @classmethod
+    def deserialize(cls, infile):
+        read_assignment = cls.__new__(cls)
+        read_assignment.assignment_id = read_int(infile)
+        read_assignment.read_id = read_string(infile)
+        read_assignment.chr_id = read_string(infile)
+        bool_arr = read_bool_array(infile, 2)
+        read_assignment.multimapper = bool_arr[0]
+        read_assignment.polyA_found = bool_arr[1]
+        read_assignment.assignment_type = ReadAssignmentType(read_int(infile, SHORT_INT_BYTES))
+        read_assignment.score = float(read_int(infile)) / float(1 << 31)
+
+    def serialize(self, outfile):
+        write_int(self.assignment_id, outfile)
+        write_string(self.read_id, outfile)
+        write_string(self.chr_id, outfile)
+        write_bool_array([self.multimapper, self.polyA_found], outfile)
+        write_int(self.assignment_type.value, outfile, SHORT_INT_BYTES)
+        write_int(int(self.score * (1 << 31)), outfile)
 
 
 class ReadAssignment:
