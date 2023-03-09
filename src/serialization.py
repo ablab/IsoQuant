@@ -3,8 +3,8 @@ ENCODING = 'utf-8'
 BYTE_ORDER = "big"
 STR_LEN_BYTES = 2
 SHORT_INT_BYTES = 2
-LONG_INT_BYTES = 3
-
+LONG_INT_BYTES = 4
+TERMINATION_INT = (1 << 32) - 1
 
 def write_string(s, outf):
     str_len = len(s)

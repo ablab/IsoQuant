@@ -20,7 +20,7 @@ class ReadAssignmentType(Enum):
     ambiguous = 10
     unique_minor_difference = 2
     inconsistent = 3
-    suspended = -1
+    suspended = 255
 
 
 # SQANTI-like
@@ -402,7 +402,7 @@ class BasicReadAssignment:
         read_assignment.multimapper = bool_arr[0]
         read_assignment.polyA_found = bool_arr[1]
         read_assignment.assignment_type = ReadAssignmentType(read_int(infile, SHORT_INT_BYTES))
-        read_assignment.score = float(read_int(infile)) / float(1 << 31)
+        read_assignment.score = float(read_int(infile)) / float(1 << 20)
 
     def serialize(self, outfile):
         write_int(self.assignment_id, outfile)
@@ -410,7 +410,11 @@ class BasicReadAssignment:
         write_string(self.chr_id, outfile)
         write_bool_array([self.multimapper, self.polyA_found], outfile)
         write_int(self.assignment_type.value, outfile, SHORT_INT_BYTES)
-        write_int(int(self.score * (1 << 31)), outfile)
+        try:
+            write_int(int(self.score * (1 << 20)), outfile)
+        except OverflowError:
+            logger.info(self.score, int(self.score * (1 << 20)))
+            exit(-1)
 
 
 class ReadAssignment:
