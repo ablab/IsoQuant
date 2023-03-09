@@ -5,6 +5,8 @@ STR_LEN_BYTES = 2
 SHORT_INT_BYTES = 2
 LONG_INT_BYTES = 4
 TERMINATION_INT = (1 << 32) - 1
+SHORT_FLOAT_MULTIPLIER = 1 << 20
+
 
 def write_string(s, outf):
     str_len = len(s)
@@ -24,6 +26,14 @@ def read_int(inf, bytes_len=LONG_INT_BYTES):
     return int.from_bytes(inf.read(bytes_len), BYTE_ORDER)
 
 
+def write_short_int(val, outf):
+    write_int(val, outf, SHORT_INT_BYTES)
+
+
+def read_short_int(inf):
+    return read_int(inf, SHORT_INT_BYTES)
+
+
 def write_list(l, outf, func):
     write_int(len(l), outf)
     for val in l:
@@ -35,6 +45,21 @@ def read_list(inf, func):
     list_size = read_int(inf)
     for i in range(list_size):
         result.append(func(inf))
+    return result
+
+
+def write_list_of_pairs(l, outf, func):
+    write_int(len(l), outf)
+    for val in l:
+        func(val[0], outf)
+        func(val[1], outf)
+
+
+def read_list_of_pairs(inf, func):
+    result = []
+    list_size = read_int(inf)
+    for i in range(list_size):
+        result.append((func(inf), func(inf)))
     return result
 
 
