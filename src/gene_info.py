@@ -9,6 +9,7 @@ from enum import Enum, unique
 from functools import partial
 from collections import OrderedDict, defaultdict
 
+from .serialization import *
 from .common import (
     contains,
     equal_ranges,
@@ -122,7 +123,6 @@ class FeatureInfo:
 
 # All gene(s) information
 class GeneInfo:
-    MAX_INTRON_LEN = 50000
     EXTRA_BASES_FOR_SEQ = 20
 
     def __init__(self, gene_db_list, db, delta=0):
@@ -147,11 +147,9 @@ class GeneInfo:
         self.intron_profiles = FeatureProfiles()
         self.exon_profiles = FeatureProfiles()
         self.split_exon_profiles = FeatureProfiles()
-        self.ambiguous_isoforms = set()
 
         self.all_isoforms_introns, self.all_isoforms_exons = self.set_introns_and_exons()
         self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
-
         self.set_junction_profiles(self.all_isoforms_introns, self.all_isoforms_exons)
 
         self.isoform_strands = {}
@@ -161,8 +159,6 @@ class GeneInfo:
         self.set_gene_ids()
         self.gene_attributes = {}
         self.set_gene_attributes()
-        # self.detect_ambiguous()
-        self.regions_for_bam_fetch = self.get_regions_for_bam_fetch(self.split_exon_profiles.features)
         self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
         self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
 
@@ -536,35 +532,6 @@ class GeneInfo:
                                                 partial(equal_ranges, delta=0))
                 # setting up split exon profiles for current isoform
                 self.split_exon_profiles.set_profiles(t.id, all_isoforms_exons[t.id], transcript_region, contains)
-
-    # select exon-dense regions
-    def get_regions_for_bam_fetch(self, all_exons):
-        regions_for_bam_fetch = []
-        current_region = None
-        for e in all_exons:
-            if not current_region:
-                current_region = e
-            elif e[0] - current_region[1] < self.MAX_INTRON_LEN:
-                current_region = (current_region[0], e[1])
-            else:
-                regions_for_bam_fetch.append(current_region)
-                current_region = e
-        if current_region:
-            regions_for_bam_fetch.append(current_region)
-        return regions_for_bam_fetch
-
-    # detect isoforms which are exact sub-isoforms of others
-    def detect_ambiguous(self):
-        for t in self.intron_profiles.profiles.keys():
-            intron_profile = self.intron_profiles.profiles[t]
-            exon_profile = self.split_exon_profiles.profiles[t]
-            for t2 in self.intron_profiles.profiles.keys():
-                if t == t2:
-                    continue
-                if is_subprofile(intron_profile, self.intron_profiles.profiles[t2]) and \
-                        is_subprofile(exon_profile, self.split_exon_profiles.profiles[t2]):
-                    self.ambiguous_isoforms.add(t)
-                    break
 
     def transcript_start(self, transcript_id):
         return self.all_isoforms_exons[transcript_id][0][0]
