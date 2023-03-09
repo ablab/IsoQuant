@@ -330,7 +330,7 @@ class GeneInfo:
 
         gene_info.all_read_region_start = gene_info.start
         gene_info.all_read_region_end = gene_info.end
-        if read_int(infile, SHORT_INT_BYTES):
+        if write_short_int(infile):
             gene_info.reference_region = (read_int(infile), read_int(infile))
         else:
             gene_info.reference_region = None
@@ -365,11 +365,11 @@ class GeneInfo:
         write_int(self.start, outfile)
         write_int(self.end, outfile)
         if self.reference_region:
-            write_int(1, outfile, SHORT_INT_BYTES)
+            write_short_int(1, outfile)
             write_int(self.reference_region[0], outfile)
             write_int(self.reference_region[1], outfile)
         else:
-            write_int(0, outfile, SHORT_INT_BYTES)
+            write_short_int(0, outfile)
 
     def empty(self):
         return not self.gene_db_list and not self.exon_profiles.features

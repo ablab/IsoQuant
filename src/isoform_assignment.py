@@ -6,8 +6,9 @@
 
 import logging
 from enum import Enum, unique
-from src.common import AtomicCounter
+from src.common import AtomicCounter, junctions_from_blocks
 from src.serialization import *
+from src.polya_finder import PolyAInfo
 
 logger = logging.getLogger('IsoQuant')
 
@@ -343,6 +344,24 @@ class MatchEvent:
         self.read_region = read_region
         self.event_info = event_info
 
+    @classmethod
+    def deserialize(cls, infile):
+        event = cls.__new__(cls)
+        event.event_type = MatchEventSubtype(read_int(infile, SHORT_INT_BYTES))
+        # TODO: think about 2/3-byte storage
+        event.isoform_region = (read_int(infile), read_int(infile))
+        event.read_region = (read_int(infile), read_int(infile))
+        event.event_info = read_int(infile)
+        return event
+
+    def serialize(self, outfile):
+        write_int(self.event_type.value, outfile, SHORT_INT_BYTES)
+        write_int(self.isoform_region[0], outfile)
+        write_int(self.isoform_region[1], outfile)
+        write_int(self.read_region[0], outfile)
+        write_int(self.read_region[1], outfile)
+        write_int(self.event_info, outfile)
+
     def __repr__(self):
         return "%s:%s,%s,%s" % (self.event_type.name, str(self.isoform_region),
                                 str(self.read_region), str(self.event_info))
@@ -363,6 +382,25 @@ class IsoformMatch:
                 list(filter(lambda x: x.event_type != MatchEventSubtype.none, match_subclassification))
         else:
             self.match_subclassifications = [match_subclassification]
+
+    @classmethod
+    def deserialize(cls, infile):
+        match = cls.__new__(cls)
+        match.assigned_gene = read_string(infile)
+        match.assigned_transcript = read_string(infile)
+        match.transcript_strand = read_string(infile)
+        match.match_classification = MatchClassification(read_short_int(infile))
+        match.score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
+        match.match_subclassifications = read_list(infile, MatchEvent.deserialize)
+        return match
+
+    def serialize(self, outfile):
+        write_string(self.assigned_gene, outfile)
+        write_string(self.assigned_transcript, outfile)
+        write_string(self.transcript_strand, outfile)
+        write_short_int(self.match_classification.value, outfile)
+        write_int(int(self.score * (SHORT_FLOAT_MULTIPLIER)), outfile)
+        write_list(outfile, self.match_subclassifications, MatchEvent.serialize)
 
     def add_subclassification(self, match_subclassification):
         if len(self.match_subclassifications) == 1 and \
@@ -401,20 +439,17 @@ class BasicReadAssignment:
         bool_arr = read_bool_array(infile, 2)
         read_assignment.multimapper = bool_arr[0]
         read_assignment.polyA_found = bool_arr[1]
-        read_assignment.assignment_type = ReadAssignmentType(read_int(infile, SHORT_INT_BYTES))
-        read_assignment.score = float(read_int(infile)) / float(1 << 20)
+        read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
+        read_assignment.score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
+        return read_assignment
 
     def serialize(self, outfile):
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
         write_string(self.chr_id, outfile)
         write_bool_array([self.multimapper, self.polyA_found], outfile)
-        write_int(self.assignment_type.value, outfile, SHORT_INT_BYTES)
-        try:
-            write_int(int(self.score * (1 << 20)), outfile)
-        except OverflowError:
-            logger.info(self.score, int(self.score * (1 << 20)))
-            exit(-1)
+        write_short_int(self.assignment_type.value, outfile)
+        write_int(int(self.score * (SHORT_FLOAT_MULTIPLIER)), outfile)
 
 
 class ReadAssignment:
@@ -426,6 +461,7 @@ class ReadAssignment:
         self.corrected_exons = None
         self.corrected_introns = None
         self.gene_info = None
+        self.multimapper = False
         self.polyA_found = False
         self.cage_found = False
         self.polya_info = None
@@ -441,6 +477,44 @@ class ReadAssignment:
         else:
             self.isoform_matches = [match]
         self.additional_info = {}
+
+    @classmethod
+    def deserialize(cls, infile, gene_info):
+        read_assignment = cls.__new__(cls)
+        read_assignment.assignment_id = read_int(infile)
+        read_assignment.read_id = read_string(infile)
+        read_assignment.exons = read_list_of_pairs(infile, read_int)
+        read_assignment.corrected_exons = read_list_of_pairs(infile, read_int)
+        read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
+        read_assignment.gene_info = gene_info
+        bool_arr = read_bool_array(infile, 3)
+        read_assignment.multimapper = bool_arr[0]
+        read_assignment.polyA_found = bool_arr[1]
+        read_assignment.cage_found = bool_arr[2]
+        read_assignment.polya_info = PolyAInfo(read_int(infile), read_int(infile), read_int(infile), read_int(infile))
+        read_assignment.read_group = read_string(infile)
+        read_assignment.mapped_strand = read_string(infile)
+        read_assignment.strand = read_string(infile)
+        read_assignment.chr_id = read_string(infile)
+        read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
+        read_assignment.isoform_matches = read_list(infile, IsoformMatch.deserialize)
+        return read_assignment
+
+    def serialize(self, outfile):
+        write_int(self.assignment_id, outfile)
+        write_string(self.read_id, outfile)
+        write_list_of_pairs(self.exons, outfile, write_int)
+        write_list_of_pairs(self.corrected_exons, outfile, write_int)
+        write_bool_array([self.multimapper, self.polyA_found, self.cage_found], outfile)
+        write_int(self.polya_info.external_polya_pos, outfile)
+        write_int(self.polya_info.external_polyt_pos, outfile)
+        write_int(self.polya_info.internal_polya_pos, outfile)
+        write_int(self.polya_info.internal_polyt_pos, outfile)
+        write_string(self.mapped_strand, outfile)
+        write_string(self.strand, outfile)
+        write_string(self.chr_id, outfile)
+        write_short_int(self.assignment_type.value, outfile)
+        write_list(self.isoform_matches, outfile, IsoformMatch.serialize)
 
     def add_match(self, match):
         self.isoform_matches.append(match)
