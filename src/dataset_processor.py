@@ -119,18 +119,6 @@ def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
     return processed_reads, read_grouper.read_groups
 
 
-class ReadAssignmentLoader:
-    def __init__(self, save_file_name, gffutils_db, multimappers_dict):
-        logger.info("Loading read assignments from " + save_file_name)
-        assert os.path.exists(save_file_name)
-        self.save_file_name = save_file_name
-        self.unpickler = pickle.Unpickler(open(save_file_name, "rb"), fix_imports=False)
-        self.current_gene_info_obj = None
-        self.is_updated = False
-        self.gffutils_db = gffutils_db
-        self.multimapped_reads = multimappers_dict
-
-
 def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
     gc.disable()
     logger.info("Loading read assignments from " + save_file_name)
