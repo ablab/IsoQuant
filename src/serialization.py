@@ -24,6 +24,20 @@ def read_int(inf, bytes_len=LONG_INT_BYTES):
     return int.from_bytes(inf.read(bytes_len), BYTE_ORDER)
 
 
+def write_list(l, outf, func):
+    write_int(len(l), outf)
+    for val in l:
+        func(val, outf)
+
+
+def read_list(inf, func):
+    result = []
+    list_size = read_int(inf)
+    for i in range(list_size):
+        result.append(func(inf))
+    return result
+
+
 def write_bool_array(bool_arr, outf):
     assert len(bool_arr) <= 8
     byte_val = 0
