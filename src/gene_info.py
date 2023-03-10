@@ -442,7 +442,7 @@ class GeneInfo:
 
                 all_isoforms_introns[t.id] = junctions_from_blocks(all_isoforms_exons[t.id])
 
-        if not all_isoforms_exons:
+        if self.db and not all_isoforms_exons:
             logger.warning("Gene %s has no exons / transcripts, check your input annotation" % self.gene_db_list[0].id)
 
         introns = set()

@@ -528,6 +528,7 @@ class ReadAssignment:
         write_list(self.isoform_matches, outfile, IsoformMatch.serialize)
         write_dict(self.additional_info, outfile)
         write_short_int(int(self.introns_match), outfile)
+        # TODO optimize profiles, possible to write single bytes here
         write_list(self.exon_gene_profile, outfile, write_int_neg)
         write_list(self.intron_gene_profile, outfile, write_int_neg)
 
