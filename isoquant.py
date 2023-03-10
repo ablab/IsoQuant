@@ -304,6 +304,15 @@ def check_input_params(args):
         logger.error("Unsupported strandness " + args.stranded + ", choose one of: " + " ".join(SUPPORTED_STRANDEDNESS))
         return False
 
+    if not args.genedb:
+        if args.count_exons:
+            logger.warning("--count_exons option has no effect without gene annotation")
+        if args.sqanti_output:
+            logger.warning("--sqanti_output option has no effect without gene annotation")
+        if args.no_model_construction:
+            logger.warning("Setting --no_model_construction without providing a gene "
+                           "annotation will not produce any meaningful results")
+
     check_input_files(args)
     return True
 
