@@ -469,6 +469,7 @@ class ReadAssignment:
         self.mapped_strand = "."
         self.strand = "."
         self.chr_id = "."
+        self.mapping_quality = 0
         self.assignment_type = assignment_type
         if match is None:
             self.isoform_matches = []
@@ -496,6 +497,7 @@ class ReadAssignment:
         read_assignment.mapped_strand = read_string(infile)
         read_assignment.strand = read_string(infile)
         read_assignment.chr_id = read_string(infile)
+        read_assignment.mapping_quality = read_short_int(infile)
         read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
         read_assignment.isoform_matches = read_list(infile, IsoformMatch.deserialize)
         return read_assignment
@@ -514,6 +516,7 @@ class ReadAssignment:
         write_string(self.mapped_strand, outfile)
         write_string(self.strand, outfile)
         write_string(self.chr_id, outfile)
+        write_short_int(self.mapping_quality, outfile)
         write_short_int(self.assignment_type.value, outfile)
         write_list(self.isoform_matches, outfile, IsoformMatch.serialize)
 
