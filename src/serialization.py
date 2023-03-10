@@ -2,6 +2,7 @@
 ENCODING = 'utf-8'
 BYTE_ORDER = "big"
 STR_LEN_BYTES = 2
+NONE_STR_LEN = (1 << 16) - 1
 SHORT_INT_BYTES = 2
 LONG_INT_BYTES = 4
 TERMINATION_INT = (1 << 32) - 1
@@ -21,8 +22,7 @@ def read_string(inf):
 
 def write_string_or_none(s, outf):
     if s is None:
-        str_len = 1
-        outf.write(str_len.to_bytes(STR_LEN_BYTES, BYTE_ORDER) + bytearray([0]))
+        outf.write(NONE_STR_LEN.to_bytes(STR_LEN_BYTES, BYTE_ORDER))
         return
     str_len = len(s)
     outf.write(str_len.to_bytes(STR_LEN_BYTES, BYTE_ORDER) + bytearray(s, encoding=ENCODING))
@@ -30,12 +30,8 @@ def write_string_or_none(s, outf):
 
 def read_string_or_none(inf):
     str_len = int.from_bytes(inf.read(STR_LEN_BYTES), BYTE_ORDER)
-    if str_len == 1:
-        val = inf.read(str_len)
-        if val[0] == 0:
-            return None
-        else:
-            return val.decode(encoding=ENCODING)
+    if str_len == NONE_STR_LEN:
+        return None
     return inf.read(str_len).decode(encoding=ENCODING)
 
 
