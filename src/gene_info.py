@@ -339,9 +339,12 @@ class GeneInfo:
         gene_info.intron_profiles = FeatureProfiles()
         gene_info.exon_profiles = FeatureProfiles()
         gene_info.split_exon_profiles = FeatureProfiles()
-        gene_info.all_isoforms_introns, gene_info.all_isoforms_exons = gene_info.set_introns_and_exons()
-        gene_info.split_exon_profiles.set_features(gene_info.split_exons(gene_info.exon_profiles.features))
-        gene_info.set_junction_profiles(gene_info.all_isoforms_introns, gene_info.all_isoforms_exons)
+        gene_info.all_isoforms_introns = {}
+        gene_info.all_isoforms_exons = {}
+        if gene_info.gene_db_list:
+            gene_info.all_isoforms_introns, gene_info.all_isoforms_exons = gene_info.set_introns_and_exons()
+            gene_info.split_exon_profiles.set_features(gene_info.split_exons(gene_info.exon_profiles.features))
+            gene_info.set_junction_profiles(gene_info.all_isoforms_introns, gene_info.all_isoforms_exons)
 
         gene_info.isoform_strands = {}
         gene_info.gene_strands = {}
