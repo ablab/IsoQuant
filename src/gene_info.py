@@ -323,19 +323,17 @@ class GeneInfo:
         gene_count = read_int(infile)
         for i in range(gene_count):
             gene_id = read_string(infile)
-            gene_info.gene_db_list.append(gene_info.db[gene_id])
+            if gene_info.db:
+                gene_info.gene_db_list.append(gene_info.db[gene_id])
         gene_info.chr_id = read_string(infile)
         gene_info.start = read_int(infile)
         gene_info.end = read_int(infile)
 
         gene_info.all_read_region_start = gene_info.start
         gene_info.all_read_region_end = gene_info.end
-        if write_short_int(infile):
-            gene_info.reference_region = (read_int(infile), read_int(infile))
-        else:
-            gene_info.reference_region = None
 
         # the rest is computed based on the database
+        gene_info.reference_region = None
         gene_info.canonical_sites = {}
         gene_info.gene_regions = {}
         gene_info.intron_profiles = FeatureProfiles()
@@ -364,12 +362,6 @@ class GeneInfo:
         write_string(self.chr_id, outfile)
         write_int(self.start, outfile)
         write_int(self.end, outfile)
-        if self.reference_region:
-            write_short_int(1, outfile)
-            write_int(self.reference_region[0], outfile)
-            write_int(self.reference_region[1], outfile)
-        else:
-            write_short_int(0, outfile)
 
     def empty(self):
         return not self.gene_db_list and not self.exon_profiles.features

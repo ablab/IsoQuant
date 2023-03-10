@@ -5,7 +5,6 @@
 ############################################################################
 
 import logging
-import pickle
 
 from .common import (
     CANONICAL_FWD_SITES,
@@ -16,8 +15,14 @@ from .common import (
     sum_intervals_from_point,
     sum_intervals_to_point
 )
-from .isoform_assignment import match_subtype_to_str_with_additional_info
+from .serialization import (
+    write_short_int,
+    read_short_int,
+    SHORT_TERMINATION_INT
+)
+from .isoform_assignment import match_subtype_to_str_with_additional_info, ReadAssignment
 from .long_read_assigner import ReadAssignmentType
+from .gene_info import GeneInfo
 
 
 logger = logging.getLogger('IsoQuant')
@@ -102,20 +107,67 @@ class BEDPrinter(AbstractAssignmentPrinter):
 
 
 class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
+    GENE_INFO = 255
+    READ_ASSIGNMENT = 255 << 8
     def __init__(self, output_file_name, params):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
-        self.pickler = pickle.Pickler(open(self.output_file_name, "wb"),  -1)
-        self.pickler.fast = True
+        self.dumper = open(self.output_file_name, "wb")
+
+    def __del__(self):
+        write_short_int(SHORT_TERMINATION_INT, self.dumper)
+        self.dumper.close()
 
     def add_gene_info(self, gene_info):
-        gene_info.db = None
-        self.pickler.dump(gene_info)
+        write_short_int(self.GENE_INFO, self.dumper)
+        gene_info.serialize(self.dumper)
 
     def add_read_info(self, read_assignment):
         if read_assignment.assignment_type is None or read_assignment.isoform_matches is None:
             return
-        read_assignment.gene_info = None
-        self.pickler.dump(read_assignment)
+        write_short_int(self.READ_ASSIGNMENT, self.dumper)
+        read_assignment.serialize(self.dumper)
+
+
+class TmpFileAssignmentLoader:
+    def __init__(self, input_file_name, genedb, chr_record):
+        self.loader = open(input_file_name, "rb")
+        self.genedb = genedb
+        self.chr_record = chr_record
+        self.current_gene_info = None
+        self.current_id = None
+        self._read_id()
+
+    def __del__(self):
+        self.loader.close()
+
+    def _read_id(self):
+        self.current_id = read_short_int(self.loader)
+
+    def has_next(self):
+        return self.current_id != SHORT_TERMINATION_INT
+
+    def is_gene_info(self):
+        return self.current_id == TmpFileAssignmentPrinter.GENE_INFO
+
+    def is_read_assignment(self):
+        return self.current_id == TmpFileAssignmentPrinter.READ_ASSIGNMENT
+
+    def get_object(self):
+        if self.is_gene_info():
+            self.current_gene_info = GeneInfo.deserialize(self.loader, self.genedb)
+            if self.chr_record:
+                self.current_gene_info.set_reference_sequence(self.current_gene_info.all_read_region_start,
+                                                              self.current_gene_info.all_read_region_end,
+                                                              self.chr_record)
+            self._read_id()
+            return self.current_gene_info
+        elif self.is_read_assignment():
+            assert self.current_gene_info is not None
+            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info)
+            self._read_id()
+            return assignment
+        else:
+            return None
 
 
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):

@@ -386,8 +386,8 @@ class IsoformMatch:
     @classmethod
     def deserialize(cls, infile):
         match = cls.__new__(cls)
-        match.assigned_gene = read_string(infile)
-        match.assigned_transcript = read_string(infile)
+        match.assigned_gene = read_string_or_none(infile)
+        match.assigned_transcript = read_string_or_none(infile)
         match.transcript_strand = read_string(infile)
         match.match_classification = MatchClassification(read_short_int(infile))
         match.score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
@@ -395,12 +395,12 @@ class IsoformMatch:
         return match
 
     def serialize(self, outfile):
-        write_string(self.assigned_gene, outfile)
-        write_string(self.assigned_transcript, outfile)
+        write_string_or_none(self.assigned_gene, outfile)
+        write_string_or_none(self.assigned_transcript, outfile)
         write_string(self.transcript_strand, outfile)
         write_short_int(self.match_classification.value, outfile)
         write_int(int(self.score * (SHORT_FLOAT_MULTIPLIER)), outfile)
-        write_list(outfile, self.match_subclassifications, MatchEvent.serialize)
+        write_list(self.match_subclassifications, outfile, MatchEvent.serialize)
 
     def add_subclassification(self, match_subclassification):
         if len(self.match_subclassifications) == 1 and \
@@ -491,7 +491,7 @@ class ReadAssignment:
         read_assignment.multimapper = bool_arr[0]
         read_assignment.polyA_found = bool_arr[1]
         read_assignment.cage_found = bool_arr[2]
-        read_assignment.polya_info = PolyAInfo(read_int(infile), read_int(infile), read_int(infile), read_int(infile))
+        read_assignment.polya_info = PolyAInfo(read_int_neg(infile), read_int_neg(infile), read_int_neg(infile), read_int_neg(infile))
         read_assignment.read_group = read_string(infile)
         read_assignment.mapped_strand = read_string(infile)
         read_assignment.strand = read_string(infile)
@@ -506,10 +506,10 @@ class ReadAssignment:
         write_list_of_pairs(self.exons, outfile, write_int)
         write_list_of_pairs(self.corrected_exons, outfile, write_int)
         write_bool_array([self.multimapper, self.polyA_found, self.cage_found], outfile)
-        write_int(self.polya_info.external_polya_pos, outfile)
-        write_int(self.polya_info.external_polyt_pos, outfile)
-        write_int(self.polya_info.internal_polya_pos, outfile)
-        write_int(self.polya_info.internal_polyt_pos, outfile)
+        write_int_neg(self.polya_info.external_polya_pos, outfile)
+        write_int_neg(self.polya_info.external_polyt_pos, outfile)
+        write_int_neg(self.polya_info.internal_polya_pos, outfile)
+        write_int_neg(self.polya_info.internal_polyt_pos, outfile)
         write_string(self.mapped_strand, outfile)
         write_string(self.strand, outfile)
         write_string(self.chr_id, outfile)
