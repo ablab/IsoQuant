@@ -227,52 +227,53 @@ class ReadAssignmentAggregator:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                            additional_header=self.common_header)
             printer_list.append(self.basic_printer)
-        if self.args.sqanti_output:
+        if self.args.sqanti_output and self.args.genedb:
             self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
             printer_list.append(self.sqanti_printer)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
-        self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, self.args.gene_quantification,
-                                                ignore_read_groups=True, output_zeroes=False)
-        self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
-                                                            self.args.transcript_quantification,
-                                                            ignore_read_groups=True, output_zeroes=False)
+        self.global_counter = CompositeCounter([])
+        if self.args.genedb:
+            self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, self.args.gene_quantification,
+                                                    ignore_read_groups=True, output_zeroes=False)
+            self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
+                                                                self.args.transcript_quantification,
+                                                                ignore_read_groups=True, output_zeroes=False)
+            self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
+
         self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
                                                                   self.args.transcript_quantification,
                                                                   ignore_read_groups=True, output_zeroes=False)
-
         self.transcript_model_global_counter = CompositeCounter([self.transcript_model_counter])
-        if self.args.count_exons:
+
+        if self.args.count_exons and self.args.genedb:
             self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
             self.intron_counter = IntronCounter(sample.out_intron_counts_tsv, ignore_read_groups=True)
-            self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter,
-                                                    self.exon_counter, self.intron_counter])
-        else:
-            self.global_counter = CompositeCounter([self.gene_counter, self.transcript_counter])
+            self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
         if self.args.read_group:
-            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
-                                                            self.args.gene_quantification, self.read_groups)
-            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
-                                                                        self.args.transcript_quantification,
-                                                                        self.read_groups)
+            if self.args.genedb:
+                self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
+                                                                self.args.gene_quantification, self.read_groups)
+                self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
+                                                                            self.args.transcript_quantification,
+                                                                            self.read_groups)
+                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
+
             self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
                                                                               self.args.transcript_quantification,
                                                                               self.read_groups, output_zeroes=False)
-
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
-            if self.args.count_exons:
+
+            if self.args.count_exons and self.args.genedb:
                 self.exon_grouped_counter = ExonCounter(sample.out_exon_grouped_counts_tsv)
                 self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
-                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter,
-                                                  self.exon_grouped_counter, self.intron_grouped_counter])
-            else:
                 self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 
     def finalize_aggregators(self, sample):
-        logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
-        logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
         if self.args.genedb:
+            logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
+            logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
             logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
         self.read_stat_counter.print_start("Read assignment statistics")
 
@@ -534,7 +535,7 @@ class DatasetProcessor:
             transcript_stat_counter.print_start("Transcript model statistics")
 
         self.merge_assignments(sample, aggregator, chr_ids)
-        if self.args.sqanti_output:
+        if self.args.sqanti_output and self.args.genedb:
             merge_files(
                 [
                     rreplace(sample.out_alt_tsv, sample.label, f"{sample.label}_{chr_id}")
