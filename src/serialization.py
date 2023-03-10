@@ -8,6 +8,10 @@ LONG_INT_BYTES = 4
 TERMINATION_INT = (1 << 32) - 1
 SHORT_TERMINATION_INT = (1 << 16) - 1
 SHORT_FLOAT_MULTIPLIER = 1 << 20
+DICT_TYPE_LEN = 1
+DICT_INT_TYPE = 9
+DICT_INT_PAIR_TYPE = 10
+DICT_STR_TYPE = 17
 
 
 def write_string(s, outf):
@@ -113,3 +117,39 @@ def read_int_neg(inf):
     if val & 1 << 31 != 0:
         return - (val & ((1 << 31) - 1))
     return val
+
+
+def write_dict(d, outf):
+    # keys - only strings, values - string, ints, int pairs
+    write_int(len(d), outf)
+    for k in d.keys():
+        write_string(k, outf)
+        v = d[k]
+        if isinstance(v, int):
+            outf.write(DICT_INT_TYPE.to_bytes(DICT_TYPE_LEN, BYTE_ORDER))
+            write_int_neg(v, outf)
+        elif isinstance(v, str):
+            outf.write(DICT_STR_TYPE.to_bytes(DICT_TYPE_LEN, BYTE_ORDER))
+            write_string(v, outf)
+        elif isinstance(v, tuple):
+            outf.write(DICT_INT_PAIR_TYPE.to_bytes(DICT_TYPE_LEN, BYTE_ORDER))
+            write_int_neg(v[0], outf)
+            write_int_neg(v[1], outf)
+        else:
+            raise ValueError("Unsupported value type in dictionary serialization")
+
+
+def read_dict(inf):
+    d = {}
+    d_len = read_int(inf)
+    for i in range(d_len):
+        k = read_string(inf)
+        vtype = int.from_bytes(inf.read(DICT_TYPE_LEN))
+        if vtype == DICT_INT_TYPE:
+            d[k] = read_int(inf)
+        elif vtype == DICT_STR_TYPE:
+            d[k] = read_string(inf)
+        elif vtype == DICT_INT_PAIR_TYPE:
+            d[k] = (read_int(inf), read_int(inf))
+        else:
+            raise ValueError("Serialized dictionary contains unsupported value")
