@@ -87,7 +87,9 @@ def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
             for g in open(group_file):
                 read_grouper.read_groups.add(g.strip())
             # TODO: fix loading with db = None
-            for gene_info, assignment_storage in load_assigned_reads(save_file, None, None, None):
+            loader = ReadAssignmentLoader(save_file, None, None, None)
+            while loader.has_next():
+                gene_info, assignment_storage = loader.get_next()
                 for a in assignment_storage:
                     processed_reads.append(BasicReadAssignment(a))
             logger.info("Loaded data for " + chr_id)
@@ -118,6 +120,45 @@ def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
 
     return processed_reads, read_grouper.read_groups
 
+
+class ReadAssignmentLoader:
+    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict):
+        logger.info("Loading read assignments from " + save_file_name)
+        assert os.path.exists(save_file_name)
+        self.save_file_name = save_file_name
+        self.unpickler = TmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
+        self.multimapped_chr_dict = multimapped_chr_dict
+
+    def has_next(self):
+        return self.unpickler.has_next()
+    def get_next(self):
+        if not self.unpickler.has_next():
+            return None, None
+
+        assert self.unpickler.is_gene_info()
+        gene_info = self.unpickler.get_object()
+        assignment_storage = []
+        while self.unpickler.is_read_assignment():
+            read_assignment = self.unpickler.get_object()
+            if self.multimapped_chr_dict is not None and read_assignment.read_id in self.multimapped_chr_dict:
+                resolved_assignment = None
+                for a in self.multimapped_chr_dict[read_assignment.read_id]:
+                    if a.assignment_id == read_assignment.assignment_id and a.chr_id == read_assignment.chr_id:
+                        if resolved_assignment is not None:
+                            logger.info("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
+                        resolved_assignment = a
+
+                if not resolved_assignment:
+                    logger.warning("Incomplete information on read %s" % read_assignment.read_id)
+                    continue
+                elif resolved_assignment.assignment_type == ReadAssignmentType.suspended:
+                    continue
+                else:
+                    read_assignment.assignment_type = resolved_assignment.assignment_type
+                    read_assignment.multimapper = resolved_assignment.multimapper
+            assignment_storage.append(read_assignment)
+
+        return gene_info, assignment_storage
 
 def load_assigned_reads(save_file_name, gffutils_db, chr_record, multimapped_chr_dict):
     logger.info("Loading read assignments from " + save_file_name)
@@ -183,7 +224,9 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimappe
         tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support,
                                              gtf_suffix=".extended_annotation.gtf", output_r2t=False)
 
-    for gene_info, assignment_storage in load_assigned_reads(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads):
+    loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
+    while loader.has_next():
+        gene_info, assignment_storage = loader.get_next()
         logger.debug("Processing %d reads" % len(assignment_storage))
         for read_assignment in assignment_storage:
             if read_assignment is None:
