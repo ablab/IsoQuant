@@ -478,6 +478,9 @@ class ReadAssignment:
         else:
             self.isoform_matches = [match]
         self.additional_info = {}
+        self.introns_match = False
+        self.exon_gene_profile = []
+        self.intron_gene_profile = []
 
     @classmethod
     def deserialize(cls, infile, gene_info):
@@ -500,6 +503,10 @@ class ReadAssignment:
         read_assignment.mapping_quality = read_short_int(infile)
         read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
         read_assignment.isoform_matches = read_list(infile, IsoformMatch.deserialize)
+        read_assignment.additional_info = read_dict(infile)
+        read_assignment.introns_match = bool(read_short_int(infile))
+        read_assignment.exon_gene_profile = read_list(infile, read_int_neg)
+        read_assignment.intron_gene_profile = read_list(infile, read_int_neg)
         return read_assignment
 
     def serialize(self, outfile):
@@ -519,6 +526,10 @@ class ReadAssignment:
         write_short_int(self.mapping_quality, outfile)
         write_short_int(self.assignment_type.value, outfile)
         write_list(self.isoform_matches, outfile, IsoformMatch.serialize)
+        write_dict(self.additional_info, outfile)
+        write_short_int(int(self.introns_match), outfile)
+        write_list(self.exon_gene_profile, outfile, write_int_neg)
+        write_list(self.intron_gene_profile, outfile, write_int_neg)
 
     def add_match(self, match):
         self.isoform_matches.append(match)

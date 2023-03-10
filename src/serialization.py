@@ -144,7 +144,7 @@ def read_dict(inf):
     d_len = read_int(inf)
     for i in range(d_len):
         k = read_string(inf)
-        vtype = int.from_bytes(inf.read(DICT_TYPE_LEN))
+        vtype = int.from_bytes(inf.read(DICT_TYPE_LEN), BYTE_ORDER)
         if vtype == DICT_INT_TYPE:
             d[k] = read_int(inf)
         elif vtype == DICT_STR_TYPE:
@@ -153,3 +153,4 @@ def read_dict(inf):
             d[k] = (read_int(inf), read_int(inf))
         else:
             raise ValueError("Serialized dictionary contains unsupported value")
+    return d
