@@ -399,7 +399,7 @@ class IsoformMatch:
         write_string_or_none(self.assigned_transcript, outfile)
         write_string(self.transcript_strand, outfile)
         write_short_int(self.match_classification.value, outfile)
-        write_int(int(self.score * (SHORT_FLOAT_MULTIPLIER)), outfile)
+        write_int(int(self.score * SHORT_FLOAT_MULTIPLIER), outfile)
         write_list(self.match_subclassifications, outfile, MatchEvent.serialize)
 
     def add_subclassification(self, match_subclassification):
@@ -449,7 +449,7 @@ class BasicReadAssignment:
         write_string(self.chr_id, outfile)
         write_bool_array([self.multimapper, self.polyA_found], outfile)
         write_short_int(self.assignment_type.value, outfile)
-        write_int(int(self.score * (SHORT_FLOAT_MULTIPLIER)), outfile)
+        write_int(int(self.score * SHORT_FLOAT_MULTIPLIER), outfile)
 
 
 class ReadAssignment:
@@ -510,6 +510,7 @@ class ReadAssignment:
         write_int_neg(self.polya_info.external_polyt_pos, outfile)
         write_int_neg(self.polya_info.internal_polya_pos, outfile)
         write_int_neg(self.polya_info.internal_polyt_pos, outfile)
+        write_string(self.read_group, outfile)
         write_string(self.mapped_strand, outfile)
         write_string(self.strand, outfile)
         write_string(self.chr_id, outfile)
