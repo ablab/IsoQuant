@@ -251,14 +251,13 @@ class ReadAssignmentAggregator:
             self.intron_counter = IntronCounter(sample.out_intron_counts_tsv, ignore_read_groups=True)
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
-        if self.args.read_group:
-            if self.args.genedb:
-                self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
-                                                                self.args.gene_quantification, self.read_groups)
-                self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
-                                                                            self.args.transcript_quantification,
-                                                                            self.read_groups)
-                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
+        if self.args.read_group and self.args.genedb:
+            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
+                                                            self.args.gene_quantification, self.read_groups)
+            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
+                                                                        self.args.transcript_quantification,
+                                                                        self.read_groups)
+            self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 
             self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
                                                                               self.args.transcript_quantification,
@@ -268,7 +267,7 @@ class ReadAssignmentAggregator:
             if self.args.count_exons and self.args.genedb:
                 self.exon_grouped_counter = ExonCounter(sample.out_exon_grouped_counts_tsv)
                 self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
-                self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
+                self.global_counter.add_counters([self.exon_grouped_counter, self.intron_grouped_counter])
 
     def finalize_aggregators(self, sample):
         if self.args.genedb:
