@@ -135,6 +135,8 @@ def create_read_grouper(args, sample, chr_id):
     if values[0] == "file_name":
         return FileNameGrouper(args)
     elif values[0] == 'tag':
+        if len(values) < 2:
+            return AlignmentTagReadGrouper(tag="RG")
         return AlignmentTagReadGrouper(tag=values[1])
     elif values[0] == 'read_id':
         return ReadIdSplitReadGrouper(delim=values[1])
