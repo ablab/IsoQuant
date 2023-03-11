@@ -288,7 +288,7 @@ def check_input_params(args):
         return False
     args.data_type = DATA_TYPE_ALIASES[args.data_type]
 
-    if not args.fastq and not args.fastq_list and not args.bam and not args.bam_list:
+    if not args.fastq and not args.fastq_list and not args.bam and not args.bam_list and not args.read_assignments:
         logger.error("No input data was provided")
         return False
 
