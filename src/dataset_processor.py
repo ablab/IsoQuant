@@ -166,9 +166,10 @@ class ReadAssignmentLoader:
 
 
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups, io_support):
+    logger.info("Processing chromosome " + chr_id)
     current_chr_record = Fasta(args.reference)[chr_id]
     multimapped_reads = defaultdict(list)
-    multimap_loader = open(dump_filename + "_multimappers", "rb")
+    multimap_loader = open(dump_filename + "_multimappers_" + chr_id, "rb")
     list_size = read_int(multimap_loader)
     while list_size != TERMINATION_INT:
         for i in range(list_size):
@@ -192,7 +193,6 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     else:
         gffutils_db = None
 
-    logger.info("Processing chromosome " + chr_id)
     transcript_stat_counter = EnumStats()
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
     tmp_extended_gff_printer = None
@@ -449,14 +449,20 @@ class DatasetProcessor:
 
         logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
-        multimap_dumper = open(sample.out_raw_file + "_multimappers", "wb")
+        multimap_dumper = {}
+        for chr_id in chr_ids:
+            multimap_dumper[chr_id] = open(sample.out_raw_file + "_multimappers_" + chr_id, "wb")
         total_assignments = 0
         polya_assignments = 0
 
         for assignment_list in self.multimapped_reads.values():
             if len(assignment_list) > 1:
                 multimap_resolver.resolve(assignment_list)
-                write_list(assignment_list, multimap_dumper, BasicReadAssignment.serialize)
+                resolved_lists = defaultdict(list)
+                for a in assignment_list:
+                    resolved_lists[a.chr_id].append(a)
+                for chr_id in resolved_lists.keys():
+                    write_list(resolved_lists[chr_id], multimap_dumper[chr_id], BasicReadAssignment.serialize)
 
             for a in assignment_list:
                 if a.assignment_type != ReadAssignmentType.suspended:
@@ -464,8 +470,9 @@ class DatasetProcessor:
                     if a.polyA_found:
                         polya_assignments += 1
 
-        write_int(TERMINATION_INT, multimap_dumper)
-        multimap_dumper.close()
+        for chr_id in chr_ids:
+            write_int(TERMINATION_INT, multimap_dumper[chr_id])
+            multimap_dumper[chr_id].close()
 
         self.multimapped_reads = {
             read_id: assignment_list
