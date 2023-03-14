@@ -1,6 +1,7 @@
 numpy>=1.23.1
-biopython==1.76
-gffutils==0.10.1
+gffutils>=0.10.1
+biopython>=1.76
 pandas>=1.0.1
-pybedtools==0.8.1
+pybedtools>=0.8.1
 pysam>=0.15
+pyfaidx>=0.7
