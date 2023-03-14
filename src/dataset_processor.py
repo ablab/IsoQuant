@@ -131,6 +131,7 @@ class ReadAssignmentLoader:
 
     def has_next(self):
         return self.unpickler.has_next()
+
     def get_next(self):
         if not self.unpickler.has_next():
             return None, None
@@ -159,44 +160,6 @@ class ReadAssignmentLoader:
             assignment_storage.append(read_assignment)
 
         return gene_info, assignment_storage
-
-def load_assigned_reads(save_file_name, gffutils_db, chr_record, multimapped_chr_dict):
-    logger.info("Loading read assignments from " + save_file_name)
-    assert os.path.exists(save_file_name)
-    unpickler = TmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
-    read_storage = []
-    current_gene_info = None
-
-    while unpickler.has_next():
-        if unpickler.is_gene_info():
-            if current_gene_info:
-                yield current_gene_info, read_storage
-            read_storage = []
-            current_gene_info = unpickler.get_object()
-        elif unpickler.is_read_assignment():
-            read_assignment = unpickler.get_object()
-            if multimapped_chr_dict is not None and read_assignment.read_id in multimapped_chr_dict:
-                resolved_assignment = None
-                for a in multimapped_chr_dict[read_assignment.read_id]:
-                    if a.assignment_id == read_assignment.assignment_id and a.chr_id == read_assignment.chr_id:
-                        if resolved_assignment is not None:
-                            logger.info("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
-                        resolved_assignment = a
-
-                if not resolved_assignment:
-                    logger.warning("Incomplete information on read %s" % read_assignment.read_id)
-                    continue
-                elif resolved_assignment.assignment_type == ReadAssignmentType.suspended:
-                    continue
-                else:
-                    read_assignment.assignment_type = resolved_assignment.assignment_type
-                    read_assignment.multimapper = resolved_assignment.multimapper
-            read_storage.append(read_assignment)
-        else:
-            raise ValueError("Read assignment file {} is corrupted!".format(save_file_name))
-
-    if current_gene_info:
-        yield current_gene_info, read_storage
 
 
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_groups, current_chr_record,
