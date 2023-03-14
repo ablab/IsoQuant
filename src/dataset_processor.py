@@ -165,7 +165,7 @@ class ReadAssignmentLoader:
         return gene_info, assignment_storage
 
 
-def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups, io_support):
+def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
     current_chr_record = Fasta(args.reference)[chr_id]
     multimapped_reads = defaultdict(list)
@@ -194,6 +194,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         gffutils_db = None
 
     transcript_stat_counter = EnumStats()
+    io_support = IOSupport(args)
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
     tmp_extended_gff_printer = None
     if gffutils_db:
@@ -524,7 +525,6 @@ class DatasetProcessor:
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),
             itertools.repeat(self.all_read_groups),
-            itertools.repeat(self.io_support),
         )
 
         if self.args.threads > 1:
