@@ -165,9 +165,18 @@ class ReadAssignmentLoader:
         return gene_info, assignment_storage
 
 
-def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_groups,
-                                 io_support):
+def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups, io_support):
     current_chr_record = Fasta(args.reference)[chr_id]
+    multimapped_reads = defaultdict(list)
+    multimap_loader = open(dump_filename + "_multimappers", "rb")
+    list_size = read_int(multimap_loader)
+    while list_size != TERMINATION_INT:
+        for i in range(list_size):
+            a = BasicReadAssignment.deserialize(multimap_loader)
+            if a.chr_id == chr_id:
+                multimapped_reads[a.read_id].append(a)
+        list_size = read_int(multimap_loader)
+
     chr_dump_file = dump_filename + "_" + chr_id
     lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
     read_stat_file = "{}_read_stat".format(chr_dump_file)
@@ -507,7 +516,6 @@ class DatasetProcessor:
             chr_ids,
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),
-            (self.multimapped_info_dict[chr_id] for chr_id in chr_ids),
             itertools.repeat(self.all_read_groups),
             itertools.repeat(self.io_support),
         )
@@ -560,27 +568,11 @@ class DatasetProcessor:
         aggregator.finalize_aggregators(sample)
 
     def load_read_info(self, dump_filename):
-        self.multimapped_info_dict = defaultdict(lambda : defaultdict(list))
-        if self.multimapped_reads:
-            for read_id in self.multimapped_reads:
-                for a in self.multimapped_reads[read_id]:
-                    self.multimapped_info_dict[a.chr_id][a.read_id].append(a)
-            self.multimapped_reads = None
-        else:
-            multimap_loader = open(dump_filename + "_multimappers", "rb")
-            list_size = read_int(multimap_loader)
-            while list_size != TERMINATION_INT:
-                for i in range(list_size):
-                    a = BasicReadAssignment.deserialize(multimap_loader)
-                    self.multimapped_info_dict[a.chr_id][a.read_id].append(a)
-                list_size = read_int(multimap_loader)
-
         info_loader = open(dump_filename + "_info", "rb")
         total_assignments = read_int(info_loader)
         polya_assignments = read_int(info_loader)
         all_read_groups = set(read_list(info_loader, read_string))
         info_loader.close()
-
         return total_assignments, polya_assignments, all_read_groups
 
     def merge_assignments(self, sample, aggregator, chr_ids):
