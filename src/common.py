@@ -713,8 +713,8 @@ CANONICAL_REV_SITES = {("CT", "AC"), ("CT", "GC"), ("GT", "AT")}
 def get_intron_strand(intron, reference_region, ref_region_start=1):
     intron_left_pos = intron[0] - ref_region_start
     intron_right_pos = intron[1] - ref_region_start
-    left_site = str(reference_region[intron_left_pos:intron_left_pos + 2].seq)
-    right_site = str(reference_region[intron_right_pos - 1:intron_right_pos + 1].seq)
+    left_site = str(reference_region[intron_left_pos:intron_left_pos + 2])
+    right_site = str(reference_region[intron_right_pos - 1:intron_right_pos + 1])
     is_fwd = (left_site, right_site) in CANONICAL_FWD_SITES
     is_rev = (left_site, right_site) in CANONICAL_REV_SITES
 
@@ -732,8 +732,8 @@ def get_strand(introns, reference_region, ref_region_start=1):
     for intron in introns:
         intron_left_pos = intron[0] - ref_region_start
         intron_right_pos = intron[1] - ref_region_start
-        left_site = str(reference_region[intron_left_pos:intron_left_pos + 2].seq)
-        right_site = str(reference_region[intron_right_pos - 1:intron_right_pos + 1].seq)
+        left_site = str(reference_region[intron_left_pos:intron_left_pos + 2])
+        right_site = str(reference_region[intron_right_pos - 1:intron_right_pos + 1])
         count_fwd += 1 if (left_site, right_site) in CANONICAL_FWD_SITES else 0
         count_rev += 1 if (left_site, right_site) in CANONICAL_REV_SITES else 0
 

@@ -309,7 +309,7 @@ class GeneInfo:
         gene_info.gene_regions = {}
         gene_info.reference_region = None
         if chr_record:
-            gene_info.reference_region = str(chr_record[gene_info.all_read_region_start - 1:gene_info.all_read_region_end + 1].seq)
+            gene_info.reference_region = str(chr_record[gene_info.all_read_region_start - 1:gene_info.all_read_region_end + 1])
 
         return gene_info
 
@@ -614,7 +614,7 @@ class GeneInfo:
         self.all_read_region_start = start
         self.all_read_region_end = end
         self.reference_region = \
-            str(chr_record[self.all_read_region_start - 1:self.all_read_region_end + 1].seq)
+            str(chr_record[self.all_read_region_start - 1:self.all_read_region_end + 1])
         self.canonical_sites = {}
 
 

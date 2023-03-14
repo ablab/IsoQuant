@@ -16,7 +16,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import gffutils
 import pysam
-import Bio.SeqIO as SeqIO
+from pyfaidx import Fasta, UnsupportedCompressionFormat
 
 from .common import proper_plural_form, rreplace
 from .serialization import *
@@ -73,7 +73,10 @@ def clean_locks(chr_ids, base_name, fname_function):
             os.remove(fname)
 
 
-def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
+def collect_reads_in_parallel(sample, chr_id, args):
+    current_chr_record = Fasta(args.reference)[chr_id]
+    if not args.low_memory:
+        current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
     lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
     save_file = "{}_{}".format(sample.out_raw_file, chr_id)
@@ -162,8 +165,9 @@ class ReadAssignmentLoader:
         return gene_info, assignment_storage
 
 
-def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_groups, current_chr_record,
+def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_groups,
                                  io_support):
+    current_chr_record = Fasta(args.reference)[chr_id]
     chr_dump_file = dump_filename + "_" + chr_id
     lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
     read_stat_file = "{}_read_stat".format(chr_dump_file)
@@ -300,26 +304,32 @@ class DatasetProcessor:
 
         if self.args.needs_reference:
             logger.info("Loading reference genome from " + self.args.reference)
-            ref_name, outer_ext = os.path.splitext(os.path.basename(self.args.reference))
+            ref_file_name = os.path.basename(self.args.reference)
+            ref_name, outer_ext = os.path.splitext(ref_file_name)
+
+            #make symlink for pyfaidx index
+            symlink_name = os.path.join(args.output, ref_file_name)
+            if os.path.exists(symlink_name) and not self.args.resume:
+                os.remove(symlink_name)
+            if not os.path.exists(symlink_name):
+                os.symlink(self.args.reference, symlink_name)
+            self.args.original_ref = self.args.reference
+            self.args.reference = symlink_name
+
             low_ext = outer_ext.lower()
             if low_ext in ['.gz', '.gzip', '.bgz']:
-                with gzip.open(self.args.reference, "rt") as handle:
-                    if self.args.low_memory:
-                        if low_ext == '.bgz':
-                            self.reference_record_dict = SeqIO.index(self.args.reference, "fasta")
-                        else:
-                            self.args.gunzipped_reference = os.path.join(args.output, ref_name)
-                            with open(self.args.gunzipped_reference, "w") as outf:
-                                shutil.copyfileobj(handle, outf)
-                            logger.info("Loading uncompressed reference from " + self.args.gunzipped_reference)
-                            self.reference_record_dict = SeqIO.index(self.args.gunzipped_reference, "fasta")
-                    else:
-                        self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(handle, "fasta"))
+                try:
+                    self.reference_record_dict = Fasta(self.args.reference)
+                except UnsupportedCompressionFormat:
+                    gunzipped_reference = os.path.join(args.output, ref_name)
+                    if not os.path.exists(gunzipped_reference) or not self.args.resume:
+                        with open(gunzipped_reference, "w") as outf:
+                            shutil.copyfileobj(gzip.open(self.args.reference, "rt"), outf)
+                        logger.info("Loading uncompressed reference from " + gunzipped_reference)
+                    self.args.reference = gunzipped_reference
+                    self.reference_record_dict = Fasta(self.args.reference)
             else:
-                if self.args.low_memory:
-                    self.reference_record_dict = SeqIO.index(self.args.reference, "fasta")
-                else:
-                    self.reference_record_dict = SeqIO.to_dict(SeqIO.parse(self.args.reference, "fasta"))
+                self.reference_record_dict = Fasta(self.args.reference)
         else:
             self.reference_record_dict = None
 
@@ -394,7 +404,7 @@ class DatasetProcessor:
                 os.remove(lock_file)
 
         chr_ids = sorted(
-            self.reference_record_dict,
+            self.reference_record_dict.keys(),
             key=lambda x: len(self.reference_record_dict[x]),
             reverse=True,
         )
@@ -410,7 +420,6 @@ class DatasetProcessor:
             itertools.repeat(sample),
             chr_ids,
             itertools.repeat(self.args),
-            (self.reference_record_dict[chr_id] for chr_id in chr_ids)
         )
 
         if self.args.threads > 1:
@@ -470,7 +479,7 @@ class DatasetProcessor:
 
     def process_assigned_reads(self, sample, dump_filename):
         chr_ids = sorted(
-            self.reference_record_dict,
+            self.reference_record_dict.keys(),
             key=lambda x: len(self.reference_record_dict[x]),
             reverse=True
         )
@@ -500,7 +509,6 @@ class DatasetProcessor:
             itertools.repeat(self.args),
             (self.multimapped_info_dict[chr_id] for chr_id in chr_ids),
             itertools.repeat(self.all_read_groups),
-            (self.reference_record_dict[chr_id] for chr_id in chr_ids),
             itertools.repeat(self.io_support),
         )
 
