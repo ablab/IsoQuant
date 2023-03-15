@@ -274,7 +274,7 @@ where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set)
 
 `--resume`
     Resume a previously unfinished run. Output folder with previous run must be specified.
-    Allowed options are `--threads`, `--low_memory` and `--debug`, other options cannot be changed.
+    Allowed options are `--threads` and `--debug`, other options cannot be changed.
     IsoQuant will run from the beginning if the output folder does not contain the previous run.
 
 `--force`

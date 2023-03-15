@@ -137,7 +137,9 @@ def parse_args(args=None, namespace=None):
                           help="align reads to reference without running further analysis")
 
     # ADDITIONAL
-    add_additional_option("--low_memory", help="decrease RAM consumption (leads to slower processing)",
+    add_additional_option("--low_memory", help="decrease RAM consumption (deprecated, set by default)",
+                          action='store_true', default=True)
+    add_additional_option("--high_memory", help="increase RAM consumption (store alignment and the genome in RAM)",
                           action='store_true', default=False)
     add_additional_option("--no_junc_bed", action="store_true", default=False,
                           help="do NOT use annotation for read mapping")
@@ -179,7 +181,7 @@ def parse_args(args=None, namespace=None):
         resume_parser.add_argument('--debug', action='store_true', default=argparse.SUPPRESS,
                                    help='Debug log output.')
         resume_parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default=argparse.SUPPRESS)
-        resume_parser.add_argument("--low_memory", help="decrease RAM consumption (leads to slower processing)",
+        resume_parser.add_argument("--low_memory", help="decrease RAM consumption (deprecated, set by default)",
                                    action='store_true', default=argparse.SUPPRESS)
         resume_parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                                    default=argparse.SUPPRESS)
@@ -231,6 +233,9 @@ def check_and_load_args(args, parser):
         args.genedb_output = args.output
     elif not os.path.exists(args.genedb_output):
         os.makedirs(args.genedb_output)
+
+    if args.high_memory:
+        args.low_memory = False
 
     if not check_input_params(args):
         parser.print_usage()
