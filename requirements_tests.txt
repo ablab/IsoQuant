@@ -10,3 +10,4 @@ pybedtools==0.8.1
 pysam>=0.15
 simplejson==3.17.0
 six==1.14.0
+pyfaidx>=0.7
