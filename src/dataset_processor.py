@@ -343,10 +343,6 @@ class DatasetProcessor:
         else:
             self.reference_record_dict = None
 
-        self.multimapped_reads = defaultdict(list)
-        # chr_id -> read_id -> list of assignments
-        self.multimapped_info_dict = defaultdict(lambda : defaultdict(list))
-
     def __del__(self):
         if not self.args.keep_tmp and self.args.gunzipped_reference:
             if os.path.exists(self.args.gunzipped_reference):
@@ -363,7 +359,6 @@ class DatasetProcessor:
         logger.info("Processing sample " + sample.label)
         logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(map(lambda x: x[0], sample.file_list)))
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
-        self.multimapped_reads = defaultdict(list)
 
         self.all_read_groups = set()
         if self.args.resume and os.path.exists(sample.read_group_file + "_lock"):
@@ -423,7 +418,7 @@ class DatasetProcessor:
             clean_locks(chr_ids, sample.out_raw_file, reads_processed_lock_file_name)
 
         all_read_groups = set()
-        self.multimapped_reads = defaultdict(list)
+        multimapped_reads = defaultdict(list)
 
         read_gen = (
             collect_reads_in_parallel,
@@ -438,13 +433,13 @@ class DatasetProcessor:
 
                 for storage, read_groups in results:
                     for read_assignment in storage:
-                        self.multimapped_reads[read_assignment.read_id].append(read_assignment)
+                        multimapped_reads[read_assignment.read_id].append(read_assignment)
 
                     all_read_groups.update(read_groups)
         else:
             for storage, read_groups in map(*read_gen):
                 for read_assignment in storage:
-                    self.multimapped_reads[read_assignment.read_id].append(read_assignment)
+                    multimapped_reads[read_assignment.read_id].append(read_assignment)
 
                 all_read_groups.update(read_groups)
 
@@ -456,7 +451,7 @@ class DatasetProcessor:
         total_assignments = 0
         polya_assignments = 0
 
-        for assignment_list in self.multimapped_reads.values():
+        for assignment_list in multimapped_reads.values():
             if len(assignment_list) > 1:
                 multimap_resolver.resolve(assignment_list)
                 resolved_lists = defaultdict(list)
@@ -474,12 +469,6 @@ class DatasetProcessor:
         for chr_id in chr_ids:
             write_int(TERMINATION_INT, multimap_dumper[chr_id])
             multimap_dumper[chr_id].close()
-
-        self.multimapped_reads = {
-            read_id: assignment_list
-            for read_id, assignment_list in self.multimapped_reads.items()
-            if len(assignment_list) > 1
-        }
 
         info_dumper = open(info_file, "wb")
         write_int(total_assignments, info_dumper)
