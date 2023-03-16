@@ -82,7 +82,7 @@ def collect_reads_in_parallel(sample, chr_id, args, current_chr_record):
     processed_reads = []
 
     if os.path.exists(lock_file) and args.resume:
-        logger.info("Detected processed reads for " + chr_id)
+        logger.info("Detected processed reads for " + chr_id + ": " + lock_file)
         if os.path.exists(group_file) and os.path.exists(save_file):
             read_grouper.read_groups.clear()
             for g in open(group_file):
@@ -139,6 +139,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
     read_storage = []
     current_gene_info = None
 
+    count = 0
     while True:
         try:
             obj = unpickler.load()
@@ -165,6 +166,7 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
                 read_storage.append(read_assignment)
             elif isinstance(obj, GeneInfo):
                 if current_gene_info:
+                    count += len(read_storage)
                     yield current_gene_info, read_storage
                 read_storage = []
                 current_gene_info = obj
@@ -175,7 +177,9 @@ def load_assigned_reads(save_file_name, gffutils_db, multimapped_chr_dict):
             break
     gc.enable()
     if current_gene_info:
+        count += len(read_storage)
         yield current_gene_info, read_storage
+    logger.info("Loaded %d reads for %s" % (count, save_file_name))
 
 
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, multimapped_reads, read_groups, current_chr_record,
