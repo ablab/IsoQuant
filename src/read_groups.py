@@ -185,13 +185,13 @@ def split_read_group_table(table_file, sample, read_id_column_index, group_id_co
 
     for bam_file in bam_files:
         bam = pysam.AlignmentFile(bam_file, "rb")
+        for chr_id in bam.references:
+            read_group_files[chr_id] = open(sample.read_group_file + "_" + chr_id, "w")
         for read_alignment in bam:
             chr_id = read_alignment.reference_name
             if not chr_id:
                 continue
 
-            if chr_id not in read_group_files:
-                read_group_files[chr_id] = open(sample.read_group_file + "_" + chr_id, "w")
             read_id = read_alignment.query_name
             if read_id in read_groups and read_id not in processed_reads[chr_id]:
                 read_group_files[chr_id].write("%s\t%s\n" % (read_id, read_groups[read_id]))
