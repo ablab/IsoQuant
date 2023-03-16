@@ -118,8 +118,9 @@ def run_isoquant(args, config_dict, log):
     output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)
     if "resume" in config_dict:
         assert "label" in config_dict
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+        if os.path.exists(output_folder):
+            os.rmdir(output_folder)
+        os.makedirs(output_folder)
         isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder, "--resume"]
         src_dir = fix_path(config_file, config_dict["resume"])
         for f in os.listdir(src_dir):
