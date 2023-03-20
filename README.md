@@ -55,6 +55,8 @@
         --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz 
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
+* If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
+
 <a name="sec1"></a>
 # About IsoQuant
 
@@ -87,7 +89,7 @@ Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have al
 Reference genome should be provided in multi-FASTA format (can be gzipped). 
 Reference genome is mandatory even when BAM files are provided.
 
-Reference gene annotation is not mandatory, but may increase precision and recall.
+Reference gene annotation is not mandatory, but is likely to increase precision and recall.
 It can be provided in GFF/GTF format (can be gzipped). 
 In this case it will be converted to [gffutils](https://pythonhosted.org/gffutils/installation.html) database. Information on converted databases will be stored in your `~/.config/IsoQuant/db_config.json` to increase speed of future runs. You can also provide gffutils database manually. Make sure that chromosome/scaffold names are identical in FASTA file and gene annotation.
 
@@ -101,6 +103,7 @@ You will also need
 * [pysam](https://pysam.readthedocs.io/en/latest/index.html) 
 * [biopython](https://biopython.org/)
 * [pybedtools](https://daler.github.io/pybedtools/)
+* [pyfaidx](https://pypi.org/project/pyfaidx/)
 * [pandas](https://pandas.pydata.org/)
 * [numpy](https://numpy.org/)
 * [minimap2](https://github.com/lh3/minimap2) 
@@ -124,7 +127,7 @@ conda install -c bioconda -c conda-forge -c isoquant isoquant
 <a name="sec2.2"></a>
 ## Manual installation and requirements
 To obtain IsoQuant you can download repository and install requirements.  
-Clone IsoQuant repository and switch to latest release:
+Clone IsoQuant repository and switch to the latest release:
 ```bash
 git clone https://github.com/ablab/IsoQuant.git
 cd IsoQuant
@@ -161,9 +164,14 @@ To run IsoQuant, you should provide:
 Optionally, you may provide a reference gene annotation in gffutils database or GTF/GFF format (can be gzipped);
 
 
-By default, each file with reads is treated as a separate sample. 
-To group multiple files into a single sample, provide a text files with paths to your FASTQ/FASTA/BAM files. 
-Provide each file in a separate line, leave blank lines between samples.
+By default, all provided files with reads are treated as a single experiment, which means a single combined GTF will 
+be generated. If multiple files are provided, IsoQuant will compute tables with each column 
+corresponding to an individual file (further referred to as per-file counts). This pipeline is typical for the cases when a user is 
+interested in comparing expression between different replicas/conditions within the same experiment.
+
+
+To obtain distinct GTFs from multiple files in a single IsoQuant run, provide a text file with paths to 
+your FASTQ/FASTA/BAM files. Provide each file in a separate line, leave blank lines between different experiments.
 See more in [examples](#examples).
 
 <a name="sec3.2"></a>
@@ -213,23 +221,25 @@ which dramatically speeds up gene database conversion (see more [here](https://p
 To provide aligned reads use one of the following options:
 
 `--bam`
-    Sorted and indexed BAM file(s); each file will be treated as a separate sample.
+    Sorted and indexed BAM file(s); a single GTF will be generated for all files. If multiple files are provided,
+expression tables with "per-file" columns will be computed. See more about [input data](#sec3.1).
 
 `--bam_list` 
-    Text file with list of BAM files, one file per line, leave empty line between samples. 
+    Text file with list of BAM files, one file per line, leave empty line between experiments. For each experiment
+IsoQuant will generate a individual GTF and count tables. 
 You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:replicate1`).
-Use this option to obtain per-replicate expression table (see `--read_group` option). 
 
 #### Using raw reads as an input:  
 To provide read sequences use one of the following options:
 
 `--fastq` 
-    Input FASTQ/FASTA file(s), can be gzipped; each file will be treated as a separate sample.
+    Input FASTQ/FASTA file(s), can be gzipped;  a single GTF will be generated for all files. If multiple files are provided,
+expression tables with "per-file" columns will be computed. See more about [input data](#sec3.1).
   
 `--fastq_list` 
-    Text file with list of FASTQ/FASTA files (can be gzipped), one file per line, leave empty line between samples.
+    Text file with list of FASTQ/FASTA files (can be gzipped),  one file per line, leave empty line between experiments. 
+For each experiment IsoQuant will generate a individual GTF and count tables. 
 You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:replicate1`).
-Use this option to obtain per-replicate expression table (see `--read_group` option). 
 
 #### Other input options:
 `--stranded`
@@ -239,14 +249,16 @@ Use this option to obtain per-replicate expression table (see `--read_group` opt
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
 
 `--labels` or `-l`
-    Sets space-separated sample names. Make sure that the number of labels is equal to the number of samples. 
+    Sets space-separated experiment names. Make sure that the number of labels is equal to the number of experiments. 
 Input file names are used as labels if not set.
 
 `--read_group`
- Sets a way to group feature counts (e.g. by cell type or replicate). Available options are:
- * `file_name`: groups reads by their original file names (or file name aliases) within a sample. 
-This option makes sense when a sample contains multiple files (see `--bam_list` and `--fastq_list` options to learn more).
-This option is designed for obtaining expression tables with a separate column for each file (replicate).
+ Sets a way to group feature counts (e.g. by cell type). Available options are:
+ * `file_name`: groups reads by their original file names (or file name aliases) within an experiment. 
+This option makes sense when multiple files are provided. 
+This option is designed for obtaining expression tables with a separate column for each file. 
+If multiple BAM/FASTQ files are provided and `--read_group` option is not set, IsoQuant will set `--read_group:file_name` 
+by default.
  * `tag`: groups reads by BAM file read tag: set `tag:TAG`, where `TAG` is the desired tag name 
 (e.g. `tag:RG` with use `RG` values as groups, `RG` will be used if unset);
  * `read_id`: groups reads by read name suffix: set `read_id:DELIM` where `DELIM` is the 
@@ -376,6 +388,12 @@ We recommend to not modify these options unless you are clearly aware of their e
     for storing the annotation database, because SQLite database cannot be created on a shared disks. 
     The folder will be created automatically.
 
+`--low_memory`
+    Deprecated, default behaviour since 3.2.
+
+`--high_memory` 
+    Cache read alignments instead for making several passes over a BAM file, noticeably increases RAM usage.
+
 
 ### Examples
 <a name="examples"></a>
@@ -387,7 +405,7 @@ isoquant.py -d pacbio_ccs --bam mapped_reads.bam \
  --genedb annotation.db --output output_dir 
 ```
 
-* Nanopore dRNA stranded reads; official annotation in GTF format, used sample label instead of file name:
+* Nanopore dRNA stranded reads; official annotation in GTF format, use label instead of file name:
 ```bash
 isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz \
  --reference reference.fasta --genedb annotation.gtf --complete_genedb \ 
@@ -406,7 +424,13 @@ isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq \
  --reference reference.fasta --genedb genes.gtf --output output_dir 
 ```
 
-* ONT cDNA reads; 2 samples with 3 replicates (biological or technical); official annotation in GTF format:
+* Nanopore cDNA reads, multiple samples/replicas within a single experiment; official annotation in GTF format:
+```bash
+isoquant.py -d nanopore --bam ONT.cDNA_1.bam ONT.cDNA_2.bam ONT.cDNA_3.bam \
+ --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --labels My_ONT_cDNA
+```
+
+* ONT cDNA reads; 2 experiments with 3 replicates (biological or technical); official annotation in GTF format:
 ```bash
 isoquant.py -d nanopore --fastq_list list.txt  \
  --read_group file_name -l SAMPLE1 SAMPLE2   \
@@ -425,9 +449,10 @@ list.txt file :
 /PATH/TO/SAMPLE2/file3.fastq:S2_REPLICATE3
 
 ```
+IsoQuant will produce 2 sets of resulting files (including annotations and expression tables), one for each experiment.
 Note, that file aliases given after a colon will be used in expression table header. 
 
-* ONT cDNA reads; 2 samples with 2 replicates, each replicate has 2 files; official annotation in GTF format:
+* ONT cDNA reads; 2 experiments with 2 replicates, each replicate has 2 files; official annotation in GTF format:
 ```bash
 isoquant.py -d nanopore --fastq_list list.txt \
  --read_group file_name -l SAMPLE1 SAMPLE2 \
@@ -448,6 +473,7 @@ list.txt file :
 /PATH/TO/SAMPLE2/r2_2.fastq:S2_REPLICATE2
 
 ```
+IsoQuant will produce 2 sets of resulting files (including annotations and expression tables), one for each experiment.
 Note, that file aliases given after a colon will be used in expression table header. 
 
 <a name="sec3.3"></a>
