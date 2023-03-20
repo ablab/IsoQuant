@@ -126,6 +126,9 @@ class InputDataStorage:
             labels.append('{:02d}'.format(i) + "_" + os.path.splitext(os.path.basename(sample_files[i][0][0]))[0])
         return labels
 
+    def has_replicas(self):
+        return any(len(sample.file_list) > 1 for sample in self.samples)
+
 
 def check_input_type(fname, input_type):
     basename_plus_inner_ext, outer_ext = os.path.splitext(fname.lower())
