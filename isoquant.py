@@ -427,6 +427,8 @@ def set_data_dependent_options(args):
 
     args.resolve_ambiguous = 'monoexon_and_fsm' if args.fl_data else 'default'
     args.needs_polya_for_construction = False
+    if args.read_group is None and ((args.bam and len(args.bam) > 1) or (args.fastq and len(args.fastq) > 1)):
+        args.read_group = "file_name"
     args.use_technical_replicas = args.read_group == "file_name"
 
 

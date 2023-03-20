@@ -54,14 +54,16 @@ class InputDataStorage:
 
         if args.fastq is not None:
             self.input_type = "fastq"
+            sample_files.append([])
             for fq in args.fastq:
                 check_input_type(fq, self.input_type)
-                sample_files.append([[fq]])
+                sample_files[0].append([fq])
         elif args.bam is not None:
             self.input_type = "bam"
+            sample_files.append([])
             for bam in args.bam:
                 check_input_type(bam, self.input_type)
-                sample_files.append([[bam]])
+                sample_files[0].append([bam])
         elif args.fastq_list is not None:
             self.input_type = "fastq"
             sample_files, self.readable_names_dict = self.get_samples_from_file(args.fastq_list)
