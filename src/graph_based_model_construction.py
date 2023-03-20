@@ -450,7 +450,8 @@ class GraphBasedModelConstructor:
         if not self.params.fl_only:
             logger.debug("Constructing nonFL isoforms")
             self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
-        self.construct_monoexon_novel(novel_mono_exon_reads)
+        if self.params.report_novel_unspliced:
+            self.construct_monoexon_novel(novel_mono_exon_reads)
 
     def collect_terminal_exons_from_graph(self):
         polya_exons = []
