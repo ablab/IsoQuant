@@ -38,6 +38,13 @@ from src.stats import combine_counts
 logger = logging.getLogger('IsoQuant')
 
 
+def bool_str(s):
+    s = s.lower()
+    if s not in {'false', 'true', '0', '1'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'true' or s == '1'
+
+
 def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     show_full_help = '--full_help' in sys.argv
@@ -112,7 +119,9 @@ def parse_args(args=None, namespace=None):
                         help="transcript quantification strategy", type=str, default="with_ambiguous")
     parser.add_argument("--gene_quantification", choices=COUNTING_STRATEGIES,
                         help="gene quantification strategy", type=str, default="with_inconsistent")
-
+    parser.add_argument("--report_novel_unspliced", "-u", type=bool_str,
+                        help="report novel monoexonic transcripts (true/false), "
+                             "default: False for ONT, True for other data types")
     # OUTPUT PROPERTIES
     parser.add_argument("--full_help", action='help', help="show full list of options")
     parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
@@ -510,16 +519,16 @@ def set_model_construction_options(args):
                                             'min_known_count', 'min_nonfl_count',
                                             'min_novel_count', 'min_novel_count_rel',
                                             'min_mono_count_rel', 'singleton_adjacent_cov',
-                                            'fl_only'))
+                                            'fl_only', 'novel_monoexonic'))
     strategies = {
-        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50, True),
-        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100, False),
-        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False),
-        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10, False),
-        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10, False),
-        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True),
-        'all':             ModelConstructionStrategy(0, 0.3, 10,  1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False),
-        'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False)
+        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50, True, False),
+        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100, False, True),
+        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False, True),
+        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10, False, False),
+        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10, False, True),
+        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True, True),
+        'all':             ModelConstructionStrategy(0, 0.3, 10,  1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False, True),
+        'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False, True)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -540,6 +549,14 @@ def set_model_construction_options(args):
     args.singleton_adjacent_cov = strategy.singleton_adjacent_cov
     args.fl_only = strategy.fl_only
     args.min_mono_exon_coverage = 0.75
+
+    if args.report_novel_unspliced is None:
+        args.report_novel_unspliced = strategy.novel_monoexonic
+
+    if not args.report_novel_unspliced:
+        logger.info("Novel unspliced transcripts will not be reported, "
+                    "set --report_novel_unspliced true to discover them")
+
 
 def set_configs_directory(args):
     config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')

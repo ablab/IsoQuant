@@ -345,11 +345,18 @@ This option is chosen automatically based on specified data type, but will be ov
 * `sensitive_pacbio` - sensitive settings for PacBio CCS reads, more transcripts are reported possibly at a cost of precision;
 * `fl_pacbio` - optimal settings for full-length PacBio CCS reads, will be used if `--data_type pacbio_ccs` and `--fl_data` options are set; 
 * `default_ont` - optimal settings for ONT reads;
-* `sensitive_ont` - sensitive settings for ONT reads, more transcripts are reported possibly at a cost of precision;
+* `sensitive_ont` - sensitive settings for ONT reads, more transcripts are reported possibly at a cost of precision (including novel mono-exonic isoforms);
 * `assembly` - optimal settings for a transcriptome assembly: input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not considered;    
 * `all` - reports almost all novel transcripts, loses precision in favor to recall.
 
 This option is chosen automatically based on specified data type, but will be overridden if set manually.
+
+
+`--report_novel_unspliced` Report novel mono-exonic transcripts (set `true` or `false`). 
+The default value is `false` for Nanopore data and `true` for other data types. 
+The main explanation that some aligner report a lot of false unspliced alignments
+for ONT reads.
+
 
 
 ### Hidden options
