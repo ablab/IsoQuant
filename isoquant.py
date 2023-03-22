@@ -38,6 +38,13 @@ from src.stats import combine_counts
 logger = logging.getLogger('IsoQuant')
 
 
+def bool_str(s):
+    s = s.lower()
+    if s not in {'false', 'true', '0', '1'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'true' or s == '0'
+
+
 def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     show_full_help = '--full_help' in sys.argv
@@ -112,8 +119,8 @@ def parse_args(args=None, namespace=None):
                         help="transcript quantification strategy", type=str, default="with_ambiguous")
     parser.add_argument("--gene_quantification", choices=COUNTING_STRATEGIES,
                         help="gene quantification strategy", type=str, default="with_inconsistent")
-    parser.add_argument("--report_novel_unspliced", "-u", type=bool,
-                        help="report novel monoexonic transcripts (True/False), "
+    parser.add_argument("--report_novel_unspliced", "-u", type=bool_str,
+                        help="report novel monoexonic transcripts (true/false), "
                              "default: False for ONT, True for other data types")
     # OUTPUT PROPERTIES
     parser.add_argument("--full_help", action='help', help="show full list of options")
