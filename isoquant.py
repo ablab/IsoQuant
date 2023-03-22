@@ -42,7 +42,7 @@ def bool_str(s):
     s = s.lower()
     if s not in {'false', 'true', '0', '1'}:
         raise ValueError('Not a valid boolean string')
-    return s == 'true' or s == '0'
+    return s == 'true' or s == '1'
 
 
 def parse_args(args=None, namespace=None):
@@ -552,6 +552,10 @@ def set_model_construction_options(args):
 
     if args.report_novel_unspliced is None:
         args.report_novel_unspliced = strategy.novel_monoexonic
+
+    if not args.report_novel_unspliced:
+        logger.info("Novel unspliced transcripts will not be reported, "
+                    "set --report_novel_unspliced true to discover them")
 
 
 def set_configs_directory(args):
