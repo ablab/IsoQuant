@@ -559,6 +559,8 @@ Tab-separated values, the columns are:
         - `ism_5/3` - incomplete splice match, truncated on 5'/3' side;
         - `ism_internal` - incomplete splice match, truncated on both sides;
         - `mono_exonic` - mono-exonic read matching spliced isoform;
+        - `tss_match` / `tss_match_precise` - 5' read is located less than 50 / `delta` bases from the TSS of the assigned isoform
+        - `tes_match` / `tes_match_precise` - 3' read is located less than 50 / `delta` bases from the TES of the assigned isoform (can be reported without detecting polyA sites)
     - alignment artifacts:
         - `intron_shift` - intron that seems to be shifted due to misalignment (typical for Nanopores);
         - `exon_misalignment` - short exon that seems to be missed due to misalignment  (typical for Nanopores);

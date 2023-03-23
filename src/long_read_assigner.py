@@ -200,42 +200,49 @@ class LongReadAssigner:
                 break
 
         if common_first_exon == -1 or common_last_exon == -1:
-            logger.warning(" + Werid case for exon elongation, no matching exons")
+            logger.warning(" + Odd case for exon elongation, no matching exons")
+
+        events = []
 
         first_read_exon = read_split_exon_profile.read_features[0]
         if overlaps(first_read_exon, split_exons[common_first_exon]):
             extra_left = split_exons[common_first_exon][0] - first_read_exon[0]
-        else:
-            # first read exon seems to be to the left of common exon
-            extra_left = 0
+            # logger.debug("+ + Left: %d %d" % (common_first_exon, isofrom_first_exon))
+            if common_first_exon == isofrom_first_exon and abs(extra_left) <= self.params.minor_exon_extension:
+                if abs(extra_left) <= self.params.delta:
+                    left_match_event = MatchEventSubtype.terminal_site_match_left_precise
+                else:
+                    left_match_event = MatchEventSubtype.terminal_site_match_left
+                events.append(MatchEvent(left_match_event, event_info=extra_left))
+
+            left_event = None
+            if extra_left > self.params.minor_exon_extension:
+                if common_first_exon == isofrom_first_exon:
+                    left_event = MatchEventSubtype.major_exon_elongation_left
+            elif extra_left > self.params.delta:
+                left_event = MatchEventSubtype.exon_elongation_left
+            if left_event:
+                events.append(MatchEvent(left_event, event_info=extra_left))
 
         last_read_exon = read_split_exon_profile.read_features[-1]
         if overlaps(last_read_exon, split_exons[common_last_exon]):
             extra_right = last_read_exon[1] - split_exons[common_last_exon][1]
-        else:
-            extra_right = 0
+            # logger.debug("+ + Right: %d %d" % (common_last_exon, isofrom_last_exon))
+            if common_last_exon == isofrom_last_exon and abs(extra_right) <= self.params.minor_exon_extension:
+                if abs(extra_right) <= self.params.delta:
+                    right_match_event = MatchEventSubtype.terminal_site_match_right_precise
+                else:
+                    right_match_event = MatchEventSubtype.terminal_site_match_right
+                events.append(MatchEvent(right_match_event, event_info=extra_right))
 
-        # logger.debug("+ + Checking exon elongation")
-        # logger.debug("+ + Extra bases: left = %d, right = %d" % (extra_left, extra_right))
-
-        events = []
-        left_event = None
-        if extra_left > self.params.minor_exon_extension:
-            if common_first_exon == isofrom_first_exon:
-                left_event = MatchEventSubtype.major_exon_elongation_left
-        elif extra_left > self.params.delta:
-            left_event = MatchEventSubtype.exon_elongation_left
-        if left_event:
-            events.append(MatchEvent(left_event, event_info=extra_left))
-
-        right_event = None
-        if extra_right > self.params.minor_exon_extension:
-            if common_last_exon == isofrom_last_exon:
-                right_event = MatchEventSubtype.major_exon_elongation_right
-        elif extra_right > self.params.delta:
-                right_event = MatchEventSubtype.exon_elongation_right
-        if right_event:
-            events.append(MatchEvent(right_event, event_info=extra_right))
+            right_event = None
+            if extra_right > self.params.minor_exon_extension:
+                if common_last_exon == isofrom_last_exon:
+                    right_event = MatchEventSubtype.major_exon_elongation_right
+            elif extra_right > self.params.delta:
+                    right_event = MatchEventSubtype.exon_elongation_right
+            if right_event:
+                events.append(MatchEvent(right_event, event_info=extra_right))
 
         return events
 
