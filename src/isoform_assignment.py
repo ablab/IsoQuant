@@ -148,6 +148,11 @@ class MatchEventSubtype(Enum):
     correct_polya_site_right = 223
     aligned_polya_tail = 300
 
+    terminal_site_match_left = 250
+    terminal_site_match_right = 251
+    terminal_site_match_left_precise = 252
+    terminal_site_match_right_precise = 253
+
     def __lt__(self, other):
         return self.value < other.value
 
@@ -182,7 +187,11 @@ class MatchEventSubtype(Enum):
                                        MatchEventSubtype.ism_right,
                                        MatchEventSubtype.ism_internal,
                                        MatchEventSubtype.correct_polya_site_left,
-                                       MatchEventSubtype.correct_polya_site_right}
+                                       MatchEventSubtype.correct_polya_site_right,
+                                       MatchEventSubtype.terminal_site_match_left,
+                                       MatchEventSubtype.terminal_site_match_right,
+                                       MatchEventSubtype.terminal_site_match_left_precise,
+                                       MatchEventSubtype.terminal_site_match_right_precise}
 
     @staticmethod
     def is_major_elongation(match_event_subtype):
@@ -265,7 +274,11 @@ event_subtype_cost = {
     MatchEventSubtype.alternative_tss_right :0.75,
     MatchEventSubtype.correct_polya_site_left:0,
     MatchEventSubtype.correct_polya_site_right:0,
-    MatchEventSubtype.aligned_polya_tail:0
+    MatchEventSubtype.aligned_polya_tail:0,
+    MatchEventSubtype.terminal_site_match_left:0,
+    MatchEventSubtype.terminal_site_match_right:0,
+    MatchEventSubtype.terminal_site_match_left_precise:0,
+    MatchEventSubtype.terminal_site_match_right_precise:0
 }
 
 
@@ -351,7 +364,7 @@ class MatchEvent:
         # TODO: think about 2/3-byte storage
         event.isoform_region = (read_int(infile), read_int(infile))
         event.read_region = (read_int(infile), read_int(infile))
-        event.event_info = read_int(infile)
+        event.event_info = read_int_neg(infile)
         return event
 
     def serialize(self, outfile):
@@ -360,7 +373,7 @@ class MatchEvent:
         write_int(self.isoform_region[1], outfile)
         write_int(self.read_region[0], outfile)
         write_int(self.read_region[1], outfile)
-        write_int(self.event_info, outfile)
+        write_int_neg(self.event_info, outfile)
 
     def __repr__(self):
         return "%s:%s,%s,%s" % (self.event_type.name, str(self.isoform_region),
@@ -584,7 +597,12 @@ match_subtype_printable_names = \
      MatchEventSubtype.alt_left_site_known: ('alt_donor_site_known', 'alt_acceptor_site_known'),
      MatchEventSubtype.alt_right_site_known: ('alt_acceptor_site_known', 'alt_donor_site_known'),
      MatchEventSubtype.alt_left_site_novel: ('alt_donor_site_novel', 'alt_acceptor_site_novel'),
-     MatchEventSubtype.alt_right_site_novel: ('alt_acceptor_site_novel', 'alt_donor_site_novel')}
+     MatchEventSubtype.alt_right_site_novel: ('alt_acceptor_site_novel', 'alt_donor_site_novel'),
+     MatchEventSubtype.terminal_site_match_left: ('tss_match', 'tes_match'),
+     MatchEventSubtype.terminal_site_match_right: ('tes_match', 'tss_match'),
+     MatchEventSubtype.terminal_site_match_left_precise: ('tss_match_precise', 'tes_match_precise'),
+     MatchEventSubtype.terminal_site_match_right_precise: ('tes_match_precise', 'tss_match_precise')
+     }
      #MatchEventSubtype.alternative_polya_site_left: ('alternative_polya_site_5', 'alternative_polya_site_3'),
      #MatchEventSubtype.alternative_polya_site_right: ('alternative_polya_site_3', 'alternative_polya_site_5'),
      #MatchEventSubtype.internal_polya_left: ('internal_polya_site_5', 'internal_polya_site_3'),
@@ -627,7 +645,10 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
                            MatchEventSubtype.alternative_tss_left, MatchEventSubtype.alternative_tss_right,
                            MatchEventSubtype.alternative_polya_site_left, MatchEventSubtype.alternative_polya_site_right,
                            MatchEventSubtype.correct_polya_site_right, MatchEventSubtype.correct_polya_site_left,
-                           MatchEventSubtype.internal_polya_left, MatchEventSubtype.internal_polya_right}:
+                           MatchEventSubtype.internal_polya_left, MatchEventSubtype.internal_polya_right,
+                           MatchEventSubtype.terminal_site_match_left, MatchEventSubtype.terminal_site_match_right,
+                           MatchEventSubtype.terminal_site_match_left_precise,
+                           MatchEventSubtype.terminal_site_match_right_precise}:
         # elongation events
         additional_info = ":" + str(event.event_info)
     else:
