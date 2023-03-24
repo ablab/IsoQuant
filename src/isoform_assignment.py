@@ -196,8 +196,12 @@ class MatchEventSubtype(Enum):
     @staticmethod
     def is_major_elongation(match_event_subtype):
         return match_event_subtype in {MatchEventSubtype.major_exon_elongation_left,
-                                       MatchEventSubtype.major_exon_elongation_right,
-                                       MatchEventSubtype.incomplete_intron_retention}
+                                       MatchEventSubtype.major_exon_elongation_right}
+
+    @staticmethod
+    def is_minor_elongation(match_event_subtype):
+        return match_event_subtype in {MatchEventSubtype.exon_elongation_left,
+                                       MatchEventSubtype.exon_elongation_right}
 
     @staticmethod
     def is_major_inconsistency(match_event_subtype):
