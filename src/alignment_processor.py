@@ -365,6 +365,8 @@ class AlignmentCollector:
             read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
+            self.check_antisense(read_assignment)
+
             read_assignment.chr_id = gene_info.chr_id
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
@@ -469,3 +471,15 @@ class AlignmentCollector:
             pos = min(current_start + 1, coverage_positions[-1] + 1)
 
         return split_regions
+
+    def check_antisense(self, read_assignment):
+        for match in read_assignment.isoform_matches:
+            if match.assigned_transcript is None:
+                continue
+
+            if read_assignment.strand == match.transcript_strand:
+                continue
+            if match.match_classification not in \
+                    [MatchClassification.novel_in_catalog, MatchClassification.novel_not_in_catalog]:
+                match.match_classification = MatchClassification.antisense
+            match.match_subclassifications.append(MatchEvent(MatchEventSubtype.antisense))

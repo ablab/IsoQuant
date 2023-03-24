@@ -76,6 +76,7 @@ class MatchEventSubtype(Enum):
     undefined = 1
     # non-contradictory
     mono_exonic = 10
+    antisense = 9
     fsm = 11
     ism_left = 15
     ism_right = 13
@@ -331,6 +332,7 @@ nonintronic_events = {
     MatchEventSubtype.internal_polya_right, MatchEventSubtype.internal_polya_left,
     MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
     MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right,
+    MatchEventSubtype.antisense
 }
 
 

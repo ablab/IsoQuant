@@ -218,7 +218,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                                                            ["Classification=" + str(m.match_classification.name) + ";"]))
                 continue
             isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
-            event_string = ",".join([match_subtype_to_str_with_additional_info(x, m.transcript_strand,
+            event_string = ",".join([match_subtype_to_str_with_additional_info(x, read_assignment.strand,
                                                                                read_introns, isoform_introns)
                                      for x in m.match_subclassifications])
             strand = read_assignment.strand
