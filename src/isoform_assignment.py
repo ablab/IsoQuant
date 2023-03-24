@@ -586,28 +586,28 @@ def get_assigned_gene_id(match):
 
 
 match_subtype_printable_names = \
-    {MatchEventSubtype.ism_left : ('ism_5', 'ism_3'),
-     MatchEventSubtype.ism_right : ('ism_3', 'ism_5'),
-     MatchEventSubtype.exon_elongation_left : ('exon_elongation_5', 'exon_elongation_3'),
-     MatchEventSubtype.exon_elongation_right : ('exon_elongation_3', 'exon_elongation_5'),
-     MatchEventSubtype.major_exon_elongation_left: ('major_exon_elongation_5', 'major_exon_elongation_3'),
-     MatchEventSubtype.major_exon_elongation_right: ('major_exon_elongation_3', 'major_exon_elongation_5'),
-     MatchEventSubtype.fake_terminal_exon_left : ('fake_terminal_exon_5', 'fake_terminal_exon_3'),
-     MatchEventSubtype.fake_terminal_exon_right : ('fake_terminal_exon_3', 'fake_terminal_exon_5'),
-     MatchEventSubtype.terminal_exon_misalignment_left : ('terminal_exon_misalignment_5', 'terminal_exon_misalignment_3'),
-     MatchEventSubtype.terminal_exon_misalignment_right : ('terminal_exon_misalignment_3', 'terminal_exon_misalignment_5'),
-     MatchEventSubtype.incomplete_intron_retention_left: ('incomplete_intron_retention_5', 'incomplete_intron_retention_3'),
-     MatchEventSubtype.incomplete_intron_retention_right: ('incomplete_intron_retention_3', 'incomplete_intron_retention_5'),
-     MatchEventSubtype.extra_intron_flanking_left: ('extra_intron_5', 'extra_intron_3'),
-     MatchEventSubtype.extra_intron_flanking_right: ('extra_intron_3', 'extra_intron_5'),
-     MatchEventSubtype.alt_left_site_known: ('alt_donor_site_known', 'alt_acceptor_site_known'),
-     MatchEventSubtype.alt_right_site_known: ('alt_acceptor_site_known', 'alt_donor_site_known'),
-     MatchEventSubtype.alt_left_site_novel: ('alt_donor_site_novel', 'alt_acceptor_site_novel'),
-     MatchEventSubtype.alt_right_site_novel: ('alt_acceptor_site_novel', 'alt_donor_site_novel'),
-     MatchEventSubtype.terminal_site_match_left: ('tss_match', 'tes_match'),
-     MatchEventSubtype.terminal_site_match_right: ('tes_match', 'tss_match'),
-     MatchEventSubtype.terminal_site_match_left_precise: ('tss_match_precise', 'tes_match_precise'),
-     MatchEventSubtype.terminal_site_match_right_precise: ('tes_match_precise', 'tss_match_precise')
+    {MatchEventSubtype.ism_left : ('ism_5', 'ism_3', 'ism'),
+     MatchEventSubtype.ism_right : ('ism_3', 'ism_5', 'ism'),
+     MatchEventSubtype.exon_elongation_left : ('exon_elongation_5', 'exon_elongation_3', 'exon_elongation'),
+     MatchEventSubtype.exon_elongation_right : ('exon_elongation_3', 'exon_elongation_5', 'exon_elongation'),
+     MatchEventSubtype.major_exon_elongation_left: ('major_exon_elongation_5', 'major_exon_elongation_3', 'major_exon_elongation'),
+     MatchEventSubtype.major_exon_elongation_right: ('major_exon_elongation_3', 'major_exon_elongation_5', 'major_exon_elongation'),
+     MatchEventSubtype.fake_terminal_exon_left : ('fake_terminal_exon_5', 'fake_terminal_exon_3', 'fake_terminal_exon'),
+     MatchEventSubtype.fake_terminal_exon_right : ('fake_terminal_exon_3', 'fake_terminal_exon_5', 'fake_terminal_exon'),
+     MatchEventSubtype.terminal_exon_misalignment_left : ('terminal_exon_misalignment_5', 'terminal_exon_misalignment_3', 'terminal_exon_misalignment'),
+     MatchEventSubtype.terminal_exon_misalignment_right : ('terminal_exon_misalignment_3', 'terminal_exon_misalignment_5', 'terminal_exon_misalignment'),
+     MatchEventSubtype.incomplete_intron_retention_left: ('incomplete_intron_retention_5', 'incomplete_intron_retention_3', 'incomplete_intron_retention'),
+     MatchEventSubtype.incomplete_intron_retention_right: ('incomplete_intron_retention_3', 'incomplete_intron_retention_5', 'incomplete_intron_retention'),
+     MatchEventSubtype.extra_intron_flanking_left: ('extra_intron_5', 'extra_intron_3', 'extra_intron'),
+     MatchEventSubtype.extra_intron_flanking_right: ('extra_intron_3', 'extra_intron_5', 'extra_intron'),
+     MatchEventSubtype.alt_left_site_known: ('alt_donor_site_known', 'alt_acceptor_site_known', 'alternative_splice_site_known'),
+     MatchEventSubtype.alt_right_site_known: ('alt_acceptor_site_known', 'alt_donor_site_known', 'alternative_splice_site_known'),
+     MatchEventSubtype.alt_left_site_novel: ('alt_donor_site_novel', 'alt_acceptor_site_novel', 'alternative_splice_site_novel'),
+     MatchEventSubtype.alt_right_site_novel: ('alt_acceptor_site_novel', 'alt_donor_site_novel', 'alternative_splice_site_novel'),
+     MatchEventSubtype.terminal_site_match_left: ('tss_match', 'tes_match', 'terminal_position_match'),
+     MatchEventSubtype.terminal_site_match_right: ('tes_match', 'tss_match', 'terminal_position_match'),
+     MatchEventSubtype.terminal_site_match_left_precise: ('tss_match_precise', 'tes_match_precise', 'terminal_position_match_precise'),
+     MatchEventSubtype.terminal_site_match_right_precise: ('tes_match_precise', 'tss_match_precise', 'terminal_position_match_precise')
      }
      #MatchEventSubtype.alternative_polya_site_left: ('alternative_polya_site_5', 'alternative_polya_site_3'),
      #MatchEventSubtype.alternative_polya_site_right: ('alternative_polya_site_3', 'alternative_polya_site_5'),
@@ -626,8 +626,10 @@ def match_subtype_to_str(event, strand):
             logger.warning("Strand is not set for site-dependent modifications")
         if strand == '-':
             return match_subtype_printable_names[event_subtype][1]
-        else:
+        elif strand == '+':
             return match_subtype_printable_names[event_subtype][0]
+        else:
+            return match_subtype_printable_names[event_subtype][2]
     return event_subtype.name
 
 
