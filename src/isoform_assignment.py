@@ -667,6 +667,10 @@ def is_matching_assignment(isoform_assignment):
         allowed_set = {MatchEventSubtype.none,
                        MatchEventSubtype.fsm,
                        MatchEventSubtype.exon_misalignment,
-                       MatchEventSubtype.intron_shift}
+                       MatchEventSubtype.intron_shift,
+                       MatchEventSubtype.terminal_site_match_left,
+                       MatchEventSubtype.terminal_site_match_right,
+                       MatchEventSubtype.terminal_site_match_left_precise,
+                       MatchEventSubtype.terminal_site_match_right_precise}
         return all(m.event_type in allowed_set for m in isoform_assignment.isoform_matches[0].match_subclassifications)
     return False
