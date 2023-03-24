@@ -293,11 +293,10 @@ class LongReadAssigner:
 
         return js - flanking_percentage
 
-
     # ====== CLASSIFICATION =======
 
     # check for extra sequences and modify assignment accordingly
-    def check_for_extra_terminal_seqs(self, read_split_exon_profile, assignment):
+    def check_read_ends(self, read_split_exon_profile, assignment):
         for match in assignment.isoform_matches:
             if match.assigned_transcript is None:
                 continue
@@ -307,10 +306,10 @@ class LongReadAssigner:
             for e in exon_elongation_types:
                 match.add_subclassification(e)
 
-            if  any(MatchEventSubtype.is_major_elongation(e.event_type) for e in exon_elongation_types):
+            if any(MatchEventSubtype.is_major_elongation(e.event_type) for e in exon_elongation_types):
                 # serious exon elongation
                 assignment.set_assignment_type(ReadAssignmentType.inconsistent)
-            elif len(exon_elongation_types) > 0:
+            elif any(MatchEventSubtype.is_minor_elongation(e.event_type) for e in exon_elongation_types):
                 # minor exon elongation
                 if assignment.assignment_type == ReadAssignmentType.unique:
                     assignment.set_assignment_type(ReadAssignmentType.unique_minor_difference)
@@ -496,6 +495,7 @@ class LongReadAssigner:
             assignment = self.match_consistent_spliced(read_id, combined_read_profile, consistent_isoforms)
 
         if assignment is not None:
+            self.check_read_ends(combined_read_profile.read_split_exon_profile, assignment)
             self.verify_read_ends_for_assignment(combined_read_profile, assignment)
 
             # if apa detected isofrom should be treated as inconsistent and rechecked
