@@ -200,6 +200,9 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     if gffutils_db:
         tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support,
                                              gtf_suffix=".extended_annotation.gtf", output_r2t=False)
+    sqanti_t2t_printer = None
+    if args.sqanti_output:
+        sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args))
 
     loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
     while loader.has_next():
@@ -219,6 +222,9 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             tmp_gff_printer.dump(model_constructor)
             if tmp_extended_gff_printer:
                 tmp_extended_gff_printer.dump(model_constructor, model_constructor.extended_annotation_storage)
+            if args.sqanti_output:
+                for a in model_constructor.transcript2transcript:
+                    sqanti_t2t_printer.add_read_info(a)
             for t in model_constructor.transcript_model_storage:
                 transcript_stat_counter.add(t.transcript_type)
 
@@ -247,9 +253,10 @@ class ReadAssignmentAggregator:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                            additional_header=self.common_header)
             printer_list.append(self.basic_printer)
-        if self.args.sqanti_output and self.args.genedb:
+        if self.args.sqanti_output:
             self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
             printer_list.append(self.sqanti_printer)
+            self.t2t_sqanti_printer = SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         self.global_counter = CompositeCounter([])
@@ -552,13 +559,20 @@ class DatasetProcessor:
             transcript_stat_counter.print_start("Transcript model statistics")
 
         self.merge_assignments(sample, aggregator, chr_ids)
-        if self.args.sqanti_output and self.args.genedb:
+        if self.args.sqanti_output:
             merge_files(
                 [
                     rreplace(sample.out_alt_tsv, sample.label, f"{sample.label}_{chr_id}")
                     for chr_id in chr_ids
                 ],
                 sample.out_alt_tsv, copy_header=False
+            )
+            merge_files(
+                [
+                    rreplace(sample.out_t2t_tsv, sample.label, f"{sample.label}_{chr_id}")
+                    for chr_id in chr_ids
+                ],
+                sample.out_t2t_tsv, copy_header=False
             )
 
         aggregator.finalize_aggregators(sample)

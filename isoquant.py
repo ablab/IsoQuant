@@ -322,6 +322,7 @@ def check_input_params(args):
         if args.count_exons:
             logger.warning("--count_exons option has no effect without gene annotation")
         if args.sqanti_output:
+            args.sqanti_output = False
             logger.warning("--sqanti_output option has no effect without gene annotation")
         if args.no_model_construction:
             logger.warning("Setting --no_model_construction without providing a gene "
