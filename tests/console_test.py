@@ -46,7 +46,8 @@ def test_clean_start():
     assert os.path.isdir(sample_folder)
     resulting_files = ["exon_counts.tsv", "exon_grouped_counts.tsv", "gene_counts.tsv", "gene_grouped_counts.tsv",
                        "intron_counts.tsv", "intron_grouped_counts.tsv", "corrected_reads.bed", "read_assignments.tsv",
-                       "SQANTI-like.tsv", "transcript_counts.tsv", "transcript_grouped_counts.tsv",
+                       "read2transcripts.SQANTI-like.tsv", "transcripts2transcripts.SQANTI-like.tsv",
+                       "transcript_counts.tsv", "transcript_grouped_counts.tsv",
                        "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv",
                        "transcript_model_tpm.tsv"]
     for f in resulting_files:
@@ -102,7 +103,8 @@ def test_with_bam_and_polya():
     assert os.path.isdir(sample_folder)
     resulting_files = ["exon_counts.tsv", "gene_counts.tsv",
                        "intron_counts.tsv", "corrected_reads.bed", "read_assignments.tsv",
-                       "SQANTI-like.tsv", "transcript_counts.tsv",
+                       "read2transcripts.SQANTI-like.tsv", "transcripts2transcripts.SQANTI-like.tsv",
+                       "transcript_counts.tsv",
                        "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
