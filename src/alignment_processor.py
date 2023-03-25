@@ -477,7 +477,7 @@ class AlignmentCollector:
             if match.assigned_transcript is None:
                 continue
 
-            if read_assignment.strand == match.transcript_strand:
+            if read_assignment.strand == match.transcript_strand or read_assignment.strand == '.':
                 continue
             if match.match_classification not in \
                     [MatchClassification.novel_in_catalog, MatchClassification.novel_not_in_catalog]:
