@@ -30,7 +30,7 @@ class SampleData:
         self.out_raw_file = self._make_aux_path(self.label + ".save")
         self.read_group_file = self._make_aux_path(self.label + ".read_group")
         self.out_corrected_bed = self._make_path(self.label + ".corrected_reads.bed")
-        self.out_alt_tsv = self._make_path(self.label + ".SQANTI-like.tsv")
+        self.out_alt_tsv = self._make_path(self.label + ".read2transcripts.SQANTI-like.tsv")
         self.out_gene_counts_tsv = self._make_path(self.label + ".gene")
         self.out_transcript_counts_tsv = self._make_path(self.label + ".transcript")
         self.out_transcript_model_counts_tsv = self._make_path(self.label + ".transcript_model")
@@ -41,6 +41,7 @@ class SampleData:
         self.out_transcript_grouped_counts_tsv = self._make_path(self.label + ".transcript_grouped")
         self.out_exon_grouped_counts_tsv = self._make_path(self.label + ".exon_grouped")
         self.out_intron_grouped_counts_tsv = self._make_path(self.label + ".intron_grouped")
+        self.out_t2t_tsv = self._make_path(self.label + ".transcripts2transcripts.SQANTI-like.tsv")
 
 
 class InputDataStorage:

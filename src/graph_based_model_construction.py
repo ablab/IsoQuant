@@ -65,6 +65,7 @@ class GraphBasedModelConstructor:
         self.internal_counter = defaultdict(int)
         self.reads_used_in_construction = set()
         self.unused_reads = []
+        self.transcript2transcript = []
 
     def get_transcript_id(self):
         return GraphBasedModelConstructor.transcript_id_counter.increment()
@@ -137,9 +138,10 @@ class GraphBasedModelConstructor:
             self.transcript_model_storage = transcript_joiner.join_transcripts()
 
     def compare_models_with_known(self):
-        if not self.gene_info.all_isoforms_introns:
+        if not self.gene_info.all_isoforms_exons:
             return
 
+        self.transcript2transcript = []
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
                 continue
@@ -150,9 +152,18 @@ class GraphBasedModelConstructor:
 
             combined_profile = self.profile_constructor.construct_profiles(model.exon_blocks, polya_info, [])
             assignment = self.assigner.assign_to_isoform(model.transcript_id, combined_profile)
-
             if assignment is None or not assignment.isoform_matches:
                 continue
+
+            assignment.polya_info = polya_info
+            assignment.cage_found = False
+            assignment.exons = model.exon_blocks
+            assignment.strand = model.strand
+            assignment.chr_id = model.chr_id
+            assignment.set_additional_info("indel_count", "NA")
+            assignment.set_additional_info("junctions_with_indels", "NA")
+            assignment.introns_match = all(e == 1 for e in combined_profile.read_intron_profile.read_profile)
+            assignment.gene_info = self.gene_info
 
             assigned_transcript_id = assignment.isoform_matches[0].assigned_transcript
             if not assigned_transcript_id or assigned_transcript_id not in self.gene_info.all_isoforms_introns:
@@ -165,6 +176,7 @@ class GraphBasedModelConstructor:
                                      for x in assignment.isoform_matches[0].match_subclassifications])
             model.add_additional_attribute("similar_reference_id", assigned_transcript_id)
             model.add_additional_attribute("alternatives", event_string)
+            self.transcript2transcript.append(assignment)
 
     def filter_transcripts(self):
         filtered_storage = []

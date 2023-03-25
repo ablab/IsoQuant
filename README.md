@@ -273,13 +273,15 @@ where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set)
 ### Output options
 
 `--sqanti_output`
-    Produce SQANTI-like TSV output (requires more time).
+    Produce SQANTI-like TSV output (requires more time). 
+    Will take effect only when reference annotation is provided.
 
 `--check_canonical`
     Report whether read or constructed transcript model contains non-canonical splice junction (requires more time).
 
 `--count_exons`
     Perform exon and intron counting in addition to gene and transcript counting.
+    Will take effect only when reference annotation is provided.
 
 
 ### Pipeline options
@@ -505,9 +507,10 @@ Output directory will contain one folder per sample with the following files:
 * `SAMPLE_ID.gene_tpm.tsv` - TSV file with gene expression in TPM;
 * `SAMPLE_ID.gene_counts.tsv` - TSV file with raw gene counts;
 
-If `--sqanti_output` is set, IsoQuant will save read assignments in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format:
-* `SAMPLE_ID.SQANTI-like.tsv`
-
+If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format:
+* `SAMPLE_ID.read2transcripts.SQANTI-like.tsv` - read to isoform assignments;
+* `SAMPLE_ID.transcript2transcripts.SQANTI-like.tsv` - discovered novel transcripts vs known transcripts;
+* 
 If `--count_exons` is set, exon and intron counts will be produced:
 * `SAMPLE_ID.exon_counts.tsv`
 * `SAMPLE_ID.intron_counts.tsv`
@@ -520,7 +523,7 @@ If `--read_group` is set, the per-group counts will be also computed:
 * `SAMPLE_ID.exon_grouped_counts.tsv`
 * `SAMPLE_ID.intron_grouped_counts.tsv`
 
-If multiple samples are provided, aggregated expression matrices will be placed in `<output_dir>`:
+If multiple experiments are provided, aggregated expression matrices will be placed in `<output_dir>`:
 * `combined_gene_counts.tsv`
 * `combined_gene_tpm.tsv`
 * `combined_transcript_counts.tsv`

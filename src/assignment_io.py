@@ -298,13 +298,14 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
 class SqantiTSVPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
-        self.header = 'isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
+        self.header = '#isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
                       '\tassociated_gene\tassociated_transcript\tref_length\tref_exons\tdiff_to_TSS\tdiff_to_TTS' \
                       '\tdiff_to_gene_TSS\tdiff_to_gene_TTS\tsubcategory\tall_canonical' \
                       '\tn_indels\tn_indels_junc\tbite\tCDS_genomic_start' \
                       '\tCDS_genomic_end\tperc_A_downstreamTTS\tseq_A_downstream_TTS\tdist_to_cage_peak' \
                       '\twithin_cage_peak\tdist_to_polya_site\twithin_polya_site\tpolyA_motif\tpolyA_dist\n'
         self.output_file.write(self.header)
+        self.output_file.flush()
         self.io_support = io_support
 
     def add_read_info(self, read_assignment):
@@ -320,7 +321,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         transcript_id = match.assigned_transcript
         if transcript_id is None:
             return
-        strand = gene_info.isoform_strands[transcript_id]
+        strand = read_assignment.strand
 
         # FIXME not genomic distance
         dist_to_tss = self.io_support.count_tss_dist(read_assignment, transcript_id)
