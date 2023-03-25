@@ -2,6 +2,31 @@
 <title>IsoQuant changelog</title>
 <body>
 
+<h3>IsoQuant 3.2, 26 Match 2023</h3>
+
+<p>Unspliced novel transcripts are not reported by the default for ONT data, use <code>--report_novel_unspliced</code> to generate them.</p>
+
+<p>When multiple BAM/FASTQ files are provided via <code>--bam</code> / <code>--fastq</code>,
+    they are treated as different replicas/samples of the same experiment;
+    a single GTF and per-sample counts are generated automatically.</p>
+
+<p>10-15 times lower RAM consumption with the same running time.</p>
+
+<p>~5 times lower disk consumption for temporary files.</p>
+
+<p><code>--low_memory</code> option has no effect (used by default); <code>--high_memory</code> mimics old behavior by storing alignments in RAM.</p>
+
+<p>Read assignment reports transcript start and end (TSS/TES) matches.</p>
+
+<p><code>--sqanti_output</code> generates SQANTI-like output for novel vs reference transcripts.</p>
+
+<p>Resulting annotation contains exon ids.</p>
+
+<p>Supplementary gene attributes are copied from the reference annotation to the output annotations.</p>
+
+<p>Improved <code>--resume</code> and <code>--force</code> behaviour.</p>
+
+
 <h3>IsoQuant 3.1.2, 7 February 2023</h3>
 
 <p>Fixed strand detection that caused lower precision for novel transcripts.</p>
