@@ -185,14 +185,14 @@ class LongReadAssigner:
 
         # find first and last common exons
         common_first_exon = -1
-        isofrom_first_exon = isoform_profile.index(1)
+        isoform_first_exon = isoform_profile.index(1)
         for i in range(len(split_exons)):
             if isoform_profile[i] == read_split_exon_profile.gene_profile[i] == 1:
                 common_first_exon = i
                 break
 
         common_last_exon = -1
-        isofrom_last_exon = rindex(isoform_profile, 1)
+        isoform_last_exon = rindex(isoform_profile, 1)
         for i in range(len(split_exons)):
             index = len(split_exons) - i - 1
             if isoform_profile[index] == read_split_exon_profile.gene_profile[index] == 1:
@@ -207,42 +207,41 @@ class LongReadAssigner:
         first_read_exon = read_split_exon_profile.read_features[0]
         if overlaps(first_read_exon, split_exons[common_first_exon]):
             extra_left = split_exons[common_first_exon][0] - first_read_exon[0]
-            # logger.debug("+ + Left: %d %d" % (common_first_exon, isofrom_first_exon))
-            if common_first_exon == isofrom_first_exon and abs(extra_left) <= self.params.minor_exon_extension:
-                if abs(extra_left) <= self.params.delta:
-                    left_match_event = MatchEventSubtype.terminal_site_match_left_precise
-                else:
-                    left_match_event = MatchEventSubtype.terminal_site_match_left
-                events.append(MatchEvent(left_match_event, event_info=extra_left))
+            if common_first_exon == isoform_first_exon:
+                # logger.debug("+ + Left: %d %d" % (common_first_exon, isoform_first_exon))
+                if abs(extra_left) <= self.params.minor_exon_extension:
+                    if abs(extra_left) <= self.params.delta:
+                        left_match_event = MatchEventSubtype.terminal_site_match_left_precise
+                    else:
+                        left_match_event = MatchEventSubtype.terminal_site_match_left
+                    events.append(MatchEvent(left_match_event, event_info=extra_left))
 
-            left_event = None
-            if extra_left > self.params.minor_exon_extension:
-                if common_first_exon == isofrom_first_exon:
-                    left_event = MatchEventSubtype.major_exon_elongation_left
-            elif extra_left > self.params.delta:
-                left_event = MatchEventSubtype.exon_elongation_left
-            if left_event:
-                events.append(MatchEvent(left_event, event_info=extra_left))
+                if extra_left > self.params.minor_exon_extension:
+                    events.append(MatchEvent(MatchEventSubtype.major_exon_elongation_left, event_info=extra_left))
+                elif extra_left > self.params.delta:
+                    events.append(MatchEvent(MatchEventSubtype.exon_elongation_left, event_info=extra_left))
+            elif self.params.minor_exon_extension >= extra_left > self.params.delta:
+                # minor exon elongations detected for non-terminal exons too
+                events.append(MatchEvent(MatchEventSubtype.exon_elongation_left, event_info=extra_left))
 
         last_read_exon = read_split_exon_profile.read_features[-1]
         if overlaps(last_read_exon, split_exons[common_last_exon]):
             extra_right = last_read_exon[1] - split_exons[common_last_exon][1]
-            # logger.debug("+ + Right: %d %d" % (common_last_exon, isofrom_last_exon))
-            if common_last_exon == isofrom_last_exon and abs(extra_right) <= self.params.minor_exon_extension:
-                if abs(extra_right) <= self.params.delta:
-                    right_match_event = MatchEventSubtype.terminal_site_match_right_precise
-                else:
-                    right_match_event = MatchEventSubtype.terminal_site_match_right
-                events.append(MatchEvent(right_match_event, event_info=extra_right))
+            if common_last_exon == isoform_last_exon:
+                # logger.debug("+ + Right: %d %d" % (common_last_exon, isoform_last_exon))
+                if  abs(extra_right) <= self.params.minor_exon_extension:
+                    if abs(extra_right) <= self.params.delta:
+                        right_match_event = MatchEventSubtype.terminal_site_match_right_precise
+                    else:
+                        right_match_event = MatchEventSubtype.terminal_site_match_right
+                    events.append(MatchEvent(right_match_event, event_info=extra_right))
 
-            right_event = None
-            if extra_right > self.params.minor_exon_extension:
-                if common_last_exon == isofrom_last_exon:
-                    right_event = MatchEventSubtype.major_exon_elongation_right
-            elif extra_right > self.params.delta:
-                    right_event = MatchEventSubtype.exon_elongation_right
-            if right_event:
-                events.append(MatchEvent(right_event, event_info=extra_right))
+                if extra_right > self.params.minor_exon_extension:
+                    events.append(MatchEvent(MatchEventSubtype.major_exon_elongation_right, event_info=extra_right))
+                elif extra_right > self.params.delta:
+                    events.append(MatchEvent(MatchEventSubtype.exon_elongation_right, event_info=extra_right))
+            elif self.params.minor_exon_extension >= extra_right > self.params.delta:
+                events.append(MatchEvent(MatchEventSubtype.exon_elongation_right, event_info=extra_right))
 
         return events
 
@@ -498,7 +497,7 @@ class LongReadAssigner:
             self.check_read_ends(combined_read_profile.read_split_exon_profile, assignment)
             self.verify_read_ends_for_assignment(combined_read_profile, assignment)
 
-            # if apa detected isofrom should be treated as inconsistent and rechecked
+            # if apa detected isoform should be treated as inconsistent and rechecked
             if assignment.assignment_type == ReadAssignmentType.inconsistent:
                 return None
 
