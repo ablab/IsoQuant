@@ -67,6 +67,10 @@ assigns reads to the annotated isoforms based on their intron and exon structure
 IsoQuant further performs annotated gene, isoform, exon and intron quantification. 
 If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. 
 
+IsoQuant consists of two stages, which generate its own output: 
+1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isofrom assignment,
+splice site correction and abundance quantification for reference genes/transcripts.
+2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.
 
 IsoQuant version 3.2.0 was released under GPLv2 on March 27th, 2023 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
@@ -491,37 +495,53 @@ Note, that file aliases given after a colon will be used in expression table hea
 ### Output files
 
 IsoQuant output files will be stored in `<output_dir>`, which is set by the user. 
-If the output directory was not specified the files are stored in `isoquant_output`.  
-Output directory will contain one folder per sample with the following files:  
+If the output directory was not specified the files are stored in `isoquant_output`.
 
-* `SAMPLE_ID.transcript_models.gtf` - GTF file with constructed transcript models (both known and novel transcripts);
-* `SAMPLE_ID.transcript_model_reads.tsv` - TSV file indicating which reads contributed to transcript models;
-* `SAMPLE_ID.transcript_model_tpm.tsv` - expression of constructed transcript models in TPM;
-* `SAMPLE_ID.transcript_model_counts.tsv` - raw counts for constructed transcript models;
-* `SAMPLE_ID.extended_annotation.gtf` - GTF file with the entire reference annotation plus all discovered novel transcripts;
+IsoQuant consists of two stages, which generate its own output: 
+1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isofrom assignment,
+splice site correction and abundance quantification for reference genes/transcripts.
+2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.
 
-* `SAMPLE_ID.read_assignments.tsv` - TSV file with each read to isoform assignments;
+#### Reference-based analysis output
+
+* `SAMPLE_ID.read_assignments.tsv` - TSV file with read to isoform assignments;
 * `SAMPLE_ID.corrected_reads.bed` - BED file with corrected read alignments;
-* `SAMPLE_ID.transcript_tpm.tsv` - TSV file with isoform expression in TPM;
-* `SAMPLE_ID.transcript_counts.tsv` - TSV file with raw isoform counts;
-* `SAMPLE_ID.gene_tpm.tsv` - TSV file with gene expression in TPM;
-* `SAMPLE_ID.gene_counts.tsv` - TSV file with raw gene counts;
+* `SAMPLE_ID.transcript_tpm.tsv` - TSV file with reference transcript expression in TPM;
+* `SAMPLE_ID.transcript_counts.tsv` - TSV file with raw read counts for reference transcript;
+* `SAMPLE_ID.gene_tpm.tsv` - TSV file with reference gene expression in TPM;
+* `SAMPLE_ID.gene_counts.tsv` - TSV file with raw read counts for reference genes;
 
 If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format:
 * `SAMPLE_ID.read2transcripts.SQANTI-like.tsv` - read to isoform assignments;
-* `SAMPLE_ID.transcript2transcripts.SQANTI-like.tsv` - discovered novel transcripts vs known transcripts;
-* 
+* `SAMPLE_ID.transcript2transcripts.SQANTI-like.tsv` - discovered novel transcripts vs reference transcripts;
+ 
 If `--count_exons` is set, exon and intron counts will be produced:
-* `SAMPLE_ID.exon_counts.tsv`
-* `SAMPLE_ID.intron_counts.tsv`
+* `SAMPLE_ID.exon_counts.tsv` - reference exon inclusion/exclusion read counts;
+* `SAMPLE_ID.intron_counts.tsv` - reference intron inclusion/exclusion read counts;
 
-If `--read_group` is set, the per-group counts will be also computed:
+If `--read_group` is set, the per-group expression values for reference features will be also computed:
 * `SAMPLE_ID.gene_grouped_tpm.tsv`
 * `SAMPLE_ID.transcript_grouped_tpm.tsv`
 * `SAMPLE_ID.gene_grouped_counts.tsv`
 * `SAMPLE_ID.transcript_grouped_counts.tsv`
 * `SAMPLE_ID.exon_grouped_counts.tsv`
 * `SAMPLE_ID.intron_grouped_counts.tsv`
+
+#### Transcript discovery output
+
+File names typically contain `transcript_model` in their name.
+
+* `SAMPLE_ID.transcript_models.gtf` - GTF file with discovered expressed transcript (both known and novel transcripts);
+* `SAMPLE_ID.transcript_model_reads.tsv` - TSV file indicating which reads contributed to transcript models;
+* `SAMPLE_ID.transcript_model_tpm.tsv` - expression of discovered transcripts models in TPM (corresponds to `SAMPLE_ID.transcript_models.gtf`);
+* `SAMPLE_ID.transcript_model_counts.tsv` - raw read counts for discovered transcript models (corresponds to `SAMPLE_ID.transcript_models.gtf`);
+* `SAMPLE_ID.extended_annotation.gtf` - GTF file with the entire reference annotation plus all discovered novel transcripts;
+
+
+If `--read_group` is set, the per-group counts for discovered transcripts will be also computed:
+* `SAMPLE_ID.transcript_model_grouped_counts.tsv`
+* `SAMPLE_ID.transcript_model_grouped_tpm.tsv`
+
 
 If multiple experiments are provided, aggregated expression matrices will be placed in `<output_dir>`:
 * `combined_gene_counts.tsv`
