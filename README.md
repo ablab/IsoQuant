@@ -512,7 +512,7 @@ splice site correction and abundance quantification for reference genes/transcri
 * `SAMPLE_ID.gene_counts.tsv` - TSV file with raw read counts for reference genes;
 
 If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format:
-* `SAMPLE_ID.novel_vs_known.SQANTI-like.tsv` - discovered novel transcripts vs reference transcripts (similar to SQANTI `classification.txt`);
+* `SAMPLE_ID.novel_vs_known.SQANTI-like.tsv` - discovered novel transcripts vs reference transcripts (similar, but not identical to SQANTI `classification.txt`);
  
 If `--count_exons` is set, exon and intron counts will be produced:
 * `SAMPLE_ID.exon_counts.tsv` - reference exon inclusion/exclusion read counts;
