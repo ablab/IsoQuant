@@ -8,7 +8,7 @@
 
 
 
-# IsoQuant 3.1 manual
+# IsoQuant 3.2 manual
 
 1. [About IsoQuant](#sec1) </br>
 1.1. [Supported data types](#sec1.1)</br>
@@ -30,7 +30,7 @@
 
         conda create -c conda-forge -c bioconda -n isoquant python=3.8 isoquant
 
-*   If installing manually, you will need Python3 (3.7 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
+*   If installing manually, you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
   
 *   To run IsoQuant on raw FASTQ/FASTA files use the following command
 
@@ -68,7 +68,7 @@ IsoQuant further performs annotated gene, isoform, exon and intron quantificatio
 If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping. 
 
 
-IsoQuant version 3.1.2 was released under GPLv2 on February 7th, 2023 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 3.2.0 was released under GPLv2 on March 27th, 2023 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
@@ -97,7 +97,7 @@ Pre-constructed aligner index can also be provided to increase mapping time.
 
 <a name="sec2"></a>
 # Installation
-IsoQuant requires a 64-bit Linux system or Mac OS and Python (3.7 and higher) to be pre-installed on it. 
+IsoQuant requires a 64-bit Linux system or Mac OS and Python (3.8 and higher) to be pre-installed on it. 
 You will also need 
 * [gffutils](https://pythonhosted.org/gffutils/installation.html) 
 * [pysam](https://pysam.readthedocs.io/en/latest/index.html) 
@@ -119,7 +119,7 @@ conda install -c bioconda isoquant
 
 If this command does not work, it means that bioconda is not updated yet. Try installing via:
 ```bash
-conda create -n isoquant python=3.7
+conda create -n isoquant python=3.8
 conda activate isoquant
 conda install -c bioconda -c conda-forge -c isoquant isoquant
 ```

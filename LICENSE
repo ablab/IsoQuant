@@ -18,10 +18,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 -------------------------------------------------------------------------------
 
 IsoQuant
-A tool for isoform assignment and quantification fror long and barcoded reads
+A tool for transcript discovery, quantification and read-to-isoform assignment for PacBio and Nanopore data
 Version: see VERSION
 
-Developed in 
+Developed in
+Department of Computer Science, University of Helsinki,
 Center for Algorithmic Biotechnology, Institute of Translational Biomedicine, St. Petersburg State University and 
 Hagen Tilgner Lab, Brain and Mind Research Institute, Weill Cornell Medicine
 
@@ -29,10 +30,17 @@ Current contributors:
 
     Andrey Prjibelski,
     Alla Mikheenko,
+    James Webber,
+    Alexandru Tomescu
+    and
+    Hagen Tilgner
+
+Also contributed:
+
     Alexander Smetanin,
     Artyom Kaltovich,
-    Anoushka Joglekar and
-    Hagen Tilgner
+    Anoushka Joglekar
+
 
 Installation instructions and manual can be found on the website:
 https://github.com/ablab/IsoQuant
