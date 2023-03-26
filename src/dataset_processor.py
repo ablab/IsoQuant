@@ -254,8 +254,8 @@ class ReadAssignmentAggregator:
                                                            additional_header=self.common_header)
             printer_list.append(self.basic_printer)
         if self.args.sqanti_output:
-            self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
-            printer_list.append(self.sqanti_printer)
+            # self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
+            # printer_list.append(self.sqanti_printer)
             self.t2t_sqanti_printer = SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
@@ -560,13 +560,6 @@ class DatasetProcessor:
 
         self.merge_assignments(sample, aggregator, chr_ids)
         if self.args.sqanti_output:
-            merge_files(
-                [
-                    rreplace(sample.out_alt_tsv, sample.label, f"{sample.label}_{chr_id}")
-                    for chr_id in chr_ids
-                ],
-                sample.out_alt_tsv, copy_header=False
-            )
             merge_files(
                 [
                     rreplace(sample.out_t2t_tsv, sample.label, f"{sample.label}_{chr_id}")
