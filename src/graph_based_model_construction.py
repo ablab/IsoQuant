@@ -141,6 +141,10 @@ class GraphBasedModelConstructor:
         if not self.gene_info.all_isoforms_exons:
             return
 
+        gene_to_model_dict = defaultdict(list)
+        for model in self.transcript_model_storage:
+            gene_to_model_dict[model.gene_id].append(model.transcript_id)
+
         self.transcript2transcript = []
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
@@ -155,6 +159,11 @@ class GraphBasedModelConstructor:
             if assignment is None or not assignment.isoform_matches:
                 continue
 
+            if len(gene_to_model_dict[assignment.isoform_matches[0].assigned_gene]) == 1:
+                FSM_class = "A"
+            else:
+                FSM_class = "C"
+
             assignment.polya_info = polya_info
             assignment.cage_found = False
             assignment.exons = model.exon_blocks
@@ -162,6 +171,7 @@ class GraphBasedModelConstructor:
             assignment.chr_id = model.chr_id
             assignment.set_additional_info("indel_count", "NA")
             assignment.set_additional_info("junctions_with_indels", "NA")
+            assignment.set_additional_info("FSM_class", FSM_class)
             assignment.introns_match = all(e == 1 for e in combined_profile.read_intron_profile.read_profile)
             assignment.gene_info = self.gene_info
 

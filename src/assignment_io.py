@@ -300,10 +300,14 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = '#isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
                       '\tassociated_gene\tassociated_transcript\tref_length\tref_exons\tdiff_to_TSS\tdiff_to_TTS' \
-                      '\tdiff_to_gene_TSS\tdiff_to_gene_TTS\tsubcategory\tall_canonical' \
-                      '\tn_indels\tn_indels_junc\tbite\tCDS_genomic_start' \
-                      '\tCDS_genomic_end\tperc_A_downstreamTTS\tseq_A_downstream_TTS\tdist_to_cage_peak' \
-                      '\twithin_cage_peak\tdist_to_polya_site\twithin_polya_site\tpolyA_motif\tpolyA_dist\n'
+                      '\tdiff_to_gene_TSS\tdiff_to_gene_TTS\tsubcategory\tRTS_stage\tall_canonical' \
+                      '\tmin_sample_cov\tmin_cov\tmin_cov_pos\tsd_cov\tFL' \
+                      '\tn_indels\tn_indels_junc\tbite\tiso_exp\tgene_exp\tratio_exp\tFSM_class' \
+                      '\tcoding\tORF_length\tCDS_length\tCDS_start\tCDS_end' \
+                      '\tCDS_genomic_start\tCDS_genomic_end\tpredicted_NMD' \
+                      '\tperc_A_downstream_TTS\tseq_A_downstream_TTS\tdist_to_CAGE_peak' \
+                      '\twithin_CAGE_peak\tdist_to_polyA_site\twithin_polyA_site\tpolyA_motif\tpolyA_dist' \
+                      '\tpolyA_motif_found\tORF_seq\tratio_TSS\n'
         self.output_file.write(self.header)
         self.output_file.flush()
         self.io_support = io_support
@@ -356,23 +360,43 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
             seq_A_downstream_TTS = "NA"
 
         # TODO
+        RTS = "FALSE"
+        min_sample_cov  = "NA"
+        min_cov = "NA"
+        min_cov_pos = "NA"
+        sd_cov = "NA"
+        FL = "NA"
+        iso_exp = "NA"
+        gene_exp = "NA"
+        ratio_exp = "NA"
+        FSM_class = read_assignment.additional_info["FSM_class"]
+        coding = "NA"
+        ORF_length = "NA"
+        CDS_length = "NA"
+        CDS_start = "NA"
+        CDS_end = "NA"
+        predicted_NMD = "NA"
         dist_to_cage_peak = "NA"
         within_cage_peak = "NA"
         dist_to_polya_site = "NA"
         within_polya_site = "NA"
         polyA_motif = "NA"
         polyA_dist = "NA"
+        polyA_motif_found = "NA"
+        ORF_seq = "NA"
+        ratio_TSS = "NA"
 
-        l = "\t".join([str(x) for x in [read_assignment.read_id, gene_info.chr_id, strand,
-                                        read_assignment.length(), read_assignment.exon_count(),
-                                        match.match_classification.name, gene_id, transcript_id,
-                                        gene_info.total_transcript_length(transcript_id),
-                                        gene_info.transcript_exon_count(transcript_id),
-                                        dist_to_tss, dist_to_tts, dist_to_gene_tss, dist_to_gene_tts, subtypes,
-                                        all_canonical, indel_count, junctions_with_indels, bite,
-                                        ref_cds_start, ref_cds_end, perc_A_downstreamTTS, seq_A_downstream_TTS,
-                                        dist_to_cage_peak, within_cage_peak, dist_to_polya_site,
-                                        within_polya_site, polyA_motif, polyA_dist]])
+        value_list = [read_assignment.read_id, gene_info.chr_id, strand, read_assignment.length(),
+                      read_assignment.exon_count(), match.match_classification.name, gene_id, transcript_id,
+                      gene_info.total_transcript_length(transcript_id), gene_info.transcript_exon_count(transcript_id),
+                      dist_to_tss, dist_to_tts, dist_to_gene_tss, dist_to_gene_tts, subtypes, RTS,
+                      all_canonical, min_sample_cov, min_cov, min_cov_pos, sd_cov, FL,
+                      indel_count, junctions_with_indels, bite, iso_exp, gene_exp, ratio_exp, FSM_class,
+                      coding, ORF_length, CDS_length, CDS_start, CDS_end,
+                      ref_cds_start, ref_cds_end, predicted_NMD, perc_A_downstreamTTS, seq_A_downstream_TTS,
+                      dist_to_cage_peak, within_cage_peak, dist_to_polya_site,
+                      within_polya_site, polyA_motif, polyA_dist, polyA_motif_found, ORF_seq, ratio_TSS]
+        l = "\t".join([str(x) for x in value_list])
         self.output_file.write(l + "\n")
 
     def __del__(self):
@@ -420,6 +444,8 @@ class IOSupport:
         cds = [c for c in gene_info.db.children(gene_info.db[transcript_id], featuretype='CDS', order_by='start')]
         if len(cds) == 0:
             return -1, -1
+        if gene_info.isoform_strands[transcript_id] == "-":
+            return cds[-1].end, cds[0].start
         return cds[0].start, cds[-1].end
 
     def check_all_sites_match_reference(self, read_assignment):
