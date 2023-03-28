@@ -105,6 +105,9 @@ def parse_args(args=None, namespace=None):
     # ALGORITHM
     add_additional_option("--delta", type=int, default=None,
                           help="delta for inexact splice junction comparison, chosen automatically based on data type")
+    add_hidden_option("--graph_clustering_distance", type=int, default=None,
+                      help="intron graph clustering distance, "
+                           "splice junctions less that this number of bp apart will not be differentiated")
     parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
                         help="read-to-isoform matching strategy from the most strict to least", type=str, default=None)
     parser.add_argument("--splice_correction_strategy", choices=["none", "default_pacbio", "default_ont", "conservative_ont", "all", "assembly"],
@@ -457,7 +460,11 @@ def set_matching_options(args):
 
     strategy = strategies[args.matching_strategy]
 
-    args.delta = args.delta if args.delta is not None else strategy.delta
+    if args.delta is None:
+        args.delta = strategy.delta
+    elif args.delta < 0:
+        logger.error("--delta can not be negative")
+        exit(-3)
     args.minor_exon_extension = 50
     args.major_exon_extension = 300
     args.max_intron_shift = strategy.max_intron_shift
@@ -526,18 +533,22 @@ def set_model_construction_options(args):
     strategies = {
         'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50, True, False),
         'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100, False, True),
-        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 10,  2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False, True),
+        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False, True),
         'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10, False, False),
         'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10, False, True),
         'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True, True),
-        'all':             ModelConstructionStrategy(0, 0.3, 10,  1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False, True),
-        'assembly':        ModelConstructionStrategy(0, 0.3, 10,  1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False, True)
+        'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False, True),
+        'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False, True)
     }
     strategy = strategies[args.model_construction_strategy]
 
     args.min_novel_intron_count = strategy.min_novel_intron_count
     args.graph_clustering_ratio = strategy.graph_clustering_ratio
-    args.graph_clustering_distance = strategy.graph_clustering_distance
+    if args.graph_clustering_distance is None:
+        args.graph_clustering_distance = strategy.graph_clustering_distance
+    elif args.graph_clustering_distance < 0:
+        logger.error("--graph_clustering_distance can not be negative")
+        exit(-3)
     args.min_novel_isolated_intron_abs = strategy.min_novel_isolated_intron_abs
     args.min_novel_isolated_intron_rel = strategy.min_novel_isolated_intron_rel
     args.terminal_position_abs = strategy.terminal_position_abs
