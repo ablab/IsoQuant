@@ -203,6 +203,8 @@ reference annotation database.
 `--data_type` or `-d`
     Type of data to process, supported values are:  `pacbio_ccs` (same as `pacbio`), `nanopore` (same as `ont`) 
 and  `assembly` (same as `transcripts`). This option affects the algorithm parameters.
+    
+Note, that for novel mono-exonic transcripts are not reported for ONT data by default, use `--report_novel_unspliced true`. 
 
 `--reference` or `-r`
     Reference genome in FASTA format (can be gzipped), required even when BAM files are provided.
@@ -362,7 +364,7 @@ This option is chosen automatically based on specified data type, but will be ov
 * `default_pacbio` - optimal settings for PacBio CCS reads;
 * `sensitive_pacbio` - sensitive settings for PacBio CCS reads, more transcripts are reported possibly at a cost of precision;
 * `fl_pacbio` - optimal settings for full-length PacBio CCS reads, will be used if `--data_type pacbio_ccs` and `--fl_data` options are set; 
-* `default_ont` - optimal settings for ONT reads;
+* `default_ont` - optimal settings for ONT reads, novel mono-exonic transcripts are not reported (use `--report_novel_unspliced true`);
 * `sensitive_ont` - sensitive settings for ONT reads, more transcripts are reported possibly at a cost of precision (including novel mono-exonic isoforms);
 * `assembly` - optimal settings for a transcriptome assembly: input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not considered;    
 * `all` - reports almost all novel transcripts, loses precision in favor to recall.
