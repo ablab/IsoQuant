@@ -3,10 +3,6 @@ TARGET_DIR=IsoQuant-$VERSION
 rm -rf $TARGET_DIR
 mkdir $TARGET_DIR
 
-cp -r ./src $TARGET_DIR/
-cp -r ./tests $TARGET_DIR/
-cp -r ./figs $TARGET_DIR/
-
 # cleaning .pyc and .pyo
 rm -f */*.pyc
 rm -f */*.pyo
@@ -14,6 +10,12 @@ rm -rf */__pycache__/
 rm -f */*/*.pyc
 rm -f */*/*.pyo
 rm -rf */*/__pycache__/
+rm -rf ./tests/out*/
+
+cp -r ./src $TARGET_DIR/
+cp -r ./tests $TARGET_DIR/
+cp -r ./figs $TARGET_DIR/
+
 
 cp isoquant.py $TARGET_DIR/
 cp README.md $TARGET_DIR/
