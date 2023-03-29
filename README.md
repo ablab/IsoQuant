@@ -116,16 +116,9 @@ You will also need
 
 <a name="sec2.1"></a>
 ## Installing from conda
-Isoquant can be installed with conda:
+IsoQuant can be installed with conda:
 ```bash
 conda install -c bioconda isoquant
-```
-
-If this command does not work, it means that bioconda is not updated yet. Try installing via:
-```bash
-conda create -n isoquant python=3.8
-conda activate isoquant
-conda install -c bioconda -c conda-forge -c isoquant isoquant
 ```
 
 <a name="sec2.2"></a>
