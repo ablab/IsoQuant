@@ -326,13 +326,15 @@ class DatasetProcessor:
             ref_name, outer_ext = os.path.splitext(ref_file_name)
 
             #make symlink for pyfaidx index
-            symlink_name = os.path.join(args.output, ref_file_name)
-            if os.path.exists(symlink_name) and not self.args.resume:
-                os.remove(symlink_name)
-            if not os.path.exists(symlink_name):
-                os.symlink(self.args.reference, symlink_name)
-            self.args.original_ref = self.args.reference
-            self.args.reference = symlink_name
+            fai_file_name = self.args.reference + ".fai"
+            if not os.path.exists(fai_file_name):
+                symlink_name = os.path.join(args.output, ref_file_name)
+                if os.path.exists(symlink_name) and not self.args.resume:
+                    os.remove(symlink_name)
+                if not os.path.exists(symlink_name):
+                    os.symlink(self.args.reference, symlink_name)
+                self.args.original_ref = self.args.reference
+                self.args.reference = symlink_name
 
             low_ext = outer_ext.lower()
             if low_ext in ['.gz', '.gzip', '.bgz']:
