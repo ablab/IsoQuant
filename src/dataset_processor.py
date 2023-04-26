@@ -214,6 +214,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             aggregator.read_stat_counter.add(read_assignment.assignment_type)
             aggregator.global_printer.add_read_info(read_assignment)
             aggregator.global_counter.add_read_info(read_assignment)
+            aggregator.per_chuck_counter.add_read_info(read_assignment)
+        aggregator.per_chuck_counter.dump()
 
         if not args.no_model_construction:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
@@ -260,6 +262,7 @@ class ReadAssignmentAggregator:
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         self.global_counter = CompositeCounter([])
+        self.per_chuck_counter = CompositeCounter([])
         if self.args.genedb:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, self.args.gene_quantification,
                                                     ignore_read_groups=True, output_zeroes=False)
@@ -276,7 +279,7 @@ class ReadAssignmentAggregator:
         if self.args.count_exons and self.args.genedb:
             self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
             self.intron_counter = IntronCounter(sample.out_intron_counts_tsv, ignore_read_groups=True)
-            self.global_counter.add_counters([self.exon_counter, self.intron_counter])
+            self.per_chuck_counter.add_counters([self.exon_counter])
 
         if self.args.read_group and self.args.genedb:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
@@ -289,7 +292,7 @@ class ReadAssignmentAggregator:
             if self.args.count_exons:
                 self.exon_grouped_counter = ExonCounter(sample.out_exon_grouped_counts_tsv)
                 self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
-                self.global_counter.add_counters([self.exon_grouped_counter, self.intron_grouped_counter])
+                self.per_chuck_counter.add_counters([self.exon_grouped_counter])
 
         if self.args.read_group:
             self.transcript_model_grouped_counter = create_transcript_counter(sample.out_transcript_model_grouped_counts_tsv,
@@ -593,6 +596,13 @@ class DatasetProcessor:
                         stats_file_names=[rreplace(p.output_stats_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids]
                         if p.output_stats_file_name else None,
                         ignore_read_groups=p.ignore_read_groups)
+            p.convert_counts_to_tpm()
+        for p in aggregator.per_chuck_counter.counters:
+            merge_files([rreplace(p.output_counts_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                        p.output_counts_file_name,
+                        stats_file_names=[rreplace(p.output_stats_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids]
+                        if p.output_stats_file_name else None,
+                        ignore_read_groups=p.ignore_read_groups, copy_header=False)
             p.convert_counts_to_tpm()
 
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):

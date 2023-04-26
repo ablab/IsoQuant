@@ -319,6 +319,9 @@ class ProfileFeatureCounter(AbstractCounter):
         self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
         self.feature_name_dict = OrderedDict()
         self.print_zeroes = print_zeroes
+        f = open(self.output_counts_file_name, "w")
+        f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
+        f.close()
 
     def add_read_info_from_profile(self, gene_feature_profile, feature_property_map,
                                    read_group = AbstractReadGrouper.default_group_id):
@@ -335,8 +338,7 @@ class ProfileFeatureCounter(AbstractCounter):
                     self.feature_name_dict[feature_id] = feature_property_map[i].to_str()
 
     def dump(self):
-        with open(self.output_counts_file_name, "w") as f:
-            f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
+        with open(self.output_counts_file_name, "a") as f:
             all_groups = set(self.inclusion_feature_counter.keys())
             all_groups.update(self.exclusion_feature_counter.keys())
             all_groups = sorted(all_groups)
@@ -348,6 +350,9 @@ class ProfileFeatureCounter(AbstractCounter):
                     excl_count = self.exclusion_feature_counter[group_id][feature_id]
                     if self.print_zeroes or incl_count > 0 or excl_count > 0:
                         f.write("%s\t%s\t%d\t%d\n" % (feature_name, group_id, incl_count, excl_count))
+        self.inclusion_feature_counter = defaultdict(lambda: defaultdict(int))
+        self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
+        self.feature_name_dict = OrderedDict()
 
     def convert_counts_to_tpm(self):
         return
