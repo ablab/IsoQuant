@@ -259,7 +259,7 @@ def find_annotation(aligner, args):
             bed_fname = find_stored_bed(args)
             if bed_fname is None:
                 bed_fname = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".bed")
-                db2bed(bed_fname, args.genedb)
+                db2bed(args.genedb, bed_fname)
                 store_bed(bed_fname, args)
 
         return os.path.abspath(bed_fname)
