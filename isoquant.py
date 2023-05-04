@@ -690,10 +690,10 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         raise
     except:
-        strout = StringIO()
         if logger.handlers:
+            strout = StringIO()
             print_exc(file=strout)
-            s = strout.read()
+            s = strout.getvalue()
             if s:
                 logger.critical("IsoQuant failed with the following error, please, submit this issue to "
                                 "https://github.com/ablab/IsoQuant/issues" + s)
