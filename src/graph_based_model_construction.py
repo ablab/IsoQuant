@@ -435,7 +435,7 @@ class GraphBasedModelConstructor:
                 assert len(self.gene_info.all_isoforms_introns[refrenence_isoform_id]) == 0
                 transcript_start = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0]
                 transcript_end = self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1]
-                t_len = transcript_start - transcript_end + 1
+                t_len = transcript_end - transcript_start + 1
 
                 if refrenence_isoform_id not in mono_exon_isoform_coverage:
                     mono_exon_isoform_coverage[refrenence_isoform_id] = [0 for _ in range(t_len)]
