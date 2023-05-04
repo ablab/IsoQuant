@@ -67,6 +67,8 @@ def db2bed(db, bed, _=None):
             for e in genedb.children(record, order_by='start', featuretype='CDS'):
                 cds.append((e.start - 1, e.end))
 
+            if not exons:
+                continue
             transcript_start = exons[0][0]
             transcript_end = exons[-1][1]
             exons_lens = []
