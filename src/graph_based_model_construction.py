@@ -432,14 +432,15 @@ class GraphBasedModelConstructor:
             events = read_assignment.isoform_matches[0].match_subclassifications
             if any(e.event_type == MatchEventSubtype.mono_exon_match for e in events):
                 mono_exon_isoform_reads[refrenence_isoform_id].append(read_assignment)
-                assert len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) == 1
-                transcript_exon = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0]
-                t_len = transcript_exon[1] - transcript_exon[0] + 1
+                assert len(self.gene_info.all_isoforms_introns[refrenence_isoform_id]) == 0
+                transcript_start = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0]
+                transcript_end = self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1]
+                t_len = transcript_end - transcript_start + 1
 
                 if refrenence_isoform_id not in mono_exon_isoform_coverage:
                     mono_exon_isoform_coverage[refrenence_isoform_id] = [0 for _ in range(t_len)]
-                start = max(0, read_assignment.corrected_exons[0][0] - transcript_exon[0])
-                end = min(t_len, read_assignment.corrected_exons[-1][1] - transcript_exon[0] + 1)
+                start = max(0, read_assignment.corrected_exons[0][0] - transcript_start)
+                end = min(t_len, read_assignment.corrected_exons[-1][1] - transcript_start + 1)
                 for i in range(start, end):
                     mono_exon_isoform_coverage[refrenence_isoform_id][i] = 1
 
