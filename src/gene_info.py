@@ -369,7 +369,7 @@ class GeneInfo:
         write_int(self.end, outfile)
 
     def empty(self):
-        return not self.gene_db_list or not self.exon_profiles.features
+        return not self.exon_profiles.features
 
     def print_debug(self):
         gene_names = []
