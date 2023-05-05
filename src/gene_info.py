@@ -149,6 +149,8 @@ class GeneInfo:
         self.split_exon_profiles = FeatureProfiles()
 
         self.all_isoforms_introns, self.all_isoforms_exons = self.set_introns_and_exons()
+        if not self.all_isoforms_exons:
+            logger.warning("Genes %s have no exons, check you GTF file" % ", ".join([g.id for g in gene_db_list]))
         self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
         self.set_junction_profiles(self.all_isoforms_introns, self.all_isoforms_exons)
 
@@ -367,7 +369,7 @@ class GeneInfo:
         write_int(self.end, outfile)
 
     def empty(self):
-        return not self.gene_db_list and not self.exon_profiles.features
+        return not self.gene_db_list or not self.exon_profiles.features
 
     def print_debug(self):
         gene_names = []
