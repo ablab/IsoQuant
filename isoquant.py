@@ -11,6 +11,7 @@ import json
 import logging
 import os.path
 import pickle
+import shutil
 import sys
 import time
 from collections import namedtuple
@@ -647,12 +648,15 @@ def run_pipeline(args):
 # Test mode is triggered by --test option
 class TestMode(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
+        out_dir = 'isoquant_test'
+        if os.path.exists(out_dir):
+            shutil.rmtree(out_dir)
         source_dir = os.path.dirname(os.path.realpath(__file__))
-        options = ['--output', 'isoquant_test', '--threads', '2',
+        options = ['--output', out_dir, '--threads', '2',
                    '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
                    '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
                    '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
-                   '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force']
+                   '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force', '-l', 'TEST_DATA']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
         main(options)
