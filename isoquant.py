@@ -332,6 +332,10 @@ def check_input_params(args):
             logger.warning("Setting --no_model_construction without providing a gene "
                            "annotation will not produce any meaningful results")
 
+    if args.no_model_construction and args.sqanti_output:
+        args.sqanti_output = False
+        logger.warning("--sqanti_output option has no effect without model construction")
+        
     check_input_files(args)
     return True
 
