@@ -130,9 +130,11 @@ class GraphBasedModelConstructor:
         self.construct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
+
+        if self.params.genedb:
+            self.create_extended_annotation()
         if self.gene_info.all_isoforms_exons:
             self.compare_models_with_known()
-            self.create_extended_annotation()
         else:
             transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
             self.transcript_model_storage = transcript_joiner.join_transcripts()
