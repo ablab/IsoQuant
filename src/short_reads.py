@@ -153,8 +153,6 @@ def introns_from_db(db):
 	if db and not all_isoforms_exons:
 		logger.warning("Gene %s has no exons / transcripts, check your input annotation" % gene_list[0].id)
 	
-	# i want a list of introns because I think it will be easier to compare	
-	# i might be wrong about that
 	introns = set()
 	for i in all_isoforms_introns.keys():
 		introns.update(all_isoforms_introns[i])
@@ -284,6 +282,7 @@ def compare_alg(short, iso, counts, ref, chromosome):
 	for i in equal:
 		classification[(i,i)] = IntronType.equal
 		eqcounts.append(counts[(i[0]-1,i[1])])
+	eq = len(equal)
 	extra = short.difference(chosen)
 	excounts = []
 	for i in extra:
@@ -293,7 +292,7 @@ def compare_alg(short, iso, counts, ref, chromosome):
 	#print("Counts in equal introns: ", eqcounts)
 	#print("Counts in extra introns: ", excounts)
 	#print("Counts in paired introns: ", scounts)
-	return classification, eqcounts, excounts, scounts, ex_only
+	return classification, eq, excounts, scounts, ex_only
 
 
 start = time.time()
@@ -328,7 +327,7 @@ onlyshort = 0
 current_region = (0,0)
 chromosome = 0
 genes = []
-equal_c = []
+equal_c = 0
 extra_c = []
 paired_c = []
 for gene in gene_list:
@@ -342,15 +341,17 @@ for gene in gene_list:
 			#print(len(iso_int.difference(ref_int)))
 			c, eq, ex, p, s = compare_alg(short_int, iso_int, counts, ref_int, chromosome)
 			cl.update(c)
-			equal_c.extend(eq)
+			#equal_c.extend(eq)
+			equal_c += eq
 			extra_c.extend(ex)
 			paired_c.extend(p)
 			onlyshort += s
 		genes = [gene]
 		current_region = (gene.start, gene.end)
 		chromosome = gene.seqid
-
-print(onlyshort)
+# final dataset
+print("Number of correct introns only found in Illumina:", onlyshort)
+print("Number of Introns equal in IsoQuant and Illumina:", equal_c)
 end = time.time()
 print(end - start)
 
