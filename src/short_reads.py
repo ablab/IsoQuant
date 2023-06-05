@@ -306,7 +306,7 @@ if(args.iso[-2:] != "db"):
 	args.output_exists = os.path.exists(args.out)
 	if not args.output_exists:
 		os.makedirs(args.out)
-	db_file = os.path.join(args.out, "test_22.db")
+	db_file = os.path.join(args.out, "mouse_isoquant.db")
 	gtf2db(gtf, db_file, True)
 else:
 	db_file = args.iso
