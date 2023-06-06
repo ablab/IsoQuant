@@ -428,7 +428,8 @@ class GeneInfo:
             for attr in gene_db.attributes.keys():
                 if attr in ['gene_id', 'ID', 'level']:
                     continue
-                self.gene_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
+                if gene_db.attributes[attr]:
+                    self.gene_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
 
     # assigns an ordered list of all known exons and introns to self.exons and self.introns
     # returns 2 maps, isoform id -> intron / exon list
