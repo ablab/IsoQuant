@@ -133,16 +133,15 @@ class GraphBasedModelConstructor:
 
         if self.params.genedb:
             self.create_extended_annotation()
-        if self.gene_info.all_isoforms_exons:
-            self.compare_models_with_known()
-        else:
+
+        if not self.gene_info.all_isoforms_exons:
             transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
             self.transcript_model_storage = transcript_joiner.join_transcripts()
 
-    def compare_models_with_known(self):
-        if not self.gene_info.all_isoforms_exons:
-            return
+        if self.params.sqanti_output:
+            self.compare_models_with_known()
 
+    def compare_models_with_known(self):
         gene_to_model_dict = defaultdict(list)
         for model in self.transcript_model_storage:
             gene_to_model_dict[model.gene_id].append(model.transcript_id)
@@ -158,7 +157,12 @@ class GraphBasedModelConstructor:
 
             combined_profile = self.profile_constructor.construct_profiles(model.exon_blocks, polya_info, [])
             assignment = self.assigner.assign_to_isoform(model.transcript_id, combined_profile)
-            if assignment is None or not assignment.isoform_matches:
+            if assignment is None:
+                continue
+            if assignment.assignment_type in [ReadAssignmentType.intergenic, ReadAssignmentType.noninformative] or \
+                    not assignment.isoform_matches:
+                # create intergenic
+                assignment.assignment_type = ReadAssignmentType.intergenic
                 continue
 
             if len(gene_to_model_dict[assignment.isoform_matches[0].assigned_gene]) == 1:
