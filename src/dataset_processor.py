@@ -196,10 +196,10 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     transcript_stat_counter = EnumStats()
     if construct_models:
         io_support = IOSupport(args)
-        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support)
+        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support)
         tmp_extended_gff_printer = None
         if gffutils_db:
-            tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.label, io_support,
+            tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support,
                                                   gtf_suffix=".extended_annotation.gtf", output_r2t=False)
         sqanti_t2t_printer = None
         if args.sqanti_output:
@@ -370,7 +370,7 @@ class DatasetProcessor:
 
     # Run through all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
-        logger.info("Processing sample " + sample.label)
+        logger.info("Processing sample " + sample.prefix)
         logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
@@ -409,7 +409,7 @@ class DatasetProcessor:
                 os.remove(f)
             for f in glob.glob(sample.read_group_file + "*"):
                 os.remove(f)
-        logger.info("Processed sample " + sample.label)
+        logger.info("Processed sample " + sample.prefix)
 
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
@@ -504,7 +504,7 @@ class DatasetProcessor:
             key=lambda x: len(self.reference_record_dict[x]),
             reverse=True
         )
-        logger.info("Processing assigned reads " + sample.label)
+        logger.info("Processing assigned reads " + sample.prefix)
 
         # set up aggregators and outputs
         aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups)
@@ -512,11 +512,11 @@ class DatasetProcessor:
 
         if not self.args.no_model_construction:
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.label, self.io_support, header=self.common_header
+                sample.out_dir, sample.prefix, self.io_support, header=self.common_header
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
-                    sample.out_dir, sample.label, self.io_support,
+                    sample.out_dir, sample.prefix, self.io_support,
                     gtf_suffix=".extended_annotation.gtf", output_r2t=False,
                     header=self.common_header
                 )
@@ -525,7 +525,7 @@ class DatasetProcessor:
 
         model_gen = (
             construct_models_in_parallel,
-            (SampleData(sample.file_list, f"{sample.label}_{chr_id}", sample.out_dir) for chr_id in chr_ids),
+            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir) for chr_id in chr_ids),
             chr_ids,
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),
@@ -553,12 +553,12 @@ class DatasetProcessor:
                         transcript_stat_counter.stats_dict[k] += v
 
         if not self.args.no_model_construction:
-            self.merge_transcript_models(sample.label, aggregator, chr_ids, gff_printer)
+            self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
             if extended_gff_printer:
                 merge_files(
                     [
-                        rreplace(extended_gff_printer.model_fname, sample.label, f"{sample.label}_{chr_id}")
+                        rreplace(extended_gff_printer.model_fname, sample.prefix, f"{sample.prefix}_{chr_id}")
                         for chr_id in chr_ids
                     ],
                     extended_gff_printer.model_fname,
@@ -571,7 +571,7 @@ class DatasetProcessor:
         if self.args.sqanti_output:
             merge_files(
                 [
-                    rreplace(sample.out_t2t_tsv, sample.label, f"{sample.label}_{chr_id}")
+                    rreplace(sample.out_t2t_tsv, sample.prefix, f"{sample.prefix}_{chr_id}")
                     for chr_id in chr_ids
                 ],
                 sample.out_t2t_tsv, copy_header=False
@@ -590,16 +590,16 @@ class DatasetProcessor:
     def merge_assignments(self, sample, aggregator, chr_ids):
         if self.args.genedb:
             merge_files(
-                [rreplace(sample.out_assigned_tsv, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                [rreplace(sample.out_assigned_tsv, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
                 sample.out_assigned_tsv, copy_header=False)
         merge_files(
-            [rreplace(sample.out_corrected_bed, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+            [rreplace(sample.out_corrected_bed, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
             sample.out_corrected_bed, copy_header=False)
         for p in aggregator.global_counter.counters:
             merge_files(
-                [rreplace(p.output_counts_file_name, sample.label, sample.label + "_" + chr_id) for chr_id in chr_ids],
+                [rreplace(p.output_counts_file_name, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
                 p.output_counts_file_name,
-                stats_file_names=[rreplace(p.output_stats_file_name, sample.label, sample.label + "_" + chr_id) for
+                stats_file_names=[rreplace(p.output_stats_file_name, sample.prefix, sample.prefix + "_" + chr_id) for
                                   chr_id in chr_ids]
                 if p.output_stats_file_name else None,
                 ignore_read_groups=p.ignore_read_groups)

@@ -51,10 +51,10 @@ def transform_counts(path_to_csv, label, column_name='count', full=False):
 
 def combine_table(input_data, output, get_file_name, output_file_name, column_name='count', full=False):
     sample_0 = input_data.samples[0]
-    combined_table = transform_counts(get_file_name(sample_0), sample_0.label, column_name, full)
+    combined_table = transform_counts(get_file_name(sample_0), sample_0.prefix, column_name, full)
     for sample in input_data.samples[1:]:
         combined_table = pd.merge(combined_table,
-                                  transform_counts(get_file_name(sample), sample.label, column_name, full),
+                                  transform_counts(get_file_name(sample), sample.prefix, column_name, full),
                                   on='#feature_id', how='outer')
 
     combined_table.to_csv(os.path.join(output, output_file_name), sep='\t', index=False)
