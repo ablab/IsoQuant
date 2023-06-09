@@ -6,14 +6,17 @@
 
 import os
 import logging
+from collections import defaultdict
+
 
 logger = logging.getLogger('IsoQuant')
 
 
 class SampleData:
-    def __init__(self, file_list, prefix, out_dir):
+    def __init__(self, file_list, prefix, out_dir, readable_names_dict):
         # list of lists, since each sample may contain several libraries, and each library may contain 2 files (paired)
         self.file_list = file_list
+        self.readable_names_dict = readable_names_dict
         self.prefix = prefix
         self.out_dir = out_dir
         self.aux_dir = os.path.join(self.out_dir, "aux")
@@ -49,7 +52,7 @@ class InputDataStorage:
         # list of SampleData
         self.samples = []
         self.input_type = ""
-        self.readable_names_dict = {}
+        readable_names_dict = defaultdict(lambda: defaultdict(str))
         sample_files = []
         experiment_names = []
         self.experiment_prefix = args.prefix
@@ -57,38 +60,46 @@ class InputDataStorage:
         if args.fastq is not None:
             self.input_type = "fastq"
             sample_files.append([])
-            experiment_names.append(args.prefix)
+            experiment_name = args.prefix
+            experiment_names.append(experiment_name)
             if args.labels and len(args.labels) != len(args.fastq):
                 logger.critical("Number of labels is not equal to the number of files")
                 exit(-1)
             for i, fq in enumerate(args.fastq):
                 check_input_type(fq, self.input_type)
+                if fq in readable_names_dict[experiment_name]:
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fq)
+                    exit(-2)
                 sample_files[0].append([fq])
-                if args.labels:
-                    self.readable_names_dict[fq] = args.labels[i]
+                readable_names_dict[experiment_name][fq] = args.labels[i] if args.labels else \
+                    os.path.splitext(os.path.basename(fq))[0]
 
         elif args.bam is not None:
             self.input_type = "bam"
             sample_files.append([])
-            experiment_names.append(args.prefix)
+            experiment_name = args.prefix
+            experiment_names.append(experiment_name)
             if args.labels and len(args.labels) != len(args.bam):
                 logger.critical("Number of labels is not equal to the number of files")
                 exit(-1)
             for i, bam in enumerate(args.bam):
                 check_input_type(bam, self.input_type)
+                if bam in readable_names_dict[experiment_name]:
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
+                    exit(-2)
                 sample_files[0].append([bam])
-                if args.labels:
-                    self.readable_names_dict[bam] = args.labels[i]
+                readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
+                    os.path.splitext(os.path.basename(bam))[0]
 
         elif args.fastq_list is not None:
             self.input_type = "fastq"
-            sample_files, experiment_names, self.readable_names_dict = self.get_samples_from_file(args.fastq_list)
+            sample_files, experiment_names, readable_names_dict = self.get_samples_from_file(args.fastq_list)
             if args.labels:
                 logger.warning("--labels option has no effect when files are provided via input list")
 
         elif args.bam_list is not None:
             self.input_type = "bam"
-            sample_files, experiment_names, self.readable_names_dict = self.get_samples_from_file(args.bam_list)
+            sample_files, experiment_names, readable_names_dict = self.get_samples_from_file(args.bam_list)
             if args.labels:
                 logger.warning("--labels option has no effect when files are provided via input list")
 
@@ -103,12 +114,14 @@ class InputDataStorage:
             exit(-1)
 
         for i in range(len(sample_files)):
-            self.samples.append(SampleData(sample_files[i], experiment_names[i], os.path.join(args.output, experiment_names[i])))
+            self.samples.append(SampleData(sample_files[i], experiment_names[i],
+                                           os.path.join(args.output, experiment_names[i]),
+                                           readable_names_dict[experiment_names[i]]))
 
     def get_samples_from_file(self, file_name):
         sample_files = []
         experiment_names = []
-        readable_names_dict = {}
+        readable_names_dict = defaultdict(lambda: defaultdict(str))
         inf = open(file_name, "r")
         current_sample = []
         current_sample_name = ""
@@ -141,9 +154,10 @@ class InputDataStorage:
                     readable_name = os.path.splitext(os.path.basename(files[0]))[0]
                 current_sample.append(files)
                 for fname in files:
-                    if fname in readable_names_dict:
-                        logger.warning("File %s is used multiple times")
-                    readable_names_dict[fname] = readable_name
+                    if fname in readable_names_dict[current_sample_name]:
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
+                        exit(-2)
+                    readable_names_dict[current_sample_name][fname] = readable_name
 
         if len(current_sample) > 0:
             sample_files.append(current_sample)

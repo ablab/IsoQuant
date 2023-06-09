@@ -80,10 +80,10 @@ class ReadTableGrouper(AbstractReadGrouper):
 
 
 class FileNameGrouper(AbstractReadGrouper):
-    def __init__(self, args):
+    def __init__(self, args, sample):
         AbstractReadGrouper.__init__(self)
-        if args.input_data.readable_names_dict:
-            self.readable_names_dict = args.input_data.readable_names_dict
+        if sample.readable_names_dict:
+            self.readable_names_dict = sample.readable_names_dict
             return
 
         self.readable_names_dict = {}
@@ -133,7 +133,7 @@ def create_read_grouper(args, sample, chr_id):
     option = args.read_group
     values = option.split(':')
     if values[0] == "file_name":
-        return FileNameGrouper(args)
+        return FileNameGrouper(args, sample)
     elif values[0] == 'tag':
         if len(values) < 2:
             return AlignmentTagReadGrouper(tag="RG")

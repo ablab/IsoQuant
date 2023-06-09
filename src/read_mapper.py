@@ -48,9 +48,9 @@ class DataSetReadMapper:
 
     def map_reads(self, args):
         samples = []
-        readable_names_dict = {}
         annotation_file = find_annotation(self.aligner, args)
         for sample in args.input_data.samples:
+            readable_names_dict = {}
             bam_files = []
             for fastq_files in sample.file_list:
                 for fastq_file in fastq_files:
@@ -59,12 +59,11 @@ class DataSetReadMapper:
                         bam_file = align_fasta(self.aligner, fastq_file, annotation_file, args, sample.prefix, sample.aux_dir)
                         store_alignment(bam_file, fastq_file, annotation_file, args)
                     bam_files.append([bam_file])
-                    if fastq_file in args.input_data.readable_names_dict:
-                        readable_names_dict[bam_file] = args.input_data.readable_names_dict[fastq_file]
+                    if fastq_file in sample.readable_names_dict:
+                        readable_names_dict[bam_file] = sample.readable_names_dict[fastq_file]
 
-            samples.append(SampleData(bam_files, sample.prefix, sample.out_dir))
+            samples.append(SampleData(bam_files, sample.prefix, sample.out_dir, readable_names_dict))
         args.input_data.samples = samples
-        args.input_data.readable_names_dict = readable_names_dict
         args.input_data.input_type = "bam"
         return args.input_data
 
