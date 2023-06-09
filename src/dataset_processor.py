@@ -525,7 +525,7 @@ class DatasetProcessor:
 
         model_gen = (
             construct_models_in_parallel,
-            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir) for chr_id in chr_ids),
+            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict) for chr_id in chr_ids),
             chr_ids,
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),
