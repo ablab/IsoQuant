@@ -87,8 +87,11 @@ def parse_args(args=None, namespace=None):
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
 
+    parser.add_argument('--prefix', '-p', type=str,
+                        help='experiment name; to be used for folder and file naming; default is OUT', default="OUT")
     parser.add_argument('--labels', '-l', nargs='+', type=str,
-                        help='sample names to be used; input file names are used if not set')
+                        help='sample/replica labels to be used as column names; input file names are used if not set;'
+                             'must be equal to the number of input files given via --fastq/--bam')
     parser.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG); "
                                              "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM); "
