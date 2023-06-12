@@ -124,7 +124,7 @@ class InputDataStorage:
         readable_names_dict = defaultdict(lambda: defaultdict(str))
         inf = open(file_name, "r")
         current_sample = []
-        current_sample_name = ""
+        current_sample_name = self.experiment_prefix
         current_index = 0
 
         for l in inf:
