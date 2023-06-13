@@ -8,7 +8,7 @@
 
 
 
-# IsoQuant 3.2 manual
+# IsoQuant 3.3 manual
 
 1. [About IsoQuant](#sec1) </br>
 1.1. [Supported data types](#sec1.1)</br>
@@ -72,7 +72,7 @@ IsoQuant consists of two stages, which generate its own output:
 splice site correction and abundance quantification for reference genes/transcripts.
 2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.
 
-IsoQuant version 3.2.0 was released under GPLv2 on March 27th, 2023 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 3.3.0 was released under GPLv2 on June 13th, 2023 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
