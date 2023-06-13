@@ -37,7 +37,7 @@ def test_clean_start():
                              "--genedb", data_dir + "chr9.4M.gtf.gz", "--complete_genedb",
                              "-r",  data_dir + "chr9.4M.fa.gz",
                              "-t", "2",
-                             "--labels", sample_name,
+                             "--prefix", sample_name,
                              "--count_exons", "--sqanti_output",
                              "--read_group","file:" + data_dir + "chr9.4M.ont.sim.read_groups.tsv" + ":0:1"])
 
@@ -69,7 +69,7 @@ def test_usual_start():
                              "--genedb", data_dir + "chr9.4M.gtf.gz", "--complete_genedb",
                              "-r",  data_dir + "chr9.4M.fa.gz",
                              "-t", "2",
-                             "--labels", sample_name])
+                             "--prefix", sample_name])
 
     assert result.returncode == 0
     sample_folder = os.path.join(out_dir, sample_name)
@@ -95,7 +95,7 @@ def test_with_bam_and_polya():
                              "--genedb", data_dir + "chr9.4M.gtf.gz", "--complete_genedb",
                              "-r",  data_dir + "chr9.4M.fa.gz",
                              "-t", "2",
-                             "--labels", sample_name,
+                             "--prefix", sample_name,
                              "--sqanti_output", "--count_exons"])
 
     assert result.returncode == 0
@@ -126,7 +126,7 @@ def test_with_bam_and_polya():
 #                             "-r",  data_dir + "MAPT.Mouse.reference.fasta",
 #                             '--cage', data_dir + "MAPT.Mouse.CAGE.bed",
 #                             "-t", "2",
-#                             "--labels", sample_name])
+#                             "--prefix", sample_name])
 #
     # assert result.returncode == 0
     # sample_folder = os.path.join(out_dir, sample_name)
