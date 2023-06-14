@@ -638,7 +638,8 @@ def run_pipeline(args):
         args.input_data = dataset_mapper.map_reads(args)
 
     if args.run_aligner_only:
-        logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
+        logger.info("Read assignment adn isoform reconstruction steps are skipped because "
+                    "--run-aligner-only option was used")
     else:
         # run isoform assignment
         dataset_processor = DatasetProcessor(args)
@@ -649,7 +650,6 @@ def run_pipeline(args):
             combine_counts(args.input_data, args.output)
 
     logger.info(" === IsoQuant pipeline finished === ")
-
 
 
 # Test mode is triggered by --test option
