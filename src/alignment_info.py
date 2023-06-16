@@ -71,12 +71,9 @@ class AlignmentInfo:
         indel_count = 0
         mismatch_count = 0
         last_ref_pos = 0
-        logger.debug("to check: %d : %d" % (ref_start, ref_end))
         for (read_pos, ref_pos) in selected_pairs:
             # note that ref_pos are 0 based from BAM file, but ref_start and ref_end are 1-based
             true_ref_pos = ref_pos if ref_pos is None else ref_pos + 1
-            logger.debug("< PAIR: " + str(read_pos) + ":" + str(true_ref_pos))
-            logger.debug(last_ref_pos)
             if true_ref_pos is None:
                 # insertion, check previous position is inside or adjacent to the region
                 if ref_start - 1 <= last_ref_pos <= ref_end:

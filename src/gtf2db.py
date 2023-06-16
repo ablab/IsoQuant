@@ -16,7 +16,7 @@ from traceback import print_exc
 logger = logging.getLogger('IsoQuant')
 
 
-def db2gtf(gtf, db):
+def db2gtf(db, gtf, _=None):
     logger.info("Converting gene annotation file to .gtf format (takes a while)...")
     with open(gtf, "w") as f:
         gene_db = gffutils.FeatureDB(db)
@@ -29,7 +29,7 @@ def db2gtf(gtf, db):
     logger.info("Gene database written to " + gtf)
 
 
-def db2bed(bed, db):
+def db2bed(db, bed, _=None):
     # adapted from paftools in mimimap2
     colors = {
         'protein_coding': '0,128,255',
@@ -67,6 +67,8 @@ def db2bed(bed, db):
             for e in genedb.children(record, order_by='start', featuretype='CDS'):
                 cds.append((e.start - 1, e.end))
 
+            if not exons:
+                continue
             transcript_start = exons[0][0]
             transcript_end = exons[-1][1]
             exons_lens = []
@@ -155,7 +157,7 @@ def convert_db(gtf_filename, genedb_filename, convert_fn, args):
     if convert_fn == gtf2db:
         convert_fn(gtf_filename, genedb_filename, args.complete_genedb)
     else:
-        convert_fn(gtf_filename, genedb_filename)
+        convert_fn(genedb_filename, gtf_filename)
     converted_gtfs[gtf_filename] = {
         'genedb': genedb_filename,
         'gtf_mtime': os.path.getmtime(gtf_filename),
@@ -166,15 +168,19 @@ def convert_db(gtf_filename, genedb_filename, convert_fn, args):
         json.dump(converted_gtfs, f_out)
     return gtf_filename, genedb_filename
 
+
+mode_dict = {"gtf2db" : gtf2db, "db2gtf" : db2gtf, "db2bed" : db2bed}
+
+
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--output", "-o", type=str, help="output file", default="")
-    parser.add_argument("--input", "-i", type=str, help="input gtf/db file")
+    parser.add_argument("--output", "-o", type=str, help="output file", required=True)
+    parser.add_argument("--input", "-i", type=str, help="input gtf/db file", required=True)
     parser.add_argument('--complete_genedb', '-c', action='store_true', default=False,
                         help="use this flag if gene annotation contains transcript and gene metafeatures, "
                              "e.g. with official annotations, such as GENCODE; "
                              "speeds up gene database conversion")
-    parser.add_argument("--reverse", "-r", action='store_true', default=False, help="db2gtf")
+    parser.add_argument("--mode", "-m", type=str, default="gtf2db", help="[gtf2db|db2gtf|db2bed]")
 
 
     args = parser.parse_args()
@@ -186,10 +192,13 @@ def parse_args():
 
 def main():
     args = parse_args()
-    if args.reverse:
-        db2gtf(args.output, args.input)
+    if args.mode in mode_dict:
+        conversion_func = mode_dict[args.mode]
     else:
-        gtf2db(args.input, args.output, args.complete_genedb)
+        logger.error("Mode %s is not available" % args.mode)
+        exit(-1)
+
+    conversion_func(args.input, args.output, args.complete_genedb)
 
 
 if __name__ == "__main__":

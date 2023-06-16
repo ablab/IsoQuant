@@ -6,15 +6,18 @@
 
 import os
 import logging
+from collections import defaultdict
+
 
 logger = logging.getLogger('IsoQuant')
 
 
 class SampleData:
-    def __init__(self, file_list, label, out_dir):
+    def __init__(self, file_list, prefix, out_dir, readable_names_dict):
         # list of lists, since each sample may contain several libraries, and each library may contain 2 files (paired)
         self.file_list = file_list
-        self.label = label
+        self.readable_names_dict = readable_names_dict
+        self.prefix = prefix
         self.out_dir = out_dir
         self.aux_dir = os.path.join(self.out_dir, "aux")
         self._init_paths()
@@ -26,22 +29,22 @@ class SampleData:
         return os.path.join(self.aux_dir, name)
 
     def _init_paths(self):
-        self.out_assigned_tsv = self._make_path(self.label + ".read_assignments.tsv")
-        self.out_raw_file = self._make_aux_path(self.label + ".save")
-        self.read_group_file = self._make_aux_path(self.label + ".read_group")
-        self.out_corrected_bed = self._make_path(self.label + ".corrected_reads.bed")
-        self.out_alt_tsv = self._make_path(self.label + ".read_assignments.SQANTI-like.tsv")
-        self.out_gene_counts_tsv = self._make_path(self.label + ".gene")
-        self.out_transcript_counts_tsv = self._make_path(self.label + ".transcript")
-        self.out_transcript_model_counts_tsv = self._make_path(self.label + ".transcript_model")
-        self.out_transcript_model_grouped_counts_tsv = self._make_path(self.label + ".transcript_model_grouped")
-        self.out_exon_counts_tsv = self._make_path(self.label + ".exon")
-        self.out_intron_counts_tsv = self._make_path(self.label + ".intron")
-        self.out_gene_grouped_counts_tsv = self._make_path(self.label + ".gene_grouped")
-        self.out_transcript_grouped_counts_tsv = self._make_path(self.label + ".transcript_grouped")
-        self.out_exon_grouped_counts_tsv = self._make_path(self.label + ".exon_grouped")
-        self.out_intron_grouped_counts_tsv = self._make_path(self.label + ".intron_grouped")
-        self.out_t2t_tsv = self._make_path(self.label + ".novel_vs_known.SQANTI-like.tsv")
+        self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
+        self.out_raw_file = self._make_aux_path(self.prefix + ".save")
+        self.read_group_file = self._make_aux_path(self.prefix + ".read_group")
+        self.out_corrected_bed = self._make_path(self.prefix + ".corrected_reads.bed")
+        self.out_alt_tsv = self._make_path(self.prefix + ".read_assignments.SQANTI-like.tsv")
+        self.out_gene_counts_tsv = self._make_path(self.prefix + ".gene")
+        self.out_transcript_counts_tsv = self._make_path(self.prefix + ".transcript")
+        self.out_transcript_model_counts_tsv = self._make_path(self.prefix + ".transcript_model")
+        self.out_transcript_model_grouped_counts_tsv = self._make_path(self.prefix + ".transcript_model_grouped")
+        self.out_exon_counts_tsv = self._make_path(self.prefix + ".exon")
+        self.out_intron_counts_tsv = self._make_path(self.prefix + ".intron")
+        self.out_gene_grouped_counts_tsv = self._make_path(self.prefix + ".gene_grouped")
+        self.out_transcript_grouped_counts_tsv = self._make_path(self.prefix + ".transcript_grouped")
+        self.out_exon_grouped_counts_tsv = self._make_path(self.prefix + ".exon_grouped")
+        self.out_intron_grouped_counts_tsv = self._make_path(self.prefix + ".intron_grouped")
+        self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
 
 
 class InputDataStorage:
@@ -49,58 +52,99 @@ class InputDataStorage:
         # list of SampleData
         self.samples = []
         self.input_type = ""
-        self.readable_names_dict = {}
+        readable_names_dict = defaultdict(lambda: defaultdict(str))
         sample_files = []
-        labels = []
+        experiment_names = []
+        self.experiment_prefix = args.prefix
 
         if args.fastq is not None:
             self.input_type = "fastq"
             sample_files.append([])
-            for fq in args.fastq:
+            experiment_name = args.prefix
+            experiment_names.append(experiment_name)
+            if args.labels and len(args.labels) != len(args.fastq):
+                logger.critical("Number of labels is not equal to the number of files")
+                exit(-1)
+            for i, fq in enumerate(args.fastq):
                 check_input_type(fq, self.input_type)
+                if fq in readable_names_dict[experiment_name]:
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fq)
+                    exit(-2)
                 sample_files[0].append([fq])
+                readable_names_dict[experiment_name][fq] = args.labels[i] if args.labels else \
+                    os.path.splitext(os.path.basename(fq))[0]
+
         elif args.bam is not None:
             self.input_type = "bam"
             sample_files.append([])
-            for bam in args.bam:
+            experiment_name = args.prefix
+            experiment_names.append(experiment_name)
+            if args.labels and len(args.labels) != len(args.bam):
+                logger.critical("Number of labels is not equal to the number of files")
+                exit(-1)
+            for i, bam in enumerate(args.bam):
                 check_input_type(bam, self.input_type)
+                if bam in readable_names_dict[experiment_name]:
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
+                    exit(-2)
                 sample_files[0].append([bam])
+                readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
+                    os.path.splitext(os.path.basename(bam))[0]
+
         elif args.fastq_list is not None:
             self.input_type = "fastq"
-            sample_files, self.readable_names_dict = self.get_samples_from_file(args.fastq_list)
+            sample_files, experiment_names, readable_names_dict = self.get_samples_from_file(args.fastq_list)
+            if args.labels:
+                logger.warning("--labels option has no effect when files are provided via input list")
+
         elif args.bam_list is not None:
             self.input_type = "bam"
-            sample_files, self.readable_names_dict = self.get_samples_from_file(args.bam_list)
+            sample_files, experiment_names, readable_names_dict = self.get_samples_from_file(args.bam_list)
+            if args.labels:
+                logger.warning("--labels option has no effect when files are provided via input list")
+
         elif args.read_assignments is not None:
             self.input_type = "save"
-            for save_file in args.read_assignments:
+            for i, save_file in enumerate(args.read_assignments):
                 sample_files.append([[save_file]])
+                experiment_names.append(self.experiment_prefix + str(i))
+
         else:
             logger.critical("Input data was not specified")
             exit(-1)
 
-        if args.labels is not None:
-            if len(args.labels) != len(sample_files):
-                logger.critical("Number of labels is not equal to the number of samples")
-                exit(-1)
-            else:
-                labels = args.labels
-        else:
-            labels = self.get_labels(sample_files)
-
         for i in range(len(sample_files)):
-            self.samples.append(SampleData(sample_files[i], labels[i], os.path.join(args.output, labels[i])))
+            self.samples.append(SampleData(sample_files[i], experiment_names[i],
+                                           os.path.join(args.output, experiment_names[i]),
+                                           readable_names_dict[experiment_names[i]]))
 
     def get_samples_from_file(self, file_name):
         sample_files = []
-        readable_names_dict = {}
+        experiment_names = []
+        readable_names_dict = defaultdict(lambda: defaultdict(str))
         inf = open(file_name, "r")
         current_sample = []
+        current_sample_name = self.experiment_prefix
+        current_index = 0
 
         for l in inf:
-            if len(l.strip()) == 0 and len(current_sample) > 0:
-                sample_files.append(current_sample)
+            if len(l.strip()) == 0 or l.startswith("#"):
+                if len(current_sample) > 0:
+                    sample_files.append(current_sample)
+                    experiment_names.append(current_sample_name)
                 current_sample = []
+                current_sample_name = l.strip()[1:]
+                if not current_sample_name:
+                    current_sample_name = self.experiment_prefix + str(current_index)
+                if current_sample_name in experiment_names:
+                    new_sample_name = self.experiment_prefix + str(current_index)
+                    if current_sample_name == new_sample_name:
+                        logger.critical("Change experiment name %s and rerun IsoQuant" % current_sample_name)
+                        exit(-1)
+                    logger.warning("Duplicate folder prefix %s, will change to %s" %
+                                   (current_sample_name, new_sample_name))
+                    current_sample_name = new_sample_name
+                current_index += 1
             else:
                 vals = l.strip().split(':')
                 files = vals[0].split()
@@ -110,22 +154,20 @@ class InputDataStorage:
                     readable_name = os.path.splitext(os.path.basename(files[0]))[0]
                 current_sample.append(files)
                 for fname in files:
-                    readable_names_dict[fname] = readable_name
+                    if fname in readable_names_dict[current_sample_name]:
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
+                        exit(-2)
+                    readable_names_dict[current_sample_name][fname] = readable_name
 
         if len(current_sample) > 0:
             sample_files.append(current_sample)
+            experiment_names.append(current_sample_name)
 
         for sample in sample_files:
             for lib in sample:
                 for in_file in lib:
                     check_input_type(in_file, self.input_type)
-        return sample_files, readable_names_dict
-
-    def get_labels(self, sample_files):
-        labels = []
-        for i in range(len(sample_files)):
-            labels.append('{:02d}'.format(i) + "_" + os.path.splitext(os.path.basename(sample_files[i][0][0]))[0])
-        return labels
+        return sample_files, experiment_names, readable_names_dict
 
     def has_replicas(self):
         return any(len(sample.file_list) > 1 for sample in self.samples)

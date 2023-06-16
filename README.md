@@ -8,7 +8,7 @@
 
 
 
-# IsoQuant 3.2 manual
+# IsoQuant 3.3 manual
 
 1. [About IsoQuant](#sec1) </br>
 1.1. [Supported data types](#sec1.1)</br>
@@ -72,7 +72,7 @@ IsoQuant consists of two stages, which generate its own output:
 splice site correction and abundance quantification for reference genes/transcripts.
 2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.
 
-IsoQuant version 3.2.0 was released under GPLv2 on March 27th, 2023 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+IsoQuant version 3.3.0 was released under GPLv2 on June 13th, 2023 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png) 
@@ -156,18 +156,56 @@ If the installation is successful, you will find the following information at th
 To run IsoQuant, you should provide:
 * reads in FASTA/FASTQ (can be gzipped) or sorted and indexed BAM;
 * reference sequence in FASTA format (can be gzipped).
+* _Optionally_, you may provide a reference gene annotation in gffutils database or GTF/GFF format (can be gzipped).
 
-Optionally, you may provide a reference gene annotation in gffutils database or GTF/GFF format (can be gzipped);
+
+IsoQuant can handle data from multiple _experiments_ simultaneously. Each experiment may contain multiple _samples_ (or _replicas_).
+Each experiment is processed individually. The ouput files for each experiment will be placed into a separate folder.
+Files from the same _experiment_ are used to construct a single GTF and aggregated abundance tables. 
+If a single experiment contains multiple samples, per sample abundance tables are also generated.
+
+Two ways of providing input files are described below.
 
 
-By default, all provided files with reads are treated as a single experiment, which means a single combined GTF will 
+### Specifying input data via command line
+
+Two main options are `--fastq` and `--bam` (see description below). Both options accept one or multiple files separated by space.
+All provided files are treated as a single experiment, which means a single combined GTF will 
 be generated. If multiple files are provided, IsoQuant will compute tables with each column 
-corresponding to an individual file (further referred to as per-file counts). This pipeline is typical for the cases when a user is 
-interested in comparing expression between different replicas/conditions within the same experiment.
+corresponding to an individual file (per-sample counts). 
+To set a specific label for each sample use `--label` option. Number of labels sould be equal to the number of files.
+To a set a prefix for the output files use `--prefix` option.
+
+This pipeline is typical for the cases when a user is 
+interested in comparing expression between different replicas/conditions within the same experiment. 
 
 
-To obtain distinct GTFs from multiple files in a single IsoQuant run, provide a text file with paths to 
-your FASTQ/FASTA/BAM files. Provide each file in a separate line, leave blank lines between different experiments.
+### Specifying input data via dataset description file
+
+If you wish to process several independent experiments in a single run, you should provide a dataset description
+file via `--fastq_list` or `--bam_list` (see description below). 
+A distinct output folder with individual GTFs and abundance tables will be generated for each experiment. 
+
+Input files should be provided one per line. Experiments should be separated by blank lines or experiment names
+starting with #. You can also set a specific label for each listed file using colon. For example: 
+
+```
+#EXPERIMENT1
+/PATH/TO/FILE1A.fastq:SAMPLE_A
+/PATH/TO/FILE2A.fastq:SAMPLE_A
+/PATH/TO/FILE1B.fastq:SAMPLE_B
+/PATH/TO/FILE2B.fastq:SAMPLE_B
+#EXPERIMENT2
+/PATH/TO/FILE3.fastq:SAMPLE_C1
+/PATH/TO/FILE4.fastq:SAMPLE_C2
+```
+
+Output sub-folders will be named `EXPERIMENT1` and `EXPERIMENT2`. 
+Abundance tables will have specified labels as column names.
+If you want to group multiple files as a single sample within the experiment, use identical labels.
+
+
+Note, that  `--label` option has no effect in this case.
 See more in [examples](#examples).
 
 <a name="sec3.2"></a>
@@ -223,9 +261,10 @@ To provide aligned reads use one of the following options:
 expression tables with "per-file" columns will be computed. See more about [input data](#sec3.1).
 
 `--bam_list` 
-    Text file with list of BAM files, one file per line, leave empty line between experiments. For each experiment
-IsoQuant will generate a individual GTF and count tables. 
-You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:replicate1`).
+    Text file with list of BAM files, one file per line. Each file must be sorted and indexed.
+Leave empty line or experiment name starting with # between the experiments. 
+For each experiment IsoQuant will generate a individual GTF and count tables. 
+You may also give a label for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:replicate1`).
 
 #### Using raw reads as an input:  
 To provide read sequences use one of the following options:
@@ -235,9 +274,10 @@ To provide read sequences use one of the following options:
 expression tables with "per-file" columns will be computed. See more about [input data](#sec3.1).
   
 `--fastq_list` 
-    Text file with list of FASTQ/FASTA files (can be gzipped),  one file per line, leave empty line between experiments. 
-For each experiment IsoQuant will generate a individual GTF and count tables. 
-You may also give an alias for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:replicate1`).
+    Text file with list of FASTQ/FASTA files (can be gzipped),  one file per line.
+Leave empty line or experiment name starting with # between the experiments. 
+For each experiment IsoQuant will generate a individual GTF and count tables.
+You may also give a label for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:replicate1`).
 
 #### Other input options:
 `--stranded`
@@ -246,13 +286,16 @@ You may also give an alias for each file specifying it after a colon (e.g. `/PAT
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
 
+`--preifx` or `-p`
+    Prefix for all output files and sub-folder name. `OUT` if not set.
+
 `--labels` or `-l`
-    Sets space-separated experiment names. Make sure that the number of labels is equal to the number of experiments. 
+    Sets space-separated sample names. Make sure that the number of labels is equal to the number of files. 
 Input file names are used as labels if not set.
 
 `--read_group`
  Sets a way to group feature counts (e.g. by cell type). Available options are:
- * `file_name`: groups reads by their original file names (or file name aliases) within an experiment. 
+ * `file_name`: groups reads by their original file names (or file name labels) within an experiment. 
 This option makes sense when multiple files are provided. 
 This option is designed for obtaining expression tables with a separate column for each file. 
 If multiple BAM/FASTQ files are provided and `--read_group` option is not set, IsoQuant will set `--read_group:file_name` 
@@ -412,17 +455,17 @@ isoquant.py -d pacbio_ccs --bam mapped_reads.bam \
  --genedb annotation.db --output output_dir 
 ```
 
-* Nanopore dRNA stranded reads; official annotation in GTF format, use label instead of file name:
+* Nanopore dRNA stranded reads; official annotation in GTF format, use custon prefix for output:
 ```bash
 isoquant.py -d nanopore --stranded forward --fastq ONT.raw.fastq.gz \
  --reference reference.fasta --genedb annotation.gtf --complete_genedb \ 
- --output output_dir --labels My_ONT
+ --output output_dir --prefix My_ONT
 ```
 
 * Nanopore cDNA reads; no reference annotation:
 ```bash
 isoquant.py -d nanopore --fastq ONT.cDNA.raw.fastq.gz \
- --reference reference.fasta --output output_dir --labels My_ONT_cDNA
+ --reference reference.fasta --output output_dir --prefix My_ONT_cDNA
 ```
 
 * PacBio FL reads; custom annotation in GTF format, which contains only exon features:
@@ -434,37 +477,39 @@ isoquant.py -d pacbio_ccs --fl_data --fastq CCS.fastq \
 * Nanopore cDNA reads, multiple samples/replicas within a single experiment; official annotation in GTF format:
 ```bash
 isoquant.py -d nanopore --bam ONT.cDNA_1.bam ONT.cDNA_2.bam ONT.cDNA_3.bam \
- --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir --labels My_ONT_cDNA
+ --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir 
+ --predix ONT_3samples --labels A1 A2 A3
 ```
 
 * ONT cDNA reads; 2 experiments with 3 replicates (biological or technical); official annotation in GTF format:
 ```bash
 isoquant.py -d nanopore --fastq_list list.txt  \
- --read_group file_name -l SAMPLE1 SAMPLE2   \
  --complete_genedb --genedb genes.gtf \
  --reference reference.fasta --output output_dir 
 ```
 
 list.txt file :
 ```
+#SAMPLE1
 /PATH/TO/SAMPLE1/file1.fastq:S1_REPLICATE1
 /PATH/TO/SAMPLE1/file2.fastq:S1_REPLICATE2
 /PATH/TO/SAMPLE1/file3.fastq:S1_REPLICATE3
-
+#SAMPLE2
 /PATH/TO/SAMPLE2/file1.fastq:S2_REPLICATE1
 /PATH/TO/SAMPLE2/file2.fastq:S2_REPLICATE2
 /PATH/TO/SAMPLE2/file3.fastq:S2_REPLICATE3
 
 ```
 IsoQuant will produce 2 sets of resulting files (including annotations and expression tables), one for each experiment.
-Note, that file aliases given after a colon will be used in expression table header. 
+Output sub-folder will be named `SAMPLE1` and `SAMPLE2`.
+File labels given after a colon will be used in expression table header. 
 
 * ONT cDNA reads; 2 experiments with 2 replicates, each replicate has 2 files; official annotation in GTF format:
 ```bash
 isoquant.py -d nanopore --fastq_list list.txt \
- --read_group file_name -l SAMPLE1 SAMPLE2 \
- --complete_genedb --genedb genes.gtf \
- --reference reference.fasta --output output_dir 
+  --complete_genedb --genedb genes.gtf \
+ --reference reference.fasta --prefix MY_SAMPLE \ 
+ --output output_dir  
 ```
 
 list.txt file :
@@ -480,8 +525,11 @@ list.txt file :
 /PATH/TO/SAMPLE2/r2_2.fastq:S2_REPLICATE2
 
 ```
+
 IsoQuant will produce 2 sets of resulting files (including annotations and expression tables), one for each experiment.
-Note, that file aliases given after a colon will be used in expression table header. 
+Output sub-folder will be named `MY_SAMPLE0` and `MY_SAMPLE1`. 
+File labels given after a colon will be used in expression table header.
+Note, that files having identical labels will be treated as a single sample (and thus counts will be combined). 
 
 <a name="sec3.3"></a>
 ## IsoQuant output

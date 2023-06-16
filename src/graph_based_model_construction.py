@@ -130,17 +130,18 @@ class GraphBasedModelConstructor:
         self.construct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
-        if self.gene_info.all_isoforms_exons:
-            self.compare_models_with_known()
+
+        if self.params.genedb:
             self.create_extended_annotation()
-        else:
+
+        if not self.gene_info.all_isoforms_exons:
             transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
             self.transcript_model_storage = transcript_joiner.join_transcripts()
 
-    def compare_models_with_known(self):
-        if not self.gene_info.all_isoforms_exons:
-            return
+        if self.params.sqanti_output:
+            self.compare_models_with_known()
 
+    def compare_models_with_known(self):
         gene_to_model_dict = defaultdict(list)
         for model in self.transcript_model_storage:
             gene_to_model_dict[model.gene_id].append(model.transcript_id)
@@ -156,13 +157,8 @@ class GraphBasedModelConstructor:
 
             combined_profile = self.profile_constructor.construct_profiles(model.exon_blocks, polya_info, [])
             assignment = self.assigner.assign_to_isoform(model.transcript_id, combined_profile)
-            if assignment is None or not assignment.isoform_matches:
+            if assignment is None:
                 continue
-
-            if len(gene_to_model_dict[assignment.isoform_matches[0].assigned_gene]) == 1:
-                FSM_class = "A"
-            else:
-                FSM_class = "C"
 
             assignment.polya_info = polya_info
             assignment.cage_found = False
@@ -171,9 +167,23 @@ class GraphBasedModelConstructor:
             assignment.chr_id = model.chr_id
             assignment.set_additional_info("indel_count", "NA")
             assignment.set_additional_info("junctions_with_indels", "NA")
-            assignment.set_additional_info("FSM_class", FSM_class)
             assignment.introns_match = all(e == 1 for e in combined_profile.read_intron_profile.read_profile)
             assignment.gene_info = self.gene_info
+
+            if assignment.assignment_type in [ReadAssignmentType.intergenic, ReadAssignmentType.noninformative] or \
+                    not assignment.isoform_matches:
+                # create intergenic
+                assignment.assignment_type = ReadAssignmentType.intergenic
+                FSM_class = "C"
+                assignment.set_additional_info("FSM_class", FSM_class)
+                self.transcript2transcript.append(assignment)
+                continue
+
+            if len(gene_to_model_dict[assignment.isoform_matches[0].assigned_gene]) == 1:
+                FSM_class = "A"
+            else:
+                FSM_class = "C"
+            assignment.set_additional_info("FSM_class", FSM_class)
 
             assigned_transcript_id = assignment.isoform_matches[0].assigned_transcript
             if not assigned_transcript_id or assigned_transcript_id not in self.gene_info.all_isoforms_introns:
@@ -309,6 +319,7 @@ class GraphBasedModelConstructor:
             # do not include terminal vertices
             # logger.debug(">>> Considering path " + str(path))
             intron_path = path[1:-1]
+            if not intron_path: continue
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
             count = self.path_storage.paths[path]
@@ -316,30 +327,25 @@ class GraphBasedModelConstructor:
             # logger.debug("uuu %s: %s" % (new_transcript_id, str(novel_exons)))
 
             reference_isoform = None
-            if intron_path and intron_path not in self.known_isoforms_in_graph:
-                # check if new transcript matches a reference one
-                if intron_path[0][0] == VERTEX_polyt:
-                    polya_info = PolyAInfo(-1, intron_path[0][1], -1, -1)
-                elif intron_path[-1][0] == VERTEX_polya:
-                    polya_info = PolyAInfo(intron_path[-1][1], -1, -1, -1)
-                else:
-                    polya_info = PolyAInfo(-1, -1, -1, -1)
-                combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
-                assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
-                # check that no serious contradiction occurs
-                # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
-                #             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
-
-                if is_matching_assignment(assignment):
-                    reference_isoform = assignment.isoform_matches[0].assigned_transcript
-                    # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
+            # check if new transcript matches a reference one
+            if intron_path[0][0] == VERTEX_polyt:
+                polya_info = PolyAInfo(-1, intron_path[0][1], -1, -1)
+            elif intron_path[-1][0] == VERTEX_polya:
+                polya_info = PolyAInfo(intron_path[-1][1], -1, -1, -1)
             else:
-                # path matches reference exactly
-                isoform_id = self.known_isoforms_in_graph[intron_path]
-                #if abs(self.gene_info.transcript_start(isoform_id) - transcript_range[0]) <= self.params.apa_delta and \
-                #        abs(self.gene_info.transcript_end(isoform_id) - transcript_range[1]) <= self.params.apa_delta:
-                reference_isoform = isoform_id
-                # logger.debug("uuu Matches with known isoform %s" % reference_isoform)
+                polya_info = PolyAInfo(-1, -1, -1, -1)
+            combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
+            assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
+            # check that no serious contradiction occurs
+            # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
+            #             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
+
+            if is_matching_assignment(assignment):
+                reference_isoform = assignment.isoform_matches[0].assigned_transcript
+                # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
+            elif intron_path in self.known_isoforms_in_graph:
+                # path was not assigned to any known isoform but intron chain still matches
+                continue
 
             new_model = None
             if reference_isoform:
@@ -356,7 +362,7 @@ class GraphBasedModelConstructor:
                     #logger.debug("Graph positions: %s, %s" % (str(path[0]), str(path[-1])))
             else:
                 # adding FL novel isoform
-                component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
+                # component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
                 novel_isoform_cutoff = self.params.min_novel_count
 
                 has_polyt = path[0][0] == VERTEX_polyt
@@ -432,14 +438,15 @@ class GraphBasedModelConstructor:
             events = read_assignment.isoform_matches[0].match_subclassifications
             if any(e.event_type == MatchEventSubtype.mono_exon_match for e in events):
                 mono_exon_isoform_reads[refrenence_isoform_id].append(read_assignment)
-                assert len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) == 1
-                transcript_exon = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0]
-                t_len = transcript_exon[1] - transcript_exon[0] + 1
+                assert len(self.gene_info.all_isoforms_introns[refrenence_isoform_id]) == 0
+                transcript_start = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0]
+                transcript_end = self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1]
+                t_len = transcript_end - transcript_start + 1
 
                 if refrenence_isoform_id not in mono_exon_isoform_coverage:
                     mono_exon_isoform_coverage[refrenence_isoform_id] = [0 for _ in range(t_len)]
-                start = max(0, read_assignment.corrected_exons[0][0] - transcript_exon[0])
-                end = min(t_len, read_assignment.corrected_exons[-1][1] - transcript_exon[0] + 1)
+                start = max(0, read_assignment.corrected_exons[0][0] - transcript_start)
+                end = min(t_len, read_assignment.corrected_exons[-1][1] - transcript_start + 1)
                 for i in range(start, end):
                     mono_exon_isoform_coverage[refrenence_isoform_id][i] = 1
 

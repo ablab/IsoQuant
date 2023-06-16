@@ -11,6 +11,7 @@ import json
 import logging
 import os.path
 import pickle
+import shutil
 import sys
 import time
 from collections import namedtuple
@@ -86,8 +87,11 @@ def parse_args(args=None, namespace=None):
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
 
+    parser.add_argument('--prefix', '-p', type=str,
+                        help='experiment name; to be used for folder and file naming; default is OUT', default="OUT")
     parser.add_argument('--labels', '-l', nargs='+', type=str,
-                        help='sample names to be used; input file names are used if not set')
+                        help='sample/replica labels to be used as column names; input file names are used if not set;'
+                             'must be equal to the number of input files given via --fastq/--bam')
     parser.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG); "
                                              "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM); "
@@ -331,6 +335,10 @@ def check_input_params(args):
             logger.warning("Setting --no_model_construction without providing a gene "
                            "annotation will not produce any meaningful results")
 
+    if args.no_model_construction and args.sqanti_output:
+        args.sqanti_output = False
+        logger.warning("--sqanti_output option has no effect without model construction")
+        
     check_input_files(args)
     return True
 
@@ -647,12 +655,15 @@ def run_pipeline(args):
 # Test mode is triggered by --test option
 class TestMode(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
+        out_dir = 'isoquant_test'
+        if os.path.exists(out_dir):
+            shutil.rmtree(out_dir)
         source_dir = os.path.dirname(os.path.realpath(__file__))
-        options = ['--output', 'isoquant_test', '--threads', '2',
+        options = ['--output', out_dir, '--threads', '2',
                    '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
                    '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
                    '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
-                   '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force']
+                   '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force', '-p', 'TEST_DATA']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
         main(options)
@@ -690,10 +701,10 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         raise
     except:
-        strout = StringIO()
         if logger.handlers:
+            strout = StringIO()
             print_exc(file=strout)
-            s = strout.read()
+            s = strout.getvalue()
             if s:
                 logger.critical("IsoQuant failed with the following error, please, submit this issue to "
                                 "https://github.com/ablab/IsoQuant/issues" + s)

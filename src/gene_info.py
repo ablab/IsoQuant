@@ -149,6 +149,8 @@ class GeneInfo:
         self.split_exon_profiles = FeatureProfiles()
 
         self.all_isoforms_introns, self.all_isoforms_exons = self.set_introns_and_exons()
+        if not self.all_isoforms_exons:
+            logger.warning("Genes %s have no exons, check you GTF file" % ", ".join([g.id for g in gene_db_list]))
         self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
         self.set_junction_profiles(self.all_isoforms_introns, self.all_isoforms_exons)
 
@@ -367,7 +369,7 @@ class GeneInfo:
         write_int(self.end, outfile)
 
     def empty(self):
-        return not self.gene_db_list and not self.exon_profiles.features
+        return not self.exon_profiles.features
 
     def print_debug(self):
         gene_names = []
@@ -426,7 +428,8 @@ class GeneInfo:
             for attr in gene_db.attributes.keys():
                 if attr in ['gene_id', 'ID', 'level']:
                     continue
-                self.gene_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
+                if gene_db.attributes[attr]:
+                    self.gene_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
 
     # assigns an ordered list of all known exons and introns to self.exons and self.introns
     # returns 2 maps, isoform id -> intron / exon list
@@ -438,11 +441,14 @@ class GeneInfo:
 
         for gene_db in self.gene_db_list:
             for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
-                all_isoforms_exons[t.id] = []
+                exons = []
                 for e in self.db.children(t, order_by='start'):
                     if e.featuretype == 'exon':
-                        all_isoforms_exons[t.id].append((e.start, e.end))
-
+                        exons.append((e.start, e.end))
+                if not exons:
+                    logger.warning("Malformed transcript %s has no exons" % t.id)
+                    continue
+                all_isoforms_exons[t.id] = exons
                 all_isoforms_introns[t.id] = junctions_from_blocks(all_isoforms_exons[t.id])
 
         if self.db and not all_isoforms_exons:
@@ -575,16 +581,16 @@ class GeneInfo:
     # calculate junction profiles for known isoforms
     def set_junction_profiles(self, all_isoforms_introns, all_isoforms_exons):
         for gene_db in self.gene_db_list:
-            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
-                transcript_region = self.transcript_region(t.id)
+            for t_id in self.all_isoforms_exons.keys():
+                transcript_region = self.transcript_region(t_id)
                 # setting up intron profiles for current isoform
-                self.intron_profiles.set_profiles(t.id, all_isoforms_introns[t.id], transcript_region,
+                self.intron_profiles.set_profiles(t_id, all_isoforms_introns[t_id], transcript_region,
                                                   partial(equal_ranges, delta=0))
                 # setting up exon profiles for current isoform
-                self.exon_profiles.set_profiles(t.id, all_isoforms_exons[t.id], transcript_region,
+                self.exon_profiles.set_profiles(t_id, all_isoforms_exons[t_id], transcript_region,
                                                 partial(equal_ranges, delta=0))
                 # setting up split exon profiles for current isoform
-                self.split_exon_profiles.set_profiles(t.id, all_isoforms_exons[t.id], transcript_region, contains)
+                self.split_exon_profiles.set_profiles(t_id, all_isoforms_exons[t_id], transcript_region, contains)
 
     def transcript_start(self, transcript_id):
         return self.all_isoforms_exons[transcript_id][0][0]

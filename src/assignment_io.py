@@ -315,29 +315,43 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
     def add_read_info(self, read_assignment):
         if read_assignment is None:
             return
-        # FIXME ambiguous matches
-        if read_assignment.assignment_type in [ReadAssignmentType.noninformative, ReadAssignmentType.ambiguous]:
+
+        if read_assignment.assignment_type == ReadAssignmentType.noninformative:
             return
 
         gene_info = read_assignment.gene_info
-        match = read_assignment.isoform_matches[0]
-        gene_id = match.assigned_gene
-        transcript_id = match.assigned_transcript
-        if transcript_id is None:
-            return
+        if not read_assignment.isoform_matches:
+            assigned = False
+            gene_id = "NA"
+            transcript_id = "NA"
+        else:
+            assigned = True
+            match = read_assignment.isoform_matches[0]
+            gene_id = match.assigned_gene
+            transcript_id = match.assigned_transcript
+            if transcript_id is None:
+                transcript_id = "NA"
+                gene_id = "NA"
+                assigned = False
         strand = read_assignment.strand
 
         # FIXME not genomic distance
-        dist_to_tss = self.io_support.count_tss_dist(read_assignment, transcript_id)
-        dist_to_tts = self.io_support.count_tts_dist(read_assignment, transcript_id)
-        dist_to_gene_tss, dist_to_gene_tts = self.io_support.find_closests_tsts(read_assignment)
+        if assigned:
+            dist_to_tss = self.io_support.count_tss_dist(read_assignment, transcript_id)
+            dist_to_tts = self.io_support.count_tts_dist(read_assignment, transcript_id)
+            dist_to_gene_tss, dist_to_gene_tts = self.io_support.find_closests_tsts(read_assignment)
+        else:
+            dist_to_tss, dist_to_tts = "NA", "NA"
+            dist_to_gene_tss, dist_to_gene_tts = "NA", "NA"
         if strand == '-':
             # swapping distances since 5' and 3' are now opposite
             dist_to_tss, dist_to_tts = dist_to_tts, dist_to_tss
             dist_to_gene_tss, dist_to_gene_tts = dist_to_gene_tts, dist_to_gene_tss
 
-        subtypes = ";".join([x.event_type.name for x in match.match_subclassifications])
-        if not subtypes:
+        if assigned:
+            subtypes = ";".join([x.event_type.name for x in match.match_subclassifications])
+            if not subtypes: subtypes = "."
+        else:
             subtypes = "."
 
         indel_count = read_assignment.additional_info["indel_count"] \
@@ -345,7 +359,10 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         junctions_with_indels = read_assignment.additional_info["junctions_with_indels"] \
             if "junctions_with_indels" in read_assignment.additional_info.keys() else "-1"
         bite = self.io_support.check_all_sites_match_reference(read_assignment)
-        ref_cds_start, ref_cds_end = self.io_support.find_ref_CDS_region(gene_info, transcript_id)
+        if assigned:
+            ref_cds_start, ref_cds_end = self.io_support.find_ref_CDS_region(gene_info, transcript_id)
+        else:
+            ref_cds_start, ref_cds_end = "NA", "NA"
 
         if gene_info.reference_region:
             read_exons = read_assignment.exons
@@ -386,9 +403,12 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         ORF_seq = "NA"
         ratio_TSS = "NA"
 
+        transcript_len = "NA" if not assigned else gene_info.total_transcript_length(transcript_id)
+        transcript_exon_count = "NA" if not assigned else gene_info.transcript_exon_count(transcript_id)
+
         value_list = [read_assignment.read_id, gene_info.chr_id, strand, read_assignment.length(),
                       read_assignment.exon_count(), match.match_classification.name, gene_id, transcript_id,
-                      gene_info.total_transcript_length(transcript_id), gene_info.transcript_exon_count(transcript_id),
+                      transcript_len, transcript_exon_count,
                       dist_to_tss, dist_to_tts, dist_to_gene_tss, dist_to_gene_tts, subtypes, RTS,
                       all_canonical, min_sample_cov, min_cov, min_cov_pos, sd_cov, FL,
                       indel_count, junctions_with_indels, bite, iso_exp, gene_exp, ratio_exp, FSM_class,
