@@ -32,9 +32,9 @@
 
 *   If installing manually, you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
   
-*   Run an example build from the repository root to make sure everything is installed correctly.
+*   Verify installation
 
-        mkdir temp && ./isoquant.py --reference tests/toy_data/MAPT.Mouse.reference.fasta  --genedb tests/toy_data/MAPT.Mouse.genedb.gtf --fastq tests/toy_data/MAPT.Mouse.ONT.simulated.fastq  --data_type assembly -o temp && rm -rf temp
+        isoquant.py --test
 
 *   To run IsoQuant on raw FASTQ/FASTA files use the following command
 
