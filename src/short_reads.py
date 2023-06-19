@@ -7,8 +7,8 @@ import networkx as nx
 from networkx.algorithms import bipartite
 from enum import Enum, unique
 
-from common import *
-from gtf2db import *
+from .common import *
+from .gtf2db import *
 
 ABSENT_PAIR = (-1,-1)
 
@@ -41,7 +41,7 @@ def parse_args():
 						type=str, dest = "out", required = True)
 	return parser.parse_args()
 
-def get_introns(f):
+def get_introns_old(f):
 	samfile = pysam.AlignmentFile(f, "rb") 
 	introns = samfile.find_introns(read for read in samfile.fetch())
 	samfile.close()
@@ -51,6 +51,15 @@ def get_introns(f):
 		i_list.add(i)
 	return i_list
 	
+def get_introns(f, chromosome, start, end):
+		samfile = pysam.AlignmentFile(f, "rb") 
+		intr = samfile.find_introns(samfile.fetch(self.chromosome, start = self.start, stop = self.end))
+		samfile.close()
+		i_list = set()
+		for i in intr.keys():
+			if(type(i)!="int"): 
+				i_list.add((i[0]+1,i[1]))
+		return i_list	
 
 def introns_from_gene(db, gene, f):
 	all_isoforms_introns = {}
@@ -214,20 +223,20 @@ def classify_introns(iso, short):
 		return IntronType.short_contains_iso
 	return IntronType.only_isoquant
 	
-def classify_reference(iso, short, ref, chromosome):
+def classify_reference(iso, short, ref, chromosome, counts):
 	#if iso in ref and any(sh in ref for sh in short):
 	if iso in ref and short in ref:
-		print("both:", chromosome, ":" , iso, ",", short)
+		print("both:", chromosome, ":" , iso, ",", short, "count:", counts[(short[0]-1,short[1])]) 
 		return IntronReference.both
 	elif iso in ref:
-		print("iso:", chromosome, ":" , iso, ",", short)
+		print("iso:", chromosome, ":" , iso, ",", short, "count:", counts[(short[0]-1,short[1])])
 		return IntronReference.iso_right
 	#elif any(sh in ref for sh in short):
 	elif short in ref:
-		print("short:", chromosome, ":" , iso, ",", short)
+		print("short:", chromosome, ":" , iso, ",", short, "count:", counts[(short[0]-1,short[1])])
 		return IntronReference.short_right
 	else:
-		print("none:", chromosome, ":" , iso, ",", short)
+		print("none:", chromosome, ":" , iso, ",", short, "count:", counts[(short[0]-1,short[1])])
 		return IntronReference.none
 	
 def compare_alg(short, iso, counts, ref, chromosome):
@@ -242,6 +251,7 @@ def compare_alg(short, iso, counts, ref, chromosome):
 	#score = [1000000000000,1000000000000,1000000000000]
 	#sh = [(0,0),(0,0),(0,0)]
 	chosen = []
+	additional = []
 	classification = {}
 	cl_ref = {}
 	scounts = []
@@ -261,32 +271,37 @@ def compare_alg(short, iso, counts, ref, chromosome):
 				if x < score:
 					score = x
 					sh = s
+					additional = []
+				if x == score and not s == sh:
+					additional.append(s)
 				G.add_edge(i, s, weight = abs(i[0] - s[0]) + abs(i[1] - s[1]))
 		#classification[(i,sh[0])] = classify_introns(i,sh[0])
 		#classification[(i,sh[1])] = classify_introns(i,sh[1])
 		#classification[(i,sh[2])] = classify_introns(i,sh[2])
 		#classification[(i,sh)] = classify_introns(i,sh)
-		classify_reference(i, sh, ref, chromosome)
+		classify_reference(i, sh, ref, chromosome, counts)
+		for x in additional:
+			classify_reference(i, x, ref, chromosome, counts)
 		# for y in sh:
 			# if(not y == (0,0)):
 				# chosen.append(y)
 				# scounts.append(counts[(y[0]-1,y[1])])
 		if(not sh == (0,0)):
 			chosen.append(sh)
-			scounts.append(counts[(sh[0]-1,sh[1])])
+			#scounts.append(counts[(sh[0]-1,sh[1])])
 		#score = [1000000000000,1000000000000,1000000000000]
 		#sh = [(0,0),(0,0),(0,0)]
 		score = 1000000000000
 		sh = (0,0)
 	eqcounts = []
-	for i in equal:
-		classification[(i,i)] = IntronType.equal
-		eqcounts.append(counts[(i[0]-1,i[1])])
+	#for i in equal:
+	#	classification[(i,i)] = IntronType.equal
+	#	eqcounts.append(counts[(i[0]-1,i[1])])
 	eq = len(equal)
 	extra = short.difference(chosen)
 	excounts = []
-	for i in extra:
-		excounts.append(counts[(i[0]-1,i[1])])
+	#for i in extra:
+		#excounts.append(counts[(i[0]-1,i[1])])
 	
 	ex_only = len(extra.intersection(ref))		
 	#print("Counts in equal introns: ", eqcounts)
