@@ -87,6 +87,10 @@ def parse_args(args=None, namespace=None):
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
 
+    # TODO: add nargs="+" to support multiple files
+    parser.add_argument('--illumina_bam', type=str, help='sorted and indexed file with Illumina '
+                                                         'reads from the same sample')
+
     parser.add_argument('--prefix', '-p', type=str,
                         help='experiment name; to be used for folder and file naming; default is OUT', default="OUT")
     parser.add_argument('--labels', '-l', nargs='+', type=str,
@@ -350,28 +354,35 @@ def check_input_files(args):
                 if args.input_data.input_type == "save":
                     saves = glob.glob(in_file + "*")
                     if not saves:
-                        print("ERROR! Input files " + in_file + "* do not exist")
+                        logger.critical("Input files " + in_file + "* do not exist")
                     continue
                 if not os.path.isfile(in_file):
-                    print("ERROR! Input file " + in_file + " does not exist")
+                    logger.critical("Input file " + in_file + " does not exist")
                     exit(-1)
                 if args.input_data.input_type == "bam":
                     bamfile_in = pysam.AlignmentFile(in_file, "rb")
                     if not bamfile_in.has_index():
-                        print("ERROR! BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
+                        logger.critical("BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
                         exit(-1)
                     bamfile_in.close()
+
+    if args.illumina_bam is not None:
+        bamfile_in = pysam.AlignmentFile(args.illumina_bam, "rb")
+        if not bamfile_in.has_index():
+            logger.critical("BAM file " + args.illumina_bam + " is not indexed, run samtools sort and samtools index")
+            exit(-1)
+        bamfile_in.close()
 
     if args.cage is not None:
         logger.critical("CAGE data is not supported yet")
         exit(-1)
         if not os.path.isfile(args.cage):
-            print("ERROR! Bed file with CAGE peaks " + args.cage + " does not exist")
+            logger.critical("Bed file with CAGE peaks " + args.cage + " does not exist")
             exit(-1)
 
     if args.genedb is not None:
         if not os.path.isfile(args.genedb):
-            print("ERROR! Gene database " + args.genedb + " does not exist")
+            logger.critical("Gene database " + args.genedb + " does not exist")
             exit(-1)
     else:
         args.no_junc_bed = True
@@ -379,7 +390,7 @@ def check_input_files(args):
     if args.read_assignments is not None:
         for r in args.read_assignments:
             if not glob.glob(r + "*"):
-                print("No files found with prefix " + str(r))
+                logger.critical("No files found with prefix " + str(r))
                 exit(-1)
 
 
