@@ -264,14 +264,20 @@ class AlignmentCollector:
         logger.debug("Processing region %s" % str(current_region))
         gene_info = self.get_gene_info_for_region(current_region)
         if gene_info.empty():
-            assignment_storage = self.process_intergenic(alignment_storage)
+            assignment_storage = self.process_intergenic(alignment_storage, current_region)
         else:
             assignment_storage = self.process_genic(alignment_storage, gene_info)
 
         return gene_info, assignment_storage
 
-    def process_intergenic(self, alignment_storage):
+    def process_intergenic(self, alignment_storage, region):
         assignment_storage = []
+        if self.params.illumina_bam is not None:
+            pass
+            # corrector = IlluminaExonCorrector(self.params.illumina_bam, region)
+        else:
+            pass
+            # corrector = VoidExonCorrector()
         for bam_index, alignment in alignment_storage:
             if alignment.reference_id == -1 or alignment.is_supplementary or \
                     (self.params.no_secondary and alignment.is_secondary):
