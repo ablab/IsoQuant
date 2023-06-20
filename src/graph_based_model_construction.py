@@ -205,6 +205,8 @@ class GraphBasedModelConstructor:
 
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
+                self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
+
                 filtered_storage.append(model)
                 confirmed_transcipt_ids.add(model.transcript_id)
                 continue
