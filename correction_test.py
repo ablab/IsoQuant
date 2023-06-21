@@ -57,7 +57,7 @@ for gene in gene_list:
 					continue
 				exons = ai.read_exons
 				introns = set(junctions_from_blocks(exons))
-				corrected_introns = corrector.correct_read(introns)
+				corrected_introns = corrector.correct_exons(introns)
 				before += len(introns.intersection(reference_introns))
 				after += len(corrected_introns.intersection(reference_introns))
 		genes = [gene]
@@ -73,7 +73,7 @@ if genes:
 			continue
 		exons = ai.read_exons
 		introns = set(junctions_from_blocks(exons))
-		corrected_introns = corrector.correct_read(introns)
+		corrected_introns = corrector.correct_exons(introns)
 		before += len(introns.intersection(reference_introns))
 		after += len(corrected_introns.intersection(reference_introns))
 		
