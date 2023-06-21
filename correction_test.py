@@ -5,7 +5,7 @@ import gffutils
 from src.illumina_exon_corrector import IlluminaExonCorrector
 from src.alignment_info import AlignmentInfo
 from src.common import junctions_from_blocks, overlaps
-from src.short_utils import ref_from_region
+from src.short_utils import get_region_from_db
 
 def parse_args():
 	parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -43,13 +43,13 @@ genes = []
 before = 0
 after = 0
 for gene in gene_list:
-	if overlaps((gene.start,gene.end), current_region) and gene.seqid == chromosome: # Chromosom mit abfragen?
+	if overlaps((gene.start,gene.end), current_region) and gene.seqid == chromosome:
 		genes.append(gene)
 		current_region = (current_region[0], max(current_region[1], gene.end))
 	else:
 		if genes :
 			corrector = IlluminaExonCorrector(chromosome, current_region[0], current_region[1], short_file)
-			reference_introns = ref_from_region(ref_db, (chromosome, current_region[0], current_region[1]))
+			reference_introns = get_region_from_db(ref_db, (chromosome, current_region[0], current_region[1]))
 			for alignment in long_file.fetch(chromosome, start = current_region[0], stop = current_region[1]):
 				ai = AlignmentInfo(alignment)
 				if not ai.read_exons:
@@ -65,7 +65,7 @@ for gene in gene_list:
 		chromosome = gene.seqid
 if genes:
 	corrector = IlluminaExonCorrector(chromosome, current_region[0], current_region[1], short_file)
-	reference_introns = ref_from_region(ref_db, (chromosome, current_region[0], current_region[1]))
+	reference_introns = get_region_from_db(ref_db, (chromosome, current_region[0], current_region[1]))
 	for alignment in long_file.fetch(chromosome, start = current_region[0], stop = current_region[1]):
 		ai = AlignmentInfo(alignment)
 		if not ai.read_exons:
