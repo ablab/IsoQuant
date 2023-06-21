@@ -1,6 +1,16 @@
 import pysam
 
-from .common import overlaps
+from .common import overlaps, junctions_from_blocks, get_exons
+
+
+class VoidExonCorrector:
+
+	def __init__(self):
+		pass
+
+	def correct_read(self, alignment_info):
+		return alignment_info.read_exons
+
 
 class IlluminaExonCorrector:
 	
@@ -20,9 +30,13 @@ class IlluminaExonCorrector:
 			if(type(i)!="int"): 
 				i_list.add((i[0]+1,i[1]))
 		return i_list
-		
-	def correct_read(self, introns):
-		corrected_introns = set()
+
+	def correct_read(self, alignment_info):
+		return self.correct_exons(alignment_info.read_exons)
+
+	def correct_exons(self, exons):
+		introns = junctions_from_blocks(exons)
+		corrected_introns = []
 		score = 1000000000000
 		sh = (0,0)
 		for i in introns:
@@ -33,9 +47,9 @@ class IlluminaExonCorrector:
 						score = x
 						sh = s
 			if (i[0] == sh[0] and i[1] == sh[1]-4) or (i[1] == sh[1] and sh[0] == i[0]-4):
-				corrected_introns.add(sh)
+				corrected_introns.append(sh)
 			else:
-				corrected_introns.add(i)
+				corrected_introns.append(i)
 			sh = (0,0)
 			score = 1000000000000
-		return corrected_introns
+		return get_exons((exons[0][0], exons[-1][1]), corrected_introns)

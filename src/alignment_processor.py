@@ -25,6 +25,8 @@ from .polya_finder import PolyAFinder, CagePeakFinder
 from .polya_verification import PolyAFixer
 from .exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
+from .illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -273,11 +275,10 @@ class AlignmentCollector:
     def process_intergenic(self, alignment_storage, region):
         assignment_storage = []
         if self.params.illumina_bam is not None:
-            pass
-            # corrector = IlluminaExonCorrector(self.params.illumina_bam, region)
+            corrector = IlluminaExonCorrector(self.chr_id, region[0], region[1], self.params.illumina_bam)
         else:
-            pass
-            # corrector = VoidExonCorrector()
+            corrector = VoidExonCorrector()
+
         for bam_index, alignment in alignment_storage:
             if alignment.reference_id == -1 or alignment.is_supplementary or \
                     (self.params.no_secondary and alignment.is_secondary):
@@ -313,7 +314,7 @@ class AlignmentCollector:
             read_assignment.polya_info = alignment_info.polya_info
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.exons = alignment_info.read_exons
-            read_assignment.corrected_exons = alignment_info.read_exons
+            read_assignment.corrected_exons = corrector.correct_exons(alignment_info)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
 
             read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
