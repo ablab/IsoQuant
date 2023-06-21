@@ -1,7 +1,6 @@
 import pysam
 
 from .common import overlaps
-from .short_utils import get_introns
 
 class IlluminaExonCorrector:
 	
@@ -10,8 +9,17 @@ class IlluminaExonCorrector:
 		self.start = start
 		self.end = end
 		
-		self.short_introns = get_introns(short_read_file, chromosome, start, end)
+		self.short_introns = self.get_introns(short_read_file, chromosome, start, end)
 		
+	def get_introns(self, f, chromosome, start, end):
+		samfile = pysam.AlignmentFile(f, "rb") 
+		intr = samfile.find_introns(samfile.fetch(chromosome, start = start, stop = end))
+		samfile.close()
+		i_list = set()
+		for i in intr.keys():
+			if(type(i)!="int"): 
+				i_list.add((i[0]+1,i[1]))
+		return i_list
 		
 	def correct_read(self, introns):
 		corrected_introns = set()
