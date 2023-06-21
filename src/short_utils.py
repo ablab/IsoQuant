@@ -3,15 +3,6 @@ import gffutils
 
 from .common import junctions_from_blocks
 
-def get_introns(f, chromosome, start, end):
-		samfile = pysam.AlignmentFile(f, "rb") 
-		intr = samfile.find_introns(samfile.fetch(chromosome, start = start, stop = end))
-		samfile.close()
-		i_list = set()
-		for i in intr.keys():
-			if(type(i)!="int"): 
-				i_list.add((i[0]+1,i[1]))
-		return i_list
 
 def get_region_from_db(db, region): 
 	
