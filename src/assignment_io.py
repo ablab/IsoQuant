@@ -20,7 +20,7 @@ from .serialization import (
     read_short_int,
     SHORT_TERMINATION_INT
 )
-from .isoform_assignment import match_subtype_to_str_with_additional_info, ReadAssignment
+from .isoform_assignment import match_subtype_to_str_with_additional_info, ReadAssignment, MatchClassification
 from .long_read_assigner import ReadAssignmentType
 from .gene_info import GeneInfo
 
@@ -324,15 +324,18 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
             assigned = False
             gene_id = "NA"
             transcript_id = "NA"
+            sqanti_classification = MatchClassification.intergenic
         else:
             assigned = True
             match = read_assignment.isoform_matches[0]
             gene_id = match.assigned_gene
             transcript_id = match.assigned_transcript
+            sqanti_classification = match.match_classification
             if transcript_id is None:
                 transcript_id = "NA"
                 gene_id = "NA"
                 assigned = False
+                sqanti_classification = MatchClassification.intergenic
         strand = read_assignment.strand
 
         # FIXME not genomic distance
@@ -407,7 +410,7 @@ class SqantiTSVPrinter(AbstractAssignmentPrinter):
         transcript_exon_count = "NA" if not assigned else gene_info.transcript_exon_count(transcript_id)
 
         value_list = [read_assignment.read_id, gene_info.chr_id, strand, read_assignment.length(),
-                      read_assignment.exon_count(), match.match_classification.name, gene_id, transcript_id,
+                      read_assignment.exon_count(), sqanti_classification.name, gene_id, transcript_id,
                       transcript_len, transcript_exon_count,
                       dist_to_tss, dist_to_tts, dist_to_gene_tss, dist_to_gene_tts, subtypes, RTS,
                       all_canonical, min_sample_cov, min_cov, min_cov_pos, sd_cov, FL,
