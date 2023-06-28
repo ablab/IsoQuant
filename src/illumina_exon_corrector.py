@@ -50,9 +50,9 @@ class IlluminaExonCorrector:
                     if x < score:
                         score = x
                         sh = s
-            if (i[0] == sh[0] and i[1] == sh[1]-4) or (i[1] == sh[1] and sh[0] == i[0]-4):
+            if ((i[0] == sh[0] and i[1] == sh[1]-4) or (i[1] == sh[1] and sh[0] == i[0]-4)) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1]:
                 corrected_introns.append(sh)
-            elif self.counts[(sh[0]-1,sh[1])] > 100:
+            elif self.counts[(sh[0]-1,sh[1])] > 100 and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1]:
                 corrected_introns.append(sh)
             else:
                 corrected_introns.append(i)
