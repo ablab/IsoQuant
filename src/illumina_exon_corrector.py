@@ -55,7 +55,7 @@ class IlluminaExonCorrector:
             elif self.counts[(sh[0]-1,sh[1])] > 100:
                 print(sh)
                 print(self.counts[(sh[0]-1,sh[1])])
-                corrected_introns.append(i)
+                corrected_introns.append(sh)
             else:
                 corrected_introns.append(i)
             sh = (0,0)
