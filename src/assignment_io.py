@@ -96,6 +96,7 @@ class BEDPrinter(AbstractAssignmentPrinter):
         strand = read_assignment.mapped_strand
         chr_id = read_assignment.gene_info.chr_id
         exon_blocks = read_assignment.corrected_exons if self.print_corrected else read_assignment.exons
+        print(exon_blocks)
 
         self.output_file.write("%s\t%d\t%d\t%s\t0\t%s\t%d\t%d\t%d\t%d\t%s\t%s\n" %
                            (chr_id, exon_blocks[0][0] - 1, exon_blocks[-1][1],
