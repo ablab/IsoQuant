@@ -213,7 +213,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             if read_assignment is None:
                 continue
             aggregator.read_stat_counter.add(read_assignment.assignment_type)
-            print(read_assignment)
+            print(read_assignment.gene_info)
             aggregator.global_printer.add_read_info(read_assignment)
             aggregator.global_counter.add_read_info(read_assignment)
 
