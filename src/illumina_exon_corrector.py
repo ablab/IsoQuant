@@ -53,7 +53,9 @@ class IlluminaExonCorrector:
             if (i[0] == sh[0] and i[1] == sh[1]-4) or (i[1] == sh[1] and sh[0] == i[0]-4):
                 corrected_introns.append(sh)
             elif self.counts[(sh[0]-1,sh[1])] > 100:
-                corrected_introns.append(sh)
+                print(sh)
+                print(self.counts[(sh[0]-1,sh[1])])
+                corrected_introns.append(i)
             else:
                 corrected_introns.append(i)
             sh = (0,0)
