@@ -29,7 +29,7 @@ from src.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from src.dataset_processor import DatasetProcessor
+from src.dataset_processor import DatasetProcessor, ISOQUANT_MODES, IsoQuantMode
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES
 from src.input_data_storage import InputDataStorage
@@ -87,6 +87,13 @@ def parse_args(args=None, namespace=None):
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
 
+    parser.add_argument('--barcode_whitelist', type=str,
+                        help='file with barcode whitelist for barcode calling')
+    parser.add_argument("--barcoded_reads", type=str,
+                        help='file with barcoded reads; barcodes will be called automatically if not provided')
+    parser.add_argument("--barcode_column", type=str,
+                        help='column with barcodes in barcoded_reads file, default=1; read id column is 0', default=1)
+
     parser.add_argument('--prefix', '-p', type=str,
                         help='experiment name; to be used for folder and file naming; default is OUT', default="OUT")
     parser.add_argument('--labels', '-l', nargs='+', type=str,
@@ -99,6 +106,9 @@ def parse_args(args=None, namespace=None):
                                              "by original file name (file_name)", type=str)
 
     # INPUT PROPERTIES
+    parser.add_argument("--mode", "-m", type=str, choices=ISOQUANT_MODES,
+                        help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
+                             "; default:bulk", default="bulk")
     parser.add_argument("--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
                         help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
     parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
@@ -338,6 +348,13 @@ def check_input_params(args):
     if args.no_model_construction and args.sqanti_output:
         args.sqanti_output = False
         logger.warning("--sqanti_output option has no effect without model construction")
+
+    args.mode = IsoQuantMode[args.mode]
+    if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
+        if not args.barcode_whitelist and not args.barcoded_reads:
+            logger.critical("You have chosen single-cell mode %s, please specify barcode whitelist or file with "
+                            "barcoded reads" % args.mode.name)
+            exit(-3)
         
     check_input_files(args)
     return True
@@ -625,6 +642,10 @@ def set_additional_params(args):
 
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
+
+    if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
+        # call barcodes
+        pass
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):

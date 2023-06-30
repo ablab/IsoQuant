@@ -21,17 +21,15 @@ import pysam
 from Bio import SeqIO
 import logging
 
-from kmer_index import KmerIndexer
-from sequence_common import reverse_complement, detect_exact_positions, find_candidate_with_max_score_ssw
-from reports import *
+from src.sc.kmer_index import KmerIndexer
+from src.sc.sequence_common import reverse_complement, detect_exact_positions, find_candidate_with_max_score_ssw
+from src.sc.reports import *
 
 
 logger = logging.getLogger('IsoQuant')
 
 
 READ_CHUNK_SIZE = 10000
-
-
 
 
 class BarcodeCaller:
