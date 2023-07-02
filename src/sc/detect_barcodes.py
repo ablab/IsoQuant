@@ -143,7 +143,7 @@ def process_chunk(barcodes, read_chunk, output_file, num, min_score, method):
     return output_file
 
 
-def process_single_thread(input_reads, barcodes, min_score, method, output):
+def call_barcodes_single_thread(input_reads, barcodes, min_score, method, output):
     barcodes = load_barcodes(barcodes)
     barcode_detector = None
     if method == BarcodeCallingAlgorithm.tenX:
@@ -156,7 +156,7 @@ def process_single_thread(input_reads, barcodes, min_score, method, output):
     barcode_caller.process(input_reads)
 
 
-def process_in_parallel(input_reads, barcodes, min_score, method, threads, aux, output):
+def call_barcodes_in_parallel(input_reads, barcodes, min_score, method, threads, aux, output):
     barcodes = load_barcodes(barcodes)
     logger.info("Loaded %d barcodes" % len(barcodes))
 
@@ -252,10 +252,10 @@ def main():
     set_logger(logger)
     algorithm = BarcodeCallingAlgorithm[args.method]
     if args.threads == 1:
-        process_single_thread(args.input, args.barcodes, args.min_score, algorithm, args.output)
+        call_barcodes_single_thread(args.input, args.barcodes, args.min_score, algorithm, args.output)
     else:
         aux = os.path.dirname(args.output)
-        process_in_parallel(args.input, args.barcodes, args.min_score, algorithm, aux, args.output)
+        call_barcodes_in_parallel(args.input, args.barcodes, args.min_score, algorithm, aux, args.output)
 
 
 if __name__ == "__main__":

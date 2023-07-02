@@ -35,6 +35,7 @@ from src.long_read_counter import COUNTING_STRATEGIES
 from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
+from src.call_barcodes import IsoQuantBarcodeCaller
 
 logger = logging.getLogger('IsoQuant')
 
@@ -645,7 +646,8 @@ def run_pipeline(args):
 
     if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
         # call barcodes
-        pass
+        barcode_caller = IsoQuantBarcodeCaller(args.barcode_whitelist)
+        # barcode_caller
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
