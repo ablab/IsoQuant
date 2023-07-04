@@ -123,7 +123,7 @@ def prepare_read_groups(args, sample):
         return
     table_filename, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
     logger.info("Splitting read group file %s for better memory consumption" % table_filename)
-    split_read_group_table(table_filename, sample, read_id_column_index, group_id_column_index, delim)
+    split_read_group_table(table_filename, sample, sample.read_group_file, read_id_column_index, group_id_column_index, delim)
 
 
 def create_read_grouper(args, sample, chr_id):
@@ -148,8 +148,8 @@ def create_read_grouper(args, sample, chr_id):
         return DefaultReadGrouper()
 
 
-def load_table(table_tsv_file, read_id_column_index, group_id_column_index, delim):
-    min_columns = max(read_id_column_index, group_id_column_index)
+def load_table(table_tsv_file, read_id_column_index, group_id_column_indices, delim):
+    min_columns = max(read_id_column_index, max(group_id_column_indices))
     _, outer_ext = os.path.splitext(table_tsv_file)
     if outer_ext.lower() in ['.gz', '.gzip']:
         handle = gzip.open(table_tsv_file, "rt")
@@ -172,13 +172,16 @@ def load_table(table_tsv_file, read_id_column_index, group_id_column_index, deli
         if read_id in read_map:
             logger.warning("Duplicate information for read %s" % read_id)
 
-        group_id = column_values[group_id_column_index]
+        if isinstance(group_id_column_indices, int):
+            group_id = column_values[group_id_column_indices]
+        else:
+            group_id = [column_values[i] for i in group_id_column_indices]
         read_map[read_id] = group_id
     return read_map
 
 
-def split_read_group_table(table_file, sample, read_id_column_index, group_id_column_index, delim):
-    read_groups = load_table(table_file, read_id_column_index, group_id_column_index, delim)
+def split_read_group_table(table_file, sample, output_prefix, read_id_column_index, group_id_column_indices, delim):
+    read_groups = load_table(table_file, read_id_column_index, group_id_column_indices, delim)
     read_group_files = {}
     processed_reads = defaultdict(set)
     bam_files = list(map(lambda x: x[0], sample.file_list))
@@ -186,7 +189,7 @@ def split_read_group_table(table_file, sample, read_id_column_index, group_id_co
     for bam_file in bam_files:
         bam = pysam.AlignmentFile(bam_file, "rb")
         for chr_id in bam.references:
-            read_group_files[chr_id] = open(sample.read_group_file + "_" + chr_id, "w")
+            read_group_files[chr_id] = open(output_prefix + "_" + chr_id, "w")
         for read_alignment in bam:
             chr_id = read_alignment.reference_name
             if not chr_id:
@@ -194,7 +197,11 @@ def split_read_group_table(table_file, sample, read_id_column_index, group_id_co
 
             read_id = read_alignment.query_name
             if read_id in read_groups and read_id not in processed_reads[chr_id]:
-                read_group_files[chr_id].write("%s\t%s\n" % (read_id, read_groups[read_id]))
+                values = read_groups[read_id]
+                if isinstance(values, list):
+                    read_group_files[chr_id].write("%s\t%s\n" % (read_id, "\t".join(values)))
+                else:
+                    read_group_files[chr_id].write("%s\t%s\n" % (read_id, values))
                 processed_reads[chr_id].add(read_id)
 
     for f in read_group_files.values():

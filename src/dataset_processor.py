@@ -35,7 +35,8 @@ from .long_read_counter import (
 from .multimap_resolver import MultimapResolver
 from .read_groups import (
     create_read_grouper,
-    prepare_read_groups
+    prepare_read_groups,
+    split_read_group_table
 )
 from .assignment_io import (
     IOSupport,
@@ -250,6 +251,11 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     return aggregator.read_stat_counter, transcript_stat_counter
 
 
+def split_barcoded_reads(barcoded_reads, barcode_column, sample):
+    logger.info("Splitting barcoded reads %s for better memory consumption" % barcoded_reads)
+    split_read_group_table(barcoded_reads, sample, sample.b, 0, [barcode_column, barcode_column + 1], "\t")
+
+
 class ReadAssignmentAggregator:
     def __init__(self, args, sample, read_groups):
         self.args = args
@@ -394,6 +400,9 @@ class DatasetProcessor:
                 os.remove(fname)
             prepare_read_groups(self.args, sample)
             open(fname, "w").close()
+
+        if sample.barcoded_reads:
+
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]

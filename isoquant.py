@@ -93,7 +93,8 @@ def parse_args(args=None, namespace=None):
     parser.add_argument("--barcoded_reads", type=str,
                         help='file with barcoded reads; barcodes will be called automatically if not provided')
     parser.add_argument("--barcode_column", type=str,
-                        help='column with barcodes in barcoded_reads file, default=1; read id column is 0', default=1)
+                        help='column with barcodes in barcoded_reads file, default=7, UMI is the following;'
+                             'read id column is 0', default=1)
 
     parser.add_argument('--prefix', '-p', type=str,
                         help='experiment name; to be used for folder and file naming; default is OUT', default="OUT")
@@ -355,6 +356,9 @@ def check_input_params(args):
         if not args.barcode_whitelist and not args.barcoded_reads:
             logger.critical("You have chosen single-cell mode %s, please specify barcode whitelist or file with "
                             "barcoded reads" % args.mode.name)
+            exit(-3)
+        if args.barcoded_reads and (args.fastq_list or args.bam_list):
+            logger.critical("Providing barcodes for multiple samples is not supported yet")
             exit(-3)
         
     check_input_files(args)
@@ -645,9 +649,13 @@ def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
 
     if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
-        # call barcodes
-        barcode_caller = IsoQuantBarcodeCaller(args.barcode_whitelist)
-        # barcode_caller
+        if not args.barcoded_reads:
+            # call barcodes
+            barcode_caller = IsoQuantBarcodeCaller(args.barcode_whitelist)
+            # barcode_caller
+        else:
+            args.input_data.samples[0].barcoded_reads = args.barcoded_reads
+
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):

@@ -13,14 +13,18 @@ logger = logging.getLogger('IsoQuant')
 
 
 class SampleData:
-    def __init__(self, file_list, prefix, out_dir, readable_names_dict):
+    def __init__(self, file_list, prefix, out_dir, readable_names_dict, barcoded_reads=None):
         # list of lists, since each sample may contain several libraries, and each library may contain 2 files (paired)
         self.file_list = file_list
         self.readable_names_dict = readable_names_dict
         self.prefix = prefix
         self.out_dir = out_dir
         self.aux_dir = os.path.join(self.out_dir, "aux")
+        self.barcoded_reads = barcoded_reads
         self._init_paths()
+
+    def set_barcodes(self, barcoded_reads):
+        self.barcoded_reads = barcoded_reads
 
     def _make_path(self, name):
         return os.path.join(self.out_dir, name)
@@ -32,6 +36,7 @@ class SampleData:
         self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
         self.out_raw_file = self._make_aux_path(self.prefix + ".save")
         self.read_group_file = self._make_aux_path(self.prefix + ".read_group")
+        self.barcoded_reads_file = self._make_aux_path(self.prefix + ".barcodes")
         self.out_corrected_bed = self._make_path(self.prefix + ".corrected_reads.bed")
         self.out_alt_tsv = self._make_path(self.prefix + ".read_assignments.SQANTI-like.tsv")
         self.out_gene_counts_tsv = self._make_path(self.prefix + ".gene")

@@ -170,6 +170,18 @@ class TmpFileAssignmentLoader:
             return None
 
 
+class AllInfoAssignmentPrinter(AbstractAssignmentPrinter):
+    def __init__(self, output_file_name, params, io_support, additional_header = ""):
+        AbstractAssignmentPrinter.__init__(self, output_file_name, params)
+        self.header = "#read_id\tchr\tstrand\tisoform_id\tgene_id" \
+                      "\tassignment_type\tassignment_events\texons\tadditional_info\n"
+        self.output_file.write(additional_header)
+        self.output_file.write(self.header)
+        self.output_file.flush()
+        self.io_support = io_support
+
+
+
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support, additional_header = ""):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
