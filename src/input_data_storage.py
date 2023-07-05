@@ -34,6 +34,7 @@ class SampleData:
 
     def _init_paths(self):
         self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
+        self.out_all_info = self._make_path(self.prefix + ".all_info")
         self.out_raw_file = self._make_aux_path(self.prefix + ".save")
         self.read_group_file = self._make_aux_path(self.prefix + ".read_group")
         self.barcoded_reads_file = self._make_aux_path(self.prefix + ".barcodes")

@@ -44,6 +44,7 @@ from .assignment_io import (
     ReadAssignmentCompositePrinter,
     SqantiTSVPrinter,
     BasicTSVAssignmentPrinter,
+    AllInfoAssignmentPrinter,
     TmpFileAssignmentPrinter,
     TmpFileAssignmentLoader,
 )
@@ -253,7 +254,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
 def split_barcoded_reads(barcoded_reads, barcode_column, sample):
     logger.info("Splitting barcoded reads %s for better memory consumption" % barcoded_reads)
-    split_read_group_table(barcoded_reads, sample, sample.b, 0, [barcode_column, barcode_column + 1], "\t")
+    split_read_group_table(barcoded_reads, sample, sample.barcoded_reads_file, 0,
+                           [barcode_column, barcode_column + 1], "\t")
 
 
 class ReadAssignmentAggregator:
@@ -270,6 +272,9 @@ class ReadAssignmentAggregator:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                            additional_header=self.common_header)
             printer_list.append(self.basic_printer)
+            if sample.barcoded_reads:
+                self.allinfo_printer = AllInfoAssignmentPrinter(sample.out_allinfo, self.args, self.io_support)
+                printer_list.append(self.allinfo_printer)
         if self.args.sqanti_output:
             # self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
             # printer_list.append(self.sqanti_printer)
@@ -402,7 +407,8 @@ class DatasetProcessor:
             open(fname, "w").close()
 
         if sample.barcoded_reads:
-
+            # TODO
+            split_barcoded_reads(sample.barcoded_reads, self.args.barcode_column, sample)
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
@@ -542,6 +548,7 @@ class DatasetProcessor:
             else:
                 extended_gff_printer = None
 
+        # TODO add barcode info
         model_gen = (
             construct_models_in_parallel,
             (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict) for chr_id in chr_ids),
