@@ -24,7 +24,6 @@ class Enc:
         
         self.k = len(list(filter(lambda f_sv: f_sv!=0, F[self.source]))) #k = |{v in V : f(s,v)>0}| trivial lower bound, think of funnels
 
-        #IDEA: change these variables to be hash maps that map (u,v,i) to the variable. safer and better abstraction
         self.edge_vars = []
         self.pi_vars   = []
         self.weights   = []
@@ -54,34 +53,31 @@ class Enc:
 
         #3a, 3b
         for i in range(self.k):
-            #self.solver.Add( sum( edge for v in range(1,self.n)   if self.edge_vars[(source,v,i)] ) == 1 )
-            #self.solver.Add( sum( edge for u in range(0,self.n-1) if self.edge_vars[(u,target,i)] ) == 1 )
             self.solver.Add( sum( filter(lambda edge: head(edge)==self.source, self.edge_vars[i]) ) == 1 )
             self.solver.Add( sum( filter(lambda edge: tail(edge)==self.target, self.edge_vars[i]) ) == 1 )
             
         #3c
         for i in range(self.k):
-            for v in range(1,self.n-1): #find all wedges u->v->w for a fixed v (excluding {s,t})
-                #self.solver.Add( sum( edge for u in range(0,self.n) if self.edge_vars[(u,v,i)] ) - sum( edge for w in range(0,self.n) if self.edge_vars[(v,w,i)] ) )
+            for v in range(1,self.n-1): #find all wedges u->v->w for a fixed v excluding {s,t}
                 self.solver.Add( sum( filter(lambda edge: tail(edge)==v, self.edge_vars[i]) ) - sum( filter(lambda edge: head(edge)==v, self.edge_vars[i]) ) == 0 )
 
         #5a
         for e in range(self.m):
-            #self.solver.Add( sum( pi for i in range(self.k) if self.pi_vars[(u,v,i)] ) where (u,v)=e  ==  Flow[head(self.pi_vars[i][e]][tail(self.pi_vars[i][e]] ) )
-            self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k)) == self.F[head(self.pi_vars[i][e])][tail(self.pi_vars[i][e])] )
+            self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k)) == self.F[head(self.pi_vars[0][e])][tail(self.pi_vars[0][e])] ) #[0] bcause we just want the edge (u,v), the path is irrelevant
 
         #5b
         for i in range(self.k):
-            for pi,x in tuple(zip(self.pi_vars[i],self.edge_vars[i])):
-                self.solver.Add( pi <= self.w_max*x )
+            for pi,edge in tuple(zip(self.pi_vars[i],self.edge_vars[i])):
+                self.solver.Add( pi <= self.w_max * edge )
         #5c
         for i in range(self.k):
             for pi in self.pi_vars[i]:
                 self.solver.Add( pi <= self.weights[i] )
+        
         #5d
         for i in range(self.k):
-            for pi,x in tuple(zip(self.pi_vars[i],self.edge_vars[i])):
-                self.solver.Add( pi >= self.weights[i] - (1 - x)*self.w_max )
+            for pi,edge in tuple(zip(self.pi_vars[i],self.edge_vars[i])):
+                self.solver.Add( pi >= self.weights[i] - (1 - edge) * self.w_max )
         
         #Example of a subpath constraint: R=[ [(1,3),(3,5)], [(0,1)] ], means that we have 2 paths to cover, the first one is 1-3-5. the second path is just a single edge 0-1
         def EncodeSubpathConstraints():
@@ -91,13 +87,13 @@ class Enc:
                     self.solver.Add( sum( filter( lambda e: exists_edge(e,self.R[j]), self.edge_vars[i] )) >= len(self.R[j])*self.path_vars[i][j] )
             #7b
             for r in range(len(self.R)):
-                self.solver.Add( sum( self.path_vars[i][r] for i in range(len(self.path_vars)) ) >= 1 )
+                self.solver.Add( sum( self.path_vars[i][r] for i in range(self.k) ) >= 1 )
             
         def EncodeInexactFlow():
             #9a (to be exchanged with constraint 5a)
-            for e in range(self.m):
-                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) <= self.F_high[head(self.pi_vars[i][e])][self.tail(self.pi_vars[i][e])] )
-                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) >= self.F_low [head(self.pi_vars[i][e])][self.tail(self.pi_vars[i][e])] )
+            for e in range(self.m):#[0] bcause we just want the edge (u,v), the path is irrelevant
+                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) <= self.F_high[head(self.pi_vars[0][e])][self.tail(self.pi_vars[0][e])] )
+                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) >= self.F_low [head(self.pi_vars[0][e])][self.tail(self.pi_vars[0][e])] )
 
         EncodeSubpathConstraints()
 
@@ -129,13 +125,18 @@ def intron_to_matrix(intron_graph):
          [0,0,0,0,6,7],
          [0,0,0,0,0,6],
          [0,0,0,0,0,0]]
+    #TODO
+    #dictionary mapping nodes from intron_graph to nodes of ILP graph, i.e. a dict: NxN->N
+    #same thing the other way around, i.e. a dict N->NxN
     return F
 
-'''
->Transform intron_graph into flow matrix F:
-    -add super source to every 0 in-degree vertex (leftmost guys in each layer) and a super target from every 0-outdegree vertex (rightmost guys in each layer) 
-    -DAG may contain multiple connected components but thats fine, we can still add from super source to every guy... future think of possible opts (threads running in different components?) 
-'''
+
+#Transform intron_graph into flow matrix F
+# dont forget to add super source to every 0 in-degree vertex (leftmost guys in each layer) and a super target from every 0-outdegree vertex (rightmost guys in each layer) 
+# F = intron_to_matrix(intron_graph)
+
+# DAG may contain multiple connected components but thats fine, we can still add from super source to every guy... future think of possible opts (threads running in different components?) 
+
 
 def Encode_ILP(intron_graph):
 
@@ -145,3 +146,7 @@ def Encode_ILP(intron_graph):
 
     e = Enc(F,R=R)
     e.linear_search()
+
+if __name__ == "__main__":
+    Encode_ILP("")
+    print('\nExiting ILP module now...')
