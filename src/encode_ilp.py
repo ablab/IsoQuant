@@ -9,16 +9,18 @@ class Enc:
 
     def __init__(self,F,R=[],F_low=[],F_high=[],solver_id='SCIP'):
         self.n = len(F)
-        self.m = len(list(filter(lambda f_uv : f_uv!=0, flatten(F)))) #every edge has positive flow
+        self.m = len(list(filter(lambda f_uv : f_uv!=0, flatten(F)))) #every edge has positive flow <should be a field of the constructor>
         self.source = 0
         self.target = self.n-1
         self.F = F
         self.R = R
-        self.f = sum(F[self.source]) #sum of out-going flow from the source
+        self.F_low  = F_low
+        self.F_high = F_high
+        self.f = sum(F[self.source]) #sum of out-going flow from the source <should be a field of the constructor>
         self.w_max = max(map(max,F))
         self.constraints = []
 
-        self.solver   = pywraplp.Solver.CreateSolver(solver_id)
+        self.solver = pywraplp.Solver.CreateSolver(solver_id)
         if not self.solver:
             exit(0) #TODO: display error message and catch exception
         
@@ -31,6 +33,10 @@ class Enc:
 
     def add_constraint(self, constraint):
         self.constraints.append(str(constraint))
+
+    def show_constraints(self):
+        #TODO
+        return self.constraints
 
     def clear(self):
         self.constraints = []
@@ -58,12 +64,13 @@ class Enc:
             
         #3c
         for i in range(self.k):
-            for v in range(1,self.n-1): #find all wedges u->v->w for a fixed v excluding {s,t}
+            for v in range(1,self.n-1): #find all wedges u->v->w for a fixed v (excluding {s,t})
                 self.solver.Add( sum( filter(lambda edge: tail(edge)==v, self.edge_vars[i]) ) - sum( filter(lambda edge: head(edge)==v, self.edge_vars[i]) ) == 0 )
 
-        #5a
-        for e in range(self.m):
-            self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k)) == self.F[head(self.pi_vars[0][e])][tail(self.pi_vars[0][e])] ) #[0] bcause we just want the edge (u,v), the path is irrelevant
+        def EncodeExactFlow():
+            #5a (to be exchanged with constraint 9a)
+            for e in range(self.m):
+                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k)) == self.F[head(self.pi_vars[0][e])][tail(self.pi_vars[0][e])] ) #[0] bcause we just want the edge (u,v), the path's index is irrelevant
 
         #5b
         for i in range(self.k):
@@ -91,11 +98,16 @@ class Enc:
             
         def EncodeInexactFlow():
             #9a (to be exchanged with constraint 5a)
-            for e in range(self.m):#[0] bcause we just want the edge (u,v), the path is irrelevant
+            for e in range(self.m):
                 self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) <= self.F_high[head(self.pi_vars[0][e])][self.tail(self.pi_vars[0][e])] )
                 self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) >= self.F_low [head(self.pi_vars[0][e])][self.tail(self.pi_vars[0][e])] )
 
-        EncodeSubpathConstraints()
+        if self.R!=[]:
+            EncodeSubpathConstraints()
+        if self.F_low!=[] and self.F_high!=[]:
+            EncodeInexactFlow()
+        else:
+            EncodeExactFlow()
 
         #Add trivial objective function (we are just interested in deciding whether or not these constraints form a feasible region)
         self.solver.Minimize(1)
@@ -118,6 +130,12 @@ class Enc:
             self.clear()
             self.k += 1
 
+'''
+# Transform intron_graph into a flow matrix F
+- add super source to every 0 in-degree vertex (leftmost guys in each layer) and a super target from every 0-outdegree vertex (rightmost guys in each layer)
+- the edge weight from the super source to each 0 in-degree vertex v is equal to the outgoing flow of v. analogously, from every 0-outdegree vertex v to super target define w(v,t)=incoming flow into v
+- DAG may contain multiple connected components but thats fine, we can still add from super source to every 0-indegree guy... in the future think of possible opts (threads running in different components?)
+''' 
 def intron_to_matrix(intron_graph):
     F = [[0,6,7,0,0,0],
          [0,0,2,4,0,0],
@@ -125,17 +143,12 @@ def intron_to_matrix(intron_graph):
          [0,0,0,0,6,7],
          [0,0,0,0,0,6],
          [0,0,0,0,0,0]]
-    #TODO
-    #dictionary mapping nodes from intron_graph to nodes of ILP graph, i.e. a dict: NxN->N
-    #same thing the other way around, i.e. a dict N->NxN
+    '''
+    TODO
+    -dictionary mapping intron_graph vertices to nodes of ILP graph, i.e. a dict: NxN->N
+    -same thing the other way around, i.e. a dict N->NxN   
+    '''
     return F
-
-
-#Transform intron_graph into flow matrix F
-# dont forget to add super source to every 0 in-degree vertex (leftmost guys in each layer) and a super target from every 0-outdegree vertex (rightmost guys in each layer) 
-# F = intron_to_matrix(intron_graph)
-
-# DAG may contain multiple connected components but thats fine, we can still add from super source to every guy... future think of possible opts (threads running in different components?) 
 
 
 def Encode_ILP(intron_graph):
@@ -143,10 +156,18 @@ def Encode_ILP(intron_graph):
     F = intron_to_matrix(intron_graph)
 
     R = [[(1,3),(3,5)]]
-
+    
     e = Enc(F,R=R)
     e.linear_search()
 
-if __name__ == "__main__":
-    Encode_ILP("")
-    print('\nExiting ILP module now...')
+'''
+https://developers.google.com/optimization/reference/python/linear_solver/pywraplp
+
+-set_is_lazy
+
+Advanced usage: sets the constraint "laziness".
+This is only supported for SCIP and has no effect on other solvers.
+
+When laziness is true, the constraint is only considered by the Linear Programming solver if its current solution violates the constraint.
+In this case, the constraint is definitively added to the problem. This may be useful in some MIP problems, and may have a dramatic impact on performance.
+'''
