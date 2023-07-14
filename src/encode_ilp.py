@@ -55,7 +55,7 @@ class Enc:
             self.edge_vars += [ [self.solver.BoolVar('x_{}_{}_{}'.format(u,v,i))              for u in range(self.n) for v in range(self.n) if self.F[u][v]!=0] ]
             self.pi_vars   += [ [self.solver.IntVar(0, self.w_max,'p_{}_{}_{}'.format(u,v,i)) for u in range(self.n) for v in range(self.n) if self.F[u][v]!=0] ]
             self.weights   += [  self.solver.IntVar(1, self.w_max,'w_{}'.format(i)) ]
-            self.path_vars += [ [self.solver.BoolVar('r_{}_{}'.format(i,j)) for j in range(len(self.R)) ]] #R=[ [(1,3),(3,5)], [(0,1)] ], 2 paths to cover: 1-3-5 and a single edge 0-1
+            self.path_vars += [ [self.solver.BoolVar('r_{}_{}'.format(i,j)) for j in range(len(self.R)) ]]
 
         #3a, 3b
         for i in range(self.k):
@@ -132,8 +132,8 @@ class Enc:
 
 '''
 # Transform intron_graph into a flow matrix F
-- add super source to every 0 in-degree vertex (leftmost guys in each layer) and a super target from every 0-outdegree vertex (rightmost guys in each layer)
-- the edge weight from the super source to each 0 in-degree vertex v is equal to the outgoing flow of v. analogously, from every 0-outdegree vertex v to super target define w(v,t)=incoming flow into v
+- add super source S and an edge (S,v) to every node v with 0 in-degree (leftmost guys in each layer); add super target T and an edge (v,T) from every node v with 0-outdegree (rightmost guys in each layer)
+- define f(S,v)=out-going flow of v and f(v,T)=incoming-flow of v
 - DAG may contain multiple connected components but thats fine, we can still add from super source to every 0-indegree guy... in the future think of possible opts (threads running in different components?)
 ''' 
 def intron_to_matrix(intron_graph):

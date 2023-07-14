@@ -61,7 +61,7 @@ class Enc:
             self.edge_vars += [ [self.solver.BoolVar('x_{}_{}_{}'.format(e[0],e[1],i))              for e in self.E ] ]
             self.pi_vars   += [ [self.solver.IntVar(0, self.w_max,'p_{}_{}_{}'.format(e[0],e[1],i)) for e in self.E ] ]
             self.weights   += [  self.solver.IntVar(1, self.w_max,'w_{}'.format(i)) ]
-            self.path_vars += [ [self.solver.BoolVar('r_{}_{}'.format(i,j)) for j in range(len(self.R)) ]] #R=[ [(1,3),(3,5)], [(0,1)] ], 2 paths to cover: 1-3-5 and a single edge 0-1
+            self.path_vars += [ [self.solver.BoolVar('r_{}_{}'.format(i,j)) for j in range(len(self.R)) ]]
 
         #3a, 3b
         for i in range(self.k):
@@ -71,13 +71,11 @@ class Enc:
         #3c
         for i in range(self.k):
             for v in range(1,self.n-1): #find all wedges u->v->w for a fixed v (excluding {s,t})
-                #self.solver.Add( sum( edge for u in range(0,self.n) if self.edge_vars[(u,v,i)] ) - sum( edge for w in range(0,self.n) if self.edge_vars[(v,w,i)] ) )
                 self.solver.Add( sum( filter(lambda edge: tail(edge)==v, self.edge_vars[i]) ) - sum( filter(lambda edge: head(edge)==v, self.edge_vars[i]) ) == 0 )
 
         def EncodeExactFlow():
             #5a (to be exchanged with constraint 9a)
             for e in range(self.m):
-                #self.solver.Add( sum( pi for i in range(self.k) if self.pi_vars[(u,v,i)] ) where (u,v)=e  ==  Flow[head(self.pi_vars[i][e]][tail(self.pi_vars[i][e]] ) )
                 self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k)) == self.F[self.E[e]] ) #[0] bcause we just want the edge (u,v), the path is irrelevant
 
         #5b
@@ -138,8 +136,8 @@ class Enc:
 
 '''
 # Transform intron_graph into a flow matrix F
-- add super source to every 0 in-degree vertex (leftmost guys in each layer) and a super target from every 0-outdegree vertex (rightmost guys in each layer)
-- the edge weight from the super source to each 0 in-degree vertex v is equal to the outgoing flow of v. analogously, from every 0-outdegree vertex v to super target define w(v,t)=incoming flow into v
+- add super source S and an edge (S,v) to every node v with 0 in-degree (leftmost guys in each layer); add super target T and an edge (v,T) from every node v with 0-outdegree (rightmost guys in each layer)
+- define f(S,v)=out-going flow of v and f(v,T)=incoming-flow of v
 - DAG may contain multiple connected components but thats fine, we can still add from super source to every 0-indegree guy... in the future think of possible opts (threads running in different components?)
 ''' 
 def intron_to_matrix(intron_graph):
