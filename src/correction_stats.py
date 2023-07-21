@@ -120,10 +120,10 @@ class CorrectionStats:
                 elif b[1] == a[1] and a[0] == b[0]-4:
                     classification.append(self.stats_single(b, a, reference_introns))
                 else:
-                    #print(len(diff_before))
-                    #print(len(diff_after))
-                    #print(i)
-                    #print(j)
+                    print(len(diff_before))
+                    print(len(diff_after))
+                    print(i)
+                    print(j)
                     right = diff_after[i+j+1]
                     j = j + 1
                     if b in reference_introns:
