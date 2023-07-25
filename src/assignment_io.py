@@ -20,9 +20,14 @@ from .serialization import (
     read_short_int,
     SHORT_TERMINATION_INT
 )
-from .isoform_assignment import match_subtype_to_str_with_additional_info, ReadAssignment
-from .long_read_assigner import ReadAssignmentType
+from .isoform_assignment import (
+    match_subtype_to_str_with_additional_info,
+    ReadAssignment,
+    ReadAssignmentType,
+    MatchEventSubtype
+)
 from .gene_info import GeneInfo
+from .read_groups import load_table
 
 
 logger = logging.getLogger('IsoQuant')
@@ -171,7 +176,7 @@ class TmpFileAssignmentLoader:
 
 
 class AllInfoAssignmentPrinter(AbstractAssignmentPrinter):
-    def __init__(self, output_file_name, params, io_support, additional_header = ""):
+    def __init__(self, output_file_name, params, io_support, barcode_file, additional_header =""):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = "#read_id\tchr\tstrand\tisoform_id\tgene_id" \
                       "\tassignment_type\tassignment_events\texons\tadditional_info\n"
@@ -179,7 +184,45 @@ class AllInfoAssignmentPrinter(AbstractAssignmentPrinter):
         self.output_file.write(self.header)
         self.output_file.flush()
         self.io_support = io_support
+        self.barcode_dict = load_table(barcode_file, 0, [1,2], '\t')
 
+    def add_read_info(self, read_assignment):
+        if not read_assignment.isoform_matches:
+            return
+        if read_assignment.multimapper:
+            return
+        read_id = read_assignment.read_id
+        chr_id = read_assignment.chr_id
+        strand = read_assignment.strand
+        gene_id = read_assignment.isoform_matches[0].assigned_gene
+
+        exon_blocks = read_assignment.corrected_exons if read_assignment.corrected_exons else read_assignment.exons
+        intron_blocks = read_assignment.corrected_introns if read_assignment.corrected_introns else \
+            junctions_from_blocks(exon_blocks)
+        exons_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (chr_id, e[0], e[1], strand) for e in exon_blocks])
+        introns_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (chr_id, e[0], e[1], strand) for e in intron_blocks])
+
+        barcode = "*"
+        umi = "*"
+        if read_id in self.barcode_dict:
+            barcode = self.barcode_dict[read_id][0]
+            umi = self.barcode_dict[read_id][1]
+        cell_type = "None"
+        read_type = "known" if read_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference] else "novel"
+
+        polyA = "NoPolyA"
+        TSS = "NoTSS"
+        matching_events = read_assignment.isoform_matches[0].match_subclassifications
+        if any(MatchEventSubtype.is_tses(m.event_type) for m in matching_events):
+            tss_pos = exon_blocks[-1][1] if strand == "-" else exon_blocks[0][0]
+            TSS = "%s_%d_%d_%s" % (chr_id, tss_pos, tss_pos, strand)
+        if any(MatchEventSubtype.is_correct_polya(m.event_type) for m in matching_events):
+            polyA_pos = exon_blocks[-1][1] if strand == "+" else exon_blocks[0][0]
+            polyA = "%s_%d_%d_%s" % (chr_id, polyA_pos, polyA_pos, strand)
+        self.output_file.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\n" % (read_id, gene_id, cell_type, barcode,
+                                                                                 umi, introns_str, TSS, polyA,
+                                                                                 exons_str, read_type,
+                                                                                 len(intron_blocks)))
 
 
 class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):

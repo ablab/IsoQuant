@@ -208,6 +208,14 @@ class MatchEventSubtype(Enum):
     def is_major_inconsistency(match_event_subtype):
         return match_event_subtype in nnic_event_types or match_event_subtype in nic_event_types
 
+    @staticmethod
+    def is_tses(match_event_subtype):
+        return match_event_subtype in tses_events
+
+    @staticmethod
+    def is_correct_polya(match_event_subtype):
+        return match_event_subtype in correct_polya_events
+
 
 event_subtype_cost = {
     MatchEventSubtype.none:0,
@@ -335,6 +343,10 @@ nonintronic_events = {
     MatchEventSubtype.antisense
 }
 
+tses_events = {MatchEventSubtype.terminal_site_match_left, MatchEventSubtype.terminal_site_match_left_precise,
+               MatchEventSubtype.terminal_site_match_right, MatchEventSubtype.terminal_site_match_right_precise}
+
+correct_polya_events = {MatchEventSubtype.correct_polya_site_right, MatchEventSubtype.correct_polya_site_left}
 
 # (side, is_known) -> alternation type
 alternative_sites = {("left", True): MatchEventSubtype.alt_left_site_known,

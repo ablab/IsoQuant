@@ -407,7 +407,6 @@ class DatasetProcessor:
             open(fname, "w").close()
 
         if sample.barcoded_reads:
-            # TODO
             split_barcoded_reads(sample.barcoded_reads, self.args.barcode_column, sample)
 
         if self.args.read_assignments:
