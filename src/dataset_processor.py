@@ -273,7 +273,8 @@ class ReadAssignmentAggregator:
                                                            additional_header=self.common_header)
             printer_list.append(self.basic_printer)
             if sample.barcoded_reads:
-                self.allinfo_printer = AllInfoAssignmentPrinter(sample.out_allinfo, self.args, self.io_support)
+                self.allinfo_printer = AllInfoAssignmentPrinter(sample.out_all_info, self.args, self.io_support,
+                                                                sample.barcoded_reads)
                 printer_list.append(self.allinfo_printer)
         if self.args.sqanti_output:
             # self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
@@ -407,7 +408,8 @@ class DatasetProcessor:
             open(fname, "w").close()
 
         if sample.barcoded_reads:
-            split_barcoded_reads(sample.barcoded_reads, self.args.barcode_column, sample)
+            logger.info("Loading barcodes")
+            split_barcoded_reads(sample.barcoded_reads, self.args.barcode_column - 1, sample)
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
@@ -550,7 +552,8 @@ class DatasetProcessor:
         # TODO add barcode info
         model_gen = (
             construct_models_in_parallel,
-            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict) for chr_id in chr_ids),
+            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict,
+                        f"{sample.barcoded_reads_file}_{chr_id}") for chr_id in chr_ids),
             chr_ids,
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),
@@ -620,6 +623,10 @@ class DatasetProcessor:
         merge_files(
             [rreplace(sample.out_corrected_bed, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
             sample.out_corrected_bed, copy_header=False)
+        if sample.barcoded_reads:
+            merge_files(
+                [rreplace(sample.out_all_info, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
+                sample.out_all_info, copy_header=False)
         for p in aggregator.global_counter.counters:
             merge_files(
                 [rreplace(p.output_counts_file_name, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],

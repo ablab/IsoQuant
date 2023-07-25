@@ -35,7 +35,7 @@ from src.long_read_counter import COUNTING_STRATEGIES
 from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
-from src.call_barcodes import IsoQuantBarcodeCaller
+#from src.call_barcodes import IsoQuantBarcodeCaller
 
 logger = logging.getLogger('IsoQuant')
 
@@ -94,7 +94,7 @@ def parse_args(args=None, namespace=None):
                         help='file with barcoded reads; barcodes will be called automatically if not provided')
     parser.add_argument("--barcode_column", type=str,
                         help='column with barcodes in barcoded_reads file, default=7, UMI is the following;'
-                             'read id column is 0', default=1)
+                             'read id column is 0', default=7)
 
     parser.add_argument('--prefix', '-p', type=str,
                         help='experiment name; to be used for folder and file naming; default is OUT', default="OUT")
@@ -650,12 +650,12 @@ def run_pipeline(args):
 
     if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
         if not args.barcoded_reads:
+            pass
             # call barcodes
-            barcode_caller = IsoQuantBarcodeCaller(args.barcode_whitelist)
+            # barcode_caller = IsoQuantBarcodeCaller(args.barcode_whitelist)
             # barcode_caller
         else:
             args.input_data.samples[0].barcoded_reads = args.barcoded_reads
-
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
