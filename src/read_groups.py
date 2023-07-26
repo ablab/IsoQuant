@@ -151,8 +151,9 @@ def create_read_grouper(args, sample, chr_id):
 
 def load_table(table_tsv_file, read_id_column_index, group_id_column_indices, delim):
     if isinstance(group_id_column_indices, int):
-        group_id_column_indices = [group_id_column_indices]
-    min_columns = max(read_id_column_index, max(group_id_column_indices))
+        min_columns = max(read_id_column_index, group_id_column_indices)
+    else:
+        min_columns = max(read_id_column_index, max(group_id_column_indices))
     _, outer_ext = os.path.splitext(table_tsv_file)
     if outer_ext.lower() in ['.gz', '.gzip']:
         handle = gzip.open(table_tsv_file, "rt")
