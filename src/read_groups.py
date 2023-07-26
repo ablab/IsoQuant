@@ -123,7 +123,7 @@ def prepare_read_groups(args, sample):
         return
     table_filename, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
     logger.info("Splitting read group file %s for better memory consumption" % table_filename)
-    split_read_group_table(table_filename, sample, sample.read_group_file, read_id_column_index, [group_id_column_index],
+    split_read_group_table(table_filename, sample, sample.read_group_file, read_id_column_index, group_id_column_index,
                            delim)
 
 
@@ -150,6 +150,8 @@ def create_read_grouper(args, sample, chr_id):
 
 
 def load_table(table_tsv_file, read_id_column_index, group_id_column_indices, delim):
+    if isinstance(group_id_column_indices, int):
+        group_id_column_indices = [group_id_column_indices]
     min_columns = max(read_id_column_index, max(group_id_column_indices))
     _, outer_ext = os.path.splitext(table_tsv_file)
     if outer_ext.lower() in ['.gz', '.gzip']:
