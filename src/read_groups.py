@@ -123,7 +123,8 @@ def prepare_read_groups(args, sample):
         return
     table_filename, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
     logger.info("Splitting read group file %s for better memory consumption" % table_filename)
-    split_read_group_table(table_filename, sample, sample.read_group_file, read_id_column_index, group_id_column_index, delim)
+    split_read_group_table(table_filename, sample, sample.read_group_file, read_id_column_index, [group_id_column_index],
+                           delim)
 
 
 def create_read_grouper(args, sample, chr_id):
