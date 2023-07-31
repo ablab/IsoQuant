@@ -63,31 +63,31 @@ class IlluminaExonCorrector:
                 appended = True
             #else:
             #    corrected_introns.append(i)
-            # if len(overlapping) > 1 and not appended:
-                # score = 100
-                # left = (0,0)
-                # right = (0,0)
-                # for k in range(0, len(overlapping) -1):
-                    # x = overlapping[k]
-                    # for l in range(k, len(overlapping)):
-                        # y = overlapping[l]
-                        # if x[1] < y[0]:
-                            # if abs(y[0] - x[1]) <= 50 and abs(i[0] - x[0]) <= 25 and abs(y[1] - i[1]) <= 25:
-                                # if (i[0] - x[0]) + (y[1] - i[1]) - (y[0] - x[1]) < score:
-                                    # left = x
-                                    # right = y
-                                    # score = (i[0] - x[0]) + (y[1] - i[1]) - (y[0] - x[1])
-                        # elif x[0] > y[1]:
-                            # if abs(x[0] - y[1]) <= 50 and abs(i[0] - y[0]) <= 25 and abs(x[1] - i[1]) <= 25:
-                                # if (i[0] - y[0]) + (x[1] - i[1]) - (x[0] - y[1]) < score:
-                                    # left = y
-                                    # right = x
-                                    # score = (i[0] - y[0]) + (x[1] - i[1]) - (x[0] - y[1])
-                # if not left == (0,0):
-                    # corrected_introns.append(left)
-                    # corrected_introns.append(right)
-                    # appended = True
-                    # #print("Before:", i, "After:", left, right)
+            if len(overlapping) > 1 and not appended:
+                score = 100
+                left = (0,0)
+                right = (0,0)
+                for k in range(0, len(overlapping) -1):
+                    x = overlapping[k]
+                    for l in range(k, len(overlapping)):
+                        y = overlapping[l]
+                        if x[1] < y[0]:
+                            if abs(y[0] - x[1]) <= 100 and abs(i[0] - x[0]) <= 50 and abs(y[1] - i[1]) <= 50:
+                                if (i[0] - x[0]) + (y[1] - i[1]) - (y[0] - x[1]) < score:
+                                    left = x
+                                    right = y
+                                    score = (i[0] - x[0]) + (y[1] - i[1]) - (y[0] - x[1])
+                        elif x[0] > y[1]:
+                            if abs(x[0] - y[1]) <= 100 and abs(i[0] - y[0]) <= 50 and abs(x[1] - i[1]) <= 50:
+                                if (i[0] - y[0]) + (x[1] - i[1]) - (x[0] - y[1]) < score:
+                                    left = y
+                                    right = x
+                                    score = (i[0] - y[0]) + (x[1] - i[1]) - (x[0] - y[1])
+                if not left == (0,0):
+                    corrected_introns.append(left)
+                    corrected_introns.append(right)
+                    appended = True
+                    #print("Before:", i, "After:", left, right)
             if not appended:
                corrected_introns.append(i)
             sh = (0,0)
