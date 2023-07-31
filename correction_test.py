@@ -8,6 +8,7 @@ from src.alignment_info import AlignmentInfo
 from src.common import junctions_from_blocks, overlaps
 from src.short_utils import get_region_from_db
 from src.correction_stats import CorrectionStats, Stats
+from src.gtf2db import gtf2db
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
