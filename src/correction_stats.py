@@ -110,7 +110,7 @@ class CorrectionStats:
         if len(diff_before) == len(diff_after):
             for i in range(len(diff_before)):
                 classification.append(self.stats_single(diff_before[i], diff_after[i], reference_introns))
-        else:
+        elif len(diff_before) < len(diff_after):
             j = 0
             for i in range(len(diff_before)):
                 b = diff_before[i]
@@ -135,4 +135,8 @@ class CorrectionStats:
                     else:
                         classification.append(Stats.false_negative)
                         print("False negative with change, before:", b, "after:", a, right)
+        else:
+            print("more exons before than after")
+            print(diff_before)
+            print(diff_after)
         return classification
