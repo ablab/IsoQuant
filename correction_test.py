@@ -1,6 +1,7 @@
 import argparse
 import pysam
 import gffutils
+import os
 
 from src.illumina_exon_corrector import IlluminaExonCorrector
 from src.alignment_info import AlignmentInfo
