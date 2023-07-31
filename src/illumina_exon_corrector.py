@@ -54,12 +54,12 @@ class IlluminaExonCorrector:
                     if x < score:
                         score = x
                         sh = s
-            if (i[0] == sh[0] or i[1] == sh[1]) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1]:
+            if (i[0] == sh[0] or i[1] == sh[1]) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1] and self.counts((sh[0]-1,sh[1])) > 100:
                 
             #if ((i[0] == sh[0] and i[1] == sh[1]-4) or (i[1] == sh[1] and sh[0] == i[0]-4)):
-            #    corrected_introns.append(sh)
-            #if ((i[1] == sh[1]-4) or (sh[0] == i[0]-4)) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1]:
                 corrected_introns.append(sh)
+            #if ((i[1] == sh[1]-4) or (sh[0] == i[0]-4)) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1]:
+            #    corrected_introns.append(sh)
                 appended = True
             #else:
             #    corrected_introns.append(i)
