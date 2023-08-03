@@ -1,6 +1,6 @@
 from enum import Enum, unique
 
-from .common import junctions_from_blocks
+from .common import junctions_from_blocks, overlaps
 
 @unique
 class Stats(Enum):
@@ -96,17 +96,18 @@ class CorrectionStats:
         transcript = self.name_map[name]
         reference_introns = self.get_introns_from_transcript(transcript)
         n_ref = len(reference_introns)
-        n_before = len(introns.intersection(reference_introns))
-        n_after = len(corrected_introns.intersection(reference_introns))
         changed = not(introns == corrected_introns)
-        unchanged_introns = introns.intersection(corrected_introns)
+        unchanged_introns = [intron for intron in introns if intron in corrected_introns]
+        #unchanged_introns = introns.intersection(corrected_introns)
         for intron in unchanged_introns:
             if intron in reference_introns:
                 classification.append(Stats.true_negative)
             else:
                 classification.append(Stats.false_negative)
-        diff_before = list(sorted(introns - unchanged_introns))
-        diff_after = list(sorted(corrected_introns - unchanged_introns))
+        #diff_before = list(sorted(introns - unchanged_introns))
+        #diff_after = list(sorted(corrected_introns - unchanged_introns))
+        diff_before = [intron for intron in introns if not intron in unchanged_introns]
+        diff_after = [intron for intron in corrected_introns if not intron in unchanged_introns]
         if len(diff_before) == len(diff_after):
             for i in range(len(diff_before)):
                 classification.append(self.stats_single(diff_before[i], diff_after[i], reference_introns))
@@ -125,16 +126,21 @@ class CorrectionStats:
                     print(i)
                     print(j)
                     right = diff_after[i+j+1]
-                    j = j + 1
-                    if b in reference_introns:
-                        classification.append(Stats.false_positive)
-                        print("False positive, before:", b, "after:", a, right)
-                    elif a in reference_introns and right in reference_introns:
-                        classification.append(Stats.true_positive)
-                        print("True positive, before:", b, "after:", a, right)
-                    else:
-                        classification.append(Stats.false_negative)
-                        print("False negative with change, before:", b, "after:", a, right)
+                    if overlaps(a, b) and overlaps(b, right):
+                        j = j + 1
+                        if b in reference_introns:
+                            classification.append(Stats.false_positive)
+                            print("False positive, before:", b, "after:", a, right)
+                        elif a in reference_introns and right in reference_introns:
+                            classification.append(Stats.true_positive)
+                            print("True positive, before:", b, "after:", a, right)
+                        else:
+                            classification.append(Stats.false_negative)
+                            print("False negative with change, before:", b, "after:", a, right)
+                    elif overlaps(a, b):
+                        classification.append(self.stats_single(b, a, reference_introns))
+                    elif overlaps(b, right):
+                        classification.append(self.stats_single(b, right, reference_introns))
         else:
             print("more exons before than after")
             print(diff_before)
