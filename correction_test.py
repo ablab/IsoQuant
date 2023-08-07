@@ -66,7 +66,9 @@ for gene in gene_list:
                 corrected_introns = set(junctions_from_blocks(corrected_exons))
                 before += len(introns.intersection(reference_introns))
                 after += len(corrected_introns.intersection(reference_introns))
-                categorized.append(correction.read_stats(introns, corrected_introns, alignment))
+                print("Chromosome:", chromosome)
+                #categorized.append(correction.read_stats(introns, corrected_introns, alignment))
+                categorized.extend(correction.intron_stats(junctions_from_blocks(exons), junctions_from_blocks(corrected_exons), alignment))
         genes = [gene]
         current_region = (gene.start, gene.end)
         chromosome = gene.seqid
@@ -84,7 +86,9 @@ if genes:
         corrected_introns = set(junctions_from_blocks(corrected_exons))
         before += len(introns.intersection(reference_introns))
         after += len(corrected_introns.intersection(reference_introns))
-        categorized.append(correction.read_stats(introns, corrected_introns, alignment))
+        print("Chromosome:", chromosome)
+        #categorized.append(correction.read_stats(introns, corrected_introns, alignment))
+        categorized.extend(correction.intron_stats(junctions_from_blocks(exons), junctions_from_blocks(corrected_exons), alignment))
         
 print("Number of correct introns before correction:", before)
 print("Number of correct introns after correction:", after)
