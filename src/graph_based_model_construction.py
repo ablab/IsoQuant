@@ -116,6 +116,7 @@ class GraphBasedModelConstructor:
         return None
 
     def process(self, read_assignment_storage):
+        #Construction of intron graph
         self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         self.path_storage = IntronPathStorage(self.params, self.path_processor)
@@ -126,8 +127,12 @@ class GraphBasedModelConstructor:
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
+        #Path construction via heuristics
+        # paths = encoding_ilp(self.intron_graph)
         self.construct_fl_isoforms()
         self.construct_assignment_based_isoforms(read_assignment_storage)
+        
+        #doesnt matter for now...
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
 

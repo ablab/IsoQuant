@@ -1,4 +1,6 @@
 from ortools.linear_solver import pywraplp
+from collections import defaultdict
+from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
 
 def flatten(l):       return [item for sublist in l for item in sublist]
 def head(x):          return int(x.name().split('_')[1])
@@ -141,12 +143,89 @@ class Enc:
 - DAG may contain multiple connected components but thats fine, we can still add from super source to every 0-indegree guy... in the future think of possible opts (threads running in different components?)
 ''' 
 def intron_to_matrix(intron_graph):
+    intron2vertex = dict()
+    vertex2intron = dict()
+    source = 0
+    vertex_id = 1
+
+    # add all intron vertices
+    for intron in intron_graph.intron_collector.clustered_introns.keys():
+        intron2vertex[intron] = vertex_id
+        vertex2intron[vertex_id] = intron
+        vertex_id += 1
+
+    # add all starting vertices (avoid repeating incoming from the same starting vertex)
+    for intron in intron_graph.incoming_edges.keys():
+        for preceeding_intron in intron_graph.incoming_edges[intron]:
+            if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start] and preceeding_intron not in intron2vertex:
+                intron2vertex[preceeding_intron] = vertex_id
+                vertex2intron[vertex_id] = preceeding_intron
+                vertex_id += 1
+
+    # add all terminal vertices (avoid repeating outgoing from the same terminal vertex)
+    for intron in intron_graph.outgoing_edges.keys():
+        for subsequent_intron in intron_graph.outgoing_edges[intron]:
+            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end] and subsequent_intron not in intron2vertex:
+                intron2vertex[subsequent_intron] = vertex_id
+                vertex2intron[vertex_id] = subsequent_intron
+                vertex_id += 1
+
+    target = vertex_id
+
+    # create edges
+    edge_list = []
+    edge_set = set()
+    starting_introns = defaultdict(int)
+    for intron in intron_graph.incoming_edges.keys():
+        for preceeding_intron in intron_graph.incoming_edges[intron]:
+            edge_list.append((intron2vertex[preceeding_intron], intron2vertex[intron]))
+            edge_set.add((intron2vertex[preceeding_intron], intron2vertex[intron]))
+            if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
+                starting_introns[preceeding_intron] += intron_graph.edge_weights[(preceeding_intron, intron)]
+
+    terminal_introns = defaultdict(int)
+    for intron in intron_graph.outgoing_edges.keys():
+        for subsequent_intron in intron_graph.outgoing_edges[intron]:
+            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
+                edge_list.append((intron2vertex[intron], intron2vertex[subsequent_intron]))
+                edge_set.add((intron2vertex[intron], intron2vertex[subsequent_intron]))
+                terminal_introns[subsequent_intron] += intron_graph.edge_weights[(intron, subsequent_intron)]
+
+    flow_dict = defaultdict(int)
+    for intron in intron_graph.incoming_edges.keys():
+        for preceeding_intron in intron_graph.incoming_edges[intron]:
+            u = intron2vertex[preceeding_intron]
+            v = intron2vertex[intron]
+            flow_dict[(u, v)] = intron_graph.edge_weights[(preceeding_intron, intron)]
+
+    for intron in intron_graph.outgoing_edges.keys():
+        for subsequent_intron in intron_graph.outgoing_edges[intron]:
+            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
+                u = intron2vertex[intron]
+                v = intron2vertex[subsequent_intron]
+                flow_dict[(u, v)] = intron_graph.edge_weights[(preceeding_intron, intron)]
+
+    for starting_intron in starting_introns.keys():
+        starting_vertex = intron2vertex[starting_intron]
+        edge_list.append((source, starting_vertex))
+        edge_set.add((source, starting_vertex))
+        flow_dict[(source, starting_vertex)] = starting_introns[starting_intron]
+
+    for terminal_intron in terminal_introns.keys():
+        terminal_vertex = intron2vertex[terminal_intron]
+        edge_list.append((terminal_vertex, target))
+        edge_set.add((terminal_vertex, target))
+        flow_dict[(terminal_vertex, target)] = terminal_introns[terminal_intron]
+
+    assert len(edge_list) == len(edge_set)
+    #return vertex_id+1,edge_list,flow_dict    
+
     F_matrix = [[0,6,7,0,0,0],
-         [0,0,2,4,0,0],
-         [0,0,0,9,0,0],
-         [0,0,0,0,6,7],
-         [0,0,0,0,0,6],
-         [0,0,0,0,0,0]]
+                [0,0,2,4,0,0],
+                [0,0,0,9,0,0],
+                [0,0,0,0,6,7],
+                [0,0,0,0,0,6],
+                [0,0,0,0,0,0]]
     n = len(F_matrix)
     E = list()
     F = dict()
@@ -158,7 +237,7 @@ def intron_to_matrix(intron_graph):
     '''
     TODO
     -dictionary mapping intron_graph vertices to nodes of ILP graph, i.e. a dict: NxN->N
-    -same thing the other way around, i.e. a dict N->NxN   
+    -same thing the other way around, i.e. a dict N->NxN
     '''
     return n,E,F
 
