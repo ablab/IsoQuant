@@ -205,6 +205,7 @@ def intron_to_matrix(intron_graph):
                 v = intron2vertex[subsequent_intron]
                 flow_dict[(u, v)] = intron_graph.edge_weights[(preceeding_intron, intron)]
 
+    # add connection to super source and total weight
     for starting_intron in starting_introns.keys():
         starting_vertex = intron2vertex[starting_intron]
         edge_list.append((source, starting_vertex))
