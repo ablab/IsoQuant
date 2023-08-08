@@ -358,6 +358,7 @@ class AlignmentCollector:
             read_assignment.polya_info = alignment_info.polya_info
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.exons = alignment_info.read_exons
+            read_assignment.cigartuples = alignment.cigartuples
             read_assignment.corrected_exons = exon_corrector.correct_assigned_read(alignment_info,
                                                                                    read_assignment)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
