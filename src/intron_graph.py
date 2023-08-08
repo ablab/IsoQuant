@@ -441,28 +441,36 @@ class IntronGraph:
         terminal_positions = self.cluster_terminal_positions(extra_end_positions,
                                                              read_end=read_end,
                                                              cutoff=read_ends_cutoff)
-        logger.debug("POLYAs clustered:")
-        logger.debug(clustered_polyas)
-        logger.debug("Teminal clustered:")
-        logger.debug(terminal_positions)
+        # logger.debug("POLYAs clustered:")
+        # logger.debug(clustered_polyas)
+        # logger.debug("Teminal clustered:")
+        # logger.debug(terminal_positions)
         if read_end:
             # if intron in self.terminal_known_positions:
             #    logger.debug("Annotated terminal positions: " + str(sorted(self.terminal_known_positions[intron])))
             # logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
             # logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
             for pos in clustered_polyas.keys():
-                self.outgoing_edges[intron].add((VERTEX_polya, pos))
+                terminal_vertex = (VERTEX_polya, pos)
+                self.outgoing_edges[intron].add(terminal_vertex)
+                self.edge_weights[(intron, terminal_vertex)] = clustered_polyas[pos]
             for pos in terminal_positions.keys():
-                self.outgoing_edges[intron].add((VERTEX_read_end, pos))
+                terminal_vertex = (VERTEX_read_end, pos)
+                self.outgoing_edges[intron].add(terminal_vertex)
+                self.edge_weights[(intron, terminal_vertex)] = terminal_positions[pos]
         else:
             # if intron in self.starting_known_positions:
             #    logger.debug("Annotated terminal positions: " + str(sorted(self.starting_known_positions[intron])))
             # logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
             # logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
             for pos in clustered_polyas.keys():
-                self.incoming_edges[intron].add((VERTEX_polyt, pos))
+                terminal_vertex = (VERTEX_polyt, pos)
+                self.incoming_edges[intron].add(terminal_vertex)
+                self.edge_weights[(terminal_vertex, intron)] = clustered_polyas[pos]
             for pos in terminal_positions.keys():
-                self.incoming_edges[intron].add((VERTEX_read_start, pos))
+                terminal_vertex = (VERTEX_read_start, pos)
+                self.incoming_edges[intron].add(terminal_vertex)
+                self.edge_weights[(terminal_vertex, intron)] = terminal_positions[pos]
 
     def collect_terminal_positions(self):
         polya_ends = defaultdict(lambda: defaultdict(int))
