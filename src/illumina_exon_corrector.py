@@ -39,7 +39,7 @@ class IlluminaExonCorrector:
         corrector.end = 0
         corrector.short_introns = short_introns
         corrector.counts = dict()
-        
+        return corrector
         
     def get_introns(self, f, chromosome, start, end):
         samfile = pysam.AlignmentFile(f, "rb") 
@@ -75,7 +75,7 @@ class IlluminaExonCorrector:
 
 
     def correct_exons(self, exons):
-        print(exons)
+        print("exons:", exons)
         introns = junctions_from_blocks(exons)
         corrected_introns = []
         score = IlluminaExonCorrector.MAX_SCORE
