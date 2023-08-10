@@ -80,13 +80,13 @@ class CorrectionStats:
                 
     def stats_single(self, before, after, reference_introns):
         if before in reference_introns:
-            #print("False positive, before:", before, "after:", after)
+            print("False positive, before:", before, "after:", after)
             return Stats.false_positive
         elif after in reference_introns:
             print("True positive, before:", before, "after:", after)
             return Stats.true_positive
         else:
-            #print("False negative with change, before:", before, "after:", after)
+            print("False negative with change, before:", before, "after:", after)
             return Stats.false_negative
         
     def intron_stats(self, introns, corrected_introns, alignment):
@@ -131,13 +131,13 @@ class CorrectionStats:
                         j = j + 1
                         if b in reference_introns:
                             classification.append(Stats.false_positive)
-                            #print("False positive, before:", b, "after:", a, right)
+                            print("False positive, before:", b, "after:", a, right)
                         elif a in reference_introns and right in reference_introns:
                             classification.append(Stats.true_positive)
                             print("True positive, before:", b, "after:", a, right)
                         else:
                             classification.append(Stats.false_negative)
-                            #print("False negative with change, before:", b, "after:", a, right)
+                            print("False negative with change, before:", b, "after:", a, right)
                     elif overlaps(a, b):
                         classification.append(self.stats_single(b, a, reference_introns))
                     elif overlaps(b, right):
