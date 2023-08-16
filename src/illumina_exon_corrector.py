@@ -41,6 +41,7 @@ class IlluminaExonCorrector:
         corrector.counts = dict()
         return corrector
         
+    # get introns from a specific area of the genome
     def get_introns(self, f, chromosome, start, end):
         samfile = pysam.AlignmentFile(f, "rb") 
         intr = samfile.find_introns(samfile.fetch(chromosome, start = start, stop = end))
@@ -48,29 +49,33 @@ class IlluminaExonCorrector:
         i_list = set()
         for i in intr.keys():
             if(type(i)!="int"): 
+                # gtf files start with 1, bam with 0, we use gtf as standard
                 i_list.add((i[0]+1,i[1]))
-        return i_list, intr
-        
-    #def set_introns(alignment_file = None)
-    #or as in Gene_Info.from_models, i.e. from_data
-        
+        # in some cases counts might be necessary, so original is also saved
+        return i_list, intr        
 
     def correct_read(self, alignment_info):
         return self.correct_exons(alignment_info.read_exons)
-        
-    def skipped_score(self, left, right, old):
+      
+    @staticmethod
+    def skipped_score(left, right, old):
         return (old[0] - left[0]) + (right[1] - old[1]) - (right[0] - left[1])
         
-    def better_skipped(self, left, right, old, score):
+    @staticmethod
+    def better_skipped(left, right, old, score):
         return self.skipped_score(left, right, old) < score
         
-    def right_length(self, left, right, old):
+    @staticmethod
+    def right_length(left, right, old):
         middle = abs(right[0] - left[1]) <= IlluminaExonCorrector.EXON_LENGTH
         left_side = abs(old[0] - left[0]) <= IlluminaExonCorrector.SIDE_DIFF
         right_side = abs(right[1] - old[1]) <= IlluminaExonCorrector.SIDE_DIFF
         return (middle and left_side and right_side)
         
-    def one_differs(self, left, right, old):
+    #only one side of the new introns is allowed to be the same as the old intron
+    #when both the left and the right end are the same it is often a false positive
+    @staticmethod
+    def one_differs(left, right, old):
         return (not left[0] == old[0] or not right[1] == old[1])
 
 
@@ -86,15 +91,20 @@ class IlluminaExonCorrector:
             for s in self.short_introns:
                 x = abs(i[0] - s[0]) + abs(i[1] - s[1])
                 if overlaps(i, s):
+                    #collect all overlapping introns to look for skipped exons
+                    #still test if it is the best single match
                     overlapping.append(s)
                     if x < score:
                         score = x
                         sh = s
             #if (i[0] == sh[0] or i[1] == sh[1]) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1] and self.counts[(sh[0]-1,sh[1])] > 100:
+            
+            # if the best single match differs by 4 it is usually good to correct
             if ((i[0] == sh[0] and i[1] == sh[1]-4) or (i[1] == sh[1] and sh[0] == i[0]-4)):
             #if ((i[1] == sh[1]-4) or (sh[0] == i[0]-4)) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1]:
                 corrected_introns.append(sh)
                 appended = True
+            #if nothing has been corrected yet check if there might be a skipped exon
             if len(overlapping) > 1 and not appended:
                 score = IlluminaExonCorrector.MAX_SCORE
                 left = IlluminaExonCorrector.ABSENT_INTRON
@@ -103,6 +113,11 @@ class IlluminaExonCorrector:
                     x = overlapping[k]
                     for l in range(k, len(overlapping)):
                         y = overlapping[l]
+                        # it is important that the exons are in the right order
+                        # so there is two cases that might be a skipped exon
+                        # It can only be a skipped exon if the gap between the introns has the right length
+                        # as well as the differences between the old exon and the new exons
+                        # additionally there might be multiple options so it also has to have the best score
                         if x[1] < y[0]: 
                             if self.right_length(x, y, i) and self.one_differs(x, y, i):
                                 if self.better_skipped(x, y, i, score):
@@ -115,20 +130,20 @@ class IlluminaExonCorrector:
                                     left = y
                                     right = x
                                     score = self.skipped_score(y, x, i)
+                # if the left intron has been changed the requirements have been fulfilled and a correction can happen
                 if not left == IlluminaExonCorrector.ABSENT_INTRON:
                     corrected_introns.append(left)
                     corrected_introns.append(right)
                     appended = True
+            # if neither of the options lead to a correction the original intron is kept
             if not appended:
                corrected_introns.append(i)
             sh = IlluminaExonCorrector.ABSENT_INTRON
             score = IlluminaExonCorrector.MAX_SCORE
             overlapping = []
             appended = False
+        # in case of introns in the wrong order the next steps will not work so debug option here
         if not validate_exons(get_exons((exons[0][0], exons[-1][1]), corrected_introns)):
             logger.debug("old:", introns)
             logger.debug("new:", corrected_introns)
         return get_exons((exons[0][0], exons[-1][1]), corrected_introns)
-        
-# function for parameters like in set_matching_options, put things like 25, 50 ...
-# comment functions
