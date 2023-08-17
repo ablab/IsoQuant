@@ -130,6 +130,7 @@ class GraphBasedModelConstructor:
         self.construct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
+        self.correct_transcripts()
 
         if self.params.genedb:
             self.create_extended_annotation()
@@ -197,6 +198,23 @@ class GraphBasedModelConstructor:
             model.add_additional_attribute("similar_reference_id", assigned_transcript_id)
             model.add_additional_attribute("alternatives", event_string)
             self.transcript2transcript.append(assignment)
+
+    def correct_transcripts(self):
+        for model in self.transcript_model_storage:
+            exons = model.exon_blocks
+            assigned_reads = self.transcript_read_ids[model.transcript_id]
+            corrected_exons = self.correct_transcript_splice_sites(exons, assigned_reads)
+            if corrected_exons:
+                model.exon_blocks = corrected_exons
+
+    def correct_transcript_splice_sites(self, exons, assigned_reads):
+        # exons: list of coordinate pairs
+        # assigned_reads: list of ReadAssignment, contains read_id and cigartuples
+        # self.chr_record - FASTA recored, i.e. a single chromosome from a reference
+        # returns: a list of corrected exons if correction takes place, None - otherwise
+        # TODO Heidi: insert your code here
+        return None
+
 
     def filter_transcripts(self):
         filtered_storage = []
