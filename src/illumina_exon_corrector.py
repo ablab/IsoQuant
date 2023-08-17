@@ -63,7 +63,7 @@ class IlluminaExonCorrector:
         
     @staticmethod
     def better_skipped(left, right, old, score):
-        return self.skipped_score(left, right, old) < score
+        return IlluminaExonCorrector.skipped_score(left, right, old) < score
         
     @staticmethod
     def right_length(left, right, old):
