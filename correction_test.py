@@ -58,7 +58,7 @@ for gene in gene_list:
             for alignment in long_file.fetch(chromosome, start = current_region[0], stop = current_region[1]):
                 ai = AlignmentInfo(alignment)
                 if not ai.read_exons:
-                    logger.warning("Read has no aligned exons")
+                    print("Read has no aligned exons")
                     continue
                 exons = ai.read_exons
                 introns = set(junctions_from_blocks(exons))
@@ -79,7 +79,7 @@ if genes:
     for alignment in long_file.fetch(chromosome, start = current_region[0], stop = current_region[1]):
         ai = AlignmentInfo(alignment)
         if not ai.read_exons:
-            logger.warning("Read has no aligned exons")
+            print("Read has no aligned exons")
             continue
         exons = ai.read_exons
         introns = set(junctions_from_blocks(exons))
