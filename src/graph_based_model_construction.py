@@ -25,6 +25,7 @@ from .isoform_assignment import is_matching_assignment, match_subtype_to_str_wit
 from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
+from .encode_ilp_v2 import Encode_ILP
 
 
 logger = logging.getLogger('IsoQuant')
@@ -123,6 +124,9 @@ class GraphBasedModelConstructor:
         self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
+
+        logger.info("Encoding ILP")
+        Encode_ILP(self.intron_graph)
 
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path

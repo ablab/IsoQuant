@@ -1,3 +1,5 @@
+import math
+
 from ortools.linear_solver import pywraplp
 from collections import defaultdict
 from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
@@ -9,13 +11,15 @@ def exists_edge(e,p): return len(list(filter(lambda x: head(e)==x[0] and tail(e)
 
 class Enc:
 
-    def __init__(self,n,E,F,R=[],F_low=[],F_high=[],solver_id='SCIP'):
+    def __init__(self,n,E,F={},F_low={},F_high={},R=[],solver_id='SCIP'):
         self.n = n
         self.m = len(E)
         self.source = 0
         self.target = self.n-1
         self.E = E
         self.F = F
+        if not F:
+            self.F = F_high
         self.F_low  = F_low
         self.F_high = F_high
         self.R = R
@@ -33,12 +37,16 @@ class Enc:
             if u==self.source:
                 self.f += self.F[e] #sum of out-going flow from the source
                 self.k += 1         #k = |{v in V : f(s,v)>0}| trivial lower bound, think of funnels. (we assume that every edge has positive flow)
-            self.w_max = max(self.w_max,F[e])
+            self.w_max = max(self.w_max,self.F[e])
         
         self.edge_vars = []
         self.pi_vars   = []
         self.weights   = []
         self.path_vars = []
+
+        assert(self.F == self.F_high)
+        print(self.F_low)
+        print(self.F_high)
 
     def add_constraint(self, constraint):
         self.constraints.append(str(constraint))
@@ -64,6 +72,11 @@ class Enc:
             self.pi_vars   += [ [self.solver.IntVar(0, self.w_max,'p_{}_{}_{}'.format(e[0],e[1],i)) for e in self.E ] ]
             self.weights   += [  self.solver.IntVar(1, self.w_max,'w_{}'.format(i)) ]
             self.path_vars += [ [self.solver.BoolVar('r_{}_{}'.format(i,j)) for j in range(len(self.R)) ]]
+
+        print(self.edge_vars)
+        print(self.pi_vars)
+        print(self.weights)
+        print(self.path_vars)
 
         #3a, 3b
         for i in range(self.k):
@@ -111,7 +124,7 @@ class Enc:
 
         if self.R!=[]:
             EncodeSubpathConstraints()
-        if self.F_low!=[] and self.F_high!=[]:
+        if len(self.F_low) != 0 and len(self.F_high) != 0:
             EncodeInexactFlow()
         else:
             EncodeExactFlow()
@@ -126,6 +139,7 @@ class Enc:
             print(int(self.weights[i].solution_value()), path[:-1])
 
     def linear_search(self):
+        print(self.m,self.f)
         while self.k <= min(self.m,self.f):
 
             self.encode()
@@ -203,7 +217,7 @@ def intron_to_matrix(intron_graph):
             if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
                 u = intron2vertex[intron]
                 v = intron2vertex[subsequent_intron]
-                flow_dict[(u, v)] = intron_graph.edge_weights[(preceeding_intron, intron)]
+                flow_dict[(u, v)] = intron_graph.edge_weights[(intron, subsequent_intron)]
 
     # add connection to super source and total weight
     for starting_intron in starting_introns.keys():
@@ -221,35 +235,23 @@ def intron_to_matrix(intron_graph):
     assert len(edge_list) == len(edge_set)
     #return vertex_id+1,edge_list,flow_dict    
 
-    F_matrix = [[0,6,7,0,0,0],
-                [0,0,2,4,0,0],
-                [0,0,0,9,0,0],
-                [0,0,0,0,6,7],
-                [0,0,0,0,0,6],
-                [0,0,0,0,0,0]]
-    n = len(F_matrix)
-    E = list()
-    F = dict()
-    for u in range(len(F_matrix)):
-        for v in range(len(F_matrix[u])):
-            if F_matrix[u][v]!=0:
-                E.append((u,v))
-                F[(u,v)]=F_matrix[u][v]
-    '''
-    TODO
-    -dictionary mapping intron_graph vertices to nodes of ILP graph, i.e. a dict: NxN->N
-    -same thing the other way around, i.e. a dict N->NxN
-    '''
-    return n,E,F
+    alfa = 0.5
+    f_low   = {}
+    f_high = {}
+    for edge in flow_dict:
+        f_low[edge] = math.floor((1-alfa)*flow_dict[edge])
+        f_high[edge] = math.ceil((1+alfa)*flow_dict[edge])
+
+    return vertex_id+1, edge_list, f_low, f_high
 
 
 def Encode_ILP(intron_graph):
 
-    n,E,F = intron_to_matrix(intron_graph)
+    n,E,Fl,Fh = intron_to_matrix(intron_graph)
 
     R = [[(1,3),(3,5)]]
 
-    e = Enc(n,E,F,R=R)
+    e = Enc(n,E,F_low=Fl,F_high=Fh)
     e.linear_search()
 
 
