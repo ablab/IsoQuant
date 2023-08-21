@@ -2,12 +2,14 @@ from enum import Enum, unique
 
 from .common import junctions_from_blocks, overlaps
 
+
 @unique
 class Stats(Enum):
     true_negative = 1  #correct before and not changed
     false_negative = 2 #either changed but not correct after or not correct before and not changed
     true_positive = 3  #changed and it is correct after
     false_positive = 4 #changed and it is not correct after but was correct before
+
 
 class CorrectionStats:
     
@@ -39,7 +41,6 @@ class CorrectionStats:
         introns= junctions_from_blocks(exons)
         introns = set(introns)
         return introns
-        
         
     def read_stats(self, introns, corrected_introns, alignment):
         name = alignment.query_name
