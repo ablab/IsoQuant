@@ -6,11 +6,11 @@ from .transcript_printer import  validate_exons
 
 logger = logging.getLogger('IsoQuant')
 
+
 class VoidExonCorrector:
 
     def __init__(self):
         pass
-
 
     def correct_read(self, alignment_info):
         return alignment_info.read_exons
@@ -77,7 +77,6 @@ class IlluminaExonCorrector:
     @staticmethod
     def one_differs(left, right, old):
         return (not left[0] == old[0] or not right[1] == old[1])
-
 
     def correct_exons(self, exons):
         print("exons:", exons)
