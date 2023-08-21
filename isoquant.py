@@ -107,6 +107,8 @@ def parse_args(args=None, namespace=None):
                                                          ', leave empty line between samples')
     input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
                                                            ', leave empty line between samples')
+    input_args.add_argument('--yaml', type=str, help='yaml file containing all input files, one entry per sample'
+                                                     ', check readme for format info')
 
     # TODO: add nargs="+" to support multiple files
     input_args_group.add_argument('--illumina_bam', type=str, help='sorted and indexed file with Illumina '
@@ -361,6 +363,10 @@ def check_input_params(args):
         return False
     if args.stranded not in SUPPORTED_STRANDEDNESS:
         logger.error("Unsupported strandness " + args.stranded + ", choose one of: " + " ".join(SUPPORTED_STRANDEDNESS))
+        return False
+        
+    if args.yaml_file and args.illumina_bam:
+        logger.error("When providing a yaml file it should include all input files, including the illumina bam file.")
         return False
 
     if not args.genedb:
