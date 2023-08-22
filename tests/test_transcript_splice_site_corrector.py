@@ -40,7 +40,7 @@ class TestMoreConservativeStrategyConditions(TestCase):
         self.assertTrue(result)
 
     def test_sublist_largest_values_exists_returns_false(self):
-        lst = [0, 0, 10, 10, 10, 6, 0, 0]
+        lst = [0, 0, 10, 10, 10, 0, 6, 0]
         n = 4
         result = sublist_largest_values_exists(lst, n)
         self.assertFalse(result)
@@ -247,5 +247,5 @@ class ExtractSpliceSiteLocationsFromAlignedRead(TestCase):
         read_end = 40
         result = extract_splice_site_locations_within_aligned_read(
             read_start, read_end, exons)
-        expected_output = [20, 30 , 40]
+        expected_output = [(20, False), (30, True) , (40, False)]
         self.assertEqual(result, expected_output)
