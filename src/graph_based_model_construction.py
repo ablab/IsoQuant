@@ -269,17 +269,17 @@ class GraphBasedModelConstructor:
         if not corrected_exons:
             return None
         
-        corrected_exons = []
+        final_corrected_exons = []
         for exon in exons:
-            corrected_exon = exon
+            new_corrected_exon = exon
             if exon[0] in splice_site_cases:
                 corrected_location = exon[0] + splice_site_cases[exon[0]]["most_common_del"]
                 corrected_exon = (corrected_location, exon[1])
             if exon[1] in splice_site_cases:
                 corrected_location = exon[1] + splice_site_cases[exon[1]]["most_common_del"]
                 corrected_exon = (exon[0], corrected_location)
-            corrected_exons.append(corrected_exon)
-        return corrected_exons
+            final_corrected_exons.append(new_corrected_exon)
+        return final_corrected_exons
 
 
     def filter_transcripts(self):
