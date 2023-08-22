@@ -94,7 +94,12 @@ def extract_splice_site_locations_within_aligned_read(read_start: int, read_end:
     return matching_locations
 
 
-def count_deletions_for_splice_site_locations(assigned_read, exons: list, splice_site_cases: dict):
+def count_deletions_for_splice_site_locations(
+        read_start: int, 
+        read_end: int, 
+        cigartuples: list, 
+        exons: list, 
+        splice_site_cases: dict):
     """
 
     Args:
@@ -103,10 +108,6 @@ def count_deletions_for_splice_site_locations(assigned_read, exons: list, splice
         splice_site_cases (dict): a dictionary for storing splice site cases
     """
 
-    # Extract read start and end
-    read_start = assigned_read.corrected_exons[0][0]
-    read_end = assigned_read.corrected_exons[-1][1]
-    cigartuples = assigned_read.cigartuples
     
     # Constant window size for counting deletions
     WINDOW_SIZE = 8
@@ -239,3 +240,66 @@ def sublist_largest_values_exists(lst, n):
             count = 0
 
     return False
+
+
+def correct_splice_site_errors(
+        splice_site_cases: dict,
+        MIN_N_OF_ALIGNED_READS: int,
+        ACCEPTED_DEL_CASES: list,
+        MORE_CONSERVATIVE_STRATEGY: bool,
+        strand: str,
+        chr_record):
+    """ 1. Count most common deletion at each splice site location
+        2. For interesting cases count nucleotides at deletion positions
+        3. If canonical nucleotides are found, correct splice site
+
+    Args:
+        splice_site_cases (dict): collected splice site cases
+        MIN_N_OF_ALIGNED_READS (int): constant for minimum number of aligned reads
+        ACCEPTED_DEL_CASES (list): constant for accepted cases of deletions
+        MORE_CONSERVATIVE_STRATEGY (bool): constant for more conservative strategy
+        strand (str): transcript strand (extracted from first ReadAssignment-object in read_assignments list)
+        chr_record (Fasta): FASTA recored, i.e. a single chromosome from a reference
+    """
+    
+    locations_with_errors = []
+    for splice_site_location, splice_site_data in splice_site_cases.items():
+        
+        reads = sum(splice_site_data["deletions"].values())
+        if reads < MIN_N_OF_ALIGNED_READS:
+            continue
+        
+        compute_most_common_del_and_verify_nucleotides(
+            splice_site_location, 
+            splice_site_data, 
+            chr_record,
+            ACCEPTED_DEL_CASES,
+            strand
+            )
+        if MORE_CONSERVATIVE_STRATEGY:
+            if not sublist_largest_values_exists(
+                splice_site_data["del_pos_distr"],
+                abs(splice_site_data["most_common_del"])):
+                continue
+            pass
+
+        if splice_site_data["del_location_has_canonical_nucleotides"]:
+            locations_with_errors.append(splice_site_location)
+    
+    return locations_with_errors
+
+def generate_updated_exon_list(
+        splice_site_cases: dict,
+        locations_with_errors: list,
+        exons: list):
+    updated_exons = []
+    for exon in exons:
+            updated_exon = exon
+            if exon[0] in locations_with_errors:
+                corrected_location = exon[0] + splice_site_cases[exon[0]]["most_common_del"]
+                updated_exon = (corrected_location, exon[1])
+            if exon[1] in locations_with_errors:
+                corrected_location = exon[1] + splice_site_cases[exon[1]]["most_common_del"]
+                updated_exon = (exon[0], corrected_location)
+            updated_exons.append(updated_exon)
+    return updated_exons
