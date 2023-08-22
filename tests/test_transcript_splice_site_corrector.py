@@ -2,11 +2,20 @@ from unittest import TestCase
 from unittest import main as unittest_main
 
 
-from src.transcript_splice_site_corrector import threshold_exceeded
-from src.transcript_splice_site_corrector import sublist_largest_values_exists
-from src.transcript_splice_site_corrector import extract_location_from_cigar_string
-from src.transcript_splice_site_corrector import count_deletions_from_cigar_codes_in_given_window
-from src.transcript_splice_site_corrector import extract_splice_site_locations_within_aligned_read
+from src.transcript_splice_site_corrector import (
+    extract_location_from_cigar_string,
+    count_deletions_from_cigar_codes_in_given_window,
+    extract_splice_site_locations_within_aligned_read,
+    count_deletions_for_splice_site_locations,
+    compute_most_common_case_of_deletions,
+    extract_nucleotides_from_most_common_del_location,
+    compute_most_common_del_and_verify_nucleotides,
+    threshold_exceeded,
+    sublist_largest_values_exists,
+    correct_splice_site_errors,
+    generate_updated_exon_list,
+)
+
 class TestMoreConservativeStrategyConditions(TestCase):
     
     def test_threshold_exceeds_returns_true(self):
@@ -239,7 +248,7 @@ class TestIndelCountingFromCigarCodes(TestCase):
         self.assertEqual(splice_site_data['deletions'], expected_result['deletions'])
         self.assertEqual(splice_site_data['del_pos_distr'], expected_result['del_pos_distr'])
 
-class ExtractSpliceSiteLocationsFromAlignedRead(TestCase):
+class TestExtractSpliceSiteLocationsFromAlignedRead(TestCase):
 
     def test_correct_splice_sites_are_extracted(self):
         exons = [(1, 10), (20, 30), (40, 50)]
@@ -249,3 +258,58 @@ class ExtractSpliceSiteLocationsFromAlignedRead(TestCase):
             read_start, read_end, exons)
         expected_output = [(20, False), (30, True) , (40, False)]
         self.assertEqual(result, expected_output)
+
+
+class TestExonListUpdater(TestCase):
+    
+    def test_error_at_location_start_is_corrected(self):
+        exons = [(1, 10), (20, 30), (40, 50)]
+        locations_with_errors = [20]
+        splice_site_cases = {
+            20: {
+                "most_common_del": 4,
+            }
+        }
+        result = generate_updated_exon_list(
+            splice_site_cases, locations_with_errors, exons)
+        expected_result = [(1, 10), (24, 30), (40, 50)]
+        self.assertEqual(result, expected_result)
+    
+    def test_error_at_location_end_is_corrected(self):
+        exons = [(1, 10), (20, 30), (40, 50)]
+        locations_with_errors = [30]
+        splice_site_cases = {
+            30: {
+                "most_common_del": -4,
+            }
+        }
+        result = generate_updated_exon_list(
+            splice_site_cases, locations_with_errors, exons)
+        expected_result = [(1, 10), (20, 26), (40, 50)]
+        self.assertEqual(result, expected_result)
+        
+
+    pass
+
+class TestHelperFunctions(TestCase):
+
+    def test_distinct_most_common_case_is_returned_for_location_end(self):
+        cases = {0: 10, 1: 2, 3: 0, 4: 20, 5: 1}
+        location_is_end = False
+        result = compute_most_common_case_of_deletions(cases, location_is_end)
+        expected_result = 4
+        self.assertEqual(result, expected_result)
+
+    def test_distinct_most_common_case_is_returned_for_location_start(self):
+        cases = {0: 10, 1: 2, 3: 0, 4: 20, 5: 1}
+        location_is_end = True
+        result = compute_most_common_case_of_deletions(cases, location_is_end)
+        expected_result = -4
+        self.assertEqual(result, expected_result)
+    
+    def test_if_no_distinct_most_commont_del_exists_return_neg_one(self):
+        cases = {0: 10, 1: 2, 3: 20, 4: 20, 5: 1}
+        location_is_end = False
+        result = compute_most_common_case_of_deletions(cases, location_is_end)
+        expected_result = -1
+        self.assertEqual(result, expected_result)
