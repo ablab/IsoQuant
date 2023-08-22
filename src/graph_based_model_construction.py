@@ -26,9 +26,11 @@ from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
 
-from .transcript_splice_site_corrector import count_deletions_for_splice_site_locations
-from .transcript_splice_site_corrector import compute_most_common_del_and_verify_nucleotides
-from .transcript_splice_site_corrector import sublist_largest_values_exists
+from .transcript_splice_site_corrector import (
+    count_deletions_for_splice_site_locations, 
+    correct_splice_site_errors,
+    generate_updated_exon_list
+    )
 
 logger = logging.getLogger('IsoQuant')
 
@@ -234,52 +236,36 @@ class GraphBasedModelConstructor:
         splice_site_cases = {}
         # Iterate assigned_reads list and count deletions for splice site locations
         for read_assignment in assigned_reads:
-            count_deletions_for_splice_site_locations(read_assignment, exons, splice_site_cases)
+            read_start = read_assignment.corrected_exons[0][0]
+            read_end = read_assignment.corrected_exons[-1][1]
+            cigartuples = read_assignment.cigartuples
+            count_deletions_for_splice_site_locations(
+                read_start, 
+                read_end, 
+                cigartuples, 
+                exons, 
+                splice_site_cases)
 
-        # Second iteration
-        # 1. Count most common deletion at each splice site location
-        # 2. For interesting cases count nucleotides at deletion positions
-        # 3. If canonical nucleotides are found, correct splice site
         
-        corrected_exons = []
-        for splice_site_location, splice_site_data in splice_site_cases.items():
-            
-            reads = sum(splice_site_data["deletions"].values())
-            if reads < MIN_N_OF_ALIGNED_READS:
-                continue
-            
-            compute_most_common_del_and_verify_nucleotides(
-                splice_site_location, 
-                splice_site_data, 
-                self.chr_record,
-                ACCEPTED_DEL_CASES,
-                strand
-                )
-            if MORE_CONSERVATIVE_STRATEGY:
-                if not sublist_largest_values_exists(
-                    splice_site_data["del_pos_distr"],
-                    abs(splice_site_data["most_common_del"])):
-                    continue
-                pass
+        corrected_exons = correct_splice_site_errors(
+            splice_site_cases,
+            MIN_N_OF_ALIGNED_READS,
+            ACCEPTED_DEL_CASES,
+            MORE_CONSERVATIVE_STRATEGY,
+            strand,
+            self.chr_record
+        )
 
-            if splice_site_data["del_location_has_canonical_nucleotides"]:
-                corrected_exons.append(splice_site_location)
-        
-        # If correction took place, return corrected exons
         if not corrected_exons:
             return None
         
-        final_corrected_exons = []
-        for exon in exons:
-            new_corrected_exon = exon
-            if exon[0] in splice_site_cases:
-                corrected_location = exon[0] + splice_site_cases[exon[0]]["most_common_del"]
-                corrected_exon = (corrected_location, exon[1])
-            if exon[1] in splice_site_cases:
-                corrected_location = exon[1] + splice_site_cases[exon[1]]["most_common_del"]
-                corrected_exon = (exon[0], corrected_location)
-            final_corrected_exons.append(new_corrected_exon)
-        return final_corrected_exons
+        updated_exons = generate_updated_exon_list(
+            splice_site_cases,
+            corrected_exons,
+            exons
+        )
+        
+        return updated_exons
 
 
     def filter_transcripts(self):
