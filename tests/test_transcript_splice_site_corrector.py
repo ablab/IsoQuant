@@ -367,21 +367,21 @@ class TestCountDeletionsFromSpliceSiteLocations(TestCase):
                 'location_is_end': False, 
                 'deletions': {2: 1}, 
                 'del_pos_distr': [0, 0, 0, 0, 0, 0, 1, 1], 
-                'most_common_deletion': -1, 
+                'most_common_del': -1, 
                 'del_location_has_canonical_nucleotides': False
             },
             30: {
                 'location_is_end': True, 
                 'deletions': {4: 1}, 
                 'del_pos_distr': [0, 0, 0, 1, 1, 1, 1, 0], 
-                'most_common_deletion': -1, 
+                'most_common_del': -1, 
                 'del_location_has_canonical_nucleotides': False
             },
             40: {
                 'location_is_end': False, 
                 'deletions': {0: 1}, 
                 'del_pos_distr': [0, 0, 0, 0, 0, 0, 0, 0], 
-                'most_common_deletion': -1, 
+                'most_common_del': -1, 
                 'del_location_has_canonical_nucleotides': False
             },
         }
@@ -463,3 +463,92 @@ class TestNucleotideExtraction(TestCase):
             chr_record,
             strand)
         self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
+
+
+class TestDeletionComputationAndBaseExtraction(TestCase):
+
+    def test_for_accepted_del_case_nucleotides_are_vefiried(self):
+        splice_site_location = 10
+        splice_site_data  = {
+            "most_common_del": -1,
+            "location_is_end": False,
+            "del_location_has_canonical_nucleotides": False,
+            "deletions": {4: 1},
+            "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
+        }
+
+        chr_record = "AAAAAAAAAAAAAAG"
+        ACCEPTED_DEL_CASES = [4]
+        strand = "+"
+        compute_most_common_del_and_verify_nucleotides(
+            splice_site_location,
+            splice_site_data,
+            chr_record,
+            ACCEPTED_DEL_CASES,
+            strand)
+        expected_result = {
+            "most_common_del": 4,
+            "location_is_end": False,
+            "del_location_has_canonical_nucleotides": True,
+            "deletions": {4: 1},
+            "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
+        }
+        self.assertEqual(splice_site_data, expected_result)
+
+
+    def test_for_not_accepted_del_case_nucleotides_are_not_vefiried(self):
+        splice_site_location = 10
+        splice_site_data  = {
+            "most_common_del": -1,
+            "location_is_end": False,
+            "del_location_has_canonical_nucleotides": False,
+            "deletions": {2: 1},
+            "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
+        }
+
+        chr_record = "AAAAAAAAAAAAAAG"
+        ACCEPTED_DEL_CASES = [4]
+        strand = "+"
+        compute_most_common_del_and_verify_nucleotides(
+            splice_site_location,
+            splice_site_data,
+            chr_record,
+            ACCEPTED_DEL_CASES,
+            strand)
+        expected_result = {
+            "most_common_del": 2,
+            "location_is_end": False,
+            "del_location_has_canonical_nucleotides": False,
+            "deletions": {2: 1},
+            "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
+        }
+        self.assertEqual(splice_site_data, expected_result)
+    
+    def test_for_accepted_del_case_non_canonical_nucleotides_return_false(self):
+        splice_site_location = 10
+        splice_site_data  = {
+            "most_common_del": -1,
+            "location_is_end": False,
+            "del_location_has_canonical_nucleotides": False,
+            "deletions": {4: 1},
+            "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
+        }
+
+        chr_record = "AAAAAAAAAAAAAXX"
+        ACCEPTED_DEL_CASES = [4]
+        strand = "+"
+        compute_most_common_del_and_verify_nucleotides(
+            splice_site_location,
+            splice_site_data,
+            chr_record,
+            ACCEPTED_DEL_CASES,
+            strand)
+        expected_result = {
+            "most_common_del": 4,
+            "location_is_end": False,
+            "del_location_has_canonical_nucleotides": False,
+            "deletions": {4: 1},
+            "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
+        }
+        self.assertEqual(splice_site_data, expected_result)
+        
