@@ -1,6 +1,5 @@
 from unittest import TestCase
-from unittest import main as unittest_main
-
+from unittest.mock import MagicMock, patch
 
 from src.transcript_splice_site_corrector import (
     extract_location_from_cigar_string,
@@ -313,3 +312,154 @@ class TestHelperFunctions(TestCase):
         result = compute_most_common_case_of_deletions(cases, location_is_end)
         expected_result = -1
         self.assertEqual(result, expected_result)
+
+
+class TestCorrectSpliceSiteErrors(TestCase):
+    
+    @patch('src.transcript_splice_site_corrector.compute_most_common_case_of_deletions')
+    def test_errors_are_correctly_returned(self, mock_compute_most_common_case_of_deletions):
+        splice_site_cases = {
+            20: {
+                "del_location_has_canonical_nucleotides": False,
+                "deletions": {4: 10},
+                "location_is_end": False,
+                "most_common_del": 4,
+            },
+            30: {
+                "del_location_has_canonical_nucleotides": True,
+                "deletions": {4: 10},
+                "location_is_end": False,
+                "most_common_del": 4,
+            },
+        }
+        MIN_N_ALIGNED_READS = 5
+        ACCEPTED_DEL_CASES = [4]
+        MORE_CONSERVATIVE_STRATEGY = False
+        strand = "+"
+        chr_record = None
+        result = correct_splice_site_errors(
+            splice_site_cases,
+            MIN_N_ALIGNED_READS,
+            ACCEPTED_DEL_CASES,
+            MORE_CONSERVATIVE_STRATEGY,
+            strand,
+            chr_record)
+        expected_result = [30]
+        self.assertEqual(result, expected_result)
+
+class TestCountDeletionsFromSpliceSiteLocations(TestCase):
+    def test_count_deletions_from_splice_site_locations_extracts_correct_locations(self):
+        exons = [(1, 10), (20, 30), (40, 50)]
+        #  20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 
+        # [M ,M, M, M, M, M, D, D, D, D, M, M, M, M, M, M, M, M, M, M, M]
+        cigartuples = [(0, 6), (2, 4), (0, 10)]
+        read_start = 20
+        read_end = 40
+        splice_site_cases = {}
+        count_deletions_for_splice_site_locations(
+            read_start,
+            read_end,
+            cigartuples,
+            exons,
+            splice_site_cases)
+        expected_result = {
+            20: {
+                'location_is_end': False, 
+                'deletions': {2: 1}, 
+                'del_pos_distr': [0, 0, 0, 0, 0, 0, 1, 1], 
+                'most_common_deletion': -1, 
+                'del_location_has_canonical_nucleotides': False
+            },
+            30: {
+                'location_is_end': True, 
+                'deletions': {4: 1}, 
+                'del_pos_distr': [0, 0, 0, 1, 1, 1, 1, 0], 
+                'most_common_deletion': -1, 
+                'del_location_has_canonical_nucleotides': False
+            },
+            40: {
+                'location_is_end': False, 
+                'deletions': {0: 1}, 
+                'del_pos_distr': [0, 0, 0, 0, 0, 0, 0, 0], 
+                'most_common_deletion': -1, 
+                'del_location_has_canonical_nucleotides': False
+            },
+        }
+        self.assertEqual(splice_site_cases, expected_result)
+
+
+class TestNucleotideExtraction(TestCase):
+
+    def test_canonical_nucleotides_for_loc_start_pos_strand_are_extracted_correctly(self):
+        location = 10
+        splice_site_data = {
+            "most_common_del": 4,
+            "location_is_end": False,
+            "del_location_has_canonical_nucleotides": False,
+        }
+        chr_record = "AAAAAAAAAAAAAAG"
+        
+        strand = "+"
+        extract_nucleotides_from_most_common_del_location(
+            location,
+            splice_site_data,
+            chr_record,
+            strand)
+        self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
+
+    def test_canonical_nucleotides_for_loc_end_pos_strand_are_extracted_correctly(self):
+        location = 10
+        splice_site_data = {
+            "most_common_del": -4,
+            "location_is_end": True,
+            "del_location_has_canonical_nucleotides": False,
+        }
+        
+        #  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15
+        #              offset of -4   ^
+        #                 |           |
+        #                 v         start pos
+        #  A  A  A  A  A  G  C  A  A  A  A  A  A  A  A  
+        chr_record = "AAAAAGCAAAAAAAA"
+        
+        strand = "+"
+        extract_nucleotides_from_most_common_del_location(
+            location,
+            splice_site_data,
+            chr_record,
+            strand)
+        self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
+
+    def test_canonical_nucleotides_for_loc_start_neg_strand_are_extracted_correctly(self):
+        location = 10
+        splice_site_data = {
+            "most_common_del": 4,
+            "location_is_end": False,
+            "del_location_has_canonical_nucleotides": False,
+        }
+        chr_record = "AAAAAAAAAAAAAAC"
+        
+        strand = "-"
+        extract_nucleotides_from_most_common_del_location(
+            location,
+            splice_site_data,
+            chr_record,
+            strand)
+        self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
+
+    def test_canonical_nucleotides_for_loc_end_neg_strand_are_extracted_correctly(self):
+        location = 10
+        splice_site_data = {
+            "most_common_del": -4,
+            "location_is_end": True,
+            "del_location_has_canonical_nucleotides": False,
+        }
+        chr_record = "AAAAACTAAAAAAAA"
+        
+        strand = "-"
+        extract_nucleotides_from_most_common_del_location(
+            location,
+            splice_site_data,
+            chr_record,
+            strand)
+        self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
