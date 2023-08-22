@@ -205,7 +205,7 @@ def compute_most_common_del_and_verify_nucleotides(
 
 
 
-def threshold_exceeded(
+def threshold_for_del_cases_exceeded(
         del_pos_distr: list,
         deletions: dict,
         most_common_del: int,
@@ -246,6 +246,7 @@ def correct_splice_site_errors(
         splice_site_cases: dict,
         MIN_N_OF_ALIGNED_READS: int,
         ACCEPTED_DEL_CASES: list,
+        THRESHOLD_CASES_AT_LOCATION: float,
         MORE_CONSERVATIVE_STRATEGY: bool,
         strand: str,
         chr_record):
@@ -281,7 +282,12 @@ def correct_splice_site_errors(
                 splice_site_data["del_pos_distr"],
                 abs(splice_site_data["most_common_del"])):
                 continue
-            pass
+            if not threshold_for_del_cases_exceeded(
+                splice_site_data["del_pos_distr"],
+                splice_site_data["deletions"],
+                splice_site_data["most_common_del"],
+                THRESHOLD_CASES_AT_LOCATION):
+                continue
 
         if splice_site_data["del_location_has_canonical_nucleotides"]:
             locations_with_errors.append(splice_site_location)
