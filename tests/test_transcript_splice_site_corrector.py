@@ -1,5 +1,5 @@
 from unittest import TestCase
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from src.transcript_splice_site_corrector import (
     extract_location_from_cigar_string,
@@ -9,12 +9,18 @@ from src.transcript_splice_site_corrector import (
     compute_most_common_case_of_deletions,
     extract_nucleotides_from_most_common_del_location,
     compute_most_common_del_and_verify_nucleotides,
-    threshold_exceeded,
+    threshold_for_del_cases_exceeded,
     sublist_largest_values_exists,
     correct_splice_site_errors,
     generate_updated_exon_list,
 )
 
+#######################################################################
+##                                                                   ##
+## Run tests with:                                                   ##
+## python -m unittest tests/test_transcript_splice_site_corrector.py ##
+##                                                                   ##
+#######################################################################
 class TestMoreConservativeStrategyConditions(TestCase):
     
     def test_threshold_exceeds_returns_true(self):
@@ -22,7 +28,7 @@ class TestMoreConservativeStrategyConditions(TestCase):
         del_pos_distr = [0, 0, 10, 10, 10, 10, 0, 0]
         deletions = {4: 10}
         most_common_del = 4
-        result = threshold_exceeded(
+        result = threshold_for_del_cases_exceeded(
             del_pos_distr,
             deletions,
             most_common_del,
@@ -34,7 +40,7 @@ class TestMoreConservativeStrategyConditions(TestCase):
         del_pos_distr = [0, 0, 10, 10, 10, 6, 0, 0]
         deletions = {4: 6, 3: 4}
         most_common_del = 4
-        result = threshold_exceeded(
+        result = threshold_for_del_cases_exceeded(
             del_pos_distr,
             deletions,
             most_common_del,
@@ -334,6 +340,7 @@ class TestCorrectSpliceSiteErrors(TestCase):
         }
         MIN_N_ALIGNED_READS = 5
         ACCEPTED_DEL_CASES = [4]
+        THRESHOLD_CASES_AT_LOCATION = 0.7
         MORE_CONSERVATIVE_STRATEGY = False
         strand = "+"
         chr_record = None
@@ -341,6 +348,7 @@ class TestCorrectSpliceSiteErrors(TestCase):
             splice_site_cases,
             MIN_N_ALIGNED_READS,
             ACCEPTED_DEL_CASES,
+            THRESHOLD_CASES_AT_LOCATION,
             MORE_CONSERVATIVE_STRATEGY,
             strand,
             chr_record)
@@ -350,6 +358,7 @@ class TestCorrectSpliceSiteErrors(TestCase):
 class TestCountDeletionsFromSpliceSiteLocations(TestCase):
     def test_count_deletions_from_splice_site_locations_extracts_correct_locations(self):
         exons = [(1, 10), (20, 30), (40, 50)]
+        # Cigar codes for indeces 20-40:
         #  20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 
         # [M ,M, M, M, M, M, D, D, D, D, M, M, M, M, M, M, M, M, M, M, M]
         cigartuples = [(0, 6), (2, 4), (0, 10)]
@@ -415,6 +424,7 @@ class TestNucleotideExtraction(TestCase):
             "del_location_has_canonical_nucleotides": False,
         }
         
+        #  Fasta 1-based index extraction location:
         #  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15
         #              offset of -4   ^
         #                 |           |
