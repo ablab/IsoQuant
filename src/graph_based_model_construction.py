@@ -251,6 +251,7 @@ class GraphBasedModelConstructor:
             splice_site_cases,
             MIN_N_OF_ALIGNED_READS,
             ACCEPTED_DEL_CASES,
+            THRESHOLD_CASES_AT_LOCATION,
             MORE_CONSERVATIVE_STRATEGY,
             strand,
             self.chr_record
