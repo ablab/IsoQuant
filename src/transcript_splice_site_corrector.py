@@ -122,7 +122,7 @@ def count_deletions_for_splice_site_locations(
                 'location_is_end': location_type,  
                 'deletions': {},
                 'del_pos_distr': [0 for _ in range(WINDOW_SIZE)],
-                'most_common_deletion': -1,
+                'most_common_del': -1,
                 'del_location_has_canonical_nucleotides': False
             }
         
@@ -191,12 +191,12 @@ def compute_most_common_del_and_verify_nucleotides(
     
     
     # Compute most common case of deletions
-    splice_site_data["most_common_deletion"] = compute_most_common_case_of_deletions(
+    splice_site_data["most_common_del"] = compute_most_common_case_of_deletions(
         splice_site_data["deletions"],
         splice_site_data["location_is_end"])
     
     # Extract nucleotides from most common deletion location if it is an accepted case
-    if splice_site_data["most_common_deletion"] in ACCEPTED_DEL_CASES:
+    if splice_site_data["most_common_del"] in ACCEPTED_DEL_CASES:
         extract_nucleotides_from_most_common_del_location(
             splice_site_location, 
             splice_site_data, 
