@@ -265,6 +265,7 @@ class GraphBasedModelConstructor:
             corrected_exons,
             exons
         )
+        logger.debug("Corrected exons: ", updated_exons)
         
         return updated_exons
 
