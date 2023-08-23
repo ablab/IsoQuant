@@ -219,7 +219,7 @@ class GraphBasedModelConstructor:
         # returns: a list of corrected exons if correction takes place, None - otherwise
         # TODO Heidi: insert your code here
 
-        
+        logger.debug("Correcting splice sites. n of exons: ", len(exons), " n of assigned reads: ", len(assigned_reads))
         # Constants
         ACCEPTED_DEL_CASES = [3, 4, 5, 6]
         SUPPORTED_STRANDS = ['+', '-']
