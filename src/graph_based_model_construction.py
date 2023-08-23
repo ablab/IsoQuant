@@ -219,7 +219,6 @@ class GraphBasedModelConstructor:
         # returns: a list of corrected exons if correction takes place, None - otherwise
         # TODO Heidi: insert your code here
 
-        logger.debug(f"Correcting splice sites. n of exons: {len(exons)}, n of assigned reads: {len(assigned_reads)}")
         # Constants
         ACCEPTED_DEL_CASES = [3, 4, 5, 6]
         SUPPORTED_STRANDS = ['+', '-']
@@ -230,6 +229,7 @@ class GraphBasedModelConstructor:
 
 
         strand = assigned_reads[0].strand
+        logger.debug(f"Heidi: Correcting splice sites. n of exons: {len(exons)}, n of assigned reads: {len(assigned_reads)}, strand: {strand}")
         if strand not in SUPPORTED_STRANDS:
             return None
 
@@ -248,7 +248,8 @@ class GraphBasedModelConstructor:
                 exons, 
                 splice_site_cases)
 
-        
+        logger.debug(f"Heidi: Splice site cases: {splice_site_cases}")
+
         corrected_exons = correct_splice_site_errors(
             splice_site_cases,
             MIN_N_OF_ALIGNED_READS,
@@ -267,7 +268,7 @@ class GraphBasedModelConstructor:
             corrected_exons,
             exons
         )
-        logger.debug(f"Corrected exons: {len(updated_exons)}, {updated_exons}")
+        logger.debug(f"Heidi: Corrected exons: {len(updated_exons)}, {updated_exons}")
         
         return updated_exons
 
