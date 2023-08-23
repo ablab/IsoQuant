@@ -240,6 +240,7 @@ class GraphBasedModelConstructor:
             read_end = read_assignment.corrected_exons[-1][1]
             cigartuples = read_assignment.cigartuples
             if not cigartuples:
+                logger.debug(f"Heidi: No cigar tuples for read {read_assignment.read_id}")
                 continue
             count_deletions_for_splice_site_locations(
                 read_start, 
