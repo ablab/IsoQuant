@@ -6,6 +6,7 @@
 
 import os
 import logging
+import yaml
 from collections import defaultdict
 
 
@@ -108,6 +109,11 @@ class InputDataStorage:
             for i, save_file in enumerate(args.read_assignments):
                 sample_files.append([[save_file]])
                 experiment_names.append(self.experiment_prefix + str(i))
+        
+        elif args.yaml_file is not None:
+            sample_files, experiment_names, readable_names_dict = self.get_samples_from_yaml(args.yaml_file)
+            if args.labels:
+                logger.warning("--labels option has no effect when files are provided via yaml file")
 
         else:
             logger.critical("Input data was not specified")
@@ -171,6 +177,73 @@ class InputDataStorage:
 
     def has_replicas(self):
         return any(len(sample.file_list) > 1 for sample in self.samples)
+        
+    def get_samples_from_yaml(self, file_name):
+        sample_files = []
+        experiment_names = []
+        readable_names_dict = defaultdict(lambda: defaultdict(str))
+        yaml_file = open(file_name, 'r')
+        con = yaml.safe_load(yaml_file)
+        current_sample = []
+        current_sample_name = self.experiment_prefix
+        current_index = 0
+        t = con[0]
+        if not 'data format' in t.keys():
+            logger.critical("Please specify whether you are using fastq or bam files in the first entry")
+            exit(-2)
+        else:
+            if len(t.keys()) > 1:
+                logger.warning("The first entry should only specify the input data format. Any additional info will be ignored")
+            if  t['data format'] == "bam":
+                self.input_type = "bam"
+            elif t['data format'] == "fastq" or t['data format'] == "fasta":
+                self.input_type = "fastq"
+            else:
+                logger.critical("The input data format can only be either fastq, fasta or bam.")
+                exit(-1)
+        for sample in con:
+            if not 'name' in sample.keys():
+                current_sample_name = self.experiment_prefix + str(current_index)
+            else:
+                current_sample_name = sample['name']
+            if current_sample_name in experiment_names:
+                    new_sample_name = self.experiment_prefix + str(current_index)
+                    if current_sample_name == new_sample_name:
+                        logger.critical("Change experiment name %s and rerun IsoQuant" % current_sample_name)
+                        exit(-1)
+                    logger.warning("Duplicate folder prefix %s, will change to %s" %
+                                   (current_sample_name, new_sample_name))
+                    current_sample_name = new_sample_name
+            if not 'long_read_files' in sample.keys():
+                logger.warning("Sample %s does not contain any files" %current_sample_name)
+                current_sample = []
+            else:
+                current_sample = sample['long_read_files']
+                names = 'file_names' in sample.keys()
+                if names and not len(sample['file_names']) == len(current_sample):
+                    logger.critical("The number of file aliases differs from the number of files")
+                    exit(-2)
+                for f in range(len(current_sample)):
+                    fname = current_sample[f]
+                    if names:
+                        readable_name = sample['file_names'][f]
+                    else:
+                        readable_name = os.path.splitext(os.path.basename(files[0]))[0]
+                    if fname in readable_names_dict[current_sample_name]:
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
+                        exit(-2)
+                    readable_names_dict[current_sample_name][fname] = readable_name
+            if len(current_sample) > 0:
+            sample_files.append(current_sample)
+            experiment_names.append(current_sample_name)
+            
+        for sample in sample_files:
+            for lib in sample:
+                for in_file in lib:
+                    check_input_type(in_file, self.input_type)
+        return sample_files, experiment_names, readable_names_dict
+            
+        
 
 
 def check_input_type(fname, input_type):
