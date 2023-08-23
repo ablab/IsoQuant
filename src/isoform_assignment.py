@@ -509,6 +509,8 @@ class ReadAssignment:
         read_assignment.read_id = read_string(infile)
         read_assignment.exons = read_list_of_pairs(infile, read_int)
         read_assignment.cigartuples = read_list_of_pairs(infile, read_int)
+        if not read_assignment.cigartuples:
+            read_assignment.cigartuples = None
         read_assignment.corrected_exons = read_list_of_pairs(infile, read_int)
         read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
         read_assignment.gene_info = gene_info
@@ -534,7 +536,10 @@ class ReadAssignment:
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
         write_list_of_pairs(self.exons, outfile, write_int)
-        write_list_of_pairs(self.cigartuples, outfile, write_int)
+        if self.cigartuples is None:
+            write_list_of_pairs([], outfile, write_int)
+        else:
+            write_list_of_pairs(self.cigartuples, outfile, write_int)
         write_list_of_pairs(self.corrected_exons, outfile, write_int)
         write_bool_array([self.multimapper, self.polyA_found, self.cage_found], outfile)
         write_int_neg(self.polya_info.external_polya_pos, outfile)

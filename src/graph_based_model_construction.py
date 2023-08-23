@@ -239,6 +239,8 @@ class GraphBasedModelConstructor:
             read_start = read_assignment.corrected_exons[0][0]
             read_end = read_assignment.corrected_exons[-1][1]
             cigartuples = read_assignment.cigartuples
+            if not cigartuples:
+                continue
             count_deletions_for_splice_site_locations(
                 read_start, 
                 read_end, 
