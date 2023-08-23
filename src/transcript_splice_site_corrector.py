@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger('IsoQuant')
+
 def extract_location_from_cigar_string(cigartuples: list,
                                     read_start: int,
                                     read_end: int,
@@ -114,7 +117,7 @@ def count_deletions_for_splice_site_locations(
     
     # Extract splice site locations within aligned read
     matching_locations = extract_splice_site_locations_within_aligned_read(read_start, read_end, exons)
-    
+    logger.debug(f"Matching locations: {matching_locations}")
     # Count deletions for each splice site location
     for splice_site_location, location_type in matching_locations:
         if splice_site_location not in splice_site_cases:
