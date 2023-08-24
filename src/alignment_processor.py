@@ -219,12 +219,13 @@ class AlignmentCollector:
     ABS_COV_VALLEY = 1
     REL_COV_VALLEY = 0.01
 
-    def __init__(self, chr_id, bam_pairs, params, genedb=None, chr_record=None, read_groupper=DefaultReadGrouper()):
+    def __init__(self, chr_id, bam_pairs, params, illumina_bam, genedb=None, chr_record=None, read_groupper=DefaultReadGrouper()):
         self.chr_id = chr_id
         self.bam_pairs = bam_pairs
         self.params = params
         self.genedb = genedb
         self.chr_record = chr_record
+        self.illumina_bam = illumina_bam
 
         self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, 0,
                                           self.bam_pairs[0][0].get_reference_length(self.chr_id),
@@ -274,8 +275,8 @@ class AlignmentCollector:
 
     def process_intergenic(self, alignment_storage, region):
         assignment_storage = []
-        if self.params.illumina_bam is not None:
-            corrector = IlluminaExonCorrector(self.chr_id, region[0], region[1], self.params.illumina_bam)
+        if self.illumina_bam is not None:
+            corrector = IlluminaExonCorrector(self.chr_id, region[0], region[1], self.illumina_bam)
         else:
             corrector = VoidExonCorrector()
 

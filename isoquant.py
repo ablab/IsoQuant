@@ -349,8 +349,18 @@ def check_input_params(args):
         return False
     args.data_type = DATA_TYPE_ALIASES[args.data_type]
 
-    if not args.fastq and not args.fastq_list and not args.bam and not args.bam_list and not args.read_assignments:
+    if not args.fastq and not args.fastq_list and not args.bam and not args.bam_list and not args.read_assignments and not args.yaml:
         logger.error("No input data was provided")
+        return False
+        
+    if args.yaml and args.illumina_bam:
+        logger.error("When providing a yaml file it should include all input files, including the illumina bam file.")
+        return False
+        
+    # not happy with wording check again later
+    if args.illumina_bam and (args.fastq_list or args.bam_list):
+        logger.error("Unsupported combination of list of input files and Illumina bam file."
+                     "To combine multiple experiments with short read correction please use yaml input.")
         return False
 
     args.input_data = InputDataStorage(args)
@@ -363,10 +373,6 @@ def check_input_params(args):
         return False
     if args.stranded not in SUPPORTED_STRANDEDNESS:
         logger.error("Unsupported strandness " + args.stranded + ", choose one of: " + " ".join(SUPPORTED_STRANDEDNESS))
-        return False
-        
-    if args.yaml_file and args.illumina_bam:
-        logger.error("When providing a yaml file it should include all input files, including the illumina bam file.")
         return False
 
     if not args.genedb:

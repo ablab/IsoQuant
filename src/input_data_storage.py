@@ -14,10 +14,11 @@ logger = logging.getLogger('IsoQuant')
 
 
 class SampleData:
-    def __init__(self, file_list, prefix, out_dir, readable_names_dict):
+    def __init__(self, file_list, prefix, out_dir, readable_names_dict, illumina_bam):
         # list of lists, since each sample may contain several libraries, and each library may contain 2 files (paired)
         self.file_list = file_list
         self.readable_names_dict = readable_names_dict
+        self.illumina_bam = illumina_bam
         self.prefix = prefix
         self.out_dir = out_dir
         self.aux_dir = os.path.join(self.out_dir, "aux")
@@ -57,6 +58,7 @@ class InputDataStorage:
         sample_files = []
         experiment_names = []
         self.experiment_prefix = args.prefix
+        illumina_bam = []
 
         if args.fastq is not None:
             self.input_type = "fastq"
@@ -74,6 +76,7 @@ class InputDataStorage:
                 sample_files[0].append([fq])
                 readable_names_dict[experiment_name][fq] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(fq))[0]
+            illumina_bam.append(args.illumina_bam)
 
         elif args.bam is not None:
             self.input_type = "bam"
@@ -91,16 +94,17 @@ class InputDataStorage:
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(bam))[0]
+            illumina_bam.append(args.illumina_bam)
 
         elif args.fastq_list is not None:
             self.input_type = "fastq"
-            sample_files, experiment_names, readable_names_dict = self.get_samples_from_file(args.fastq_list)
+            sample_files, experiment_names, readable_names_dict, illumina_bam = self.get_samples_from_file(args.fastq_list)
             if args.labels:
                 logger.warning("--labels option has no effect when files are provided via input list")
 
         elif args.bam_list is not None:
             self.input_type = "bam"
-            sample_files, experiment_names, readable_names_dict = self.get_samples_from_file(args.bam_list)
+            sample_files, experiment_names, readable_names_dict, illumina_bam = self.get_samples_from_file(args.bam_list)
             if args.labels:
                 logger.warning("--labels option has no effect when files are provided via input list")
 
@@ -110,8 +114,8 @@ class InputDataStorage:
                 sample_files.append([[save_file]])
                 experiment_names.append(self.experiment_prefix + str(i))
         
-        elif args.yaml_file is not None:
-            sample_files, experiment_names, readable_names_dict = self.get_samples_from_yaml(args.yaml_file)
+        elif args.yaml is not None:
+            sample_files, experiment_names, readable_names_dict, illumina_bam = self.get_samples_from_yaml(args.yaml)
             if args.labels:
                 logger.warning("--labels option has no effect when files are provided via yaml file")
 
@@ -122,11 +126,13 @@ class InputDataStorage:
         for i in range(len(sample_files)):
             self.samples.append(SampleData(sample_files[i], experiment_names[i],
                                            os.path.join(args.output, experiment_names[i]),
-                                           readable_names_dict[experiment_names[i]]))
+                                           readable_names_dict[experiment_names[i]],
+                                           illumina_bam[i]))
 
     def get_samples_from_file(self, file_name):
         sample_files = []
         experiment_names = []
+        illumina_bam = []
         readable_names_dict = defaultdict(lambda: defaultdict(str))
         inf = open(file_name, "r")
         current_sample = []
@@ -138,6 +144,7 @@ class InputDataStorage:
                 if len(current_sample) > 0:
                     sample_files.append(current_sample)
                     experiment_names.append(current_sample_name)
+                    illumina_bam.append(None)
                 current_sample = []
                 current_sample_name = l.strip()[1:]
                 if not current_sample_name:
@@ -168,12 +175,16 @@ class InputDataStorage:
         if len(current_sample) > 0:
             sample_files.append(current_sample)
             experiment_names.append(current_sample_name)
+            illumina_bam.append(None)
 
         for sample in sample_files:
             for lib in sample:
                 for in_file in lib:
                     check_input_type(in_file, self.input_type)
-        return sample_files, experiment_names, readable_names_dict
+                    
+        print(sample_files)
+        print(illumina_bam)
+        return sample_files, experiment_names, readable_names_dict, illumina_bam
 
     def has_replicas(self):
         return any(len(sample.file_list) > 1 for sample in self.samples)
@@ -181,6 +192,7 @@ class InputDataStorage:
     def get_samples_from_yaml(self, file_name):
         sample_files = []
         experiment_names = []
+        illumina_bam = []
         readable_names_dict = defaultdict(lambda: defaultdict(str))
         yaml_file = open(file_name, 'r')
         con = yaml.safe_load(yaml_file)
@@ -195,13 +207,15 @@ class InputDataStorage:
             if len(t.keys()) > 1:
                 logger.warning("The first entry should only specify the input data format. Any additional info will be ignored")
             if  t['data format'] == "bam":
+                print("yes")
                 self.input_type = "bam"
+                print(self.input_type)
             elif t['data format'] == "fastq" or t['data format'] == "fasta":
                 self.input_type = "fastq"
             else:
                 logger.critical("The input data format can only be either fastq, fasta or bam.")
                 exit(-1)
-        for sample in con:
+        for sample in con[1:]:
             if not 'name' in sample.keys():
                 current_sample_name = self.experiment_prefix + str(current_index)
             else:
@@ -219,6 +233,7 @@ class InputDataStorage:
                 current_sample = []
             else:
                 current_sample = sample['long_read_files']
+                print(current_sample)
                 names = 'file_names' in sample.keys()
                 if names and not len(sample['file_names']) == len(current_sample):
                     logger.critical("The number of file aliases differs from the number of files")
@@ -228,20 +243,27 @@ class InputDataStorage:
                     if names:
                         readable_name = sample['file_names'][f]
                     else:
-                        readable_name = os.path.splitext(os.path.basename(files[0]))[0]
+                        readable_name = os.path.splitext(os.path.basename(fname[0]))[0]
                     if fname in readable_names_dict[current_sample_name]:
                         logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
                         exit(-2)
                     readable_names_dict[current_sample_name][fname] = readable_name
             if len(current_sample) > 0:
-            sample_files.append(current_sample)
-            experiment_names.append(current_sample_name)
+                sample_files.append([current_sample])
+                experiment_names.append(current_sample_name)
+                if 'illumina bam' in sample.keys():
+                    illumina_bam.append(sample['illumina bam'])
+                else:
+                    illumina_bam.append(None)
             
+        # this is one for loop too many check why it works above and see if I have a list too little
+        print(sample_files)
         for sample in sample_files:
             for lib in sample:
                 for in_file in lib:
+                    print(in_file)
                     check_input_type(in_file, self.input_type)
-        return sample_files, experiment_names, readable_names_dict
+        return sample_files, experiment_names, readable_names_dict, illumina_bam
             
         
 
