@@ -79,7 +79,6 @@ class IlluminaExonCorrector:
         return (not left[0] == old[0] or not right[1] == old[1])
 
     def correct_exons(self, exons):
-        print("exons:", exons)
         introns = junctions_from_blocks(exons)
         corrected_introns = []
         score = IlluminaExonCorrector.MAX_SCORE

@@ -103,10 +103,11 @@ def collect_reads_in_parallel(sample, chr_id, args):
     bam_files = list(map(lambda x: x[0], sample.file_list))
     bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
     gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
+    illumina_bam = sample.illumina_bam
 
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
-        AlignmentCollector(chr_id, bam_file_pairs, args, gffutils_db, current_chr_record, read_grouper)
+        AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)
@@ -529,7 +530,7 @@ class DatasetProcessor:
 
         model_gen = (
             construct_models_in_parallel,
-            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict) for chr_id in chr_ids),
+            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict, sample.illumina_bam) for chr_id in chr_ids),
             chr_ids,
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),

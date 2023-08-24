@@ -62,7 +62,7 @@ class DataSetReadMapper:
                     if fastq_file in sample.readable_names_dict:
                         readable_names_dict[bam_file] = sample.readable_names_dict[fastq_file]
 
-            samples.append(SampleData(bam_files, sample.prefix, sample.out_dir, readable_names_dict))
+            samples.append(SampleData(bam_files, sample.prefix, sample.out_dir, readable_names_dict, sample.illumina_bam))
         args.input_data.samples = samples
         args.input_data.input_type = "bam"
         return args.input_data
