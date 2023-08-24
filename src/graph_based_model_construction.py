@@ -242,13 +242,14 @@ class GraphBasedModelConstructor:
             if not cigartuples:
                 logger.debug(f"Heidi: No cigar tuples for read {read_assignment.read_id}")
                 continue
+            logger.debug(f"Heidi: Cigar tuples for read {read_assignment.read_id}: {cigartuples}")
             count_deletions_for_splice_site_locations(
                 read_start, 
                 read_end, 
                 cigartuples, 
                 exons, 
                 splice_site_cases)
-
+            
         logger.debug(f"Heidi: Splice site cases: {splice_site_cases}")
 
         corrected_exons = correct_splice_site_errors(
