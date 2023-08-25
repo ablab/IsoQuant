@@ -1,6 +1,9 @@
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
+from src.isoform_assignment import ReadAssignment
+
+from src.graph_based_model_construction import GraphBasedModelConstructor
 from src.transcript_splice_site_corrector import (
     extract_location_from_cigar_string,
     count_deletions_from_cigar_codes_in_given_window,
@@ -561,4 +564,29 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
         self.assertEqual(splice_site_data, expected_result)
+
+class TestSpliceSiteCorrector(TestCase):
+    
+    
+    def test_error_is_corrected(self):
+        assigned_read_1 = ReadAssignment(read_id="1", assignment_type="test")
+        assigned_read_1.cigartuples = [(0, 10), (2, 4), (0, 6)]
+        assigned_read_1.corrected_exons = [(0, 20)]
+        assigned_read_1.strand = "+"
+        assigned_reads = [assigned_read_1, assigned_read_1, assigned_read_1, assigned_read_1, assigned_read_1]
+        exons = [(0, 5), (10, 20)]
+
+        constructor = GraphBasedModelConstructor(
+            gene_info=MagicMock(),
+            chr_record= "ABCDEFGHIJKLMAGPQRSTUVWXYZ",
+            params=MagicMock(),
+            transcript_counter=0
+        )
+        result = constructor.correct_transcript_splice_sites(exons, assigned_reads)
+
+        expected_result = [(0, 5), (14, 20)]
+        self.assertTrue(result == expected_result)
+
+
         
+    
