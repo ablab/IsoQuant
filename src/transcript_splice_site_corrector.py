@@ -182,7 +182,6 @@ def extract_nucleotides_from_most_common_del_location(
         possible_canonicals = canonical_pairs[strand]['end']
     else:
         possible_canonicals = canonical_pairs[strand]['start']
-    
     if extracted_canonicals in possible_canonicals:
         splice_site_data["del_location_has_canonical_nucleotides"] = True
 
@@ -200,7 +199,7 @@ def compute_most_common_del_and_verify_nucleotides(
         splice_site_data["location_is_end"])
     
     # Extract nucleotides from most common deletion location if it is an accepted case
-    if splice_site_data["most_common_del"] in ACCEPTED_DEL_CASES:
+    if abs(splice_site_data["most_common_del"]) in ACCEPTED_DEL_CASES:
         extract_nucleotides_from_most_common_del_location(
             splice_site_location, 
             splice_site_data, 
