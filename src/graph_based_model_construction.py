@@ -208,6 +208,15 @@ class GraphBasedModelConstructor:
         for model in self.transcript_model_storage:
             exons = model.exon_blocks
             assigned_reads = self.transcript_read_ids[model.transcript_id]
+            cigartuples = False
+            for read in assigned_reads:
+                if read.cigartuples:
+                    cigartuples = True
+                    break
+            if not cigartuples:
+                logger.debug(f"Heidi: Method correct_transcripts. No cigar tuples for transcript {model.transcript_id}")    
+            else:
+                logger.debug(f"Heidi: Method correct_transcripts. Yes cigar tuples for transcript {model.transcript_id}")
             corrected_exons = self.correct_transcript_splice_sites(exons, assigned_reads)
             if corrected_exons:
                 model.exon_blocks = corrected_exons
@@ -240,9 +249,9 @@ class GraphBasedModelConstructor:
             read_end = read_assignment.corrected_exons[-1][1]
             cigartuples = read_assignment.cigartuples
             if not cigartuples:
-                logger.debug(f"Heidi: No cigar tuples for read {read_assignment.read_id}")
+                # logger.debug(f"Heidi: No cigar tuples for read {read_assignment.read_id}")
                 continue
-            logger.debug(f"Heidi: Cigar tuples for read {read_assignment.read_id}: {cigartuples}")
+            # logger.debug(f"Heidi: Cigar tuples for read {read_assignment.read_id}: {cigartuples}")
             count_deletions_for_splice_site_locations(
                 read_start, 
                 read_end, 
