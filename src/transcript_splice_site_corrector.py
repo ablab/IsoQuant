@@ -50,7 +50,7 @@ def count_deletions_from_cigar_codes_in_given_window(cigartuples: list,
         loc_type (str): type of location (start or end)
     """
 
-    deletions = 0
+    count_of_deletions = 0
     
 
     cigar_code_list = []
@@ -74,13 +74,13 @@ def count_deletions_from_cigar_codes_in_given_window(cigartuples: list,
         if i >= len(cigar_code_list):
             break
         if cigar_code_list[i] == 2:
-            deletions += 1
+            count_of_deletions += 1
             splice_site_data["del_pos_distr"][i] += 1
     
-    if deletions not in splice_site_data:
-        splice_site_data["deletions"][deletions] = 0
+    if count_of_deletions not in splice_site_data["deletions"]:
+        splice_site_data["deletions"][count_of_deletions] = 0
     
-    splice_site_data["deletions"][deletions] += 1
+    splice_site_data["deletions"][count_of_deletions] += 1
 
 
 def extract_splice_site_locations_within_aligned_read(read_start: int, read_end: int, exons:list):
@@ -117,6 +117,7 @@ def count_deletions_for_splice_site_locations(
     
     # Extract splice site locations within aligned read
     matching_locations = extract_splice_site_locations_within_aligned_read(read_start, read_end, exons)
+    
     logger.debug(f"Matching locations: {matching_locations}")
     # Count deletions for each splice site location
     for splice_site_location, location_type in matching_locations:
@@ -265,6 +266,8 @@ def correct_splice_site_errors(
         strand (str): transcript strand (extracted from first ReadAssignment-object in read_assignments list)
         chr_record (Fasta): FASTA recored, i.e. a single chromosome from a reference
     """
+
+    
     
     locations_with_errors = []
     for splice_site_location, splice_site_data in splice_site_cases.items():
