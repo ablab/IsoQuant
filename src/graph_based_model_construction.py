@@ -236,7 +236,7 @@ class GraphBasedModelConstructor:
 
 
         strand = assigned_reads[0].strand
-        logger.debug(f"Heidi: Correcting splice sites. n of exons: {len(exons)}, n of assigned reads: {len(assigned_reads)}, strand: {strand}")
+        logger.debug(f"correct_transcript_splice_sites. Correcting splice sites. n of exons: {len(exons)}, n of assigned reads: {len(assigned_reads)}, strand: {strand}")
         if strand not in SUPPORTED_STRANDS:
             return None
 
@@ -257,7 +257,7 @@ class GraphBasedModelConstructor:
                 exons, 
                 splice_site_cases)
             
-        logger.debug(f"Heidi: Splice site cases: {splice_site_cases}")
+        logger.debug(f"correct_transcript_splice_sites. Splice site cases: {splice_site_cases}")
 
         corrected_exons = correct_splice_site_errors(
             splice_site_cases,
@@ -272,12 +272,15 @@ class GraphBasedModelConstructor:
         if not corrected_exons:
             return None
         
+        cases = [str(exon) + ": " + str(splice_site_cases[exon]) for exon in corrected_exons]
+        logger.debug(f"correct_transcript_splice_sites. Corrected exons: {len(corrected_exons)}, {corrected_exons} {cases}")
+        
+        
         updated_exons = generate_updated_exon_list(
             splice_site_cases,
             corrected_exons,
             exons
         )
-        logger.debug(f"Heidi: Corrected exons: {len(updated_exons)}, {updated_exons}")
         
         return updated_exons
 
