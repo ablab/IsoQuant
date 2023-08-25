@@ -209,6 +209,7 @@ class GraphBasedModelConstructor:
             exons = model.exon_blocks
             assigned_reads = self.transcript_read_ids[model.transcript_id]
             found_cigartuples = False
+            # TODO: REMOVE NEXT FIVE LINES AFTER CIAGRTUPLES ARE FIXED
             for read in assigned_reads:
                 if read.cigartuples:
                     found_cigartuples = True
