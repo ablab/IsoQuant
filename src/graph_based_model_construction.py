@@ -213,7 +213,7 @@ class GraphBasedModelConstructor:
                 if read.cigartuples:
                     found_cigartuples = True
                     break
-            logger.debug(f"Heidi: Method correct_transcripts. Transcript: {model.transcript_id}, four one or more cigartuples: {found_cigartuples}")    
+            logger.debug(f"Heidi: Method correct_transcripts. Transcript: {model.transcript_id}, found one or more cigartuples: {found_cigartuples}")    
             corrected_exons = self.correct_transcript_splice_sites(exons, assigned_reads)
             if corrected_exons:
                 model.exon_blocks = corrected_exons
