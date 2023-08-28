@@ -76,7 +76,7 @@ class InputDataStorage:
                 sample_files[0].append([fq])
                 readable_names_dict[experiment_name][fq] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(fq))[0]
-            illumina_bam.append(args.illumina_bam)
+            illumina_bam.append([args.illumina_bam])
 
         elif args.bam is not None:
             self.input_type = "bam"
@@ -94,7 +94,7 @@ class InputDataStorage:
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(bam))[0]
-            illumina_bam.append(args.illumina_bam)
+            illumina_bam.append([args.illumina_bam])
 
         elif args.fastq_list is not None:
             self.input_type = "fastq"
@@ -144,7 +144,7 @@ class InputDataStorage:
                 if len(current_sample) > 0:
                     sample_files.append(current_sample)
                     experiment_names.append(current_sample_name)
-                    illumina_bam.append(None)
+                    illumina_bam.append([None])
                 current_sample = []
                 current_sample_name = l.strip()[1:]
                 if not current_sample_name:
@@ -175,15 +175,15 @@ class InputDataStorage:
         if len(current_sample) > 0:
             sample_files.append(current_sample)
             experiment_names.append(current_sample_name)
-            illumina_bam.append(None)
+            illumina_bam.append([None])
 
         for sample in sample_files:
             for lib in sample:
                 for in_file in lib:
                     check_input_type(in_file, self.input_type)
                     
-        print(sample_files)
-        print(illumina_bam)
+        #print(sample_files)
+        #print(illumina_bam)
         return sample_files, experiment_names, readable_names_dict, illumina_bam
 
     def has_replicas(self):
@@ -230,7 +230,7 @@ class InputDataStorage:
                     current_sample_name = new_sample_name
             if not 'long_read_files' in sample.keys():
                 logger.warning("Sample %s does not contain any files" %current_sample_name)
-                current_sample = []
+                current_sample = [[]]
             else:
                 current_sample = sample['long_read_files']
                 print(current_sample)
@@ -254,18 +254,33 @@ class InputDataStorage:
                 if 'illumina bam' in sample.keys():
                     illumina_bam.append(sample['illumina bam'])
                 else:
-                    illumina_bam.append(None)
+                    illumina_bam.append([None])
             
         # this is one for loop too many check why it works above and see if I have a list too little
-        print(sample_files)
+        # either use extra list or remove one loop. check with andrey if we actually have libs in samples
+        #print(sample_files)
         for sample in sample_files:
             for lib in sample:
                 for in_file in lib:
-                    print(in_file)
                     check_input_type(in_file, self.input_type)
         return sample_files, experiment_names, readable_names_dict, illumina_bam
-            
         
+    # what do I use here? sample files? or all files?
+    def get_sample_name(names, index):
+        common_characters = len(names[0])
+        common_name = names[0]
+        
+        for i in range(1, len(names)):
+            p = mismatch(common_name, names[i])
+            if p[0] < common_characters:
+                common_characters = p[0]
+                
+        found = common_names.rfind('/', 0, common_characters)
+        
+        common_name = common_name[:found]
+        
+        sample_name = common_name + str(index)
+        return sample_name
 
 
 def check_input_type(fname, input_type):
