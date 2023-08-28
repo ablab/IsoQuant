@@ -42,18 +42,32 @@ class IlluminaExonCorrector:
         return corrector
         
     # get introns from a specific area of the genome
-    def get_introns(self, f, chromosome, start, end):
-        samfile = pysam.AlignmentFile(f, "rb") 
-        intr = samfile.find_introns(samfile.fetch(chromosome, start = start, stop = end))
-        samfile.close()
+    def get_introns(self, files, chromosome, start, end):
+        introns = dict()
+        for f in files:
+            samfile = pysam.AlignmentFile(f, "rb") 
+            intr = samfile.find_introns(samfile.fetch(chromosome, start = start, stop = end))
+            introns = self.merge_dictionaries(introns, intr)
+            samfile.close()
+            # in some cases counts might be necessary, so original is also saved
         i_list = set()
-        for i in intr.keys():
+        for i in introns.keys():
             if(type(i)!="int"): 
                 # gtf files start with 1, bam with 0, we use gtf as standard
                 i_list.add((i[0]+1,i[1]))
-        # in some cases counts might be necessary, so original is also saved
-        return i_list, intr        
-
+        return i_list, introns
+    
+    @staticmethod
+    def merge_dictionaries(old, new):
+        old_entries = old.keys()
+        for entry in new.keys():
+            if entry in old_entries:
+                count = new[entry] + old[entry]
+                old[entry] = count
+            else:
+                old[entry] = new[entry]
+        return old
+                
     def correct_read(self, alignment_info):
         return self.correct_exons(alignment_info.read_exons)
       
