@@ -700,7 +700,7 @@ def run_pipeline(args):
         dataset_processor.process_all_samples(args.input_data)
 
         # aggregate counts for all samples
-        if len(args.input_data.samples) > 1:
+        if len(args.input_data.samples) > 1 and args.genedb:
             combine_counts(args.input_data, args.output)
 
     logger.info(" === IsoQuant pipeline finished === ")
