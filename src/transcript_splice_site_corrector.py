@@ -214,7 +214,7 @@ def threshold_for_del_cases_exceeded(
     total_cases = sum(deletions.values())
     nucleotides_exceeding_treshold = 0
     for value in del_pos_distr:
-        if value / total_cases > THRESHOLD_CASES_AT_LOCATION:
+        if value  > total_cases * THRESHOLD_CASES_AT_LOCATION:
             nucleotides_exceeding_treshold += 1
     return bool(nucleotides_exceeding_treshold >= abs(most_common_del))
 
