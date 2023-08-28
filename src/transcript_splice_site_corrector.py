@@ -102,7 +102,8 @@ def count_deletions_for_splice_site_locations(
         read_end: int, 
         cigartuples: list, 
         exons: list, 
-        splice_site_cases: dict):
+        splice_site_cases: dict,
+        WINDOW_SIZE: int):
     """
 
     Args:
@@ -111,9 +112,6 @@ def count_deletions_for_splice_site_locations(
         splice_site_cases (dict): a dictionary for storing splice site cases
     """
 
-    
-    # Constant window size for counting deletions
-    WINDOW_SIZE = 8
     
     # Extract splice site locations within aligned read
     matching_locations = extract_splice_site_locations_within_aligned_read(read_start, read_end, exons)
