@@ -600,7 +600,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGIJGCMNOPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHIGCLMNOPQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
@@ -640,13 +640,52 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGIJCTMNOPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHICTLMNOPQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
         result = constructor.correct_transcript_splice_sites(exons, assigned_reads)
 
         expected_result = [(0, 10), (20, 30)]
+        self.assertTrue(result == expected_result)
+
+    def test_error_in_end_on_neg_strand_and_min_accepted_del_cases_is_corrected(self):
+        assigned_read_1 = ReadAssignment(read_id="1", assignment_type="test")
+        assigned_read_1.cigartuples = [(0, 10), (2, 3), (0, 17)]
+        assigned_read_1.corrected_exons = [(0, 20)]
+        assigned_read_1.strand = "-"
+        assigned_reads = [assigned_read_1, assigned_read_1, assigned_read_1, assigned_read_1, assigned_read_1]
+        exons = [(0, 14), (20, 30)]
+
+        constructor = GraphBasedModelConstructor(
+            gene_info=MagicMock(),
+            chr_record= "ABCDEFGHIJCTMNOPQRSTUVWXYZ",
+            params=MagicMock(),
+            transcript_counter=0
+        )
+        result = constructor.correct_transcript_splice_sites(exons, assigned_reads)
+
+        expected_result = [(0, 11), (20, 30)]
+        self.assertTrue(result == expected_result)
+
+    def test_error_in_end_on_neg_strand_and_max_accepted_del_cases_is_corrected(self):
+        assigned_read_1 = ReadAssignment(read_id="1", assignment_type="test")
+        assigned_read_1.cigartuples = [(0, 8), (2, 6), (0, 16)]
+        assigned_read_1.corrected_exons = [(0, 20)]
+        assigned_read_1.strand = "-"
+        assigned_reads = [assigned_read_1, assigned_read_1, assigned_read_1, assigned_read_1, assigned_read_1]
+        exons = [(0, 14), (20, 30)]
+
+        constructor = GraphBasedModelConstructor(
+            gene_info=MagicMock(),
+            chr_record= "ABCDEFGCTJKLMNOPQRSTUVWXYZ",
+            params=MagicMock(),
+            transcript_counter=0
+        )
+        result = constructor.correct_transcript_splice_sites(exons, assigned_reads)
+        
+
+        expected_result = [(0, 8), (20, 30)]
         self.assertTrue(result == expected_result)
 
 
@@ -660,7 +699,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGIJKLMNOPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
@@ -669,4 +708,21 @@ class TestSpliceSiteCorrector(TestCase):
         expected_result = None
         self.assertTrue(result == expected_result)
 
-    
+    def test_case_with_not_enough_dels_but_canonicals_in_end_on_pos_strand_returns_none(self):
+        assigned_read_1 = ReadAssignment(read_id="1", assignment_type="test")
+        assigned_read_1.cigartuples = [(0, 10), (2, 2), (0, 18)]
+        assigned_read_1.corrected_exons = [(0, 20)]
+        assigned_read_1.strand = "-"
+        assigned_reads = [assigned_read_1, assigned_read_1, assigned_read_1, assigned_read_1, assigned_read_1]
+        exons = [(0, 14), (20, 30)]
+
+        constructor = GraphBasedModelConstructor(
+            gene_info=MagicMock(),
+            chr_record= "ABCDEFGHIGCLMNOPQRSTUVWXYZ",
+            params=MagicMock(),
+            transcript_counter=0
+        )
+        result = constructor.correct_transcript_splice_sites(exons, assigned_reads)
+
+        expected_result = None
+        self.assertTrue(result == expected_result)
