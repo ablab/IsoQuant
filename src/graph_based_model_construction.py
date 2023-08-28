@@ -231,6 +231,7 @@ class GraphBasedModelConstructor:
         SUPPORTED_STRANDS = ['+', '-']
         THRESHOLD_CASES_AT_LOCATION = 0.7
         MIN_N_OF_ALIGNED_READS = 5
+        WINDOW_SIZE = 8
 
         MORE_CONSERVATIVE_STRATEGY = False
 
@@ -255,7 +256,8 @@ class GraphBasedModelConstructor:
                 read_end, 
                 cigartuples, 
                 exons, 
-                splice_site_cases)
+                splice_site_cases,
+                WINDOW_SIZE)
             
         logger.debug(f"correct_transcript_splice_sites. Splice site cases: {splice_site_cases}")
 
