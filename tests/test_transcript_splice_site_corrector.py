@@ -368,12 +368,14 @@ class TestCountDeletionsFromSpliceSiteLocations(TestCase):
         read_start = 20
         read_end = 40
         splice_site_cases = {}
+        WINDOW_SIZE = 8
         count_deletions_for_splice_site_locations(
             read_start,
             read_end,
             cigartuples,
             exons,
-            splice_site_cases)
+            splice_site_cases,
+            WINDOW_SIZE)
         expected_result = {
             20: {
                 'location_is_end': False, 
