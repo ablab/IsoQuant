@@ -329,13 +329,13 @@ class TestCorrectSpliceSiteErrors(TestCase):
     def test_errors_are_correctly_returned(self, mock_compute_most_common_case_of_deletions):
         splice_site_cases = {
             20: {
-                "del_location_has_canonical_nucleotides": False,
+                "canonical_bases_found": False,
                 "deletions": {4: 10},
                 "location_is_end": False,
                 "most_common_del": 4,
             },
             30: {
-                "del_location_has_canonical_nucleotides": True,
+                "canonical_bases_found": True,
                 "deletions": {4: 10},
                 "location_is_end": False,
                 "most_common_del": 4,
@@ -382,21 +382,21 @@ class TestCountDeletionsFromSpliceSiteLocations(TestCase):
                 'deletions': {2: 1}, 
                 'del_pos_distr': [0, 0, 0, 0, 0, 0, 1, 1], 
                 'most_common_del': -1, 
-                'del_location_has_canonical_nucleotides': False
+                'canonical_bases_found': False
             },
             30: {
                 'location_is_end': True, 
                 'deletions': {4: 1}, 
                 'del_pos_distr': [0, 0, 0, 1, 1, 1, 1, 0], 
                 'most_common_del': -1, 
-                'del_location_has_canonical_nucleotides': False
+                'canonical_bases_found': False
             },
             40: {
                 'location_is_end': False, 
                 'deletions': {0: 1}, 
                 'del_pos_distr': [0, 0, 0, 0, 0, 0, 0, 0], 
                 'most_common_del': -1, 
-                'del_location_has_canonical_nucleotides': False
+                'canonical_bases_found': False
             },
         }
         self.assertEqual(splice_site_cases, expected_result)
@@ -409,7 +409,7 @@ class TestNucleotideExtraction(TestCase):
         splice_site_data = {
             "most_common_del": 4,
             "location_is_end": False,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
         }
         chr_record = "AAAAAAAAAAAAAAG"
         
@@ -419,14 +419,14 @@ class TestNucleotideExtraction(TestCase):
             splice_site_data,
             chr_record,
             strand)
-        self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
+        self.assertTrue(splice_site_data["canonical_bases_found"])
 
     def test_canonical_nucleotides_for_loc_end_pos_strand_are_extracted_correctly(self):
         location = 10
         splice_site_data = {
             "most_common_del": -4,
             "location_is_end": True,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
         }
         
         #  Fasta 1-based index extraction location:
@@ -443,14 +443,14 @@ class TestNucleotideExtraction(TestCase):
             splice_site_data,
             chr_record,
             strand)
-        self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
+        self.assertTrue(splice_site_data["canonical_bases_found"])
 
     def test_canonical_nucleotides_for_loc_start_neg_strand_are_extracted_correctly(self):
         location = 10
         splice_site_data = {
             "most_common_del": 4,
             "location_is_end": False,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
         }
         chr_record = "AAAAAAAAAAAAAAC"
         
@@ -460,14 +460,14 @@ class TestNucleotideExtraction(TestCase):
             splice_site_data,
             chr_record,
             strand)
-        self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
+        self.assertTrue(splice_site_data["canonical_bases_found"])
 
     def test_canonical_nucleotides_for_loc_end_neg_strand_are_extracted_correctly(self):
         location = 10
         splice_site_data = {
             "most_common_del": -4,
             "location_is_end": True,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
         }
         chr_record = "AAAAACTAAAAAAAA"
         
@@ -477,7 +477,7 @@ class TestNucleotideExtraction(TestCase):
             splice_site_data,
             chr_record,
             strand)
-        self.assertTrue(splice_site_data["del_location_has_canonical_nucleotides"])
+        self.assertTrue(splice_site_data["canonical_bases_found"])
 
 
 class TestDeletionComputationAndBaseExtraction(TestCase):
@@ -487,7 +487,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
         splice_site_data  = {
             "most_common_del": -1,
             "location_is_end": False,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
             "deletions": {4: 1},
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
@@ -504,7 +504,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
         expected_result = {
             "most_common_del": 4,
             "location_is_end": False,
-            "del_location_has_canonical_nucleotides": True,
+            "canonical_bases_found": True,
             "deletions": {4: 1},
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
@@ -516,7 +516,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
         splice_site_data  = {
             "most_common_del": -1,
             "location_is_end": False,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
             "deletions": {2: 1},
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
@@ -533,7 +533,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
         expected_result = {
             "most_common_del": 2,
             "location_is_end": False,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
             "deletions": {2: 1},
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
@@ -544,7 +544,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
         splice_site_data  = {
             "most_common_del": -1,
             "location_is_end": False,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
             "deletions": {4: 1},
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
@@ -561,7 +561,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
         expected_result = {
             "most_common_del": 4,
             "location_is_end": False,
-            "del_location_has_canonical_nucleotides": False,
+            "canonical_bases_found": False,
             "deletions": {4: 1},
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
