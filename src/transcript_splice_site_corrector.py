@@ -125,7 +125,7 @@ def count_deletions_for_splice_site_locations(
                 'deletions': {},
                 'del_pos_distr': [0 for _ in range(WINDOW_SIZE)],
                 'most_common_del': -1,
-                'del_location_has_canonical_nucleotides': False
+                'canonical_bases_found': False
             }
         
         # Processing cigartuples
@@ -181,7 +181,7 @@ def extract_nucleotides_from_most_common_del_location(
     else:
         possible_canonicals = canonical_pairs[strand]['start']
     if extracted_canonicals in possible_canonicals:
-        splice_site_data["del_location_has_canonical_nucleotides"] = True
+        splice_site_data["canonical_bases_found"] = True
 
 def compute_most_common_del_and_verify_nucleotides(
         splice_site_location: int, 
@@ -292,7 +292,7 @@ def correct_splice_site_errors(
                 THRESHOLD_CASES_AT_LOCATION):
                 continue
 
-        if splice_site_data["del_location_has_canonical_nucleotides"]:
+        if splice_site_data["canonical_bases_found"]:
             locations_with_errors.append(splice_site_location)
     
     return locations_with_errors
