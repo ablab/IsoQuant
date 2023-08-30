@@ -208,15 +208,9 @@ class GraphBasedModelConstructor:
         for model in self.transcript_model_storage:
             exons = model.exon_blocks
             assigned_reads = self.transcript_read_ids[model.transcript_id]
-            found_cigartuples = False
-            # TODO: REMOVE NEXT FIVE LINES AFTER CIAGRTUPLES ARE FIXED
-            for read in assigned_reads:
-                if read.cigartuples:
-                    found_cigartuples = True
-                    break
-            logger.debug(f"Heidi: Method correct_transcripts. Transcript: {model.transcript_id}, found one or more cigartuples: {found_cigartuples}")    
             corrected_exons = self.correct_transcript_splice_sites(exons, assigned_reads)
             if corrected_exons:
+                logger.debug(f"correct_transcripts. Corrected exons: {corrected_exons}, original exons: {exons}")
                 model.exon_blocks = corrected_exons
 
     def correct_transcript_splice_sites(self, exons: list, assigned_reads: list):
@@ -237,7 +231,6 @@ class GraphBasedModelConstructor:
 
 
         strand = assigned_reads[0].strand
-        logger.debug(f"correct_transcript_splice_sites. Correcting splice sites. n of exons: {len(exons)}, n of assigned reads: {len(assigned_reads)}, strand: {strand}")
         if strand not in SUPPORTED_STRANDS:
             return None
 
@@ -259,7 +252,7 @@ class GraphBasedModelConstructor:
                 splice_site_cases,
                 WINDOW_SIZE)
             
-        logger.debug(f"correct_transcript_splice_sites. Splice site cases: {splice_site_cases}")
+        
 
         corrected_exons = correct_splice_site_errors(
             splice_site_cases,
@@ -275,7 +268,6 @@ class GraphBasedModelConstructor:
             return None
         
         cases = [str(exon) + ": " + str(splice_site_cases[exon]) for exon in corrected_exons]
-        logger.debug(f"correct_transcript_splice_sites. Corrected exons: {len(corrected_exons)}, {corrected_exons} {cases}")
         
         
         updated_exons = generate_updated_exon_list(
