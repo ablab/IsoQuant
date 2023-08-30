@@ -411,7 +411,7 @@ class TestNucleotideExtraction(TestCase):
             "location_is_end": False,
             "canonical_bases_found": False,
         }
-        chr_record = "AAAAAAAAAAAAAAG"
+        chr_record = "AAAAAAAAAAAAAAAG"
         
         strand = "+"
         extract_nucleotides_from_most_common_del_location(
@@ -435,7 +435,7 @@ class TestNucleotideExtraction(TestCase):
         #                 |           |
         #                 v         start pos
         #  A  A  A  A  A  G  C  A  A  A  A  A  A  A  A  
-        chr_record = "AAAAAGCAAAAAAAA"
+        chr_record = "AAAAAAGCAAAAAAAA"
         
         strand = "+"
         extract_nucleotides_from_most_common_del_location(
@@ -452,7 +452,7 @@ class TestNucleotideExtraction(TestCase):
             "location_is_end": False,
             "canonical_bases_found": False,
         }
-        chr_record = "AAAAAAAAAAAAAAC"
+        chr_record = "AAAAAAAAAAAAAAAC"
         
         strand = "-"
         extract_nucleotides_from_most_common_del_location(
@@ -469,7 +469,7 @@ class TestNucleotideExtraction(TestCase):
             "location_is_end": True,
             "canonical_bases_found": False,
         }
-        chr_record = "AAAAACTAAAAAAAA"
+        chr_record = "AAAAAACTAAAAAAAA"
         
         strand = "-"
         extract_nucleotides_from_most_common_del_location(
@@ -492,7 +492,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
 
-        chr_record = "AAAAAAAAAAAAAAG"
+        chr_record = "AAAAAAAAAAAAAAAG"
         ACCEPTED_DEL_CASES = [4]
         strand = "+"
         compute_most_common_del_and_verify_nucleotides(
@@ -521,7 +521,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
 
-        chr_record = "AAAAAAAAAAAAAAG"
+        chr_record = "AAAAAAAAAAAAAAAG"
         ACCEPTED_DEL_CASES = [4]
         strand = "+"
         compute_most_common_del_and_verify_nucleotides(
@@ -549,7 +549,7 @@ class TestDeletionComputationAndBaseExtraction(TestCase):
             "del_pos_distr": [0, 0, 0, 0, 0, 0, 0, 0],
         }
 
-        chr_record = "AAAAAAAAAAAAAXX"
+        chr_record = "AAAAAAAAAAAAAAXX"
         ACCEPTED_DEL_CASES = [4]
         strand = "+"
         compute_most_common_del_and_verify_nucleotides(
@@ -580,7 +580,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGHIJKLMAGPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHIJKLMNAGQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
@@ -600,7 +600,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGHIGCLMNOPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHIJGCMNOPQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
@@ -620,7 +620,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGHIJKLMGCPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHIJKLMNGCQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
@@ -640,7 +640,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGHICTLMNOPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHIJCTMNOPQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
@@ -659,7 +659,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGHIJCTMNOPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHIJKCTNOPQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
@@ -678,7 +678,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGCTJKLMNOPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHCTKLMNOPQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
@@ -718,7 +718,7 @@ class TestSpliceSiteCorrector(TestCase):
 
         constructor = GraphBasedModelConstructor(
             gene_info=MagicMock(),
-            chr_record= "ABCDEFGHIGCLMNOPQRSTUVWXYZ",
+            chr_record= "ABCDEFGHIJGCMNOPQRSTUVWXYZ",
             params=MagicMock(),
             transcript_counter=0
         )
