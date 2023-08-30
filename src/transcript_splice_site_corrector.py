@@ -157,7 +157,7 @@ def extract_nucleotides_from_most_common_del_location(
         chr_record, 
         strand: str):
     most_common_del = splice_site_data["most_common_del"]
-    idx_correction = -1
+    idx_correction = 0
     extraction_start = location + most_common_del + idx_correction
     extraction_end = location + most_common_del + 2 + idx_correction
     try:
