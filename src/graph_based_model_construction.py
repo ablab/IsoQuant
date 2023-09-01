@@ -374,9 +374,14 @@ class GraphBasedModelConstructor:
                 #logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
                 #             % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))
                 if count < novel_isoform_cutoff:
-                    pass #logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
+                    # logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
+                    pass
                 elif len(novel_exons) == 2 and (not polya_site or transcript_ss_strand == '.'):
-                    pass #logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
+                    # logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
+                    pass
+                elif transcript_strand == '.' and not self.params.keep_noncanonical:
+                    logger.info("Avoiding unreliable transcript with %d exons" % len(novel_exons))
+                    pass
                 else:
                     if self.params.use_technical_replicas and \
                             len(set([a.read_group for a in self.path_storage.paths_to_reads[path]])) <= 1:
