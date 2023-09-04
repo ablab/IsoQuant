@@ -91,7 +91,7 @@ class Enc:
         def EncodeExactFlow():
             #5a (to be exchanged with constraint 9a)
             for e in range(self.m):
-                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k)) == self.F[self.E[e]] ) #[0] bcause we just want the edge (u,v), the path is irrelevant
+                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k)) == self.F[self.E[e]] )
 
         #5b
         for i in range(self.k):
@@ -117,6 +117,12 @@ class Enc:
                 self.solver.Add( sum( self.path_vars[i][r] for i in range(len(self.path_vars)) ) >= 1 )
             
         def EncodeInexactFlow():
+            #9a (to be exchanged with constraint 5a)
+            for e in range(self.m):
+                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) <= self.F_high[self.E[e]] )
+                self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) >= self.F_low [self.E[e]] )
+
+        def EncodePathError():
             #9a (to be exchanged with constraint 5a)
             for e in range(self.m):
                 self.solver.Add( sum( self.pi_vars[i][e] for i in range(self.k) ) <= self.F_high[self.E[e]] )
