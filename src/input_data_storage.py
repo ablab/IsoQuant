@@ -232,16 +232,16 @@ class InputDataStorage:
                 logger.warning("Sample %s does not contain any files" %current_sample_name)
                 current_sample = [[]]
             else:
-                current_sample = sample['long_read_files']
+                current_sample = sample['long read files']
                 print(current_sample)
-                names = 'file_names' in sample.keys()
-                if names and not len(sample['file_names']) == len(current_sample):
+                names = 'labels' in sample.keys()
+                if names and not len(sample['labels']) == len(current_sample):
                     logger.critical("The number of file aliases differs from the number of files")
                     exit(-2)
                 for f in range(len(current_sample)):
                     fname = current_sample[f]
                     if names:
-                        readable_name = sample['file_names'][f]
+                        readable_name = sample['labels'][f]
                     else:
                         readable_name = os.path.splitext(os.path.basename(fname[0]))[0]
                     if fname in readable_names_dict[current_sample_name]:

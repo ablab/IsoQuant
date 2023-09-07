@@ -110,10 +110,8 @@ def parse_args(args=None, namespace=None):
     input_args.add_argument('--yaml', type=str, help='yaml file containing all input files, one entry per sample'
                                                      ', check readme for format info')
 
-    # TODO: add nargs="+" to support multiple files
-    input_args_group.add_argument('--illumina_bam', type=str, help='sorted and indexed file with Illumina '
-                                                                   'reads from the same sample')
-
+    input_args_group.add_argument('--illumina_bam', nargs='+', type=str,
+                                  help='sorted and indexed file(s) with Illumina reads from the same sample')
 
     input_args_group.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG); "
@@ -357,7 +355,6 @@ def check_input_params(args):
         logger.error("When providing a yaml file it should include all input files, including the illumina bam file.")
         return False
         
-    # not happy with wording check again later
     if args.illumina_bam and (args.fastq_list or args.bam_list):
         logger.error("Unsupported combination of list of input files and Illumina bam file."
                      "To combine multiple experiments with short read correction please use yaml input.")
