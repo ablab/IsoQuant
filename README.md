@@ -200,7 +200,7 @@ interested in comparing expression between different replicas/conditions within 
 
 ### Specifying input data via dataset description file
 
-This option will be deprecated in future releases.
+This option will be deprecated in future releases. To process multiple experiments, please use `--yaml` instead.
 
 If you wish to process several independent experiments in a single run, you should provide a dataset description
 file via `--fastq_list` or `--bam_list` (see description below).
@@ -234,14 +234,14 @@ To provide all input files in a single file, you can provide a yaml file via `--
 A distinct output folder with individual GTFs and abundance tables will be generated for each experiment.
 In this option, bam files with short reads for correction can be provided for each experiment.
 
-The yaml file contains a list of experiments in square brackets. The first entry in the list should be the type of files the experiments contain, written as `data format: ` followed by the type in quitation marks. The type can be either fastq or bam. Each experiment is represented by a set of curly brackets around a set of parameters. Each experiment should have a name and one or multiple input files in either fastq or bam format. Additionally it may contain one or multiple bam files with short reads. The name is provided as `name: ` followed by the experiment name in quotation marks. Both short and long read files are provided as a list of file paths in quotation marks, following `long read files: ` and `illumina bam: ` respectively. Labels for the files can also be set with `labels: `. The number of labels needs to be the same as the number of files. All entries are separated by commata. For example:
+The yaml file contains a list of experiments in square brackets. The first entry in the list should be the type of files the experiments contain, written as `data format: ` followed by the type in quotation marks. The type can be either fastq or bam. Each experiment is represented by a set of curly brackets around a set of parameters. Each experiment should have a name and one or multiple input files in either fastq or bam format. Additionally it may contain one or multiple bam files with short reads. The name is provided as `name: ` followed by the experiment name in quotation marks. Both short and long read files are provided as a list of file paths in quotation marks, following `long read files: ` and `illumina bam: ` respectively. Labels for the files can also be set with `labels: `. The number of labels needs to be the same as the number of files. All entries are separated by commata. For example:
 
 ```
 [
   data format: "fastq",
   {
     name: "experiment1",
-    long_read_files: [
+    long read files: [
       "/PATH/TO/FILE1.fastq",
       "/PATH/TO/FILE2.fastq"
     ],
@@ -249,7 +249,7 @@ The yaml file contains a list of experiments in square brackets. The first entry
   },
   {
     name: "experiment2",
-    long_read_files: [
+    long read files: [
       "/PATH/TO/FILE3.fastq"
     ],
     illumina bam: ["PATH/TO/ILLUMINA2.bam"]
