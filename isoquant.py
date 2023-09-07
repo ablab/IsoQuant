@@ -408,13 +408,12 @@ def check_input_files(args):
                         logger.critical("BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
                         exit(-1)
                     bamfile_in.close()
-
-    if args.illumina_bam is not None:
-        bamfile_in = pysam.AlignmentFile(args.illumina_bam, "rb")
-        if not bamfile_in.has_index():
-            logger.critical("BAM file " + args.illumina_bam + " is not indexed, run samtools sort and samtools index")
-            exit(-1)
-        bamfile_in.close()
+        for illumina in sample.illumina_bam:
+            bamfile_in = pysam.AlignmentFile(illumina, "rb")
+            if not bamfile_in.has_index():
+                logger.critical("BAM file " + illumina + " is not indexed, run samtools sort and samtools index")
+                exit(-1)
+            bamfile_in.close()
 
     if args.cage is not None:
         logger.critical("CAGE data is not supported yet")
