@@ -228,9 +228,9 @@ class InputDataStorage:
                     logger.warning("Duplicate folder prefix %s, will change to %s" %
                                    (current_sample_name, new_sample_name))
                     current_sample_name = new_sample_name
-            if not 'long_read_files' in sample.keys():
-                logger.warning("Sample %s does not contain any files" %current_sample_name)
-                current_sample = [[]]
+            if not 'long read files' in sample.keys():
+                logger.critical("Sample %s does not contain any files" %current_sample_name)
+                exit(-2)
             else:
                 current_sample = sample['long read files']
                 print(current_sample)
