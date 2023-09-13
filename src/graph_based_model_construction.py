@@ -379,7 +379,7 @@ class GraphBasedModelConstructor:
                 elif len(novel_exons) == 2 and (not polya_site or transcript_ss_strand == '.'):
                     # logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                     pass
-                elif transcript_strand == '.' and not self.params.keep_noncanonical:
+                elif transcript_strand == '.' and not self.params.report_unstranded:
                     logger.info("Avoiding unreliable transcript with %d exons" % len(novel_exons))
                     pass
                 else:

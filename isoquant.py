@@ -140,7 +140,7 @@ def parse_args(args=None, namespace=None):
 
     parser.add_argument('--check_canonical', action='store_true', default=False,
                         help="report whether splice junctions are canonical")
-    add_additional_option("--keep_noncanonical", help="report transcripts for which the strand cannot be detected "
+    add_additional_option("--report_unstranded", help="report transcripts for which the strand cannot be detected "
                                                       "using canonical splice sites",
                           action='store_true', default=False)
     parser.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",

@@ -421,6 +421,9 @@ We recommend to not modify these options unless you are clearly aware of their e
 `--no_secondary`
     Ignore secondary alignments.
 
+`--report_unstranded`
+    Report transcripts for which the strand cannot be detected using canonical splice sites.
+
 `--aligner`
     Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.
 
