@@ -416,10 +416,13 @@ for ONT reads.
 
 ### Hidden options
 Options below are shown only with `--full_help` option. 
-We recommend to not modify these options unless you are clearly aware of their effect.
+We recommend _not_ to modify these options unless you are clearly aware of their effect.
     
 `--no_secondary`
     Ignore secondary alignments.
+
+`--min_mapq`
+    Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
 
 `--report_unstranded`
     Report transcripts for which the strand cannot be detected using canonical splice sites.
