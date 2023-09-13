@@ -284,6 +284,9 @@ class AlignmentCollector:
                     (self.params.no_secondary and alignment.is_secondary):
                 continue
 
+            if self.params.min_mapq and alignment.mapping_quality < self.params.min_mapq:
+                continue
+
             read_id = alignment.query_name
             alignment_info = AlignmentInfo(alignment)
 
@@ -335,6 +338,9 @@ class AlignmentCollector:
         for bam_index, alignment in alignment_storage:
             if alignment.reference_id == -1 or alignment.is_supplementary or \
                     (self.params.no_secondary and alignment.is_secondary):
+                continue
+
+            if self.params.min_mapq and alignment.mapping_quality < self.params.min_mapq:
                 continue
 
             read_id = alignment.query_name

@@ -171,6 +171,8 @@ def parse_args(args=None, namespace=None):
                                "(will be created automatically if not given)")
     add_additional_option("--no_secondary", help="ignore secondary alignments (not recommended)", action='store_true',
                           default=False)
+    add_additional_option("--min_mapq", help="ignore alignments with MAPQ < this"
+                                             "(also filters out secondary alignments)", type=int)
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
     add_additional_option("--read_assignments", nargs='+', type=str,
