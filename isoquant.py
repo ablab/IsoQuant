@@ -198,8 +198,8 @@ def parse_args(args=None, namespace=None):
     add_additional_option("--read_assignments", nargs='+', type=str,
                           help="reuse read assignments (binary format) to construct transcript models",
                           default=None)
-    add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
-                                            "; chosen based on data type if not set", type=str)
+    add_hidden_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS)
+                                        + "; chosen based on data type if not set", type=str)
     add_additional_option_to_group(output_args_group, "--genedb_output", help="output folder for converted gene "
                                                                               "database, will be created automatically "
                                                                               " (same as output by default)", type=str)
