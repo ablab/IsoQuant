@@ -424,7 +424,7 @@ class GraphBasedModelConstructor:
 
         for read_assignment in read_assignment_storage:
             if len(read_assignment.corrected_exons) <= 2 and \
-                    (read_assignment.multimapper or read_assignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
+                    (read_assignment.multimapper or read_assignment.mapping_quality < self.params.simple_alignments_mapq_cutoff):
                 continue
 
             if not read_assignment:

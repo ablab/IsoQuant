@@ -298,7 +298,7 @@ class AlignmentCollector:
             #        alignment.mapping_quality < self.params.multi_intron_mapping_quality_cutoff:
             #    continue
             if len(alignment_info.read_exons) <= 2 and \
-                    (alignment.is_secondary or alignment.mapping_quality < self.params.mono_mapping_quality_cutoff):
+                    (alignment.is_secondary or alignment.mapping_quality < self.params.simple_alignments_mapq_cutoff):
                 continue
 
             alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
@@ -359,7 +359,7 @@ class AlignmentCollector:
 
             if (not read_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference])\
                     and not alignment.is_secondary and \
-                    alignment.mapping_quality < self.params.multi_intron_mapping_quality_cutoff:
+                    alignment.mapping_quality < self.params.inconsistent_mapq_cutoff:
                 continue
 
             if alignment_info.exons_changed:
