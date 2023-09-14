@@ -200,11 +200,11 @@ def parse_args(args=None, namespace=None):
                                                                   "MAPQ < this (works only in annotation-free mode, "
                                                                   "default=1)", type=int, default=1)
 
-    add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
-                          default=False)
-    add_additional_option("--read_assignments", nargs='+', type=str,
-                          help="reuse read assignments (binary format) to construct transcript models",
-                          default=None)
+    add_additional_option_to_group(pipeline_args_group, "--keep_tmp", help="do not remove temporary files "
+                                                                           "in the end", action='store_true',
+                                   default=False)
+    add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
+                                   help="reuse read assignments (binary format)", default=None)
     add_hidden_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS)
                                         + "; chosen based on data type if not set", type=str)
     add_additional_option_to_group(output_args_group, "--genedb_output", help="output folder for converted gene "
