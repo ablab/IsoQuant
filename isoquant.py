@@ -48,35 +48,56 @@ def bool_str(s):
 
 def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
+    ref_args_group = parser.add_argument_group('Reference data:')
+    input_args_group = parser.add_argument_group('Input data:')
+    output_args_group = parser.add_argument_group('Output naming:')
+    pipeline_args_group = parser.add_argument_group('Pipeline options:')
+
+    other_options = parser.add_argument_group("Additional options:")
     show_full_help = '--full_help' in sys.argv
 
     def add_additional_option(*args, **kwargs):  # show command only with --full-help
         if not show_full_help:
             kwargs['help'] = argparse.SUPPRESS
-        parser.add_argument(*args, **kwargs)
+        other_options.add_argument(*args, **kwargs)
+
+    def add_additional_option_to_group(opt_group, *args, **kwargs):  # show command only with --full-help
+        if not show_full_help:
+            kwargs['help'] = argparse.SUPPRESS
+        opt_group.add_argument(*args, **kwargs)
 
     def add_hidden_option(*args, **kwargs):  # show command only with --full-help
         kwargs['help'] = argparse.SUPPRESS
         parser.add_argument(*args, **kwargs)
 
-    parser.add_argument("--output", "-o", help="output folder, will be created automatically [default=isoquant_output]",
-                        type=str, default="isoquant_output")
-    parser.add_argument('--debug', action='store_true', default=False,
-                        help='Debug log output.')
-    # REFERENCE
-    parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF format", type=str)
+    parser.add_argument("--full_help", action='help', help="show full list of options")
+    add_hidden_option('--debug', action='store_true', default=False,
+                      help='Debug log output.')
 
-    parser.add_argument('--complete_genedb', action='store_true', default=False,
-                        help="use this flag if gene annotation contains transcript and gene metafeatures, "
-                             "e.g. with official annotations, such as GENCODE; "
-                             "speeds up gene database conversion")
-    parser.add_argument("--reference", "-r", help="reference genome in FASTA format (can be gzipped)",
-                        type=str)
-    parser.add_argument("--index", help="genome index for specified aligner (optional)", type=str)
-    parser.add_argument('--clean_start', action='store_true', default=False,
-                        help='Do not use previously generated index, feature db or alignments.')
+    output_args_group.add_argument("--output", "-o", help="output folder, will be created automatically "
+                                                          "[default=isoquant_output]",
+                                   type=str, default="isoquant_output")
+    output_args_group.add_argument('--prefix', '-p', type=str,
+                                   help='experiment name; to be used for folder and file naming; default is OUT',
+                                   default="OUT")
+    output_args_group.add_argument('--labels', '-l', nargs='+', type=str,
+                                   help='sample/replica labels to be used as column names; input file names are used '
+                                        'if not set; must be equal to the number of input files given via --fastq/--bam')
+    # REFERENCE
+    ref_args_group.add_argument("--reference", "-r", help="reference genome in FASTA format (can be gzipped)",
+                                type=str, required=True)
+    ref_args_group.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF "
+                                                       "format (optional)", type=str)
+    ref_args_group.add_argument('--complete_genedb', action='store_true', default=False,
+                                help="use this flag if gene annotation contains transcript and gene metafeatures, "
+                                     "e.g. with official annotations, such as GENCODE; "
+                                     "speeds up gene database conversion")
+    add_additional_option_to_group(ref_args_group, "--index", help="genome index for specified aligner (optional)",
+                                   type=str)
+
     # INPUT READS
-    input_args = parser.add_mutually_exclusive_group()
+
+    input_args = input_args_group.add_mutually_exclusive_group()
     input_args.add_argument('--bam', nargs='+', type=str,
                             help='sorted and indexed BAM file(s), each file will be treated as a separate sample')
     input_args.add_argument('--fastq', nargs='+', type=str,
@@ -88,26 +109,22 @@ def parse_args(args=None, namespace=None):
                                                            ', leave empty line between samples')
 
     # TODO: add nargs="+" to support multiple files
-    parser.add_argument('--illumina_bam', type=str, help='sorted and indexed file with Illumina '
-                                                         'reads from the same sample')
+    input_args_group.add_argument('--illumina_bam', type=str, help='sorted and indexed file with Illumina '
+                                                                   'reads from the same sample')
 
-    parser.add_argument('--prefix', '-p', type=str,
-                        help='experiment name; to be used for folder and file naming; default is OUT', default="OUT")
-    parser.add_argument('--labels', '-l', nargs='+', type=str,
-                        help='sample/replica labels to be used as column names; input file names are used if not set;'
-                             'must be equal to the number of input files given via --fastq/--bam')
-    parser.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
+
+    input_args_group.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
                                              "by BAM file tag (tag:TAG); "
                                              "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM); "
                                              "using read id (read_id:DELIM); "
                                              "by original file name (file_name)", type=str)
 
     # INPUT PROPERTIES
-    parser.add_argument("--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
+    input_args_group.add_argument("--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
                         help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
-    parser.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
+    input_args_group.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
-    parser.add_argument('--fl_data', action='store_true', default=False,
+    input_args_group.add_argument('--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
     # ALGORITHM
@@ -116,48 +133,51 @@ def parse_args(args=None, namespace=None):
     add_hidden_option("--graph_clustering_distance", type=int, default=None,
                       help="intron graph clustering distance, "
                            "splice junctions less that this number of bp apart will not be differentiated")
-    parser.add_argument("--matching_strategy", choices=["exact", "precise", "default", "loose"],
-                        help="read-to-isoform matching strategy from the most strict to least", type=str, default=None)
-    parser.add_argument("--splice_correction_strategy", choices=["none", "default_pacbio", "default_ont", "conservative_ont", "all", "assembly"],
-                        help="read alignment correction strategy to use",
-                        type=str, default=None)
-    parser.add_argument("--model_construction_strategy", choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
-                                                                  "default_ont", "sensitive_ont", "all", "assembly"],
-                        help="transcript model construction strategy to use",
-                        type=str, default=None)
+    add_additional_option("--matching_strategy", choices=["exact", "precise", "default", "loose"],
+                          help="read-to-isoform matching strategy from the most strict to least", type=str, default=None)
+    add_additional_option("--splice_correction_strategy", choices=["none", "default_pacbio", "default_ont", "conservative_ont", "all", "assembly"],
+                          help="read alignment correction strategy to use",
+                          type=str, default=None)
+    add_additional_option("--model_construction_strategy", choices=["reliable", "default_pacbio",
+                                                                    "sensitive_pacbio", "fl_pacbio", "default_ont",
+                                                                    "sensitive_ont", "all", "assembly"],
+                          help="transcript model construction strategy to use",
+                          type=str, default=None)
 
-    parser.add_argument("--transcript_quantification", choices=COUNTING_STRATEGIES,
-                        help="transcript quantification strategy", type=str, default="with_ambiguous")
-    parser.add_argument("--gene_quantification", choices=COUNTING_STRATEGIES,
-                        help="gene quantification strategy", type=str, default="with_inconsistent")
-    parser.add_argument("--report_novel_unspliced", "-u", type=bool_str,
-                        help="report novel monoexonic transcripts (true/false), "
-                             "default: False for ONT, True for other data types")
+    add_additional_option("--transcript_quantification", choices=COUNTING_STRATEGIES,
+                          help="transcript quantification strategy", type=str, default="with_ambiguous")
+    add_additional_option("--gene_quantification", choices=COUNTING_STRATEGIES,
+                          help="gene quantification strategy", type=str, default="with_inconsistent")
+    add_additional_option("--report_novel_unspliced", "-u", type=bool_str,
+                          help="report novel monoexonic transcripts (true/false), "
+                               "default: False for ONT, True for other data types")
     # OUTPUT PROPERTIES
-    parser.add_argument("--full_help", action='help', help="show full list of options")
-    parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
-    parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default="16")
-
-    parser.add_argument('--check_canonical', action='store_true', default=False,
-                        help="report whether splice junctions are canonical")
-    add_additional_option("--report_unstranded", help="report transcripts for which the strand cannot be detected "
-                                                      "using canonical splice sites",
-                          action='store_true', default=False)
-    parser.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
-                        action='store_true', default=False)
-    parser.add_argument("--count_exons", help="perform exon and intron counting", action='store_true', default=False)
+    pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
+                                     default="16")
+    pipeline_args_group.add_argument('--check_canonical', action='store_true', default=False,
+                                     help="report whether splice junctions are canonical")
+    add_additional_option_to_group(pipeline_args_group, "--report_unstranded",
+                                   help="report transcripts for which the strand cannot be detected "
+                                        "using canonical splice sites",
+                                   action='store_true', default=False)
+    pipeline_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
+                                     action='store_true', default=False)
+    pipeline_args_group.add_argument("--count_exons", help="perform exon and intron counting",
+                                     action='store_true', default=False)
 
     # PIPELINE STEPS
-    resume_args = parser.add_mutually_exclusive_group()
+    resume_args = pipeline_args_group.add_mutually_exclusive_group()
     resume_args.add_argument("--resume", action="store_true", default=False,
                              help="resume failed run, specify output folder, input options are not allowed")
     resume_args.add_argument("--force", action="store_true", default=False,
                              help="force to overwrite the previous run")
+    add_additional_option_to_group(pipeline_args_group, '--clean_start', action='store_true', default=False,
+                                   help='Do not use previously generated index, feature db or alignments.')
 
-    parser.add_argument("--no_model_construction", action="store_true", default=False,
-                          help="run only read assignment and quantification")
-    parser.add_argument("--run_aligner_only", action="store_true", default=False,
-                          help="align reads to reference without running further analysis")
+    add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
+                                   default=False, help="run only read assignment and quantification")
+    add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
+                                   help="align reads to reference without running further analysis")
 
     # ADDITIONAL
     add_additional_option("--low_memory", help="decrease RAM consumption (deprecated, set by default)",
@@ -180,10 +200,12 @@ def parse_args(args=None, namespace=None):
                           default=None)
     add_additional_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS) +
                                             "; chosen based on data type if not set", type=str)
-    add_additional_option("--genedb_output", help="output folder for converted gene database,"
-                                                  " will be created automatically (same as output by default)", type=str)
+    add_additional_option_to_group(output_args_group, "--genedb_output", help="output folder for converted gene "
+                                                                              "database, will be created automatically "
+                                                                              " (same as output by default)", type=str)
     add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
+    parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
 
     isoquant_version = "3.2.0"
     try:
