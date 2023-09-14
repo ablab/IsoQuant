@@ -421,9 +421,6 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 `--no_secondary`
     Ignore secondary alignments.
 
-`--min_mapq`
-    Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
-
 `--report_unstranded`
     Report transcripts for which the strand cannot be detected using canonical splice sites.
 
@@ -449,6 +446,15 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 
 `--high_memory` 
     Cache read alignments instead for making several passes over a BAM file, noticeably increases RAM usage.
+
+`--min_mapq`
+    Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
+
+`--multi_intron_mapping_quality_cutoff`
+    Filers out inconsistent alignments with MAPQ less than this value (works when the reference annotation is provided, default is 5).
+
+`--simple_alignments_mapq_cutoff`
+    Filers out alignments with 1 or 2 exons and MAPQ less than this value (works only in annotation-free mode, default is 1).
 
 
 ### Examples
