@@ -192,7 +192,14 @@ def parse_args(args=None, namespace=None):
     add_additional_option("--no_secondary", help="ignore secondary alignments (not recommended)", action='store_true',
                           default=False)
     add_additional_option("--min_mapq", help="ignore alignments with MAPQ < this"
-                                             "(also filters out secondary alignments)", type=int)
+                                             "(also filters out secondary alignments, default: None)", type=int)
+    add_additional_option("--inconsistent_mapq_cutoff", help="ignore inconsistent alignments with MAPQ < this "
+                                                             "(works only with the reference annotation, default=5)",
+                          type=int, default=5)
+    add_additional_option("--simple_alignments_mapq_cutoff", help="ignore alignments with 1 or 2 exons and "
+                                                                  "MAPQ < this (works only in annotation-free mode, "
+                                                                  "default=1)", type=int, default=1)
+
     add_additional_option("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                           default=False)
     add_additional_option("--read_assignments", nargs='+', type=str,
@@ -656,8 +663,6 @@ def set_additional_params(args):
         logger.warning("Reference genome is not provided! This may affect quality of the results!")
         args.needs_reference = False
 
-    args.multi_intron_mapping_quality_cutoff = 5
-    args.mono_mapping_quality_cutoff = 1
     args.simple_models_mapq_cutoff = 30
 
 
