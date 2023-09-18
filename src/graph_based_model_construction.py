@@ -347,7 +347,7 @@ class GraphBasedModelConstructor:
                 # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
             elif intron_path in self.known_isoforms_in_graph:
                 # path was not assigned to any known isoform but intron chain still matches
-                continue
+                pass
 
             new_model = None
             if reference_isoform:
