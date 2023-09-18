@@ -85,7 +85,7 @@ def parse_args(args=None, namespace=None):
                                         'if not set; must be equal to the number of input files given via --fastq/--bam')
     # REFERENCE
     ref_args_group.add_argument("--reference", "-r", help="reference genome in FASTA format (can be gzipped)",
-                                type=str, required=True)
+                                type=str)
     ref_args_group.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF "
                                                        "format (optional)", type=str)
     ref_args_group.add_argument('--complete_genedb', action='store_true', default=False,
