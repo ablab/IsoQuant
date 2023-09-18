@@ -230,8 +230,8 @@ event_subtype_cost = {
     # intron retentions
     MatchEventSubtype.intron_retention:0.6,
     MatchEventSubtype.unspliced_intron_retention:0.6,
-    MatchEventSubtype.incomplete_intron_retention_left:0.6,
-    MatchEventSubtype.incomplete_intron_retention_right:0.6,
+    MatchEventSubtype.incomplete_intron_retention_left:0.7,
+    MatchEventSubtype.incomplete_intron_retention_right:0.7,
     MatchEventSubtype.fake_micro_intron_retention:0.1,
     # major alternation
     # alternative donor/acceptor sites
