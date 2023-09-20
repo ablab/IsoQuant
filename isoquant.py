@@ -29,12 +29,13 @@ from src.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from src.dataset_processor import DatasetProcessor
+from src.dataset_processor import DatasetProcessor, ISOQUANT_MODES, IsoQuantMode
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES
 from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
+from src.barcode_calling.detect_barcodes import process_single_thread, process_in_parallel
 
 logger = logging.getLogger('IsoQuant')
 
@@ -50,6 +51,7 @@ def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     ref_args_group = parser.add_argument_group('Reference data:')
     input_args_group = parser.add_argument_group('Input data:')
+    sc_args_group = parser.add_argument_group('Single-cell/spatial-related options:')
     output_args_group = parser.add_argument_group('Output naming:')
     pipeline_args_group = parser.add_argument_group('Pipeline options:')
 
@@ -126,6 +128,19 @@ def parse_args(args=None, namespace=None):
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
     input_args_group.add_argument('--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
+
+    # SC ARGUMENTS
+    sc_args_group.add_argument("--mode", "-m", type=str, choices=ISOQUANT_MODES,
+                               help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
+                                    "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
+    sc_args_group.add_argument('--barcode_whitelist', type=str,
+                               help='file with barcode whitelist for barcode calling')
+    sc_args_group.add_argument("--barcoded_reads", type=str,
+                               help='file with barcoded reads; barcodes will be called automatically if not provided')
+    sc_args_group.add_argument("--barcode_column", type=str,
+                               help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
+                               default=1)
+
 
     # ALGORITHM
     add_additional_option("--delta", type=int, default=None,
@@ -376,6 +391,13 @@ def check_input_params(args):
     if args.no_model_construction and args.sqanti_output:
         args.sqanti_output = False
         logger.warning("--sqanti_output option has no effect without model construction")
+
+    args.mode = IsoQuantMode[args.mode]
+    if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
+        if not args.barcode_whitelist and not args.barcoded_reads:
+            logger.critical("You have chosen single-cell mode %s, please specify barcode whitelist or file with "
+                            "barcoded reads" % args.mode.name)
+            exit(-3)
         
     check_input_files(args)
     return True
@@ -666,8 +688,30 @@ def set_additional_params(args):
     args.simple_models_mapq_cutoff = 30
 
 
+class BarcodeCallingArgs:
+    def __init__(self, input, barcode_whitelist, mode, output, tmp_dir, threads):
+        self.input = input
+        self.barcodes = barcode_whitelist
+        self.mode = mode
+        self.output = output
+        self.tmp_dir = tmp_dir
+        self.threads = threads
+
+
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
+    if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
+        # call barcodes
+        if not args.barcoded_reads:
+            sample = args.input_data.samples[0]
+            bc_args = BarcodeCallingArgs(sample.file_list[0][0], args.barcode_whitelist, args.mode.name,
+                                         sample.out_barcodes_tsv, sample.aux_dir, args.threads)
+            if args.threads == 1:
+                process_single_thread(bc_args)
+            else:
+                process_in_parallel(bc_args)
+        else:
+            args.input_data.samples[0].out_barcodes_tsv = args.barcoded_reads
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):

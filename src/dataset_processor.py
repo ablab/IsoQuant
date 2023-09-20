@@ -10,7 +10,7 @@ import itertools
 import logging
 import os
 import shutil
-import time
+from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 
@@ -50,6 +50,16 @@ from .transcript_printer import GFFPrinter
 from .graph_based_model_construction import GraphBasedModelConstructor
 
 logger = logging.getLogger('IsoQuant')
+
+
+@unique
+class IsoQuantMode(Enum):
+    bulk = 1
+    tenX = 2
+    double = 3
+
+
+ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.double.name]
 
 
 def reads_collected_lock_file_name(sample_out_raw, chr_id):
