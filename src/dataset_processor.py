@@ -57,6 +57,16 @@ from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_ch
 logger = logging.getLogger('IsoQuant')
 
 
+@unique
+class IsoQuantMode(Enum):
+    bulk = 1
+    tenX = 2
+    double = 3
+
+
+ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.double.name]
+
+
 def convert_chr_id_to_file_name_str(chr_id: str):
     return chr_id.replace('/', '_')
 
