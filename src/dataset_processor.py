@@ -75,6 +75,10 @@ def read_group_lock_filename(sample):
     return sample.read_group_file + "_lock"
 
 
+def split_barcodes_lock_filename(sample):
+    return sample.barcodes_split_reads + "_lock"
+
+
 def clean_locks(chr_ids, base_name, fname_function):
     for chr_id in chr_ids:
         fname = fname_function(base_name, chr_id)
@@ -386,14 +390,24 @@ class DatasetProcessor:
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
 
         self.all_read_groups = set()
-        if self.args.resume and os.path.exists(sample.read_group_file + "_lock"):
-            logger.info("Read group table was split during the previous run, existing files will be used")
+        fname = read_group_lock_filename(sample)
+        if self.args.resume and os.path.exists(fname):
+            logger.info("Barcode table was split during the previous run, existing files will be used")
         else:
-            fname = read_group_lock_filename(sample)
             if os.path.exists(fname):
                 os.remove(fname)
             prepare_read_groups(self.args, sample)
             open(fname, "w").close()
+
+        if self.args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+            fname = split_barcodes_lock_filename(sample)
+            if self.args.resume and os.path.exists(fname):
+                logger.info("Read group table was split during the previous run, existing files will be used")
+            else:
+                if os.path.exists(fname):
+                    os.remove(fname)
+                prepare_read_groups(self.args, sample)
+                open(fname, "w").close()
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
