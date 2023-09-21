@@ -226,9 +226,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         for read_assignment in assignment_storage:
             if read_assignment is None:
                 continue
-            aggregator.read_stat_counter.add(read_assignment.assignment_type)
-            aggregator.global_printer.add_read_info(read_assignment)
-            aggregator.global_counter.add_read_info(read_assignment)
+            aggregator.add_assignment(read_assignment)
 
         if construct_models:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
@@ -243,10 +241,14 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             for t in model_constructor.transcript_model_storage:
                 transcript_stat_counter.add(t.transcript_type)
 
-    aggregator.global_counter.dump()
+        aggregator.finalize_chunk()
+        if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+            # do umi filtering and dump reads
+            pass
+
+    aggregator.dump_data()
     aggregator.read_stat_counter.dump(read_stat_file)
     if construct_models:
-        aggregator.transcript_model_global_counter.dump()
         transcript_stat_counter.dump(transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
@@ -314,6 +316,22 @@ class ReadAssignmentAggregator:
                 self.args.transcript_quantification,
                 self.read_groups, output_zeroes=False)
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
+
+        if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+            pass
+
+    def add_assignment(self, read_assignment):
+        self.read_stat_counter.add(read_assignment.assignment_type)
+        self.global_printer.add_read_info(read_assignment)
+        self.global_counter.add_read_info(read_assignment)
+
+    def finalize_chunk(self):
+        pass
+
+    def dump_data(self):
+        self.global_counter.dump()
+        if self.args.construct_models:
+            self.transcript_model_global_counter.dump()
 
     def finalize_aggregators(self, sample):
         if self.args.genedb:
