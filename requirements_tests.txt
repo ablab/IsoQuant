@@ -12,3 +12,4 @@ simplejson>=3.17.0
 six>=1.14.0
 pyfaidx>=0.7
 pyyaml>=5.4
+ssw-py>=1.0.0

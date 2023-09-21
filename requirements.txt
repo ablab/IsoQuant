@@ -5,4 +5,5 @@ pybedtools>=0.8.1
 pysam>=0.15
 packaging
 pyfaidx>=0.7
+ssw-py>=1.0.0
 pyyaml>=5.4
