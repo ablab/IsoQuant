@@ -399,6 +399,9 @@ class ReadAssignmentAggregator:
                 read_groups=self.read_groups, output_zeroes=False)
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
 
+        if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+            pass
+
     def finalize_aggregators(self, sample):
         if self.args.genedb:
             logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
