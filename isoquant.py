@@ -477,7 +477,7 @@ def check_input_params(args):
         logger.warning("--discard_chr has not effect when --process_only_chr is set and will be ignored")
 
     args.mode = IsoQuantMode[args.mode]
-    if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
+    if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
         if not args.barcode_whitelist and not args.barcoded_reads:
             logger.critical("You have chosen single-cell mode %s, please specify barcode whitelist or file with "
                             "barcoded reads" % args.mode.name)
@@ -832,6 +832,7 @@ class BarcodeCallingArgs:
         self.output = output
         self.tmp_dir = tmp_dir
         self.threads = threads
+        self.min_score = None
 
 
 def run_pipeline(args):
@@ -840,7 +841,7 @@ def run_pipeline(args):
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
-    if args.mode in [IsoQuantMode.curio, IsoQuantMode.tenX]:
+    if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
         # call barcodes
         if not args.barcoded_reads:
             sample = args.input_data.samples[0]
