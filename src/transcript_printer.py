@@ -18,6 +18,14 @@ def validate_exons(novel_exons):
     return novel_exons == sorted(novel_exons) and all(0 < x[0] <= x[1] for x in novel_exons)
 
 
+class VoidPrinter:
+    def dump(self):
+        pass
+
+    def add_read_info(self, _):
+        pass
+
+
 class GFFPrinter:
     transcript_id_counter = AtomicCounter()
     transcript_id_dict = {}
