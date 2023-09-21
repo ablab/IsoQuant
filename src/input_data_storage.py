@@ -51,6 +51,7 @@ class SampleData:
         self.out_intron_grouped_counts_tsv = self._make_path(self.prefix + ".intron_grouped")
         self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
         self.out_barcodes_tsv = self._make_path(self.prefix + ".barcodes.tsv")
+        self.barcodes_split_reads = self._make_aux_path(self.prefix + ".barcodes")
 
 
 class InputDataStorage:

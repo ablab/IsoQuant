@@ -201,3 +201,62 @@ def split_read_group_table(table_file, sample, read_id_column_index, group_id_co
 
     for f in read_group_files.values():
         f.close()
+
+
+def load_multicolumn_table(table_tsv_file, read_id_column_index, group_id_column_indices, delim):
+    min_columns = max(read_id_column_index, max(group_id_column_indices))
+    _, outer_ext = os.path.splitext(table_tsv_file)
+    if outer_ext.lower() in ['.gz', '.gzip']:
+        handle = gzip.open(table_tsv_file, "rt")
+    else:
+        handle = open(table_tsv_file, 'r')
+
+    read_map = {}
+    for line in handle:
+        line = line.strip()
+        if line.startswith('#') or not line:
+            continue
+
+        column_values = line.split(delim)
+        if len(column_values) <= min_columns:
+            logger.warning("Malformed input read information table, minimum, of %d columns expected, "
+                           "file %s, line: %s" % (min_columns, table_tsv_file, line))
+            continue
+
+        read_id = column_values[read_id_column_index]
+        if read_id in read_map:
+            logger.warning("Duplicate information for read %s" % read_id)
+
+        column_data = [column_values[i] for i in group_id_column_indices]
+        read_map[read_id] = column_data
+    return read_map
+
+
+def split_table(table_file, sample, out_prefix, read_id_column_index, group_id_column_indices, delim):
+    read_groups = load_multicolumn_table(table_file, read_id_column_index, group_id_column_indices, delim)
+    read_group_files = {}
+    processed_reads = defaultdict(set)
+    bam_files = list(map(lambda x: x[0], sample.file_list))
+
+    for bam_file in bam_files:
+        bam = pysam.AlignmentFile(bam_file, "rb")
+        for chr_id in bam.references:
+            if chr_id not in read_group_files:
+                read_group_files[chr_id] = open(out_prefix + "_" + chr_id, "w")
+        for read_alignment in bam:
+            chr_id = read_alignment.reference_name
+            if not chr_id:
+                continue
+
+            read_id = read_alignment.query_name
+            if read_id in read_groups and read_id not in processed_reads[chr_id]:
+                read_group_files[chr_id].write("%s\t%s\n" % (read_id, read_groups[read_id]))
+                processed_reads[chr_id].add(read_id)
+
+    for f in read_group_files.values():
+        f.close()
+
+
+def prepare_barcoded_reads(args, sample):
+    logger.info("Splitting barcoded reads %s for better memory consumption" % sample.out_barcodes_tsv)
+    split_table(sample.out_barcodes_tsv, sample, sample.barcodes_split_reads, 0, [1, 2, 3, 4], '\t')
