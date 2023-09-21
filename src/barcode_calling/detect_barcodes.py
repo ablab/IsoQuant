@@ -135,7 +135,9 @@ def process_chunk(barcode_detector, read_chunk, output_file, num):
 
 def process_single_thread(args):
     barcodes = load_barcodes(args.barcodes)
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes, min_score=args.min_score)
+    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    if args.min_score:
+        barcode_detector.min_score = args.min_score
     barcode_caller = BarcodeCaller(args.output, barcode_detector)
     barcode_caller.process(args.input)
 
@@ -173,7 +175,9 @@ def process_in_parallel(args):
         tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
     os.makedirs(tmp_dir)
 
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes, min_score=args.min_score)
+    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    if args.min_score:
+        barcode_detector.min_score = args.min_score
     barcode_calling_gen = (
         process_chunk,
         itertools.repeat(barcode_detector),
