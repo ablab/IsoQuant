@@ -620,7 +620,7 @@ def set_model_construction_options(args):
     if args.report_novel_unspliced is None:
         args.report_novel_unspliced = strategy.novel_monoexonic
 
-    if not args.report_novel_unspliced:
+    if not args.report_novel_unspliced and not args.no_model_construction:
         logger.info("Novel unspliced transcripts will not be reported, "
                     "set --report_novel_unspliced true to discover them")
 
