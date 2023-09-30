@@ -163,7 +163,7 @@ class DoubleBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, joint_barcode_list, umi_list=None, min_score=12):
+    def __init__(self, joint_barcode_list, umi_list=None, min_score=13):
         self.pcr_primer_indexer = KmerIndexer([DoubleBarcodeDetector.PCR_PRIMER], kmer_size=6)
         self.linker_indexer = KmerIndexer([DoubleBarcodeDetector.LINKER], kmer_size=5)
         self.barcode_indexer = KmerIndexer(joint_barcode_list, kmer_size=5)
