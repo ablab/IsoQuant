@@ -6,7 +6,6 @@
 # See file LICENSE for details.
 ############################################################################
 
-import pysam
 import sys
 import argparse
 from traceback import print_exc
@@ -14,7 +13,7 @@ from collections import defaultdict
 import logging
 import editdistance
 
-from src.barcode_calling.umi_filtering import UMIFilter, filter_bam
+from umi_filtering import UMIFilter, filter_bam
 
 
 logger = logging.getLogger('IsoQuant')

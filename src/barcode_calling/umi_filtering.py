@@ -13,10 +13,20 @@ import logging
 import editdistance
 
 
-from src.common import overlaps, junctions_from_blocks
-
-
 logger = logging.getLogger('IsoQuant')
+
+
+def overlaps(range1, range2):
+    return not (range1[1] < range2[0] or range1[0] > range2[1])
+
+
+def junctions_from_blocks(sorted_blocks):
+    junctions = []
+    if len(sorted_blocks) >= 2:
+        for i in range(0, len(sorted_blocks) - 1):
+            if sorted_blocks[i][1] + 1 < sorted_blocks[i + 1][0]:
+                junctions.append((sorted_blocks[i][1] + 1, sorted_blocks[i + 1][0] - 1))
+    return junctions
 
 
 def load_barcodes(in_file, use_untrusted_umis=False, barcode_column=1, umi_column=2, umi_property_column=4):
