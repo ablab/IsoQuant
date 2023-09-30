@@ -13,7 +13,7 @@ from collections import defaultdict
 import logging
 import editdistance
 
-from umi_filtering import UMIFilter, filter_bam
+from umi_filtering import UMIFilter, filter_bam, load_barcodes
 
 
 logger = logging.getLogger('IsoQuant')
@@ -45,6 +45,8 @@ def parse_args():
     parser.add_argument("--only_unique", action="store_true", help="keep only non-ambiguous reads", default=False)
     parser.add_argument("--disregard_length_diff", action="store_true", help="do not account for length difference "
                                                                              "when comparing UMIs", default=False)
+    parser.add_argument("--old_barcode_format", action="store_true",
+                        help="use previous barcode formate (barcode column = 6)", default=False)
 
     args = parser.parse_args()
     return args
@@ -54,7 +56,13 @@ def main():
     args = parse_args()
     set_logger(logger)
 
-    umi_filter = UMIFilter(args)
+    if args.old_barcode_format:
+        barcode_umi_dict = load_barcodes(args.barcodes, args.untrusted_umis, 6, 7, 8, 9)
+    else:
+        barcode_umi_dict = load_barcodes(args.barcodes, args.untrusted_umis)
+
+    umi_filter = UMIFilter(barcode_umi_dict, args.min_distance, args.disregard_length_diff,
+                           args.only_unique, args.only_spliced)
     umi_filter.process(args.read_assignments, args.output)
     if args.bam:
         filter_bam(args.bam, args.output  + ".UMI_filtered.reads.bam", umi_filter.selected_reads)
