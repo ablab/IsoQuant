@@ -29,7 +29,8 @@ def junctions_from_blocks(sorted_blocks):
     return junctions
 
 
-def load_barcodes(in_file, use_untrusted_umis=False, barcode_column=1, umi_column=2, umi_property_column=4):
+def load_barcodes(in_file, use_untrusted_umis=False, barcode_column=1, umi_column=2,
+                  barcode_score_column=3, umi_property_column=4, min_score=13):
     # Old format:
     # afaf0413-4dd7-491a-928b-39da40d68fb3    99      56      66      83      +       GCCGATACGCCAAT  CGACTGAAG       13      True
     logger.info("Loading barcodes from " + in_file)
@@ -38,7 +39,8 @@ def load_barcodes(in_file, use_untrusted_umis=False, barcode_column=1, umi_colum
         v = l.strip().split("\t")
         if len(v) < 10: continue
         barcode = v[barcode_column]
-        if barcode == "*":
+        score = int(v[barcode_score_column])
+        if barcode == "*" or score < min_score:
             continue
         if not use_untrusted_umis and v[umi_property_column] != "True":
             continue
