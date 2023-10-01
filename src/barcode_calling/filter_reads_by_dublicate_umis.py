@@ -39,7 +39,7 @@ def parse_args():
     parser.add_argument("--min_distance", type=int, help="minimal edit distance for UMIs to be considered distinct;"
                                                          "length difference is added to this values by default;"
                                                          "0 for equal UMIs, -1 for keeping only a single gene-barcode "
-                                                         "read (default: 3)", default=3)
+                                                         "read. By default will be process with -1, 2, 3", default=3)
     parser.add_argument("--untrusted_umis", action="store_true", help="allow untrusted UMIs to be used", default=False)
     parser.add_argument("--only_spliced", action="store_true", help="keep only spliced reads", default=False)
     parser.add_argument("--only_unique", action="store_true", help="keep only non-ambiguous reads", default=False)
@@ -61,11 +61,11 @@ def main():
     else:
         barcode_umi_dict = load_barcodes(args.barcodes, args.untrusted_umis)
 
-    for d in [-1, 2, 3]:
+    for d in {-1, 2, 3, args.min_distance}:
         logger.info("== Filtering by UMIs with edit distance %d ==" % d)
         output_prefix = args.output + ".ALL" if d < 0 else "ED%d" % d
         logger.info("Results will be saves to %s" % output_prefix)
-        umi_filter = UMIFilter(barcode_umi_dict, args.min_distance, args.disregard_length_diff,
+        umi_filter = UMIFilter(barcode_umi_dict, d, args.disregard_length_diff,
                                args.only_unique, args.only_spliced)
         umi_filter.process(args.read_assignments, output_prefix)
         if args.bam:
