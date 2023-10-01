@@ -235,7 +235,7 @@ class UMIFilter:
             matching_events = v[6]
 
             self.total_assignments += 1
-            assigned = gene_id == "."
+            assigned = gene_id != "."
             spliced = len(exon_blocks) > 1
             unique = assignment_type.startswith("unique")
             barcoded = barcode is not None
@@ -294,12 +294,15 @@ class UMIFilter:
 
         logger.info("Saved %d reads to %s" % (read_count, output_prefix))
         logger.info("Total assignments processed %d (typically much more than read count)" % self.total_assignments)
+        logger.info("Unique gene-barcodes pairs %d" % len(unique_gene_barcode))
         for k in sorted(self.stats.keys()):
             logger.info("%s: %d" % (k, self.stats[k]))
 
         stats_output = output_prefix + ".stats"
         logger.info("Stats are written to written to %s" % stats_output)
         with open(stats_output, "w") as count_hist_file:
+            count_hist_file.write("Unique gene-barcodes pairs %d\n" % len(unique_gene_barcode))
+
             for k in sorted(self.stats.keys()):
                 count_hist_file.write("%s: %d\n" % (k, self.stats[k]))
 
