@@ -38,6 +38,7 @@ def load_barcodes(in_file, use_untrusted_umis=False, barcode_column=1, umi_colum
     hq_barcoded = 0
     trusted_umi = 0
     for l in open(in_file):
+        if l.startswith("#"):continue
         read_count += 1
         v = l.strip().split("\t")
         if len(v) < 10: continue
