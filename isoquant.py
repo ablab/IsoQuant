@@ -871,6 +871,8 @@ def run_pipeline(args):
             combine_counts(args.input_data, args.output)
 
     if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+        if args.barcoded_reads:
+            args.input_data.samples[0].out_barcodes_tsv = args.barcoded_reads
         barcode_umi_dict = load_barcodes(args.input_data.samples[0].out_barcodes_tsv, False)
         for d in {-1, 2, 3}:
             logger.info("== Filtering by UMIs with edit distance %d ==" % d)
