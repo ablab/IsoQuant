@@ -42,6 +42,8 @@ from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
 from src.barcode_calling.detect_barcodes import process_single_thread, process_in_parallel
+from src.barcode_calling.umi_filtering import UMIFilter, filter_bam, load_barcodes
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -867,6 +869,16 @@ def run_pipeline(args):
         # aggregate counts for all samples
         if len(args.input_data.samples) > 1 and args.genedb:
             combine_counts(args.input_data, args.output)
+
+    if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+        barcode_umi_dict = load_barcodes(args.input_data.samples[0].out_barcodes_tsv, False)
+        for d in {-1, 2, 3}:
+            logger.info("== Filtering by UMIs with edit distance %d ==" % d)
+            output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else "ED%d" % d)
+            logger.info("Results will be saved to %s" % output_prefix)
+            umi_filter = UMIFilter(barcode_umi_dict, d)
+            umi_filter.process(args.input_data.samples[0].out_assigned_tsv, output_prefix)
+            logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
     logger.info(" === IsoQuant pipeline finished === ")
 
