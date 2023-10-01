@@ -67,6 +67,7 @@ class SampleData:
         self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
         self.out_barcodes_tsv = self._make_path(self.prefix + ".barcodes.tsv")
         self.barcodes_split_reads = self._make_aux_path(self.prefix + ".barcodes")
+        self.out_umi_filtered = self._make_path(self.prefix + ".UMI_filtered")
 
 
 class InputDataStorage:
