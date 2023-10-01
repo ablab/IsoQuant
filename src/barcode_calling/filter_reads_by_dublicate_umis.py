@@ -63,7 +63,7 @@ def main():
 
     for d in {-1, 2, 3, args.min_distance}:
         logger.info("== Filtering by UMIs with edit distance %d ==" % d)
-        output_prefix = args.output + ".ALL" if d < 0 else "ED%d" % d
+        output_prefix = args.output + (".ALL" if d < 0 else "ED%d" % d)
         logger.info("Results will be saves to %s" % output_prefix)
         umi_filter = UMIFilter(barcode_umi_dict, d, args.disregard_length_diff,
                                args.only_unique, args.only_spliced)
