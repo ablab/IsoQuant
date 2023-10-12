@@ -66,6 +66,15 @@ def load_barcodes(in_file, use_untrusted_umis=False, barcode_column=1, umi_colum
     return barcode_dict
 
 
+class ShortReadAssignmentInfo:
+    def __init__(self, gene_id, exon_blocks, assignment_type, matching_events, barcode):
+        self.gene_id = gene_id
+        self.exon_blocks = exon_blocks
+        self.assignment_type = assignment_type
+        self.matching_events = matching_events
+        self.barcode = barcode
+
+
 class ReadAssignmentInfo:
     def __init__(self, read_id, chr_id, gene_id, strand, exon_blocks, assignment_type, matching_events, barcode, umi):
         self.read_id = read_id
@@ -77,6 +86,10 @@ class ReadAssignmentInfo:
         self.matching_events = matching_events
         self.barcode = barcode
         self.umi = umi
+
+    def short(self):
+        return ShortReadAssignmentInfo(self.gene_id, self.exon_blocks, self.assignment_type,
+                                       self.matching_events, self.barcode)
 
     def to_allinfo_str(self):
         intron_blocks = junctions_from_blocks(self.exon_blocks)
@@ -113,6 +126,7 @@ class UMIFilter:
         self.spliced = 0
         self.spliced_and_assigned = 0
         self.stats = defaultdict(int)
+        self.unique_gene_barcode = set()
 
         self.total_assignments = 0
         self.duplicated_molecule_counts = defaultdict(int)
@@ -204,20 +218,47 @@ class UMIFilter:
                     allinfo_outf.write(read_assignment.to_allinfo_str() + "\n")
         return read_count
 
+    def count_stats(self, read_info_storage):
+        for read_id in read_info_storage.keys():
+            read_infos = read_info_storage[read_id]
+            assigned = read_infos[0].gene_id != "."
+            spliced = len(read_infos[0].exon_blocks) > 1
+            barcoded = read_infos[0].barcode is not None
+            unique = len(set(r.gene_id for r in read_infos))
+
+            if assigned:
+                self.stats["Assigned to any gene"] += 1
+            if spliced:
+                self.stats["Spliced"] += 1
+            if unique:
+                self.stats["Uniquely assigned"] += 1
+            if unique and spliced:
+                self.stats["Uniquely assigned and spliced"] += 1
+            if barcoded:
+                if assigned:
+                    self.stats["Assigned to any gene and barcoded"] += 1
+                if spliced:
+                    self.stats["Spliced and barcoded"] += 1
+                if unique:
+                    self.stats["Uniquely assigned and barcoded"] += 1
+                if unique and spliced:
+                    self.stats["Uniquely assigned and spliced and barcoded"] += 1
+
+            if unique and barcoded:
+                self.unique_gene_barcode.add((read_infos[0].gene_id, read_infos[0].barcode))
+
     def process(self, assignment_file, output_prefix):
         outf = open(output_prefix + ".UMI_filtered.reads.tsv", "w")
         allinfo_outf = open(output_prefix + ".UMI_filtered.allinfo", "w")
 
         # 1251f521-d4c2-4dcc-96d7-85070cc44e12    chr1    -       ENST00000477740.5       ENSG00000238009.6       ambiguous       ism_internal    112699-112804,120721-120759     PolyA=False
         gene_barcode_dict = defaultdict(lambda: defaultdict(list))
-        read_to_gene = {}
+        read_info_storage = defaultdict(list)
         current_interval = (-1, -1)
         current_chr = None
         read_count = 0
 
-        processed_reads = set()
-        unique_gene_barcode = set()
-
+        self.unique_gene_barcode = set()
         for l in open(assignment_file):
             if l.startswith("#"): continue
             v = l.strip().split("\t")
@@ -237,37 +278,14 @@ class UMIFilter:
             self.total_assignments += 1
             assigned = gene_id != "."
             spliced = len(exon_blocks) > 1
-            unique = assignment_type.startswith("unique")
+            #unique = assignment_type.startswith("unique")
             barcoded = barcode is not None
-
-            if read_id not in processed_reads:
-                processed_reads.add(read_id)
-                if assigned:
-                    self.stats["Assigned to any gene"] += 1
-                if spliced:
-                    self.stats["Spliced"] += 1
-                if unique:
-                    self.stats["Unique"] += 1
-                if unique and spliced:
-                    self.stats["Unique and spliced"] += 1
-                if barcoded:
-                    if assigned:
-                        self.stats["Assigned to any gene and barcoded"] += 1
-                    if spliced:
-                        self.stats["Spliced and barcoded"] += 1
-                    if unique:
-                        self.stats["Unique and barcoded"] += 1
-                    if unique and spliced:
-                        self.stats["Unique and spliced and barcoded"] += 1
-
-                if unique and barcoded:
-                    unique_gene_barcode.add((gene_id, barcode))
 
             if not barcoded or not assigned:
                 continue
 
-            if not unique and self.only_unique_assignments:
-                continue
+            #if not unique and self.only_unique_assignments:
+            #    continue
 
             if not spliced and self.only_spliced_reads:
                 continue
@@ -280,12 +298,12 @@ class UMIFilter:
                 current_chr = chr_id
                 current_interval = read_interval
                 gene_barcode_dict.clear()
-                read_to_gene.clear()
+                read_info_storage.clear()
 
-
-            gene_barcode_dict[gene_id][barcode].append(ReadAssignmentInfo(read_id, chr_id, gene_id, strand, exon_blocks,
-                                                                          assignment_type, matching_events, barcode, umi))
-            read_to_gene[read_id] = gene_id
+            assignment_info = ReadAssignmentInfo(read_id, chr_id, gene_id, strand, exon_blocks,
+                                                 assignment_type, matching_events, barcode, umi)
+            gene_barcode_dict[gene_id][barcode].append(assignment_info)
+            read_info_storage[read_id].append(assignment_info.short())
             current_interval = (current_interval[0], max(current_interval[1], read_interval[1]))
 
         read_count += self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
@@ -294,17 +312,18 @@ class UMIFilter:
 
         logger.info("Saved %d reads to %s" % (read_count, output_prefix))
         logger.info("Total assignments processed %d (typically much more than read count)" % self.total_assignments)
-        logger.info("Unique gene-barcodes pairs %d" % len(unique_gene_barcode))
+        self.count_stats(read_info_storage)
+        logger.info("Unique gene-barcodes pairs %d" % len(self.unique_gene_barcode))
         for k in sorted(self.stats.keys()):
             logger.info("%s: %d" % (k, self.stats[k]))
 
-        stats_output = output_prefix + ".stats"
+        stats_output = output_prefix + ".stats.tsv"
         logger.info("Stats are written to written to %s" % stats_output)
         with open(stats_output, "w") as count_hist_file:
-            count_hist_file.write("Unique gene-barcodes pairs %d\n" % len(unique_gene_barcode))
+            count_hist_file.write("Unique gene-barcodes pairs %d\n" % len(self.unique_gene_barcode))
 
             for k in sorted(self.stats.keys()):
-                count_hist_file.write("%s: %d\n" % (k, self.stats[k]))
+                count_hist_file.write("%s\t%d\n" % (k, self.stats[k]))
 
 
 def filter_bam(in_file_name, out_file_name, read_set):
