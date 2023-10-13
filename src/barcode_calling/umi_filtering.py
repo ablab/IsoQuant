@@ -219,6 +219,7 @@ class UMIFilter:
         return read_count
 
     def count_stats(self, read_info_storage):
+        logger.info("Processing %d reads" % len(read_info_storage))
         for read_id in read_info_storage.keys():
             read_infos = read_info_storage[read_id]
             assigned = read_infos[0].gene_id != "."
@@ -280,6 +281,9 @@ class UMIFilter:
             spliced = len(exon_blocks) > 1
             #unique = assignment_type.startswith("unique")
             barcoded = barcode is not None
+            assignment_info = ReadAssignmentInfo(read_id, chr_id, gene_id, strand, exon_blocks,
+                                                 assignment_type, matching_events, barcode, umi)
+            read_info_storage[read_id].append(assignment_info.short())
 
             if not barcoded or not assigned:
                 continue
@@ -299,10 +303,7 @@ class UMIFilter:
                 current_interval = read_interval
                 gene_barcode_dict.clear()
 
-            assignment_info = ReadAssignmentInfo(read_id, chr_id, gene_id, strand, exon_blocks,
-                                                 assignment_type, matching_events, barcode, umi)
             gene_barcode_dict[gene_id][barcode].append(assignment_info)
-            read_info_storage[read_id].append(assignment_info.short())
             current_interval = (current_interval[0], max(current_interval[1], read_interval[1]))
 
         read_count += self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
