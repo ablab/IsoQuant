@@ -298,7 +298,6 @@ class UMIFilter:
                 current_chr = chr_id
                 current_interval = read_interval
                 gene_barcode_dict.clear()
-                read_info_storage.clear()
 
             assignment_info = ReadAssignmentInfo(read_id, chr_id, gene_id, strand, exon_blocks,
                                                  assignment_type, matching_events, barcode, umi)
