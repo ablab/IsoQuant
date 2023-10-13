@@ -224,7 +224,7 @@ class UMIFilter:
             assigned = read_infos[0].gene_id != "."
             spliced = len(read_infos[0].exon_blocks) > 1
             barcoded = read_infos[0].barcode is not None
-            unique = len(set(r.gene_id for r in read_infos))
+            unique = assigned and len(set(r.gene_id for r in read_infos)) == 1
 
             if assigned:
                 self.stats["Assigned to any gene"] += 1
