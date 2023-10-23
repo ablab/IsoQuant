@@ -181,10 +181,10 @@ def check_input_type(fname, input_type):
     basename, fasta_ext = os.path.splitext(basename_plus_inner_ext)
     if fasta_ext in ['.fastq', '.fasta', '.fa', '.fq', '.fna']:
         if input_type != 'fastq':
-            raise Exception("Wrong file extension was detected. Use only FASTQ/FASTA files with --fastq option.")
+            raise Exception("Wrong file extension was detected %s. Use only FASTQ/FASTA files with --fastq option." % fname)
     elif fasta_ext == '.bam':
         if input_type != 'bam':
-            raise Exception("Wrong file extension was detected. Use only BAM files with --bam option.")
+            raise Exception("Wrong file extension was detected for file %s. Use only BAM files with --bam option." % fname)
     else:
         raise Exception("File format " + fasta_ext + " is not supported! Supported formats: FASTQ, FASTA, BAM")
 
