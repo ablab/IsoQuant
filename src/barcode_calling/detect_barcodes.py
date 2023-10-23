@@ -20,7 +20,7 @@ from collections import defaultdict
 import pysam
 from Bio import SeqIO
 import logging
-from .barcode_callers import (
+from barcode_callers import (
     TenXBarcodeDetector,
     DoubleBarcodeDetector,
     IlluminaDoubleBarcodeDetector,
