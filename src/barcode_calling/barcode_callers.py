@@ -7,8 +7,8 @@
 import logging
 from collections import defaultdict
 
-from .kmer_indexer import KmerIndexer
-from .common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions
+from kmer_indexer import KmerIndexer
+from common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions
 
 logger = logging.getLogger('IsoQuant')
 
