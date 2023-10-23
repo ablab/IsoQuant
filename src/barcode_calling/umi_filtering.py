@@ -245,7 +245,7 @@ class UMIFilter:
                 if unique and spliced:
                     self.stats["Uniquely assigned and spliced and barcoded"] += 1
 
-            if unique and barcoded:
+            if assigned and barcoded:
                 self.unique_gene_barcode.add((read_infos[0].gene_id, read_infos[0].barcode))
 
     def process(self, assignment_file, output_prefix):
