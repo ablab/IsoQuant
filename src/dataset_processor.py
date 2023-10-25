@@ -333,6 +333,10 @@ class DatasetProcessor:
             fai_file_name = self.args.reference + ".fai"
             if not os.path.exists(fai_file_name):
                 symlink_name = os.path.join(args.output, ref_file_name)
+                if os.path.exists(symlink_name) and os.path.isdir(symlink_name):
+                    # highly unlikely event of one of samples having exactly the same name as reference genome
+                    ref_file_name = "reference_" + ref_file_name
+                    symlink_name = os.path.join(args.output, ref_file_name)
                 if os.path.exists(symlink_name) and not self.args.resume:
                     os.remove(symlink_name)
                 if not os.path.exists(symlink_name):
