@@ -127,6 +127,7 @@ You will also need
 * [pybedtools](https://daler.github.io/pybedtools/)
 * [pyfaidx](https://pypi.org/project/pyfaidx/)
 * [pandas](https://pandas.pydata.org/)
+* [pyyaml](https://pypi.org/project/PyYAML/)
 * [minimap2](https://github.com/lh3/minimap2)
 * [samtools](http://www.htslib.org/download/)
 * [STAR](https://github.com/alexdobin/STAR) (optional)
