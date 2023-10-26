@@ -91,9 +91,9 @@ def test_with_bam_and_polya():
     result = subprocess.run(["python", "isoquant.py",
                              "-o", out_dir,
                              "--data_type", "nanopore",
-                             "--bam", data_dir + "chr9.4M.ont.sim.polya.bam",
-                             "--genedb", data_dir + "chr9.4M.gtf.gz", "--complete_genedb",
-                             "-r",  data_dir + "chr9.4M.fa.gz",
+                             "--bam", os.path.join(data_dir, "chr9.4M.ont.sim.polya.bam"),
+                             "--genedb", os.path.join(data_dir, "chr9.4M.gtf.gz"), "--complete_genedb",
+                             "-r",  os.path.join(data_dir, "chr9.4M.fa.gz"),
                              "-t", "2",
                              "--prefix", sample_name,
                              "--sqanti_output", "--count_exons"])
