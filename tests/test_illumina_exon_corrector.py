@@ -74,7 +74,25 @@ class TestIntrons:
                              (4564086, 4565358): 1232,(4563689, 4563994): 214,(4563713, 4563994): 342,(4564086, 4566513): 161,(4566032, 4788201): 1})
                              ])
     def test_introns(self, test_file, chromosome, start, end, expected_introns, expected_counts):
-        corrector = IlluminaExonCorrector(chromosome, start, end, test_file)
+        corrector = IlluminaExonCorrector(chromosome, start, end, [test_file])
         assert corrector.short_introns == expected_introns
         assert corrector.counts == expected_counts
+        
+    @pytest.mark.parametrize("test_file, chromosome, start, end, expected_introns, expected_counts",
+                             [(short_toy, "chr1", 5154787, 5232327, 
+                             {(5154787, 5159231),(5159335, 5163585),(5163676, 5165837),(5163717, 5165837),(5165952, 5168251),(5168357, 5171292),(5171347, 5187612),(5187711, 5194499),(5194693, 5203306),(5203486, 5206034),
+                             (5206161, 5213972),(5214075, 5220170),(5219146, 5324823),(5220285, 5232327)},
+                             {(5154786, 5159231): 126,(5159334, 5163585): 114,(5163675, 5165837): 130,(5165951, 5168251): 124,(5163716, 5165837): 10,(5168356, 5171292): 140,(5171346, 5187612): 118,(5187710, 5194499): 98,
+                             (5194692, 5203306): 130,(5203485, 5206034): 126,(5206160, 5213972): 124,(5214074, 5220170): 112,(5220284, 5232327): 140,(5219145, 5324823): 2}),
+                             (short_toy, "chr1", 4561154, 4565934, 
+                             {(4313746, 4566513),(4404340, 4562619),(4431824, 4562619),(4513716, 4633993),(4533690, 4595836),(4562892, 4563322),(4562892, 4563994),(4562894, 4738843),(4563690, 4563994),(4563714, 4563994),
+                             (4564087, 4565358),(4564087, 4566513),(4566033, 4788201)},
+                             {(4313745, 4566513): 2,(4404339, 4562619): 2,(4431823, 4562619): 2,(4513715, 4633993): 2,(4533689, 4595836): 2,(4562891, 4563322): 1682,(4562891, 4563994): 1562,(4562893, 4738843): 2,
+                             (4564086, 4565358): 2464,(4563689, 4563994): 428,(4563713, 4563994): 684,(4564086, 4566513): 322,(4566032, 4788201): 2})
+                             ])
+    def test_introns(self, test_file, chromosome, start, end, expected_introns, expected_counts):
+        corrector = IlluminaExonCorrector(chromosome, start, end, [test_file, test_file])
+        assert corrector.short_introns == expected_introns
+        assert corrector.counts == expected_counts
+    
         
