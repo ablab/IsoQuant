@@ -192,6 +192,7 @@ class InputDataStorage:
         return any(len(sample.file_list) > 1 for sample in self.samples)
         
     def get_samples_from_yaml(self, file_name):
+        # TODO: allow relative paths, i.e. introduce "path fixer" for non-abosulte paths (relative to YAML file)
         sample_files = []
         experiment_names = []
         illumina_bam = []
