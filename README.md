@@ -173,17 +173,23 @@ If the installation is successful, you will find the following information at th
 <a name="sec3.1"></a>
 ## IsoQuant input
 To run IsoQuant, you should provide:
-* reads in FASTA/FASTQ (can be gzipped) or sorted and indexed BAM;
-* reference sequence in FASTA format (can be gzipped).
+* Long RNA reads (PacBio or Oxford Nanopore) in one of the following formats: 
+  * FASTA/FASTQ (can be gzipped);
+  * Sorted and indexed BAM;
+* Reference sequence in FASTA format (can be gzipped);
 * _Optionally_, you may provide a reference gene annotation in gffutils database or GTF/GFF format (can be gzipped).
 
+IsoQuant is also capable of using short Illumina reads to correct long-read alignments.
 
 IsoQuant can handle data from multiple _experiments_ simultaneously. Each experiment may contain multiple _samples_ (or _replicas_).
-Each experiment is processed individually. The ouput files for each experiment will be placed into a separate folder.
-Files from the same _experiment_ are used to construct a single GTF and aggregated abundance tables.
-If a single experiment contains multiple samples, per sample abundance tables are also generated.
+Each experiment is processed individually. Running IsoQuant on several experiments simultaneously
+is equivalent to several separate IsoQuant runs.
 
-Two ways of providing input files are described below.
+The output files for each experiment will be placed into a separate folder.
+Files from the same _experiment_ are used to construct a single GTF and aggregated abundance tables.
+If a single experiment contains multiple samples/replicas, per sample abundance tables are also generated.
+
+The ways of providing input files are described below.
 
 
 ### Specifying input data via command line
@@ -192,16 +198,79 @@ Two main options are `--fastq` and `--bam` (see description below). Both options
 All provided files are treated as a single experiment, which means a single combined GTF will
 be generated. If multiple files are provided, IsoQuant will compute tables with each column
 corresponding to an individual file (per-sample counts).
-To set a specific label for each sample use `--label` option. Number of labels sould be equal to the number of files.
+To set a specific label for each sample use `--label` option. Number of labels must be equal to the number of files.
 To a set a prefix for the output files use `--prefix` option.
 
 This pipeline is typical for the cases when a user is
 interested in comparing expression between different replicas/conditions within the same experiment.
 
+#### Short reads for alignment correction
 
-### Specifying input data via dataset description file
+A BAM file with Illumina reads can be provided via `--illumina_bam`. It cannot be the only input, but may only be used with either `--bam` or `--fastq`.
+The option accepts one or multiple bam files separated by space. All files will be combined and used to correct offsets between introns in long and short reads as well as skipped exons.
 
-This option will be deprecated in future releases. To process multiple experiments, please use `--yaml` instead.
+
+### Specifying input data via yaml file
+
+To provide all input files in a single description file, you can use a [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) file via `--yaml` (see description below).
+You can provide multiple experiments in a single YAML file with each experiment containing an arbitrary number of smaples/rpelicas. 
+A distinct output folder with individual GTFs and abundance tables will be generated for each experiment.
+In this option, BAM files with short reads for correction can be provided for each experiment.
+
+The YAML file contains a list of experiments (e.g. in square brackets). 
+The first entry in the list should be the type of files the experiments contain, written as `data format: ` 
+followed by the type in quotation marks. The type can be either `fastq` or `bam`.
+
+Each experiment is represented as set of parameters (e.g. in curly brackets). 
+Each experiment must have a name and a list if long-read files in the specified format.
+Additionally, it may contain one or multiple BAM files with short reads. 
+The name is provided as `name: ` followed by the experiment name in quotation marks. 
+Both short and long read files are provided as a list of file paths in quotation marks, 
+following `long read files: ` and `illumina bam: ` respectively. 
+Labels for the files can also be set with `labels: `. 
+The number of labels needs to be the same as the number of files with long reads. 
+All paths should be either absolute or relative to the YAML file.
+
+For example:
+
+```
+[
+  data format: "fastq",
+  {
+    name: "Experiment1",
+    long read files: [
+      "/PATH/TO/FILE1.fastq",
+      "/PATH/TO/FILE2.fastq"
+    ],
+    labels: [
+      "Sample1",
+      "Sample2"
+    ],
+    illumina bam: ["PATH/TO/ILLUMINA1.bam"]
+  },
+  {
+    name: "Experiment2",
+    long read files: [
+      "/PATH/TO/FILE3.fastq"
+    ],
+    illumina bam: ["PATH/TO/ILLUMINA2.bam"]
+  }
+]
+
+```
+
+
+Output sub-folders will be named `Experiment1` and `Experiment2`. 
+Both sub-folders will contain predicted transcript models and abundance tables. 
+Abundance table for `Experiment2` with have columns "Sample1" and "Sample2".
+
+Note, that  `--bam`, `--fastq` and `--label` options are not compatible with `--yaml`.
+See more in [examples](#examples).
+
+
+### Specifying input data via dataset description file (deprecated)
+
+This option is deprecated since version 3.4 and will be removed later. To process multiple experiments, please use `--yaml` instead.
 
 If you wish to process several independent experiments in a single run, you should provide a dataset description
 file via `--fastq_list` or `--bam_list` (see description below).
@@ -228,41 +297,6 @@ If you want to group multiple files as a single sample within the experiment, us
 
 Note, that  `--label` option has no effect in this case.
 See more in [examples](#examples).
-
-### Specifying input data via yaml file
-
-To provide all input files in a single file, you can provide a yaml file via `--yaml` (see description below).
-A distinct output folder with individual GTFs and abundance tables will be generated for each experiment.
-In this option, bam files with short reads for correction can be provided for each experiment.
-
-The yaml file contains a list of experiments in square brackets. The first entry in the list should be the type of files the experiments contain, written as `data format: ` followed by the type in quotation marks. The type can be either fastq or bam. Each experiment is represented by a set of curly brackets around a set of parameters. Each experiment should have a name and one or multiple input files in either fastq or bam format. Additionally it may contain one or multiple bam files with short reads. The name is provided as `name: ` followed by the experiment name in quotation marks. Both short and long read files are provided as a list of file paths in quotation marks, following `long read files: ` and `illumina bam: ` respectively. Labels for the files can also be set with `labels: `. The number of labels needs to be the same as the number of files. All entries are separated by commata. For example:
-
-```
-[
-  data format: "fastq",
-  {
-    name: "experiment1",
-    long read files: [
-      "/PATH/TO/FILE1.fastq",
-      "/PATH/TO/FILE2.fastq"
-    ],
-    illumina bam: ["PATH/TO/ILLUMINA1.bam"]
-  },
-  {
-    name: "experiment2",
-    long read files: [
-      "/PATH/TO/FILE3.fastq"
-    ],
-    illumina bam: ["PATH/TO/ILLUMINA2.bam"]
-  }
-]
-
-```
-
-### Short reads for correction
-
-A bam file with Illumina reads can be provided via `--illumina_bam`. It cannot be the only input, but may only be used with either `--bam` or `--fastq`.
-The option accepts one or multiple bam files separated by space. All files will be combined and used to correct offsets between introns in long and short reads as well as skipped exons.
 
 
 <a name="sec3.2"></a>
@@ -310,25 +344,39 @@ Use this flag when providing official annotations, e.g. GENCODE.
 This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options,
 which dramatically speeds up gene database conversion (see more [here](https://pythonhosted.org/gffutils/autodocs/gffutils.create_db.html?highlight=disable_infer_transcripts)).
 
-#### Using mapped reads as input:
-To provide aligned reads use one of the following options:
+#### Providing input reads via command line option:
+
+`--fastq`
+    Input FASTQ/FASTA file(s), can be gzipped;  a single GTF will be generated for all files. If multiple files are provided,
+expression tables with "per-file" columns will be computed. See more about [input data](#sec3.1).
+
 
 `--bam`
     Sorted and indexed BAM file(s); a single GTF will be generated for all files. If multiple files are provided,
 expression tables with "per-file" columns will be computed. See more about [input data](#sec3.1).
+
+
+#### Providing input reads via YAML configuration file:
+
+`--yaml`
+    Path to dataset description file in [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) format. The file should contain a list with `data format` property,
+which can be `fastq` or `bam` and an individual entry for experiment. 
+Each experiment is represented as set of parameters (e.g. in curly brackets):
+- `name` - experiment name, string (optional);
+- `long read files` - a list of paths to long read files matching the specified format;
+- `lables` - a list labels for long read files for expression table (optional, must be equal to the number of long read files)
+- `illumina bam` - a list of paths to short read BAM files for splice site correction (optional).
+
+All paths should be either absolute or relative to the YAML file.
+See more in [examples](#examples).
+
+#### Providing input reads via dataset description file (deprecated)
 
 `--bam_list`
     Text file with list of BAM files, one file per line. Each file must be sorted and indexed.
 Leave empty line or experiment name starting with # between the experiments.
 For each experiment IsoQuant will generate a individual GTF and count tables.
 You may also give a label for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:replicate1`).
-
-#### Using raw reads as an input:  
-To provide read sequences use one of the following options:
-
-`--fastq`
-    Input FASTQ/FASTA file(s), can be gzipped;  a single GTF will be generated for all files. If multiple files are provided,
-expression tables with "per-file" columns will be computed. See more about [input data](#sec3.1).
 
 `--fastq_list`
     Text file with list of FASTQ/FASTA files (can be gzipped),  one file per line.
@@ -406,6 +454,7 @@ where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set)
 
 
 ### Algorithm parameters
+<a name="params"></a>
 
 #### Qunatification
 
@@ -472,6 +521,7 @@ for ONT reads.
 
 
 ### Hidden options
+<a name="hidden"></a>
 Options below are shown only with `--full_help` option.
 We recommend _not_ to modify these options unless you are clearly aware of their effect.
     
@@ -550,55 +600,92 @@ isoquant.py -d nanopore --bam ONT.cDNA_1.bam ONT.cDNA_2.bam ONT.cDNA_3.bam \
  --predix ONT_3samples --labels A1 A2 A3
 ```
 
-* ONT cDNA reads; 2 experiments with 3 replicates (biological or technical); official annotation in GTF format:
+* ONT cDNA reads; 2 experiments with 3 replicates; official annotation in GTF format:
 ```bash
-isoquant.py -d nanopore --fastq_list list.txt  \
+isoquant.py -d nanopore --yaml dataset.yaml  \
  --complete_genedb --genedb genes.gtf \
  --reference reference.fasta --output output_dir
 ```
 
-list.txt file :
-```
-#SAMPLE1
-/PATH/TO/SAMPLE1/file1.fastq:S1_REPLICATE1
-/PATH/TO/SAMPLE1/file2.fastq:S1_REPLICATE2
-/PATH/TO/SAMPLE1/file3.fastq:S1_REPLICATE3
-#SAMPLE2
-/PATH/TO/SAMPLE2/file1.fastq:S2_REPLICATE1
-/PATH/TO/SAMPLE2/file2.fastq:S2_REPLICATE2
-/PATH/TO/SAMPLE2/file3.fastq:S2_REPLICATE3
+dataset.yaml file :
 
 ```
+[
+  data format: "fastq",
+  {
+    name: "Experiment1",
+    long read files: [
+      "/PATH/TO/SAMPLE1/file1.fastq",
+      "/PATH/TO/SAMPLE1/file2.fastq",
+      "/PATH/TO/SAMPLE1/file3.fastq"
+    ],
+    labels: [
+      "Replicate1",
+      "Replicate2",
+      "Replicate3"
+    ]
+  },
+  {
+    name: "Experiment1",
+    long read files: [
+      "/PATH/TO/SAMPLE2/file1.fastq",
+      "/PATH/TO/SAMPLE2/file2.fastq",
+      "/PATH/TO/SAMPLE2/file3.fastq"
+    ],
+    labels: [
+      "Replicate1",
+      "Replicate2",
+      "Replicate3"
+    ]
+  }
+]
+
+```
+
+
 IsoQuant will produce 2 sets of resulting files (including annotations and expression tables), one for each experiment.
-Output sub-folder will be named `SAMPLE1` and `SAMPLE2`.
-File labels given after a colon will be used in expression table header.
+Output sub-folder will be named `Experiment1` and `Experiment2`.
+Expression tables will have columns "Replicate1", "Replicate2" and "Replicate3". 
 
-* ONT cDNA reads; 2 experiments with 2 replicates, each replicate has 2 files; official annotation in GTF format:
+
+* ONT cDNA reads; 1 experiment with 2 replicates, each replicate has 2 files; official annotation in GTF format:
 ```bash
-isoquant.py -d nanopore --fastq_list list.txt \
+isoquant.py -d nanopore --yaml dataset.yaml  \
   --complete_genedb --genedb genes.gtf \
  --reference reference.fasta --prefix MY_SAMPLE \
  --output output_dir  
 ```
 
-list.txt file :
-```
-/PATH/TO/SAMPLE1/r1_1.fastq:S1_REPLICATE1
-/PATH/TO/SAMPLE1/r1_2.fastq:S1_REPLICATE1
-/PATH/TO/SAMPLE1/r2_1.fastq:S1_REPLICATE2
-/PATH/TO/SAMPLE1/r2_2.fastq:S1_REPLICATE2
+dataset.yaml file :
 
-/PATH/TO/SAMPLE2/r1_1.fastq:S2_REPLICATE1
-/PATH/TO/SAMPLE2/r1_2.fastq:S2_REPLICATE1
-/PATH/TO/SAMPLE2/r2_1.fastq:S2_REPLICATE2
-/PATH/TO/SAMPLE2/r2_2.fastq:S2_REPLICATE2
 
 ```
+[
+  data format: "fastq",
+  {
+    name: "Experiment1",
+    long read files: [
+      "/PATH/TO/SAMPLE1/file1.fastq",
+      "/PATH/TO/SAMPLE1/file2.fastq",
+      "/PATH/TO/SAMPLE1/file3.fastq",
+      "/PATH/TO/SAMPLE1/file3.fastq"
+    ],
+    labels: [
+      "Replicate1",
+      "Replicate1",
+      "Replicate2",
+      "Replicate2"
+    ]
+  }
+]
 
-IsoQuant will produce 2 sets of resulting files (including annotations and expression tables), one for each experiment.
-Output sub-folder will be named `MY_SAMPLE0` and `MY_SAMPLE1`.
-File labels given after a colon will be used in expression table header.
-Note, that files having identical labels will be treated as a single sample (and thus counts will be combined).
+```
+
+
+IsoQuant will produce one output sub-folder `Experiment1`.
+Expression tables will have columns "Replicate1" and "Replicate2".
+Files having identical labels will be treated as a single replica (and thus the counts will be combined).
+
 
 <a name="sec3.3"></a>
 ## IsoQuant output
