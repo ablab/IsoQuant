@@ -90,7 +90,7 @@ class TestIntrons:
                              {(4313745, 4566513): 2,(4404339, 4562619): 2,(4431823, 4562619): 2,(4513715, 4633993): 2,(4533689, 4595836): 2,(4562891, 4563322): 1682,(4562891, 4563994): 1562,(4562893, 4738843): 2,
                              (4564086, 4565358): 2464,(4563689, 4563994): 428,(4563713, 4563994): 684,(4564086, 4566513): 322,(4566032, 4788201): 2})
                              ])
-    def test_introns(self, test_file, chromosome, start, end, expected_introns, expected_counts):
+    def test_multiple_files(self, test_file, chromosome, start, end, expected_introns, expected_counts):
         corrector = IlluminaExonCorrector(chromosome, start, end, [test_file, test_file])
         assert corrector.short_introns == expected_introns
         assert corrector.counts == expected_counts
