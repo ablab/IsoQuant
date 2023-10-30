@@ -98,8 +98,8 @@ class InputDataStorage:
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(bam))[0]
+            illumina_bam.append(args.illumina_bam)
             
-
         elif args.fastq_list is not None:
             self.input_type = "fastq"
             sample_files, experiment_names, readable_names_dict, illumina_bam = self.get_samples_from_file(args.fastq_list)
