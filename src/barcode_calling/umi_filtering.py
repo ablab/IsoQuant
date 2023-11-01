@@ -205,20 +205,23 @@ class UMIFilter:
 
     def _process_chunk(self, gene_barcode_dict, outf, allinfo_outf=None):
         read_count = 0
+        spliced_count = 0
         for gene_id in gene_barcode_dict:
             assignment_list = self._process_gene(gene_barcode_dict[gene_id])
-            read_count += len(assignment_list)
             for read_assignment in assignment_list:
-                outf.write(read_assignment.read_id + "\n")
                 if (not read_assignment.assignment_type.startswith("unique") and
                         read_assignment.read_id in self.selected_reads):
                     continue
+                read_count += 1
+                if len(read_assignment.exon_blocks) > 1:
+                    spliced_count += 1
+                outf.write(read_assignment.read_id + "\n")
                 self.selected_reads.add(read_assignment.read_id)
                 if allinfo_outf:
                     allinfo_outf.write(read_assignment.to_allinfo_str() + "\n")
-        return read_count
+        return read_count, spliced_count
 
-    def count_stats(self, read_info_storage):
+    def count_stats_for_storage(self, read_info_storage):
         logger.info("Processing %d reads" % len(read_info_storage))
         for read_id in read_info_storage.keys():
             read_infos = read_info_storage[read_id]
@@ -258,6 +261,7 @@ class UMIFilter:
         current_interval = (-1, -1)
         current_chr = None
         read_count = 0
+        spliced_count = 0
 
         self.unique_gene_barcode = set()
         for l in open(assignment_file):
@@ -296,7 +300,9 @@ class UMIFilter:
 
             read_interval = (exon_blocks[0][0], exon_blocks[-1][1])
             if current_chr != chr_id or not overlaps(current_interval, read_interval):
-                read_count += self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
+                processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
+                read_count += processed_read_count
+                spliced_count += processed_spliced_count
                 if current_chr != chr_id:
                     logger.info("Processing chromosome " + chr_id)
                 current_chr = chr_id
@@ -306,13 +312,48 @@ class UMIFilter:
             gene_barcode_dict[gene_id][barcode].append(assignment_info)
             current_interval = (current_interval[0], max(current_interval[1], read_interval[1]))
 
-        read_count += self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
+        processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
+        read_count += processed_read_count
+        spliced_count += processed_spliced_count
         outf.close()
         allinfo_outf.close()
 
-        logger.info("Saved %d reads to %s" % (read_count, output_prefix))
+        logger.info("Saved %d reads, of them spliced %d to %s" % (read_count, spliced_count, output_prefix))
         logger.info("Total assignments processed %d (typically much more than read count)" % self.total_assignments)
-        self.count_stats(read_info_storage)
+        self.count_stats_for_storage(read_info_storage)
+        logger.info("Unique gene-barcodes pairs %d" % len(self.unique_gene_barcode))
+        for k in sorted(self.stats.keys()):
+            logger.info("%s: %d" % (k, self.stats[k]))
+
+        stats_output = output_prefix + ".stats.tsv"
+        logger.info("Stats are written to written to %s" % stats_output)
+        with open(stats_output, "w") as count_hist_file:
+            count_hist_file.write("Unique gene-barcodes pairs %d\n" % len(self.unique_gene_barcode))
+
+            for k in sorted(self.stats.keys()):
+                count_hist_file.write("%s\t%d\n" % (k, self.stats[k]))
+
+    def count_stats(self, assignment_file, output_prefix):
+        read_info_storage = defaultdict(list)
+
+        self.unique_gene_barcode = set()
+        for l in open(assignment_file):
+            if l.startswith("#"): continue
+            v = l.strip().split("\t")
+            read_id = v[0]
+            gene_id = v[4]
+            assignment_type = v[5]
+            exon_blocks_str = v[7]
+            exon_blocks = list(map(lambda x: tuple(map(int, x.split('-'))), exon_blocks_str.split(',')))
+            if read_id in self.barcode_dict:
+                barcode, umi = self.barcode_dict[read_id]
+            else:
+                barcode, umi = None, None
+            matching_events = v[6]
+            read_info_storage[read_id].append(ShortReadAssignmentInfo(gene_id, exon_blocks, assignment_type,
+                                                                      matching_events, barcode))
+
+        self.count_stats_for_storage(read_info_storage)
         logger.info("Unique gene-barcodes pairs %d" % len(self.unique_gene_barcode))
         for k in sorted(self.stats.keys()):
             logger.info("%s: %d" % (k, self.stats[k]))
