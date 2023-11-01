@@ -225,7 +225,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
         assignment_aggregator.finalize_chunk()
         if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
-            # do umi filtering and dump reads
+            # TODO: do umi filtering and dump reads
             pass
 
     assignment_aggregator.dump_data()
