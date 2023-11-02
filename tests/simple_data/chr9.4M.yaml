@@ -1,0 +1,10 @@
+[
+  data format: "bam",
+  {
+    name: "ONT_Simulated.chr9.4M.polyA",
+    long read files: [
+      "chr9.4M.ont.sim.polya.bam"
+    ],
+    illumina bam: ["chr9.4M.Illumina.bam"]
+  }
+]

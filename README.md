@@ -31,7 +31,7 @@
         conda create -c conda-forge -c bioconda -n isoquant python=3.8 isoquant
 
 *   If installing manually, you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
-  
+
 *   Verify your installation by running:
 
         isoquant.py --test
@@ -173,7 +173,7 @@ If the installation is successful, you will find the following information at th
 <a name="sec3.1"></a>
 ## IsoQuant input
 To run IsoQuant, you should provide:
-* Long RNA reads (PacBio or Oxford Nanopore) in one of the following formats: 
+* Long RNA reads (PacBio or Oxford Nanopore) in one of the following formats:
   * FASTA/FASTQ (can be gzipped);
   * Sorted and indexed BAM;
 * Reference sequence in FASTA format (can be gzipped);
@@ -198,8 +198,8 @@ Two main options are `--fastq` and `--bam` (see description below). Both options
 All provided files are treated as a single experiment, which means a single combined GTF will
 be generated. If multiple files are provided, IsoQuant will compute tables with each column
 corresponding to an individual file (per-sample counts).
-To set a specific label for each sample use `--label` option. Number of labels must be equal to the number of files.
-To a set a prefix for the output files use `--prefix` option.
+To set a specific label for each sample use the `--label` option. Number of labels must be equal to the number of files.
+To a set a prefix for the output files use the `--prefix` option.
 
 This pipeline is typical for the cases when a user is
 interested in comparing expression between different replicas/conditions within the same experiment.
@@ -213,22 +213,22 @@ The option accepts one or multiple bam files separated by space. All files will 
 ### Specifying input data via yaml file
 
 To provide all input files in a single description file, you can use a [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) file via `--yaml` (see description below).
-You can provide multiple experiments in a single YAML file with each experiment containing an arbitrary number of smaples/rpelicas. 
+You can provide multiple experiments in a single YAML file with each experiment containing an arbitrary number of smaples/replicas.
 A distinct output folder with individual GTFs and abundance tables will be generated for each experiment.
 In this option, BAM files with short reads for correction can be provided for each experiment.
 
-The YAML file contains a list of experiments (e.g. in square brackets). 
-The first entry in the list should be the type of files the experiments contain, written as `data format: ` 
+The YAML file contains a list of experiments (e.g. in square brackets).
+The first entry in the list should be the type of files the experiments contain, written as `data format: `
 followed by the type in quotation marks. The type can be either `fastq` or `bam`.
 
-Each experiment is represented as set of parameters (e.g. in curly brackets). 
+Each experiment is represented as set of parameters (e.g. in curly brackets).
 Each experiment must have a name and a list if long-read files in the specified format.
-Additionally, it may contain one or multiple BAM files with short reads. 
-The name is provided as `name: ` followed by the experiment name in quotation marks. 
-Both short and long read files are provided as a list of file paths in quotation marks, 
-following `long read files: ` and `illumina bam: ` respectively. 
-Labels for the files can also be set with `labels: `. 
-The number of labels needs to be the same as the number of files with long reads. 
+Additionally, it may contain one or multiple BAM files with short reads.
+The name is provided as `name: ` followed by the experiment name in quotation marks.
+Both short and long read files are provided as a list of file paths in quotation marks,
+following `long read files: ` and `illumina bam: ` respectively.
+Labels for the files can also be set with `labels: `.
+The number of labels needs to be the same as the number of files with long reads.
 All paths should be either absolute or relative to the YAML file.
 
 For example:
@@ -260,8 +260,8 @@ For example:
 ```
 
 
-Output sub-folders will be named `Experiment1` and `Experiment2`. 
-Both sub-folders will contain predicted transcript models and abundance tables. 
+Output sub-folders will be named `Experiment1` and `Experiment2`.
+Both sub-folders will contain predicted transcript models and abundance tables.
 Abundance table for `Experiment2` with have columns "Sample1" and "Sample2".
 
 Note, that  `--bam`, `--fastq` and `--label` options are not compatible with `--yaml`.
@@ -360,7 +360,7 @@ expression tables with "per-file" columns will be computed. See more about [inpu
 
 `--yaml`
     Path to dataset description file in [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) format. The file should contain a list with `data format` property,
-which can be `fastq` or `bam` and an individual entry for experiment. 
+which can be `fastq` or `bam` and an individual entry for experiment.
 Each experiment is represented as set of parameters (e.g. in curly brackets):
 - `name` - experiment name, string (optional);
 - `long read files` - a list of paths to long read files matching the specified format;
@@ -391,7 +391,7 @@ You may also give a label for each file specifying it after a colon (e.g. `/PATH
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
 
-`--preifx` or `-p`
+`--prefix` or `-p`
     Prefix for all output files and sub-folder name. `OUT` if not set.
 
 `--labels` or `-l`
@@ -456,21 +456,21 @@ where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set)
 ### Algorithm parameters
 <a name="params"></a>
 
-#### Qunatification
+#### Quantification
 
 `--transcript_quantification` Transcript quantification strategy, should be one of:
 
 * `unique_only` - only reads that are uniquely assigned and consistent with a transcript are used for quantification;
 * `with_ambiguous` - ambiguously assigned reads are split between transcripts with equal weights (e.g. 1/2 when a read is assigned to 2 transcripts simultaneously, default mode);
 * `with_inconsistent` - uniquely assigned reads with non-intronic inconsistencies (i.e. alternative poly-A site, TSS etc) are also included;
-* `all` - all of above.
+* `all` - all of the above.
 
 `--gene_quantification` Gene quantification strategy, should be one of:
 
 * `unique_only` -  only reads that are uniquely assigned to a gene and consistent with any of gene's isoforms are used for quantification;
 * `with_ambiguous` - ambiguously assigned reads are split between genes with equal weights (e.g. 1/2 when a read is assigned to 2 genes simultaneously);
-* `with_inconsistent` - only reads that are uniquely assigned to a gene but not necessary consistent with gene's isoforms (default);
-* `all` - all of above.
+* `with_inconsistent` - only reads that are uniquely assigned to a gene but not necessarily consistent with genes isoforms (default);
+* `all` - all of the above.
 
 
 #### Read to isoform matching:
@@ -524,7 +524,7 @@ for ONT reads.
 <a name="hidden"></a>
 Options below are shown only with `--full_help` option.
 We recommend _not_ to modify these options unless you are clearly aware of their effect.
-    
+
 `--no_secondary`
     Ignore secondary alignments.
 
@@ -645,7 +645,7 @@ dataset.yaml file :
 
 IsoQuant will produce 2 sets of resulting files (including annotations and expression tables), one for each experiment.
 Output sub-folder will be named `Experiment1` and `Experiment2`.
-Expression tables will have columns "Replicate1", "Replicate2" and "Replicate3". 
+Expression tables will have columns "Replicate1", "Replicate2" and "Replicate3".
 
 
 * ONT cDNA reads; 1 experiment with 2 replicates, each replicate has 2 files; official annotation in GTF format:

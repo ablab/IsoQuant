@@ -108,6 +108,61 @@ def test_with_bam_and_polya():
                        "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
+        
+        
+def test_with_illumina():
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    data_dir = os.path.join(source_dir, 'simple_data/')
+    out_dir = os.path.join(source_dir, "out_illumina/")
+    shutil.rmtree(out_dir, ignore_errors=True)
+    os.environ['HOME'] = source_dir
+    sample_name = "ONT_Simulated.chr9.4M.polyA"
+
+    result = subprocess.run(["python", "isoquant.py",
+                             "-o", out_dir,
+                             "--data_type", "nanopore",
+                             "--bam", os.path.join(data_dir, "chr9.4M.ont.sim.polya.bam"),
+                             "--illumina_bam", os.path.join(data_dir, "chr9.4M.Illumina.bam")
+                             "--genedb", os.path.join(data_dir, "chr9.4M.gtf.gz"), "--complete_genedb",
+                             "-r",  os.path.join(data_dir, "chr9.4M.fa.gz"),
+                             "-t", "2",
+                             "--prefix", sample_name])
+
+    assert result.returncode == 0
+    sample_folder = os.path.join(out_dir, sample_name)
+    assert os.path.isdir(sample_folder)
+    resulting_files = ["gene_counts.tsv",
+                       "corrected_reads.bed", "read_assignments.tsv",
+                       "transcript_counts.tsv",
+                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
+    for f in resulting_files:
+        assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
+        
+def test_with_yaml():
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    data_dir = os.path.join(source_dir, 'simple_data/')
+    out_dir = os.path.join(source_dir, "out_yaml/")
+    shutil.rmtree(out_dir, ignore_errors=True)
+    os.environ['HOME'] = source_dir
+    sample_name = "ONT_Simulated.chr9.4M.polyA"
+
+    result = subprocess.run(["python", "isoquant.py",
+                             "-o", out_dir,
+                             "--data_type", "nanopore",
+                             "--yaml", os.path.join(data_dir, "chr9.4M.yaml"),
+                             "--genedb", os.path.join(data_dir, "chr9.4M.gtf.gz"), "--complete_genedb",
+                             "-r",  os.path.join(data_dir, "chr9.4M.fa.gz"),
+                             "-t", "2"])
+
+    assert result.returncode == 0
+    sample_folder = os.path.join(out_dir, sample_name)
+    assert os.path.isdir(sample_folder)
+    resulting_files = ["gene_counts.tsv",
+                       "corrected_reads.bed", "read_assignments.tsv",
+                       "transcript_counts.tsv",
+                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv"]
+    for f in resulting_files:
+        assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
 
 #def test_cage():
