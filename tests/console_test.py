@@ -122,7 +122,7 @@ def test_with_illumina():
                              "-o", out_dir,
                              "--data_type", "nanopore",
                              "--bam", os.path.join(data_dir, "chr9.4M.ont.sim.polya.bam"),
-                             "--illumina_bam", os.path.join(data_dir, "chr9.4M.Illumina.bam")
+                             "--illumina_bam", os.path.join(data_dir, "chr9.4M.Illumina.bam"),
                              "--genedb", os.path.join(data_dir, "chr9.4M.gtf.gz"), "--complete_genedb",
                              "-r",  os.path.join(data_dir, "chr9.4M.fa.gz"),
                              "-t", "2",
