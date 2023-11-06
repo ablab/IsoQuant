@@ -9,6 +9,8 @@ import logging
 import yaml
 from collections import defaultdict
 
+from .file_utils import normalize_path
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -191,16 +193,14 @@ class InputDataStorage:
     def has_replicas(self):
         return any(len(sample.file_list) > 1 for sample in self.samples)
         
-    def get_samples_from_yaml(self, file_name):
+    def get_samples_from_yaml(self, yaml_file_path):
         # TODO: allow relative paths, i.e. introduce "path fixer" for non-abosulte paths (relative to YAML file)
         sample_files = []
         experiment_names = []
         illumina_bam = []
         readable_names_dict = defaultdict(lambda: defaultdict(str))
-        yaml_file = open(file_name, 'r')
+        yaml_file = open(yaml_file_path, 'r')
         con = yaml.safe_load(yaml_file)
-        current_sample = []
-        current_sample_name = self.experiment_prefix
         current_index = 0
         t = con[0]
         if not 'data format' in t.keys():
@@ -235,7 +235,7 @@ class InputDataStorage:
                 logger.critical("Experiment %s does not contain any files" %current_sample_name)
                 exit(-2)
             else:
-                current_sample = sample['long read files']
+                current_sample = [normalize_path(yaml_file_path, b) for b in sample['long read files']]
                 names = 'labels' in sample.keys()
                 if names and not len(sample['labels']) == len(current_sample):
                     logger.critical("The number of file aliases differs from the number of files")
@@ -254,7 +254,7 @@ class InputDataStorage:
                 sample_files.append([current_sample])
                 experiment_names.append(current_sample_name)
                 if 'illumina bam' in sample.keys():
-                    illumina_bam.append(sample['illumina bam'])
+                    illumina_bam.append([normalize_path(yaml_file_path, ib) for ib in sample['illumina bam']])
                 else:
                     illumina_bam.append(None)
             

@@ -39,3 +39,10 @@ def merge_files(file_names, merged_file_name, stats_file_names=None, ignore_read
             outf.write("__no_feature\t%d\n" % not_assigned_reads)
             outf.write("__not_aligned\t%d\n" % not_aligned_reads)
 
+
+def normalize_path(config_path, file_path):
+    if os.path.isabs(file_path):
+        return os.path.normpath(file_path)
+    else:
+        return os.path.normpath(os.path.join(os.path.dirname(config_path), file_path))
+
