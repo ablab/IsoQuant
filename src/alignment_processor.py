@@ -237,7 +237,6 @@ class AlignmentCollector:
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
 
     def process(self):
-        current_region = None
         alignment_storage = BAMAlignmentStorage(self.bam_merger) if self.params.low_memory else InMemoryAlignmentStorage()
 
         for bam_index, alignment in self.bam_merger.get():
@@ -259,13 +258,15 @@ class AlignmentCollector:
         if len(split_regions) == 1:
             yield self.process_alignments_in_region(current_region, alignment_storage.get_alignments())
         else:
-            for new_region in split_regions:
+            for i, new_region in enumerate(split_regions):
                 alignments = alignment_storage.get_alignments(new_region)
-                yield self.process_alignments_in_region(new_region, alignments)
+                final_region = (i == len(split_regions)-1)
+                yield self.process_alignments_in_region(new_region, alignments, final_region)
 
-    def process_alignments_in_region(self, current_region, alignment_storage):
+    def process_alignments_in_region(self, current_region, alignment_storage, final_region=True):
         logger.debug("Processing region %s" % str(current_region))
         gene_info = self.get_gene_info_for_region(current_region)
+        gene_info.finalizing_info = final_region
         if gene_info.empty():
             assignment_storage = self.process_intergenic(alignment_storage, current_region)
         else:
@@ -462,7 +463,8 @@ class AlignmentCollector:
             gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
         return gene_info
 
-    def split_coverage_regions(self, genomic_region, alignment_storage):
+    @staticmethod
+    def split_coverage_regions(genomic_region, alignment_storage):
         if interval_len(genomic_region) < AlignmentCollector.MAX_REGION_LEN and \
                 alignment_storage.get_read_count() < AlignmentCollector.MIN_READS_TO_SPLIT:
             return [genomic_region]
@@ -487,7 +489,8 @@ class AlignmentCollector:
 
         return split_regions
 
-    def check_antisense(self, read_assignment):
+    @staticmethod
+    def check_antisense(read_assignment):
         for match in read_assignment.isoform_matches:
             if match.assigned_transcript is None:
                 continue

@@ -135,6 +135,8 @@ class GeneInfo:
         # gene region
         self.chr_id, self.start, self.end = self.get_gene_region()
         self.delta = delta
+        # flag for alignment processing
+        self.finalizing_info = True
 
         # additional info for canonical splice site detection
         self.all_read_region_start = self.start
@@ -177,6 +179,7 @@ class GeneInfo:
         gene_info.start = transcript_model_storage[0].get_start()
         gene_info.end = transcript_model_storage[0].get_end()
         gene_info.delta = delta
+        gene_info.finalizing_info = True
         gene_info.all_isoforms_exons = {}
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
@@ -236,6 +239,7 @@ class GeneInfo:
         gene_info.start = transcript_model.get_start()
         gene_info.end = transcript_model.get_end()
         gene_info.delta = delta
+        gene_info.finalizing_info = True
 
         # profiles for all known isoforoms
         gene_info.intron_profiles = FeatureProfiles()
@@ -288,6 +292,7 @@ class GeneInfo:
         gene_info.start = start
         gene_info.end = end
         gene_info.delta = delta
+        gene_info.finalizing_info = True
 
         # profiles for all known isoforms
         gene_info.intron_profiles = FeatureProfiles()
@@ -320,6 +325,7 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = genedb
         gene_info.delta = read_int(infile)
+        gene_info.finalizing_info = read_short_int(infile) > 0
         gene_info.gene_db_list = []
 
         gene_count = read_int(infile)
@@ -361,6 +367,7 @@ class GeneInfo:
 
     def serialize(self, outfile):
         write_int(self.delta, outfile)
+        write_short_int(1 if self.finalizing_info else 0, outfile)
         write_int(len(self.gene_db_list), outfile)
         for g in self.gene_db_list:
             write_string(g.id, outfile)

@@ -88,7 +88,6 @@ def collect_reads_in_parallel(sample, chr_id, args):
             read_grouper.read_groups.clear()
             for g in open(group_file):
                 read_grouper.read_groups.add(g.strip())
-            # TODO: fix loading with db = None
             loader = ReadAssignmentLoader(save_file, None, None, None)
             while loader.has_next():
                 gene_info, assignment_storage = loader.get_next()
@@ -217,7 +216,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             aggregator.global_printer.add_read_info(read_assignment)
             aggregator.global_counter.add_read_info(read_assignment)
             aggregator.per_chuck_counter.add_read_info(read_assignment)
-        aggregator.per_chuck_counter.dump()
+        if gene_info.finalizing_info:
+            aggregator.per_chuck_counter.dump()
 
         if construct_models:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
