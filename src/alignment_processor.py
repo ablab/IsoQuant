@@ -281,11 +281,7 @@ class AlignmentCollector:
             corrector = VoidExonCorrector()
 
         for bam_index, alignment in alignment_storage:
-            if alignment.reference_id == -1 or alignment.is_supplementary or \
-                    (self.params.no_secondary and alignment.is_secondary):
-                continue
-
-            if self.params.min_mapq and alignment.mapping_quality < self.params.min_mapq:
+            if not self.preliminary_alignment_check(alignment):
                 continue
 
             read_id = alignment.query_name
@@ -337,11 +333,7 @@ class AlignmentCollector:
         assignment_storage = []
 
         for bam_index, alignment in alignment_storage:
-            if alignment.reference_id == -1 or alignment.is_supplementary or \
-                    (self.params.no_secondary and alignment.is_secondary):
-                continue
-
-            if self.params.min_mapq and alignment.mapping_quality < self.params.min_mapq:
+            if not self.preliminary_alignment_check(alignment):
                 continue
 
             read_id = alignment.query_name
@@ -400,6 +392,24 @@ class AlignmentCollector:
             assignment_storage.append(read_assignment)
             logger.debug("=== Finished read " + read_id + " ===")
         return assignment_storage
+
+    def preliminary_alignment_check(self, alignment):
+        if alignment.reference_id == -1 or alignment.is_supplementary or \
+                (self.params.no_secondary and alignment.is_secondary):
+            return False
+
+        if self.params.min_mapq and alignment.mapping_quality < self.params.min_mapq:
+            return False
+
+        divergence = 0.0
+        try:
+            divergence = alignment.get_tag("de")
+        except KeyError:
+            pass
+        if divergence > self.params.per_base_divergence_cutoff:
+            return False
+
+        return True
 
     def get_assignment_strand(self, read_assignment):
         if read_assignment.isoform_matches and read_assignment.assignment_type in \

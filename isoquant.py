@@ -673,6 +673,7 @@ def set_additional_params(args):
         args.needs_reference = False
 
     args.simple_models_mapq_cutoff = 30
+    args.per_base_divergence_cutoff = 0.01
 
 
 def run_pipeline(args):
