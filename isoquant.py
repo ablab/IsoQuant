@@ -829,12 +829,15 @@ def run_pipeline(args):
         # call barcodes
         if not args.barcoded_reads:
             sample = args.input_data.samples[0]
-            bc_args = BarcodeCallingArgs(sample.file_list[0][0], args.barcode_whitelist, args.mode.name,
-                                         sample.out_barcodes_tsv, sample.aux_dir, args.threads)
-            if args.threads == 1:
-                process_single_thread(bc_args)
+            if args.resume and os.path.exists(sample.out_barcodes_tsv):
+                logger.error("Barcodes were called during the previous run, skipping")
             else:
-                process_in_parallel(bc_args)
+                bc_args = BarcodeCallingArgs(sample.file_list[0][0], args.barcode_whitelist, args.mode.name,
+                                             sample.out_barcodes_tsv, sample.aux_dir, args.threads)
+                if args.threads == 1:
+                    process_single_thread(bc_args)
+                else:
+                    process_in_parallel(bc_args)
         else:
             args.input_data.samples[0].out_barcodes_tsv = args.barcoded_reads
 
