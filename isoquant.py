@@ -468,6 +468,8 @@ def check_input_params(args):
 
 
     args.mode = IsoQuantMode[args.mode]
+    if not isinstance(args.mode, IsoQuantMode):
+        args.mode = IsoQuantMode[args.mode]
     if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
         if not args.barcode_whitelist and not args.barcoded_reads:
             logger.critical("You have chosen single-cell mode %s, please specify barcode whitelist or file with "
