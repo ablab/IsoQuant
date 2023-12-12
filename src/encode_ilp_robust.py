@@ -13,7 +13,7 @@ def t(e):             return e[1]
 
 class Enc:
 
-    def __init__(self,n,E,F={},R=[],solver_id='SCIP'):
+    def __init__(self,n,E,F={},R=[],solver_id='SCIP',eps=10):
         self.n = n
         self.m = len(E)
         self.source = 0
@@ -25,6 +25,8 @@ class Enc:
         self.k = 0
         self.w_max = 0
         self.constraints = []
+
+        self.epsilon = eps #maybe we could have a function that computes this epsilon based on features of the data
 
         self.solver = pywraplp.Solver.CreateSolver(solver_id)
         if not self.solver:
@@ -137,19 +139,22 @@ class Enc:
 
     def print_solution(self):
         print("Solution has size ", self.k, " with the following weight-slack-path decomposition")
+        print("Sum of slacks is ", self.solver.Objective().Value())
         for i in range(self.k):
             path = list(map(lambda e : tail(e), list(filter(lambda e : e.solution_value()==1, self.edge_vars[i]))))
             print(int(self.weights[i].solution_value()), int(self.slack_vars[i].solution_value()), path[:-1])
 
     def linear_search(self):
-        print(self.m,self.f)
+        cur = math.inf
         while self.k <= min(self.m,self.f):
-
             self.encode()
-            if self.solver.Solve() == pywraplp.Solver.OPTIMAL:
-                self.print_solution()
-                break
-
+            status = self.solver.Solve()
+            if status == pywraplp.Solver.OPTIMAL:
+                slack_sum = self.solver.Objective().Value()
+                if cur-slack_sum < self.epsilon:
+                    self.print_solution()
+                    break
+                cur = slack_sum
             self.clear()
             self.k += 1
 
