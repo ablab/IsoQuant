@@ -377,7 +377,8 @@ class GraphBasedModelConstructor:
                 if count < novel_isoform_cutoff:
                     # logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
                     pass
-                elif len(novel_exons) == 2 and self.params.require_monointronic_polya and not polya_site:
+                elif (len(novel_exons) == 2 and
+                      ((self.params.require_monointronic_polya and not polya_site) or transcript_ss_strand == '.')):
                     # logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                     pass
                 elif transcript_strand == '.' and not self.params.report_unstranded:
