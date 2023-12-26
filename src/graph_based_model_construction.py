@@ -376,7 +376,7 @@ class GraphBasedModelConstructor:
                 if count < novel_isoform_cutoff:
                     # logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
                     pass
-                elif len(novel_exons) == 2 and (not polya_site or transcript_ss_strand == '.'):
+                elif len(novel_exons) == 2 and self.params.require_monointronic_polya and not polya_site:
                     # logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                     pass
                 elif transcript_strand == '.' and not self.params.report_unstranded:
@@ -468,13 +468,13 @@ class GraphBasedModelConstructor:
                     #             (read_assignment.read_id, refrenence_isoform_id))
                 spliced_isoform_reads[refrenence_isoform_id].append(read_assignment)
 
-                if self.params.needs_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '-':
+                if self.params.requires_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '-':
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
                         isoform_left_support[refrenence_isoform_id] += 1
                 elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= self.params.apa_delta:
                     isoform_left_support[refrenence_isoform_id] += 1
 
-                if self.params.needs_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '+':
+                if self.params.requires_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '+':
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_right for x in events):
                         isoform_right_support[refrenence_isoform_id] += 1
                 elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= self.params.apa_delta:
@@ -761,7 +761,7 @@ class IntronPathStorage:
             path_tuple = tuple(intron_path)
             self.paths[path_tuple] += 1
             if terminal_vertex and starting_vertex:
-                if not self.params.needs_polya_for_construction or\
+                if not self.params.requires_polya_for_construction or\
                         (terminal_vertex[0] == VERTEX_polya or starting_vertex[0] == VERTEX_polyt):
                     self.fl_paths.add(path_tuple)
             self.paths_to_reads[path_tuple].append(a)
