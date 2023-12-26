@@ -433,7 +433,10 @@ class DatasetProcessor:
             # do not require polyA tails for mono-intronic only if the data is reliable and polyA percentage is low
             self.args.require_monointronic_polya or self.args.requires_polya_for_construction,
             self.args.polya_requirement_strategy)
-
+        self.args.require_monoexonic_polya = set_polya_requirement_strategy(
+            # do not require polyA tails for mono-intronic only if the data is reliable and polyA percentage is low
+            self.args.require_monoexonic_polya or self.args.requires_polya_for_construction,
+            self.args.polya_requirement_strategy)
 
         self.process_assigned_reads(sample, saves_file)
         if not self.args.read_assignments and not self.args.keep_tmp:
@@ -538,7 +541,7 @@ class DatasetProcessor:
         )
         logger.info("Processing assigned reads " + sample.prefix)
         logger.info("  Transcript models construction is turned %s" %
-                    "off" if self.args.no_model_construction else "on")
+                    ("off" if self.args.no_model_construction else "on"))
 
         # set up aggregators and outputs
         aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups)
@@ -546,14 +549,17 @@ class DatasetProcessor:
 
         if not self.args.no_model_construction:
             logger.info("Transcript construction options:")
-            logger.info("  Novel monoexonic transcripts will be reported: %s" %
-                        "yes" if self.args.report_novel_unspliced else "no")
-            logger.info("  Presence of polyA tail is required for a multi-exon transcript to be reported: %s"
-                        % "yes" if self.args.requires_polya_for_construction else "no")
-            logger.info("  Presence of polyA tail is required for a 2-exon transcript to be reported: %s"
-                        % "yes" if self.args.require_monointronic_polya else "no")
-            logger.info("  Report transcript for which strand cannot be detected using canonical splice sites: %s"
-                        % "yes" if self.args.report_unstranded else "no")
+            logger.info("  Novel monoexonic transcripts will be reported: %s"
+                        % ("yes" if self.args.report_novel_unspliced else "no"))
+            logger.info("  PolyA tails are required for multi-exon transcripts to be reported: %s"
+                        % ("yes" if self.args.requires_polya_for_construction else "no"))
+            logger.info("  PolyA tails are required for 2-exon transcripts to be reported: %s"
+                        % ("yes" if self.args.require_monointronic_polya else "no"))
+            logger.info("  PolyA tails are required for known monoexon transcripts to be reported: %s"
+                        % ("yes" if self.args.require_monoexonic_polya else "no"))
+            logger.info("  PolyA tails are required for novel monoexon transcripts to be reported: %s" % "yes")
+            logger.info("  Report transcript for which the strand cannot be detected using canonical splice sites: %s"
+                        % ("yes" if self.args.report_unstranded else "no"))
 
             gff_printer = GFFPrinter(
                 sample.out_dir, sample.prefix, self.io_support, header=self.common_header
