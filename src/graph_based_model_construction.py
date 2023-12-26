@@ -7,6 +7,7 @@
 import logging
 from collections import defaultdict
 from functools import cmp_to_key
+from enum import unique, Enum
 
 from .common import (
     AtomicCounter,
@@ -28,6 +29,13 @@ from .polya_finder import PolyAInfo
 
 
 logger = logging.getLogger('IsoQuant')
+
+
+@unique
+class StrandnessReportingLevel(Enum):
+    only_canonical = 1
+    only_stranded = 2
+    all = 3
 
 
 class GraphBasedModelConstructor:
@@ -370,7 +378,7 @@ class GraphBasedModelConstructor:
                 has_polya = path[-1][0] == VERTEX_polya
                 polya_site = has_polya or has_polyt
                 transcript_strand = self.strand_detector.get_strand(intron_path, has_polya, has_polyt)
-                transcript_ss_strand = self.strand_detector.get_strand(intron_path)
+                transcript_clean_strand = self.strand_detector.get_clean_strand(intron_path)
 
                 #logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
                 #             % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))
@@ -378,11 +386,14 @@ class GraphBasedModelConstructor:
                     # logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
                     pass
                 elif (len(novel_exons) == 2 and
-                      ((self.params.require_monointronic_polya and not polya_site) or transcript_ss_strand == '.')):
+                      ((self.params.require_monointronic_polya and not polya_site) or transcript_clean_strand == '.')):
                     # logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                     pass
-                elif transcript_strand == '.' and not self.params.report_unstranded:
-                    logger.info("Avoiding unreliable transcript with %d exons" % len(novel_exons))
+                elif ((self.params.report_canonical_strategy == StrandnessReportingLevel.only_canonical
+                       and transcript_clean_strand == '.')
+                      or (self.params.report_canonical_strategy == StrandnessReportingLevel.only_stranded
+                          and transcript_strand == '.')):
+                    logger.debug("Avoiding unreliable transcript with %d exons" % len(novel_exons))
                     pass
                 else:
                     if self.params.use_technical_replicas and \

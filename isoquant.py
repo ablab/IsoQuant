@@ -30,6 +30,7 @@ from src.read_mapper import (
     DataSetReadMapper
 )
 from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
+from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES
 from src.input_data_storage import InputDataStorage
@@ -150,9 +151,15 @@ def parse_args(cmd_args=None, namespace=None):
                           help="gene quantification strategy", type=str, default="with_inconsistent")
     add_additional_option("--report_novel_unspliced", "-u", type=bool_str,
                           help="report novel monoexonic transcripts (true/false), "
-                               "default: False for ONT, True for other data types")
+                               "default: false for ONT, true for other data types")
+    add_additional_option("--report_canonical",  type=str, choices=[e.name for e in StrandnessReportingLevel],
+                          help="reporting level for novel transcripts based on canonical splice sites " +
+                               "/".join([e.name for e in StrandnessReportingLevel]) +
+                               "default: " + StrandnessReportingLevel.only_canonical.name,
+                          default=StrandnessReportingLevel.only_canonical.name)
     add_additional_option("--polya_requirement", type=str, choices=[e.name for e in PolyAUsageStrategies],
-                          help="require polyA tails to be present when reporting transcripts (default/never/always), "
+                          help="require polyA tails to be present when reporting transcripts " +
+                               "/".join([e.name for e in StrandnessReportingLevel]) +
                                "default: require polyA only when polyA percentage is >= 70%%",
                           default=PolyAUsageStrategies.default.name)
     # OUTPUT PROPERTIES
@@ -160,10 +167,6 @@ def parse_args(cmd_args=None, namespace=None):
                                      default="16")
     pipeline_args_group.add_argument('--check_canonical', action='store_true', default=False,
                                      help="report whether splice junctions are canonical")
-    add_additional_option_to_group(pipeline_args_group, "--report_unstranded",
-                                   help="report transcripts for which the strand cannot be detected "
-                                        "using canonical splice sites",
-                                   action='store_true', default=False)
     pipeline_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
                                      action='store_true', default=False)
     pipeline_args_group.add_argument("--count_exons", help="perform exon and intron counting",
@@ -650,6 +653,7 @@ def set_model_construction_options(args):
     args.require_monointronic_polya = strategy.require_monointronic_polya
     args.require_monoexonic_polya = strategy.require_monoexonic_polya
     args.polya_requirement_strategy = PolyAUsageStrategies[args.polya_requirement]
+    args.report_canonical_strategy = StrandnessReportingLevel[args.report_canonical]
 
 
 def set_configs_directory(args):
