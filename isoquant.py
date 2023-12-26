@@ -29,7 +29,7 @@ from src.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from src.dataset_processor import DatasetProcessor
+from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES
 from src.input_data_storage import InputDataStorage
@@ -151,6 +151,10 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option("--report_novel_unspliced", "-u", type=bool_str,
                           help="report novel monoexonic transcripts (true/false), "
                                "default: False for ONT, True for other data types")
+    add_additional_option("--polya_requirement", type=str, choices=[e.name for e in PolyAUsageStrategies],
+                          help="require polyA tails to be present when reporting transcripts (default/never/always), "
+                               "default: require polyA only when polyA percentage is >= 70%",
+                          default=PolyAUsageStrategies.default.name)
     # OUTPUT PROPERTIES
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
                                      default="16")
@@ -271,11 +275,12 @@ def check_and_load_args(args, parser):
                 logger.warning("Output folder already contains a previous run, will be overwritten.")
             else:
                 logger.warning("Output folder already contains a previous run, some files may be overwritten. "
-                               "Use --resume to resume a failed run. Use --force to avoid this message. "
-                               "Press Ctrl+C to interrupt the run now.")
+                               "Use --resume to resume a failed run. Use --force to avoid this message.")
+                logger.warning("Press Ctrl+C to interrupt the run now.")
                 delay = 9
                 for i in range(delay):
-                    sys.stdout.write("Resuming the run in %d seconds\r" % (delay - i))
+                    countdown = delay - i
+                    sys.stdout.write("Resuming the run in %d second%s\r" % (countdown, "s" if countdown > 1 else ""))
                     time.sleep(1)
                 logger.info("Overwriting the previous run")
                 time.sleep(1)
@@ -598,7 +603,7 @@ def set_model_construction_options(args):
         'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False, True, False),
         'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10, False, False, True),
         'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10, False, True, False),
-        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True, True, True),
+        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True, True, False),
         'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False, True, False),
         'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False, True, False)
     }
@@ -634,6 +639,7 @@ def set_model_construction_options(args):
                     "set --report_novel_unspliced true to discover them")
 
     args.require_monointronic_polya = strategy.require_monointronic_polya
+    args.polya_requirement_strategy = PolyAUsageStrategies[args.polya_requirement]
 
 
 def set_configs_directory(args):
@@ -658,8 +664,6 @@ def set_additional_params(args):
     set_splice_correction_options(args)
 
     args.print_additional_info = True
-    args.no_polya = False
-
     args.indel_near_splice_site_dist = 10
     args.upstream_region_len = 20
 
@@ -676,6 +680,7 @@ def set_additional_params(args):
 
     args.simple_models_mapq_cutoff = 30
     args.polya_percentage_threshold = 0.7
+    args.low_polya_percentage_threshold = 0.1
 
 
 def run_pipeline(args):
