@@ -673,6 +673,7 @@ def set_additional_params(args):
         args.needs_reference = False
 
     args.simple_models_mapq_cutoff = 30
+    args.polya_percentage_threshold = 0.7
 
 
 def run_pipeline(args):
