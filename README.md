@@ -529,6 +529,8 @@ polyA tails are always required for 1/2-exon transcripts when using ONT data (th
 * `never` - polyA tails are never required; use this option **at your own risk** as it may noticeably increase false discovery rate, especially for ONT data;
 * `always` - reported transcripts are always required to have polyA support in the reads.
 
+Note, that polyA tails are always required for reporting novel unspliced isoforms. 
+
 
 
 ### Hidden options

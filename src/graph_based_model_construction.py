@@ -128,6 +128,7 @@ class GraphBasedModelConstructor:
 
         self.construct_fl_isoforms()
         self.construct_assignment_based_isoforms(read_assignment_storage)
+        # FIXME: assign reads AFTER filtering
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
 
@@ -596,7 +597,8 @@ class GraphBasedModelConstructor:
             polya_support = polya_sites[isoform_id]
 
             # logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.intron_graph.max_coverage, count, coverage, polya_support))
-            if count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or polya_support == 0:
+            if (count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or
+                    (self.params.require_monoexonic_polya and polya_support == 0)):
                 pass # logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
             elif isoform_id not in GraphBasedModelConstructor.detected_known_isoforms:
                 new_model = self.transcript_from_reference(isoform_id)
