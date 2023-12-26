@@ -501,7 +501,7 @@ def set_data_dependent_options(args):
         args.splice_correction_strategy = splice_correction_strategies[args.data_type]
 
     args.resolve_ambiguous = 'monoexon_and_fsm' if args.fl_data else 'default'
-    args.needs_polya_for_construction = False
+    args.requires_polya_for_construction = False
     if args.read_group is None and args.input_data.has_replicas():
         args.read_group = "file_name"
     args.use_technical_replicas = args.read_group == "file_name"
@@ -591,16 +591,16 @@ def set_model_construction_options(args):
                                             'min_known_count', 'min_nonfl_count',
                                             'min_novel_count', 'min_novel_count_rel',
                                             'min_mono_count_rel', 'singleton_adjacent_cov',
-                                            'fl_only', 'novel_monoexonic'))
+                                            'fl_only', 'novel_monoexonic', 'require_monointronic_polya'))
     strategies = {
-        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50, True, False),
-        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100, False, True),
-        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False, True),
-        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10, False, False),
-        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10, False, True),
-        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True, True),
-        'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False, True),
-        'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False, True)
+        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50, True, False, True),
+        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100, False, True, False),
+        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False, True, False),
+        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10, False, False, True),
+        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10, False, True, False),
+        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True, True, True),
+        'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False, True, False),
+        'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False, True, False)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -632,6 +632,8 @@ def set_model_construction_options(args):
     if not args.report_novel_unspliced and not args.no_model_construction:
         logger.info("Novel unspliced transcripts will not be reported, "
                     "set --report_novel_unspliced true to discover them")
+
+    args.require_monointronic_polya = strategy.require_monointronic_polya
 
 
 def set_configs_directory(args):
