@@ -540,7 +540,7 @@ class DatasetProcessor:
             reverse=True
         )
         logger.info("Processing assigned reads " + sample.prefix)
-        logger.info("  Transcript models construction is turned %s" %
+        logger.info("Transcript models construction is turned %s" %
                     ("off" if self.args.no_model_construction else "on"))
 
         # set up aggregators and outputs
