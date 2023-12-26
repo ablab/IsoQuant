@@ -153,7 +153,7 @@ def parse_args(cmd_args=None, namespace=None):
                                "default: False for ONT, True for other data types")
     add_additional_option("--polya_requirement", type=str, choices=[e.name for e in PolyAUsageStrategies],
                           help="require polyA tails to be present when reporting transcripts (default/never/always), "
-                               "default: require polyA only when polyA percentage is >= 70%",
+                               "default: require polyA only when polyA percentage is >= 70%%",
                           default=PolyAUsageStrategies.default.name)
     # OUTPUT PROPERTIES
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
