@@ -522,6 +522,15 @@ The main explanation that some aligner report a lot of false unspliced alignment
 for ONT reads.
 
 
+`--report_canonical`
+    Strategy for reporting novel transcripts based on canonical splice sites, should be one of:
+
+* `only_canonical` - report novel transcripts, which contain only canonical splice sites;
+* `only_stranded` - report novel transcripts, for which the strand can be unambiguously derived using splice sites and 
+presence of a polyA tail, allowing some splice sites to be non-canonical (default);
+* `all` -- report all transcript model regardless of their splice sites.
+
+
 `--polya_requirement` Strategy for using polyA tails during transcript model construction, should be one of:
 
 * `default` - polyA tails are required if at least 70% of the reads have polyA tail; 
@@ -540,9 +549,6 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 
 `--no_secondary`
     Ignore secondary alignments.
-
-`--report_unstranded`
-    Report transcripts for which the strand cannot be detected using canonical splice sites.
 
 `--aligner`
     Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.

@@ -635,7 +635,7 @@ class StrandDetector:
         elif self.chr_record:
             self.strand_dict[intron] = get_intron_strand(intron, self.chr_record)
 
-    def get_strand(self, introns, has_polya=False, has_polyt=False):
+    def count_canonical_sites(self, introns):
         count_fwd = 0
         count_rev = 0
         for intron in introns:
@@ -648,6 +648,19 @@ class StrandDetector:
                 count_fwd += 1
             elif strand == '-':
                 count_rev += 1
+        return count_fwd, count_rev
+
+    # all splice sites must be canonical from the same strand, not just the majority
+    def get_clean_strand(self, introns):
+        count_fwd, count_rev = self.count_canonical_sites(introns)
+        if count_fwd == 0 and count_rev > 0:
+            return  '-'
+        elif count_fwd > 0 and count_rev == 0:
+            return '+'
+        return '.'
+
+    def get_strand(self, introns, has_polya=False, has_polyt=False):
+        count_fwd, count_rev = self.count_canonical_sites(introns)
         if count_fwd == count_rev:
             if has_polya and not has_polyt:
                 return '+'
