@@ -10,7 +10,7 @@ import itertools
 import logging
 import os
 import shutil
-import time
+from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 
@@ -70,6 +70,22 @@ def clean_locks(chr_ids, base_name, fname_function):
         fname = fname_function(base_name, chr_id)
         if os.path.exists(fname):
             os.remove(fname)
+
+
+@unique
+class PolyAUsageStrategies(Enum):
+    default = 1
+    never = 2
+    always = 3
+
+
+def set_polya_requirement_strategy(flag, polya_requirement_strategy):
+    if polya_requirement_strategy == PolyAUsageStrategies.default:
+        return flag
+    elif polya_requirement_strategy == PolyAUsageStrategies.never:
+        return False
+    else:
+        return True
 
 
 def collect_reads_in_parallel(sample, chr_id, args):
@@ -406,9 +422,18 @@ class DatasetProcessor:
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
         logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
-        self.args.requires_polya_for_construction = polya_fraction >= self.args.polya_percentage_threshold
-        # do not require polyA tails for mono-intronic only if the data is reliable and polyA percentage is low
-        self.args.require_monointronic_polya = self.args.require_monointronic_polya or self.args.requires_polya_for_construction
+        if polya_fraction < self.args.low_polya_percentage_threshold:
+            logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
+                           "If you aim to construct transcript models, consider using --polya_requirement option.")
+
+        self.args.requires_polya_for_construction = set_polya_requirement_strategy(
+            polya_fraction >= self.args.polya_percentage_threshold,
+            self.args.polya_requirement_strategy)
+        self.args.require_monointronic_polya = set_polya_requirement_strategy(
+            # do not require polyA tails for mono-intronic only if the data is reliable and polyA percentage is low
+            self.args.require_monointronic_polya or self.args.requires_polya_for_construction,
+            self.args.polya_requirement_strategy)
+
 
         self.process_assigned_reads(sample, saves_file)
         if not self.args.read_assignments and not self.args.keep_tmp:
@@ -512,21 +537,24 @@ class DatasetProcessor:
             reverse=True
         )
         logger.info("Processing assigned reads " + sample.prefix)
-        logger.info("Transcript construction options:")
-        logger.info("  Novel monoexonic transcripts will be reported: %s" %
-                    "yes" if self.args.report_novel_unspliced else "no")
-        logger.info("  Presence of polyA tail is required for a multi-exon transcript to be reported: %s"
-                    % "yes" if self.args.requires_polya_for_construction else "no")
-        logger.info("  Presence of polyA tail is required for a 2-exon transcript to be reported: %s"
-                    % "yes" if self.args.require_monointronic_polya else "no")
-        logger.info("  Report transcript for which strand cannot be detected using canonical splice sites: %s"
-                    % "yes" if self.args.report_unstranded else "no")
+        logger.info("  Transcript models construction is turned %s" %
+                    "off" if self.args.no_model_construction else "on")
 
         # set up aggregators and outputs
         aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups)
         transcript_stat_counter = EnumStats()
 
         if not self.args.no_model_construction:
+            logger.info("Transcript construction options:")
+            logger.info("  Novel monoexonic transcripts will be reported: %s" %
+                        "yes" if self.args.report_novel_unspliced else "no")
+            logger.info("  Presence of polyA tail is required for a multi-exon transcript to be reported: %s"
+                        % "yes" if self.args.requires_polya_for_construction else "no")
+            logger.info("  Presence of polyA tail is required for a 2-exon transcript to be reported: %s"
+                        % "yes" if self.args.require_monointronic_polya else "no")
+            logger.info("  Report transcript for which strand cannot be detected using canonical splice sites: %s"
+                        % "yes" if self.args.report_unstranded else "no")
+
             gff_printer = GFFPrinter(
                 sample.out_dir, sample.prefix, self.io_support, header=self.common_header
             )

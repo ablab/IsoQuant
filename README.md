@@ -105,6 +105,9 @@ IsoQuant support all kinds of long RNA data:
 
 Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
 
+IsoQuant expect reads to contain polyA tails. For more reliable transcript model construction do not trim polyA tails.
+
+
 <a name="sec1.2"></a>
 ## Supported reference data
 
@@ -517,6 +520,14 @@ This option is chosen automatically based on specified data type, but will be ov
 The default value is `false` for Nanopore data and `true` for other data types.
 The main explanation that some aligner report a lot of false unspliced alignments
 for ONT reads.
+
+
+`--polya_requirement` Strategy for using polyA tails during transcript model construction, should be one of:
+
+* `default` - polyA tails are required if at least 70% of the reads have polyA tail; 
+polyA tails are always required for 1/2-exon transcripts when using ONT data (this is caused by elevated number of false 1/2-exonic alignments reported by minimap2); 
+* `never` - polyA tails are never required; use this option **at your own risk** as it may noticeably increase false discovery rate, especially for ONT data;
+* `always` - reported transcripts are always required to have polyA support in the reads.
 
 
 
