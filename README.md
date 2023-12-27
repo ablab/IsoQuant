@@ -568,11 +568,9 @@ We recommend _not_ to modify these options unless you are clearly aware of their
     for storing the annotation database, because SQLite database cannot be created on a shared disks.
     The folder will be created automatically.
 
-`--low_memory`
-    Deprecated, default behaviour since 3.2.
-
 `--high_memory`
-    Cache read alignments instead for making several passes over a BAM file, noticeably increases RAM usage.
+    Cache read alignments instead for making several passes over a BAM file, noticeably increases RAM usage, 
+but may improve running time when disk I/O is relatively slow.
 
 `--min_mapq`
     Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
