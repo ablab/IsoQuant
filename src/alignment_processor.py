@@ -229,7 +229,7 @@ class AlignmentCollector:
 
         self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, 0,
                                           self.bam_pairs[0][0].get_reference_length(self.chr_id),
-                                          multiple_iterators=self.params.low_memory)
+                                          multiple_iterators=not self.params.high_memory)
         self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
@@ -238,7 +238,7 @@ class AlignmentCollector:
 
     def process(self):
         current_region = None
-        alignment_storage = BAMAlignmentStorage(self.bam_merger) if self.params.low_memory else InMemoryAlignmentStorage()
+        alignment_storage = BAMAlignmentStorage(self.bam_merger) if not self.params.high_memory else InMemoryAlignmentStorage()
 
         for bam_index, alignment in self.bam_merger.get():
             if alignment_storage.alignment_is_not_adjacent(alignment):

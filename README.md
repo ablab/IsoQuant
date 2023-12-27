@@ -105,6 +105,9 @@ IsoQuant support all kinds of long RNA data:
 
 Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
 
+IsoQuant expect reads to contain polyA tails. For more reliable transcript model construction do not trim polyA tails.
+
+
 <a name="sec1.2"></a>
 ## Supported reference data
 
@@ -519,6 +522,26 @@ The main explanation that some aligner report a lot of false unspliced alignment
 for ONT reads.
 
 
+`--report_canonical`
+    Strategy for reporting novel transcripts based on canonical splice sites, should be one of:
+
+* `auto` - automatic selection based on the data type and model construction strategy (default); 
+* `only_canonical` - report novel transcripts, which contain only canonical splice sites;
+* `only_stranded` - report novel transcripts, for which the strand can be unambiguously derived using splice sites and 
+presence of a polyA tail, allowing some splice sites to be non-canonical
+* `all` -- report all transcript model regardless of their splice sites.
+
+
+`--polya_requirement` Strategy for using polyA tails during transcript model construction, should be one of:
+
+* `auto` - default behaviour: polyA tails are required if at least 70% of the reads have polyA tail; 
+polyA tails are always required for 1/2-exon transcripts when using ONT data (this is caused by elevated number of false 1/2-exonic alignments reported by minimap2); 
+* `never` - polyA tails are never required; use this option **at your own risk** as it may noticeably increase false discovery rate, especially for ONT data;
+* `always` - reported transcripts are always required to have polyA support in the reads.
+
+Note, that polyA tails are always required for reporting novel unspliced isoforms. 
+
+
 
 ### Hidden options
 <a name="hidden"></a>
@@ -527,9 +550,6 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 
 `--no_secondary`
     Ignore secondary alignments.
-
-`--report_unstranded`
-    Report transcripts for which the strand cannot be detected using canonical splice sites.
 
 `--aligner`
     Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.
@@ -548,11 +568,9 @@ We recommend _not_ to modify these options unless you are clearly aware of their
     for storing the annotation database, because SQLite database cannot be created on a shared disks.
     The folder will be created automatically.
 
-`--low_memory`
-    Deprecated, default behaviour since 3.2.
-
 `--high_memory`
-    Cache read alignments instead for making several passes over a BAM file, noticeably increases RAM usage.
+    Cache read alignments instead for making several passes over a BAM file, noticeably increases RAM usage, 
+but may improve running time when disk I/O is relatively slow.
 
 `--min_mapq`
     Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).

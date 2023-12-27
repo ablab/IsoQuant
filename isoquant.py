@@ -29,7 +29,8 @@ from src.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from src.dataset_processor import DatasetProcessor
+from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
+from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES
 from src.input_data_storage import InputDataStorage
@@ -48,12 +49,12 @@ def bool_str(s):
 
 def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    ref_args_group = parser.add_argument_group('Reference data:')
-    input_args_group = parser.add_argument_group('Input data:')
-    output_args_group = parser.add_argument_group('Output naming:')
-    pipeline_args_group = parser.add_argument_group('Pipeline options:')
+    ref_args_group = parser.add_argument_group('Reference data')
+    input_args_group = parser.add_argument_group('Input data')
+    output_args_group = parser.add_argument_group('Output naming')
+    pipeline_args_group = parser.add_argument_group('Pipeline options')
 
-    other_options = parser.add_argument_group("Additional options:")
+    other_options = parser.add_argument_group("Additional options")
     show_full_help = '--full_help' in sys.argv
 
     def add_additional_option(*args, **kwargs):  # show command only with --full-help
@@ -150,16 +151,20 @@ def parse_args(args=None, namespace=None):
                           help="gene quantification strategy", type=str, default="with_inconsistent")
     add_additional_option("--report_novel_unspliced", "-u", type=bool_str,
                           help="report novel monoexonic transcripts (true/false), "
-                               "default: False for ONT, True for other data types")
+                               "default: false for ONT, true for other data types")
+    add_additional_option("--report_canonical",  type=str, choices=[e.name for e in StrandnessReportingLevel],
+                          help="reporting level for novel transcripts based on canonical splice sites;"
+                               " default: " + StrandnessReportingLevel.auto.name,
+                          default=StrandnessReportingLevel.only_stranded.name)
+    add_additional_option("--polya_requirement", type=str, choices=[e.name for e in PolyAUsageStrategies],
+                          help="require polyA tails to be present when reporting transcripts; "
+                               "default: auto (requires polyA only when polyA percentage is >= 70%%)",
+                          default=PolyAUsageStrategies.auto.name)
     # OUTPUT PROPERTIES
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
                                      default="16")
     pipeline_args_group.add_argument('--check_canonical', action='store_true', default=False,
                                      help="report whether splice junctions are canonical")
-    add_additional_option_to_group(pipeline_args_group, "--report_unstranded",
-                                   help="report transcripts for which the strand cannot be detected "
-                                        "using canonical splice sites",
-                                   action='store_true', default=False)
     pipeline_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
                                      action='store_true', default=False)
     pipeline_args_group.add_argument("--count_exons", help="perform exon and intron counting",
@@ -180,8 +185,6 @@ def parse_args(args=None, namespace=None):
                                    help="align reads to reference without running further analysis")
 
     # ADDITIONAL
-    add_additional_option("--low_memory", help="decrease RAM consumption (deprecated, set by default)",
-                          action='store_true', default=True)
     add_additional_option("--high_memory", help="increase RAM consumption (store alignment and the genome in RAM)",
                           action='store_true', default=False)
     add_additional_option("--no_junc_bed", action="store_true", default=False,
@@ -234,11 +237,13 @@ def parse_args(args=None, namespace=None):
                                    type=str, required=True)
         resume_parser.add_argument('--debug', action='store_true', default=argparse.SUPPRESS,
                                    help='Debug log output.')
-        resume_parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default=argparse.SUPPRESS)
-        resume_parser.add_argument("--low_memory", help="decrease RAM consumption (deprecated, set by default)",
+        resume_parser.add_argument("--threads", "-t", help="number of threads to use",
+                                   type=int, default=argparse.SUPPRESS)
+        resume_parser.add_argument("--high_memory",
+                                   help="increase RAM consumption (store alignment and the genome in RAM)",
+                                   action='store_true', default=False)
+        resume_parser.add_argument("--keep_tmp", help="do not remove temporary files in the end",
                                    action='store_true', default=argparse.SUPPRESS)
-        resume_parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
-                                   default=argparse.SUPPRESS)
         args, unknown_args = resume_parser.parse_known_args(sys.argv[1:])
         if unknown_args:
             logger.error("You cannot specify options other than --output/--threads/--debug/--low_memory "
@@ -271,11 +276,12 @@ def check_and_load_args(args, parser):
                 logger.warning("Output folder already contains a previous run, will be overwritten.")
             else:
                 logger.warning("Output folder already contains a previous run, some files may be overwritten. "
-                               "Use --resume to resume a failed run. Use --force to avoid this message. "
-                               "Press Ctrl+C to interrupt the run now.")
+                               "Use --resume to resume a failed run. Use --force to avoid this message.")
+                logger.warning("Press Ctrl+C to interrupt the run now.")
                 delay = 9
                 for i in range(delay):
-                    sys.stdout.write("Resuming the run in %d seconds\r" % (delay - i))
+                    countdown = delay - i
+                    sys.stdout.write("Resuming the run in %d second%s\r" % (countdown, "s" if countdown > 1 else ""))
                     time.sleep(1)
                 logger.info("Overwriting the previous run")
                 time.sleep(1)
@@ -287,9 +293,6 @@ def check_and_load_args(args, parser):
         args.genedb_output = args.output
     elif not os.path.exists(args.genedb_output):
         os.makedirs(args.genedb_output)
-
-    if args.high_memory:
-        args.low_memory = False
 
     if not check_input_params(args):
         parser.print_usage()
@@ -501,7 +504,7 @@ def set_data_dependent_options(args):
         args.splice_correction_strategy = splice_correction_strategies[args.data_type]
 
     args.resolve_ambiguous = 'monoexon_and_fsm' if args.fl_data else 'default'
-    args.needs_polya_for_construction = False
+    args.requires_polya_for_construction = False
     if args.read_group is None and args.input_data.has_replicas():
         args.read_group = "file_name"
     args.use_technical_replicas = args.read_group == "file_name"
@@ -591,16 +594,26 @@ def set_model_construction_options(args):
                                             'min_known_count', 'min_nonfl_count',
                                             'min_novel_count', 'min_novel_count_rel',
                                             'min_mono_count_rel', 'singleton_adjacent_cov',
-                                            'fl_only', 'novel_monoexonic'))
+                                            'fl_only', 'novel_monoexonic',
+                                            'require_monointronic_polya', 'require_monoexonic_polya',
+                                            'report_canonical'))
     strategies = {
-        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50, True, False),
-        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100, False, True),
-        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100, False, True),
-        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10, False, False),
-        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10, False, True),
-        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100, True, True),
-        'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500, False, True),
-        'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50, False, True)
+        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50,
+                                                     True, False, True, True, StrandnessReportingLevel.only_canonical),
+        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100,
+                                                     False, True, False, True, StrandnessReportingLevel.only_canonical),
+        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100,
+                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
+        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10,
+                                                     False, False, True, True, StrandnessReportingLevel.only_canonical),
+        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10,
+                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
+        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100,
+                                                     True, True, False, False, StrandnessReportingLevel.only_canonical),
+        'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500,
+                                                     False, True, False, False, StrandnessReportingLevel.all),
+        'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50,
+                                                     False, True, False, False, StrandnessReportingLevel.only_stranded)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -633,6 +646,13 @@ def set_model_construction_options(args):
         logger.info("Novel unspliced transcripts will not be reported, "
                     "set --report_novel_unspliced true to discover them")
 
+    args.require_monointronic_polya = strategy.require_monointronic_polya
+    args.require_monoexonic_polya = strategy.require_monoexonic_polya
+    args.polya_requirement_strategy = PolyAUsageStrategies[args.polya_requirement]
+    args.report_canonical_strategy = StrandnessReportingLevel[args.report_canonical]
+    if args.report_canonical_strategy == StrandnessReportingLevel.auto:
+        args.report_canonical_strategy = strategy.report_canonical
+
 
 def set_configs_directory(args):
     config_dir = os.path.join(os.environ['HOME'], '.config', 'IsoQuant')
@@ -656,8 +676,6 @@ def set_additional_params(args):
     set_splice_correction_options(args)
 
     args.print_additional_info = True
-    args.no_polya = False
-
     args.indel_near_splice_site_dist = 10
     args.upstream_region_len = 20
 
@@ -673,6 +691,8 @@ def set_additional_params(args):
         args.needs_reference = False
 
     args.simple_models_mapq_cutoff = 30
+    args.polya_percentage_threshold = 0.7
+    args.low_polya_percentage_threshold = 0.1
 
 
 def run_pipeline(args):
