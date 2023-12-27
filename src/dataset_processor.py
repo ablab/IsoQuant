@@ -74,13 +74,13 @@ def clean_locks(chr_ids, base_name, fname_function):
 
 @unique
 class PolyAUsageStrategies(Enum):
-    default = 1
+    auto = 1
     never = 2
     always = 3
 
 
 def set_polya_requirement_strategy(flag, polya_requirement_strategy):
-    if polya_requirement_strategy == PolyAUsageStrategies.default:
+    if polya_requirement_strategy == PolyAUsageStrategies.auto:
         return flag
     elif polya_requirement_strategy == PolyAUsageStrategies.never:
         return False
@@ -558,8 +558,7 @@ class DatasetProcessor:
             logger.info("  PolyA tails are required for known monoexon transcripts to be reported: %s"
                         % ("yes" if self.args.require_monoexonic_polya else "no"))
             logger.info("  PolyA tails are required for novel monoexon transcripts to be reported: %s" % "yes")
-            logger.info("  Report transcript for which the strand cannot be detected using canonical splice sites: %s"
-                        % ("yes" if self.args.report_unstranded else "no"))
+            logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
 
             gff_printer = GFFPrinter(
                 sample.out_dir, sample.prefix, self.io_support, header=self.common_header

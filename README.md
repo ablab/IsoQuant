@@ -525,15 +525,16 @@ for ONT reads.
 `--report_canonical`
     Strategy for reporting novel transcripts based on canonical splice sites, should be one of:
 
+* `auto` - automatic selection based on the data type and model construction strategy (default); 
 * `only_canonical` - report novel transcripts, which contain only canonical splice sites;
 * `only_stranded` - report novel transcripts, for which the strand can be unambiguously derived using splice sites and 
-presence of a polyA tail, allowing some splice sites to be non-canonical (default);
+presence of a polyA tail, allowing some splice sites to be non-canonical
 * `all` -- report all transcript model regardless of their splice sites.
 
 
 `--polya_requirement` Strategy for using polyA tails during transcript model construction, should be one of:
 
-* `default` - polyA tails are required if at least 70% of the reads have polyA tail; 
+* `auto` - default behaviour: polyA tails are required if at least 70% of the reads have polyA tail; 
 polyA tails are always required for 1/2-exon transcripts when using ONT data (this is caused by elevated number of false 1/2-exonic alignments reported by minimap2); 
 * `never` - polyA tails are never required; use this option **at your own risk** as it may noticeably increase false discovery rate, especially for ONT data;
 * `always` - reported transcripts are always required to have polyA support in the reads.
