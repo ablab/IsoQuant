@@ -49,10 +49,10 @@ def bool_str(s):
 
 def parse_args(cmd_args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    ref_args_group = parser.add_argument_group('Reference data:')
-    input_args_group = parser.add_argument_group('Input data:')
-    output_args_group = parser.add_argument_group('Output naming:')
-    pipeline_args_group = parser.add_argument_group('Pipeline options:')
+    ref_args_group = parser.add_argument_group('Reference data')
+    input_args_group = parser.add_argument_group('Input data')
+    output_args_group = parser.add_argument_group('Output naming')
+    pipeline_args_group = parser.add_argument_group('Pipeline options')
 
     other_options = parser.add_argument_group("Additional options:")
     show_full_help = '--full_help' in cmd_args
@@ -153,15 +153,13 @@ def parse_args(cmd_args=None, namespace=None):
                           help="report novel monoexonic transcripts (true/false), "
                                "default: false for ONT, true for other data types")
     add_additional_option("--report_canonical",  type=str, choices=[e.name for e in StrandnessReportingLevel],
-                          help="reporting level for novel transcripts based on canonical splice sites " +
-                               "/".join([e.name for e in StrandnessReportingLevel]) +
-                               "default: " + StrandnessReportingLevel.only_canonical.name,
-                          default=StrandnessReportingLevel.only_canonical.name)
+                          help="reporting level for novel transcripts based on canonical splice sites;"
+                               " default: " + StrandnessReportingLevel.auto.name,
+                          default=StrandnessReportingLevel.only_stranded.name)
     add_additional_option("--polya_requirement", type=str, choices=[e.name for e in PolyAUsageStrategies],
-                          help="require polyA tails to be present when reporting transcripts " +
-                               "/".join([e.name for e in StrandnessReportingLevel]) +
-                               "default: require polyA only when polyA percentage is >= 70%%",
-                          default=PolyAUsageStrategies.default.name)
+                          help="require polyA tails to be present when reporting transcripts; "
+                               "default: auto (requires polyA only when polyA percentage is >= 70%%)",
+                          default=PolyAUsageStrategies.auto.name)
     # OUTPUT PROPERTIES
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
                                      default="16")
@@ -600,24 +598,25 @@ def set_model_construction_options(args):
                                             'min_novel_count', 'min_novel_count_rel',
                                             'min_mono_count_rel', 'singleton_adjacent_cov',
                                             'fl_only', 'novel_monoexonic',
-                                            'require_monointronic_polya', 'require_monoexonic_polya'))
+                                            'require_monointronic_polya', 'require_monoexonic_polya',
+                                            'report_canonical'))
     strategies = {
         'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50,
-                                                     True, False, True, True),
+                                                     True, False, True, True, StrandnessReportingLevel.only_canonical),
         'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100,
-                                                     False, True, False, True),
+                                                     False, True, False, True, StrandnessReportingLevel.only_stranded),
         'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100,
-                                                     False, True, False, False),
+                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
         'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10,
-                                                     False, False, True, True),
+                                                     False, False, True, True, StrandnessReportingLevel.only_stranded),
         'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10,
-                                                     False, True, False, False),
+                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
         'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100,
-                                                     True, True, False, False),
+                                                     True, True, False, False, StrandnessReportingLevel.only_stranded),
         'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500,
-                                                     False, True, False, False),
+                                                     False, True, False, False, StrandnessReportingLevel.all),
         'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50,
-                                                     False, True, False, False)
+                                                     False, True, False, False, StrandnessReportingLevel.only_stranded)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -654,6 +653,8 @@ def set_model_construction_options(args):
     args.require_monoexonic_polya = strategy.require_monoexonic_polya
     args.polya_requirement_strategy = PolyAUsageStrategies[args.polya_requirement]
     args.report_canonical_strategy = StrandnessReportingLevel[args.report_canonical]
+    if args.report_canonical_strategy == StrandnessReportingLevel.auto:
+        args.report_canonical_strategy = strategy.report_canonical
 
 
 def set_configs_directory(args):

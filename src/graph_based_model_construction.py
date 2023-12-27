@@ -36,6 +36,7 @@ class StrandnessReportingLevel(Enum):
     only_canonical = 1
     only_stranded = 2
     all = 3
+    auto = 10
 
 
 class GraphBasedModelConstructor:
