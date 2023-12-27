@@ -90,7 +90,7 @@ def set_polya_requirement_strategy(flag, polya_requirement_strategy):
 
 def collect_reads_in_parallel(sample, chr_id, args):
     current_chr_record = Fasta(args.reference)[chr_id]
-    if not args.low_memory:
+    if args.high_memory:
         current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
     lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
