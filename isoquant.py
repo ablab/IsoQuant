@@ -46,7 +46,7 @@ def bool_str(s):
     return s == 'true' or s == '1'
 
 
-def parse_args(args=None, namespace=None):
+def parse_args(cmd_args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     ref_args_group = parser.add_argument_group('Reference data:')
     input_args_group = parser.add_argument_group('Input data:')
@@ -54,7 +54,7 @@ def parse_args(args=None, namespace=None):
     pipeline_args_group = parser.add_argument_group('Pipeline options:')
 
     other_options = parser.add_argument_group("Additional options:")
-    show_full_help = '--full_help' in sys.argv
+    show_full_help = '--full_help' in cmd_args
 
     def add_additional_option(*args, **kwargs):  # show command only with --full-help
         if not show_full_help:
@@ -222,7 +222,7 @@ def parse_args(args=None, namespace=None):
         pass
     parser.add_argument('--version', '-v', action='version', version='IsoQuant ' + isoquant_version)
 
-    args = parser.parse_args(args, namespace)
+    args = parser.parse_args(cmd_args, namespace)
 
     if args.resume:
         resume_parser = argparse.ArgumentParser(add_help=False)
@@ -239,7 +239,7 @@ def parse_args(args=None, namespace=None):
                                    action='store_true', default=argparse.SUPPRESS)
         resume_parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                                    default=argparse.SUPPRESS)
-        args, unknown_args = resume_parser.parse_known_args(sys.argv[1:])
+        args, unknown_args = resume_parser.parse_known_args(cmd_args)
         if unknown_args:
             logger.error("You cannot specify options other than --output/--threads/--debug/--low_memory "
                          "with --resume option")
