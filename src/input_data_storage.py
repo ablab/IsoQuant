@@ -251,7 +251,8 @@ class InputDataStorage:
                         exit(-2)
                     readable_names_dict[current_sample_name][fname] = readable_name
             if len(current_sample) > 0:
-                sample_files.append([current_sample])
+                current_sample_list = [[s] for s in current_sample]
+                sample_files.append(current_sample_list)
                 experiment_names.append(current_sample_name)
                 if 'illumina bam' in sample.keys():
                     illumina_bam.append([normalize_path(yaml_file_path, ib) for ib in sample['illumina bam']])
