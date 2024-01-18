@@ -13,7 +13,7 @@ def t(e):             return e[1]
 
 class Enc:
 
-    def __init__(self,n,E,F={},R=[],solver_id='SCIP',eps=10):
+    def __init__(self,n,E,F={},R=[],solver_id='SCIP',eps=100):
         self.n = n
         self.m = len(E)
         self.source = 0
@@ -41,13 +41,10 @@ class Enc:
         
         self.edge_vars  = []
         self.phi_vars   = []
+        self.gam_vars   = []
         self.weights    = []
         self.slack_vars = []
         self.path_vars  = []
-
-        assert(self.F == self.F_high)
-        print(self.F_low)
-        print(self.F_high)
 
     def add_constraint(self, constraint):
         self.constraints.append(str(constraint))
@@ -61,6 +58,7 @@ class Enc:
         self.edge_vars   = []
         self.phi_vars    = []
         self.gam_vars    = []
+        self.slack_vars  = []
         self.weights     = []
         self.path_vars   = []
         self.solver.Clear()
@@ -78,12 +76,13 @@ class Enc:
             self.slack_vars += [  self.solver.IntVar(0, self.w_max,'s_{}'.format(i)) ]
             self.path_vars  += [ [self.solver.BoolVar('r_{}_{}'.format(i,j)) for j in range(len(self.R)) ]]
 
-        print(self.edge_vars)
-        print(self.phi_vars)
-        print(self.gam_vars)
-        print(self.weights)
-        print(self.slack_vars)
-        print(self.path_vars)
+        #print(self.edge_vars)
+        #print(self.phi_vars)
+        #print(self.gam_vars)
+        #print(self.weights)
+        #print(self.slack_vars)
+        #print(self.path_vars)
+        #print()
 
         #The identifiers of the constraints come from https://www.biorxiv.org/content/10.1101/2023.03.20.533019v1.full.pdf
 
@@ -138,8 +137,8 @@ class Enc:
         self.solver.Minimize( sum( slack for slack in self.slack_vars ) )
 
     def print_solution(self):
-        print("Solution has size ", self.k, " with the following weight-slack-path decomposition")
-        print("Sum of slacks is ", self.solver.Objective().Value())
+        print("###Solution has size ", self.k, " with the following weight-slack-path decomposition")
+        print("###Sum of slacks is ", self.solver.Objective().Value())
         for i in range(self.k):
             path = list(map(lambda e : tail(e), list(filter(lambda e : e.solution_value()==1, self.edge_vars[i]))))
             print(int(self.weights[i].solution_value()), int(self.slack_vars[i].solution_value()), path[:-1])
@@ -147,10 +146,14 @@ class Enc:
     def linear_search(self):
         cur = math.inf
         while self.k <= min(self.m,self.f):
+            print("Encoding...",self.k)
             self.encode()
+            print("Solving...")
             status = self.solver.Solve()
+            print("Status",status)
             if status == pywraplp.Solver.OPTIMAL:
                 slack_sum = self.solver.Objective().Value()
+                print("Found opt:", self.solver.Objective().Value(),",",self.k)
                 if cur-slack_sum < self.epsilon:
                     self.print_solution()
                     break
@@ -241,21 +244,13 @@ def intron_to_matrix(intron_graph):
         flow_dict[(terminal_vertex, target)] = terminal_introns[terminal_intron]
 
     assert len(edge_list) == len(edge_set)
-    #return vertex_id+1,edge_list,flow_dict    
-
-    alfa = 0.5
-    f_low   = {}
-    f_high = {}
-    for edge in flow_dict:
-        f_low[edge] = math.floor((1-alfa)*flow_dict[edge])
-        f_high[edge] = math.ceil((1+alfa)*flow_dict[edge])
-
-    return vertex_id+1, edge_list, f_low, f_high, f_high
+    print("ok")
+    return vertex_id+1, edge_list, flow_dict
 
 
 def Encode_ILP(intron_graph):
 
-    n,E,Fl,Fh,F = intron_to_matrix(intron_graph)
+    n,E,F = intron_to_matrix(intron_graph)
 
     R = [[(1,3),(3,5)]]
 
