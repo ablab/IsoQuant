@@ -26,7 +26,7 @@ class Enc:
         self.w_max = 0
         self.constraints = []
 
-        self.epsilon = eps #maybe we could have a function that computes this epsilon based on features of the data
+        self.epsilon = eps #we could have a function that computes epsilon based on features of the data
 
         self.solver = pywraplp.Solver.CreateSolver(solver_id)
         if not self.solver:
@@ -136,41 +136,63 @@ class Enc:
         #Add objective function: the goal is to minimize the total slack of the paths
         self.solver.Minimize( sum( slack for slack in self.slack_vars ) )
 
-    def print_solution(self):
-        print("###Solution has size ", self.k, " with the following weight-slack-path decomposition")
-        print("###Sum of slacks is ", self.solver.Objective().Value())
+    def print_solution(self,solution):
+        opt, slack, paths = solution
+        print("Solution has size ", opt, "with slack", slack, "and with the following weight-slack-path decomposition")
+        for p in paths:
+            print(p)
+    
+    def build_solution(self):
+        opt   = self.k
+        slack = self.solver.Objective().Value()
+        paths = []
         for i in range(self.k):
             path = list(map(lambda e : tail(e), list(filter(lambda e : e.solution_value()==1, self.edge_vars[i]))))
-            print(int(self.weights[i].solution_value()), int(self.slack_vars[i].solution_value()), path[:-1])
+            paths.append( (int(self.weights[i].solution_value()), int(self.slack_vars[i].solution_value()), path[:-1]) )
+        return (opt, slack, paths)
 
     def linear_search(self):
-        cur = math.inf
-        while self.k <= min(self.m,self.f):
-            print("Encoding...",self.k)
+
+        #Feasibility: Find first feasible solution (there always exists one) and clear the solver for next stage
+        while True:
             self.encode()
-            print("Solving...")
             status = self.solver.Solve()
-            print("Status",status)
-            if status == pywraplp.Solver.OPTIMAL:
-                slack_sum = self.solver.Objective().Value()
-                print("Found opt:", self.solver.Objective().Value(),",",self.k)
-                if cur-slack_sum < self.epsilon:
-                    self.print_solution()
-                    break
-                cur = slack_sum
+            if (status == pywraplp.Solver.OPTIMAL):
+                previous_slack = self.solver.Objective().Value()
+                solution       = self.build_solution()
+                break
             self.clear()
             self.k += 1
+
+        #Optimality: Find the k for which the difference in slacks of two consecutive iterations becomes sufficiently small
+        while self.k <= min(self.m,self.f):
+
+            self.encode()
+            status = self.solver.Solve()
+            current_slack = self.solver.Objective().Value()
+            
+            if previous_slack-current_slack < self.epsilon:
+                self.print_solution(solution)
+                break
+
+            solution       = self.build_solution()
+            previous_slack = current_slack
+            self.clear()
+            self.k += 1
+
 
 '''
 # Transform intron_graph into a flow matrix F
 - add super source S and an edge (S,v) to every node v with 0 in-degree (leftmost guys in each layer); add super target T and an edge (v,T) from every node v with 0-outdegree (rightmost guys in each layer)
 - define f(S,v)=out-going flow of v and f(v,T)=incoming-flow of v
 - DAG may contain multiple connected components but thats fine, we can still add from super source to every 0-indegree guy... in the future think of possible opts (threads running in different components?)
+
+Input:  intron_graph
+Output: abstracted DAG in the form (number of nodes, edge list, flow dictionary)
 ''' 
 def intron_to_matrix(intron_graph):
     intron2vertex = dict()
     vertex2intron = dict()
-    source = 0
     vertex_id = 1
 
     # add all intron vertices
@@ -195,6 +217,7 @@ def intron_to_matrix(intron_graph):
                 vertex2intron[vertex_id] = subsequent_intron
                 vertex_id += 1
 
+    source = 0
     target = vertex_id
 
     # create edges
@@ -251,8 +274,6 @@ def intron_to_matrix(intron_graph):
 def Encode_ILP(intron_graph):
 
     n,E,F = intron_to_matrix(intron_graph)
-
-    R = [[(1,3),(3,5)]]
 
     e = Enc(n,E,F)
     e.linear_search()
