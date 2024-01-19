@@ -11,6 +11,8 @@
 
 from graphviz import Digraph
 
+'''
+TODO label the graph
 def network2dot(G):
     dot = Digraph(format='pdf')
     dot.graph_attr['rankdir'] = 'LR' # Display the graph in landscape mode
@@ -21,7 +23,21 @@ def network2dot(G):
         dot.edge(str(u),str(v),label=f'{att["weight"]}')
 
     return dot
+'''
 
-def visualize(intron_graph):
+def network2dot(G):
+    dot = Digraph(format='pdf')
+    dot.graph_attr['rankdir'] = 'LR' # Display the graph in landscape mode
+    dot.node_attr['shape'] = 'rectangle' # Rectangle nodes
+
+    (E,F) = G
+    
+    for (u,v) in E:
+        dot.edge(str(u),str(v),label=str(F[(u,v)]))
+
+    dot.render(directory='.', view=True)
+    
+
+def visualize(G):
     #should allow more arguments. e.g., a set of paths that we want to highlight in the drawing
-    return network2dot(intron_graph)
+    network2dot(G)

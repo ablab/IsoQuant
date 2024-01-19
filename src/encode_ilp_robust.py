@@ -3,6 +3,7 @@ import math
 from ortools.linear_solver import pywraplp
 from collections import defaultdict
 from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
+from src.visualization import visualize
 
 def flatten(l):       return [item for sublist in l for item in sublist]
 def head(x):          return int(x.name().split('_')[1])
@@ -13,7 +14,7 @@ def t(e):             return e[1]
 
 class Enc:
 
-    def __init__(self,n,E,F={},R=[],solver_id='SCIP',eps=100):
+    def __init__(self,n,E,F={},R=[],solver_id='GLOP_LINEAR_PROGRAMMING',eps=1000):
         self.n = n
         self.m = len(E)
         self.source = 0
@@ -76,13 +77,14 @@ class Enc:
             self.slack_vars += [  self.solver.IntVar(0, self.w_max,'s_{}'.format(i)) ]
             self.path_vars  += [ [self.solver.BoolVar('r_{}_{}'.format(i,j)) for j in range(len(self.R)) ]]
 
-        #print(self.edge_vars)
-        #print(self.phi_vars)
-        #print(self.gam_vars)
-        #print(self.weights)
-        #print(self.slack_vars)
-        #print(self.path_vars)
-        #print()
+        print()
+        print(self.edge_vars)
+        print(self.phi_vars)
+        print(self.gam_vars)
+        print(self.weights)
+        print(self.slack_vars)
+        print(self.path_vars)
+        print()
 
         #The identifiers of the constraints come from https://www.biorxiv.org/content/10.1101/2023.03.20.533019v1.full.pdf
 
@@ -152,7 +154,7 @@ class Enc:
         return (opt, slack, paths)
 
     def linear_search(self):
-
+        print("Feasibility")
         #Feasibility: Find first feasible solution (there always exists one) and clear the solver for next stage
         while True:
             self.encode()
@@ -164,6 +166,7 @@ class Enc:
             self.clear()
             self.k += 1
 
+        print("Optimality")
         #Optimality: Find the k for which the difference in slacks of two consecutive iterations becomes sufficiently small
         while self.k <= min(self.m,self.f):
 
@@ -172,8 +175,10 @@ class Enc:
             current_slack = self.solver.Objective().Value()
             
             if previous_slack-current_slack < self.epsilon:
+                print(previous_slack,current_slack)
                 self.print_solution(solution)
-                break
+                exit(0)
+                #break
 
             solution       = self.build_solution()
             previous_slack = current_slack
@@ -266,14 +271,24 @@ def intron_to_matrix(intron_graph):
         edge_set.add((terminal_vertex, target))
         flow_dict[(terminal_vertex, target)] = terminal_introns[terminal_intron]
 
+    #FIXME edge_set is not necessary
     assert len(edge_list) == len(edge_set)
-    print("ok")
+    assert len(edge_list) == len(flow_dict)
+
+    print("Returning from graph transformation")
+
+    print("N:",vertex_id+1)
+    print("Edges:",edge_list)
+    print("Flows:",flow_dict)
+
     return vertex_id+1, edge_list, flow_dict
 
 
 def Encode_ILP(intron_graph):
 
     n,E,F = intron_to_matrix(intron_graph)
+
+    visualize((E,F))
 
     e = Enc(n,E,F)
     e.linear_search()
