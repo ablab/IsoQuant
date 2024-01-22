@@ -6,11 +6,11 @@ from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX
 from src.visualization import visualize
 
 def flatten(l):       return [item for sublist in l for item in sublist]
-def head(x):          return int(x.name().split('_')[1])
-def tail(x):          return int(x.name().split('_')[2])
+def tail(x):          return int(x.name().split('_')[1])
+def head(x):          return int(x.name().split('_')[2])
 def exists_edge(e,p): return len(list(filter(lambda x: head(e)==x[0] and tail(e)==x[1], p))) >= 1
-def h(e):             return e[0]
-def t(e):             return e[1]
+def t(e):             return e[0]
+def h(e):             return e[1]
 
 class Enc:
 
@@ -38,7 +38,9 @@ class Enc:
             if u==self.source:
                 self.f += self.F[e] #sum of out-going flow from the source
                 self.k += 1         #k = |{v in V : f(s,v)>0}| trivial lower bound, think of funnels. (we assume that every edge has positive flow)
-            self.w_max = 1e8 #max(self.w_max,self.F[e])
+            self.w_max = max(self.w_max,self.F[e])
+
+        self.MM = 1e8
 
         self.edge_vars  = []
         self.phi_vars   = []
@@ -70,10 +72,10 @@ class Enc:
     def encode(self):
 
         for i in range(self.k): #DANGER the order of the variables, e.g. order of edge_varibles and self.phi_vars must be the same
-            #self.edge_vars  += [ [self.solver.BoolVar('x_{}_{}_{}'.format(h(e),t(e),i))              for e in self.E ] ]
-            self.edge_vars  += [ [self.solver.IntVar(0, 1, 'x_{}_{}_{}'.format(h(e),t(e),i))         for e in self.E ] ]
-            self.phi_vars   += [ [self.solver.IntVar(0, self.w_max,'f_{}_{}_{}'.format(h(e),t(e),i)) for e in self.E ] ]
-            self.gam_vars   += [ [self.solver.IntVar(0, self.w_max,'g_{}_{}_{}'.format(h(e),t(e),i)) for e in self.E ] ]
+            self.edge_vars  += [ [self.solver.BoolVar('x_{}_{}_{}'.format(t(e),h(e),i))              for e in self.E ] ]
+            #self.edge_vars  += [ [self.solver.IntVar(0, 1, 'x_{}_{}_{}'.format(t(e),h(e),i))         for e in self.E ] ]
+            self.phi_vars   += [ [self.solver.IntVar(0, self.w_max,'f_{}_{}_{}'.format(t(e),h(e),i)) for e in self.E ] ]
+            self.gam_vars   += [ [self.solver.IntVar(0, self.w_max,'g_{}_{}_{}'.format(t(e),h(e),i)) for e in self.E ] ]
             self.weights    += [  self.solver.IntVar(1, self.w_max,'w_{}'.format(i)) ]
             self.slack_vars += [  self.solver.IntVar(0, self.w_max,'s_{}'.format(i)) ]
             self.path_vars  += [ [self.solver.BoolVar('r_{}_{}'.format(i,j)) for j in range(len(self.R)) ]]
@@ -91,19 +93,21 @@ class Enc:
 
         #This constraint is to avoid paths to branch out... still working on this
         #for i in range(self.k):
-            #0<x<1 => slack to +infinity 
-            #can also do 
+        #    for e in range(self.m):
+        #        self.solver.Add( self.edge_vars[i][e] <=  2)
+            #x>0 => slack to +infinity
+            #can also do
             #0<x<1 => False
 
         #14a, 14b
         for i in range(self.k):
-            self.solver.Add( sum( filter(lambda edge: head(edge)==self.source, self.edge_vars[i]) ) == 1 )
-            self.solver.Add( sum( filter(lambda edge: tail(edge)==self.target, self.edge_vars[i]) ) == 1 )
+            self.solver.Add( sum( filter(lambda edge: tail(edge)==self.source, self.edge_vars[i]) ) == 1 )
+            self.solver.Add( sum( filter(lambda edge: head(edge)==self.target, self.edge_vars[i]) ) == 1 )
             
         #14c
         for i in range(self.k):
             for v in range(1,self.n-1): #find all wedges u->v->w for a fixed v (excluding {s,t})
-                self.solver.Add( sum( filter(lambda edge: tail(edge)==v, self.edge_vars[i]) ) - sum( filter(lambda edge: head(edge)==v, self.edge_vars[i]) ) == 0 )
+                self.solver.Add( sum( filter(lambda edge: head(edge)==v, self.edge_vars[i]) ) - sum( filter(lambda edge: tail(edge)==v, self.edge_vars[i]) ) == 0 )
 
         #14d, 14e
         for e in range(self.m):
@@ -114,7 +118,7 @@ class Enc:
         for i in range(self.k):
             for e in range(self.m): # for phi,x in tuple(zip(self.phi_vars[i],self.edge_vars[i])): self.solver.Add( phi <= self.w_max * x )
                 self.solver.Add( self.phi_vars[i][e] <= self.w_max * self.edge_vars[i][e] ) ###
-                self.solver.Add( self.gam_vars[i][e] <= self.w_max * self.edge_vars[i][e] )
+                self.solver.Add( self.gam_vars[i][e] <= self.MM * self.edge_vars[i][e] )
 
         #14g, 14j
         for i in range(self.k):
@@ -127,7 +131,7 @@ class Enc:
         for i in range(self.k):
             for e in range(self.m):
                 self.solver.Add( self.phi_vars[i][e] >= self.weights[i]    - (1 - self.edge_vars[i][e]) * self.w_max )###
-                self.solver.Add( self.gam_vars[i][e] >= self.slack_vars[i] - (1 - self.edge_vars[i][e]) * self.w_max )
+                self.solver.Add( self.gam_vars[i][e] >= self.slack_vars[i] - (1 - self.edge_vars[i][e]) * self.MM )
 
         #Example of a subpath constraint: R=[ [(1,3),(3,5)], [(0,1)] ], means that we have 2 paths to cover, the first one is 1-3-5. the second path is just a single edge 0-1
         def EncodeSubpathConstraints():
@@ -163,9 +167,27 @@ class Enc:
             #list(filter(lambda e : e.solution_value()==1, self.edge_vars[i]))
 
         for i in range(self.k):
-            path = list(map(lambda e : tail(e), list(filter(lambda e : e.solution_value()>0.9, self.edge_vars[i]))))
+            path = []
+            u    = self.source
+            while u != self.target:
+                e = list(filter(lambda e : e.solution_value()>0.5 and tail(e)==u, self.edge_vars[i]))
+                #assert(len(e)==1) this should be true always. as of now, ocasionally it is not, due to precision problems
+                if (e==[]): #along the same lines, this makes no sense and is only temporary
+                    print("Path",i,"has no edge from",u)
+                    break
+                v = head(e[0])
+                path.append(v)
+                u = v
+            if path==[]:#along the same lines, this makes no sense and is only temporary
+                path.append(0)
             paths.append( (int(self.weights[i].solution_value()), int(self.slack_vars[i].solution_value()), path[:-1]) )
+
         return (opt, slack, paths)
+        #print(self.source,self.target,self.n)
+        #for i in range(self.k):
+        #    path = list(map(lambda e : tail(e), list(filter(lambda e : e.solution_value()==1, self.edge_vars[i]))))
+        #    paths.append( (int(self.weights[i].solution_value()), int(self.slack_vars[i].solution_value()), path[:-1]) )
+        #return (opt, slack, paths)
 
     def linear_search(self):
         print("Feasibility")
