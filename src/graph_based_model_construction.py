@@ -25,7 +25,8 @@ from .isoform_assignment import is_matching_assignment, match_subtype_to_str_wit
 from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
-from .encode_ilp_robust import Encode_ILP
+#from .encode_ilp_OR import Encode_ILP
+from .encode_ilp_gurobi import Encode_ILP
 
 
 logger = logging.getLogger('IsoQuant')
