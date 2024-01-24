@@ -1,5 +1,3 @@
-import math
-
 from ortools.linear_solver import pywraplp
 from collections import defaultdict
 from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
@@ -14,7 +12,7 @@ def h(e):             return e[1]
 
 class Enc:
 
-    def __init__(self,n,E,F={},R=[],solver_id='GLOP_LINEAR_PROGRAMMING',eps=10000):
+    def __init__(self,n,E,F,R=[],solver_id='CBC_MIXED_INTEGER_PROGRAMMING',eps=10000):
         self.n = n
         self.m = len(E)
         self.source = 0
@@ -40,7 +38,7 @@ class Enc:
                 self.k += 1         #k = |{v in V : f(s,v)>0}| trivial lower bound, think of funnels. (we assume that every edge has positive flow)
             self.w_max = max(self.w_max,self.F[e])
 
-        self.MM = 1e8
+        #self.MM = 1e8
 
         self.edge_vars  = []
         self.phi_vars   = []
@@ -72,8 +70,7 @@ class Enc:
     def encode(self):
 
         for i in range(self.k): #DANGER the order of the variables, e.g. order of edge_varibles and self.phi_vars must be the same
-            self.edge_vars  += [ [self.solver.BoolVar('x_{}_{}_{}'.format(t(e),h(e),i))              for e in self.E ] ]
-            #self.edge_vars  += [ [self.solver.IntVar(0, 1, 'x_{}_{}_{}'.format(t(e),h(e),i))         for e in self.E ] ]
+            self.edge_vars  += [ [self.solver.BoolVar('x_{}_{}_{}'.format(t(e),h(e),i))              for e in self.E ] ] #TODO try IntVar
             self.phi_vars   += [ [self.solver.IntVar(0, self.w_max,'f_{}_{}_{}'.format(t(e),h(e),i)) for e in self.E ] ]
             self.gam_vars   += [ [self.solver.IntVar(0, self.w_max,'g_{}_{}_{}'.format(t(e),h(e),i)) for e in self.E ] ]
             self.weights    += [  self.solver.IntVar(1, self.w_max,'w_{}'.format(i)) ]
@@ -90,14 +87,6 @@ class Enc:
         print()
 
         #The identifiers of the constraints come from https://www.biorxiv.org/content/10.1101/2023.03.20.533019v1.full.pdf
-
-        #This constraint is to avoid paths to branch out... still working on this
-        #for i in range(self.k):
-        #    for e in range(self.m):
-        #        self.solver.Add( self.edge_vars[i][e] <=  2)
-            #x>0 => slack to +infinity
-            #can also do
-            #0<x<1 => False
 
         #14a, 14b
         for i in range(self.k):
@@ -116,9 +105,9 @@ class Enc:
 
         #14f, 14i
         for i in range(self.k):
-            for e in range(self.m): # for phi,x in tuple(zip(self.phi_vars[i],self.edge_vars[i])): self.solver.Add( phi <= self.w_max * x )
+            for e in range(self.m):
                 self.solver.Add( self.phi_vars[i][e] <= self.w_max * self.edge_vars[i][e] ) ###
-                self.solver.Add( self.gam_vars[i][e] <= self.MM * self.edge_vars[i][e] )
+                self.solver.Add( self.gam_vars[i][e] <= self.w_max * self.edge_vars[i][e] )
 
         #14g, 14j
         for i in range(self.k):
@@ -131,7 +120,7 @@ class Enc:
         for i in range(self.k):
             for e in range(self.m):
                 self.solver.Add( self.phi_vars[i][e] >= self.weights[i]    - (1 - self.edge_vars[i][e]) * self.w_max )###
-                self.solver.Add( self.gam_vars[i][e] >= self.slack_vars[i] - (1 - self.edge_vars[i][e]) * self.MM )
+                self.solver.Add( self.gam_vars[i][e] >= self.slack_vars[i] - (1 - self.edge_vars[i][e]) * self.w_max )
 
         #Example of a subpath constraint: R=[ [(1,3),(3,5)], [(0,1)] ], means that we have 2 paths to cover, the first one is 1-3-5. the second path is just a single edge 0-1
         def EncodeSubpathConstraints():
@@ -161,12 +150,6 @@ class Enc:
         paths = []
 
         for i in range(self.k):
-            for e in self.edge_vars[i]:
-                print(e, e.solution_value())
-            print()
-            #list(filter(lambda e : e.solution_value()==1, self.edge_vars[i]))
-
-        for i in range(self.k):
             path = []
             u    = self.source
             while u != self.target:
@@ -183,11 +166,6 @@ class Enc:
             paths.append( (int(self.weights[i].solution_value()), int(self.slack_vars[i].solution_value()), path[:-1]) )
 
         return (opt, slack, paths)
-        #print(self.source,self.target,self.n)
-        #for i in range(self.k):
-        #    path = list(map(lambda e : tail(e), list(filter(lambda e : e.solution_value()==1, self.edge_vars[i]))))
-        #    paths.append( (int(self.weights[i].solution_value()), int(self.slack_vars[i].solution_value()), path[:-1]) )
-        #return (opt, slack, paths)
 
     def linear_search(self):
         print("Feasibility")
@@ -205,17 +183,15 @@ class Enc:
 
         print("Optimality")
         #Optimality: Find the k for which the difference in slacks of two consecutive iterations becomes sufficiently small
-        while self.k <= min(self.m,self.f):
+        while self.k <= self.m:#min(self.m,self.f):
 
             self.encode()
             status = self.solver.Solve()
             current_slack = self.solver.Objective().Value()
             
             if previous_slack-current_slack < self.epsilon:
-                print(previous_slack,current_slack)
                 self.print_solution(solution)
                 exit(0)
-                #break
 
             solution       = self.build_solution()
             previous_slack = current_slack
@@ -332,3 +308,17 @@ def Encode_ILP(intron_graph):
 
 
 #https://developers.google.com/optimization/reference/python/linear_solver/pywraplp
+#https://developers.google.com/optimization/reference/python/linear_solver/pywraplp
+
+#This constraint is to avoid paths to branch out... still working on this
+#self.edge_aux0  += [ [self.solver.BoolVar('z0_{}_{}_{}'.format(t(e),h(e),i))             for e in self.E ] ]
+#self.edge_aux1  += [ [self.solver.BoolVar('z1_{}_{}_{}'.format(t(e),h(e),i))             for e in self.E ] ]
+#self.edge_vars  += [ [self.solver.IntVar(0, 1, 'x_{}_{}_{}'.format(t(e),h(e),i))         for e in self.E ] ]
+#for i in range(self.k):
+#    for e in range(self.m):
+#        self.solver.Add(     self.edge_vars[i][e] <= self.edge_aux0[i][e] )
+#        self.solver.Add( 1 - self.edge_vars[i][e] <= self.edge_aux1[i][e] )
+#        self.solver.Add( self.edge_aux0[i][e] + self.edge_aux1[i][e] <=  1)
+    #x>0 => slack to +infinity
+    #can also do
+    #0<x<1 => False
