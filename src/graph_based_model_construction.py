@@ -128,7 +128,9 @@ class GraphBasedModelConstructor:
         self.construct_fl_isoforms()
         self.construct_assignment_based_isoforms(read_assignment_storage)
         self.assign_reads_to_models(read_assignment_storage)
-        self.filter_transcripts()
+        unassigned_reads = self.filter_transcripts()
+        # reassign reads
+        self.assign_reads_to_models(unassigned_reads)
 
         self.transcript_counter.add_unassigned(len(self.unused_reads))
 
@@ -200,6 +202,7 @@ class GraphBasedModelConstructor:
         filtered_storage = []
         confirmed_transcipt_ids = set()
         to_substitute = self.detect_similar_isoforms()
+        unassigned_reads = []
 
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
@@ -220,6 +223,7 @@ class GraphBasedModelConstructor:
             if model.transcript_id in to_substitute:
                 #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
                 self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
+                unassigned_reads += self.transcript_read_ids[model.transcript_id]
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
@@ -227,6 +231,7 @@ class GraphBasedModelConstructor:
                 #logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
                 #                                                        self.internal_counter[model.transcript_id],
                 #                                                        novel_isoform_cutoff, component_coverage))
+                unassigned_reads += self.transcript_read_ids[model.transcript_id]
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
@@ -235,6 +240,7 @@ class GraphBasedModelConstructor:
                 #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.params.simple_models_mapq_cutoff:
                     #logger.debug("Novel model %s has poor quality" % model.transcript_id)
+                    unassigned_reads += self.transcript_read_ids[model.transcript_id]
                     del self.transcript_read_ids[model.transcript_id]
                     continue
 
@@ -245,6 +251,7 @@ class GraphBasedModelConstructor:
 
         self.transcript_model_storage = filtered_storage
         self.transcript_counter.add_confirmed_features(confirmed_transcipt_ids)
+        return unassigned_reads
 
     def mapping_quality(self, model):
         mapq = 0
