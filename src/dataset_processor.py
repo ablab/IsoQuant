@@ -667,7 +667,8 @@ class DatasetProcessor:
                 stats_file_names=[rreplace(p.output_stats_file_name, sample.prefix, sample.prefix + "_" + chr_id) for
                                   chr_id in chr_ids]
                 if p.output_stats_file_name else None,
-                ignore_read_groups=p.ignore_read_groups)
+                ignore_read_groups=p.ignore_read_groups,
+                unaligned_reads=self.alignment_stat_counter.stats_dict[AlignmentType.unaligned])
             p.convert_counts_to_tpm()
 
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
@@ -681,5 +682,6 @@ class DatasetProcessor:
                         stats_file_names=[rreplace(p.output_stats_file_name, label, label + "_" + chr_id) for chr_id in
                                           chr_ids]
                         if p.output_stats_file_name else None,
-                        ignore_read_groups=p.ignore_read_groups)
+                        ignore_read_groups=p.ignore_read_groups,
+                        unaligned_reads=self.alignment_stat_counter.stats_dict[AlignmentType.unaligned])
             p.convert_counts_to_tpm()

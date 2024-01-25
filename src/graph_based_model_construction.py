@@ -141,6 +141,8 @@ class GraphBasedModelConstructor:
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
 
+        self.transcript_counter.add_unassigned(len(self.unused_reads))
+
         if not self.gene_info.all_isoforms_exons:
             transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
             self.transcript_model_storage = transcript_joiner.join_transcripts()
