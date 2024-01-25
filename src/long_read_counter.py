@@ -95,6 +95,12 @@ class AbstractCounter:
     def dump(self):
         raise NotImplementedError()
 
+    def add_unassigned(self, n_reads=1):
+        raise NotImplementedError()
+
+    def add_unaligned(self, n_reads=1):
+        raise NotImplementedError()
+
 
 class CompositeCounter:
     def __init__(self, counters):
@@ -118,6 +124,14 @@ class CompositeCounter:
     def dump(self):
         for p in self.counters:
             p.dump()
+
+    def add_unassigned(self, n_reads=1):
+        for p in self.counters:
+            p.add_unassigned(n_reads)
+
+    def add_unaligned(self, n_reads=1):
+        for p in self.counters:
+            p.add_unaligned(n_reads)
 
 
 # count meta-features assigned to reads (genes or isoforms)
