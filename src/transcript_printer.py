@@ -18,6 +18,11 @@ def validate_exons(novel_exons):
     return novel_exons == sorted(novel_exons) and all(0 < x[0] <= x[1] for x in novel_exons)
 
 
+class VoidPrinter:
+    def dump(self, transcript_model_constructor, transcript_model_storage=None):
+        pass
+
+
 class GFFPrinter:
     transcript_id_counter = AtomicCounter()
     transcript_id_dict = {}
@@ -26,6 +31,7 @@ class GFFPrinter:
                  gtf_suffix = ".transcript_models.gtf",
                  r2t_suffix = ".transcript_model_reads.tsv",
                  output_r2t = True,
+                 check_canonical = False,
                  header = ""):
         self.model_fname = os.path.join(outf_prefix, sample_name + gtf_suffix)
         self.printed_gene_ids = set()
@@ -41,6 +47,7 @@ class GFFPrinter:
             if header:
                 self.out_r2t.write("#read_id\ttranscript_id\n")
                 self.out_r2t.flush()
+        self.check_canonical = check_canonical
         self.io_support = io_support
 
     def __del__(self):
@@ -48,14 +55,14 @@ class GFFPrinter:
         if self.output_r2t:
             self.out_r2t.close()
 
-    def dump(self, transcript_model_constructor, transcript_model_storage=None):
+    def dump(self, gene_info, transcript_model_storage):
         # write exons to GFF
         if transcript_model_storage is None:
-            transcript_model_storage = transcript_model_constructor.transcript_model_storage
+            transcript_model_storage = transcript_model_storage
         gene_to_model_dict = defaultdict(list)
         gene_regions = {}
-        if not transcript_model_constructor.gene_info.empty():
-            gene_regions = transcript_model_constructor.gene_info.get_gene_regions()
+        if not gene_info.empty():
+            gene_regions = gene_info.get_gene_regions()
         GFFGeneInfo = namedtuple("GFFGeneInfo", ("chr_id", "strand", "gene_region"))
         gene_info_dict = {}
 
@@ -69,7 +76,7 @@ class GFFPrinter:
 
             transcript_region = (model.exon_blocks[0][0], model.exon_blocks[-1][1])
             if gene_id not in gene_info_dict:
-                assert model.chr_id == transcript_model_constructor.gene_info.chr_id
+                assert model.chr_id == gene_info.chr_id
                 gene_range = max_range(gene_regions[gene_id], transcript_region) if gene_id in gene_regions else transcript_region
                 gene_info_dict[gene_id] = GFFGeneInfo(model.chr_id, model.strand, gene_range)
             else:
@@ -86,8 +93,8 @@ class GFFPrinter:
         for gene_id, coords in gene_order:
             if gene_id not in self.printed_gene_ids:
                 gene_additiional_info = ""
-                if transcript_model_constructor.gene_info and gene_id in transcript_model_constructor.gene_info.gene_attributes:
-                    gene_additiional_info = transcript_model_constructor.gene_info.gene_attributes[gene_id]
+                if gene_info and gene_id in gene_info.gene_attributes:
+                    gene_additiional_info = gene_info.gene_attributes[gene_id]
                 gene_line = '%s\tIsoQuant\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts "%d"; %s\n' % \
                             (gene_info_dict[gene_id].chr_id, coords[0], coords[1], gene_info_dict[gene_id].strand,
                              gene_id, len(gene_to_model_dict[gene_id]), gene_additiional_info)
@@ -100,9 +107,10 @@ class GFFPrinter:
 
                 if not model.check_additional("exons"):
                     model.add_additional_attribute("exons", str(len(model.exon_blocks)))
-                if transcript_model_constructor.params.check_canonical and \
-                        transcript_model_constructor.gene_info.reference_region:
-                    self.add_canonical_info(model, transcript_model_constructor.gene_info)
+                #TODO: move
+                if self.check_canonical and \
+                        gene_info.reference_region:
+                    self.add_canonical_info(model, gene_info)
 
                 transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; %s\n' \
                                   % (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,
@@ -124,17 +132,21 @@ class GFFPrinter:
                     self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns +
                                        ' exon "%d"; exon_id "%s";\n' % ((i + 1), exon_str_id))
         self.out_gff.flush()
-        # write read_id -> transcript_id map
-        if self.output_r2t:
-            used_reads = set()
-            for model_id, read_assignments in transcript_model_constructor.transcript_read_ids.items():
-                for a in read_assignments:
-                    used_reads.add(a.read_id)
-                    self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
-            for read_id in transcript_model_constructor.unused_reads:
-                self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
-            self.out_r2t.flush()
 
+    def dump_read_assignments(self, transcript_model_constructor):
+        # write read_id -> transcript_id map
+        if not self.output_r2t:
+            return
+        used_reads = set()
+        for model_id, read_assignments in transcript_model_constructor.transcript_read_ids.items():
+            for a in read_assignments:
+                used_reads.add(a.read_id)
+                self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
+        for read_id in transcript_model_constructor.unused_reads:
+            self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
+        self.out_r2t.flush()
+
+    # FIXME: this modifies models during printing
     def add_canonical_info(self, model, gene_info):
         key_word = 'Canonical'
         if model.check_additional(key_word):
