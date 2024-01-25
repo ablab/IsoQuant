@@ -97,6 +97,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
     lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
     save_file = "{}_{}".format(sample.out_raw_file, chr_id)
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
+    bamstat_file = "{}_{}_bamstat".format(sample.out_raw_file, chr_id)
     processed_reads = []
 
     if os.path.exists(lock_file) and args.resume:
@@ -105,13 +106,14 @@ def collect_reads_in_parallel(sample, chr_id, args):
             read_grouper.read_groups.clear()
             for g in open(group_file):
                 read_grouper.read_groups.add(g.strip())
+            alignment_stat_counter = EnumStats(bamstat_file)
             loader = ReadAssignmentLoader(save_file, None, None, None)
             while loader.has_next():
                 gene_info, assignment_storage = loader.get_next()
                 for a in assignment_storage:
                     processed_reads.append(BasicReadAssignment(a))
             logger.info("Loaded data for " + chr_id)
-            return processed_reads, read_grouper.read_groups
+            return processed_reads, read_grouper.read_groups, alignment_stat_counter
         else:
             logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
 
@@ -133,6 +135,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
     with open(group_file, "w") as group_dump:
         for g in read_grouper.read_groups:
             group_dump.write("%s\n" % g)
+    alignment_collector.alignment_stat_counter.dump(bamstat_file)
 
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
@@ -507,7 +510,7 @@ class DatasetProcessor:
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             self.alignment_stat_counter.add(AlignmentType.unaligned, bam.unmapped)
-        self.alignment_stat_counter.print_start("Alignment collected, overall alignment statistics:")
+        self.alignment_stat_counter.print_start("Alignments collected, overall alignment statistics:")
 
         logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
