@@ -216,7 +216,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support, check_canonical=args.check_canonical) \
         if construct_models else VoidPrinter()
     tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support,
-                                          gtf_suffix=".extended_annotation.gtf", output_r2t=False) \
+                                          gtf_suffix=".extended_annotation.gtf", output_r2t=False,
+                                          check_canonical=args.check_canonical) \
         if (construct_models and args.genedb) else VoidPrinter()
 
     sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args)) \
