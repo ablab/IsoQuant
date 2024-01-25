@@ -78,6 +78,14 @@ class ReadAssignmentCompositePrinter:
             p.flush()
 
 
+class VoidPrinter:
+    def add_read_info(self, _):
+        pass
+
+    def flush(self):
+        pass
+
+
 # write mapped reads to bed file
 class BEDPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, print_corrected=False, assignment_checker=PrintAllFunctor()):

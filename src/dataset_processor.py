@@ -46,8 +46,9 @@ from .assignment_io import (
     TmpFileAssignmentPrinter,
     TmpFileAssignmentLoader,
 )
-from .transcript_printer import GFFPrinter
+from .transcript_printer import GFFPrinter, VoidPrinter
 from .graph_based_model_construction import GraphBasedModelConstructor
+from .gene_info import TranscriptModelType
 
 logger = logging.getLogger('IsoQuant')
 
@@ -211,16 +212,16 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         gffutils_db = None
 
     transcript_stat_counter = EnumStats()
-    if construct_models:
-        io_support = IOSupport(args)
-        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support)
-        tmp_extended_gff_printer = None
-        if gffutils_db:
-            tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support,
-                                                  gtf_suffix=".extended_annotation.gtf", output_r2t=False)
-        sqanti_t2t_printer = None
-        if args.sqanti_output:
-            sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args))
+    io_support = IOSupport(args)
+    tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support, check_canonical=args.check_canonical) \
+        if construct_models else VoidPrinter()
+    tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support,
+                                          gtf_suffix=".extended_annotation.gtf", output_r2t=False) \
+        if (construct_models and args.genedb) else VoidPrinter()
+
+    sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args)) \
+        if args.sqanti_output else VoidPrinter()
+    novel_model_storage = []
 
     loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
     while loader.has_next():
@@ -237,18 +238,21 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
                                                            aggregator.transcript_model_global_counter)
             model_constructor.process(assignment_storage)
-            tmp_gff_printer.dump(model_constructor)
-            if tmp_extended_gff_printer:
-                tmp_extended_gff_printer.dump(model_constructor, model_constructor.extended_annotation_storage)
-            if args.sqanti_output:
-                for a in model_constructor.transcript2transcript:
-                    sqanti_t2t_printer.add_read_info(a)
+            tmp_gff_printer.dump(model_constructor.gene_info, model_constructor.transcript_model_storage)
+            tmp_gff_printer.dump_read_assignments(model_constructor)
+            for m in model_constructor.transcript_model_storage:
+                if m.transcript_type != TranscriptModelType.known:
+                    novel_model_storage.append(m)
+            for a in model_constructor.transcript2transcript:
+                sqanti_t2t_printer.add_read_info(a)
             for t in model_constructor.transcript_model_storage:
                 transcript_stat_counter.add(t.transcript_type)
 
     aggregator.global_counter.dump()
     aggregator.read_stat_counter.dump(read_stat_file)
     if construct_models:
+        #FIXME
+        tmp_extended_gff_printer.dump(None, novel_model_storage)
         aggregator.transcript_model_global_counter.dump()
         transcript_stat_counter.dump(transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
