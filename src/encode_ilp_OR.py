@@ -95,7 +95,7 @@ class Enc:
             
         #14c
         for i in range(self.k):
-            for v in range(1,self.n-1): #find all wedges u->v->w for a fixed v (excluding {s,t})
+            for v in range(1,self.n-1): #find all wedges u->v->w for v in V\{s,t}
                 self.solver.Add( sum( filter(lambda edge: head(edge)==v, self.edge_vars[i]) ) - sum( filter(lambda edge: tail(edge)==v, self.edge_vars[i]) ) == 0 )
 
         #14d, 14e

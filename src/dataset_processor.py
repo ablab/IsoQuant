@@ -221,6 +221,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
                                                            aggregator.transcript_model_global_counter)
             model_constructor.process(assignment_storage)
+            #break SENA
             tmp_gff_printer.dump(model_constructor)
             if tmp_extended_gff_printer:
                 tmp_extended_gff_printer.dump(model_constructor, model_constructor.extended_annotation_storage)

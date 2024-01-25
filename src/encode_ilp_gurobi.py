@@ -4,6 +4,9 @@ from collections import defaultdict
 from gurobipy import GRB
 import gurobipy as gp
 
+def tail(grb_edge): return int(grb_edge.split("[")[1].split(",")[0])
+def head(grb_edge): return int(grb_edge.split("[")[1].split(",")[1])
+def path(grb_edge): return int(grb_edge.split("[")[1].split(",")[2])
 
 class Enc:
 
@@ -30,11 +33,11 @@ class Enc:
         for (u,v) in self.E:
             if u==self.source:
                 self.f += self.F[(u,v)] #sum of out-going flow from the source
-                self.k += 1         #k = |{v in V : f(s,v)>0}| trivial lower bound, think of funnels. (we assume that every edge has positive flow)
+                self.k += 1             #k = outdegree(s), trivial lower bound, think of funnels. (we assume that every edge has positive flow)
             self.w_max = max(self.w_max,self.F[(u,v)])
-        print(self.k,self.w_max)
-        #self.MM = 1e8
-        self.k=5
+        
+        self.M = 1e10
+        #self.w_max = 1e8
 
         self.edge_vars  = {}
         self.phi_vars   = {}
@@ -58,7 +61,7 @@ class Enc:
         self.weights     = {}
         self.slacks      = {}
         self.path_vars   = {}
-        self.model       = gp.Model("MFD") #gurobi model does not have an "easy" clear() method so we just create a fresh model
+        self.model       = gp.Model("MFD") #gurobi model does not have an "easy" clear() method so we just create a fresh model whenever we want to reset the encoder
 
     def display_stats(self):
         print("###################################\nSTATS####################################\n")
@@ -75,16 +78,16 @@ class Enc:
         self.model.optimize()
 
     def encode(self):
-    
+
         # Create variables
-        edge_indexes    = [(u,v,i) for i in range(self.k) for (u, v) in self.E]
-        path_indexes    = list(range(self.k))
-        subpath_indexes = [(i,j) for i in range(self.k) for j in range(len(self.R))]
+        edge_indexes    = [ (u,v,i) for i in range(self.k) for (u, v) in self.E        ]
+        path_indexes    = [ (    i) for i in range(self.k)                             ]
+        subpath_indexes = [ (i,j  ) for i in range(self.k) for j in range(len(self.R)) ]
 
         self.edge_vars = self.model.addVars(   edge_indexes, vtype=GRB.BINARY , name='e'      )
         self.phi_vars  = self.model.addVars(   edge_indexes, vtype=GRB.INTEGER, name='p', lb=0)
         self.gam_vars  = self.model.addVars(   edge_indexes, vtype=GRB.INTEGER, name='g', lb=0)
-        self.weights   = self.model.addVars(   path_indexes, vtype=GRB.INTEGER, name='w', lb=0)
+        self.weights   = self.model.addVars(   path_indexes, vtype=GRB.INTEGER, name='w', lb=1)
         self.slacks    = self.model.addVars(   path_indexes, vtype=GRB.INTEGER, name='s', lb=0)
         self.path_vars = self.model.addVars(subpath_indexes, vtype=GRB.BINARY,  name='r'      )
 
@@ -95,25 +98,24 @@ class Enc:
             self.model.addConstr( self.edge_vars.sum('*',self.target,i) == 1, "14b_i={}".format(i) )
 
         for i in range(self.k):
-            for v in range(1,self.n-1): #find all wedges u->v->w for a fixed v (excluding {s,t})
+            for v in range(1,self.n-1): #find all wedges u->v->w for v in V\{s,t}
                 self.model.addConstr( self.edge_vars.sum('*',v,i) - self.edge_vars.sum(v,'*',i) == 0, "14c_v={}_i={}".format(v,i) )
 
         for (u,v) in self.E:
             f_uv = self.F[(u,v)]
-            self.model.addConstr( f_uv - self.phi_vars.sum(u,v,'*') <=  self.gam_vars.sum(u,v,'*'), "14d_u={}_v={}".format(u,v) )
-            self.model.addConstr( f_uv - self.phi_vars.sum(u,v,'*') >= -self.gam_vars.sum(u,v,'*'), "14e_u={}_v={}".format(u,v) )
+            phi_sum_i = self.phi_vars.sum(u,v,'*')
+            gam_sum_i = self.gam_vars.sum(u,v,'*')
+            self.model.addConstr( f_uv - phi_sum_i <=  gam_sum_i, "14d_u={}_v={}".format(u,v) )
+            self.model.addConstr( f_uv - phi_sum_i >= -gam_sum_i, "14e_u={}_v={}".format(u,v) )
 
         for i in range(self.k):
             for (u,v) in self.E:
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14f_u={}_v={}_i={}".format(u,v,i) )
-                self.model.addConstr( self.gam_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14i_u={}_v={}_i={}".format(u,v,i) )
+                self.model.addConstr( self.gam_vars[u,v,i] <=     self.M * self.edge_vars[u,v,i]                        , "14i_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.weights[i]                                           , "14g_u={}_v={}_i={}".format(u,v,i) )
-                self.model.addConstr( self.phi_vars[u,v,i] <= self.slacks[i]                                            , "14j_u={}_v={}_i={}".format(u,v,i) )
+                self.model.addConstr( self.phi_vars[u,v,i] <= self.slacks [i]                                           , "14j_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.phi_vars[u,v,i] >= self.weights[i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14h_u={}_v={}_i={}".format(u,v,i) )
-                self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks[i]  - (1 - self.edge_vars[u,v,i]) * self.w_max, "14k_u={}_v={}_i={}".format(u,v,i) )
-
-        self.model.display()
-        self.model.write("./program.rlp")
+                self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.M    , "14k_u={}_v={}_i={}".format(u,v,i) )
 
         #Example of a subpath constraint: R=[ [(1,3),(3,5)], [(0,1)] ], means that we have 2 paths to cover, the first one is 1-3-5. the second path is just a single edge 0-1
         def EncodeSubpathConstraints():
@@ -130,12 +132,17 @@ class Enc:
         #Add objective function minimizing the sum of slack of all the paths
         self.model.setObjective( self.slacks.sum(), GRB.MINIMIZE )
 
+        #self.model.display()
+
 
     def print_solution(self,solution):
         opt, slack, paths = solution
-        print("Solution has size ", opt, "with slack", slack, "and with the following weight-slack-path decomposition")
+        print("\n#####SOLUTION#####")
+        print("> FD size   :",   opt)
+        print("> Slack sum :", slack)
+        print("> Weight-Slack-Path decomposition:")
         for p in paths:
-            print(p)
+            print(*p)
     
     def build_solution(self):
         paths = []
@@ -143,9 +150,10 @@ class Enc:
             path = []
             u    = self.source
             while u != self.target:
-                edges = list(filter(lambda grb_var : grb_var.X==1 , self.edge_vars.select(u,'*',i) ))
+                edges = list(filter(lambda grb_var : grb_var.X>0.9 , self.edge_vars.select(u,'*',i) ))
+                print(edges)
                 assert(len(edges)==1)
-                _,v = edges[0]
+                v = head(edges[0].VarName)
                 path.append(v)
                 u = v
             paths.append( (self.weights[i].X, self.slacks[i].X, path[:-1]) )
@@ -153,13 +161,13 @@ class Enc:
         return (self.k, self.model.ObjVal, paths)
 
     def linear_search(self):
-        print("Feasibility")
+        print("########################Feasibility########################")
         #Feasibility: Find first feasible solution (there always exists one) and clear the solver for next stage
         while True:
-            print("CURRENT FD SIZE:",self.k)
+            print("\n########################\nCURRENT FD SIZE:",self.k,"\n########################\n")
             self.encode()
-            status = self.solve()
-            if status == GRB.OPTIMAL:
+            self.solve()
+            if self.model.status == GRB.OPTIMAL:
                 previous_slack = self.model.ObjVal
                 solution       = self.build_solution()
                 self.clear()
@@ -167,10 +175,10 @@ class Enc:
             self.clear()
             self.k += 1
 
-        print("Optimality")
+        print("########################Optimality########################")
         #Optimality: Find the k for which the difference in slacks of two consecutive iterations becomes sufficiently small
-        while self.k <= min(self.m,self.f):
-
+        while self.k <= self.m:#min(self.m,self.f):
+            print("\n########################\nCURRENT FD SIZE:",self.k,"\n########################\n")
             self.encode()
             self.solve()
             
