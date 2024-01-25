@@ -56,9 +56,9 @@ class GFFPrinter:
             self.out_r2t.close()
 
     def dump(self, gene_info, transcript_model_storage):
-        # write exons to GFF
-        if transcript_model_storage is None:
-            transcript_model_storage = transcript_model_storage
+        if not transcript_model_storage:
+            return
+
         gene_to_model_dict = defaultdict(list)
         gene_regions = {}
         if not gene_info.empty():
@@ -145,7 +145,10 @@ class GFFPrinter:
 
 def create_extened_storage(genedb, chr_id, chr_record, novel_model_storage):
     all_models = []
-    gene_info = GeneInfo(list(genedb.region(seqid=chr_id, start=1, featuretype="gene")), genedb, prepare_profiles=False)
+    gene_list = list(genedb.region(seqid=chr_id, start=1, featuretype="gene"))
+    if not gene_list:
+        return all_models, GeneInfo.from_region(chr_id, 1, len(chr_record), chr_record=chr_record)
+    gene_info = GeneInfo(gene_list, genedb, prepare_profiles=False)
     gene_info.set_reference_sequence(1, len(chr_record), chr_record)
     for isoform_id in gene_info.all_isoforms_exons.keys():
             all_models.append(TranscriptModel(gene_info.chr_id, gene_info.isoform_strands[isoform_id],
