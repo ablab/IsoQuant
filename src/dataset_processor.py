@@ -24,7 +24,7 @@ from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .stats import EnumStats
 from .file_utils import merge_files
 from .input_data_storage import SampleData
-from .alignment_processor import AlignmentCollector
+from .alignment_processor import AlignmentCollector, AlignmentType
 from .long_read_counter import (
     ExonCounter,
     IntronCounter,
@@ -46,7 +46,7 @@ from .assignment_io import (
     TmpFileAssignmentPrinter,
     TmpFileAssignmentLoader,
 )
-from .transcript_printer import GFFPrinter, VoidPrinter, create_extened_storage
+from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extened_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType
 
@@ -105,7 +105,6 @@ def collect_reads_in_parallel(sample, chr_id, args):
             read_grouper.read_groups.clear()
             for g in open(group_file):
                 read_grouper.read_groups.add(g.strip())
-            # TODO: fix loading with db = None
             loader = ReadAssignmentLoader(save_file, None, None, None)
             while loader.has_next():
                 gene_info, assignment_storage = loader.get_next()
@@ -118,7 +117,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
 
     tmp_printer = TmpFileAssignmentPrinter(save_file, args)
     bam_files = list(map(lambda x: x[0], sample.file_list))
-    bam_file_pairs = [(pysam.AlignmentFile(bam, "rb"), bam) for bam in bam_files]
+    bam_file_pairs = [(pysam.AlignmentFile(bam, "rb", require_index=True), bam) for bam in bam_files]
     gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
     illumina_bam = sample.illumina_bam
 
@@ -137,8 +136,10 @@ def collect_reads_in_parallel(sample, chr_id, args):
 
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
+    for bam in bam_file_pairs:
+        bam[0].close()
 
-    return processed_reads, read_grouper.read_groups
+    return processed_reads, read_grouper.read_groups, alignment_collector.alignment_stat_counter
 
 
 class ReadAssignmentLoader:
@@ -214,13 +215,13 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
     tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, check_canonical=args.check_canonical) \
-        if construct_models else VoidPrinter()
+        if construct_models else VoidTranscriptPrinter()
     tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, gtf_suffix=".extended_annotation.gtf",
                                           output_r2t=False, check_canonical=args.check_canonical) \
-        if (construct_models and args.genedb) else VoidPrinter()
+        if (construct_models and args.genedb) else VoidTranscriptPrinter()
 
     sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args)) \
-        if args.sqanti_output else VoidPrinter()
+        if args.sqanti_output else VoidTranscriptPrinter()
     novel_model_storage = []
 
     loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
@@ -343,6 +344,7 @@ class DatasetProcessor:
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
         self.all_read_groups = set()
+        self.alignment_stat_counter = EnumStats()
 
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
@@ -351,7 +353,7 @@ class DatasetProcessor:
             self.gffutils_db = None
 
         if self.args.needs_reference:
-            logger.info("Loading reference genome from " + self.args.reference)
+            logger.info("Loading reference genome from %s" % self.args.reference)
             ref_file_name = os.path.basename(self.args.reference)
             ref_name, outer_ext = os.path.splitext(ref_file_name)
 
@@ -490,17 +492,22 @@ class DatasetProcessor:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
 
-                for storage, read_groups in results:
+                for storage, read_groups, alignment_stats in results:
                     for read_assignment in storage:
                         multimapped_reads[read_assignment.read_id].append(read_assignment)
-
                     all_read_groups.update(read_groups)
+                    self.alignment_stat_counter.merge(alignment_stats)
         else:
-            for storage, read_groups in map(*read_gen):
+            for storage, read_groups, alignment_stats in map(*read_gen):
                 for read_assignment in storage:
                     multimapped_reads[read_assignment.read_id].append(read_assignment)
-
                 all_read_groups.update(read_groups)
+                self.alignment_stat_counter.merge(alignment_stats)
+
+        for bam_file in list(map(lambda x: x[0], sample.file_list)):
+            bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
+            self.alignment_stat_counter.add(AlignmentType.unaligned, bam.unmapped)
+        self.alignment_stat_counter.print_start("Alignment collected, overall alignment statistics:")
 
         logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
@@ -556,6 +563,8 @@ class DatasetProcessor:
         aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups)
         transcript_stat_counter = EnumStats()
 
+        gff_printer = VoidTranscriptPrinter()
+        extended_gff_printer = VoidTranscriptPrinter()
         if not self.args.no_model_construction:
             logger.info("Transcript construction options:")
             logger.info("  Novel monoexonic transcripts will be reported: %s"
@@ -578,8 +587,6 @@ class DatasetProcessor:
                     gtf_suffix=".extended_annotation.gtf", output_r2t=False,
                     header=self.common_header
                 )
-            else:
-                extended_gff_printer = None
 
         model_gen = (
             construct_models_in_parallel,

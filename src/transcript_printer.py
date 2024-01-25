@@ -19,7 +19,7 @@ def validate_exons(novel_exons):
     return novel_exons == sorted(novel_exons) and all(0 < x[0] <= x[1] for x in novel_exons)
 
 
-class VoidPrinter:
+class VoidTranscriptPrinter:
     def dump(self, transcript_model_constructor, transcript_model_storage=None):
         pass
 
