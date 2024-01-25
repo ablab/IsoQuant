@@ -246,7 +246,7 @@ def parse_args(cmd_args=None, namespace=None):
                                    action='store_true', default=argparse.SUPPRESS)
         args, unknown_args = resume_parser.parse_known_args(cmd_args)
         if unknown_args:
-            logger.error("You cannot specify options other than --output/--threads/--debug/--low_memory "
+            logger.error("You cannot specify options other than --output/--threads/--debug "
                          "with --resume option")
             parser.print_usage()
             exit(-2)

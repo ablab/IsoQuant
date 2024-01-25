@@ -26,9 +26,18 @@ from .polya_verification import PolyAFixer
 from .exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
 from .illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
-
+from .stats import EnumStats
+from enum import Enum, unique
 
 logger = logging.getLogger('IsoQuant')
+
+
+@unique
+class AlignmentType(Enum):
+    primary = 1
+    secondary = 2
+    supplementary = 20
+    unaligned = 255
 
 
 def make_alignment_tuple(bam_index, alignment):
@@ -235,12 +244,18 @@ class AlignmentCollector:
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
         self.polya_fixer = PolyAFixer(self.params)
         self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
+        self.alignment_stat_counter = EnumStats()
 
     def process(self):
-        current_region = None
         alignment_storage = BAMAlignmentStorage(self.bam_merger) if not self.params.high_memory else InMemoryAlignmentStorage()
-
         for bam_index, alignment in self.bam_merger.get():
+            if alignment.is_secondary:
+                self.alignment_stat_counter.add(AlignmentType.secondary)
+            elif alignment.is_supplementary:
+                self.alignment_stat_counter.add(AlignmentType.supplementary)
+            elif alignment.reference_id != -1:
+                self.alignment_stat_counter.add(AlignmentType.primary)
+
             if alignment_storage.alignment_is_not_adjacent(alignment):
                 for res in self.forward_alignments(alignment_storage):
                     yield res

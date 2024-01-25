@@ -24,8 +24,8 @@ class EnumStats:
             self.load(inf)
 
     # element must be Enum
-    def add(self, element):
-        self.stats_dict[element] += 1
+    def add(self, element, count=1):
+        self.stats_dict[element] += count
 
     def print_start(self, header_string=""):
         if header_string:
@@ -40,6 +40,10 @@ class EnumStats:
     def load(self, in_file):
         unpickler = pickle.Unpickler(open(in_file, "rb"), fix_imports=False)
         self.stats_dict = unpickler.load()
+
+    def merge(self, other):
+        for e in other.stats_dict.keys():
+            self.stats_dict[e] += other.stats_dict[e]
 
 
 def transform_counts(path_to_csv, label, column_name='count', full=False):
