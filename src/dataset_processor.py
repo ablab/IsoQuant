@@ -213,11 +213,10 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
-    tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support, check_canonical=args.check_canonical) \
+    tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, check_canonical=args.check_canonical) \
         if construct_models else VoidPrinter()
-    tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support,
-                                          gtf_suffix=".extended_annotation.gtf", output_r2t=False,
-                                          check_canonical=args.check_canonical) \
+    tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, gtf_suffix=".extended_annotation.gtf",
+                                          output_r2t=False, check_canonical=args.check_canonical) \
         if (construct_models and args.genedb) else VoidPrinter()
 
     sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args)) \
@@ -239,6 +238,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
                                                            aggregator.transcript_model_global_counter)
             model_constructor.process(assignment_storage)
+            if args.check_canonical:
+                io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
             tmp_gff_printer.dump(model_constructor.gene_info, model_constructor.transcript_model_storage)
             tmp_gff_printer.dump_read_assignments(model_constructor)
             for m in model_constructor.transcript_model_storage:
@@ -254,6 +255,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     if construct_models:
         if gffutils_db:
             all_models, gene_info = create_extened_storage(gffutils_db, chr_id, current_chr_record, novel_model_storage)
+            if args.check_canonical:
+                io_support.add_canonical_info(all_models, gene_info)
             tmp_extended_gff_printer.dump(gene_info, all_models)
         aggregator.transcript_model_global_counter.dump()
         transcript_stat_counter.dump(transcript_stat_file)
@@ -567,11 +570,11 @@ class DatasetProcessor:
             logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
 
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, self.io_support, header=self.common_header
+                sample.out_dir, sample.prefix, header=self.common_header
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
-                    sample.out_dir, sample.prefix, self.io_support,
+                    sample.out_dir, sample.prefix,
                     gtf_suffix=".extended_annotation.gtf", output_r2t=False,
                     header=self.common_header
                 )

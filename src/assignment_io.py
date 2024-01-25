@@ -503,6 +503,24 @@ class IOSupport:
                 return False
         return True
 
+    def add_canonical_info_for_model(self, model, gene_info):
+        if not gene_info.reference_region:
+            return
+        key_word = 'Canonical'
+        if model.check_additional(key_word):
+            return
+        model_introns = junctions_from_blocks(model.exon_blocks)
+        if len(model_introns) == 0:
+            canonical_info = "Unspliced"
+        else:
+            all_canonical = self.check_sites_are_canonical(model_introns, gene_info, model.strand)
+            canonical_info = str(all_canonical)
+        model.add_additional_attribute(key_word, canonical_info)
+
+    def add_canonical_info(self, model_storage, gene_info):
+        for m in model_storage:
+            self.add_canonical_info_for_model(m, gene_info)
+
     def check_downstream_polya(self, read_coords, gene_info, strand):
         if strand == '+':
             read_end = read_coords[1] - gene_info.all_read_region_start + 1
