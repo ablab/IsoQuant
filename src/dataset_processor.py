@@ -415,7 +415,7 @@ class DatasetProcessor:
         total_alignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
-        logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%)" %
+        logger.info("Total alignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
         self.args.needs_polya_for_construction = polya_fraction >= 0.7
 
