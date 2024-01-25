@@ -431,7 +431,7 @@ class DatasetProcessor:
         total_alignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
-        logger.info("Total alignments processed: %d, polyA tail detected in %d (%.1f%%)" %
+        logger.info("Total alignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
         if polya_fraction < self.args.low_polya_percentage_threshold:
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
