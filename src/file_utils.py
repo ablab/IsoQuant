@@ -6,7 +6,8 @@ import shutil
 logger = logging.getLogger('IsoQuant')
 
 
-def merge_files(file_names, merged_file_name, stats_file_names=None, ignore_read_groups=True, copy_header=True):
+def merge_files(file_names, merged_file_name, stats_file_names=None, ignore_read_groups=True, copy_header=True,
+                unaligned_reads=0):
     file_names.sort(key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split('(\d+)', s)])
     with open(merged_file_name, 'ab') as outf:
         for i, file_name in enumerate(file_names):
@@ -23,7 +24,7 @@ def merge_files(file_names, merged_file_name, stats_file_names=None, ignore_read
         for file_name in file_names:
             os.remove(file_name)
 
-    ambiguous_reads, not_assigned_reads, not_aligned_reads = 0, 0, 0
+    ambiguous_reads, not_assigned_reads, not_aligned_reads = 0, 0, unaligned_reads
     if stats_file_names and ignore_read_groups:
         for file_name in stats_file_names:
             with open(file_name) as f:
@@ -32,7 +33,8 @@ def merge_files(file_names, merged_file_name, stats_file_names=None, ignore_read
                 line = f.readline()
                 not_assigned_reads += int(line.split()[1])
                 line = f.readline()
-                not_aligned_reads += int(line.split()[1])
+                if unaligned_reads == 0:
+                    not_aligned_reads += int(line.split()[1])
             os.remove(file_name)
         with open(merged_file_name, 'a') as outf:
             outf.write("__ambiguous\t%d\n" % ambiguous_reads)

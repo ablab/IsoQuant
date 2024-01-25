@@ -207,6 +207,9 @@ class AssignedFeatureCounter(AbstractCounter):
             # self.confirmed_features.add((group_id, feature_ids[0]))
             self.all_features.add(feature_ids[0])
 
+    def add_unassigned(self, n_reads=1):
+        self.not_assigned_reads += n_reads
+
     def add_unaligned(self, n_reads=1):
         self.not_aligned_reads += n_reads
 
