@@ -28,7 +28,7 @@ class GFFPrinter:
     transcript_id_counter = AtomicCounter()
     transcript_id_dict = {}
 
-    def __init__(self, outf_prefix, sample_name, io_support,
+    def __init__(self, outf_prefix, sample_name,
                  gtf_suffix = ".transcript_models.gtf",
                  r2t_suffix = ".transcript_model_reads.tsv",
                  output_r2t = True,
@@ -49,7 +49,6 @@ class GFFPrinter:
                 self.out_r2t.write("#read_id\ttranscript_id\n")
                 self.out_r2t.flush()
         self.check_canonical = check_canonical
-        self.io_support = io_support
 
     def __del__(self):
         self.out_gff.close()
@@ -108,10 +107,6 @@ class GFFPrinter:
 
                 if not model.check_additional("exons"):
                     model.add_additional_attribute("exons", str(len(model.exon_blocks)))
-                #TODO: move
-                if self.check_canonical and \
-                        gene_info.reference_region:
-                    self.add_canonical_info(model, gene_info)
 
                 transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; %s\n' \
                                   % (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,
@@ -146,19 +141,6 @@ class GFFPrinter:
         for read_id in transcript_model_constructor.unused_reads:
             self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
         self.out_r2t.flush()
-
-    # FIXME: this modifies models during printing
-    def add_canonical_info(self, model, gene_info):
-        key_word = 'Canonical'
-        if model.check_additional(key_word):
-            return
-        model_introns = junctions_from_blocks(model.exon_blocks)
-        if len(model_introns) == 0:
-            canonical_info = "Unspliced"
-        else:
-            all_canonical = self.io_support.check_sites_are_canonical(model_introns, gene_info, model.strand)
-            canonical_info = str(all_canonical)
-        model.add_additional_attribute(key_word, canonical_info)
 
 
 def create_extened_storage(genedb, chr_id, chr_record, novel_model_storage):
