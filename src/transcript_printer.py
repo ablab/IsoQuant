@@ -10,6 +10,7 @@ from collections import defaultdict
 from collections import namedtuple
 
 from .common import AtomicCounter, junctions_from_blocks, max_range
+from .gene_info import TranscriptModel, GeneInfo, TranscriptModelType
 
 logger = logging.getLogger('IsoQuant')
 
@@ -158,3 +159,17 @@ class GFFPrinter:
             all_canonical = self.io_support.check_sites_are_canonical(model_introns, gene_info, model.strand)
             canonical_info = str(all_canonical)
         model.add_additional_attribute(key_word, canonical_info)
+
+
+def create_extened_storage(genedb, chr_id, chr_record, novel_model_storage):
+    all_models = []
+    gene_info = GeneInfo(list(genedb.region(seqid=chr_id, start=1, featuretype="gene")), genedb, prepare_profiles=False)
+    gene_info.set_reference_sequence(1, len(chr_record), chr_record)
+    for isoform_id in gene_info.all_isoforms_exons.keys():
+            all_models.append(TranscriptModel(gene_info.chr_id, gene_info.isoform_strands[isoform_id],
+                                              isoform_id, gene_info.gene_id_map[isoform_id],
+                                              gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known))
+    for m in novel_model_storage:
+        all_models.append(m)
+
+    return all_models, gene_info

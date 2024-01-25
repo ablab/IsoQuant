@@ -125,7 +125,7 @@ class FeatureInfo:
 class GeneInfo:
     EXTRA_BASES_FOR_SEQ = 20
 
-    def __init__(self, gene_db_list, db, delta=0):
+    def __init__(self, gene_db_list, db, delta=0, prepare_profiles=True):
         if db is None:
             return
         # gffutils main structure
@@ -151,8 +151,9 @@ class GeneInfo:
         self.all_isoforms_introns, self.all_isoforms_exons = self.set_introns_and_exons()
         if not self.all_isoforms_exons:
             logger.warning("Genes %s have no exons, check you GTF file" % ", ".join([g.id for g in gene_db_list]))
-        self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
-        self.set_junction_profiles(self.all_isoforms_introns, self.all_isoforms_exons)
+        if prepare_profiles:
+            self.split_exon_profiles.set_features(self.split_exons(self.exon_profiles.features))
+            self.set_junction_profiles(self.all_isoforms_introns, self.all_isoforms_exons)
 
         self.isoform_strands = {}
         self.gene_strands = {}
@@ -161,8 +162,9 @@ class GeneInfo:
         self.set_gene_ids()
         self.gene_attributes = {}
         self.set_gene_attributes()
-        self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
-        self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
+        if prepare_profiles:
+            self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
+            self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
 
     @classmethod
     def from_models(cls, transcript_model_storage, delta=0):
@@ -621,7 +623,7 @@ class GeneInfo:
         self.all_read_region_start = start
         self.all_read_region_end = end
         self.reference_region = \
-            str(chr_record[self.all_read_region_start - 1:self.all_read_region_end + 1])
+            str(chr_record[self.all_read_region_start - 1:self.all_read_region_end])
         self.canonical_sites = {}
 
 

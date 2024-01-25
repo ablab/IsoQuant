@@ -431,7 +431,7 @@ class GraphBasedModelConstructor:
                        and transcript_clean_strand == '.')
                       or (self.params.report_canonical_strategy == StrandnessReportingLevel.only_stranded
                           and transcript_strand == '.')):
-                    logger.debug("Avoiding unreliable transcript with %d exons" % len(novel_exons))
+                    logger.info("Avoiding unreliable transcript with %d exons (strand cannot be detected)" % len(novel_exons))
                     pass
                 else:
                     if self.params.use_technical_replicas and \
