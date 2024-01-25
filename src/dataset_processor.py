@@ -46,7 +46,7 @@ from .assignment_io import (
     TmpFileAssignmentPrinter,
     TmpFileAssignmentLoader,
 )
-from .transcript_printer import GFFPrinter, VoidPrinter
+from .transcript_printer import GFFPrinter, VoidPrinter, create_extened_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType
 
@@ -251,8 +251,9 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     aggregator.global_counter.dump()
     aggregator.read_stat_counter.dump(read_stat_file)
     if construct_models:
-        #FIXME
-        tmp_extended_gff_printer.dump(None, novel_model_storage)
+        if gffutils_db:
+            all_models, gene_info = create_extened_storage(gffutils_db, chr_id, current_chr_record, novel_model_storage)
+            tmp_extended_gff_printer.dump(gene_info, all_models)
         aggregator.transcript_model_global_counter.dump()
         transcript_stat_counter.dump(transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
