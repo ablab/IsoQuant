@@ -1,8 +1,17 @@
+#!/usr/bin/env python3
+#
+# ############################################################################
+# Copyright (c) 2023 University of Helsinki
+# # All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 import logging
 import os
 import subprocess
 import json
 import pysam
+from io import StringIO
 
 from .common import get_path_to_program
 from .gtf2db import convert_db_to_gtf, db2bed
@@ -329,7 +338,13 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
 
         command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
                    '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
-        logger.info("Running minimap2 (takes a while)")
+
+        minimap_version = "unknown"
+        version_run = subprocess.run([minimap2_path, '--version'], capture_output=True)
+        if version_run.returncode == 0:
+            minimap_version = version_run.stdout.decode('UTF-8').strip()
+
+        logger.info("Running minimap2 version %s (takes a while)" % minimap_version)
         if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
             logger.critical("Minimap2 finished with errors! See " + log_fpath)
             exit(-1)
