@@ -68,7 +68,6 @@ class GraphBasedModelConstructor:
         self.profile_constructor = CombinedProfileConstructor(self.gene_info, self.params)
 
         self.transcript_model_storage = []
-        self.extended_annotation_storage = []
         self.transcript_read_ids = defaultdict(list)
         self.transcript_counter = transcript_counter
         self.internal_counter = defaultdict(int)
@@ -141,9 +140,6 @@ class GraphBasedModelConstructor:
         self.pre_filter_transcripts()
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
-
-        if self.params.genedb:
-            self.create_extended_annotation()
 
         if not self.gene_info.all_isoforms_exons:
             transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
@@ -329,16 +325,6 @@ class GraphBasedModelConstructor:
                     to_substitute[m.transcript_id] = model.transcript_id
 
         return to_substitute
-
-    def create_extended_annotation(self):
-        self.extended_annotation_storage = []
-        for isoform_id in self.gene_info.all_isoforms_exons.keys():
-            if isoform_id not in GraphBasedModelConstructor.extended_transcript_ids:
-                self.extended_annotation_storage.append(self.transcript_from_reference(isoform_id))
-                GraphBasedModelConstructor.extended_transcript_ids.add(isoform_id)
-        for model in self.transcript_model_storage:
-            if model.transcript_type != TranscriptModelType.known:
-                self.extended_annotation_storage.append(model)
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
