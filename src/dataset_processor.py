@@ -623,7 +623,7 @@ class DatasetProcessor:
         if not self.args.no_model_construction:
             self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
-            if extended_gff_printer:
+            if self.args.genedb:
                 merge_files(
                     [
                         rreplace(extended_gff_printer.model_fname, sample.prefix, f"{sample.prefix}_{chr_id}")
