@@ -25,7 +25,7 @@ def network2dot(G):
     return dot
 '''
 
-def network2dot(G):
+def network2dot(G, paths=[]):
     dot = Digraph(format='pdf')
     dot.graph_attr['rankdir'] = 'LR' # Display the graph in landscape mode
     dot.node_attr['shape'] = 'rectangle' # Rectangle nodes
@@ -34,10 +34,28 @@ def network2dot(G):
     
     for (u,v) in E:
         dot.edge(str(u),str(v),label=str(F[(u,v)]))
+    pathWeights=None
+    if paths != []:
+        colors = ['red','blue','green','purple','brown','cyan','yellow','pink','grey']
+            
+        for index, path in enumerate(paths):
+            pathColor = colors[index % len(colors)]
+            if pathWeights is None:
+                dot.attr('edge', color=pathColor, penwidth='2.0')
+            else:
+                dot.attr('edge', label=str(pathWeights[index]), fontcolor=pathColor, color=pathColor, penwidth='2.0')
+            
+            
+            # If a path has only one node, color that node
+            if len(path) == 1:
+                dot.node(str(path[0]), color=pathColor, penwidth='2.0')
+            else:    
+                for i in range(len(path)-1):
+                    dot.edge(str(path[i]), str(path[i+1]))
 
     dot.render(directory='.', view=True)
     
 
-def visualize(G):
+def visualize(G, paths=[]):
     #should allow more arguments. e.g., a set of paths that we want to highlight in the drawing
-    network2dot(G)
+    network2dot(G, paths)

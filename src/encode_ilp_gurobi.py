@@ -143,6 +143,7 @@ class Enc:
         print("> Weight-Slack-Path decomposition:")
         for p in paths:
             print(*p)
+        visualize(self.E,paths)
     
     def build_solution(self):
         paths = []
@@ -171,7 +172,7 @@ class Enc:
                 previous_slack = self.model.ObjVal
                 solution       = self.build_solution()
                 self.clear()
-                self.k += 1
+                #self.k += 1
                 break
             self.clear()
             self.k += 1
