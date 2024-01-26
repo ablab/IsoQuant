@@ -36,7 +36,7 @@ class Enc:
                 self.k += 1             #k = outdegree(s), trivial lower bound, think of funnels. (we assume that every edge has positive flow)
             self.w_max = max(self.w_max,self.F[(u,v)])
         
-        self.M = 1e10
+        self.M = self.w_max
         #self.w_max = 1e8
 
         self.edge_vars  = {}
@@ -103,17 +103,17 @@ class Enc:
 
         for (u,v) in self.E:
             f_uv = self.F[(u,v)]
-            phi_sum_i = self.phi_vars.sum(u,v,'*')
-            gam_sum_i = self.gam_vars.sum(u,v,'*')
-            self.model.addConstr( f_uv - phi_sum_i <=  gam_sum_i, "14d_u={}_v={}".format(u,v) )
-            self.model.addConstr( f_uv - phi_sum_i >= -gam_sum_i, "14e_u={}_v={}".format(u,v) )
+            phi_sum = self.phi_vars.sum(u,v,'*')
+            gam_sum = self.gam_vars.sum(u,v,'*')
+            self.model.addConstr( f_uv - phi_sum <=  gam_sum, "14d_u={}_v={}".format(u,v) )
+            self.model.addConstr( f_uv - phi_sum >= -gam_sum, "14e_u={}_v={}".format(u,v) )
 
         for i in range(self.k):
             for (u,v) in self.E:
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14f_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.gam_vars[u,v,i] <=     self.M * self.edge_vars[u,v,i]                        , "14i_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.weights[i]                                           , "14g_u={}_v={}_i={}".format(u,v,i) )
-                self.model.addConstr( self.phi_vars[u,v,i] <= self.slacks [i]                                           , "14j_u={}_v={}_i={}".format(u,v,i) )
+                self.model.addConstr( self.gam_vars[u,v,i] <= self.slacks [i]                                           , "14j_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.phi_vars[u,v,i] >= self.weights[i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14h_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.M    , "14k_u={}_v={}_i={}".format(u,v,i) )
 
@@ -150,8 +150,8 @@ class Enc:
             path = []
             u    = self.source
             while u != self.target:
-                edges = list(filter(lambda grb_var : grb_var.X>0.9 , self.edge_vars.select(u,'*',i) ))
-                print(edges)
+                edges = list(filter(lambda grb_var : grb_var.X>0.99 , self.edge_vars.select(u,'*',i) ))
+                #print(edges)
                 assert(len(edges)==1)
                 v = head(edges[0].VarName)
                 path.append(v)
@@ -171,6 +171,7 @@ class Enc:
                 previous_slack = self.model.ObjVal
                 solution       = self.build_solution()
                 self.clear()
+                self.k += 1
                 break
             self.clear()
             self.k += 1
