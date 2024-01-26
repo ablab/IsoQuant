@@ -267,7 +267,6 @@ class GraphBasedModelConstructor:
             if model.transcript_id in to_substitute:
                 #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
                 self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
-                unassigned_reads += self.transcript_read_ids[model.transcript_id]
                 del self.transcript_read_ids[model.transcript_id]
                 del self.internal_counter[model.transcript_id]
                 continue
