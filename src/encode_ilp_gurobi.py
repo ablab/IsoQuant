@@ -143,7 +143,7 @@ class Enc:
         print("> Weight-Slack-Path decomposition:")
         for p in paths:
             print(*p)
-        visualize(self.E,paths)
+        visualize((self.E,self.F),paths)
     
     def build_solution(self):
         paths = []
