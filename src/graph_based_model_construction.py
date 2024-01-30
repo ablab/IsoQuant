@@ -291,7 +291,7 @@ class GraphBasedModelConstructor:
                     continue
 
             # TODO: correct ends for known
-            self.correct_novel_transcrip_ends(model, self.transcript_read_ids[model.transcript_id])
+            self.correct_novel_transcript_ends(model, self.transcript_read_ids[model.transcript_id])
             filtered_storage.append(model)
             confirmed_transcipt_ids.add(model.transcript_id)
 
@@ -727,7 +727,7 @@ class GraphBasedModelConstructor:
             else:
                 self.unused_reads.append(read_id)
 
-    def correct_novel_transcrip_ends(self, transcript_model, assigned_reads):
+    def correct_novel_transcript_ends(self, transcript_model, assigned_reads):
         logger.debug("Verifying ends for transcript %s" % transcript_model.transcript_id)
         transcript_end = transcript_model.exon_blocks[-1][1]
         transcript_start = transcript_model.exon_blocks[0][0]
