@@ -23,7 +23,8 @@ class Enc:
         self.w_max = 0
         self.constraints = []
 
-        self.epsilon = eps #we could have a function that computes epsilon based on features of the data
+        self.tolerance = 0.1 #tolerance allowed for gurobi numerical values
+        self.epsilon   = eps #we could have a function that computes epsilon based on features of the data
 
         self.model = gp.Model("MFD")
         if not self.model:
@@ -38,6 +39,8 @@ class Enc:
         
         self.M = self.w_max
         #self.w_max = 1e8
+
+        self.paths      = []
 
         self.edge_vars  = {}
         self.phi_vars   = {}
@@ -62,6 +65,7 @@ class Enc:
         self.slacks      = {}
         self.path_vars   = {}
         self.model       = gp.Model("MFD") #gurobi model does not have an "easy" clear() method so we just create a fresh model whenever we want to reset the encoder
+        self.paths       = []
 
     def display_stats(self):
         print("###################################\nSTATS####################################\n")
@@ -117,6 +121,10 @@ class Enc:
                 self.model.addConstr( self.phi_vars[u,v,i] >= self.weights[i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14h_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.M    , "14k_u={}_v={}_i={}".format(u,v,i) )
 
+
+        '''
+        Idea: might be interesting to try different strategies of subpath constraints wrt data
+        '''
         #Example of a subpath constraint: R=[ [(1,3),(3,5)], [(0,1)] ], means that we have 2 paths to cover, the first one is 1-3-5. the second path is just a single edge 0-1
         def EncodeSubpathConstraints():
             for i in range(self.k):
@@ -134,7 +142,6 @@ class Enc:
 
         #self.model.display()
 
-
     def print_solution(self,solution):
         opt, slack, paths = solution
         print("\n#####SOLUTION#####")
@@ -146,20 +153,18 @@ class Enc:
         visualize((self.E,self.F),paths)
     
     def build_solution(self):
-        paths = []
         for i in range(self.k):
             path = []
             u    = self.source
             while u != self.target:
-                edges = list(filter(lambda grb_var : grb_var.X>0.99 , self.edge_vars.select(u,'*',i) ))
-                #print(edges)
+                edges = list(filter(lambda grb_var : grb_var.X>1-self.tolerance , self.edge_vars.select(u,'*',i) ))
                 assert(len(edges)==1)
                 v = head(edges[0].VarName)
                 path.append(v)
                 u = v
-            paths.append( (self.weights[i].X, self.slacks[i].X, path[:-1]) )
+            self.paths.append( (self.weights[i].X, self.slacks[i].X, path[:-1]) )
 
-        return (self.k, self.model.ObjVal, paths)
+        return (self.k, self.model.ObjVal, self.paths)
 
     def linear_search(self):
         print("########################Feasibility########################")
@@ -185,8 +190,10 @@ class Enc:
             self.solve()
             
             if previous_slack-self.model.ObjVal < self.epsilon:
+                _,_,p = solution
                 self.print_solution(solution)
-                exit(0)
+                p = list(map(lambda x : x[2], p))
+                return p
 
             solution       = self.build_solution()
             previous_slack = self.model.ObjVal
@@ -202,100 +209,113 @@ class Enc:
 Input:  intron_graph
 Output: abstracted DAG in the form (number of nodes, edge list, flow dictionary)
 ''' 
-def intron_to_matrix(intron_graph):
-    intron2vertex = dict()
-    vertex2intron = dict()
-    vertex_id = 1
+class Intron2Graph:
+    
+    def __init__(self, intron_graph):
+        
+        self.intron2vertex = dict()
+        self.vertex2intron = dict()
+        self.vertex_id = 1
 
-    # add all intron vertices
-    for intron in intron_graph.intron_collector.clustered_introns.keys():
-        intron2vertex[intron] = vertex_id
-        vertex2intron[vertex_id] = intron
-        vertex_id += 1
+        # add all intron vertices
+        for intron in intron_graph.intron_collector.clustered_introns.keys():
+            self.intron2vertex[intron] = self.vertex_id
+            self.vertex2intron[self.vertex_id] = intron
+            self.vertex_id += 1
 
-    # add all starting vertices (avoid repeating incoming from the same starting vertex)
-    for intron in intron_graph.incoming_edges.keys():
-        for preceeding_intron in intron_graph.incoming_edges[intron]:
-            if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start] and preceeding_intron not in intron2vertex:
-                intron2vertex[preceeding_intron] = vertex_id
-                vertex2intron[vertex_id] = preceeding_intron
-                vertex_id += 1
+        # add all starting vertices (avoid repeating incoming from the same starting vertex)
+        for intron in intron_graph.incoming_edges.keys():
+            for preceeding_intron in intron_graph.incoming_edges[intron]:
+                if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start] and preceeding_intron not in self.intron2vertex: #FIXME magic number
+                    self.intron2vertex[preceeding_intron] = self.vertex_id
+                    self.vertex2intron[self.vertex_id] = preceeding_intron
+                    self.vertex_id += 1
 
-    # add all terminal vertices (avoid repeating outgoing from the same terminal vertex)
-    for intron in intron_graph.outgoing_edges.keys():
-        for subsequent_intron in intron_graph.outgoing_edges[intron]:
-            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end] and subsequent_intron not in intron2vertex:
-                intron2vertex[subsequent_intron] = vertex_id
-                vertex2intron[vertex_id] = subsequent_intron
-                vertex_id += 1
+        # add all terminal vertices (avoid repeating outgoing from the same terminal vertex)
+        for intron in intron_graph.outgoing_edges.keys():
+            for subsequent_intron in intron_graph.outgoing_edges[intron]:
+                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end] and subsequent_intron not in self.intron2vertex:   #FIXME magic number
+                    self.intron2vertex[subsequent_intron] = self.vertex_id
+                    self.vertex2intron[self.vertex_id] = subsequent_intron
+                    self.vertex_id += 1
 
-    source = 0
-    target = vertex_id
+        source = 0
+        target = self.vertex_id
 
-    # create edges
-    edge_list = []
-    edge_set = set()
-    starting_introns = defaultdict(int)
-    for intron in intron_graph.incoming_edges.keys():
-        for preceeding_intron in intron_graph.incoming_edges[intron]:
-            edge_list.append((intron2vertex[preceeding_intron], intron2vertex[intron]))
-            edge_set.add((intron2vertex[preceeding_intron], intron2vertex[intron]))
-            if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
-                starting_introns[preceeding_intron] += intron_graph.edge_weights[(preceeding_intron, intron)]
+        # create edges
+        self.edge_list = []
+        edge_set = set()
+        starting_introns = defaultdict(int)
+        for intron in intron_graph.incoming_edges.keys():
+            for preceeding_intron in intron_graph.incoming_edges[intron]:
+                self.edge_list.append((self.intron2vertex[preceeding_intron], self.intron2vertex[intron]))
+                edge_set.add((self.intron2vertex[preceeding_intron], self.intron2vertex[intron]))
+                if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
+                    starting_introns[preceeding_intron] += intron_graph.edge_weights[(preceeding_intron, intron)]
 
-    terminal_introns = defaultdict(int)
-    for intron in intron_graph.outgoing_edges.keys():
-        for subsequent_intron in intron_graph.outgoing_edges[intron]:
-            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                edge_list.append((intron2vertex[intron], intron2vertex[subsequent_intron]))
-                edge_set.add((intron2vertex[intron], intron2vertex[subsequent_intron]))
-                terminal_introns[subsequent_intron] += intron_graph.edge_weights[(intron, subsequent_intron)]
+        terminal_introns = defaultdict(int)
+        for intron in intron_graph.outgoing_edges.keys():
+            for subsequent_intron in intron_graph.outgoing_edges[intron]:
+                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
+                    self.edge_list.append((self.intron2vertex[intron], self.intron2vertex[subsequent_intron]))
+                    edge_set.add((self.intron2vertex[intron], self.intron2vertex[subsequent_intron]))
+                    terminal_introns[subsequent_intron] += intron_graph.edge_weights[(intron, subsequent_intron)]
 
-    flow_dict = defaultdict(int)
-    for intron in intron_graph.incoming_edges.keys():
-        for preceeding_intron in intron_graph.incoming_edges[intron]:
-            u = intron2vertex[preceeding_intron]
-            v = intron2vertex[intron]
-            flow_dict[(u, v)] = intron_graph.edge_weights[(preceeding_intron, intron)]
+        self.flow_dict = defaultdict(int)
+        for intron in intron_graph.incoming_edges.keys():
+            for preceeding_intron in intron_graph.incoming_edges[intron]:
+                u = self.intron2vertex[preceeding_intron]
+                v = self.intron2vertex[intron]
+                self.flow_dict[(u, v)] = intron_graph.edge_weights[(preceeding_intron, intron)]
 
-    for intron in intron_graph.outgoing_edges.keys():
-        for subsequent_intron in intron_graph.outgoing_edges[intron]:
-            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                u = intron2vertex[intron]
-                v = intron2vertex[subsequent_intron]
-                flow_dict[(u, v)] = intron_graph.edge_weights[(intron, subsequent_intron)]
+        for intron in intron_graph.outgoing_edges.keys():
+            for subsequent_intron in intron_graph.outgoing_edges[intron]:
+                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
+                    u = self.intron2vertex[intron]
+                    v = self.intron2vertex[subsequent_intron]
+                    self.flow_dict[(u, v)] = intron_graph.edge_weights[(intron, subsequent_intron)]
 
-    # add connection to super source and total weight
-    for starting_intron in starting_introns.keys():
-        starting_vertex = intron2vertex[starting_intron]
-        edge_list.append((source, starting_vertex))
-        edge_set.add((source, starting_vertex))
-        flow_dict[(source, starting_vertex)] = starting_introns[starting_intron]
+        # add connection to super source and total weight
+        for starting_intron in starting_introns.keys():
+            starting_vertex = self.intron2vertex[starting_intron]
+            self.edge_list.append((source, starting_vertex))
+            edge_set.add((source, starting_vertex))
+            self.flow_dict[(source, starting_vertex)] = starting_introns[starting_intron]
 
-    for terminal_intron in terminal_introns.keys():
-        terminal_vertex = intron2vertex[terminal_intron]
-        edge_list.append((terminal_vertex, target))
-        edge_set.add((terminal_vertex, target))
-        flow_dict[(terminal_vertex, target)] = terminal_introns[terminal_intron]
+        for terminal_intron in terminal_introns.keys():
+            terminal_vertex = self.intron2vertex[terminal_intron]
+            self.edge_list.append((terminal_vertex, target))
+            edge_set.add((terminal_vertex, target))
+            self.flow_dict[(terminal_vertex, target)] = terminal_introns[terminal_intron]
 
-    #FIXME edge_set is not necessary
-    assert len(edge_list) == len(edge_set)
-    assert len(edge_list) == len(flow_dict)
+        #FIXME edge_set is not necessary
+        assert len(self.edge_list) == len(edge_set)
+        assert len(self.edge_list) == len(self.flow_dict)
 
-    #print("Returning from graph transformation")
-    #print("N:",vertex_id+1)
-    #print("Edges:",edge_list)
-    #print("Flows:",flow_dict)
+        self.vertex_id += 1
+        #return self.vertex_id+1, self.edge_list, self.flow_dict
 
-    return vertex_id+1, edge_list, flow_dict
+    def path_to_transcript(self,path):
+        return list(map(lambda v : self.vertex2intron[v], path))
+    
+    def paths_to_transcripts(self, paths):
+        return list(map(self.path_to_transcript, paths))
 
 
 def Encode_ILP(intron_graph):
 
-    n,E,F = intron_to_matrix(intron_graph)
+    g = Intron2Graph(intron_graph)
+
+    n,E,F = g.vertex_id, g.edge_list, g.flow_dict
 
     visualize((E,F))
 
     e = Enc(n,E,F)
     e.encode()
-    e.linear_search()
+    paths = e.linear_search()
+
+    transcripts = g.paths_to_transcripts(paths)
+    #for t in transcripts:
+    #    print(*t)
+
+    return transcripts
