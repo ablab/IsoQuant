@@ -72,7 +72,7 @@ class GraphBasedModelConstructor:
         self.transcript_counter = transcript_counter
         self.internal_counter = defaultdict(int)
         self.reads_used_in_construction = set()
-        self.unused_reads = []
+        self.unused_reads = set()
         self.transcript2transcript = []
 
     def get_transcript_id(self):
@@ -692,7 +692,7 @@ class GraphBasedModelConstructor:
     def assign_reads_to_models(self, read_assignments):
         if not self.transcript_model_storage:
             logger.debug("No transcripts were assigned")
-            self.unused_reads = [a.read_id for a in read_assignments]
+            self.unused_reads = set(a.read_id for a in read_assignments)
             return
 
         logger.debug("Creating artificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
@@ -725,7 +725,7 @@ class GraphBasedModelConstructor:
                 for m in model_assignment.isoform_matches:
                     self.transcript_read_ids[m.assigned_transcript].append(assignment)
             else:
-                self.unused_reads.append(read_id)
+                self.unused_reads.add(read_id)
 
     def correct_novel_transcript_ends(self, transcript_model, assigned_reads):
         logger.debug("Verifying ends for transcript %s" % transcript_model.transcript_id)
