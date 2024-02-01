@@ -38,8 +38,7 @@ class Enc:
             self.w_max = max(self.w_max,self.F[(u,v)])
         
         self.M = self.w_max
-        #self.w_max = 1e8
-
+ 
         self.paths      = []
 
         self.edge_vars  = {}
@@ -88,12 +87,12 @@ class Enc:
         path_indexes    = [ (    i) for i in range(self.k)                             ]
         subpath_indexes = [ (i,j  ) for i in range(self.k) for j in range(len(self.R)) ]
 
-        self.edge_vars = self.model.addVars(   edge_indexes, vtype=GRB.BINARY , name='e'      )
-        self.phi_vars  = self.model.addVars(   edge_indexes, vtype=GRB.INTEGER, name='p', lb=0)
-        self.gam_vars  = self.model.addVars(   edge_indexes, vtype=GRB.INTEGER, name='g', lb=0)
-        self.weights   = self.model.addVars(   path_indexes, vtype=GRB.INTEGER, name='w', lb=1)
-        self.slacks    = self.model.addVars(   path_indexes, vtype=GRB.INTEGER, name='s', lb=0)
-        self.path_vars = self.model.addVars(subpath_indexes, vtype=GRB.BINARY,  name='r'      )
+        self.edge_vars = self.model.addVars(   edge_indexes, vtype=GRB.BINARY    ,  name='e'                     )
+        self.path_vars = self.model.addVars(subpath_indexes, vtype=GRB.BINARY    ,  name='r'                     )
+        self.phi_vars  = self.model.addVars(   edge_indexes, vtype=GRB.CONTINUOUS,  name='p', lb=0, ub=self.w_max)
+        self.gam_vars  = self.model.addVars(   edge_indexes, vtype=GRB.CONTINUOUS,  name='g', lb=0, ub=self.w_max)
+        self.weights   = self.model.addVars(   path_indexes, vtype=GRB.CONTINUOUS,  name='w', lb=1, ub=self.w_max)
+        self.slacks    = self.model.addVars(   path_indexes, vtype=GRB.CONTINUOUS,  name='s', lb=0, ub=self.w_max)
 
         #The identifiers of the constraints come from https://www.biorxiv.org/content/10.1101/2023.03.20.533019v1.full.pdf page 13
 
@@ -315,7 +314,7 @@ def Encode_ILP(intron_graph):
     paths = e.linear_search()
 
     transcripts = g.paths_to_transcripts(paths)
-    #for t in transcripts:
-    #    print(*t)
-
+    for t in transcripts:
+        print(*t)
+    exit(0)
     return transcripts
