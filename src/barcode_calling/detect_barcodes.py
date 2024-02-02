@@ -224,7 +224,7 @@ def set_logger(logger_instance):
     logger_instance.addHandler(ch)
 
 
-def parse_args():
+def parse_args(sys_argv):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
     parser.add_argument("--barcodes", "-b", type=str, help="barcode whitelist", required=True)
@@ -238,12 +238,12 @@ def parse_args():
     parser.add_argument("--min_score", type=int, help="minimal barcode score "
                                                       "(scoring system is +1, -1, -1, -1)", default=13)
 
-    args = parser.parse_args()
+    args = parser.parse_args(sys_argv)
     return args
 
 
-def main():
-    args = parse_args()
+def main(sys_argv):
+    args = parse_args(sys_argv)
     set_logger(logger)
     if args.threads == 1:
         process_single_thread(args)
@@ -254,7 +254,7 @@ def main():
 if __name__ == "__main__":
    # stuff only to run when not called via 'import' here
     try:
-        main()
+        main(sys.argv[1:])
     except SystemExit:
         raise
     except:
