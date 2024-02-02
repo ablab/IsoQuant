@@ -46,7 +46,7 @@ class Enc:
         self.gam_vars   = {}
         self.weights    = {}
         self.slacks     = {}
-        self.path_vars  = {}
+        self.spc_vars  = {}
 
     def add_constraint(self, constraint):
         self.constraints.append(str(constraint))
@@ -62,13 +62,13 @@ class Enc:
         self.gam_vars    = {}
         self.weights     = {}
         self.slacks      = {}
-        self.path_vars   = {}
+        self.spc_vars   = {}
         self.model       = gp.Model("MFD") #gurobi model does not have an "easy" clear() method so we just create a fresh model whenever we want to reset the encoder
         self.paths       = []
 
     def display_stats(self):
         print("###################################\nSTATS####################################\n")
-
+        self.model.display()
         self.model.printStats()
         print(self.model.numVars)
         for v in self.model.getVars():
@@ -80,6 +80,9 @@ class Enc:
     def solve(self):
         self.model.optimize()
 
+    def confidence(self, edge):
+        return 1 #should return a value in ]0,1]
+
     def encode(self):
 
         # Create variables
@@ -88,7 +91,7 @@ class Enc:
         subpath_indexes = [ (i,j  ) for i in range(self.k) for j in range(len(self.R)) ]
 
         self.edge_vars = self.model.addVars(   edge_indexes, vtype=GRB.BINARY    ,  name='e'                     )
-        self.path_vars = self.model.addVars(subpath_indexes, vtype=GRB.BINARY    ,  name='r'                     )
+        self.spc_vars = self.model.addVars(subpath_indexes, vtype=GRB.BINARY    ,  name='r'                     )
         self.phi_vars  = self.model.addVars(   edge_indexes, vtype=GRB.CONTINUOUS,  name='p', lb=0, ub=self.w_max)
         self.gam_vars  = self.model.addVars(   edge_indexes, vtype=GRB.CONTINUOUS,  name='g', lb=0, ub=self.w_max)
         self.weights   = self.model.addVars(   path_indexes, vtype=GRB.CONTINUOUS,  name='w', lb=1, ub=self.w_max)
@@ -108,8 +111,8 @@ class Enc:
             f_uv = self.F[(u,v)]
             phi_sum = self.phi_vars.sum(u,v,'*')
             gam_sum = self.gam_vars.sum(u,v,'*')
-            self.model.addConstr( f_uv - phi_sum <=  gam_sum, "14d_u={}_v={}".format(u,v) )
-            self.model.addConstr( f_uv - phi_sum >= -gam_sum, "14e_u={}_v={}".format(u,v) )
+            self.model.addConstr( f_uv - phi_sum <=  gam_sum / self.confidence((u,v)), "14d_u={}_v={}".format(u,v) )
+            self.model.addConstr( f_uv - phi_sum >= -gam_sum / self.confidence((u,v)), "14e_u={}_v={}".format(u,v) )
 
         for i in range(self.k):
             for (u,v) in self.E:
@@ -120,7 +123,6 @@ class Enc:
                 self.model.addConstr( self.phi_vars[u,v,i] >= self.weights[i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14h_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.M    , "14k_u={}_v={}_i={}".format(u,v,i) )
 
-
         '''
         Idea: might be interesting to try different strategies of subpath constraints wrt data
         '''
@@ -128,10 +130,11 @@ class Enc:
         def EncodeSubpathConstraints():
             for i in range(self.k):
                 for j in range(len(self.R)):
-                    pass
-                    #self.model.addConstr( self.path_vars.sum(i,j) >= len(self.R[j]) * self.path_vars[i][j] ) TODO prob use select method together with filter and map?
+                    edgevars_on_subpath = list(map(lambda e: self.edge_vars[e[0],e[1],i], self.R[j]))
+                    self.model.addConstr( GRB.quicksum(edgevars_on_subpath) >= len(self.R[j]) * self.spc_vars[i][j] )
+                    #for the sum over edgevars_on_subpath, test if it's faster to do: fold(+, 0, edgevars_on_subpath)
             for j in range(len(self.R)):
-                self.model.addConstr( self.path_vars.sum('*',j) >= 1 )
+                self.model.addConstr( self.spc_vars.sum('*',j) >= 1 )
 
         if self.R!=[]:
             EncodeSubpathConstraints()
@@ -139,7 +142,6 @@ class Enc:
         #Add objective function minimizing the sum of slack of all the paths
         self.model.setObjective( self.slacks.sum(), GRB.MINIMIZE )
 
-        #self.model.display()
 
     def print_solution(self,solution):
         opt, slack, paths = solution
@@ -316,5 +318,5 @@ def Encode_ILP(intron_graph):
     transcripts = g.paths_to_transcripts(paths)
     for t in transcripts:
         print(*t)
-    exit(0)
+    
     return transcripts
