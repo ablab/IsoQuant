@@ -5,6 +5,8 @@
 ############################################################################
 import math
 from collections import defaultdict
+import ctypes
+import os
 
 
 class KmerIndexer:
@@ -152,3 +154,95 @@ class ArrayKmerIndexer:
         if max_hits == 0:
             return {x[0]:x for x in result}
         return {x[0]:x for x in list(result)[:max_hits]}
+
+
+class HashKmerIndexerC:
+    lib = ctypes.cdll.LoadLibrary(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'cseqlib.so'))
+    # @params:
+    # known_strings: collection of strings (barcodes or UMI)
+    # kmer_size: K to use for indexing
+    def __init__(self, barcodes, kmer_size=7):
+        self._kmer_index = HashKmerIndexerC.lib.KmerIndexer_new(ctypes.c_int(kmer_size))
+        for b in barcodes:
+            HashKmerIndexerC.lib.KmerIndexer_add(self._kmer_index, b.encode(), ctypes.c_int(len(b)))
+        self.barcodes = barcodes
+
+    def append(self, barcode):
+        HashKmerIndexerC.lib.KmerIndexer_add(self._kmer_index, barcode.encode(), ctypes.c_int(len(barcode)))
+
+    def empty(self):
+        return ctypes.cast(HashKmerIndexerC.lib.KmerIndexer_empty(self._kmer_index), bool)
+
+    # @params:
+    # sequence: a string to be searched against known strings
+    # max_hits: return at most max_hits candidates
+    # min_kmers: minimal number of matching k-mers
+    # @return
+    # a list of pairs (string, numer of common k-mers) sorted descending by the number of shared k-mers
+    def get_occurrences(self, sequence, max_hits=0, min_kmers=1, hits_delta=1):
+        ArrayType = ctypes.c_int * 10000
+        result = ArrayType()
+        HashKmerIndexerC.lib.KmerIndexer_get_occurrences(self._kmer_index, sequence.encode(),
+                                                         ctypes.c_int(len(sequence)),
+                                                         ctypes.c_int(max_hits), ctypes.c_int(min_kmers),
+                                                         ctypes.c_int(hits_delta), result, ctypes.c_int(100))
+
+        total_candidates = result[0]
+        current_idx = 1
+        result_dict = {}
+        for i in range(total_candidates):
+            seq = self.barcodes[result[current_idx]]
+            current_idx += 1
+            hit_count = result[current_idx]
+            current_idx += 1
+            pos_hits = result[current_idx : current_idx + hit_count]
+            current_idx += hit_count
+            result_dict[seq] = (seq, hit_count, pos_hits)
+
+        return result_dict
+
+
+class ArrayKmerIndexerC:
+    lib = ctypes.cdll.LoadLibrary(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'cseqlib.so'))
+    # @params:
+    # known_strings: collection of strings (barcodes or UMI)
+    # kmer_size: K to use for indexing
+    def __init__(self, barcodes, kmer_size=7):
+        self._kmer_index = ArrayKmerIndexerC.lib.ArrayKmerIndexer_new(ctypes.c_int(kmer_size))
+        for b in barcodes:
+            ArrayKmerIndexerC.lib.ArrayKmerIndexer_add(self._kmer_index, b.encode(), ctypes.c_int(len(b)))
+        self.barcodes = barcodes
+
+    def append(self, barcode):
+        ArrayKmerIndexerC.lib.ArrayKmerIndexer_add(self._kmer_index, barcode.encode(), ctypes.c_int(len(barcode)))
+
+    def empty(self):
+        return ctypes.cast(ArrayKmerIndexerC.lib.ArrayKmerIndexer_empty(self._kmer_index), bool)
+
+    # @params:
+    # sequence: a string to be searched against known strings
+    # max_hits: return at most max_hits candidates
+    # min_kmers: minimal number of matching k-mers
+    # @return
+    # a list of pairs (string, numer of common k-mers) sorted descending by the number of shared k-mers
+    def get_occurrences(self, sequence, max_hits=0, min_kmers=1, hits_delta=1):
+        ArrayType = ctypes.c_int * 10000
+        result = ArrayType()
+        ArrayKmerIndexerC.lib.ArrayKmerIndexer_get_occurrences(self._kmer_index, sequence.encode(),
+                                                               ctypes.c_int(len(sequence)),
+                                                               ctypes.c_int(max_hits), ctypes.c_int(min_kmers),
+                                                               ctypes.c_int(hits_delta), result, ctypes.c_int(100))
+
+        total_candidates = result[0]
+        current_idx = 1
+        result_dict = {}
+        for i in range(total_candidates):
+            seq = self.barcodes[result[current_idx]]
+            current_idx += 1
+            hit_count = result[current_idx]
+            current_idx += 1
+            pos_hits = result[current_idx : current_idx + hit_count]
+            current_idx += hit_count
+            result_dict[seq] = (seq, hit_count, pos_hits)
+
+        return result_dict

@@ -5,6 +5,10 @@
 ############################################################################
 
 from ssw import AlignmentMgr
+import ctypes
+import os
+
+lib = ctypes.cdll.LoadLibrary(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'cseqlib.so'))
 
 
 def find_polyt_start(seq, window_size = 16, polya_fraction = 0.75):
@@ -29,6 +33,16 @@ def find_polyt_start(seq, window_size = 16, polya_fraction = 0.75):
         return -1
 
     return i + max(0, seq[i:].find('TTT'))
+
+
+def find_polyt_start_cpp(seq, window_size = 16, polya_fraction = 0.75):
+    polyA_count = int(window_size * polya_fraction)
+
+    if len(seq) < window_size:
+        return -1
+
+    lib.find_polyt_start(seq.encode(), ctypes.c_int(len(seq)), ctypes.c_int(0),
+                         ctypes.c_int(window_size), ctypes.c_int(polyA_count))
 
 
 base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', " ": " "}
