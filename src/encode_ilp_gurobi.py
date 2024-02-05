@@ -309,14 +309,14 @@ def Encode_ILP(intron_graph):
 
     n,E,F = g.vertex_id, g.edge_list, g.flow_dict
 
-    visualize((E,F))
+    # visualize((E,F))
 
     e = Enc(n,E,F)
     e.encode()
     paths = e.linear_search()
 
     transcripts = g.paths_to_transcripts(paths)
-    for t in transcripts:
-        print(*t)
+    # for t in transcripts:
+    #    print(*t)
     
     return transcripts
