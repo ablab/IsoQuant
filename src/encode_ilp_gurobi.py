@@ -46,7 +46,7 @@ class Enc:
         self.gam_vars   = {}
         self.weights    = {}
         self.slacks     = {}
-        self.spc_vars  = {}
+        self.spc_vars   = {}
 
     def add_constraint(self, constraint):
         self.constraints.append(str(constraint))
@@ -62,7 +62,7 @@ class Enc:
         self.gam_vars    = {}
         self.weights     = {}
         self.slacks      = {}
-        self.spc_vars   = {}
+        self.spc_vars    = {}
         self.model       = gp.Model("MFD") #gurobi model does not have an "easy" clear() method so we just create a fresh model whenever we want to reset the encoder
         self.paths       = []
 
@@ -91,7 +91,7 @@ class Enc:
         subpath_indexes = [ (i,j  ) for i in range(self.k) for j in range(len(self.R)) ]
 
         self.edge_vars = self.model.addVars(   edge_indexes, vtype=GRB.BINARY    ,  name='e'                     )
-        self.spc_vars = self.model.addVars(subpath_indexes, vtype=GRB.BINARY    ,  name='r'                     )
+        self.spc_vars  = self.model.addVars(subpath_indexes, vtype=GRB.BINARY    ,  name='r'                     )
         self.phi_vars  = self.model.addVars(   edge_indexes, vtype=GRB.CONTINUOUS,  name='p', lb=0, ub=self.w_max)
         self.gam_vars  = self.model.addVars(   edge_indexes, vtype=GRB.CONTINUOUS,  name='g', lb=0, ub=self.w_max)
         self.weights   = self.model.addVars(   path_indexes, vtype=GRB.CONTINUOUS,  name='w', lb=1, ub=self.w_max)
@@ -131,7 +131,7 @@ class Enc:
             for i in range(self.k):
                 for j in range(len(self.R)):
                     edgevars_on_subpath = list(map(lambda e: self.edge_vars[e[0],e[1],i], self.R[j]))
-                    self.model.addConstr( GRB.quicksum(edgevars_on_subpath) >= len(self.R[j]) * self.spc_vars[i][j] )
+                    self.model.addConstr( sum(edgevars_on_subpath) >= len(self.R[j]) * self.spc_vars[i,j] )
                     #for the sum over edgevars_on_subpath, test if it's faster to do: fold(+, 0, edgevars_on_subpath)
             for j in range(len(self.R)):
                 self.model.addConstr( self.spc_vars.sum('*',j) >= 1 )
