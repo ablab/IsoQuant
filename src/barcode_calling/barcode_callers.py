@@ -1,4 +1,4 @@
-############################################################################
+###########################################################################
 # Copyright (c) 2023 University of Helsinki
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -164,9 +164,9 @@ class DoubleBarcodeDetector:
     STRICT_TERMINAL_MATCH_DELTA = 1
 
     def __init__(self, joint_barcode_list, umi_list=None, min_score=13):
-        self.pcr_primer_indexer = ArrayKmerIndexer([DoubleBarcodeDetector.PCR_PRIMER], kmer_size=7)
+        self.pcr_primer_indexer = ArrayKmerIndexer([DoubleBarcodeDetector.PCR_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([DoubleBarcodeDetector.LINKER], kmer_size=5)
-        self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=7)
+        self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=6)
         self.umi_set = None
         if umi_list:
             self.umi_set =  set(umi_list)
