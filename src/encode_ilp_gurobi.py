@@ -297,7 +297,8 @@ class Intron2Graph:
         #return self.vertex_id+1, self.edge_list, self.flow_dict
 
     def transcript_to_path(self, transcript):
-        return list(map(lambda t: self.intron2vertex[t], transcript))
+        vertex_list = list(map(lambda t: self.intron2vertex[t], transcript))
+        return list(zip(vertex_list[:-1], vertex_list[1:]))
 
     def transcripts_to_paths(self, transcripts):
         return list(map(self.transcript_to_path, transcripts))
