@@ -496,7 +496,8 @@ class GraphBasedModelConstructor:
 
     def construct_ilp_isoforms(self):
         logger.info("Using ILP to discover transcripts")
-        path_constraints = list(filter(lambda p: self.path_storage.paths[p] >= 5, self.path_storage.fl_paths))
+        path_constraints = list(map(lambda x: list(x), filter(lambda p: self.path_storage.paths[p] >= 5, self.path_storage.fl_paths)))
+        print(path_constraints)
 
         fl_transcript_paths = Encode_ILP(self.intron_graph, path_constraints)
         for path in fl_transcript_paths:

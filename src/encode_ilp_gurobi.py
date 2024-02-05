@@ -296,6 +296,12 @@ class Intron2Graph:
         self.vertex_id += 1
         #return self.vertex_id+1, self.edge_list, self.flow_dict
 
+    def transcript_to_path(self, transcript):
+        return list(map(lambda t: self.intron2vertex[t], transcript))
+
+    def transcripts_to_paths(self, transcripts):
+        return list(map(self.transcript_to_path, transcripts))
+
     def path_to_transcript(self,path):
         return list(map(lambda v : self.vertex2intron[v], path))
     
@@ -303,15 +309,17 @@ class Intron2Graph:
         return list(map(self.path_to_transcript, paths))
 
 
-def Encode_ILP(intron_graph, path_constraints=[]):
+def Encode_ILP(intron_graph, transcripts_constraints=[]):
 
     g = Intron2Graph(intron_graph)
+
+    path_constraints = g.transcripts_to_paths(transcripts_constraints)
 
     n,E,F = g.vertex_id, g.edge_list, g.flow_dict
 
     # visualize((E,F))
 
-    e = Enc(n,E,F)
+    e = Enc(n,E,F, path_constraints)
     e.encode()
     paths = e.linear_search()
 
