@@ -303,7 +303,7 @@ class Intron2Graph:
         return list(map(self.path_to_transcript, paths))
 
 
-def Encode_ILP(intron_graph):
+def Encode_ILP(intron_graph, path_constraints=[]):
 
     g = Intron2Graph(intron_graph)
 

@@ -121,8 +121,9 @@ class GraphBasedModelConstructor:
         #Construction of intron graph
         self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
-        #self.path_storage = IntronPathStorage(self.params, self.path_processor)
-        #self.path_storage.fill(read_assignment_storage)
+        self.path_storage = IntronPathStorage(self.params, self.path_processor)
+        self.path_storage.fill(read_assignment_storage)
+
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
 
@@ -130,7 +131,7 @@ class GraphBasedModelConstructor:
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
         # NOW ILP IS HERE
-        self.construct_ilp_isofroms()
+        self.construct_ilp_isoforms()
         self.construct_assignment_based_isoforms(read_assignment_storage)
         
         #doesnt matter for now...
@@ -493,9 +494,11 @@ class GraphBasedModelConstructor:
         if self.params.report_novel_unspliced:
             self.construct_monoexon_novel(novel_mono_exon_reads)
 
-    def construct_ilp_isofroms(self):
+    def construct_ilp_isoforms(self):
         logger.info("Using ILP to discover transcripts")
-        fl_transcript_paths = Encode_ILP(self.intron_graph)
+        path_constraints = list(filter(lambda p: self.path_storage.paths[p] >= 5, self.path_storage.fl_paths))
+
+        fl_transcript_paths = Encode_ILP(self.intron_graph, path_constraints)
         for path in fl_transcript_paths:
             intron_path = path[1:-1]
             if not intron_path: continue
