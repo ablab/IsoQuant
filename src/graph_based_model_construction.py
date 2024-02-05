@@ -120,7 +120,7 @@ class GraphBasedModelConstructor:
     def process(self, read_assignment_storage):
         #Construction of intron graph
         self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
-        #self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
+        self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         #self.path_storage = IntronPathStorage(self.params, self.path_processor)
         #self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
