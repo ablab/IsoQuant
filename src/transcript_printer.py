@@ -133,13 +133,12 @@ class GFFPrinter:
         # write read_id -> transcript_id map
         if not self.output_r2t:
             return
-        used_reads = set()
         for model_id, read_assignments in transcript_model_constructor.transcript_read_ids.items():
             for a in read_assignments:
-                used_reads.add(a.read_id)
                 self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
-        for read_id in transcript_model_constructor.unused_reads:
-            self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
+        for read_id in transcript_model_constructor.read_assignment_counts.keys():
+            if transcript_model_constructor.read_assignment_counts[read_id] == 0:
+                self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
         self.out_r2t.flush()
 
 
