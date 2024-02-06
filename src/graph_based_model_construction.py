@@ -71,8 +71,7 @@ class GraphBasedModelConstructor:
         self.transcript_read_ids = defaultdict(list)
         self.transcript_counter = transcript_counter
         self.internal_counter = defaultdict(int)
-        self.reads_used_in_construction = set()
-        self.unused_reads = set()
+        self.read_assignment_counts = defaultdict(int)
         self.transcript2transcript = []
 
     def get_transcript_id(self):
@@ -139,11 +138,17 @@ class GraphBasedModelConstructor:
 
         self.pre_filter_transcripts()
         self.assign_reads_to_models(read_assignment_storage)
-        unassigned_reads = self.filter_transcripts()
+        self.filter_transcripts()
         # reassign reads
-        self.assign_reads_to_models(unassigned_reads)
+        self.assign_reads_to_models(read_assignment_storage)
 
-        self.transcript_counter.add_unassigned(len(self.unused_reads))
+        if len(set([x.read_id for x in read_assignment_storage])) != len(self.read_assignment_counts):
+            logger.warning("Some reads were not assigned %d %d" % (len(set([x.read_id for x in read_assignment_storage])), len(self.read_assignment_counts)))
+
+        if any(value < 0 for value in self.read_assignment_counts.values()):
+            logger.warning("Negative values in read assignment counts")
+
+        self.transcript_counter.add_unassigned(sum(value == 0 for value in self.read_assignment_counts.values()))
 
         if not self.gene_info.all_isoforms_exons:
             transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
@@ -246,7 +251,6 @@ class GraphBasedModelConstructor:
         filtered_storage = []
         confirmed_transcipt_ids = set()
         to_substitute = self.detect_similar_isoforms(self.transcript_model_storage)
-        unassigned_reads = []
 
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
@@ -266,7 +270,9 @@ class GraphBasedModelConstructor:
 
             if model.transcript_id in to_substitute:
                 #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
-                self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
+                #self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
+                for a in self.transcript_read_ids[model.transcript_id]:
+                    self.read_assignment_counts[a.read_id] -= 1
                 del self.transcript_read_ids[model.transcript_id]
                 del self.internal_counter[model.transcript_id]
                 continue
@@ -275,7 +281,8 @@ class GraphBasedModelConstructor:
                 #logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
                 #                                                        self.internal_counter[model.transcript_id],
                 #                                                        novel_isoform_cutoff, component_coverage))
-                unassigned_reads += self.transcript_read_ids[model.transcript_id]
+                for a in self.transcript_read_ids[model.transcript_id]:
+                    self.read_assignment_counts[a.read_id] -= 1
                 del self.transcript_read_ids[model.transcript_id]
                 del self.internal_counter[model.transcript_id]
                 continue
@@ -285,7 +292,8 @@ class GraphBasedModelConstructor:
                 #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.params.simple_models_mapq_cutoff:
                     #logger.debug("Novel model %s has poor quality" % model.transcript_id)
-                    unassigned_reads += self.transcript_read_ids[model.transcript_id]
+                    for a in self.transcript_read_ids[model.transcript_id]:
+                        self.read_assignment_counts[a.read_id] -= 1
                     del self.transcript_read_ids[model.transcript_id]
                     del self.internal_counter[model.transcript_id]
                     continue
@@ -297,7 +305,6 @@ class GraphBasedModelConstructor:
 
         self.transcript_model_storage = filtered_storage
         self.transcript_counter.add_confirmed_features(confirmed_transcipt_ids)
-        return unassigned_reads
 
     def mapping_quality(self, transcript_id):
         mapq = 0
@@ -351,6 +358,7 @@ class GraphBasedModelConstructor:
         self.transcript_read_ids[transcript_id].append(read_assignment)
         self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
         self.internal_counter[transcript_id] += 1
+        self.read_assignment_counts[read_id] += 1
 
     def construct_fl_isoforms(self):
         # a minor trick to compare tuples of pairs, whose starting and terminating elements have different type
@@ -456,7 +464,6 @@ class GraphBasedModelConstructor:
                 self.transcript_model_storage.append(new_model)
                 for read_assignment in self.path_storage.paths_to_reads[path]:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
-                    self.reads_used_in_construction.add(read_assignment.read_id)
 
     def construct_assignment_based_isoforms(self, read_assignment_storage):
         spliced_isoform_reads = defaultdict(list)
@@ -507,7 +514,7 @@ class GraphBasedModelConstructor:
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
                         polya_sites[refrenence_isoform_id] += 1
             elif len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) > 1:
-                if read_assignment.read_id in self.reads_used_in_construction:
+                if self.read_assignment_counts[read_assignment.read_id] > 0:
                     pass
                     # logger.debug("Spliced read %s was previously used for construction, assigned id %s" %
                     #             (read_assignment.read_id, refrenence_isoform_id))
@@ -618,7 +625,6 @@ class GraphBasedModelConstructor:
             self.transcript_model_storage.append(new_model)
             for read_assignment in clustered_reads[three_prime_pos]:
                 self.save_assigned_read(read_assignment, new_model.transcript_id)
-                self.reads_used_in_construction.add(read_assignment.read_id)
         return result
 
     def cluster_monoexons(self, grouped_reads):
@@ -650,7 +656,6 @@ class GraphBasedModelConstructor:
                 GraphBasedModelConstructor.detected_known_isoforms.add(isoform_id)
                 for read_assignment in mono_exon_isoform_reads[isoform_id]:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
-                    self.reads_used_in_construction.add(read_assignment.read_id)
                 # logger.debug(">> Adding known monoexon isoform %s, %s, count = %d: %s" %
                 #             (self.transcript_model_storage[-1].transcript_id, isoform_id,
                 #              count, str(self.gene_info.all_isoforms_exons[isoform_id])))
@@ -679,7 +684,6 @@ class GraphBasedModelConstructor:
                 GraphBasedModelConstructor.detected_known_isoforms.add(isoform_id)
                 for read_assignment in spliced_isoform_reads[isoform_id]:
                     self.save_assigned_read(read_assignment, new_model.transcript_id)
-                    self.reads_used_in_construction.add(read_assignment.read_id)
 
     # create transcript model object from reference isoforms
     def transcript_from_reference(self, isoform_id):
@@ -692,7 +696,6 @@ class GraphBasedModelConstructor:
     def assign_reads_to_models(self, read_assignments):
         if not self.transcript_model_storage:
             logger.debug("No transcripts were assigned")
-            self.unused_reads = set(a.read_id for a in read_assignments)
             return
 
         logger.debug("Creating artificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
@@ -702,7 +705,7 @@ class GraphBasedModelConstructor:
 
         for assignment in read_assignments:
             read_id = assignment.read_id
-            if read_id in self.reads_used_in_construction:
+            if self.read_assignment_counts[read_id] > 0:
                 # logger.debug("# Read %s was assigned to based on path construction" % read_id)
                 continue
 
@@ -723,9 +726,10 @@ class GraphBasedModelConstructor:
                 if len(matched_isoforms) == 1:
                     self.internal_counter[matched_isoforms[0]] += 1
                 for m in model_assignment.isoform_matches:
+                    self.read_assignment_counts[read_id] += 1
                     self.transcript_read_ids[m.assigned_transcript].append(assignment)
             else:
-                self.unused_reads.add(read_id)
+                self.read_assignment_counts[read_id] = 0
 
     def correct_novel_transcript_ends(self, transcript_model, assigned_reads):
         logger.debug("Verifying ends for transcript %s" % transcript_model.transcript_id)
