@@ -214,8 +214,6 @@ class AssignedFeatureCounter(AbstractCounter):
                 self.feature_counter[group_id][feature_id] += count_value
                 # self.confirmed_features.add((group_id, feature_id))
                 self.all_features.add(feature_id)
-            else:
-                self.ambiguous_reads += 1
         else:
             self.feature_counter[group_id][feature_ids[0]] += 1
             # self.confirmed_features.add((group_id, feature_ids[0]))
