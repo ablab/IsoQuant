@@ -41,8 +41,8 @@ def find_polyt_start_cpp(seq, window_size = 16, polya_fraction = 0.75):
     if len(seq) < window_size:
         return -1
 
-    lib.find_polyt_start(seq.encode(), ctypes.c_int(len(seq)), ctypes.c_int(0),
-                         ctypes.c_int(window_size), ctypes.c_int(polyA_count))
+    return  int(lib.find_polyt_start(seq.encode(), ctypes.c_int(len(seq)), ctypes.c_int(0),
+                                     ctypes.c_int(window_size), ctypes.c_int(polyA_count)))
 
 
 base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', " ": " "}

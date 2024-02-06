@@ -161,7 +161,8 @@ class HashKmerIndexerC:
     # @params:
     # known_strings: collection of strings (barcodes or UMI)
     # kmer_size: K to use for indexing
-    def __init__(self, barcodes, kmer_size=7):
+    def __init__(self, barcodes, kmer_size=6):
+        self.k = kmer_size
         self._kmer_index = HashKmerIndexerC.lib.KmerIndexer_new(ctypes.c_int(kmer_size))
         for b in barcodes:
             HashKmerIndexerC.lib.KmerIndexer_add(self._kmer_index, b.encode(), ctypes.c_int(len(b)))
@@ -207,7 +208,8 @@ class ArrayKmerIndexerC:
     # @params:
     # known_strings: collection of strings (barcodes or UMI)
     # kmer_size: K to use for indexing
-    def __init__(self, barcodes, kmer_size=7):
+    def __init__(self, barcodes, kmer_size=6):
+        self.k = kmer_size
         self._kmer_index = ArrayKmerIndexerC.lib.ArrayKmerIndexer_new(ctypes.c_int(kmer_size))
         for b in barcodes:
             ArrayKmerIndexerC.lib.ArrayKmerIndexer_add(self._kmer_index, b.encode(), ctypes.c_int(len(b)))
