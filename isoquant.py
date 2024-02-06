@@ -20,6 +20,7 @@ from traceback import print_exc
 
 import pysam
 import gffutils
+import pyfaidx
 
 from src.gtf2db import convert_gtf_to_db
 from src.read_mapper import (
@@ -704,6 +705,7 @@ def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
+    logger.info("pyfaidx version: %s" % pyfaidx.__version__)
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
