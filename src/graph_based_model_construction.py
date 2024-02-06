@@ -141,6 +141,7 @@ class GraphBasedModelConstructor:
         self.filter_transcripts()
         # reassign reads
         self.assign_reads_to_models(read_assignment_storage)
+        self.forward_counts()
 
         if len(set([x.read_id for x in read_assignment_storage])) != len(self.read_assignment_counts):
             logger.warning("Some reads were not assigned %d %d" % (len(set([x.read_id for x in read_assignment_storage])), len(self.read_assignment_counts)))
@@ -148,14 +149,32 @@ class GraphBasedModelConstructor:
         if any(value < 0 for value in self.read_assignment_counts.values()):
             logger.warning("Negative values in read assignment counts")
 
-        self.transcript_counter.add_unassigned(sum(value == 0 for value in self.read_assignment_counts.values()))
-
         if not self.gene_info.all_isoforms_exons:
             transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
             self.transcript_model_storage = transcript_joiner.join_transcripts()
 
         if self.params.sqanti_output:
             self.compare_models_with_known()
+
+    def forward_counts(self):
+        ambiguous_assignments = {}
+        for transcript_id in self.transcript_read_ids.keys():
+            for read_assignment in self.transcript_read_ids[transcript_id]:
+                read_id = read_assignment.read_id
+                if self.read_assignment_counts[read_id] == 1:
+                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
+                    continue
+
+                if read_id not in ambiguous_assignments:
+                    ambiguous_assignments[read_id] = [read_assignment.read_group]
+                ambiguous_assignments[read_id].append(transcript_id)
+
+            for read_id in ambiguous_assignments.keys():
+                self.transcript_counter.add_read_info_raw(read_id, ambiguous_assignments[read_id][1:],
+                                                          ambiguous_assignments[read_id][0])
+
+        self.transcript_counter.add_unassigned(sum(value == 0 for value in self.read_assignment_counts.values()))
+        self.transcript_counter.add_confirmed_features([model.transcript_id for model in self.transcript_model_storage])
 
     def compare_models_with_known(self):
         gene_to_model_dict = defaultdict(list)
@@ -249,13 +268,11 @@ class GraphBasedModelConstructor:
 
     def filter_transcripts(self):
         filtered_storage = []
-        confirmed_transcipt_ids = set()
         to_substitute = self.detect_similar_isoforms(self.transcript_model_storage)
 
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
                 filtered_storage.append(model)
-                confirmed_transcipt_ids.add(model.transcript_id)
                 continue
             # check coverage
             component_coverage = self.intron_graph.get_max_component_coverage(model.intron_path)
@@ -301,10 +318,8 @@ class GraphBasedModelConstructor:
             # TODO: correct ends for known
             self.correct_novel_transcript_ends(model, self.transcript_read_ids[model.transcript_id])
             filtered_storage.append(model)
-            confirmed_transcipt_ids.add(model.transcript_id)
 
         self.transcript_model_storage = filtered_storage
-        self.transcript_counter.add_confirmed_features(confirmed_transcipt_ids)
 
     def mapping_quality(self, transcript_id):
         mapq = 0
@@ -356,7 +371,6 @@ class GraphBasedModelConstructor:
     def save_assigned_read(self, read_assignment, transcript_id):
         read_id = read_assignment.read_id
         self.transcript_read_ids[transcript_id].append(read_assignment)
-        self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
         self.internal_counter[transcript_id] += 1
         self.read_assignment_counts[read_id] += 1
 
@@ -719,9 +733,6 @@ class GraphBasedModelConstructor:
                                                     ReadAssignmentType.unique_minor_difference,
                                                     ReadAssignmentType.ambiguous]:
                 matched_isoforms = [m.assigned_transcript for m in model_assignment.isoform_matches]
-                self.transcript_counter.add_read_info_raw(read_id,
-                                                          matched_isoforms,
-                                                          model_assignment.read_group)
 
                 if len(matched_isoforms) == 1:
                     self.internal_counter[matched_isoforms[0]] += 1
