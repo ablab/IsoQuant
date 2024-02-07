@@ -35,7 +35,7 @@ from src.long_read_counter import COUNTING_STRATEGIES
 from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
-from src.barcode_calling.detect_barcodes import process_single_thread, process_in_parallel
+from src.detect_barcodes import process_single_thread, process_in_parallel
 from src.barcode_calling.umi_filtering import UMIFilter, filter_bam, load_barcodes
 
 
