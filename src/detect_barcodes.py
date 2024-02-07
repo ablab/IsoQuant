@@ -119,6 +119,8 @@ def fastx_file_chunk_reader(handler):
 def bam_file_chunk_reader(handler):
     current_chunk = []
     for r in handler:
+        if r.is_secondary or r.is_supplementary:
+            continue
         current_chunk.append((r.query_name, r.query_sequence))
         if len(current_chunk) >= READ_CHUNK_SIZE:
             yield current_chunk
