@@ -15,6 +15,7 @@ import argparse
 import glob
 from traceback import print_exc
 import subprocess
+import logging
 
 
 _quote = {"'": "|'", "|": "||", "\n": "|n", "\r": "|r", '[': '|[', ']': '|]'}
@@ -25,58 +26,22 @@ RT_ASSIGNMENT = "assignment"
 RT_TRANSCRIPTS = "transcripts"
 
 
-def escape_value(value):
-    return "".join(_quote.get(x, x) for x in value)
+log = logging.getLogger('GitHubRunner')
 
 
-class TeamCityLog:
+def set_logger(args, logger_instance):
+    if "debug" not in args.__dict__ or not args.debug:
+        output_level = logging.INFO
+    else:
+        output_level = logging.DEBUG
+    logger_instance.setLevel(output_level)
 
-    text = ""
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
 
-    def _tc_out(self, token, **attributes):
-        message = "##teamcity[%s" % token
-
-        for k in sorted(attributes.keys()):
-            value = attributes[k]
-            if value is None:
-                continue
-
-            message += (" %s='%s'" % (k, escape_value(value)))
-
-        message += "]\n"
-        sys.stdout.write(message)
-        sys.stdout.flush()
-
-    def start_block(self, name, desc):
-        sys.stdout.flush()
-        self._tc_out("blockOpened", name = name, description = desc)
-
-    def end_block(self, name):
-        sys.stdout.flush()
-        self._tc_out("blockClosed", name = name)
-
-    def log(self, s):
-        self.text += s + "\n"
-        self._tc_out("message", text = s)
-
-    def warn(self, s):
-        msg = "WARNING: " + s + "\n"
-        self.text += msg
-        self._tc_out("message", text = s, status = 'WARNING')
-
-    def err(self, s, context = ""):
-        msg = "ERROR: " + s + "\n"
-        self.text += msg
-        self._tc_out("message", text = s, status = 'ERROR', errorDetails = context)
-
-    def print_log(self):
-        print(self.text)
-
-    def get_log(self):
-        return self.text
-
-    def record_metric(self, name, value):
-        self._tc_out("buildStatisticValue", key=name, value=value)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger_instance.addHandler(ch)
 
 
 def load_tsv_config(config_file):
@@ -109,7 +74,7 @@ def parse_args():
     return args
 
 
-def run_isoquant(args, config_dict, log):
+def run_isoquant(args, config_dict):
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
     config_file = args.config_file
@@ -134,7 +99,7 @@ def run_isoquant(args, config_dict, log):
         genome = fix_path(config_file, config_dict["genome"])
         config_dict["label"] = run_name
 
-        log.start_block('isoquant', 'Running IsoQuant')
+        log.info('== Running IsoQuant ==')
         isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
                                  "-r", genome, "-d", config_dict["datatype"], "-p", run_name]
         if genedb:
@@ -149,40 +114,39 @@ def run_isoquant(args, config_dict, log):
             isoquant_command_list.append(reads)
 
     if "isoquant_options" in config_dict:
-        log.log("Appending additional options: %s" % config_dict["isoquant_options"])
+        log.info("Appending additional options: %s" % config_dict["isoquant_options"])
         opts = config_dict["isoquant_options"].replace('"', '').split()
         for o in opts:
             isoquant_command_list.append(o)
 
-    log.log("IsoQuant command line: " + " ".join(isoquant_command_list))
+    log.info("IsoQuant command line: " + " ".join(isoquant_command_list))
     result = subprocess.run(isoquant_command_list)
     if result.returncode != 0:
-        log.err("IsoQuant exited with non-zero status: %d" % result.returncode)
+        log.error("IsoQuant exited with non-zero status: %d" % result.returncode)
         return -11
 
-    log.end_block('isoquant')
     return 0
 
 
-def check_value(etalon_value, output_value, name, log):
+def check_value(etalon_value, output_value, name):
     lower_bound = etalon_value * 0.99
     upper_bound = etalon_value * 1.01
     exit_code = 0
     if output_value < lower_bound:
-        log.err("Value of %s = %2.2f is lower than the expected value %2.2f" % (name, output_value, lower_bound))
+        log.error("Value of %s = %2.2f is lower than the expected value %2.2f" % (name, output_value, lower_bound))
         exit_code = -41
     else:
-        log.log("Value of %s = %2.2f >= %2.2f as expected" % (name, output_value, lower_bound))
+        log.info("Value of %s = %2.2f >= %2.2f as expected" % (name, output_value, lower_bound))
     if output_value > upper_bound:
-        log.err("Value of %s = %2.2f is higher than the expected value %2.2f" % (name, output_value, upper_bound))
+        log.error("Value of %s = %2.2f is higher than the expected value %2.2f" % (name, output_value, upper_bound))
         exit_code = -42
     else:
-        log.log("Value of %s = %2.2f <= %2.2f as expected" % (name, output_value, upper_bound))
+        log.info("Value of %s = %2.2f <= %2.2f as expected" % (name, output_value, upper_bound))
     return exit_code
 
 
-def run_assignment_quality(args, config_dict, log):
-    log.start_block('quality', 'Running quality assessment')
+def run_assignment_quality(args, config_dict):
+    log.info('== Running quality assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
@@ -197,7 +161,7 @@ def run_assignment_quality(args, config_dict, log):
     if "bam" not in config_dict:
         bam = glob.glob(os.path.join(output_folder, "%s/aux/%s*.bam" % (label, label)))
         if not bam:
-            log.err("BAM file was not found")
+            log.error("BAM file was not found")
             return -21
         bam = bam[0]
     else:
@@ -209,38 +173,36 @@ def run_assignment_quality(args, config_dict, log):
                        "--mapping", bam, "--fasta", reads]
 
     if "qa_options" in config_dict:
-        log.log("Appending additional options: %s" % config_dict["qa_options"])
+        log.info("Appending additional options: %s" % config_dict["qa_options"])
         opts = config_dict["qa_options"].replace('"', '').split()
         for o in opts:
             qa_command_list.append(o)
 
-    log.log("QA command line: " + " ".join(qa_command_list))
+    log.info("QA command line: " + " ".join(qa_command_list))
     result = subprocess.run(qa_command_list)
     if result.returncode != 0:
-        log.err("QA exited with non-zero status: %d" % result.returncode)
+        log.error("QA exited with non-zero status: %d" % result.returncode)
         return -13
-    log.end_block('quality')
 
     if "etalon" not in config_dict:
         return 0
 
-    log.start_block('assessment', 'Checking quality metrics')
+    log.info('== Checking quality metrics ==')
     etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
     quality_report_dict = load_tsv_config(quality_report)
     exit_code = 0
     new_etalon_outf = open(os.path.join(output_folder, "new_assignment_etalon.tsv"), "w")
     for k, v in etalon_qaulity_dict.items():
         if k not in quality_report_dict:
-            log.err("Metric %s was not found in the report" % k)
+            log.error("Metric %s was not found in the report" % k)
             exit_code = -22
             continue
         new_etalon_outf.write("%s\t%.2f\n" % (k, float(quality_report_dict[k])))
-        err_code = check_value(float(v), float(quality_report_dict[k]), k, log)
+        err_code = check_value(float(v), float(quality_report_dict[k]), k)
         if err_code != 0:
             exit_code = err_code
 
     new_etalon_outf.close()
-    log.end_block('assessment')
     return exit_code
 
 
@@ -254,8 +216,8 @@ def parse_gffcomapre(stats_file):
     return -1, -1
 
 
-def run_transcript_quality(args, config_dict, log):
-    log.start_block('quality', 'Running quality assessment')
+def run_transcript_quality(args, config_dict):
+    log.info('== Running quality assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
@@ -265,7 +227,7 @@ def run_transcript_quality(args, config_dict, log):
     output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
     out_gtf = os.path.join(output_folder, "%s/%s.transcript_models.gtf" % (label, label))
     if not out_gtf:
-        log.err("Output GTF file was not found")
+        log.error("Output GTF file was not found")
         return -31
 
     quality_output = os.path.join(output_folder, "gffcompare")
@@ -273,17 +235,16 @@ def run_transcript_quality(args, config_dict, log):
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/reduced_db_gffcompare.py"),
                        "-o", quality_output, "--genedb", genedb_prefix, "--gtf", out_gtf, "--tool", "isoquant"]
 
-    log.log("QA command line: " + " ".join(qa_command_list))
+    log.info("QA command line: " + " ".join(qa_command_list))
     result = subprocess.run(qa_command_list)
     if result.returncode != 0:
-        log.err("Transcript evaluation exited with non-zero status: %d" % result.returncode)
+        log.error("Transcript evaluation exited with non-zero status: %d" % result.returncode)
         return -13
-    log.end_block('quality')
 
     if "etalon" not in config_dict:
         return 0
 
-    log.start_block('assessment', 'Checking quality metrics')
+    log.info('== Checking quality metrics ==')
     etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
     exit_code = 0
     new_etalon_outf = open(os.path.join(quality_output, "new_gtf_etalon.tsv"), "w")
@@ -293,44 +254,43 @@ def run_transcript_quality(args, config_dict, log):
         if metric_name in etalon_qaulity_dict:
             new_etalon_outf.write("%s\t%.2f\n" % (metric_name, recall))
             etalon_recall = float(etalon_qaulity_dict[metric_name])
-            err_code = check_value(etalon_recall, recall , metric_name, log)
+            err_code = check_value(etalon_recall, recall , metric_name)
             if err_code != 0:
                 exit_code = err_code
         metric_name = gtf_type + "_precision"
         if metric_name in etalon_qaulity_dict:
             new_etalon_outf.write("%s\t%.2f\n" % (metric_name, precision))
             etalon_precision = float(etalon_qaulity_dict[metric_name])
-            err_code = check_value(etalon_precision, precision, metric_name, log)
+            err_code = check_value(etalon_precision, precision, metric_name)
             if err_code != 0:
                 exit_code = err_code
     new_etalon_outf.close()
-    log.end_block('assessment')
     return exit_code
 
 
 def main():
-    log = TeamCityLog()
     args = parse_args()
+    set_logger(args, log)
     if not args.config_file:
-        log.err("Provide configuration file")
+        log.error("Provide configuration file")
         exit(-2)
 
     config_file = args.config_file
     if not os.path.exists(config_file):
-        log.err("Provide correct path to configuration file")
+        log.error("Provide correct path to configuration file")
         exit(-3)
 
-    log.log("Loading config from %s" % config_file)
+    log.info("Loading config from %s" % config_file)
     config_dict = load_tsv_config(config_file)
     required = ["output", "name"]
     if "resume" not in config_dict:
         required += ["genome", "datatype"]
     for k in required:
         if k not in config_dict:
-            log.err(k + " is not set in the config")
+            log.error(k + " is not set in the config")
             return -10
 
-    err_code = run_isoquant(args, config_dict, log)
+    err_code = run_isoquant(args, config_dict)
     if err_code != 0:
         return err_code
 
@@ -338,11 +298,11 @@ def main():
     if run_type == RT_VOID:
         err_code = 0
     elif run_type == RT_ASSIGNMENT:
-        err_code = run_assignment_quality(args, config_dict, log)
+        err_code = run_assignment_quality(args, config_dict)
     elif run_type == RT_TRANSCRIPTS:
-        err_code = run_transcript_quality(args, config_dict, log)
+        err_code = run_transcript_quality(args, config_dict)
     else:
-        log.err("Test type %s is not supported" % run_type)
+        log.error("Test type %s is not supported" % run_type)
         err_code = -50
 
     return err_code

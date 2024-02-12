@@ -7,9 +7,9 @@ on:
 
 env:
   RUN_NAME: SIRVs.Set4.R10
-  LAUNCHER: ${{github.workspace}}/tests/teamcity/run_pipeline.py
+  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
   CFG_DIR: /abga/work/andreyp/ci_isoquant/data
-  BIN_PATH: /abga/work/andreyp/ci_isoquant/bin
+  BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
 
 jobs:
   launch-runner:
