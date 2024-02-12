@@ -32,6 +32,6 @@ jobs:
       - name: 'GitHub runner'
         shell: bash
         run: |
-          echo ${{env.BIN_PATH}} >> $GITHUB_PATH && 
+          echo ${{env.BIN_PATH}} >> $GITHUB_PATH 
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.RUN_NAME}}.cfg
 
