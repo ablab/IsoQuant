@@ -1,0 +1,36 @@
+name: SIRVs R10.4 reduced annotation
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '0 12 * * 2,6'
+
+env:
+  RUN_NAME: SIRVs.Set4.R10
+  LAUNCHER: ${{github.workspace}}/teamcity/run_pipeline.py
+  CFG_DIR: /abga/work/andreyp/ci_isoquant/data
+  BIN_PATH: /abga/work/andreyp/ci_isoquant/bin
+
+jobs:
+  launch-runner:
+    runs-on:
+      labels: [self-hosted]
+    name: 'Running IsoQuant and QC'
+
+    steps:
+      - name: 'Cleanup'
+        run: >
+          set -e &&
+          shopt -s dotglob &&
+          rm -rf *
+
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: 'GitHub runner'
+        run: >
+          echo ${{env.BIN_PATH}} >> $GITHUB_PATH && 
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.RUN_NAME}}.cfg
+
