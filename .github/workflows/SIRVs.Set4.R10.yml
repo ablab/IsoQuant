@@ -29,6 +29,12 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: 'Test'
+        shell: bash
+        run: |
+          echo ${{env.BIN_PATH}} >> $GITHUB_PATH
+          gffcompare -h
+
       - name: 'GitHub runner'
         shell: bash
         run: |
