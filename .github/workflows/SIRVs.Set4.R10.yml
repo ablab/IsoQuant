@@ -30,7 +30,8 @@ jobs:
           fetch-depth: 1
 
       - name: 'GitHub runner'
-        run: >
+        shell: bash
+        run: |
           echo ${{env.BIN_PATH}} >> $GITHUB_PATH && 
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.RUN_NAME}}.cfg
 
