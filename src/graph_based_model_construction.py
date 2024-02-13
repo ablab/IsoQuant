@@ -229,14 +229,22 @@ class GraphBasedModelConstructor:
             if model.transcript_id in to_substitute:
                 #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
                 self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
-                del self.transcript_read_ids[model.transcript_id]
+                if model.transcript_id in self.transcript_read_ids:
+                    del self.transcript_read_ids[model.transcript_id]
+                else:
+                    logger.warning("Transcript %s with substitute %s has no reads assigned" %
+                                   (model.transcript_id, to_substitute[model.transcript_id]))
                 continue
 
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
                 #logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
                 #                                                        self.internal_counter[model.transcript_id],
                 #                                                        novel_isoform_cutoff, component_coverage))
-                del self.transcript_read_ids[model.transcript_id]
+                if model.transcript_id in self.transcript_read_ids:
+                    del self.transcript_read_ids[model.transcript_id]
+                else:
+                    logger.warning("Transcript %s with cutoff %d has no reads assigned" %
+                                   (model.transcript_id, self.internal_counter[model.transcript_id]))
                 continue
 
             if len(model.exon_blocks) <= 2:
@@ -244,7 +252,11 @@ class GraphBasedModelConstructor:
                 #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.params.simple_models_mapq_cutoff:
                     #logger.debug("Novel model %s has poor quality" % model.transcript_id)
-                    del self.transcript_read_ids[model.transcript_id]
+                    if model.transcript_id in self.transcript_read_ids:
+                        del self.transcript_read_ids[model.transcript_id]
+                    else:
+                        logger.warning("Transcript %s with mapq %d has no reads assigned" %
+                                       (model.transcript_id, mapq))
                     continue
 
             # TODO: correct ends for known
