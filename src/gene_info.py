@@ -599,7 +599,7 @@ class GeneInfo:
         return self.all_isoforms_exons[transcript_id][-1][1]
 
     def transcript_region(self, transcript_id):
-        return (self.transcript_start(transcript_id), self.transcript_end(transcript_id))
+        return self.transcript_start(transcript_id), self.transcript_end(transcript_id)
 
     def transcript_exon_count(self, transcript_id):
         return sum([1 if e == 1 else 0 for e in self.exon_profiles.profiles[transcript_id]])
