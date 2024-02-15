@@ -86,10 +86,10 @@ class FeatureProfiles:
                 pos += 1
 
         start_pos = 0
-        while start_pos < len(current_profile) and current_profile[start_pos] == -2:
+        while start_pos < len(current_profile) and current_profile[start_pos] < 1:
             start_pos += 1
         end_pos = len(current_profile) - 1
-        while end_pos >= 0 and current_profile[end_pos] == -2:
+        while end_pos >= 0 and current_profile[end_pos] < 1:
             end_pos -= 1
         self.profile_ranges[transcript_id] = (start_pos, end_pos + 1)
 
