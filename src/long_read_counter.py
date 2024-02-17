@@ -78,10 +78,13 @@ class AbstractCounter:
     def __init__(self, output_prefix, ignore_read_groups=False, output_zeroes=True):
         self.ignore_read_groups = ignore_read_groups
         self.output_counts_file_name = output_prefix + "_counts.tsv"
-        open(self.output_counts_file_name, "w").close()
+        self.output_file = open(self.output_counts_file_name, "w")
         self.output_tpm_file_name = output_prefix + "_tpm.tsv"
         self.output_zeroes = output_zeroes
         self.output_stats_file_name = None
+
+    def __del__(self):
+        self.output_file.close()
 
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
@@ -247,28 +250,27 @@ class AssignedFeatureCounter(AbstractCounter):
                     continue
                 self.feature_counter[group_id][feature_id] = 0.0
 
-        with open(self.output_counts_file_name, "w") as f:
-            f.write(self.format_header(all_groups))
-            for feature_id in all_features:
-                if self.ignore_read_groups:
-                    count = self.feature_counter[all_groups[0]][feature_id]
-                    if not self.output_zeroes and count == 0:
-                        continue
-                    total_counts[all_groups[0]] += count
-                    f.write("%s\t%.2f\n" % (feature_id, count))
-                else:
-                    row_count = 0
-                    for group_id in all_groups:
-                        count = self.feature_counter[group_id][feature_id]
-                        total_counts[group_id] += count
-                        row_count += count
-                    if not self.output_zeroes and row_count == 0:
-                        continue
-                    count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
-                    f.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+        self.output_file.write(self.format_header(all_groups))
+        for feature_id in all_features:
+            if self.ignore_read_groups:
+                count = self.feature_counter[all_groups[0]][feature_id]
+                if not self.output_zeroes and count == 0:
+                    continue
+                total_counts[all_groups[0]] += count
+                self.output_file.write("%s\t%.2f\n" % (feature_id, count))
+            else:
+                row_count = 0
+                for group_id in all_groups:
+                    count = self.feature_counter[group_id][feature_id]
+                    total_counts[group_id] += count
+                    row_count += count
+                if not self.output_zeroes and row_count == 0:
+                    continue
+                count_values = [self.feature_counter[group_id][feature_id] for group_id in all_groups]
+                self.output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
         if self.ignore_read_groups:
-            with open(self.output_counts_file_name + ".stats", "w") as f:
+            with open(self.output_stats_file_name, "w") as f:
                 f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
                 f.write("__no_feature\t%d\n" % self.not_assigned_reads)
                 f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
