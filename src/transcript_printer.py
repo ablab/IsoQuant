@@ -8,6 +8,7 @@ import logging
 import os
 from collections import defaultdict
 from collections import namedtuple
+import gzip
 
 from .common import AtomicCounter, junctions_from_blocks, max_range
 from .gene_info import TranscriptModel, GeneInfo, TranscriptModelType
@@ -33,7 +34,8 @@ class GFFPrinter:
                  r2t_suffix = ".transcript_model_reads.tsv",
                  output_r2t = True,
                  check_canonical = False,
-                 header = ""):
+                 header = "",
+                 gzipped = False):
         self.model_fname = os.path.join(outf_prefix, sample_name + gtf_suffix)
         self.printed_gene_ids = set()
         self.out_gff = open(self.model_fname, "w")
@@ -44,10 +46,13 @@ class GFFPrinter:
         self.output_r2t = output_r2t
         if self.output_r2t:
             self.r2t_fname = os.path.join(outf_prefix, sample_name + r2t_suffix)
-            self.out_r2t = open(self.r2t_fname, "w")
+            if gzipped:
+                self.out_r2t = gzip.open(self.r2t_fname + ".gz", "wt")
+            else:
+                self.out_r2t = open(self.r2t_fname, "w")
             if header:
                 self.out_r2t.write("#read_id\ttranscript_id\n")
-                self.out_r2t.flush()
+
         self.check_canonical = check_canonical
 
     def __del__(self):
@@ -139,7 +144,6 @@ class GFFPrinter:
         for read_id in transcript_model_constructor.read_assignment_counts.keys():
             if transcript_model_constructor.read_assignment_counts[read_id] == 0:
                 self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
-        self.out_r2t.flush()
 
 
 def create_extened_storage(genedb, chr_id, chr_record, novel_model_storage):

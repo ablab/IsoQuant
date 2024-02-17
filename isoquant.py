@@ -183,8 +183,8 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="align reads to reference without running further analysis")
 
     # ADDITIONAL
-    add_additional_option("--low_memory", help="decrease RAM consumption (deprecated, set by default)",
-                          action='store_true', default=True)
+    add_additional_option("--no_gzip", help="do not gzip large output files", dest="gzipped",
+                          action='store_false', default=True)
     add_additional_option("--high_memory", help="increase RAM consumption (store alignment and the genome in RAM)",
                           action='store_true', default=False)
     add_additional_option("--no_junc_bed", action="store_true", default=False,
@@ -238,13 +238,11 @@ def parse_args(cmd_args=None, namespace=None):
         resume_parser.add_argument('--debug', action='store_true', default=argparse.SUPPRESS,
                                    help='Debug log output.')
         resume_parser.add_argument("--threads", "-t", help="number of threads to use", type=int, default=argparse.SUPPRESS)
-        resume_parser.add_argument("--low_memory", help="decrease RAM consumption (deprecated, set by default)",
-                                   action='store_true', default=argparse.SUPPRESS)
         resume_parser.add_argument("--keep_tmp", help="do not remove temporary files in the end", action='store_true',
                                    default=argparse.SUPPRESS)
         args, unknown_args = resume_parser.parse_known_args(cmd_args)
         if unknown_args:
-            logger.error("You cannot specify options other than --output/--threads/--debug/--low_memory "
+            logger.error("You cannot specify options other than --output/--threads/--debug "
                          "with --resume option")
             parser.print_usage()
             exit(-2)
@@ -291,8 +289,7 @@ def check_and_load_args(args, parser):
     elif not os.path.exists(args.genedb_output):
         os.makedirs(args.genedb_output)
 
-    if args.high_memory:
-        args.low_memory = False
+    args.low_memory = not args.high_memory
 
     if not check_input_params(args):
         parser.print_usage()
