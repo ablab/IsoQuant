@@ -271,18 +271,21 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
 
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, read_groups):
+    def __init__(self, args, sample, read_groups, gzipped=False):
         self.args = args
         self.read_groups = read_groups
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
 
         self.read_stat_counter = EnumStats()
-        self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed, self.args, print_corrected=True)
+        self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed,
+                                                self.args,
+                                                print_corrected=True,
+                                                gzipped=gzipped)
         printer_list = [self.corrected_bed_printer]
         if self.args.genedb:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
-                                                           additional_header=self.common_header)
+                                                           additional_header=self.common_header, gzipped=gzipped)
             printer_list.append(self.basic_printer)
         if self.args.sqanti_output:
             # self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
@@ -335,7 +338,8 @@ class ReadAssignmentAggregator:
         if self.args.genedb:
             logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
             logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
-            logger.info("Read assignments are stored in " + self.basic_printer.output_file_name)
+            logger.info("Read assignments are stored in " + self.basic_printer.output_file_name +
+                        ".gz" if self.args.gzipped else "")
         self.read_stat_counter.print_start("Read assignment statistics")
 
 
@@ -563,7 +567,7 @@ class DatasetProcessor:
                     ("off" if self.args.no_model_construction else "on"))
 
         # set up aggregators and outputs
-        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups)
+        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped)
         transcript_stat_counter = EnumStats()
 
         gff_printer = VoidTranscriptPrinter()
@@ -582,7 +586,7 @@ class DatasetProcessor:
             logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
 
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, header=self.common_header
+                sample.out_dir, sample.prefix, header=self.common_header, gzipped=self.args.gzipped
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
@@ -629,7 +633,7 @@ class DatasetProcessor:
                         rreplace(extended_gff_printer.model_fname, sample.prefix, f"{sample.prefix}_{chr_id}")
                         for chr_id in chr_ids
                     ],
-                    extended_gff_printer.model_fname,
+                    extended_gff_printer.out_gff,
                     copy_header=False
                 )
                 logger.info("Extended annotation is saved to " + extended_gff_printer.model_fname)
@@ -642,7 +646,7 @@ class DatasetProcessor:
                     rreplace(sample.out_t2t_tsv, sample.prefix, f"{sample.prefix}_{chr_id}")
                     for chr_id in chr_ids
                 ],
-                sample.out_t2t_tsv, copy_header=False
+                open(sample.out_t2t_tsv, "w"), copy_header=False
             )
 
         aggregator.finalize_aggregators(sample)
@@ -659,14 +663,14 @@ class DatasetProcessor:
         if self.args.genedb:
             merge_files(
                 [rreplace(sample.out_assigned_tsv, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
-                sample.out_assigned_tsv, copy_header=False)
+                aggregator.basic_printer.output_file, copy_header=False)
         merge_files(
             [rreplace(sample.out_corrected_bed, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
-            sample.out_corrected_bed, copy_header=False)
+            aggregator.corrected_bed_printer.output_file, copy_header=False)
         for p in aggregator.global_counter.counters:
             merge_files(
                 [rreplace(p.output_counts_file_name, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
-                p.output_counts_file_name,
+                p.output_file,
                 stats_file_names=[rreplace(p.output_stats_file_name, sample.prefix, sample.prefix + "_" + chr_id) for
                                   chr_id in chr_ids]
                 if p.output_stats_file_name else None,
@@ -676,12 +680,12 @@ class DatasetProcessor:
 
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
         merge_files([rreplace(gff_printer.model_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
-                    gff_printer.model_fname, copy_header=False)
+                    gff_printer.out_gff, copy_header=False)
         merge_files([rreplace(gff_printer.r2t_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
-                    gff_printer.r2t_fname, copy_header=False)
+                    gff_printer.out_r2t, copy_header=False)
         for p in aggregator.transcript_model_global_counter.counters:
             merge_files([rreplace(p.output_counts_file_name, label, label + "_" + chr_id) for chr_id in chr_ids],
-                        p.output_counts_file_name,
+                        p.output_file,
                         stats_file_names=[rreplace(p.output_stats_file_name, label, label + "_" + chr_id) for chr_id in
                                           chr_ids]
                         if p.output_stats_file_name else None,

@@ -188,6 +188,8 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="align reads to reference without running further analysis")
 
     # ADDITIONAL
+    add_additional_option("--no_gzip", help="do not gzip large output files", dest="gzipped",
+                          action='store_false', default=True)
     add_additional_option("--high_memory", help="increase RAM consumption (store alignment and the genome in RAM)",
                           action='store_true', default=False)
     add_additional_option("--no_junc_bed", action="store_true", default=False,
@@ -247,9 +249,10 @@ def parse_args(cmd_args=None, namespace=None):
                                    action='store_true', default=False)
         resume_parser.add_argument("--keep_tmp", help="do not remove temporary files in the end",
                                    action='store_true', default=argparse.SUPPRESS)
+
         args, unknown_args = resume_parser.parse_known_args(cmd_args)
         if unknown_args:
-            logger.error("You cannot specify options other than --output/--threads/--debug "
+            logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory "
                          "with --resume option")
             parser.print_usage()
             exit(-2)
