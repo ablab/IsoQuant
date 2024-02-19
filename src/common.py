@@ -135,7 +135,7 @@ def overlaps(range1, range2):
 
 
 def overlap_intervals(range1, range2):
-    return (max(range1[0], range2[0]), min(range1[1], range2[1]))
+    return max(range1[0], range2[0]), min(range1[1], range2[1])
 
 
 def overlaps_at_least(range1, range2, delta=0):
@@ -754,3 +754,42 @@ def get_strand(introns, reference_region, ref_region_start=1):
     if count_fwd == count_rev:
         return '.'
     return '+' if count_rev < count_fwd else '-'
+
+
+# binary search of a coordinate in ordered non-overlapping intervals
+def interval_bin_search(ordered_intervals, pos):
+    if pos > ordered_intervals[-1][1] or pos < ordered_intervals[0][0]:
+        return -1
+
+    s = len(ordered_intervals) - 1
+    if pos >= ordered_intervals[-1][0]:
+        return s
+
+    ind = s // 2
+    current_step = s // 2
+    while not (ordered_intervals[ind][0] <= pos < ordered_intervals[ind + 1][0]):
+        current_step = max(1, current_step // 2)
+        if pos < ordered_intervals[ind][0]:
+            ind -= current_step
+        else:
+            ind += current_step
+    return ind
+
+
+def interval_bin_search_rev(ordered_intervals, pos):
+    if pos > ordered_intervals[-1][1] or pos < ordered_intervals[0][0]:
+        return -1
+
+    if pos < ordered_intervals[0][1]:
+        return 0
+
+    s = len(ordered_intervals) - 1
+    ind = s // 2
+    current_step = s // 2
+    while not (ordered_intervals[ind - 1][1] < pos <= ordered_intervals[ind][1]):
+        current_step = max(1, current_step // 2)
+        if pos > ordered_intervals[ind][1]:
+            ind += current_step
+        else:
+            ind -= current_step
+    return ind
