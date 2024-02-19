@@ -15,6 +15,7 @@ from .common import (
     left_of,
     overlaps,
     overlaps_at_least,
+    overlaps_at_least_when_overlap
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -203,19 +204,18 @@ class NonOverlappingFeaturesProfileConstructor:
                 if read_pos > 0 and exon_profile[gene_pos] == 0:
                     exon_profile[gene_pos] = -1
                 gene_pos += 1
-            elif self.comparator(read_exons[read_pos], self.known_exons[gene_pos]):
+            elif self.comparator(read_exon, gene_exon):
                 exon_profile[gene_pos] = 1
                 read_profile[read_pos] = 1
-                if read_exons[read_pos][1] < self.known_exons[gene_pos][1]:
+                if read_exon[1] < gene_exon[1]:
                     read_pos += 1
                 else:
                     gene_pos += 1
-            elif overlaps(read_exons[read_pos], self.known_exons[gene_pos]):
-                if read_exons[read_pos][1] < self.known_exons[gene_pos][1]:
+            else:
+                if read_exon[1] < gene_exon[1]:
                     read_pos += 1
                 else:
                     gene_pos += 1
-
 
         # making everying beyond polyA tail as outside feature
         if polya_position != -1:
@@ -256,7 +256,7 @@ class CombinedProfileConstructor:
                                                   delta=self.params.delta)
         self.split_exon_profile_constructor = \
             NonOverlappingFeaturesProfileConstructor(self.gene_info.split_exon_profiles.features,
-                                                     comparator=partial(overlaps_at_least,
+                                                     comparator=partial(overlaps_at_least_when_overlap,
                                                                         delta=self.params.minimal_exon_overlap),
                                                      delta=self.params.delta)
 
