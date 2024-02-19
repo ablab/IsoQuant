@@ -620,9 +620,10 @@ class LongReadAssigner:
     def create_monoexon_matches(self, read_matches, selected_isoforms):
         matches = []
         for isoform_id in selected_isoforms:
-            match_classification = MatchClassification.get_mono_exon_classification(read_matches[isoform_id])
+            read_match = read_matches[isoform_id]
+            match_classification = MatchClassification.get_mono_exon_classification(read_match)
             isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
-                                         read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id])
+                                         read_match, self.gene_info.isoform_strands[isoform_id])
             matches.append(isoform_match)
         return matches
 
@@ -639,9 +640,10 @@ class LongReadAssigner:
     def create_inconsistent_matches(self, read_matches, selected_isoforms, score=0.0):
         matches = []
         for isoform_id in selected_isoforms:
-            match_classification = MatchClassification.get_inconsistency_classification(read_matches[isoform_id])
+            read_match = read_matches[isoform_id]
+            match_classification = MatchClassification.get_inconsistency_classification(read_match)
             isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
-                                         read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id],
+                                         read_match, self.gene_info.isoform_strands[isoform_id],
                                          score=score)
             matches.append(isoform_match)
         return matches
