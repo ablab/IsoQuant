@@ -13,6 +13,7 @@ from .common import (
     contains,
     contains_approx,
     difference_in_present_features,
+    equal_profiles_in_range,
     equal_ranges,
     extra_exon_percentage,
     has_overlapping_features,
@@ -101,7 +102,8 @@ class LongReadAssigner:
                 isoforms.add(isoform_id)
         return isoforms
 
-    def match_profile(self, read_gene_profile, isoform_profiles, hint=None, diff_limit=-1, profile_range=None):
+    @staticmethod
+    def match_profile(read_gene_profile, isoform_profiles, hint=None, diff_limit=-1, profile_range=None):
         """ match read profiles to a known isoform junction profile
 
         Parameters
@@ -125,6 +127,16 @@ class LongReadAssigner:
                 isoforms.append(IsoformDiff(isoform_id, diff))
         return sorted(isoforms, key=lambda x: x.diff)
 
+    @staticmethod
+    def match_profile_exact_in_range(read_gene_profile, isoform_profiles, profile_range, hint=None):
+        isoforms = []
+        isoform_set = hint if hint is not None else isoform_profiles.keys()
+        for isoform_id in isoform_set:
+            isoform_profile = isoform_profiles[isoform_id]
+            if equal_profiles_in_range(isoform_profile, read_gene_profile, profile_range):
+                isoforms.append(IsoformDiff(isoform_id, 0))
+        return isoforms
+
     def find_matching_isoforms(self, read_profile, isoform_profiles, hint=None):
         """ match read profiles to a known isoform junction profile
 
@@ -141,8 +153,8 @@ class LongReadAssigner:
             matching isoforms
 
         """
-        isoforms = self.match_profile(read_profile.gene_profile, isoform_profiles, hint, diff_limit=0,
-                                      profile_range=read_profile.gene_profile_range)
+        isoforms = self.match_profile_exact_in_range(read_profile.gene_profile, isoform_profiles,
+                                                     read_profile.gene_profile_range, hint)
         return [x[0] for x in isoforms]
 
     # select most similar isoform based on different criteria
@@ -163,6 +175,7 @@ class LongReadAssigner:
         # find intron matches
         intron_matching_isoforms = self.match_profile(combined_read_profile.read_intron_profile.gene_profile,
                                                       self.gene_info.intron_profiles.profiles,
+                                                      profile_range=combined_read_profile.read_intron_profile.gene_profile_range,
                                                       hint=significantly_overlapping_isoforms)
 
         # add extra terminal bases as potential inconsistency event
