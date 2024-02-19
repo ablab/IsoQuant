@@ -780,7 +780,7 @@ def interval_bin_search_rev(ordered_intervals, pos):
     if pos > ordered_intervals[-1][1] or pos < ordered_intervals[0][0]:
         return -1
 
-    if pos < ordered_intervals[0][1]:
+    if pos <= ordered_intervals[0][1]:
         return 0
 
     s = len(ordered_intervals) - 1
