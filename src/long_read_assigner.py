@@ -183,23 +183,23 @@ class LongReadAssigner:
     def categorize_exon_elongation_subtype(self, read_split_exon_profile, isoform_id):
         split_exons = self.gene_info.split_exon_profiles.features
         isoform_profile = self.gene_info.split_exon_profiles.profiles[isoform_id]
+        profile_range = self.gene_info.split_exon_profiles.profile_ranges[isoform_id]
+        read_profile_range = read_split_exon_profile.gene_profile_range
 
         # find first and last common exons
         common_first_exon = -1
-        isoform_first_exon = isoform_profile.index(1)
-        for i in range(len(split_exons)):
+        isoform_first_exon = profile_range[0]
+        for i in range(max(isoform_first_exon, read_profile_range[0]), len(split_exons)):
             if isoform_profile[i] == read_split_exon_profile.gene_profile[i] == 1:
                 common_first_exon = i
                 break
 
         common_last_exon = -1
-        isoform_last_exon = rindex(isoform_profile, 1)
-        for i in range(len(split_exons)):
-            index = len(split_exons) - i - 1
-            if isoform_profile[index] == read_split_exon_profile.gene_profile[index] == 1:
-                common_last_exon = index
+        isoform_last_exon = profile_range[1] - 1
+        for i in range(min(isoform_last_exon, read_profile_range[1] - 1), -1, -1):
+            if isoform_profile[i] == read_split_exon_profile.gene_profile[i] == 1:
+                common_last_exon = i
                 break
-
         if common_first_exon == -1 or common_last_exon == -1:
             logger.warning(" + Odd case for exon elongation, no matching exons")
 
