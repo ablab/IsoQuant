@@ -594,6 +594,16 @@ def difference_in_present_features(profile1, profile2, diff_limit=-1, profile_ra
     return d
 
 
+def equal_profiles_in_range(isoforom_profile, read_profile, profile_range):
+    # return true if there is difference between 2 profiles
+    # isoforom_profile must not contain zeroes
+    for i in range(*profile_range):
+        if read_profile[i] == 0:
+            continue
+        if isoforom_profile[i] != read_profile[i]:
+            return False
+    return True
+
 def count_both_present_features(profile1, profile2):
     assert len(profile1) == len(profile2)
     d = 0
