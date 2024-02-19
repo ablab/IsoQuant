@@ -119,25 +119,26 @@ class OverlappingFeaturesProfileConstructor:
             if self.absence_condition(self.gene_region, read_features[i]):
                 read_profile[i] = -1
 
-        # TODO: starting value can be detected using binary search for long profiles
         gene_pos = 0
         read_pos = 0
         while gene_pos < len(self.known_features) and read_pos < len(read_features):
-            if self.comparator(read_features[read_pos], self.known_features[gene_pos]):
+            read_feature = read_features[read_pos]
+            isoform_feature = self.known_features[gene_pos]
+            if read_feature[1] < isoform_feature[0]:
+                if read_profile[read_pos] == 0 and gene_pos > 0:
+                    read_profile[read_pos] = -1
+                read_pos += 1
+            elif isoform_feature[1] < read_feature[0]:
+                if read_pos > 0:
+                    intron_profile[gene_pos] = -1
+                gene_pos += 1
+            elif self.comparator(read_feature, isoform_feature):
                 intron_profile[gene_pos] = 1
                 read_profile[read_pos] = 1
                 matched_features[read_pos].append(gene_pos)
                 gene_pos += 1
-            elif overlaps(read_features[read_pos], self.known_features[gene_pos]):
+            elif overlaps(read_feature, isoform_feature):
                 intron_profile[gene_pos] = -1
-                gene_pos += 1
-            elif left_of(read_features[read_pos], self.known_features[gene_pos]):
-                if read_profile[read_pos] == 0 and gene_pos > 0:
-                    read_profile[read_pos] = -1
-                read_pos += 1
-            else:
-                if read_pos > 0:
-                    intron_profile[gene_pos] = -1
                 gene_pos += 1
 
         # eliminating non unique features
