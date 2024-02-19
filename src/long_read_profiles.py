@@ -15,7 +15,9 @@ from .common import (
     left_of,
     overlaps,
     overlaps_at_least,
-    overlaps_at_least_when_overlap
+    overlaps_at_least_when_overlap,
+    interval_bin_search,
+    interval_bin_search_rev
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -217,16 +219,16 @@ class NonOverlappingFeaturesProfileConstructor:
                 else:
                     gene_pos += 1
 
-        # making everying beyond polyA tail as outside feature
+        # making everything beyond polyA tail as outside feature
         if polya_position != -1:
-            for i in range(len(self.known_exons)):
-                # feature is surely beyond polyA tail
-                if self.known_exons[i][0] > polya_position + self.delta:
+            polya_index = interval_bin_search(self.known_exons, polya_position + self.delta)
+            if polya_index != -1:
+                for i in range(polya_index + 1, len(self.known_exons)):
                     exon_profile[i] = -2
         if polyt_position != -1:
-            for i in range(len(self.known_exons)):
-                # feature is surely before polyT tail
-                if self.known_exons[i][1] < polyt_position - self.delta:
+            polyt_index = interval_bin_search_rev(self.known_exons, polyt_position - self.delta)
+            if polyt_index != -1:
+                for i in range(0, polyt_index):
                     exon_profile[i] = -2
 
         start_pos = 0
