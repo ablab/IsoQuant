@@ -428,11 +428,11 @@ class DatasetProcessor:
             else:
                 os.remove(lock_file)
 
-        chr_ids = sorted(
-            self.reference_record_dict.keys(),
-            key=lambda x: len(self.reference_record_dict[x]),
-            reverse=True,
-        )
+        chr_ids = ["chrM"] # sorted(
+#            self.reference_record_dict.keys(),
+#            key=lambda x: len(self.reference_record_dict[x]),
+#            reverse=True,
+#        )
         if not self.args.resume:
             clean_locks(chr_ids, sample.out_raw_file, reads_collected_lock_file_name)
             clean_locks(chr_ids, sample.out_raw_file, reads_processed_lock_file_name)
@@ -504,11 +504,11 @@ class DatasetProcessor:
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
     def process_assigned_reads(self, sample, dump_filename):
-        chr_ids = sorted(
-            self.reference_record_dict.keys(),
-            key=lambda x: len(self.reference_record_dict[x]),
-            reverse=True
-        )
+        chr_ids = ["chrM"] # sorted(
+#            self.reference_record_dict.keys(),
+#            key=lambda x: len(self.reference_record_dict[x]),
+#            reverse=True
+#        )
         logger.info("Processing assigned reads " + sample.prefix)
 
         # set up aggregators and outputs

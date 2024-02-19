@@ -128,8 +128,27 @@ class GraphBasedModelConstructor:
 
         self.construct_fl_isoforms()
         self.construct_assignment_based_isoforms(read_assignment_storage)
+        logger.debug(" *********** INTERNAL COUNTER 1 **************** ")
+        logger.debug("Transcripts %d" % len(self.internal_counter))
+        for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
+            logger.debug("%s\t%d" % (k, v))
+        logger.debug(" ***********   **************** ")
         self.assign_reads_to_models(read_assignment_storage)
+
+        logger.debug(" *********** INTERNAL COUNTER AFTER ASSIGNMENT **************** ")
+        logger.debug("Transcripts %d" % len(self.internal_counter))
+        for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
+            logger.debug("%s\t%d" % (k, v))
+        logger.debug(" ***********   **************** ")
+
         self.filter_transcripts()
+        logger.debug(" *********** INTERNAL COUNTER FILTERED **************** ")
+        logger.debug("Transcripts %d" % len(self.internal_counter))
+        for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
+            logger.debug("%s\t%d" % (k, v))
+        logger.debug(" ***********   **************** ")
+
+
 
         if self.params.genedb:
             self.create_extended_annotation()
