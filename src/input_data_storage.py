@@ -116,6 +116,7 @@ class InputDataStorage:
 
         elif args.read_assignments is not None:
             self.input_type = "save"
+            illumina_bam = [[]]
             for i, save_file in enumerate(args.read_assignments):
                 sample_files.append([[save_file]])
                 experiment_names.append(self.experiment_prefix + str(i))
