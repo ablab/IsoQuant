@@ -470,22 +470,25 @@ def set_logger(args, logger_instance):
         old_log_file = os.path.join(args.output, "isoquant.log.old")
         with open(old_log_file, "a") as olf:
             olf.write("\n")
-            for l in open(log_file, "r"):
-                olf.write(l)
+            shutil.copyfileobj(open(log_file, "r"), olf)
 
     f = open(log_file, "w")
     f.write("Command line: " + args._cmd_line + '\n')
     f.close()
     fh = logging.FileHandler(log_file)
+    fh.set_name("isoquant_file_log")
     fh.setLevel(output_level)
     ch = logging.StreamHandler(sys.stdout)
+    ch.set_name("isoquant_screen_log")
     ch.setLevel(logging.INFO)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
-    logger_instance.addHandler(fh)
-    logger_instance.addHandler(ch)
+    if all(fh.get_name() != h.get_name() for h in logger_instance.handlers):
+        logger_instance.addHandler(fh)
+    if all(ch.get_name() != h.get_name() for h in logger_instance.handlers):
+        logger_instance.addHandler(ch)
 
     logger.info("Running IsoQuant version " + args._version)
 
