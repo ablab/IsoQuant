@@ -11,7 +11,7 @@ from functools import partial
 
 from .common import (
     contains,
-    contains_well_inside,
+    contains_approx,
     difference_in_present_features,
     equal_ranges,
     extra_exon_percentage,
@@ -96,8 +96,8 @@ class LongReadAssigner:
         isoform_set = hint if hint is not None else isoform_profiles.keys()
 
         for isoform_id in isoform_set:
-            if contains_well_inside(self.gene_info.transcript_region(isoform_id), read_region,
-                                    self.params.min_abs_exon_overlap):
+            if contains_approx(self.gene_info.transcript_region(isoform_id), read_region,
+                               self.params.min_abs_exon_overlap):
                 isoforms.add(isoform_id)
         return isoforms
 
