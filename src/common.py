@@ -139,9 +139,15 @@ def overlap_intervals(range1, range2):
 
 
 def overlaps_at_least(range1, range2, delta=0):
-    cutoff = min(delta - 1, range1[1] - range1[0], range2[1] - range2[0])
-    overlap = min(range1[1], range2[1]) + 1 - max(range1[0], range2[0])
-    return overlap > cutoff
+    ovlp1 = range1[1] - range2[0]
+    ovlp2 = range2[1] - range1[0]
+    if ovlp1 < 0 or ovlp2 < 0:
+        return False
+    d = delta - 1
+    if range1[1] < range2[1]:
+        return ovlp1 >= d or range1[0] >= range2[0]
+    else:
+        return ovlp2 >= d or range1[0] <= range2[0]
 
 
 def intersection_len(range1, range2):
