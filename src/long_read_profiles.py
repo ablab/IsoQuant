@@ -193,7 +193,17 @@ class NonOverlappingFeaturesProfileConstructor:
         read_pos = 0
 
         while gene_pos < len(self.known_exons) and read_pos < len(read_exons):
-            if self.comparator(read_exons[read_pos], self.known_exons[gene_pos]):
+            read_exon = read_exons[read_pos]
+            gene_exon = self.known_exons[gene_pos]
+            if read_exon[1] < gene_exon[0]:
+                if gene_pos > 0 and read_profile[read_pos] == 0:
+                    read_profile[read_pos] = -1
+                read_pos += 1
+            elif gene_exon[1] < read_exon[0]:
+                if read_pos > 0 and exon_profile[gene_pos] == 0:
+                    exon_profile[gene_pos] = -1
+                gene_pos += 1
+            elif self.comparator(read_exons[read_pos], self.known_exons[gene_pos]):
                 exon_profile[gene_pos] = 1
                 read_profile[read_pos] = 1
                 if read_exons[read_pos][1] < self.known_exons[gene_pos][1]:
@@ -205,14 +215,7 @@ class NonOverlappingFeaturesProfileConstructor:
                     read_pos += 1
                 else:
                     gene_pos += 1
-            elif left_of(read_exons[read_pos], self.known_exons[gene_pos]):
-                if gene_pos > 0 and read_profile[read_pos] == 0:
-                    read_profile[read_pos] = -1
-                read_pos += 1
-            else:
-                if read_pos > 0 and exon_profile[gene_pos] == 0:
-                    exon_profile[gene_pos] = -1
-                gene_pos += 1
+
 
         # making everying beyond polyA tail as outside feature
         if polya_position != -1:
