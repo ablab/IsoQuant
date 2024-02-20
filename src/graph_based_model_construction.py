@@ -132,11 +132,11 @@ class GraphBasedModelConstructor:
 
         # NOW ILP IS HERE
         self.construct_ilp_isoforms()
-        self.construct_assignment_based_isoforms(read_assignment_storage)
+        # self.construct_assignment_based_isoforms(read_assignment_storage)
         
         #doesnt matter for now...
         self.assign_reads_to_models(read_assignment_storage)
-        self.filter_transcripts()
+        # self.filter_transcripts()
 
         if self.params.genedb:
             self.create_extended_annotation()
