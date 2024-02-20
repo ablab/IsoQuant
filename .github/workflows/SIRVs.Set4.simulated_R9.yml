@@ -31,6 +31,7 @@ jobs:
           fetch-depth: 1
 
       - name: 'SIRVs simulated ONT R9'
+        if: always()
         shell: bash
         env:
           STEP_NAME: SIRVs.simulated_R9_real_exp
@@ -39,6 +40,7 @@ jobs:
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
 
       - name: 'SIRVs simulated ONT R9 real expression'
+        if: always()
         shell: bash
         env:
           STEP_NAME: SIRVs.simulated_R9_real_exp

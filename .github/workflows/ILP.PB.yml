@@ -29,6 +29,7 @@ jobs:
           fetch-depth: 1
 
       - name: 'ILP PacBio Camk2b'
+        if: always()
         shell: bash
         env:
           STEP_NAME: ILP.PB.Camk2b
@@ -37,6 +38,7 @@ jobs:
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
 
       - name: 'ILP PacBio BIN1'
+        if: always()
         shell: bash
         env:
           STEP_NAME: ILP.PB.BIN1
