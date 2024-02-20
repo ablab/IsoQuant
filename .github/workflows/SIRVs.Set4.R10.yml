@@ -32,6 +32,8 @@ jobs:
 
       - name: 'IsoQuant SIRVs'
         shell: bash
+        env:
+          STEP_NAME: SIRVs.Set4.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.RUN_NAME}}.cfg -o ${{env.OUTPUT_BASE}}

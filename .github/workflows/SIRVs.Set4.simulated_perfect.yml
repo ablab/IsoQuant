@@ -36,7 +36,7 @@ jobs:
           STEP_NAME: SIRVs.simulated_perfect
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.RUN_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
 
       - name: 'IsoQuant: perfect reads with polyA'
         shell: bash
@@ -44,4 +44,4 @@ jobs:
           STEP_NAME: SIRVs.simulated_perfect_polya
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.RUN_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
