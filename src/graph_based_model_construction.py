@@ -128,25 +128,27 @@ class GraphBasedModelConstructor:
 
         self.construct_fl_isoforms()
         self.construct_assignment_based_isoforms(read_assignment_storage)
-        logger.debug(" *********** INTERNAL COUNTER 1 **************** ")
-        logger.debug("Transcripts %d" % len(self.internal_counter))
+        logger.info(" *********** INTERNAL COUNTER 1 **************** ")
+        logger.info("Transcripts %d" % len(self.internal_counter))
         for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
-            logger.debug("%s\t%d" % (k, v))
-        logger.debug(" ***********   **************** ")
+            logger.info("%s\t%d" % (k, v))
+        logger.info(" ***********   **************** ")
         self.assign_reads_to_models(read_assignment_storage)
 
-        logger.debug(" *********** INTERNAL COUNTER AFTER ASSIGNMENT **************** ")
-        logger.debug("Transcripts %d" % len(self.internal_counter))
+        logger.info(" *********** INTERNAL COUNTER AFTER ASSIGNMENT **************** ")
+        logger.info("Transcripts %d" % len(self.internal_counter))
         for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
-            logger.debug("%s\t%d" % (k, v))
-        logger.debug(" ***********   **************** ")
+            logger.info("%s\t%d" % (k, v))
+        logger.info(" ***********   **************** ")
 
         self.filter_transcripts()
-        logger.debug(" *********** INTERNAL COUNTER FILTERED **************** ")
-        logger.debug("Transcripts %d" % len(self.internal_counter))
+        logger.info(" *********** INTERNAL COUNTER FILTERED **************** ")
+        isoform_set = set([m.transcript_id for m in self.transcript_model_storage])
+        logger.info("Transcripts %d" % len(self.internal_counter))
         for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
-            logger.debug("%s\t%d" % (k, v))
-        logger.debug(" ***********   **************** ")
+            if k in isoform_set:
+                logger.info("%s\t%d" % (k, v))
+        logger.info(" ***********   **************** ")
 
 
 
