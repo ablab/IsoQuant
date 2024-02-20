@@ -1,9 +1,9 @@
-name: SIRVs simulated perfect
+name: SIRVs simulated R9
 
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 12 * * 2'
+  - cron: '0 12 * * 4'
 
 env:
   RUN_NAME: SIRVs.simulated
@@ -30,18 +30,18 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 'SIRVs.simulated_perfect'
+      - name: 'SIRVs simulated ONT R9'
         shell: bash
         env:
-          STEP_NAME: SIRVs.simulated_perfect
+          STEP_NAME: SIRVs.simulated_R9_real_exp
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.RUN_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
 
-      - name: 'IsoQuant: perfect reads with polyA'
+      - name: 'SIRVs simulated ONT R9 real expression'
         shell: bash
         env:
-          STEP_NAME: SIRVs.simulated_perfect_polya
+          STEP_NAME: SIRVs.simulated_R9_real_exp
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.RUN_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
