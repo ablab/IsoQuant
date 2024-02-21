@@ -22,7 +22,7 @@ import pysam
 import gffutils
 import pyfaidx
 
-from src.gtf2db import convert_gtf_to_db
+from src.gtf2db import convert_gtf_to_db, check_gtf_duplicates
 from src.read_mapper import (
     DATA_TYPE_ALIASES,
     SUPPORTED_STRANDEDNESS,
@@ -712,6 +712,17 @@ def run_pipeline(args):
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
+        gtf_is_correct, corrected_gtf = check_gtf_duplicates(args.genedb)
+        if not gtf_is_correct:
+            gtf_name = os.path.basename(args.genedb)
+            gtf_name, outer_ext = os.path.splitext(gtf_name)
+            new_gtf_path = os.path.join(args.output, gtf_name + ".corrected" + outer_ext.lower())
+            with open(new_gtf_path, "w") as out_gtf:
+                out_gtf.write(corrected_gtf)
+            logger.error("Input GTF seems to be corrupted (see warnings above). "
+                         "An attempt to correct this GTF was made, the result is written to %s" % new_gtf_path)
+            logger.error("Provide a correct GTF by fixing the original input GTF or checking the corrected one.")
+            exit(-3)
         args.genedb = convert_gtf_to_db(args)
 
     # map reads if fastqs are provided

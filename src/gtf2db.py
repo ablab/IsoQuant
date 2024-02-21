@@ -12,6 +12,7 @@ import os
 import gffutils
 import argparse
 from traceback import print_exc
+from collections import defaultdict
 
 logger = logging.getLogger('IsoQuant')
 
@@ -116,6 +117,88 @@ def convert_db_to_gtf(args):
     gtf_filename = os.path.join(args.output, os.path.splitext(os.path.basename(genedb_filename))[0] + ".gtf")
     gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, db2gtf, args)
     return gtf_filename
+
+
+def check_gtf_duplicates(gtf):
+    gtf_correct = True
+    line_count = 0
+    gene_ids = {}
+    transcript_ids = {}
+    corrected_gtf = ""
+    for l in open(gtf, "r"):
+        line_count += 1
+        if l.startswith("#"):
+            corrected_gtf += l
+            continue
+        v = l.strip().split("\t")
+        if len(v) < 9:
+            corrected_gtf += l
+            continue
+
+        feature_type = v[2]
+        attrs = v[8].split(" ")
+
+        gene_id_pos = -1
+        for i in range(len(attrs)):
+            if attrs[i] == 'gene_id':
+                gene_id_pos = i
+        if gene_id_pos in [-1, len(attrs) - 1]:
+            logger.warning("Malformed GTF line %d (gene_id attribute value cannot be found)" % line_count)
+            logger.warning(l.strip())
+            gtf_correct = False
+            continue
+
+        gene_id = attrs[gene_id_pos + 1][1:-2]
+        if feature_type == "gene":
+            if gene_id in gene_ids:
+                logger.warning("Duplicated gene id %s on line %d" % (gene_id, line_count))
+                gtf_correct = False
+                gene_ids[gene_id] += 1
+                gene_id += ".%d" % gene_ids[gene_id]
+            else:
+                gene_ids[gene_id] = 0
+        elif gene_id in gene_ids and gene_ids[gene_id] > 0:
+            gene_id += ".%d" % gene_ids[gene_id]
+
+        transcript_id_pos = -1
+        for i in range(len(attrs)):
+            if attrs[i] == 'transcript_id':
+                transcript_id_pos = i
+        if feature_type != "gene" and transcript_id_pos in [-1, len(attrs) - 1]:
+            logger.warning("Malformed GTF line %d (transcript_id attribute value cannot be found)" % line_count)
+            logger.warning(l.strip())
+            gtf_correct = False
+            continue
+
+        transcript_id = attrs[transcript_id_pos + 1][1:-2]
+        if feature_type in ["transcript", "mRNA"]:
+            if transcript_id in transcript_ids:
+                logger.warning("Duplicated transcript id %s on line %d" % (transcript_id, line_count))
+                gtf_correct = False
+                transcript_ids[transcript_id] += 1
+                transcript_id += ".%d" % transcript_ids[transcript_id]
+            else:
+                transcript_ids[transcript_id] = 0
+        elif transcript_id in transcript_ids and transcript_ids[transcript_id] > 0:
+            transcript_id += ".%d" % transcript_ids[transcript_id]
+
+        if gene_id == transcript_id:
+            logger.warning("Transcript id and gene id are identical (%s) at line %d"  % (transcript_id, line_count))
+            gtf_correct = False
+            transcript_id += ".RNA.IsoQuant_corrected"
+
+        new_attrs = []
+        for i in range(len(attrs)):
+            if i == gene_id_pos + 1:
+                new_attrs.append('"%s";' % gene_id)
+            elif feature_type != "gene" and i == transcript_id_pos + 1:
+                new_attrs.append('"%s";' % transcript_id)
+            else:
+                new_attrs.append(attrs[i])
+        new_line = "\t".join(v[:8] + [" ".join(new_attrs)]) + "\n"
+        corrected_gtf += new_line
+
+    return gtf_correct, corrected_gtf
 
 
 def find_coverted_db(converted_gtfs, gtf_filename):
