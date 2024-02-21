@@ -712,11 +712,9 @@ def run_pipeline(args):
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
-        gtf_is_correct, corrected_gtf = check_gtf_duplicates(args.genedb)
+        gtf_is_correct, corrected_gtf, out_fname = check_gtf_duplicates(args.genedb)
         if not gtf_is_correct:
-            gtf_name = os.path.basename(args.genedb)
-            gtf_name, outer_ext = os.path.splitext(gtf_name)
-            new_gtf_path = os.path.join(args.output, gtf_name + ".corrected" + outer_ext.lower())
+            new_gtf_path = os.path.join(args.output, out_fname)
             with open(new_gtf_path, "w") as out_gtf:
                 out_gtf.write(corrected_gtf)
             logger.error("Input GTF seems to be corrupted (see warnings above). "
