@@ -12,7 +12,7 @@ import os
 import gffutils
 import argparse
 from traceback import print_exc
-from collections import defaultdict
+import gzip
 
 logger = logging.getLogger('IsoQuant')
 
@@ -125,7 +125,13 @@ def check_gtf_duplicates(gtf):
     gene_ids = {}
     transcript_ids = {}
     corrected_gtf = ""
-    for l in open(gtf, "r"):
+
+    gtf_name = os.path.basename(gtf)
+    gtf_name, outer_ext = os.path.splitext(gtf_name)
+    gtf_name, inner_ext = os.path.splitext(gtf_name)
+    handle = gzip.open(gtf, "rt") if outer_ext.lower() in ['.gz', '.gzip', '.bgz'] else open(gtf, "rt")
+
+    for l in handle.readlines():
         line_count += 1
         if l.startswith("#"):
             corrected_gtf += l
@@ -198,7 +204,7 @@ def check_gtf_duplicates(gtf):
         new_line = "\t".join(v[:8] + [" ".join(new_attrs)]) + "\n"
         corrected_gtf += new_line
 
-    return gtf_correct, corrected_gtf
+    return gtf_correct, corrected_gtf, gtf_name + ".corrected" + inner_ext.lower()
 
 
 def find_coverted_db(converted_gtfs, gtf_filename):
