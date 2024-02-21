@@ -92,6 +92,21 @@ def db2bed(db, bed, _=None):
 
 
 def gtf2db(gtf, db, complete_db=False):
+    logger.info("Checking input gene annotation")
+    gtf_is_correct, corrected_gtf, out_fname = check_gtf_duplicates(gtf)
+    if not gtf_is_correct:
+        outdir = os.path.dirname(db)
+        new_gtf_path = os.path.join(outdir, out_fname)
+        with open(new_gtf_path, "w") as out_gtf:
+            out_gtf.write(corrected_gtf)
+        logger.error("Input GTF seems to be corrupted (see warnings above).")
+        logger.error("An attempt to correct this GTF was made, the result is written to %s" % new_gtf_path)
+        logger.error("NB! some transcript / gene ids in the corrected annotation are modified.")
+        logger.error("Provide a correct GTF by fixing the original input GTF or checking the corrected one.")
+        exit(-3)
+    else:
+        logger.info("Gene annotation seems to be correct")
+
     logger.info("Converting gene annotation file to .db format (takes a while)...")
     gffutils.create_db(gtf, db, force=True, keep_order=True, merge_strategy='error',
                        sort_attribute_values=True, disable_infer_transcripts=complete_db,
@@ -128,8 +143,12 @@ def check_gtf_duplicates(gtf):
 
     gtf_name = os.path.basename(gtf)
     gtf_name, outer_ext = os.path.splitext(gtf_name)
-    gtf_name, inner_ext = os.path.splitext(gtf_name)
-    handle = gzip.open(gtf, "rt") if outer_ext.lower() in ['.gz', '.gzip', '.bgz'] else open(gtf, "rt")
+    if outer_ext.lower() in ['.gz', '.gzip', '.bgz']:
+        handle = gzip.open(gtf, "rt")
+        gtf_name, inner_ext = os.path.splitext(gtf_name)
+    else:
+        handle = open(gtf, "rt")
+        inner_ext = outer_ext
 
     for l in handle.readlines():
         line_count += 1
