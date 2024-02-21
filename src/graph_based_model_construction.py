@@ -143,9 +143,10 @@ class GraphBasedModelConstructor:
         self.assign_reads_to_models(read_assignment_storage)
         self.forward_counts()
 
-        if len(set([x.read_id for x in read_assignment_storage])) != len(self.read_assignment_counts):
+        # FIXME: remove asserts below
+        if self.transcript_model_storage and len(set([x.read_id for x in read_assignment_storage])) != len(self.read_assignment_counts):
             logger.warning("Some reads were not assigned %d %d" % (len(set([x.read_id for x in read_assignment_storage])), len(self.read_assignment_counts)))
-
+        # FIXME: remove asserts below
         if any(value < 0 for value in self.read_assignment_counts.values()):
             logger.warning("Negative values in read assignment counts")
 
