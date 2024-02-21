@@ -712,6 +712,7 @@ def run_pipeline(args):
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
+        logger.info("Checking input gene annotation")
         gtf_is_correct, corrected_gtf, out_fname = check_gtf_duplicates(args.genedb)
         if not gtf_is_correct:
             new_gtf_path = os.path.join(args.output, out_fname)
@@ -721,6 +722,8 @@ def run_pipeline(args):
                          "An attempt to correct this GTF was made, the result is written to %s" % new_gtf_path)
             logger.error("Provide a correct GTF by fixing the original input GTF or checking the corrected one.")
             exit(-3)
+        else:
+            logger.info("Gene annotation seems to be correct")
         args.genedb = convert_gtf_to_db(args)
 
     # map reads if fastqs are provided
