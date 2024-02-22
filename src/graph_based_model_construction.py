@@ -131,14 +131,18 @@ class GraphBasedModelConstructor:
         logger.info(" *********** INTERNAL COUNTER 1 **************** ")
         logger.info("Transcripts %d" % len(self.internal_counter))
         for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
-            logger.info("%s\t%d" % (k, v))
+            mapq = self.mapping_quality(k)
+            logger.info("%s\t%d\t%.3f" % (k, v , mapq))
         logger.info(" ***********   **************** ")
+
+        self.filter_transcripts(dry_run=True)
         self.assign_reads_to_models(read_assignment_storage)
 
         logger.info(" *********** INTERNAL COUNTER AFTER ASSIGNMENT **************** ")
         logger.info("Transcripts %d" % len(self.internal_counter))
         for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
-            logger.info("%s\t%d" % (k, v))
+            mapq = self.mapping_quality(k)
+            logger.info("%s\t%d\t%.3f" % (k, v , mapq))
         logger.info(" ***********   **************** ")
 
         self.filter_transcripts()
@@ -147,7 +151,8 @@ class GraphBasedModelConstructor:
         logger.info("Transcripts %d" % len(self.internal_counter))
         for k, v in sorted(self.internal_counter.items(), key=lambda x: x[1], reverse=True):
             if k in isoform_set:
-                logger.info("%s\t%d" % (k, v))
+                mapq = self.mapping_quality(k)
+                logger.info("%s\t%d\t%.3f" % (k, v, mapq))
         logger.info(" ***********   **************** ")
 
 
@@ -219,7 +224,7 @@ class GraphBasedModelConstructor:
             model.add_additional_attribute("alternatives", event_string)
             self.transcript2transcript.append(assignment)
 
-    def filter_transcripts(self):
+    def filter_transcripts(self, dry_run = False):
         filtered_storage = []
         confirmed_transcipt_ids = set()
         to_substitute = self.detect_similar_isoforms()
@@ -241,23 +246,26 @@ class GraphBasedModelConstructor:
                                            self.params.min_novel_count_rel * component_coverage)
 
             if model.transcript_id in to_substitute:
-                #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
+                logger.debug(" FLT Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
+                if dry_run: continue
                 self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
-                #logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
-                #                                                        self.internal_counter[model.transcript_id],
-                #                                                        novel_isoform_cutoff, component_coverage))
+                logger.debug("FLT Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
+                                                                                                self.internal_counter[model.transcript_id],
+                                                                                                novel_isoform_cutoff, component_coverage))
+                if dry_run: continue
                 del self.transcript_read_ids[model.transcript_id]
                 continue
 
             if len(model.exon_blocks) <= 2:
-                mapq = self.mapping_quality(model)
-                #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
+                mapq = self.mapping_quality(model.transcript_id)
+                logger.debug("FLT Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.params.simple_models_mapq_cutoff:
-                    #logger.debug("Novel model %s has poor quality" % model.transcript_id)
+                    logger.debug("FLT Novel model %s has poor quality" % model.transcript_id)
+                    if dry_run: continue
                     del self.transcript_read_ids[model.transcript_id]
                     continue
 
@@ -269,11 +277,11 @@ class GraphBasedModelConstructor:
         self.transcript_model_storage = filtered_storage
         self.transcript_counter.add_confirmed_features(confirmed_transcipt_ids)
 
-    def mapping_quality(self, model):
+    def mapping_quality(self, transcript_id):
         mapq = 0
-        for a in self.transcript_read_ids[model.transcript_id]:
+        for a in self.transcript_read_ids[transcript_id]:
             mapq += a.mapping_quality
-        return mapq / len(self.transcript_read_ids[model.transcript_id])
+        return mapq / len(self.transcript_read_ids[transcript_id])
 
     def detect_similar_isoforms(self):
         to_substitute = {}
