@@ -137,7 +137,8 @@ class GraphBasedModelConstructor:
 
         self.construct_fl_isoforms()
         self.construct_assignment_based_isoforms(read_assignment_storage)
-        # FIXME: assign reads AFTER filtering
+
+        self.pre_filter_transcripts()
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
 
@@ -208,10 +209,43 @@ class GraphBasedModelConstructor:
             model.add_additional_attribute("alternatives", event_string)
             self.transcript2transcript.append(assignment)
 
+    def pre_filter_transcripts(self):
+        internal_count_values = []
+        for model in self.transcript_model_storage:
+            if len(model.exon_blocks) <= 2:
+                internal_count_values.append(self.internal_counter[model.transcript_id])
+
+        internal_count_values = sorted(internal_count_values, reverse=True)
+        coverage_cutoff = self.params.min_novel_count
+        # dirty hack to avoid slow assignment in chrM
+        if len(internal_count_values) > 50:
+            coverage_cutoff = internal_count_values[50]
+
+        filtered_storage = []
+        for model in self.transcript_model_storage:
+            if len(model.exon_blocks) > 2:
+                filtered_storage.append(model)
+                continue
+
+            if (model.transcript_type != TranscriptModelType.known and
+                    self.internal_counter[model.transcript_id] < coverage_cutoff):
+                del self.transcript_read_ids[model.transcript_id]
+                del self.internal_counter[model.transcript_id]
+                continue
+
+            mapq = self.mapping_quality(model.transcript_id)
+            if mapq < self.params.simple_models_mapq_cutoff:
+                del self.transcript_read_ids[model.transcript_id]
+                del self.internal_counter[model.transcript_id]
+                continue
+            filtered_storage.append(model)
+
+        self.transcript_model_storage = filtered_storage
+
     def filter_transcripts(self):
         filtered_storage = []
         confirmed_transcipt_ids = set()
-        to_substitute = self.detect_similar_isoforms()
+        to_substitute = self.detect_similar_isoforms(self.transcript_model_storage)
 
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
@@ -233,6 +267,7 @@ class GraphBasedModelConstructor:
                 #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
                 self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
                 del self.transcript_read_ids[model.transcript_id]
+                del self.internal_counter[model.transcript_id]
                 continue
 
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
@@ -240,6 +275,7 @@ class GraphBasedModelConstructor:
                 #                                                        self.internal_counter[model.transcript_id],
                 #                                                        novel_isoform_cutoff, component_coverage))
                 del self.transcript_read_ids[model.transcript_id]
+                del self.internal_counter[model.transcript_id]
                 continue
 
             if len(model.exon_blocks) <= 2:
@@ -248,6 +284,7 @@ class GraphBasedModelConstructor:
                 if mapq < self.params.simple_models_mapq_cutoff:
                     #logger.debug("Novel model %s has poor quality" % model.transcript_id)
                     del self.transcript_read_ids[model.transcript_id]
+                    del self.internal_counter[model.transcript_id]
                     continue
 
             # TODO: correct ends for known
@@ -264,16 +301,16 @@ class GraphBasedModelConstructor:
             mapq += a.mapping_quality
         return mapq / len(self.transcript_read_ids[model.transcript_id])
 
-    def detect_similar_isoforms(self):
+    def detect_similar_isoforms(self, model_storage):
         to_substitute = {}
-        for model in self.transcript_model_storage:
+        for model in model_storage:
             if len(model.exon_blocks) <= 2 or model.transcript_id in to_substitute:
                 continue
             transcript_model_gene_info = GeneInfo.from_models([model], self.params.delta)
             assigner = LongReadAssigner(transcript_model_gene_info, self.params)
             profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
 
-            for m in self.transcript_model_storage:
+            for m in model_storage:
                 if m.transcript_type == TranscriptModelType.known or m.transcript_id == model.transcript_id or \
                         m.transcript_id in to_substitute or len(m.exon_blocks) == 1 or not m.intron_path or \
                         len(m.exon_blocks) > len(model.exon_blocks):
