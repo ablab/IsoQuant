@@ -717,8 +717,12 @@ def run_pipeline(args):
                     process_single_thread(bc_args)
                 else:
                     process_in_parallel(bc_args)
+            if not args.read_group:
+                args.read_group = "file:" + sample.out_barcodes_tsv
         else:
             args.input_data.samples[0].out_barcodes_tsv = args.barcoded_reads
+            if not args.read_group:
+                args.read_group = "file:" + args.barcoded_reads
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
