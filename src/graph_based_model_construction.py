@@ -279,7 +279,7 @@ class GraphBasedModelConstructor:
                 continue
 
             if len(model.exon_blocks) <= 2:
-                mapq = self.mapping_quality(model)
+                mapq = self.mapping_quality(model.transcript_id)
                 #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.params.simple_models_mapq_cutoff:
                     #logger.debug("Novel model %s has poor quality" % model.transcript_id)
@@ -295,11 +295,11 @@ class GraphBasedModelConstructor:
         self.transcript_model_storage = filtered_storage
         self.transcript_counter.add_confirmed_features(confirmed_transcipt_ids)
 
-    def mapping_quality(self, model):
+    def mapping_quality(self, transcript_id):
         mapq = 0
-        for a in self.transcript_read_ids[model.transcript_id]:
+        for a in self.transcript_read_ids[transcript_id]:
             mapq += a.mapping_quality
-        return mapq / len(self.transcript_read_ids[model.transcript_id])
+        return mapq / len(self.transcript_read_ids[transcript_id])
 
     def detect_similar_isoforms(self, model_storage):
         to_substitute = {}
