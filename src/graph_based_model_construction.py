@@ -156,8 +156,6 @@ class GraphBasedModelConstructor:
                 logger.info("%s\t%d\t%.3f" % (k, v, mapq))
         logger.info(" ***********   **************** ")
 
-
-
         if self.params.genedb:
             self.create_extended_annotation()
 
@@ -246,11 +244,13 @@ class GraphBasedModelConstructor:
             if (model.transcript_type != TranscriptModelType.known and
                     self.internal_counter[model.transcript_id] < coverage_cutoff):
                 del self.transcript_read_ids[model.transcript_id]
+                del self.internal_counter[model.transcript_id]
                 continue
 
             mapq = self.mapping_quality(model.transcript_id)
             if mapq < self.params.simple_models_mapq_cutoff:
                 del self.transcript_read_ids[model.transcript_id]
+                del self.internal_counter[model.transcript_id]
                 continue
 
         self.transcript_model_storage = filtered_storage
@@ -281,6 +281,7 @@ class GraphBasedModelConstructor:
                 if dry_run: continue
                 self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
                 del self.transcript_read_ids[model.transcript_id]
+                del self.internal_counter[model.transcript_id]
                 continue
 
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
@@ -289,6 +290,7 @@ class GraphBasedModelConstructor:
                                                                                                 novel_isoform_cutoff, component_coverage))
                 if dry_run: continue
                 del self.transcript_read_ids[model.transcript_id]
+                del self.internal_counter[model.transcript_id]
                 continue
 
             if len(model.exon_blocks) <= 2:
@@ -298,6 +300,7 @@ class GraphBasedModelConstructor:
                     logger.debug("FLT Novel model %s has poor quality" % model.transcript_id)
                     if dry_run: continue
                     del self.transcript_read_ids[model.transcript_id]
+                    del self.internal_counter[model.transcript_id]
                     continue
 
             # TODO: correct ends for known
