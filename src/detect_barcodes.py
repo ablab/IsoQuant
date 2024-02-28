@@ -108,12 +108,12 @@ class BarcodeCaller:
             self._process_read(read_id, seq)
 
 
-class FastaChunkReader(collections.abc.Iterator):
+class FastaChunkReader():
     def __init__(self, handler, lock):
         self.handler = handler
         self.lock = lock
 
-    def __next__(self):
+    def get_next(self):
         with self.lock:
             chunk = []
             while len(chunk) < READ_CHUNK_SIZE:
@@ -123,12 +123,12 @@ class FastaChunkReader(collections.abc.Iterator):
             return chunk
 
 
-class BamChunkReader(collections.abc.Iterator):
+class BamChunkReader():
     def __init__(self, handler, lock):
         self.handler = handler
         self.lock = lock
 
-    def __next__(self):
+    def get_next(self):
         with self.lock:
             chunk = []
             while len(chunk) < READ_CHUNK_SIZE:
@@ -165,7 +165,7 @@ def bam_file_chunk_reader(handler):
 def process_chunk(barcode_detector, read_processor, output_file, num):
     output_file += "_" + str(num)
     barcode_caller = BarcodeCaller(output_file, barcode_detector)
-    barcode_caller.process_chunk(read_processor)
+    barcode_caller.process_chunk(read_processor.get_next())
     return output_file
 
 
@@ -222,11 +222,10 @@ def process_in_parallel(args):
     barcode_calling_gen = (
         process_chunk,
         itertools.repeat(barcode_detector),
-        read_chunk_gen,
+        itertools.repeat(read_chunk_gen),
         itertools.repeat(os.path.join(tmp_dir, "bc")),
         itertools.count(start=0, step=1),
     )
-
 
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
         output_files = proc.map(*barcode_calling_gen, chunksize=1)
