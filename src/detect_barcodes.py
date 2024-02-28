@@ -15,7 +15,7 @@ from traceback import print_exc
 import itertools
 import shutil
 from concurrent.futures import ProcessPoolExecutor
-import multiprocessing
+import gc
 from collections import defaultdict
 import collections
 
@@ -197,14 +197,13 @@ def process_in_parallel(args):
         fname, outer_ext = os.path.splitext(os.path.basename(input_file))
         low_ext = outer_ext.lower()
 
-    m = multiprocessing.Manager()
-    lock = m.Lock()
+    gc.disable()
     if low_ext in ['.fq', '.fastq']:
-        read_chunk_gen = FastaChunkReader(SeqIO.parse(handle, "fastq"), lock)
+        read_chunk_gen = fastx_file_chunk_reader(SeqIO.parse(handle, "fastq"))
     elif low_ext in ['.fa', '.fasta']:
-        read_chunk_gen = FastaChunkReader(SeqIO.parse(handle, "fasta"), lock)
+        read_chunk_gen = fastx_file_chunk_reader(SeqIO.parse(handle, "fasta"))
     elif low_ext in ['.bam', '.sam']:
-        read_chunk_gen = BamChunkReader(pysam.AlignmentFile(input_file, "rb"), lock)
+        read_chunk_gen = bam_file_chunk_reader(pysam.AlignmentFile(input_file, "rb"))
     else:
         logger.error("Unknown file format " + input_file)
         exit(-1)
@@ -222,7 +221,7 @@ def process_in_parallel(args):
     barcode_calling_gen = (
         process_chunk,
         itertools.repeat(barcode_detector),
-        itertools.repeat(read_chunk_gen),
+        read_chunk_gen,
         itertools.repeat(os.path.join(tmp_dir, "bc")),
         itertools.count(start=0, step=1),
     )
@@ -242,6 +241,7 @@ def process_in_parallel(args):
     for k, v in stat_dict.items():
         logger.info("%s: %d" % (k, v))
     shutil.rmtree(tmp_dir)
+    gc.enable()
     logger.info("Finished barcode calling")
 
 
