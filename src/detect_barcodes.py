@@ -106,6 +106,34 @@ class BarcodeCaller:
             self._process_read(read_id, seq)
 
 
+class FastaChunkReader:
+    def __init__(self, handler):
+        self.handler = handler
+
+    def get_chunk(self):
+        chunk = []
+        while len(chunk) < READ_CHUNK_SIZE:
+            r = next(self.handler, None)
+            if not r: return chunk
+            chunk.append((r.id, str(r.seq)))
+        return chunk
+
+
+class BamChunkReader:
+    def __init__(self, handler):
+        self.handler = handler
+
+    def get_chunk(self):
+        chunk = []
+        while len(chunk) < READ_CHUNK_SIZE:
+            r = next(self.handler, None)
+            if not r: return chunk
+            if r.is_secondary or r.is_supplementary:
+                continue
+            chunk.append((r.query_name, r.query_sequence))
+        return chunk
+
+
 def fastx_file_chunk_reader(handler):
     current_chunk = []
     for r in handler:
@@ -128,10 +156,10 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-def process_chunk(barcode_detector, read_chunk, output_file, num):
+def process_chunk(barcode_detector, read_processor, output_file, num):
     output_file += "_" + str(num)
     barcode_caller = BarcodeCaller(output_file, barcode_detector)
-    barcode_caller.process_chunk(read_chunk)
+    barcode_caller.process_chunk(read_processor.get_chunk())
     return output_file
 
 
@@ -164,11 +192,11 @@ def process_in_parallel(args):
         low_ext = outer_ext.lower()
 
     if low_ext in ['.fq', '.fastq']:
-        read_chunk_gen = fastx_file_chunk_reader(SeqIO.parse(handle, "fastq"))
+        read_chunk_gen = FastaChunkReader(SeqIO.parse(handle, "fastq"))
     elif low_ext in ['.fa', '.fasta']:
-        read_chunk_gen = fastx_file_chunk_reader(SeqIO.parse(handle, "fasta"))
+        read_chunk_gen = FastaChunkReader(SeqIO.parse(handle, "fasta"))
     elif low_ext in ['.bam', '.sam']:
-        read_chunk_gen = bam_file_chunk_reader(pysam.AlignmentFile(input_file, "rb"))
+        read_chunk_gen = BamChunkReader(pysam.AlignmentFile(input_file, "rb"))
     else:
         logger.error("Unknown file format " + input_file)
         exit(-1)
