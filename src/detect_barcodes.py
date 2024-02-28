@@ -11,12 +11,13 @@ import random
 import sys
 import argparse
 import gzip
-from abc import ABC
 from traceback import print_exc
 import itertools
 import shutil
 from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
 from collections import defaultdict
+import collections
 
 import pysam
 from Bio import SeqIO
@@ -107,32 +108,36 @@ class BarcodeCaller:
             self._process_read(read_id, seq)
 
 
-class FastaChunkReader(collections.Iterator):
-    def __init__(self, handler):
+class FastaChunkReader(collections.abc.Iterator):
+    def __init__(self, handler, lock):
         self.handler = handler
+        self.lock = lock
 
     def __next__(self):
-        chunk = []
-        while len(chunk) < READ_CHUNK_SIZE:
-            r = next(self.handler, None)
-            if not r: return chunk
-            chunk.append((r.id, str(r.seq)))
-        return chunk
+        with self.lock:
+            chunk = []
+            while len(chunk) < READ_CHUNK_SIZE:
+                r = next(self.handler, None)
+                if not r: return chunk
+                chunk.append((r.id, str(r.seq)))
+            return chunk
 
 
-class BamChunkReader(collections.Iterator):
-    def __init__(self, handler):
+class BamChunkReader(collections.abc.Iterator):
+    def __init__(self, handler, lock):
         self.handler = handler
+        self.lock = lock
 
     def __next__(self):
-        chunk = []
-        while len(chunk) < READ_CHUNK_SIZE:
-            r = next(self.handler, None)
-            if not r: return chunk
-            if r.is_secondary or r.is_supplementary:
-                continue
-            chunk.append((r.query_name, r.query_sequence))
-        return chunk
+        with self.lock:
+            chunk = []
+            while len(chunk) < READ_CHUNK_SIZE:
+                r = next(self.handler, None)
+                if not r: return chunk
+                if r.is_secondary or r.is_supplementary:
+                    continue
+                chunk.append((r.query_name, r.query_sequence))
+            return chunk
 
 
 def fastx_file_chunk_reader(handler):
@@ -192,12 +197,14 @@ def process_in_parallel(args):
         fname, outer_ext = os.path.splitext(os.path.basename(input_file))
         low_ext = outer_ext.lower()
 
+    m = multiprocessing.Manager()
+    lock = m.Lock()
     if low_ext in ['.fq', '.fastq']:
-        read_chunk_gen = FastaChunkReader(SeqIO.parse(handle, "fastq"))
+        read_chunk_gen = FastaChunkReader(SeqIO.parse(handle, "fastq"), lock)
     elif low_ext in ['.fa', '.fasta']:
-        read_chunk_gen = FastaChunkReader(SeqIO.parse(handle, "fasta"))
+        read_chunk_gen = FastaChunkReader(SeqIO.parse(handle, "fasta"), lock)
     elif low_ext in ['.bam', '.sam']:
-        read_chunk_gen = BamChunkReader(pysam.AlignmentFile(input_file, "rb"))
+        read_chunk_gen = BamChunkReader(pysam.AlignmentFile(input_file, "rb"), lock)
     else:
         logger.error("Unknown file format " + input_file)
         exit(-1)
@@ -219,6 +226,7 @@ def process_in_parallel(args):
         itertools.repeat(os.path.join(tmp_dir, "bc")),
         itertools.count(start=0, step=1),
     )
+
 
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
         output_files = proc.map(*barcode_calling_gen, chunksize=1)
