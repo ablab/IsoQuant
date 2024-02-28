@@ -114,13 +114,13 @@ class FastaChunkReader():
         self.lock = lock
 
     def get_next(self):
-        with self.lock:
-            chunk = []
-            while len(chunk) < READ_CHUNK_SIZE:
+        chunk = []
+        while len(chunk) < READ_CHUNK_SIZE:
+            with self.lock:
                 r = next(self.handler, None)
-                if not r: return chunk
-                chunk.append((r.id, str(r.seq)))
-            return chunk
+            if not r: return chunk
+            chunk.append((r.id, str(r.seq)))
+        return chunk
 
 
 class BamChunkReader():
@@ -129,15 +129,15 @@ class BamChunkReader():
         self.lock = lock
 
     def get_next(self):
-        with self.lock:
-            chunk = []
-            while len(chunk) < READ_CHUNK_SIZE:
+        chunk = []
+        while len(chunk) < READ_CHUNK_SIZE:
+            with self.lock:
                 r = next(self.handler, None)
-                if not r: return chunk
-                if r.is_secondary or r.is_supplementary:
-                    continue
-                chunk.append((r.query_name, r.query_sequence))
-            return chunk
+            if not r: return chunk
+            if r.is_secondary or r.is_supplementary:
+                continue
+            chunk.append((r.query_name, r.query_sequence))
+        return chunk
 
 
 def fastx_file_chunk_reader(handler):
