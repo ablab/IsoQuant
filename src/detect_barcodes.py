@@ -5,12 +5,13 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
-
+import collections
 import os
 import random
 import sys
 import argparse
 import gzip
+from abc import ABC
 from traceback import print_exc
 import itertools
 import shutil
@@ -106,11 +107,11 @@ class BarcodeCaller:
             self._process_read(read_id, seq)
 
 
-class FastaChunkReader:
+class FastaChunkReader(collections.Iterator):
     def __init__(self, handler):
         self.handler = handler
 
-    def get_chunk(self):
+    def __next__(self):
         chunk = []
         while len(chunk) < READ_CHUNK_SIZE:
             r = next(self.handler, None)
@@ -119,11 +120,11 @@ class FastaChunkReader:
         return chunk
 
 
-class BamChunkReader:
+class BamChunkReader(collections.Iterator):
     def __init__(self, handler):
         self.handler = handler
 
-    def get_chunk(self):
+    def __next__(self):
         chunk = []
         while len(chunk) < READ_CHUNK_SIZE:
             r = next(self.handler, None)
