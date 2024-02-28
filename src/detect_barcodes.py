@@ -160,7 +160,7 @@ def bam_file_chunk_reader(handler):
 def process_chunk(barcode_detector, read_processor, output_file, num):
     output_file += "_" + str(num)
     barcode_caller = BarcodeCaller(output_file, barcode_detector)
-    barcode_caller.process_chunk(read_processor.get_chunk())
+    barcode_caller.process_chunk(read_processor)
     return output_file
 
 
