@@ -85,7 +85,7 @@ def find_candidate_with_max_score_ssw(barcode_matches, read_sequence, min_score=
 def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences,
                            min_score=0, start_delta=-1, end_delta=-1):
     if not pattern_occurrences:
-        return None, None
+        return None, None, 0
 
     start_pos, end_pos, pattern_start, pattern_end, score  = None, None, None, None, 0
     last_potential_pos = -2*len(pattern)
@@ -103,10 +103,10 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
             start_pos, end_pos, pattern_start, pattern_end, score = alignment
 
     if start_pos is None:
-        return None, None
+        return None, None, 0
 
     if start_delta > 0 and pattern_start > start_delta:
-        return None, None
+        return None, None, 0
     if end_delta > 0 and len(pattern) - pattern_end - 1 > end_delta:
-        return None, None
-    return start_pos, end_pos
+        return None, None, 0
+    return start_pos, end_pos, score
