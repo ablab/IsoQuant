@@ -137,7 +137,7 @@ def parse_args(args=None, namespace=None):
                                     "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
     sc_args_group.add_argument('--barcode_whitelist', type=str,
                                help='file with barcode whitelist for barcode calling')
-    sc_args_group.add_argument("--barcoded_reads", type=str,
+    sc_args_group.add_argument("--barcoded_reads", type=str, nargs='+',
                                help='file with barcoded reads; barcodes will be called automatically if not provided')
     sc_args_group.add_argument("--barcode_column", type=str,
                                help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
@@ -702,23 +702,45 @@ class BarcodeCallingArgs:
         self.min_score = None
 
 
-def run_pipeline(args):
-    logger.info(" === IsoQuant pipeline started === ")
-    if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
-        # call barcodes
-        if not args.barcoded_reads:
-            sample = args.input_data.samples[0]
-            if args.resume and os.path.exists(sample.out_barcodes_tsv):
+def call_barcodes(args):
+    if not args.barcoded_reads:
+        sample = args.input_data.samples[0]
+        out_barcode_files = []
+        for i, files in enumerate(sample.file_list):
+            output_barcodes = sample.barcodes_split_reads + "_%d.tsv" % i
+            if args.resume and os.path.exists(output_barcodes):
                 logger.error("Barcodes were called during the previous run, skipping")
             else:
-                bc_args = BarcodeCallingArgs(sample.file_list[0][0], args.barcode_whitelist, args.mode.name,
-                                             sample.out_barcodes_tsv, sample.aux_dir, args.threads)
+                bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode.name,
+                                             output_barcodes, sample.aux_dir, args.threads)
                 if args.threads == 1:
                     process_single_thread(bc_args)
                 else:
                     process_in_parallel(bc_args)
-        else:
-            args.input_data.samples[0].out_barcodes_tsv = args.barcoded_reads
+            out_barcode_files.append(output_barcodes)
+        sample.barcoded_reads = out_barcode_files
+    else:
+        args.input_data.samples[0].barcoded_reads = args.barcoded_reads
+
+
+def filter_umis(args):
+    if args.barcoded_reads:
+        args.input_data.samples[0].barcoded_reads = args.barcoded_reads
+    barcode_umi_dict = load_barcodes(args.input_data.samples[0].barcoded_reads, False)
+    for d in {-1, 2, 3}:
+        logger.info("== Filtering by UMIs with edit distance %d ==" % d)
+        output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else "ED%d" % d)
+        logger.info("Results will be saved to %s" % output_prefix)
+        umi_filter = UMIFilter(barcode_umi_dict, d)
+        umi_filter.process(args.input_data.samples[0].out_assigned_tsv, output_prefix)
+        logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
+
+
+def run_pipeline(args):
+    logger.info(" === IsoQuant pipeline started === ")
+    if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+        # call barcodes
+        call_barcodes(args)
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
@@ -743,19 +765,9 @@ def run_pipeline(args):
             combine_counts(args.input_data, args.output)
 
     if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
-        if args.barcoded_reads:
-            args.input_data.samples[0].out_barcodes_tsv = args.barcoded_reads
-        barcode_umi_dict = load_barcodes(args.input_data.samples[0].out_barcodes_tsv, False)
-        for d in {-1, 2, 3}:
-            logger.info("== Filtering by UMIs with edit distance %d ==" % d)
-            output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else "ED%d" % d)
-            logger.info("Results will be saved to %s" % output_prefix)
-            umi_filter = UMIFilter(barcode_umi_dict, d)
-            umi_filter.process(args.input_data.samples[0].out_assigned_tsv, output_prefix)
-            logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
+        filter_umis(args)
 
     logger.info(" === IsoQuant pipeline finished === ")
-
 
 
 # Test mode is triggered by --test option
