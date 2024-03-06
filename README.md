@@ -344,7 +344,7 @@ If you use official gene annotations we recommend to set `--complete_genedb` opt
     Set this flag if gene annotation contains transcript and gene meta-features.
 Use this flag when providing official annotations, e.g. GENCODE.
 This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options,
-which dramatically speeds up gene database conversion (see more [here](https://pythonhosted.org/gffutils/autodocs/gffutils.create_db.html?highlight=disable_infer_transcripts)).
+which dramatically speeds up gene database conversion (see more [here](https://daler.github.io/gffutils/autodocs/gffutils.create.create_db.html)).
 
 #### Providing input reads via command line option:
 
