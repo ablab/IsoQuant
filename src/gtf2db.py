@@ -93,7 +93,7 @@ def db2bed(db, bed, _=None):
 
 def gtf2db(gtf, db, complete_db=False):
     logger.info("Checking input gene annotation")
-    gtf_is_correct, corrected_gtf, out_fname = check_gtf_duplicates(gtf)
+    gtf_is_correct, corrected_gtf, out_fname, has_meta_features = check_gtf_duplicates(gtf)
     if not gtf_is_correct:
         outdir = os.path.dirname(db)
         new_gtf_path = os.path.join(outdir, out_fname)
@@ -106,6 +106,19 @@ def gtf2db(gtf, db, complete_db=False):
         exit(-3)
     else:
         logger.info("Gene annotation seems to be correct")
+
+    if complete_db:
+        if has_meta_features == -1:
+            logger.error("You set --complete_genedb option but the provided annotation "
+                         "does not contain any gene or transcript records.")
+            logger.error("The results of this run will not be meaningful.")
+            logger.error("Remove the output folder and restart IsoQuant without --complete_genedb.")
+            exit(-3)
+        elif has_meta_features == 0:
+            logger.warning("You set --complete_genedb option but it looks like the provided annotation "
+                           "does not contain all necessary gene or transcript records.")
+            logger.warning("The results of this run might not be meaningful.")
+            logger.warning("Remove the output folder and restart IsoQuant without --complete_genedb.")
 
     logger.info("Converting gene annotation file to .db format (takes a while)...")
     gffutils.create_db(gtf, db, force=True, keep_order=True, merge_strategy='error',
@@ -139,6 +152,8 @@ def check_gtf_duplicates(gtf):
     line_count = 0
     gene_ids = {}
     transcript_ids = {}
+    exon_gene_ids = set()
+    exon_transcript_ids = set()
     corrected_gtf = ""
 
     gtf_name = os.path.basename(gtf)
@@ -223,7 +238,17 @@ def check_gtf_duplicates(gtf):
         new_line = "\t".join(v[:8] + [" ".join(new_attrs)]) + "\n"
         corrected_gtf += new_line
 
-    return gtf_correct, corrected_gtf, gtf_name + ".corrected" + inner_ext.lower()
+        if feature_type == "exon":
+            exon_gene_ids.add(gene_id)
+            exon_transcript_ids.add(transcript_id)
+
+    complete_genedb = 1
+    if len(transcript_ids) == 0 or len(gene_ids) == 0:
+        complete_genedb = -1
+    elif len(transcript_ids) < len(exon_transcript_ids) or len(gene_ids) < len(exon_gene_ids):
+        complete_genedb = 0
+
+    return gtf_correct, corrected_gtf, gtf_name + ".corrected" + inner_ext.lower(), complete_genedb
 
 
 def find_coverted_db(converted_gtfs, gtf_filename):
