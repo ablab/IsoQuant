@@ -43,7 +43,7 @@ from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
 from src.detect_barcodes import process_single_thread, process_in_parallel
-from src.barcode_calling.umi_filtering import UMIFilter, filter_bam, load_barcodes
+from src.barcode_calling.umi_filtering import UMIFilter, create_transcript_type_dict, load_barcodes
 
 
 logger = logging.getLogger('IsoQuant')
@@ -842,11 +842,11 @@ class BarcodeCallingArgs:
 def call_barcodes(args):
     if not args.barcoded_reads:
         sample = args.input_data.samples[0]
-        out_barcode_files = []
         for i, files in enumerate(sample.file_list):
-            output_barcodes = sample.barcodes_split_reads + "_%d.tsv" % i
+            output_barcodes = sample.barcodes_tsv + "_%d.tsv" % i
             if args.resume and os.path.exists(output_barcodes):
-                logger.error("Barcodes were called during the previous run, skipping")
+                # FIXME could be incomplete barcode calling run
+                logger.info("Barcodes were called during the previous run, skipping")
             else:
                 bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode.name,
                                              output_barcodes, sample.aux_dir, args.threads)
@@ -854,8 +854,7 @@ def call_barcodes(args):
                     process_single_thread(bc_args)
                 else:
                     process_in_parallel(bc_args)
-            out_barcode_files.append(output_barcodes)
-        sample.barcoded_reads = out_barcode_files
+            args.input_data.samples[0].barcoded_reads.append(output_barcodes)
     else:
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
 
@@ -863,13 +862,19 @@ def call_barcodes(args):
 def filter_umis(args):
     if args.barcoded_reads:
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
+
+    if args.genedb:
+        transcript_type_dict = create_transcript_type_dict(args.genedb)
+    else:
+        transcript_type_dict = {}
+
     barcode_umi_dict = load_barcodes(args.input_data.samples[0].barcoded_reads, False)
     for d in {-1, 2, 3}:
         logger.info("== Filtering by UMIs with edit distance %d ==" % d)
         output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else "ED%d" % d)
         logger.info("Results will be saved to %s" % output_prefix)
         umi_filter = UMIFilter(barcode_umi_dict, d)
-        umi_filter.process(args.input_data.samples[0].out_assigned_tsv, output_prefix)
+        umi_filter.process(args.input_data.samples[0].out_assigned_tsv, output_prefix, transcript_type_dict)
         logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
 
