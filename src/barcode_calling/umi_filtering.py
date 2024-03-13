@@ -407,6 +407,6 @@ def create_transcript_type_dict(genedb):
     transcript_type_dict = {}
     for t in gffutils_db.features_of_type(('transcript', 'mRNA')):
         if "transcript_type" in t.attributes.keys():
-            transcript_type_dict[t.id] = t.attributes["transcript_type"]
+            transcript_type_dict[t.id] = t.attributes["transcript_type"][0]
     return transcript_type_dict
 
