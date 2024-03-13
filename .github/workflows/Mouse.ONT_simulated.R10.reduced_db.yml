@@ -1,0 +1,41 @@
+name: Mouse ONT R10 simulated reduced annotation
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '0 4 * * 4'
+
+env:
+  RUN_NAME: Mouse.ONT_simulated.R10.reduced_db
+  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
+  CFG_DIR: /abga/work/andreyp/ci_isoquant/data
+  BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
+  OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
+
+jobs:
+  launch-runner:
+    runs-on:
+      labels: [self-hosted]
+    name: 'Running IsoQuant and QC'
+
+    steps:
+      - name: 'Cleanup'
+        run: >
+          set -e &&
+          shopt -s dotglob &&
+          rm -rf *
+
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: 'IsoQuant'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: Mouse.ONT_simulated.R10.reduced_db
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
