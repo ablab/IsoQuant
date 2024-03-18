@@ -11,7 +11,9 @@ from functools import partial
 
 from .common import (
     contains,
+    contains_approx,
     difference_in_present_features,
+    equal_profiles_in_range,
     equal_ranges,
     extra_exon_percentage,
     has_overlapping_features,
@@ -91,16 +93,17 @@ class LongReadAssigner:
     def find_containing_isoforms(self, read_exon_split_profile, isoform_profiles, hint=None):
         isoforms = set()
         read_exons = read_exon_split_profile.read_features
+        read_region = (read_exons[0][0], read_exons[-1][1])
         isoform_set = hint if hint is not None else isoform_profiles.keys()
+
         for isoform_id in isoform_set:
-            isoform_region = (self.gene_info.transcript_start(isoform_id) - self.params.min_abs_exon_overlap,
-                              self.gene_info.transcript_end(isoform_id) + self.params.min_abs_exon_overlap)
-            read_region = (read_exons[0][0], read_exons[-1][1])
-            if contains(isoform_region, read_region):
+            if contains_approx(self.gene_info.transcript_region(isoform_id), read_region,
+                               self.params.min_abs_exon_overlap):
                 isoforms.add(isoform_id)
         return isoforms
 
-    def match_profile(self, read_gene_profile, isoform_profiles, hint=None, diff_limit=-1, profile_range=None):
+    @staticmethod
+    def match_profile(read_gene_profile, isoform_profiles, hint=None, diff_limit=-1, profile_range=None):
         """ match read profiles to a known isoform junction profile
 
         Parameters
@@ -124,6 +127,16 @@ class LongReadAssigner:
                 isoforms.append(IsoformDiff(isoform_id, diff))
         return sorted(isoforms, key=lambda x: x.diff)
 
+    @staticmethod
+    def match_profile_exact_in_range(read_gene_profile, isoform_profiles, profile_range, hint=None):
+        isoforms = []
+        isoform_set = hint if hint is not None else isoform_profiles.keys()
+        for isoform_id in isoform_set:
+            isoform_profile = isoform_profiles[isoform_id]
+            if equal_profiles_in_range(isoform_profile, read_gene_profile, profile_range):
+                isoforms.append(IsoformDiff(isoform_id, 0))
+        return isoforms
+
     def find_matching_isoforms(self, read_profile, isoform_profiles, hint=None):
         """ match read profiles to a known isoform junction profile
 
@@ -140,8 +153,8 @@ class LongReadAssigner:
             matching isoforms
 
         """
-        isoforms = self.match_profile(read_profile.gene_profile, isoform_profiles, hint, diff_limit=0,
-                                      profile_range=read_profile.gene_profile_range)
+        isoforms = self.match_profile_exact_in_range(read_profile.gene_profile, isoform_profiles,
+                                                     read_profile.gene_profile_range, hint)
         return [x[0] for x in isoforms]
 
     # select most similar isoform based on different criteria
@@ -162,14 +175,16 @@ class LongReadAssigner:
         # find intron matches
         intron_matching_isoforms = self.match_profile(combined_read_profile.read_intron_profile.gene_profile,
                                                       self.gene_info.intron_profiles.profiles,
+                                                      profile_range=combined_read_profile.read_intron_profile.gene_profile_range,
                                                       hint=significantly_overlapping_isoforms)
 
         # add extra terminal bases as potential inconsistency event
         candidates = []
         read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
         for isoform_id, diff_introns in intron_matching_isoforms:
-            extra_left = 1 if read_region[0] + self.params.delta < self.gene_info.transcript_start(isoform_id) else 0
-            extra_right = 1 if read_region[0] - self.params.delta > self.gene_info.transcript_end(isoform_id) else 0
+            transcript_start, transcript_end = self.gene_info.transcript_region(isoform_id)
+            extra_left = 1 if read_region[0] + self.params.delta < transcript_start else 0
+            extra_right = 1 if read_region[0] - self.params.delta > transcript_end else 0
             candidates.append((isoform_id, diff_introns + extra_right + extra_left))
         # select isoforms that have similar number of potential inconsistencies
         best_diff = min(candidates, key=lambda x: x[1])[1]
@@ -182,23 +197,23 @@ class LongReadAssigner:
     def categorize_exon_elongation_subtype(self, read_split_exon_profile, isoform_id):
         split_exons = self.gene_info.split_exon_profiles.features
         isoform_profile = self.gene_info.split_exon_profiles.profiles[isoform_id]
+        profile_range = self.gene_info.split_exon_profiles.profile_ranges[isoform_id]
+        read_profile_range = read_split_exon_profile.gene_profile_range
 
         # find first and last common exons
         common_first_exon = -1
-        isoform_first_exon = isoform_profile.index(1)
-        for i in range(len(split_exons)):
+        isoform_first_exon = profile_range[0]
+        for i in range(max(isoform_first_exon, read_profile_range[0]), len(split_exons)):
             if isoform_profile[i] == read_split_exon_profile.gene_profile[i] == 1:
                 common_first_exon = i
                 break
 
         common_last_exon = -1
-        isoform_last_exon = rindex(isoform_profile, 1)
-        for i in range(len(split_exons)):
-            index = len(split_exons) - i - 1
-            if isoform_profile[index] == read_split_exon_profile.gene_profile[index] == 1:
-                common_last_exon = index
+        isoform_last_exon = profile_range[1] - 1
+        for i in range(min(isoform_last_exon, read_profile_range[1] - 1), -1, -1):
+            if isoform_profile[i] == read_split_exon_profile.gene_profile[i] == 1:
+                common_last_exon = i
                 break
-
         if common_first_exon == -1 or common_last_exon == -1:
             logger.warning(" + Odd case for exon elongation, no matching exons")
 
@@ -619,9 +634,10 @@ class LongReadAssigner:
     def create_monoexon_matches(self, read_matches, selected_isoforms):
         matches = []
         for isoform_id in selected_isoforms:
-            match_classification = MatchClassification.get_mono_exon_classification(read_matches[isoform_id])
+            read_match = read_matches[isoform_id]
+            match_classification = MatchClassification.get_mono_exon_classification(read_match)
             isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
-                                         read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id])
+                                         read_match, self.gene_info.isoform_strands[isoform_id])
             matches.append(isoform_match)
         return matches
 
@@ -638,9 +654,10 @@ class LongReadAssigner:
     def create_inconsistent_matches(self, read_matches, selected_isoforms, score=0.0):
         matches = []
         for isoform_id in selected_isoforms:
-            match_classification = MatchClassification.get_inconsistency_classification(read_matches[isoform_id])
+            read_match = read_matches[isoform_id]
+            match_classification = MatchClassification.get_inconsistency_classification(read_match)
             isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
-                                         read_matches[isoform_id], self.gene_info.isoform_strands[isoform_id],
+                                         read_match, self.gene_info.isoform_strands[isoform_id],
                                          score=score)
             matches.append(isoform_match)
         return matches
@@ -676,7 +693,7 @@ class LongReadAssigner:
             # read start-end coordinates
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             # isoform start-end
-            isoform_region = (self.gene_info.transcript_start(isoform_id), self.gene_info.transcript_end(isoform_id))
+            isoform_region = self.gene_info.transcript_region(isoform_id)
             # logger.debug("R: " + str(combined_read_profile.read_split_exon_profile.read_features))
             # logger.debug(str(combined_read_profile.read_intron_profile.read_features))
             # logger.debug("I: " + str(self.gene_info.all_isoforms_exons[isoform_id]))

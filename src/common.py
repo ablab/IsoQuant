@@ -135,13 +135,27 @@ def overlaps(range1, range2):
 
 
 def overlap_intervals(range1, range2):
-    return (max(range1[0], range2[0]), min(range1[1], range2[1]))
+    return max(range1[0], range2[0]), min(range1[1], range2[1])
 
 
 def overlaps_at_least(range1, range2, delta=0):
-    cutoff = min([delta, range1[1] - range1[0] + 1, range2[1] - range2[0] + 1])
-    overlap = min(range1[1], range2[1]) + 1 - max(range1[0], range2[0])
-    return overlap >= cutoff
+    ovlp1 = range1[1] - range2[0]
+    ovlp2 = range2[1] - range1[0]
+    if ovlp1 < 0 or ovlp2 < 0:
+        return False
+    d = delta - 1
+    if range1[1] < range2[1]:
+        return ovlp1 >= d or range1[0] >= range2[0]
+    else:
+        return ovlp2 >= d or range1[0] <= range2[0]
+
+
+# dangerous function, works only when range1 and range2 are already known to overlap, do not use if unsure
+def overlaps_at_least_when_overlap(range1, range2, delta=0):
+    if range1[1] < range2[1]:
+        return range1[1] - range2[0] - 1 >= delta or range1[0] >= range2[0]
+    else:
+        return range2[1] - range1[0] - 1 >= delta or range1[0] <= range2[0]
 
 
 def intersection_len(range1, range2):
@@ -580,6 +594,16 @@ def difference_in_present_features(profile1, profile2, diff_limit=-1, profile_ra
     return d
 
 
+def equal_profiles_in_range(isoforom_profile, read_profile, profile_range):
+    # return true if there is difference between 2 profiles
+    # isoforom_profile must not contain zeroes
+    for i in range(*profile_range):
+        if read_profile[i] == 0:
+            continue
+        if isoforom_profile[i] != read_profile[i]:
+            return False
+    return True
+
 def count_both_present_features(profile1, profile2):
     assert len(profile1) == len(profile2)
     d = 0
@@ -740,3 +764,42 @@ def get_strand(introns, reference_region, ref_region_start=1):
     if count_fwd == count_rev:
         return '.'
     return '+' if count_rev < count_fwd else '-'
+
+
+# binary search of a coordinate in ordered non-overlapping intervals
+def interval_bin_search(ordered_intervals, pos):
+    if pos > ordered_intervals[-1][1] or pos < ordered_intervals[0][0]:
+        return -1
+
+    s = len(ordered_intervals) - 1
+    if pos >= ordered_intervals[-1][0]:
+        return s
+
+    ind = s // 2
+    current_step = s // 2
+    while not (ordered_intervals[ind][0] <= pos < ordered_intervals[ind + 1][0]):
+        current_step = max(1, current_step // 2)
+        if pos < ordered_intervals[ind][0]:
+            ind -= current_step
+        else:
+            ind += current_step
+    return ind
+
+
+def interval_bin_search_rev(ordered_intervals, pos):
+    if pos > ordered_intervals[-1][1] or pos < ordered_intervals[0][0]:
+        return -1
+
+    if pos <= ordered_intervals[0][1]:
+        return 0
+
+    s = len(ordered_intervals) - 1
+    ind = s // 2
+    current_step = s // 2
+    while not (ordered_intervals[ind - 1][1] < pos <= ordered_intervals[ind][1]):
+        current_step = max(1, current_step // 2)
+        if pos > ordered_intervals[ind][1]:
+            ind += current_step
+        else:
+            ind -= current_step
+    return ind

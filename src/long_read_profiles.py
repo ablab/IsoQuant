@@ -15,6 +15,9 @@ from .common import (
     left_of,
     overlaps,
     overlaps_at_least,
+    overlaps_at_least_when_overlap,
+    interval_bin_search,
+    interval_bin_search_rev
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -25,6 +28,7 @@ class MappedReadProfile:
         self.gene_profile = gene_profile
         self.read_profile = read_profile
         self.read_features = read_features
+        # profile range points to indices in the mapped region
         self.gene_profile_range = (0, len(self.gene_profile)) if gene_profile_range is None else gene_profile_range
 
 
@@ -115,25 +119,26 @@ class OverlappingFeaturesProfileConstructor:
             if self.absence_condition(self.gene_region, read_features[i]):
                 read_profile[i] = -1
 
-        # TODO: starting value can be detected using binary search for long profiles
         gene_pos = 0
         read_pos = 0
         while gene_pos < len(self.known_features) and read_pos < len(read_features):
-            if self.comparator(read_features[read_pos], self.known_features[gene_pos]):
+            read_feature = read_features[read_pos]
+            isoform_feature = self.known_features[gene_pos]
+            if read_feature[1] < isoform_feature[0]:
+                if read_profile[read_pos] == 0 and gene_pos > 0:
+                    read_profile[read_pos] = -1
+                read_pos += 1
+            elif isoform_feature[1] < read_feature[0]:
+                if read_pos > 0:
+                    intron_profile[gene_pos] = -1
+                gene_pos += 1
+            elif self.comparator(read_feature, isoform_feature):
                 intron_profile[gene_pos] = 1
                 read_profile[read_pos] = 1
                 matched_features[read_pos].append(gene_pos)
                 gene_pos += 1
-            elif overlaps(read_features[read_pos], self.known_features[gene_pos]):
+            elif overlaps(read_feature, isoform_feature):
                 intron_profile[gene_pos] = -1
-                gene_pos += 1
-            elif left_of(read_features[read_pos], self.known_features[gene_pos]):
-                if read_profile[read_pos] == 0 and gene_pos > 0:
-                    read_profile[read_pos] = -1
-                read_pos += 1
-            else:
-                if read_pos > 0:
-                    intron_profile[gene_pos] = -1
                 gene_pos += 1
 
         # eliminating non unique features
@@ -192,44 +197,46 @@ class NonOverlappingFeaturesProfileConstructor:
         read_pos = 0
 
         while gene_pos < len(self.known_exons) and read_pos < len(read_exons):
-            if self.comparator(read_exons[read_pos], self.known_exons[gene_pos]):
-                exon_profile[gene_pos] = 1
-                read_profile[read_pos] = 1
-                if read_exons[read_pos][1] < self.known_exons[gene_pos][1]:
-                    read_pos += 1
-                else:
-                    gene_pos += 1
-            elif overlaps(read_exons[read_pos], self.known_exons[gene_pos]):
-                if read_exons[read_pos][1] < self.known_exons[gene_pos][1]:
-                    read_pos += 1
-                else:
-                    gene_pos += 1
-            elif left_of(read_exons[read_pos], self.known_exons[gene_pos]):
+            read_exon = read_exons[read_pos]
+            gene_exon = self.known_exons[gene_pos]
+            if read_exon[1] < gene_exon[0]:
                 if gene_pos > 0 and read_profile[read_pos] == 0:
                     read_profile[read_pos] = -1
                 read_pos += 1
-            else:
+            elif gene_exon[1] < read_exon[0]:
                 if read_pos > 0 and exon_profile[gene_pos] == 0:
                     exon_profile[gene_pos] = -1
                 gene_pos += 1
+            elif self.comparator(read_exon, gene_exon):
+                exon_profile[gene_pos] = 1
+                read_profile[read_pos] = 1
+                if read_exon[1] < gene_exon[1]:
+                    read_pos += 1
+                else:
+                    gene_pos += 1
+            else:
+                if read_exon[1] < gene_exon[1]:
+                    read_pos += 1
+                else:
+                    gene_pos += 1
 
-        # making everying beyond polyA tail as outside feature
+        # making everything beyond polyA tail as outside feature
         if polya_position != -1:
-            for i in range(len(self.known_exons)):
-                # feature is surely beyond polyA tail
-                if self.known_exons[i][0] > polya_position + self.delta:
+            polya_index = interval_bin_search(self.known_exons, polya_position + self.delta)
+            if polya_index != -1:
+                for i in range(polya_index + 1, len(self.known_exons)):
                     exon_profile[i] = -2
         if polyt_position != -1:
-            for i in range(len(self.known_exons)):
-                # feature is surely before polyT tail
-                if self.known_exons[i][1] < polyt_position - self.delta:
+            polyt_index = interval_bin_search_rev(self.known_exons, polyt_position - self.delta)
+            if polyt_index != -1:
+                for i in range(0, polyt_index):
                     exon_profile[i] = -2
 
         start_pos = 0
-        while start_pos < len(exon_profile) and exon_profile[start_pos] == 0:
+        while start_pos < len(exon_profile) and exon_profile[start_pos] < 1:
             start_pos += 1
         end_pos = len(exon_profile) - 1
-        while end_pos >= 0 and exon_profile[end_pos] == 0:
+        while end_pos >= 0 and exon_profile[end_pos] < 1:
             end_pos -= 1
 
         return MappedReadProfile(exon_profile, read_profile, read_exons, (start_pos, end_pos + 1))
@@ -252,7 +259,7 @@ class CombinedProfileConstructor:
                                                   delta=self.params.delta)
         self.split_exon_profile_constructor = \
             NonOverlappingFeaturesProfileConstructor(self.gene_info.split_exon_profiles.features,
-                                                     comparator=partial(overlaps_at_least,
+                                                     comparator=partial(overlaps_at_least_when_overlap,
                                                                         delta=self.params.minimal_exon_overlap),
                                                      delta=self.params.delta)
 

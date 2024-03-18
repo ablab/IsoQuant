@@ -86,10 +86,10 @@ class FeatureProfiles:
                 pos += 1
 
         start_pos = 0
-        while start_pos < len(current_profile) and current_profile[start_pos] == -2:
+        while start_pos < len(current_profile) and current_profile[start_pos] < 1:
             start_pos += 1
         end_pos = len(current_profile) - 1
-        while end_pos >= 0 and current_profile[end_pos] == -2:
+        while end_pos >= 0 and current_profile[end_pos] < 1:
             end_pos -= 1
         self.profile_ranges[transcript_id] = (start_pos, end_pos + 1)
 
@@ -599,7 +599,8 @@ class GeneInfo:
         return self.all_isoforms_exons[transcript_id][-1][1]
 
     def transcript_region(self, transcript_id):
-        return (self.transcript_start(transcript_id), self.transcript_end(transcript_id))
+        exons = self.all_isoforms_exons[transcript_id]
+        return exons[0][0], exons[-1][1]
 
     def transcript_exon_count(self, transcript_id):
         return sum([1 if e == 1 else 0 for e in self.exon_profiles.profiles[transcript_id]])
