@@ -47,9 +47,6 @@ class ReadType(Enum):
     NOT_ASSIGNED = 4
 
 
-def correct_isoform(isoform_id):
-    return isoform_id.split('.')[0]
-
 class MappingData:
     def __init__(self, args):
         self.seq_set = set()
@@ -86,8 +83,11 @@ class MappingData:
                     logger.warning("Malformed read id %s" % seq_id)
                     continue
                 isoform_id = tokens[self.args.isoform_id_index]
+                if isoform_id.startswith("Pac"):
+                    self.args.isoform_id_index = -1
+                    isoform_id = tokens[self.args.isoform_id_index]
                 if isoform_id.startswith("E"):
-                    self.seqid_to_isoform[seq_id] = correct_isoform(isoform_id)
+                    self.seqid_to_isoform[seq_id] = isoform_id
                 else:
                     logger.warning("Unexpected isoform id %s" % isoform_id)
             self.seq_set.add(seq_id)
@@ -140,7 +140,7 @@ class AssignmentData:
                     isoform_id = tokens[self.parse_params.isoform_id_column]
                     if not isoform_id[0] == 'E':
                         logger.warning("Assigned to weird isoform " + isoform_id)
-                    self.assigned_isoforms[seq_id] = correct_isoform(isoform_id)
+                    self.assigned_isoforms[seq_id] = isoform_id
         logger.info("Total assignments loaded: %d" % len(self.assigned_isoforms))
 
 
@@ -248,8 +248,8 @@ class DbHandler:
             self.gene_to_isoforms_map[gene_name] = set()
             gene_db = self.db[gene_name]
             for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
-                self.isoform_to_gene_map[correct_isoform(t.id)] = gene_name
-                self.gene_to_isoforms_map[gene_name].add(correct_isoform(t.id))
+                self.isoform_to_gene_map[t.id] = gene_name
+                self.gene_to_isoforms_map[gene_name].add(t.id)
         logger.info("Gene database loaded: %d genes, %d transcripts" % (len(self.gene_to_isoforms_map), len(self.isoform_to_gene_map)))
 
     def get_gene_by_isoform(self, t_id):
@@ -314,7 +314,7 @@ def parse_args():
     parser.add_argument("--gene_db", "-g", type=str, help="gene database")
     parser.add_argument("--tool", type=str, choices=['isoquant', 'talon', 'sqanti'], default='isoquant',
                         help="tool used for generating TSV (isoquant, talon, sqanti)")
-    parser.add_argument("--isoform_id_index", type=int, default=1,
+    parser.add_argument("--isoform_id_index", type=int, default=0,
                         help="read id is split by underscore, indicate where isoform id is stored")
 
     parser.add_argument("--real_data", default=False, action="store_true",
