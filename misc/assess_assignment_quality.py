@@ -86,6 +86,8 @@ class MappingData:
                 if isoform_id.startswith("Pac"):
                     self.args.isoform_id_index = -1
                     isoform_id = tokens[self.args.isoform_id_index]
+                if isoform_id.startswith("Y"):
+                    isoform_id = tokens[-3]
                 if isoform_id.startswith("E"):
                     self.seqid_to_isoform[seq_id] = isoform_id
                 else:
