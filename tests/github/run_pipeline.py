@@ -268,6 +268,15 @@ def run_transcript_quality(args, config_dict):
     return exit_code
 
 
+def check_output_files(out_dir, file_list):
+    missing_files = []
+    for f in file_list:
+        fpath = os.path.join(out_dir, f)
+        if not os.path.exists(fpath):
+            missing_files.append(str(fpath))
+    return missing_files
+
+
 def main():
     args = parse_args()
     set_logger(args, log)
@@ -304,6 +313,13 @@ def main():
     else:
         log.error("Test type %s is not supported" % run_type)
         err_code = -50
+
+    if "check_input_files" in config_dict:
+        files_list = config_dict["check_input_files"].split()
+        label = config_dict["label"]
+        output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
+        output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
+        missing_files = check_output_files()
 
     return err_code
 
