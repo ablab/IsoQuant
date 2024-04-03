@@ -3,7 +3,7 @@ name: Human PacBio simulated uniform coverage
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 5 * * 7'
+  - cron: '0 5 * * 2'
 
 env:
   RUN_NAME: Human.PB_simulated.uniform_cov

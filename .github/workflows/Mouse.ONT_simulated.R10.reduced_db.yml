@@ -3,7 +3,7 @@ name: Mouse ONT R10 simulated reduced annotation
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 4 * * 4'
+  - cron: '0 4 * * 1'
 
 env:
   RUN_NAME: Mouse.ONT_simulated.R10.reduced_db

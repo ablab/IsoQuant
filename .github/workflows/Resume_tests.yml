@@ -3,7 +3,7 @@ name: Resume option tests
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 6 * * 6'
+  - cron: '0 6 * * 2,5'
 
 env:
   RUN_NAME: Resume_tests

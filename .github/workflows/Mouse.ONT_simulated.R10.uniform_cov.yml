@@ -3,7 +3,7 @@ name: Mouse ONT R10 simulated uniform coverage
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 1 * * 7'
+  - cron: '0 5 * * 4'
 
 env:
   RUN_NAME: Mouse.ONT_simulated.R10.uniform_cov

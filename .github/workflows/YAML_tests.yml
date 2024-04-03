@@ -3,7 +3,7 @@ name: YAML tests
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 7 * * 7'
+  - cron: '0 6 * * 3,6'
 
 env:
   RUN_NAME: Resume_tests

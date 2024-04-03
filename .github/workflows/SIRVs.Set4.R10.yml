@@ -3,7 +3,7 @@ name: SIRVs R10.4 reduced annotation
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 12 * * 2,6'
+  - cron: '0 12 * * 1,3,5'
 
 env:
   RUN_NAME: SIRVs.Set4.R10

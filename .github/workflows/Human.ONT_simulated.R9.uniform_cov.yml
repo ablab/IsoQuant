@@ -3,7 +3,7 @@ name: Human ONT R9 simulated uniform coverage
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 4 * * 7'
+  - cron: '0 5 * * 0'
 
 env:
   RUN_NAME: Human.ONT_simulated.R9.uniform_cov

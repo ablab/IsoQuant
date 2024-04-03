@@ -3,7 +3,7 @@ name: Read grouping tests
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 6 * * 7'
+  - cron: '0 6 * * 0,4'
 
 env:
   RUN_NAME: Resume_tests
