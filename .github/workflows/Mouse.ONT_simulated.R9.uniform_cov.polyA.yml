@@ -3,7 +3,7 @@ name: Mouse ONT R9 simulated uniform coverage polyA
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 3 * * 7'
+  - cron: '0 10 * * 4'
 
 env:
   RUN_NAME: Mouse.ONT_simulated.R9.uniform_cov.polyA
