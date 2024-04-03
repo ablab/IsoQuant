@@ -132,16 +132,23 @@ def check_value(etalon_value, output_value, name):
     lower_bound = etalon_value * 0.99
     upper_bound = etalon_value * 1.01
     exit_code = 0
-    if output_value < lower_bound:
-        log.error("Value of %s = %2.2f is lower than the expected value %2.2f" % (name, output_value, lower_bound))
-        exit_code = -41
+    if output_value < 0:
+        if output_value != etalon_value:
+            log.error("Value of %s = %2.2f is not equal to value %2.2f" % (name, output_value, lower_bound))
+            exit_code = -40
+        else:
+            log.info("Value of %s = %2.2f == %2.2f as expected" % (name, output_value, upper_bound))
     else:
-        log.info("Value of %s = %2.2f >= %2.2f as expected" % (name, output_value, lower_bound))
-    if output_value > upper_bound:
-        log.error("Value of %s = %2.2f is higher than the expected value %2.2f" % (name, output_value, upper_bound))
-        exit_code = -42
-    else:
-        log.info("Value of %s = %2.2f <= %2.2f as expected" % (name, output_value, upper_bound))
+        if output_value < lower_bound:
+            log.error("Value of %s = %2.2f is lower than the expected value %2.2f" % (name, output_value, lower_bound))
+            exit_code = -41
+        else:
+            log.info("Value of %s = %2.2f >= %2.2f as expected" % (name, output_value, lower_bound))
+        if output_value > upper_bound:
+            log.error("Value of %s = %2.2f is higher than the expected value %2.2f" % (name, output_value, upper_bound))
+            exit_code = -42
+        else:
+            log.info("Value of %s = %2.2f <= %2.2f as expected" % (name, output_value, upper_bound))
     return exit_code
 
 
