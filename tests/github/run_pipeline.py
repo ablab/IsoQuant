@@ -293,6 +293,9 @@ def check_output_files(out_dir, label, file_list):
         fpath = os.path.join(internal_output_dir, label + "." + f)
         if not os.path.exists(fpath):
             missing_files.append(str(fpath))
+            log.error("File is missing: %s" % str(fpath))
+        else:
+            log.info("File exists (OK): %s" % str(fpath))
     return missing_files
 
 
