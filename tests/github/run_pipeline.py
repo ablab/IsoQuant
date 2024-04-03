@@ -152,7 +152,7 @@ def find_bam(output_folder, label):
 
     for l in open(os.path.join(output_folder, "isoquant.log")):
         if l.find("BAM file: ") != -1:
-            return l.strip().split("-1")
+            return l.strip().split()[-1]
 
     return None
 
