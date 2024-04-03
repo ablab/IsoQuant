@@ -145,6 +145,18 @@ def check_value(etalon_value, output_value, name):
     return exit_code
 
 
+def find_bam(output_folder, label):
+    bam = glob.glob(os.path.join(output_folder, "%s/aux/%s*.bam" % (label, label)))
+    if bam:
+        return bam[0]
+
+    for l in open(os.path.join(output_folder, "isoquant.log")):
+        if l.find("BAM file: ") != -1:
+            return l.strip().split("-1")
+
+    return None
+
+
 def run_assignment_quality(args, config_dict):
     log.info('== Running quality assessment ==')
     config_file = args.config_file
@@ -159,11 +171,10 @@ def run_assignment_quality(args, config_dict):
     genedb = fix_path(config_file, config_dict["genedb"])
     reads = fix_path(config_file, config_dict["reads"])
     if "bam" not in config_dict:
-        bam = glob.glob(os.path.join(output_folder, "%s/aux/%s*.bam" % (label, label)))
-        if not bam:
+        bam = find_bam(output_folder, label)
+        if not bam or not os.path.exists(bam):
             log.error("BAM file was not found")
             return -21
-        bam = bam[0]
     else:
         bam = fix_path(config_file, config_dict["bam"])
 
