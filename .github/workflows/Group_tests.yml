@@ -1,0 +1,68 @@
+name: Read grouping tests
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '0 6 * * 7'
+
+env:
+  RUN_NAME: Resume_tests
+  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
+  CFG_DIR: /abga/work/andreyp/ci_isoquant/data
+  BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
+  OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
+
+jobs:
+  launch-runner:
+    runs-on:
+      labels: [self-hosted]
+    name: 'Running IsoQuant and QC'
+
+    steps:
+      - name: 'Cleanup'
+        run: >
+          set -e &&
+          shopt -s dotglob &&
+          rm -rf *
+
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: 'Grouping by BAM tag'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP1.TAG.SIRVs
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Grouping by TSV file'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP2.TSV.SIRVs.R10
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Grouping by read id'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP3.READID.SIRVs.R10
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Grouping by file name'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP4.FILES.SIRVs.R10
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
