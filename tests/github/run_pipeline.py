@@ -268,10 +268,11 @@ def run_transcript_quality(args, config_dict):
     return exit_code
 
 
-def check_output_files(out_dir, file_list):
+def check_output_files(out_dir, label, file_list):
     missing_files = []
+    internal_output_dir = os.path.join(out_dir, label)
     for f in file_list:
-        fpath = os.path.join(out_dir, f)
+        fpath = os.path.join(internal_output_dir, label + "." + f)
         if not os.path.exists(fpath):
             missing_files.append(str(fpath))
     return missing_files
@@ -317,9 +318,12 @@ def main():
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
         label = config_dict["label"]
-        output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
-        output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
-        missing_files = check_output_files()
+        run_name = config_dict["name"]
+        output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)
+        missing_files = check_output_files(output_folder, label, files_list)
+        if missing_files:
+            log.error("The following files were not detected in the output folder: %s" % "  ".join(missing_files))
+            err_code = -11
 
     return err_code
 
