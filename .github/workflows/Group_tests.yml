@@ -12,6 +12,10 @@ env:
   BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
   OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
 
+concurrency:
+  group: $RUN_NAME
+  cancel-in-progress: false
+
 jobs:
   launch-runner:
     runs-on:
