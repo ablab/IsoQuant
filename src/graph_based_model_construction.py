@@ -233,8 +233,11 @@ class GraphBasedModelConstructor:
                 del self.internal_counter[model.transcript_id]
                 continue
 
-            if (model.transcript_type != TranscriptModelType.known and
-                    self.mapping_quality(model.transcript_id) < self.params.simple_models_mapq_cutoff):
+            mapq = self.mapping_quality(model.transcript_id)
+            if ((model.transcript_type == TranscriptModelType.known and
+                    mapq < self.params.simple_known_models_mapq_cutoff) or
+                    (model.transcript_type != TranscriptModelType.known and
+                     mapq < self.params.simple_models_mapq_cutoff)):
                 del self.transcript_read_ids[model.transcript_id]
                 del self.internal_counter[model.transcript_id]
                 continue
