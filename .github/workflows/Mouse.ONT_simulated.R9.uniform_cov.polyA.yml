@@ -18,6 +18,10 @@ jobs:
       labels: [self-hosted]
     name: 'Running IsoQuant and QC'
 
+    concurrency:
+      group: $RUN_NAME
+      cancel-in-progress: false
+
     steps:
       - name: 'Cleanup'
         run: >
