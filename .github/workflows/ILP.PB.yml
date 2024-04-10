@@ -10,15 +10,15 @@ env:
   BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
   OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
 
+concurrency:
+  group: ${{github.workflow}}
+  cancel-in-progress: false
+
 jobs:
   launch-runner:
     runs-on:
       labels: [self-hosted]
     name: 'Running IsoQuant and QC'
-
-    concurrency:
-      group: ${{env.RUN_NAME}}
-      cancel-in-progress: false
 
     steps:
       - name: 'Cleanup'
