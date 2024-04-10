@@ -233,10 +233,10 @@ class NonOverlappingFeaturesProfileConstructor:
                     exon_profile[i] = -2
 
         start_pos = 0
-        while start_pos < len(exon_profile) and exon_profile[start_pos] < 1:
+        while start_pos < len(exon_profile) and exon_profile[start_pos] == 0:
             start_pos += 1
         end_pos = len(exon_profile) - 1
-        while end_pos >= 0 and exon_profile[end_pos] < 1:
+        while end_pos >= 0 and exon_profile[end_pos] == 0:
             end_pos -= 1
 
         return MappedReadProfile(exon_profile, read_profile, read_exons, (start_pos, end_pos + 1))
