@@ -153,9 +153,9 @@ def overlaps_at_least(range1, range2, delta=0):
 # dangerous function, works only when range1 and range2 are already known to overlap, do not use if unsure
 def overlaps_at_least_when_overlap(range1, range2, delta=0):
     if range1[1] < range2[1]:
-        return range1[1] - range2[0] - 1 >= delta or range1[0] >= range2[0]
+        return range1[1] - range2[0] + 1 >= delta or range1[0] >= range2[0]
     else:
-        return range2[1] - range1[0] - 1 >= delta or range1[0] <= range2[0]
+        return range2[1] - range1[0] + 1 >= delta or range1[0] <= range2[0]
 
 
 def intersection_len(range1, range2):
