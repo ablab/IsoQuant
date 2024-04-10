@@ -17,7 +17,7 @@ jobs:
     name: 'Running IsoQuant and QC'
 
     concurrency:
-      group: $RUN_NAME
+      group: $env.RUN_NAME
       cancel-in-progress: false
 
     steps:
