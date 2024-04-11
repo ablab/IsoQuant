@@ -48,7 +48,7 @@ from .assignment_io import (
 )
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
-from .gene_info import TranscriptModelType
+from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
 
 logger = logging.getLogger('IsoQuant')
 
@@ -209,11 +209,11 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
         return EnumStats(read_stat_file), EnumStats(transcript_stat_file)
 
-    aggregator = ReadAssignmentAggregator(args, sample, read_groups)
     if args.genedb:
         gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
     else:
         gffutils_db = None
+    aggregator = ReadAssignmentAggregator(args, sample, read_groups, gffutils_db, chr_id)
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
@@ -271,11 +271,17 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
 
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, read_groups, gzipped=False):
+    def __init__(self, args, sample, read_groups, gffutils_db=None, chr_id=None, gzipped=False):
         self.args = args
         self.read_groups = read_groups
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
+
+        self.gene_set = set()
+        self.transcript_set = set()
+        if gffutils_db and chr_id:
+            self.gene_set = set(get_all_chromosome_genes(gffutils_db, chr_id))
+            self.transcript_set = set(get_all_chromosome_transcripts(gffutils_db, chr_id))
 
         self.read_stat_counter = EnumStats()
         self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed,
@@ -296,10 +302,11 @@ class ReadAssignmentAggregator:
         self.global_counter = CompositeCounter([])
         if self.args.genedb:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv, self.args.gene_quantification,
-                                                    ignore_read_groups=True, output_zeroes=False)
+                                                    self.gene_set, ignore_read_groups=True, output_zeroes=True)
             self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
                                                                 self.args.transcript_quantification,
-                                                                ignore_read_groups=True, output_zeroes=False)
+                                                                self.transcript_set,
+                                                                ignore_read_groups=True, output_zeroes=True)
             self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
 
         self.transcript_model_global_counter = CompositeCounter([])
@@ -316,9 +323,11 @@ class ReadAssignmentAggregator:
 
         if self.args.read_group and self.args.genedb:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
-                                                            self.args.gene_quantification, self.read_groups)
+                                                            self.args.gene_quantification, self.read_groups,
+                                                            self.gene_set)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
                                                                         self.args.transcript_quantification,
+                                                                        self.transcript_set,
                                                                         self.read_groups)
             self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 

@@ -671,3 +671,11 @@ class StrandDetector:
                 return '-'
             return '.'
         return '+' if count_rev < count_fwd else '-'
+
+
+def get_all_chromosome_genes(genedb, chr_id):
+    return [g.id for g in genedb.region(seqid=chr_id, start=1, featuretype="gene")]
+
+
+def get_all_chromosome_transcripts(genedb, chr_id):
+    return [g.id for g in genedb.region(seqid=chr_id, start=1, featuretype=("transcript", "mRNA"))]
