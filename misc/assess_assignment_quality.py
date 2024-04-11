@@ -5,7 +5,7 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
-
+import gzip
 import os
 import re
 import sys
@@ -131,18 +131,22 @@ class AssignmentData:
 
     def parse_tsv(self, tsv_file):
         logger.info("Reading assignments from %s" % tsv_file)
-        with open(tsv_file) as f:
-            for l in f:
-                if l.startswith('#'):
-                    continue
-                tokens = l.strip().split()
-                seq_id = tokens[self.parse_params.read_id_column] # if is_real_data else id_pattern.search(tokens[0]).group(1)
-                assignment_type = tokens[self.parse_params.assignment_type_column]
-                if assignment_type in self.assignment_types:
-                    isoform_id = tokens[self.parse_params.isoform_id_column]
-                    if not isoform_id[0] == 'E':
-                        logger.warning("Assigned to weird isoform " + isoform_id)
-                    self.assigned_isoforms[seq_id] = isoform_id
+        if tsv_file.endswith(".gz") or tsv_file.endswith(".gzip"):
+            handler = gzip.open(tsv_file, "rt")
+        else:
+            handler = open(tsv_file, "rt")
+        for l in handler:
+            if l.startswith('#'):
+                continue
+            tokens = l.strip().split()
+            seq_id = tokens[self.parse_params.read_id_column] # if is_real_data else id_pattern.search(tokens[0]).group(1)
+            assignment_type = tokens[self.parse_params.assignment_type_column]
+            if assignment_type in self.assignment_types:
+                isoform_id = tokens[self.parse_params.isoform_id_column]
+                if not isoform_id[0] == 'E':
+                    logger.warning("Assigned to weird isoform " + isoform_id)
+                self.assigned_isoforms[seq_id] = isoform_id
+        handler.close()
         logger.info("Total assignments loaded: %d" % len(self.assigned_isoforms))
 
 
