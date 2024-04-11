@@ -327,7 +327,7 @@ class ReadAssignmentAggregator:
                 self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
                 self.global_counter.add_counters([self.exon_grouped_counter, self.intron_grouped_counter])
 
-        if self.args.read_group:
+        if self.args.read_group and not self.args.no_model_construction:
             self.transcript_model_grouped_counter = create_transcript_counter(
                 sample.out_transcript_model_grouped_counts_tsv,
                 self.args.transcript_quantification,
