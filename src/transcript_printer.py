@@ -146,17 +146,19 @@ class GFFPrinter:
                 self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
 
 
-def create_extened_storage(genedb, chr_id, chr_record, novel_model_storage):
+def create_extended_storage(genedb, chr_id, chr_record, novel_model_storage):
     all_models = []
     gene_list = list(genedb.region(seqid=chr_id, start=1, featuretype="gene"))
     if not gene_list:
+        for m in novel_model_storage:
+            all_models.append(m)
         return all_models, GeneInfo.from_region(chr_id, 1, len(chr_record), chr_record=chr_record)
     gene_info = GeneInfo(gene_list, genedb, prepare_profiles=False)
     gene_info.set_reference_sequence(1, len(chr_record), chr_record)
     for isoform_id in gene_info.all_isoforms_exons.keys():
-            all_models.append(TranscriptModel(gene_info.chr_id, gene_info.isoform_strands[isoform_id],
-                                              isoform_id, gene_info.gene_id_map[isoform_id],
-                                              gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known))
+        all_models.append(TranscriptModel(gene_info.chr_id, gene_info.isoform_strands[isoform_id],
+                                          isoform_id, gene_info.gene_id_map[isoform_id],
+                                          gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known))
     for m in novel_model_storage:
         all_models.append(m)
 

@@ -46,7 +46,7 @@ from .assignment_io import (
     TmpFileAssignmentPrinter,
     TmpFileAssignmentLoader,
 )
-from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extened_storage
+from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType
 
@@ -258,7 +258,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     aggregator.read_stat_counter.dump(read_stat_file)
     if construct_models:
         if gffutils_db:
-            all_models, gene_info = create_extened_storage(gffutils_db, chr_id, current_chr_record, novel_model_storage)
+            all_models, gene_info = create_extended_storage(gffutils_db, chr_id, current_chr_record, novel_model_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(all_models, gene_info)
             tmp_extended_gff_printer.dump(gene_info, all_models)
