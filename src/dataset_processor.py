@@ -670,7 +670,7 @@ class DatasetProcessor:
         for p in aggregator.global_counter.counters:
             merge_files(
                 [rreplace(p.output_counts_file_name, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
-                p.output_file,
+                p.get_output_file_handler(),
                 stats_file_names=[rreplace(p.output_stats_file_name, sample.prefix, sample.prefix + "_" + chr_id) for
                                   chr_id in chr_ids]
                 if p.output_stats_file_name else None,
@@ -685,7 +685,7 @@ class DatasetProcessor:
                     gff_printer.out_r2t, copy_header=False)
         for p in aggregator.transcript_model_global_counter.counters:
             merge_files([rreplace(p.output_counts_file_name, label, label + "_" + chr_id) for chr_id in chr_ids],
-                        p.output_file,
+                        p.get_output_file_handler(),
                         stats_file_names=[rreplace(p.output_stats_file_name, label, label + "_" + chr_id) for chr_id in
                                           chr_ids]
                         if p.output_stats_file_name else None,
