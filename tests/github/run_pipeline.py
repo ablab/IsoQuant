@@ -173,6 +173,8 @@ def run_assignment_quality(args, config_dict):
     label = config_dict["label"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
     output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
+    if not os.path.exists(output_tsv):
+        output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv.gz" % (label, label))
 
     assert "genedb" in config_dict
     genedb = fix_path(config_file, config_dict["genedb"])
