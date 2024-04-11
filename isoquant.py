@@ -696,9 +696,9 @@ def set_additional_params(args):
         args.needs_reference = False
 
     args.simple_models_mapq_cutoff = 30
-    args.simple_known_models_mapq_cutoff = 5
     args.polya_percentage_threshold = 0.7
     args.low_polya_percentage_threshold = 0.1
+
 
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
