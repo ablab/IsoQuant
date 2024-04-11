@@ -120,7 +120,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
     tmp_printer = TmpFileAssignmentPrinter(save_file, args)
     bam_files = list(map(lambda x: x[0], sample.file_list))
     bam_file_pairs = [(pysam.AlignmentFile(bam, "rb", require_index=True), bam) for bam in bam_files]
-    gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True) if args.genedb else None
+    gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
     illumina_bam = sample.illumina_bam
 
     logger.info("Processing chromosome " + chr_id)
@@ -210,7 +210,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         return EnumStats(read_stat_file), EnumStats(transcript_stat_file)
 
     if args.genedb:
-        gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
+        gffutils_db = gffutils.FeatureDB(args.genedb)
     else:
         gffutils_db = None
     aggregator = ReadAssignmentAggregator(args, sample, read_groups, gffutils_db, chr_id)
@@ -364,7 +364,7 @@ class DatasetProcessor:
 
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
-            self.gffutils_db = gffutils.FeatureDB(self.args.genedb, keep_order=True)
+            self.gffutils_db = gffutils.FeatureDB(self.args.genedb)
         else:
             self.gffutils_db = None
 
