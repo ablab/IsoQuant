@@ -471,7 +471,7 @@ where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set)
 
 * `unique_only` -  only reads that are uniquely assigned to a gene and consistent with any of gene's isoforms are used for quantification;
 * `with_ambiguous` - ambiguously assigned reads are split between genes with equal weights (e.g. 1/2 when a read is assigned to 2 genes simultaneously);
-* `with_inconsistent` - only reads that are uniquely assigned to a gene but not necessarily consistent with genes isoforms (default);
+* `with_inconsistent` - only reads that are uniquely assigned to a gene but are not necessarily consistent with genes isoforms (default);
 * `all` - all of the above.
 
 
@@ -517,7 +517,7 @@ This option is chosen automatically based on specified data type, but will be ov
 
 `--report_novel_unspliced` Report novel mono-exonic transcripts (set `true` or `false`).
 The default value is `false` for Nanopore data and `true` for other data types.
-The main explanation that some aligner report a lot of false unspliced alignments
+The main explanation that some aligners report a lot of false unspliced alignments
 for ONT reads.
 
 
@@ -527,7 +527,7 @@ for ONT reads.
 * `auto` - automatic selection based on the data type and model construction strategy (default); 
 * `only_canonical` - report novel transcripts, which contain only canonical splice sites;
 * `only_stranded` - report novel transcripts, for which the strand can be unambiguously derived using splice sites and 
-presence of a polyA tail, allowing some splice sites to be non-canonical
+presence of a polyA tail, allowing some splice sites to be non-canonical;
 * `all` -- report all transcript model regardless of their splice sites.
 
 
