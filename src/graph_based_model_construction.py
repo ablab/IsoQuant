@@ -18,6 +18,8 @@ from .common import (
     interval_len,
     junctions_from_blocks,
     read_coverage_fraction,
+    jaccard_similarity,
+    merge_ranges
 )
 from .assignment_io import ReadAssignmentType
 from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
@@ -924,10 +926,10 @@ class TranscriptToGeneJoiner:
         self.transcipt_model_storage = transcipt_model_storage
         self.gene_introns = {}
         self.gene_strands = {}
-        self.gene_regions = {}
+        self.gene_exon_regions = {}
         self.gene_to_transcripts = {}
         for t in self.transcipt_model_storage:
-            self.gene_regions[t.gene_id] = (t.get_start(), t.get_end())
+            self.gene_exon_regions[t.gene_id] = t.exon_blocks
             self.gene_introns[t.gene_id] = set(junctions_from_blocks(t.exon_blocks))
             self.gene_strands[t.gene_id] = t.strand
             self.gene_to_transcripts[t.gene_id] = {t.transcript_id}
@@ -939,9 +941,9 @@ class TranscriptToGeneJoiner:
             return 0.0
         intronic_overlap = len(self.gene_introns[gene1].intersection(self.gene_introns[gene2])) / \
                            max(1, len(self.gene_introns[gene1].union(self.gene_introns[gene2])))
-        range1 = self.gene_regions[gene1]
-        range2 = self.gene_regions[gene2]
-        position_overlap = intersection_len(range1, range2) / (max(range1[1], range2[1]) - min(range1[0], range2[0]) + 1)
+        exonic_ranges1 = self.gene_exon_regions[gene1]
+        exonic_ranges2 = self.gene_exon_regions[gene2]
+        position_overlap = jaccard_similarity(exonic_ranges1, exonic_ranges2)
         return position_overlap + intronic_overlap
 
     def count_scores(self):
@@ -955,14 +957,14 @@ class TranscriptToGeneJoiner:
 
     def merge_genes(self, gene1, gene2):
         logger.debug("Merging %s into %s" % (gene2, gene1))
-        range1 = self.gene_regions[gene1]
-        range2 = self.gene_regions[gene2]
-        self.gene_regions[gene1] = (min(range1[0], range2[0]), max(range1[1], range2[1]))
+        exonic_ranges1 = self.gene_exon_regions[gene1]
+        exonic_ranges2 = self.gene_exon_regions[gene2]
+        self.gene_exon_regions[gene1] = merge_ranges(exonic_ranges1, exonic_ranges2)
         self.gene_introns[gene1].update(self.gene_introns[gene2])
         self.gene_to_transcripts[gene1].update(self.gene_to_transcripts[gene2])
         if self.gene_strands[gene2] != self.gene_strands[gene1]:
             logger.error("Merging genes with different strands: %s, %s" % (gene1, gene2))
-        del self.gene_regions[gene2]
+        del self.gene_exon_regions[gene2]
         del self.gene_introns[gene2]
         del self.gene_to_transcripts[gene2]
         del self.gene_strands[gene2]
