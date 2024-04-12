@@ -496,6 +496,11 @@ class ReadAssignment:
             self.isoform_matches = match
         else:
             self.isoform_matches = [match]
+        if self.assignment_type != ReadAssignmentType.ambiguous:
+            self.gene_assignment_type = self.assignment_type
+        else:
+            assigned_genes = set([m.assigned_gene for m in self.isoform_matches])
+            self.gene_assignment_type = ReadAssignmentType.ambiguous if len(assigned_genes) > 1 else ReadAssignmentType.unique
         self.additional_info = {}
         self.additional_attributes = {}
         self.introns_match = False
@@ -522,6 +527,7 @@ class ReadAssignment:
         read_assignment.chr_id = read_string(infile)
         read_assignment.mapping_quality = read_short_int(infile)
         read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
+        read_assignment.gene_assignment_type = ReadAssignmentType(read_short_int(infile))
         read_assignment.isoform_matches = read_list(infile, IsoformMatch.deserialize)
         read_assignment.additional_info = read_dict(infile)
         read_assignment.additional_attributes = read_dict(infile)
@@ -546,6 +552,7 @@ class ReadAssignment:
         write_string(self.chr_id, outfile)
         write_short_int(self.mapping_quality, outfile)
         write_short_int(self.assignment_type.value, outfile)
+        write_short_int(self.gene_assignment_type.value, outfile)
         write_list(self.isoform_matches, outfile, IsoformMatch.serialize)
         write_dict(self.additional_info, outfile)
         write_dict(self.additional_attributes, outfile)
