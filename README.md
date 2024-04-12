@@ -547,6 +547,9 @@ Note, that polyA tails are always required for reporting novel unspliced isoform
 Options below are shown only with `--full_help` option.
 We recommend _not_ to modify these options unless you are clearly aware of their effect.
 
+`--no_gzip`
+    Do not compress large output files.
+
 `--no_secondary`
     Ignore secondary alignments.
 
@@ -719,8 +722,10 @@ splice site correction and abundance quantification for reference genes/transcri
 
 #### Reference-based analysis output
 
-* `SAMPLE_ID.read_assignments.tsv` - TSV file with read to isoform assignments;
-* `SAMPLE_ID.corrected_reads.bed` - BED file with corrected read alignments;
+_Will be produced only if a reference gene annotation is provided._
+
+* `SAMPLE_ID.read_assignments.tsv.gz` - TSV file with read to isoform assignments (gzipped by default);
+* `SAMPLE_ID.corrected_reads.bed.gz` - BED file with corrected read alignments (gzipped by default);
 * `SAMPLE_ID.transcript_tpm.tsv` - TSV file with reference transcript expression in TPM;
 * `SAMPLE_ID.transcript_counts.tsv` - TSV file with raw read counts for reference transcript;
 * `SAMPLE_ID.gene_tpm.tsv` - TSV file with reference gene expression in TPM;
@@ -743,10 +748,12 @@ If `--read_group` is set, the per-group expression values for reference features
 
 #### Transcript discovery output
 
+_Will not be produced if `--no_model_construction` is set._
+
 File names typically contain `transcript_model` in their name.
 
 * `SAMPLE_ID.transcript_models.gtf` - GTF file with discovered expressed transcript (both known and novel transcripts);
-* `SAMPLE_ID.transcript_model_reads.tsv` - TSV file indicating which reads contributed to transcript models;
+* `SAMPLE_ID.transcript_model_reads.tsv.gz` - TSV file indicating which reads contributed to transcript models (gzipped by default);
 * `SAMPLE_ID.transcript_model_tpm.tsv` - expression of discovered transcripts models in TPM (corresponds to `SAMPLE_ID.transcript_models.gtf`);
 * `SAMPLE_ID.transcript_model_counts.tsv` - raw read counts for discovered transcript models (corresponds to `SAMPLE_ID.transcript_models.gtf`);
 * `SAMPLE_ID.extended_annotation.gtf` - GTF file with the entire reference annotation plus all discovered novel transcripts;
