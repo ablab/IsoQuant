@@ -21,8 +21,8 @@ from .serialization import (
     read_short_int,
     SHORT_TERMINATION_INT
 )
-from .isoform_assignment import match_subtype_to_str_with_additional_info, ReadAssignment, MatchClassification
-from .long_read_assigner import ReadAssignmentType
+from .isoform_assignment import (match_subtype_to_str_with_additional_info, ReadAssignment, MatchClassification,
+                                 ReadAssignmentType, ReadAssignmentTypeNaming)
 from .gene_info import GeneInfo
 
 
@@ -241,9 +241,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                                                                                read_introns, isoform_introns)
                                      for x in m.match_subclassifications])
             strand = read_assignment.strand
-            line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t" + \
-                   m.assigned_transcript + "\t" + m.assigned_gene + "\t" + \
-                   read_assignment.assignment_type.name + "\t" + event_string + "\t" + range_list_to_str(read_exons)
+            line = (read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t" +
+                    m.assigned_transcript + "\t" + m.assigned_gene + "\t" +
+                    ReadAssignmentTypeNaming[read_assignment.assignment_type] + "\t" + event_string + "\t" +
+                    range_list_to_str(read_exons))
 
             additional_info = []
             additional_info.append("PolyA=" + str(read_assignment.polyA_found) + ";")
