@@ -20,9 +20,27 @@ class ReadAssignmentType(Enum):
     intergenic = 20
     ambiguous = 10
     unique_minor_difference = 2
-    inconsistent = 3
+    inconsistent = 30
+    inconsistent_non_intronic = 31
+    inconsistent_amb = 32
     suspended = 255
 
+    @staticmethod
+    def is_inconsistent(assignment_type):
+        return assignment_type in [ReadAssignmentType.inconsistent,
+                                   ReadAssignmentType.inconsistent_amb,
+                                   ReadAssignmentType.inconsistent_non_intronic]
+
+
+ReadAssignmentTypeNaming = {ReadAssignmentType.unique: ReadAssignmentType.unique.name,
+                            ReadAssignmentType.noninformative: ReadAssignmentType.noninformative.name,
+                            ReadAssignmentType.intergenic: ReadAssignmentType.intergenic.name,
+                            ReadAssignmentType.ambiguous: ReadAssignmentType.ambiguous.name,
+                            ReadAssignmentType.unique_minor_difference: ReadAssignmentType.unique_minor_difference.name,
+                            ReadAssignmentType.inconsistent: ReadAssignmentType.inconsistent.name,
+                            ReadAssignmentType.inconsistent_non_intronic: ReadAssignmentType.inconsistent.name,
+                            ReadAssignmentType.inconsistent_amb: ReadAssignmentType.inconsistent.name,
+                            ReadAssignmentType.suspended: ReadAssignmentType.suspended.name}
 
 # SQANTI-like
 @unique
@@ -206,7 +224,11 @@ class MatchEventSubtype(Enum):
 
     @staticmethod
     def is_major_inconsistency(match_event_subtype):
-        return match_event_subtype in nnic_event_types or match_event_subtype in nic_event_types
+        return match_event_subtype in all_major_events
+
+    @staticmethod
+    def is_intronic_inconsistency(match_event_subtype):
+        return match_event_subtype in intronic_major_events
 
 
 event_subtype_cost = {
@@ -332,8 +354,11 @@ nonintronic_events = {
     MatchEventSubtype.internal_polya_right, MatchEventSubtype.internal_polya_left,
     MatchEventSubtype.major_exon_elongation_left, MatchEventSubtype.major_exon_elongation_right,
     MatchEventSubtype.exon_elongation_left, MatchEventSubtype.exon_elongation_right,
-    MatchEventSubtype.antisense
 }
+
+all_major_events = nic_event_types.union(nnic_event_types)
+
+intronic_major_events = all_major_events.difference(nonintronic_events)
 
 
 # (side, is_known) -> alternation type
@@ -496,11 +521,17 @@ class ReadAssignment:
             self.isoform_matches = match
         else:
             self.isoform_matches = [match]
-        if self.assignment_type != ReadAssignmentType.ambiguous:
-            self.gene_assignment_type = self.assignment_type
-        else:
+        if self.assignment_type == ReadAssignmentType.ambiguous:
             assigned_genes = set([m.assigned_gene for m in self.isoform_matches])
-            self.gene_assignment_type = ReadAssignmentType.ambiguous if len(assigned_genes) > 1 else ReadAssignmentType.unique
+            self.gene_assignment_type = ReadAssignmentType.ambiguous if len(
+                assigned_genes) > 1 else ReadAssignmentType.unique
+        elif self.assignment_type == ReadAssignmentType.inconsistent_amb:
+            assigned_genes = set([m.assigned_gene for m in self.isoform_matches])
+            self.gene_assignment_type = ReadAssignmentType.inconsistent_amb if len(
+                assigned_genes) > 1 else ReadAssignmentType.inconsistent
+        else:
+            self.gene_assignment_type = self.assignment_type
+
         self.additional_info = {}
         self.additional_attributes = {}
         self.introns_match = False
