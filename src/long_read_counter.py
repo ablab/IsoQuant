@@ -146,7 +146,10 @@ class AssignedFeatureCounter(AbstractCounter):
         AbstractCounter.__init__(self, output_prefix, ignore_read_groups, output_zeroes)
         self.get_feature_id = get_feature_id
         self.all_features = set(all_features) if all_features is not None else set()
-        self.all_groups = read_groups if read_groups else []
+        if ignore_read_groups:
+            self.all_groups = [AbstractReadGrouper.default_group_id]
+        else:
+            self.all_groups = read_groups if read_groups else []
         self.read_counter = read_counter
 
         self.ambiguous_reads = 0
