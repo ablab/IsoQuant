@@ -207,7 +207,10 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
-        return EnumStats(read_stat_file), EnumStats(transcript_stat_file)
+        read_stat = EnumStats(read_stat_file)
+        transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
+        return read_stat, transcript_stat
+
 
     if args.genedb:
         gffutils_db = gffutils.FeatureDB(args.genedb)
