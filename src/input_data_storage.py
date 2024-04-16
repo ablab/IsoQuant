@@ -246,7 +246,7 @@ class InputDataStorage:
                     if names:
                         readable_name = sample['labels'][f]
                     else:
-                        readable_name = os.path.splitext(os.path.basename(fname[0]))[0]
+                        readable_name = os.path.splitext(os.path.basename(fname))[0]
                     if fname in readable_names_dict[current_sample_name]:
                         logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
                         exit(-2)

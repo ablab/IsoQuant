@@ -323,8 +323,9 @@ class ReadAssignmentAggregator:
 
         if self.args.read_group and self.args.genedb:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
-                                                            self.args.gene_quantification, self.read_groups,
-                                                            self.gene_set)
+                                                            self.args.gene_quantification,
+                                                            self.gene_set,
+                                                            self.read_groups)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
                                                                         self.args.transcript_quantification,
                                                                         self.transcript_set,
