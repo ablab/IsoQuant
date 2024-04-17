@@ -243,7 +243,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             strand = read_assignment.strand
             line = (read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t" +
                     m.assigned_transcript + "\t" + m.assigned_gene + "\t" +
-                    ReadAssignmentTypeNaming[read_assignment.assignment_type] + "\t" + event_string + "\t" +
+                    read_assignment.assignment_type.name + "\t" + event_string + "\t" +
                     range_list_to_str(read_exons))
 
             additional_info = []

@@ -32,16 +32,6 @@ class ReadAssignmentType(Enum):
                                    ReadAssignmentType.inconsistent_non_intronic]
 
 
-ReadAssignmentTypeNaming = {ReadAssignmentType.unique: ReadAssignmentType.unique.name,
-                            ReadAssignmentType.noninformative: ReadAssignmentType.noninformative.name,
-                            ReadAssignmentType.intergenic: ReadAssignmentType.intergenic.name,
-                            ReadAssignmentType.ambiguous: ReadAssignmentType.ambiguous.name,
-                            ReadAssignmentType.unique_minor_difference: ReadAssignmentType.unique_minor_difference.name,
-                            ReadAssignmentType.inconsistent: ReadAssignmentType.inconsistent.name,
-                            ReadAssignmentType.inconsistent_non_intronic: ReadAssignmentType.inconsistent.name,
-                            ReadAssignmentType.inconsistent_amb: ReadAssignmentType.inconsistent.name,
-                            ReadAssignmentType.suspended: ReadAssignmentType.suspended.name}
-
 # SQANTI-like
 @unique
 class MatchClassification(Enum):
