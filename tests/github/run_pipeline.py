@@ -339,11 +339,11 @@ def run_quantification(args, config_dict, novel, output_name):
         return 0
 
     log.info('== Checking quantification metrics ==')
-    ref_value_files = config_dict[etalon_to_use]
+    ref_value_files = fix_path(config_file, config_dict[etalon_to_use])
     if not os.path.exists(ref_value_files):
         log.error("File %s with etalon metric values was not detected" % ref_value_files)
         return -19
-    etalon_quality_dict = load_tsv_config(fix_path(config_file, ref_value_files))
+    etalon_quality_dict = load_tsv_config(ref_value_files)
     real_dict = load_tsv_config(quantification_stats_output)
     exit_code = 0
 
