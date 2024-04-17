@@ -312,6 +312,9 @@ def run_quantification(args, config_dict, novel, output_name):
     if "reference_tpm" not in config_dict:
         return 0
     ref_tpm = config_dict["reference_tpm"]
+    if not os.path.exists(ref_tpm):
+        log.error("File %s with reference TPM was not detected" % ref_tpm)
+        return -18
 
     quantification_stats_output = os.path.join(output_folder, output_name + ".quantification.tsv")
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/quantification_stats.py"),
@@ -336,7 +339,11 @@ def run_quantification(args, config_dict, novel, output_name):
         return 0
 
     log.info('== Checking quantification metrics ==')
-    etalon_quality_dict = load_tsv_config(fix_path(config_file, config_dict[etalon_to_use]))
+    ref_value_files = config_dict[etalon_to_use]
+    if not os.path.exists(ref_value_files):
+        log.error("File %s with etalon metric values was not detected" % ref_value_files)
+        return -19
+    etalon_quality_dict = load_tsv_config(fix_path(config_file, ref_value_files))
     real_dict = load_tsv_config(quantification_stats_output)
     exit_code = 0
 
