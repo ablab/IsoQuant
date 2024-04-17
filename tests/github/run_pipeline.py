@@ -26,6 +26,7 @@ RT_ASSIGNMENT = "assignment"
 RT_TRANSCRIPTS = "transcripts"
 RT_QUANTIFICATION_KNOWN = "quantification_known"
 RT_QUANTIFICATION_NOVEL = "quantification_novel"
+RT_QUANTIFICATION_GENES = "quantification_genes"
 
 
 log = logging.getLogger('GitHubRunner')
@@ -290,7 +291,7 @@ def run_transcript_quality(args, config_dict):
     return exit_code
 
 
-def run_quantification(args, config_dict, novel, output_name):
+def run_quantification(args, config_dict, mode):
     log.info('== Running quantification assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
@@ -300,10 +301,13 @@ def run_quantification(args, config_dict, novel, output_name):
     label = name if "label" not in config_dict else config_dict["label"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
 
-    if novel:
+    if mode == "novel":
         out_tpm = os.path.join(output_folder, "%s/%s.transcript_model_tpm.tsv" % (label, label))
-    else:
+    elif mode == "ref":
         out_tpm = os.path.join(output_folder, "%s/%s.transcript_tpm.tsv" % (label, label))
+    else:
+        out_tpm = os.path.join(output_folder, "%s/%s.gene_tpm.tsv" % (label, label))
+
 
     if not os.path.exists(out_tpm):
         log.error("Output TPM file %s was not found" % out_tpm)
@@ -311,16 +315,16 @@ def run_quantification(args, config_dict, novel, output_name):
 
     if "reference_tpm" not in config_dict:
         return 0
-    ref_tpm = config_dict["reference_tpm"]
+    ref_tpm = config_dict["reference_gene_tpm"] if mode == "gene" else config_dict["reference_tpm"]
     if not os.path.exists(ref_tpm):
         log.error("File %s with reference TPM was not detected" % ref_tpm)
         return -18
 
-    quantification_stats_output = os.path.join(output_folder, output_name + ".quantification.tsv")
+    quantification_stats_output = os.path.join(output_folder, mode + ".quantification.tsv")
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/quantification_stats.py"),
                        "-o", quantification_stats_output, "--ref_expr", ref_tpm, "--tpm", out_tpm]
 
-    if novel:
+    if mode == "novel":
         gffcompare_outdir = os.path.join(output_folder, "gffcompare")
         tracking = os.path.join(gffcompare_outdir, "isoquant.novel.tracking")
         if not os.path.exists(tracking):
@@ -334,7 +338,7 @@ def run_quantification(args, config_dict, novel, output_name):
         log.error("Quantification evaluation exited with non-zero status: %d" % result.returncode)
         return -14
 
-    etalon_to_use = "etalon_quantification_" + ("novel" if novel else "ref")
+    etalon_to_use = "etalon_quantification_" + mode
     if etalon_to_use not in config_dict:
         return 0
 
@@ -409,9 +413,11 @@ def main():
     if RT_TRANSCRIPTS in run_types:
         err_code = run_transcript_quality(args, config_dict)
     if RT_QUANTIFICATION_KNOWN in run_types:
-        err_code = run_quantification(args, config_dict, False, "reference")
+        err_code = run_quantification(args, config_dict, "ref")
     if RT_QUANTIFICATION_NOVEL in run_types:
-        err_code = run_quantification(args, config_dict, True, "novel")
+        err_code = run_quantification(args, config_dict, "novel")
+    if RT_QUANTIFICATION_GENES in run_types:
+        err_code = run_quantification(args, config_dict, "gene")
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
