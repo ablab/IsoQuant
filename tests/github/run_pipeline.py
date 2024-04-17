@@ -411,7 +411,7 @@ def main():
     if RT_QUANTIFICATION_KNOWN in run_types:
         err_code = run_quantification(args, config_dict, False, "reference")
     if RT_QUANTIFICATION_NOVEL in run_types:
-        err_code = run_quantification(args, config_dict, False, "novel")
+        err_code = run_quantification(args, config_dict, True, "novel")
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
