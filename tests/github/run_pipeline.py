@@ -318,7 +318,7 @@ def run_quantification(args, config_dict, novel, output_name):
 
     quantification_stats_output = os.path.join(output_folder, output_name + ".quantification.tsv")
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/quantification_stats.py"),
-                       "-o", quantification_stats_output, "----ref_expr", ref_tpm, "--tpm", out_tpm]
+                       "-o", quantification_stats_output, "--ref_expr", ref_tpm, "--tpm", out_tpm]
 
     if novel:
         gffcompare_outdir = os.path.join(output_folder, "gffcompare")
@@ -411,7 +411,7 @@ def main():
     if RT_QUANTIFICATION_KNOWN in run_types:
         err_code = run_quantification(args, config_dict, False, "reference")
     if RT_QUANTIFICATION_NOVEL in run_types:
-        err_code = run_quantification(args, config_dict, False, "reference")
+        err_code = run_quantification(args, config_dict, False, "novel")
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
