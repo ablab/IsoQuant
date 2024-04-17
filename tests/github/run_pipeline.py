@@ -24,6 +24,8 @@ _quote = {"'": "|'", "|": "||", "\n": "|n", "\r": "|r", '[': '|[', ']': '|]'}
 RT_VOID = "void"
 RT_ASSIGNMENT = "assignment"
 RT_TRANSCRIPTS = "transcripts"
+RT_QUANTIFICATION_KNOWN = "quantification_known"
+RT_QUANTIFICATION_NOVEL = "quantification_novel"
 
 
 log = logging.getLogger('GitHubRunner')
@@ -246,8 +248,8 @@ def run_transcript_quality(args, config_dict):
     label = name if "label" not in config_dict else config_dict["label"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
     out_gtf = os.path.join(output_folder, "%s/%s.transcript_models.gtf" % (label, label))
-    if not out_gtf:
-        log.error("Output GTF file was not found")
+    if not os.path.exists(out_gtf):
+        log.error("Output GTF file was not found" % out_gtf)
         return -31
 
     quality_output = os.path.join(output_folder, "gffcompare")
@@ -285,6 +287,71 @@ def run_transcript_quality(args, config_dict):
             if err_code != 0:
                 exit_code = err_code
     new_etalon_outf.close()
+    return exit_code
+
+
+def run_quantification(args, config_dict, novel, output_name):
+    log.info('== Running quantification assessment ==')
+    config_file = args.config_file
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    isoquant_dir = os.path.join(source_dir, "../../")
+
+    name = config_dict["name"]
+    label = name if "label" not in config_dict else config_dict["label"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
+
+    if novel:
+        out_tpm = os.path.join(output_folder, "%s/%s.transcript_model_tpm.tsv" % (label, label))
+    else:
+        out_tpm = os.path.join(output_folder, "%s/%s.transcript_tpm.tsv" % (label, label))
+
+    if not os.path.exists(out_tpm):
+        log.error("Output TPM file %s was not found" % out_tpm)
+        return -32
+
+    if "reference_tpm" not in config_dict:
+        return 0
+    ref_tpm = config_dict["reference_tpm"]
+
+    quantification_stats_output = os.path.join(output_folder, output_name + ".quantification.tsv")
+    qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/quantification_stats.py"),
+                       "-o", quantification_stats_output, "----ref_expr", ref_tpm, "--tpm", out_tpm]
+
+    if novel:
+        gffcompare_outdir = os.path.join(output_folder, "gffcompare")
+        tracking = os.path.join(gffcompare_outdir, "isoquant.novel.tracking")
+        if not os.path.exists(tracking):
+            log.error("Tracking file %s was not found" % tracking)
+            return -33
+        qa_command_list += ["--tracking", tracking]
+
+    log.info("QA command line: " + " ".join(qa_command_list))
+    result = subprocess.run(qa_command_list)
+    if result.returncode != 0:
+        log.error("Quantification evaluation exited with non-zero status: %d" % result.returncode)
+        return -14
+
+    etalon_to_use = "etalon_quantification_" + ("novel" if novel else "ref")
+    if etalon_to_use not in config_dict:
+        return 0
+
+    log.info('== Checking quantification metrics ==')
+    etalon_quality_dict = load_tsv_config(fix_path(config_file, config_dict[etalon_to_use]))
+    real_dict = load_tsv_config(quantification_stats_output)
+    exit_code = 0
+
+    for metric_name in etalon_quality_dict.keys():
+        if metric_name not in real_dict:
+            exit_code = -15
+            log.warning("Metric not found %s" % metric_name)
+            continue
+
+        ref_value = float(etalon_quality_dict[metric_name])
+        real_value = float(etalon_quality_dict[metric_name])
+        err_code = check_value(ref_value, real_value, metric_name)
+        if err_code != 0:
+            exit_code = err_code
+
     return exit_code
 
 
@@ -327,16 +394,17 @@ def main():
     if err_code != 0:
         return err_code
 
-    run_type = config_dict["run_type"]
-    if run_type == RT_VOID:
+    run_types = set(map(lambda x: x.strip().replace('"', ''), config_dict["run_type"].split(",")))
+    if RT_VOID in run_types:
         err_code = 0
-    elif run_type == RT_ASSIGNMENT:
+    if RT_ASSIGNMENT in run_types:
         err_code = run_assignment_quality(args, config_dict)
-    elif run_type == RT_TRANSCRIPTS:
+    if RT_TRANSCRIPTS in run_types:
         err_code = run_transcript_quality(args, config_dict)
-    else:
-        log.error("Test type %s is not supported" % run_type)
-        err_code = -50
+    if RT_QUANTIFICATION_KNOWN in run_types:
+        err_code = run_quantification(args, config_dict, False, "reference")
+    if RT_QUANTIFICATION_NOVEL in run_types:
+        err_code = run_quantification(args, config_dict, False, "reference")
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
