@@ -130,7 +130,7 @@ def main():
     print("Loading reference data from %s" % args.ref_expr)
     ref_tpm_dict = load_counts(args.ref_expr, args.ref_col)
 
-    tpm_dict = load_counts(args.tpm, args.tpm_col, novel=args.no_novel)
+    tpm_dict = load_counts(args.tpm, args.tpm_col, novel=args.novel)
 
     if args.tracking:
         # take reference ids from gffcompare output .tracking
