@@ -118,7 +118,7 @@ def parse_args():
     parser.add_argument('--tpm', '-t', type=str, help='output expression table to assess, TPM', required=True)
     parser.add_argument('--tpm_col', type=int, default=2, help='TPM column in output expression table')
     parser.add_argument('--tracking', type=str, help='tracking file')
-    parser.add_argument('--no_novel', action='store_false', default=True, help='do not use novel transcripts')
+    parser.add_argument('--no_novel', dest="novel", action='store_false', default=True, help='do not use novel transcripts')
     parser.add_argument('--full_stats', action='store_true', default=False, help='output full stats')
     parser.add_argument('--output', '-o', type=str, help='output file', default="quantification_assessment.tsv")
     return parser.parse_args()
@@ -126,13 +126,11 @@ def parse_args():
 
 def main():
     args = parse_args()
-    if not os.path.exists(args.output):
-        os.makedirs(args.output)
 
     print("Loading reference data from %s" % args.ref_expr)
     ref_tpm_dict = load_counts(args.ref_expr, args.ref_col)
 
-    tpm_dict = load_counts(args.tpm, args.tpm_col, novel=not args.no_novel)
+    tpm_dict = load_counts(args.tpm, args.tpm_col, novel=args.no_novel)
 
     if args.tracking:
         # take reference ids from gffcompare output .tracking
