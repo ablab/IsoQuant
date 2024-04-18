@@ -50,11 +50,11 @@ class MultimapResolver:
         primary_inconsistent = set()
 
         for i, a in enumerate(assignment_list):
-            if ReadAssignmentType.is_inconsistent(a.assignment_type):
+            if a.assignment_type.is_inconsistent():
                 if not a.multimapper:
                     primary_inconsistent.add(i)
                 inconsistent_assignments.add(i)
-            elif ReadAssignmentType.is_consistent(a.assignment_type):
+            elif a.assignment_type.is_consistent():
                 consistent_assignments.add(i)
                 if not a.multimapper and not a.assignment_type == ReadAssignmentType.ambiguous:
                     primary_unique.add(i)
@@ -111,8 +111,8 @@ class MultimapResolver:
         for i in range(len(assignment_list)):
             assignment = assignment_list[i]
             if i in assignments_to_keep:
-                if ReadAssignmentType.is_inconsistent(assignment.assignment_type):
-                    ambiguity_assignment_type = ReadAssignmentType.inconsistent_amb
+                if assignment.assignment_type.is_inconsistent():
+                    ambiguity_assignment_type = ReadAssignmentType.inconsistent_ambiguous
                 else:
                     ambiguity_assignment_type = ReadAssignmentType.ambiguous
 

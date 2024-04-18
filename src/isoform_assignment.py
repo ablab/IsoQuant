@@ -22,20 +22,26 @@ class ReadAssignmentType(Enum):
     unique_minor_difference = 2
     inconsistent = 30
     inconsistent_non_intronic = 31
-    inconsistent_amb = 32
+    inconsistent_ambiguous = 32
     suspended = 255
 
-    @staticmethod
-    def is_inconsistent(assignment_type):
-        return assignment_type in [ReadAssignmentType.inconsistent,
-                                   ReadAssignmentType.inconsistent_amb,
-                                   ReadAssignmentType.inconsistent_non_intronic]
+    def is_inconsistent(self):
+        return self in [ReadAssignmentType.inconsistent,
+                        ReadAssignmentType.inconsistent_ambiguous,
+                        ReadAssignmentType.inconsistent_non_intronic]
 
-    @staticmethod
-    def is_consistent(assignment_type):
-        return assignment_type in [ReadAssignmentType.unique,
-                                   ReadAssignmentType.unique_minor_difference,
-                                   ReadAssignmentType.ambiguous]
+    def is_consistent(self):
+        return self in [ReadAssignmentType.unique,
+                        ReadAssignmentType.unique_minor_difference,
+                        ReadAssignmentType.ambiguous]
+
+    def is_unassigned(self):
+        return self in [ReadAssignmentType.noninformative,
+                        ReadAssignmentType.intergenic]
+
+    def is_unique(self):
+        return self in [ReadAssignmentType.unique_minor_difference,
+                        ReadAssignmentType.unique]
 
 # SQANTI-like
 @unique
@@ -538,9 +544,9 @@ class ReadAssignment:
             assigned_genes = set([m.assigned_gene for m in self.isoform_matches])
             self.gene_assignment_type = ReadAssignmentType.ambiguous if len(
                 assigned_genes) > 1 else ReadAssignmentType.unique
-        elif self.assignment_type == ReadAssignmentType.inconsistent_amb:
+        elif self.assignment_type == ReadAssignmentType.inconsistent_ambiguous:
             assigned_genes = set([m.assigned_gene for m in self.isoform_matches])
-            self.gene_assignment_type = ReadAssignmentType.inconsistent_amb if len(
+            self.gene_assignment_type = ReadAssignmentType.inconsistent_ambiguous if len(
                 assigned_genes) > 1 else ReadAssignmentType.inconsistent
         else:
             self.gene_assignment_type = self.assignment_type
@@ -728,7 +734,7 @@ def match_subtype_to_str_with_additional_info(event, strand, read_introns, isofo
 def is_matching_assignment(isoform_assignment):
     if isoform_assignment.assignment_type == ReadAssignmentType.unique:
         return True
-    elif isoform_assignment.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference]:
+    elif isoform_assignment.assignment_type.is_unique():
         allowed_set = {MatchEventSubtype.none,
                        MatchEventSubtype.fsm,
                        MatchEventSubtype.exon_misalignment,

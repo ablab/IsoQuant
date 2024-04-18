@@ -164,8 +164,7 @@ class AssignedFeatureCounter(AbstractCounter):
         # TODO: add __alignment_not_unique / __too_low_aQual ?
         if not read_assignment:
             self.not_aligned_reads += 1
-        if read_assignment.assignment_type in [ReadAssignmentType.noninformative, ReadAssignmentType.intergenic] or \
-                not read_assignment.isoform_matches:
+        if read_assignment.assignment_type.is_unassigned() or not read_assignment.isoform_matches:
             self.not_assigned_reads += 1
         elif read_assignment.isoform_matches and read_assignment.isoform_matches[0].assigned_transcript is None:
             self.not_assigned_reads += 1
@@ -186,7 +185,7 @@ class AssignedFeatureCounter(AbstractCounter):
                     if count_value > 0:
                         self.all_features.add(feature_id)
                 self.ambiguous_reads += 1
-        elif read_assignment.assignment_type == ReadAssignmentType.inconsistent:
+        elif read_assignment.assignment_type.is_inconsistent():
             feature_ids = set([self.get_feature_id(m) for m in read_assignment.isoform_matches])
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
             count_value = self.read_counter.process_inconsistent(read_assignment.isoform_matches[0], len(feature_ids))
@@ -196,8 +195,7 @@ class AssignedFeatureCounter(AbstractCounter):
                         self.feature_counter[group_id][feature_id] += count_value
                         self.all_features.add(feature_id)
                         self.confirmed_features.add((group_id, feature_id))
-        elif read_assignment.assignment_type == ReadAssignmentType.unique or\
-                read_assignment.assignment_type == ReadAssignmentType.unique_minor_difference:
+        elif read_assignment.assignment_type.is_unique():
             feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
             group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
             self.feature_counter[group_id][feature_id] += 1.0
