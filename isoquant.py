@@ -193,6 +193,8 @@ def parse_args(cmd_args=None, namespace=None):
     # ADDITIONAL
     add_additional_option("--no_gzip", help="do not gzip large output files", dest="gzipped",
                           action='store_false', default=True)
+    add_additional_option("--no_gtf_check", help="do not perform GTF checks", dest="gtf_check",
+                          action='store_false', default=True)
     add_additional_option("--high_memory", help="increase RAM consumption (store alignment and the genome in RAM)",
                           action='store_true', default=False)
     add_additional_option("--no_junc_bed", action="store_true", default=False,

@@ -552,6 +552,9 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 `--no_gzip`
     Do not compress large output files.
 
+`--no_gzip`
+    Do not perform input GTF checks.
+
 `--no_secondary`
     Ignore secondary alignments.
 
