@@ -91,7 +91,7 @@ def db2bed(db, bed, _=None):
     logger.info("Gene database BED written to " + bed)
 
 
-def gtf2db(gtf, db, complete_db=False):
+def check_input_gtf(gtf, db, complete_db):
     logger.info("Checking input gene annotation")
     gtf_is_correct, corrected_gtf, out_fname, has_meta_features = check_gtf_duplicates(gtf)
     if not gtf_is_correct:
@@ -120,6 +120,11 @@ def gtf2db(gtf, db, complete_db=False):
             logger.warning("The results of this run might not be correct.")
             logger.warning("Remove the output folder and restart IsoQuant without --complete_genedb.")
 
+
+def gtf2db(gtf, db, complete_db=False, check_gtf=True):
+    if check_gtf:
+        check_input_gtf(gtf, db, complete_db)
+
     logger.info("Converting gene annotation file to .db format (takes a while)...")
     gffutils.create_db(gtf, db, force=True, keep_order=True, merge_strategy='error',
                        sort_attribute_values=True, disable_infer_transcripts=complete_db,
@@ -128,7 +133,7 @@ def gtf2db(gtf, db, complete_db=False):
     logger.info("Provide this database next time to avoid excessive conversion")
 
 
-def convert_gtf_to_db(args, output_is_dir=True):
+def convert_gtf_to_db(args, output_is_dir=True, check_input_gtf=True):
     gtf_filename = args.genedb
     gtf_filename = os.path.abspath(gtf_filename)
     output_path =  args.output if args.genedb_output is None else args.genedb_output
@@ -295,7 +300,7 @@ def convert_db(gtf_filename, genedb_filename, convert_fn, args):
                     return converted_gtf, genedb_filename
 
     if convert_fn == gtf2db:
-        convert_fn(gtf_filename, genedb_filename, args.complete_genedb)
+        convert_fn(gtf_filename, genedb_filename, args.complete_genedb, args.gtf_check)
     else:
         convert_fn(genedb_filename, gtf_filename)
     converted_gtfs[gtf_filename] = {
