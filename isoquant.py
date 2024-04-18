@@ -22,7 +22,7 @@ import pysam
 import gffutils
 import pyfaidx
 
-from src.gtf2db import convert_gtf_to_db, check_gtf_duplicates
+from src.gtf2db import convert_gtf_to_db
 from src.read_mapper import (
     DATA_TYPE_ALIASES,
     SUPPORTED_STRANDEDNESS,

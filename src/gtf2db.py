@@ -117,7 +117,7 @@ def gtf2db(gtf, db, complete_db=False):
         elif has_meta_features == 0:
             logger.warning("You set --complete_genedb option but it looks like the provided annotation "
                            "does not contain all necessary gene or transcript records.")
-            logger.warning("The results of this run might not be meaningful.")
+            logger.warning("The results of this run might not be correct.")
             logger.warning("Remove the output folder and restart IsoQuant without --complete_genedb.")
 
     logger.info("Converting gene annotation file to .db format (takes a while)...")
@@ -188,7 +188,10 @@ def check_gtf_duplicates(gtf):
             gtf_correct = False
             continue
 
-        gene_id = attrs[gene_id_pos + 1][1:-2]
+        gene_str = attrs[gene_id_pos + 1]
+        start_pos = gene_str.find('"')
+        end_pos = gene_str.rfind('"')
+        gene_id = gene_str[start_pos+1:end_pos]
         if feature_type == "gene":
             if gene_id in gene_ids:
                 logger.warning("Duplicated gene id %s on line %d" % (gene_id, line_count))
@@ -210,7 +213,10 @@ def check_gtf_duplicates(gtf):
             gtf_correct = False
             continue
 
-        transcript_id = attrs[transcript_id_pos + 1][1:-2]
+        transcript_str = attrs[transcript_id_pos + 1]
+        start_pos = transcript_str.find('"')
+        end_pos = transcript_str.rfind('"')
+        transcript_id = transcript_str[start_pos+1:end_pos]
         if feature_type in ["transcript", "mRNA"]:
             if transcript_id in transcript_ids:
                 logger.warning("Duplicated transcript id %s on line %d" % (transcript_id, line_count))
@@ -251,7 +257,7 @@ def check_gtf_duplicates(gtf):
     return gtf_correct, corrected_gtf, gtf_name + ".corrected" + inner_ext.lower(), complete_genedb
 
 
-def find_coverted_db(converted_gtfs, gtf_filename):
+def find_converted_db(converted_gtfs, gtf_filename):
     gtf_mtime = converted_gtfs.get(gtf_filename, {}).get('gtf_mtime')
     db_mtime = converted_gtfs.get(gtf_filename, {}).get('db_mtime')
     db_file = converted_gtfs.get(gtf_filename, {}).get('genedb')
@@ -261,12 +267,13 @@ def find_coverted_db(converted_gtfs, gtf_filename):
     return None
 
 
-def compare_stored_gtf(converted_gtfs, gtf_filename, genedb_filename):
+def compare_stored_gtf(converted_gtfs, gtf_filename, genedb_filename, complete_genedb):
     gtf_mtime = converted_gtfs.get(gtf_filename, {}).get('gtf_mtime')
     db_mtime = converted_gtfs.get(gtf_filename, {}).get('db_mtime')
-    if os.path.exists(gtf_filename) and os.path.getmtime(gtf_filename) == gtf_mtime:
-        if os.path.exists(genedb_filename) and os.path.getmtime(genedb_filename) == db_mtime:
-            return True
+    is_complete = converted_gtfs.get(gtf_filename, {}).get('complete_db')
+    return (os.path.exists(gtf_filename) and os.path.getmtime(gtf_filename) == gtf_mtime and
+            os.path.exists(genedb_filename) and os.path.getmtime(genedb_filename) == db_mtime
+            and complete_genedb == is_complete)
 
 
 def convert_db(gtf_filename, genedb_filename, convert_fn, args):
@@ -277,13 +284,13 @@ def convert_db(gtf_filename, genedb_filename, convert_fn, args):
 
     if not args.clean_start:
         if convert_fn == gtf2db:
-            converted_db = find_coverted_db(converted_gtfs, gtf_filename)
+            converted_db = find_converted_db(converted_gtfs, gtf_filename)
             if converted_db is not None:
                 logger.info("Gene annotation file found. Using " + converted_db)
                 return gtf_filename, converted_db
         else:
             for converted_gtf in converted_gtfs:
-                if compare_stored_gtf(converted_gtfs, converted_gtf, genedb_filename):
+                if compare_stored_gtf(converted_gtfs, converted_gtf, genedb_filename, args.complete_genedb):
                     logger.info("Gene annotation file found. Using " + converted_gtf)
                     return converted_gtf, genedb_filename
 
