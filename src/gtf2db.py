@@ -262,23 +262,22 @@ def check_gtf_duplicates(gtf):
     return gtf_correct, corrected_gtf, gtf_name + ".corrected" + inner_ext.lower(), complete_genedb
 
 
-def find_converted_db(converted_gtfs, gtf_filename):
+def find_converted_db(converted_gtfs, gtf_filename, complete_genedb):
     gtf_mtime = converted_gtfs.get(gtf_filename, {}).get('gtf_mtime')
     db_mtime = converted_gtfs.get(gtf_filename, {}).get('db_mtime')
     db_file = converted_gtfs.get(gtf_filename, {}).get('genedb')
-    if os.path.exists(gtf_filename) and os.path.getmtime(gtf_filename) == gtf_mtime:
-        if os.path.exists(db_file) and os.path.getmtime(db_file) == db_mtime:
-            return db_file
+    is_complete = converted_gtfs.get(gtf_filename, {}).get('complete_db')
+    if (os.path.exists(gtf_filename) and os.path.getmtime(gtf_filename) == gtf_mtime and
+            os.path.exists(db_file) and os.path.getmtime(db_file) == db_mtime and complete_genedb == is_complete):
+        return db_file
     return None
 
 
-def compare_stored_gtf(converted_gtfs, gtf_filename, genedb_filename, complete_genedb):
+def compare_stored_gtf(converted_gtfs, gtf_filename, genedb_filename):
     gtf_mtime = converted_gtfs.get(gtf_filename, {}).get('gtf_mtime')
     db_mtime = converted_gtfs.get(gtf_filename, {}).get('db_mtime')
-    is_complete = converted_gtfs.get(gtf_filename, {}).get('complete_db')
     return (os.path.exists(gtf_filename) and os.path.getmtime(gtf_filename) == gtf_mtime and
-            os.path.exists(genedb_filename) and os.path.getmtime(genedb_filename) == db_mtime
-            and complete_genedb == is_complete)
+            os.path.exists(genedb_filename) and os.path.getmtime(genedb_filename) == db_mtime)
 
 
 def convert_db(gtf_filename, genedb_filename, convert_fn, args):
@@ -289,13 +288,13 @@ def convert_db(gtf_filename, genedb_filename, convert_fn, args):
 
     if not args.clean_start:
         if convert_fn == gtf2db:
-            converted_db = find_converted_db(converted_gtfs, gtf_filename)
+            converted_db = find_converted_db(converted_gtfs, gtf_filename, args.complete_genedb)
             if converted_db is not None:
                 logger.info("Gene annotation file found. Using " + converted_db)
                 return gtf_filename, converted_db
         else:
             for converted_gtf in converted_gtfs:
-                if compare_stored_gtf(converted_gtfs, converted_gtf, genedb_filename, args.complete_genedb):
+                if compare_stored_gtf(converted_gtfs, converted_gtf, genedb_filename):
                     logger.info("Gene annotation file found. Using " + converted_gtf)
                     return converted_gtf, genedb_filename
 
