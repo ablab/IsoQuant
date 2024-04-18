@@ -594,7 +594,7 @@ class LongReadAssigner:
         # logger.debug("* Inconsistencies detected: " + str(read_matches))
 
         # select ones with least number of inconsistent events
-        best_isoforms, best_score = self.select_best_among_inconsistent(combined_read_profile, read_matches)
+        best_isoforms, penalty_score = self.select_best_among_inconsistent(combined_read_profile, read_matches)
         if not best_isoforms:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
         # logger.debug("* Selected isoforms: " + str(best_isoforms))
@@ -604,7 +604,7 @@ class LongReadAssigner:
         if not combined_read_profile.read_intron_profile.read_profile:
             isoform_matches = self.create_monoexon_matches(read_matches, best_isoforms)
         elif ReadAssignmentType.is_inconsistent(assignment_type):
-            isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms, best_score)
+            isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms, penalty_score)
         else:
             isoform_matches = self.create_consistent_matches(read_matches, best_isoforms, combined_read_profile)
         return ReadAssignment(read_id, assignment_type, isoform_matches)
@@ -656,14 +656,14 @@ class LongReadAssigner:
             matches.append(isoform_match)
         return matches
 
-    def create_inconsistent_matches(self, read_matches, selected_isoforms, score=0.0):
+    def create_inconsistent_matches(self, read_matches, selected_isoforms, penalty_score=0.0):
         matches = []
         for isoform_id in selected_isoforms:
             read_match = read_matches[isoform_id]
             match_classification = MatchClassification.get_inconsistency_classification(read_match)
             isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
                                          read_match, self.gene_info.isoform_strands[isoform_id],
-                                         score=score)
+                                         penalty_score=penalty_score)
             matches.append(isoform_match)
         return matches
 
@@ -720,7 +720,7 @@ class LongReadAssigner:
         isoform_scores = []
         for isoform_id, match_events in read_matches.items():
             # logger.debug("* * Scoring inconsistencies for " + isoform_id + ": " + str(match_events))
-            score = 0.0
+            penalty_score = 0.0
             for e in match_events:
                 event_count = 1
                 if e.isoform_region != SupplementaryMatchConstants.undefined_region and \
@@ -751,25 +751,25 @@ class LongReadAssigner:
                                     MatchEventSubtype.exon_elongation_left}:
                     event_cost = elongation_cost(self.params, e.event_info)
 
-                score +=  event_cost * event_count
+                penalty_score +=  event_cost * event_count
                 # logger.debug("* * * Event " + str(e.event_type) + ", introns affected " + str(event_count) +
                 #             ", event cost " + str(event_cost) +
-                #             ". Updated score: " + str(score))
-            # logger.debug("* * Final score for isoform " + isoform_id + ": " + str(score))
-            isoform_scores.append((isoform_id, score))
+                #             ". Updated penalty_score: " + str(penalty_score))
+            # logger.debug("* * Final penalty_score for isoform " + isoform_id + ": " + str(penalty_score))
+            isoform_scores.append((isoform_id, penalty_score))
 
-        best_score = min(isoform_scores, key=lambda x:x[1])[1]
-        # logger.debug("* * Best score " + str(best_score))
-        best_isoforms = [x[0] for x in filter(lambda x:x[1] == best_score, isoform_scores)]
+        min_penalty_score = min(isoform_scores, key=lambda x:x[1])[1]
+        # logger.debug("* * Best penalty_score " + str(min_penalty_score))
+        best_isoforms = [x[0] for x in filter(lambda x:x[1] == min_penalty_score, isoform_scores)]
         # logger.debug("* * Best isoforms " + str(best_isoforms))
 
-        # if several isoforms are tied select the best according to nucl score
+        # if several isoforms are tied select the best according to nucl penalty_score
         if len(best_isoforms) > 1:
             best_isoforms = self.resolve_by_nucleotide_score(combined_read_profile, best_isoforms,
                                                              similarity_function=self.coverage_based_nucleotide_score)
-            # logger.debug("* * Resolved by nucl score " + str(best_isoforms))
+            # logger.debug("* * Resolved by nucl penalty_score " + str(best_isoforms))
 
-        return best_isoforms, best_score
+        return best_isoforms, min_penalty_score
 
     # ==== POLYA STUFF ====
     def verify_read_ends_for_assignment(self, combined_read_profile, assignment):

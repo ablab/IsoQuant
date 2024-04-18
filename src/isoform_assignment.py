@@ -31,6 +31,11 @@ class ReadAssignmentType(Enum):
                                    ReadAssignmentType.inconsistent_amb,
                                    ReadAssignmentType.inconsistent_non_intronic]
 
+    @staticmethod
+    def is_consistent(assignment_type):
+        return assignment_type in [ReadAssignmentType.unique,
+                                   ReadAssignmentType.unique_minor_difference,
+                                   ReadAssignmentType.ambiguous]
 
 # SQANTI-like
 @unique
@@ -403,12 +408,12 @@ class MatchEvent:
 
 class IsoformMatch:
     def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
-                 match_subclassification = None, transcript_strand='.', score=0):
+                 match_subclassification = None, transcript_strand='.', penalty_score=0):
         self.assigned_gene = assigned_gene
         self.assigned_transcript = assigned_transcript
         self.transcript_strand = transcript_strand
         self.match_classification = match_classification
-        self.score = score
+        self.penalty_score = penalty_score
         if match_subclassification is None:
             self.match_subclassifications = []
         elif isinstance(match_subclassification, list):
@@ -424,7 +429,7 @@ class IsoformMatch:
         match.assigned_transcript = read_string_or_none(infile)
         match.transcript_strand = read_string(infile)
         match.match_classification = MatchClassification(read_short_int(infile))
-        match.score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
+        match.penalty_score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
         match.match_subclassifications = read_list(infile, MatchEvent.deserialize)
         return match
 
@@ -433,7 +438,7 @@ class IsoformMatch:
         write_string_or_none(self.assigned_transcript, outfile)
         write_string(self.transcript_strand, outfile)
         write_short_int(self.match_classification.value, outfile)
-        write_int(int(self.score * SHORT_FLOAT_MULTIPLIER), outfile)
+        write_int(int(self.penalty_score * SHORT_FLOAT_MULTIPLIER), outfile)
         write_list(self.match_subclassifications, outfile, MatchEvent.serialize)
 
     def add_subclassification(self, match_subclassification):
@@ -459,10 +464,22 @@ class BasicReadAssignment:
         self.multimapper = read_assignment.multimapper
         self.polyA_found = read_assignment.polyA_found
         self.assignment_type = read_assignment.assignment_type
+        self.gene_assignment_type = read_assignment.gene_assignment_type
+        self.penalty_score = 0.0
+        self.isoforms = []
+        self.genes = []
+
         if read_assignment.isoform_matches:
-            self.score = read_assignment.isoform_matches[0].score
-        else:
-            self.score = 0.0
+            gene_set = set()
+            isoform_set = set()
+            for m in read_assignment.isoform_matches:
+                self.penalty_score = min(self.penalty_score, read_assignment.isoform_matches[0].penalty_score)
+                if m.assigned_gene:
+                    gene_set.add(m.assigned_gene)
+                if m.assigned_transcript:
+                    isoform_set.add(m.assigned_transcript)
+            self.genes = list(gene_set)
+            self.isoforms = list(isoform_set)
 
     @classmethod
     def deserialize(cls, infile):
@@ -474,7 +491,10 @@ class BasicReadAssignment:
         read_assignment.multimapper = bool_arr[0]
         read_assignment.polyA_found = bool_arr[1]
         read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
-        read_assignment.score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
+        read_assignment.gene_assignment_type = ReadAssignmentType(read_short_int(infile))
+        read_assignment.penalty_score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
+        read_assignment.genes = read_list(infile, read_string)
+        read_assignment.isoforms = read_list(infile, read_string)
         return read_assignment
 
     def serialize(self, outfile):
@@ -483,7 +503,10 @@ class BasicReadAssignment:
         write_string(self.chr_id, outfile)
         write_bool_array([self.multimapper, self.polyA_found], outfile)
         write_short_int(self.assignment_type.value, outfile)
-        write_int(int(self.score * SHORT_FLOAT_MULTIPLIER), outfile)
+        write_short_int(self.gene_assignment_type.value, outfile)
+        write_int(int(self.penalty_score * SHORT_FLOAT_MULTIPLIER), outfile)
+        write_list(self.genes, outfile, write_string)
+        write_list(self.isoforms, outfile, write_string)
 
 
 class ReadAssignment:

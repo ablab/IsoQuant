@@ -34,16 +34,11 @@ class MultimapResolver:
             return assignment_list
 
         elif self.strategy == MultimapResolvingStrategy.merge:
-            informative_assignments = set()
-            for i in range(len(assignment_list)):
-                if assignment_list[i].assignment_type != ReadAssignmentType.noninformative:
-                    informative_assignments.add(i)
-            if len(informative_assignments) == 1:
-                return self.suspend_assignments(assignment_list, informative_assignments)
-            return self.suspend_assignments(assignment_list, informative_assignments, ReadAssignmentType.ambiguous)
+            return self.merge_assignments(assignment_list)
 
         elif self.strategy == MultimapResolvingStrategy.take_best:
             return self.select_best_assignment(assignment_list)
+
         else:
             raise ValueError("Unsupported multimap strategy")
 
@@ -53,53 +48,81 @@ class MultimapResolver:
         consistent_assignments = set()
         inconsistent_assignments = set()
         primary_inconsistent = set()
+
         for i, a in enumerate(assignment_list):
-            if a.assignment_type in [ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference] and \
-                    not a.multimapper:
-                primary_unique.add(i)
-            elif a.assignment_type == ReadAssignmentType.inconsistent and not a.multimapper:
-                primary_inconsistent.add(i)
-            if a.assignment_type in [ReadAssignmentType.unique,
-                                     ReadAssignmentType.unique_minor_difference,
-                                     ReadAssignmentType.ambiguous]:
-                consistent_assignments.add(i)
-            elif a.assignment_type in [ReadAssignmentType.inconsistent]:
+            if ReadAssignmentType.is_inconsistent(a.assignment_type):
+                if not a.multimapper:
+                    primary_inconsistent.add(i)
                 inconsistent_assignments.add(i)
+            elif ReadAssignmentType.is_consistent(a.assignment_type):
+                consistent_assignments.add(i)
+                if not a.multimapper and not a.assignment_type == ReadAssignmentType.ambiguous:
+                    primary_unique.add(i)
 
         if primary_unique:
-            if len(primary_unique) > 1:
-                return self.suspend_assignments(assignment_list, primary_unique, ReadAssignmentType.ambiguous)
-            # primary unique is found, rest is noninformative
-            return self.suspend_assignments(assignment_list, primary_unique)
+            return self.filter_assignments(assignment_list, primary_unique)
 
         if consistent_assignments:
-            return self.suspend_assignments(assignment_list, consistent_assignments, ReadAssignmentType.ambiguous)
+            return self.filter_assignments(assignment_list, consistent_assignments)
 
         if primary_inconsistent:
             return self.select_best_inconsistent(assignment_list, primary_inconsistent)
 
         if inconsistent_assignments:
             return self.select_best_inconsistent(assignment_list, inconsistent_assignments)
+
         return assignment_list
 
-    def select_best_inconsistent(self, assignment_list, inconsistent_assignments):
-        if len(inconsistent_assignments) > 1:
-            assignment_scores = []
-            for i in inconsistent_assignments:
-                assignment_scores.append((assignment_list[i].score, i))
-            best_score = min(assignment_scores, key=lambda x: x[0])[0]
-            best_isoforms = [x[1] for x in filter(lambda x: x[0] == best_score, assignment_scores)]
-            return self.suspend_assignments(assignment_list, best_isoforms,
-                                            ReadAssignmentType.inconsistent if len(best_isoforms) > 1 else None)
+    @staticmethod
+    def select_best_inconsistent(assignment_list, inconsistent_assignments):
+        if len(inconsistent_assignments) <= 1:
+            return MultimapResolver.filter_assignments(assignment_list, inconsistent_assignments)
 
-        return self.suspend_assignments(assignment_list, inconsistent_assignments)
+        assignment_scores = []
+        for i in inconsistent_assignments:
+            assignment_scores.append((assignment_list[i].penalty_score, i))
+        best_score = min(assignment_scores, key=lambda x: x[0])[0]
+        best_assignments = [x[1] for x in filter(lambda x: x[0] == best_score, assignment_scores)]
+        return MultimapResolver.filter_assignments(assignment_list, best_assignments)
 
-    def suspend_assignments(self, assignment_list, assignments_to_keep, new_type=None):
+    @staticmethod
+    def merge_assignments(assignment_list):
+        informative_assignments = set()
         for i in range(len(assignment_list)):
+            if assignment_list[i].assignment_type != ReadAssignmentType.noninformative:
+                informative_assignments.add(i)
+
+        return MultimapResolver.filter_assignments(assignment_list, informative_assignments)
+
+    # select all given assignments from the list, makr rest as suspended
+    # if selected assignments feature more than 1 gene/isoform - mark as ambiguous accordingly
+    @staticmethod
+    def filter_assignments(assignment_list, assignments_to_keep, mark_as_ambiguous=True):
+        all_genes = set()
+        all_isoforms = set()
+        for i in assignments_to_keep:
+            assignment = assignment_list[i]
+            all_genes.update(assignment.genes)
+            all_isoforms.update(assignment.isoforms)
+
+        change_transcript_assignment_type = mark_as_ambiguous and len(all_isoforms) > 1
+        change_gene_assignment_type = mark_as_ambiguous and len(all_genes) > 1
+
+        for i in range(len(assignment_list)):
+            assignment = assignment_list[i]
             if i in assignments_to_keep:
-                if new_type is not None:
-                    assignment_list[i].assignment_type = new_type
-                    assignment_list[i].multimapper = True
-                continue
-            assignment_list[i].assignment_type = ReadAssignmentType.suspended
+                if ReadAssignmentType.is_inconsistent(assignment.assignment_type):
+                    ambiguity_assignment_type = ReadAssignmentType.inconsistent_amb
+                else:
+                    ambiguity_assignment_type = ReadAssignmentType.ambiguous
+
+                if change_transcript_assignment_type:
+                    assignment.assignment_type = ambiguity_assignment_type
+                if change_gene_assignment_type:
+                    assignment.gene_assignment_type = ambiguity_assignment_type
+                    assignment.multimapper = True
+            else:
+                assignment.assignment_type = ReadAssignmentType.suspended
+                assignment.gene_assignment_type = ReadAssignmentType.suspended
+
         return assignment_list
