@@ -322,7 +322,7 @@ class LongReadAssigner:
 
             if any(MatchEventSubtype.is_major_elongation(e.event_type) for e in exon_elongation_types):
                 # serious exon elongation
-                if not ReadAssignmentType.is_inconsistent(assignment.assignment_type):
+                if not assignment.assignment_type.is_inconsistent():
                     assignment.set_assignment_type(ReadAssignmentType.inconsistent_non_intronic)
             elif any(MatchEventSubtype.is_minor_elongation(e.event_type) for e in exon_elongation_types):
                 # minor exon elongation
@@ -514,7 +514,7 @@ class LongReadAssigner:
             self.verify_read_ends_for_assignment(combined_read_profile, assignment)
 
             # if apa detected isoform should be treated as inconsistent and rechecked
-            if ReadAssignmentType.is_inconsistent(assignment.assignment_type):
+            if assignment.assignment_type.is_inconsistent():
                 return None
 
         return assignment
@@ -603,7 +603,7 @@ class LongReadAssigner:
         assignment_type = self.classify_assignment(best_isoforms, read_matches)
         if not combined_read_profile.read_intron_profile.read_profile:
             isoform_matches = self.create_monoexon_matches(read_matches, best_isoforms)
-        elif ReadAssignmentType.is_inconsistent(assignment_type):
+        elif assignment_type.is_inconsistent():
             isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms, penalty_score)
         else:
             isoform_matches = self.create_consistent_matches(read_matches, best_isoforms, combined_read_profile)
@@ -626,7 +626,7 @@ class LongReadAssigner:
                 inconsistency_type = ReadAssignmentType.inconsistent
             else:
                 inconsistency_type = ReadAssignmentType.inconsistent_non_intronic
-            assignment_type = ReadAssignmentType.inconsistent_amb if is_abmiguous else inconsistency_type
+            assignment_type = ReadAssignmentType.inconsistent_ambiguous if is_abmiguous else inconsistency_type
         elif any(MatchEventSubtype.is_minor_error(e) for e in all_event_types):
             #logger.debug("* * Assignment has minor errors")
             assignment_type = ReadAssignmentType.ambiguous if is_abmiguous else ReadAssignmentType.unique_minor_difference

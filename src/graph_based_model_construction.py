@@ -197,7 +197,7 @@ class GraphBasedModelConstructor:
             assignment.introns_match = all(e == 1 for e in combined_profile.read_intron_profile.read_profile)
             assignment.gene_info = self.gene_info
 
-            if assignment.assignment_type in [ReadAssignmentType.intergenic, ReadAssignmentType.noninformative] or \
+            if assignment.assignment_type.is_unassigned() or \
                     not assignment.isoform_matches:
                 # create intergenic
                 assignment.assignment_type = ReadAssignmentType.intergenic
@@ -481,13 +481,15 @@ class GraphBasedModelConstructor:
 
             if not read_assignment:
                 continue
-            if len(read_assignment.corrected_exons) == 1 and read_assignment.polyA_found and not read_assignment.multimapper and \
-                    read_assignment.assignment_type in {ReadAssignmentType.noninformative, ReadAssignmentType.inconsistent, ReadAssignmentType.intergenic}:
+            if (len(read_assignment.corrected_exons) == 1 and
+                    read_assignment.polyA_found and not read_assignment.multimapper and
+                    (read_assignment.assignment_type.is_unassigned() or
+                     read_assignment.assignment_type.is_inconsistent())):
                 novel_mono_exon_reads.append(read_assignment)
 
-            if read_assignment.assignment_type not in {ReadAssignmentType.unique,
-                                                       ReadAssignmentType.unique_minor_difference}:
+            if not read_assignment.assignment_type.is_unique():
                 continue
+
             refrenence_isoform_id = read_assignment.isoform_matches[0].assigned_transcript
             if refrenence_isoform_id in GraphBasedModelConstructor.detected_known_isoforms:
                 continue
@@ -715,9 +717,7 @@ class GraphBasedModelConstructor:
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
             model_assignment.read_group = assignment.read_group
             # check that no serious contradiction occurs
-            if model_assignment.assignment_type in [ReadAssignmentType.unique,
-                                                    ReadAssignmentType.unique_minor_difference,
-                                                    ReadAssignmentType.ambiguous]:
+            if model_assignment.assignment_type.is_consistent():
                 matched_isoforms = [m.assigned_transcript for m in model_assignment.isoform_matches]
 
                 if len(matched_isoforms) == 1:
