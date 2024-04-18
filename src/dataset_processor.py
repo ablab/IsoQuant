@@ -180,6 +180,7 @@ class ReadAssignmentLoader:
                     continue
                 else:
                     read_assignment.assignment_type = resolved_assignment.assignment_type
+                    read_assignment.gene_assignment_type = resolved_assignment.gene_assignment_type
                     read_assignment.multimapper = resolved_assignment.multimapper
             assignment_storage.append(read_assignment)
 
@@ -506,14 +507,14 @@ class DatasetProcessor:
                 results = proc.map(*read_gen, chunksize=1)
 
                 for storage, read_groups, alignment_stats in results:
-                    for read_assignment in storage:
-                        multimapped_reads[read_assignment.read_id].append(read_assignment)
+                    for basic_read_assignment in storage:
+                        multimapped_reads[basic_read_assignment.read_id].append(basic_read_assignment)
                     all_read_groups.update(read_groups)
                     self.alignment_stat_counter.merge(alignment_stats)
         else:
             for storage, read_groups, alignment_stats in map(*read_gen):
-                for read_assignment in storage:
-                    multimapped_reads[read_assignment.read_id].append(read_assignment)
+                for basic_read_assignment in storage:
+                    multimapped_reads[basic_read_assignment.read_id].append(basic_read_assignment)
                 all_read_groups.update(read_groups)
                 self.alignment_stat_counter.merge(alignment_stats)
 

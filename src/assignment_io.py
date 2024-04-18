@@ -21,8 +21,10 @@ from .serialization import (
     read_short_int,
     SHORT_TERMINATION_INT
 )
-from .isoform_assignment import (match_subtype_to_str_with_additional_info, ReadAssignment, MatchClassification,
-                                 ReadAssignmentType, ReadAssignmentTypeNaming)
+from .isoform_assignment import (match_subtype_to_str_with_additional_info,
+                                 ReadAssignment,
+                                 MatchClassification,
+                                 ReadAssignmentType)
 from .gene_info import GeneInfo
 
 
@@ -247,6 +249,7 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                     range_list_to_str(read_exons))
 
             additional_info = []
+            additional_info.append("gene_assignment=" + str(read_assignment.gene_assignment_type.name) + ";")
             additional_info.append("PolyA=" + str(read_assignment.polyA_found) + ";")
             if self.params.cage is not None:
                 additional_info.append("CAGE=" + str(read_assignment.cage_found) + ";")
