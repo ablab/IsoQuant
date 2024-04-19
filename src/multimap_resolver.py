@@ -118,6 +118,7 @@ class MultimapResolver:
 
                 if change_transcript_assignment_type:
                     assignment.assignment_type = ambiguity_assignment_type
+                    assignment.multimapper = True
                 if change_gene_assignment_type:
                     assignment.gene_assignment_type = ambiguity_assignment_type
                     assignment.multimapper = True
