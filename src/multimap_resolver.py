@@ -99,7 +99,7 @@ class MultimapResolver:
     # select all given assignments from the list, makr rest as suspended
     # if selected assignments feature more than 1 gene/isoform - mark as ambiguous accordingly
     @staticmethod
-    def filter_assignments(assignment_list, assignments_to_keep, mark_as_ambiguous=True):
+    def filter_assignments(assignment_list, assignments_to_keep):
         assignments_to_keep = MultimapResolver.find_duplicates(assignment_list, assignments_to_keep)
 
         all_genes = set()
@@ -109,8 +109,8 @@ class MultimapResolver:
             all_genes.update(assignment.genes)
             all_isoforms.update(assignment.isoforms)
 
-        change_transcript_assignment_type = mark_as_ambiguous and len(all_isoforms) > 1
-        change_gene_assignment_type = mark_as_ambiguous and len(all_genes) > 1
+        change_transcript_assignment_type = len(all_isoforms) > 1
+        change_gene_assignment_type = len(all_genes) > 1
 
         assignments_to_keep_set = set(assignments_to_keep)
         for i in range(len(assignment_list)):
