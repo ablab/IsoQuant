@@ -467,6 +467,12 @@ class BasicReadAssignment:
         self.assignment_id = read_assignment.assignment_id
         self.read_id = read_assignment.read_id
         self.chr_id = read_assignment.chr_id
+        self.start = 0
+        self.end = 0
+        if read_assignment.exons:
+            self.start = read_assignment.exons[0][0]
+            self.end = read_assignment.exons[-1][1]
+        self.genomic_region = read_assignment.genomic_region
         self.multimapper = read_assignment.multimapper
         self.polyA_found = read_assignment.polyA_found
         self.assignment_type = read_assignment.assignment_type
@@ -487,12 +493,24 @@ class BasicReadAssignment:
             self.genes = list(gene_set)
             self.isoforms = list(isoform_set)
 
+    def __eq__(self, other):
+        if isinstance(other, BasicReadAssignment):
+            return (self.read_id == other.read_id and
+                    self.chr_id == other.chr_id and
+                    self.start == other.start and
+                    self.end == other.end and
+                    self.isoforms == other.isoforms)
+        return False
+
     @classmethod
     def deserialize(cls, infile):
         read_assignment = cls.__new__(cls)
         read_assignment.assignment_id = read_int(infile)
         read_assignment.read_id = read_string(infile)
         read_assignment.chr_id = read_string(infile)
+        read_assignment.start = read_int(infile)
+        read_assignment.end = read_int(infile)
+        read_assignment.genomic_region = (read_int(infile), read_int(infile))
         bool_arr = read_bool_array(infile, 2)
         read_assignment.multimapper = bool_arr[0]
         read_assignment.polyA_found = bool_arr[1]
@@ -507,6 +525,10 @@ class BasicReadAssignment:
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
         write_string(self.chr_id, outfile)
+        write_int(self.start, outfile)
+        write_int(self.end, outfile)
+        write_int(self.genomic_region[0], outfile)
+        write_int(self.genomic_region[1], outfile)
         write_bool_array([self.multimapper, self.polyA_found], outfile)
         write_short_int(self.assignment_type.value, outfile)
         write_short_int(self.gene_assignment_type.value, outfile)
@@ -520,6 +542,7 @@ class ReadAssignment:
     def __init__(self, read_id, assignment_type, match=None):
         self.assignment_id = ReadAssignment.assignment_id_generator.increment()
         self.read_id = read_id
+        self.genomic_region = (0, 0)
         self.exons = None
         self.corrected_exons = None
         self.corrected_introns = None
@@ -562,6 +585,7 @@ class ReadAssignment:
         read_assignment = cls.__new__(cls)
         read_assignment.assignment_id = read_int(infile)
         read_assignment.read_id = read_string(infile)
+        read_assignment.genomic_region = (read_int(infile), read_int(infile))
         read_assignment.exons = read_list_of_pairs(infile, read_int)
         read_assignment.corrected_exons = read_list_of_pairs(infile, read_int)
         read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
@@ -589,6 +613,8 @@ class ReadAssignment:
     def serialize(self, outfile):
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
+        write_int(self.genomic_region[0], outfile)
+        write_int(self.genomic_region[1], outfile)
         write_list_of_pairs(self.exons, outfile, write_int)
         write_list_of_pairs(self.corrected_exons, outfile, write_int)
         write_bool_array([self.multimapper, self.polyA_found, self.cage_found], outfile)
