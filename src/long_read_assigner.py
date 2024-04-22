@@ -381,7 +381,7 @@ class LongReadAssigner:
     # make proper match subtype
     def categorize_multiple_splice_matches(self, combined_read_profile, isoform_ids):
         isoform_matches = []
-        for isoform_id in isoform_ids:
+        for isoform_id in sorted(isoform_ids):
             isoform_matches.append(self.categorize_correct_splice_match(combined_read_profile, isoform_id))
         return isoform_matches
 
@@ -400,7 +400,7 @@ class LongReadAssigner:
 
     def categorize_multiple_unspliced_matches(self, combined_read_profile, isoform_ids):
         isoform_matches = []
-        for isoform_id in isoform_ids:
+        for isoform_id in sorted(isoform_ids):
             isoform_matches.append(self.categorize_correct_unspliced_match(combined_read_profile, isoform_id))
         return isoform_matches
 
@@ -593,7 +593,7 @@ class LongReadAssigner:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)
         # logger.debug("* Inconsistencies detected: " + str(read_matches))
 
-        # select ones with least number of inconsistent events
+        # select ones with the least number of inconsistent events
         best_isoforms, penalty_score = self.select_best_among_inconsistent(combined_read_profile, read_matches)
         if not best_isoforms:
             return ReadAssignment(read_id, ReadAssignmentType.noninformative)

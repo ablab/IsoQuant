@@ -539,6 +539,7 @@ class BasicReadAssignment:
 
 class ReadAssignment:
     assignment_id_generator = AtomicCounter()
+
     def __init__(self, read_id, assignment_type, match=None):
         self.assignment_id = ReadAssignment.assignment_id_generator.increment()
         self.read_id = read_id
