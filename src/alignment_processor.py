@@ -284,7 +284,7 @@ class AlignmentCollector:
         if gene_info.empty():
             assignment_storage = self.process_intergenic(alignment_storage, current_region)
         else:
-            assignment_storage = self.process_genic(alignment_storage, gene_info)
+            assignment_storage = self.process_genic(alignment_storage, gene_info, current_region)
 
         return gene_info, assignment_storage
 
@@ -332,6 +332,7 @@ class AlignmentCollector:
                                            alignment_info.polya_info.internal_polyt_pos != -1)
             read_assignment.polya_info = alignment_info.polya_info
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
+            read_assignment.genomic_region = region
             read_assignment.exons = alignment_info.read_exons
             read_assignment.corrected_exons = corrector.correct_read(alignment_info)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
@@ -346,7 +347,7 @@ class AlignmentCollector:
             assignment_storage.append(read_assignment)
         return assignment_storage
 
-    def process_genic(self, alignment_storage, gene_info):
+    def process_genic(self, alignment_storage, gene_info, region):
         assigner = LongReadAssigner(gene_info, self.params)
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
@@ -388,6 +389,7 @@ class AlignmentCollector:
                                            alignment_info.polya_info.internal_polyt_pos != -1)
             read_assignment.polya_info = alignment_info.polya_info
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
+            read_assignment.genomic_region = region
             read_assignment.exons = alignment_info.read_exons
             read_assignment.corrected_exons = exon_corrector.correct_assigned_read(alignment_info,
                                                                                    read_assignment)
