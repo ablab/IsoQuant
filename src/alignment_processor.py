@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2020 Saint Petersburg State University
+# Copyright (c) 2024 University of Helsinki
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
