@@ -35,7 +35,7 @@ from src.read_mapper import (
 from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
-from src.long_read_counter import COUNTING_STRATEGIES
+from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy
 from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
@@ -56,6 +56,7 @@ def parse_args(cmd_args=None, namespace=None):
     input_args_group = parser.add_argument_group('Input data')
     output_args_group = parser.add_argument_group('Output naming')
     pipeline_args_group = parser.add_argument_group('Pipeline options')
+    algo_args_group = parser.add_argument_group('Algorithm settings')
 
     other_options = parser.add_argument_group("Additional options:")
     show_full_help = '--full_help' in cmd_args
@@ -132,37 +133,40 @@ def parse_args(cmd_args=None, namespace=None):
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
     # ALGORITHM
-    add_additional_option("--delta", type=int, default=None,
-                          help="delta for inexact splice junction comparison, chosen automatically based on data type")
-    add_hidden_option("--graph_clustering_distance", type=int, default=None,
-                      help="intron graph clustering distance, "
-                           "splice junctions less that this number of bp apart will not be differentiated")
-    add_additional_option("--matching_strategy", choices=["exact", "precise", "default", "loose"],
-                          help="read-to-isoform matching strategy from the most strict to least", type=str, default=None)
-    add_additional_option("--splice_correction_strategy", choices=["none", "default_pacbio", "default_ont", "conservative_ont", "all", "assembly"],
-                          help="read alignment correction strategy to use",
-                          type=str, default=None)
-    add_additional_option("--model_construction_strategy", choices=["reliable", "default_pacbio",
-                                                                    "sensitive_pacbio", "fl_pacbio", "default_ont",
-                                                                    "sensitive_ont", "all", "assembly"],
-                          help="transcript model construction strategy to use",
-                          type=str, default=None)
+    add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
+                                   help="report novel monoexonic transcripts (true/false), "
+                                        "default: false for ONT, true for other data types")
+    add_additional_option_to_group(algo_args_group, "--report_canonical",  type=str,
+                                   choices=[e.name for e in StrandnessReportingLevel],
+                                   help="reporting level for novel transcripts based on canonical splice sites;"
+                                        " default: " + StrandnessReportingLevel.auto.name,
+                                   default=StrandnessReportingLevel.only_stranded.name)
+    add_additional_option_to_group(algo_args_group, "--polya_requirement", type=str,
+                                   choices=[e.name for e in PolyAUsageStrategies],
+                                   help="require polyA tails to be present when reporting transcripts; "
+                                        "default: auto (requires polyA only when polyA percentage is >= 70%%)",
+                                   default=PolyAUsageStrategies.auto.name)
 
-    add_additional_option("--transcript_quantification", choices=COUNTING_STRATEGIES,
-                          help="transcript quantification strategy", type=str, default="with_ambiguous")
-    add_additional_option("--gene_quantification", choices=COUNTING_STRATEGIES,
-                          help="gene quantification strategy", type=str, default="with_inconsistent")
-    add_additional_option("--report_novel_unspliced", "-u", type=bool_str,
-                          help="report novel monoexonic transcripts (true/false), "
-                               "default: false for ONT, true for other data types")
-    add_additional_option("--report_canonical",  type=str, choices=[e.name for e in StrandnessReportingLevel],
-                          help="reporting level for novel transcripts based on canonical splice sites;"
-                               " default: " + StrandnessReportingLevel.auto.name,
-                          default=StrandnessReportingLevel.only_stranded.name)
-    add_additional_option("--polya_requirement", type=str, choices=[e.name for e in PolyAUsageStrategies],
-                          help="require polyA tails to be present when reporting transcripts; "
-                               "default: auto (requires polyA only when polyA percentage is >= 70%%)",
-                          default=PolyAUsageStrategies.auto.name)
+    add_additional_option_to_group(algo_args_group, "--transcript_quantification", choices=COUNTING_STRATEGIES,
+                                   help="transcript quantification strategy", type=str,
+                                   default=CountingStrategy.unique_only.name)
+    add_additional_option_to_group(algo_args_group, "--gene_quantification", choices=COUNTING_STRATEGIES,
+                                   help="gene quantification strategy", type=str,
+                                   default=CountingStrategy.unique_splicing_consistent.name)
+
+    add_additional_option_to_group(algo_args_group, "--matching_strategy",
+                                   choices=["exact", "precise", "default", "loose"],
+                                   help="read-to-isoform matching strategy from the most strict to least",
+                                   type=str, default=None)
+    add_additional_option_to_group(algo_args_group, "--splice_correction_strategy",
+                                   choices=["none", "default_pacbio", "default_ont",
+                                            "conservative_ont", "all", "assembly"],
+                                   help="read alignment correction strategy to use", type=str, default=None)
+    add_additional_option_to_group(algo_args_group, "--model_construction_strategy",
+                                   choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
+                                            "default_ont", "sensitive_ont", "all", "assembly"],
+                                   help="transcript model construction strategy to use", type=str, default=None)
+
     # OUTPUT PROPERTIES
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
                                      default="16")
@@ -191,6 +195,11 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="align reads to reference without running further analysis")
 
     # ADDITIONAL
+    add_additional_option("--delta", type=int, default=None,
+                          help="delta for inexact splice junction comparison, chosen automatically based on data type")
+    add_hidden_option("--graph_clustering_distance", type=int, default=None,
+                      help="intron graph clustering distance, "
+                           "splice junctions less that this number of bp apart will not be differentiated")
     add_additional_option("--no_gzip", help="do not gzip large output files", dest="gzipped",
                           action='store_false', default=True)
     add_additional_option("--no_gtf_check", help="do not perform GTF checks", dest="gtf_check",

@@ -22,28 +22,29 @@ logger = logging.getLogger('IsoQuant')
 class CountingStrategy(Enum):
     unique_only = 1
     with_ambiguous = 2
-    with_inconsistent = 10
-    with_inconsistent_minor = 11
+    unique_splicing_consistent = 10
+    unique_inconsistent = 11
+    # all_splicing_consistent = 19
     all = 20
-    all_minor = 21
 
     def no_inconsistent(self):
         return self in [CountingStrategy.unique_only, CountingStrategy.with_ambiguous]
 
     def ambiguous(self):
-        return self in [CountingStrategy.all, CountingStrategy.all_minor, CountingStrategy.with_ambiguous]
+        return self in [CountingStrategy.all, CountingStrategy.with_ambiguous]
 
     def inconsistent_minor(self):
-        return self in [CountingStrategy.with_inconsistent_minor, CountingStrategy.all_minor]
+        return self == CountingStrategy.unique_splicing_consistent
 
     def inconsistent(self):
-        return self in [CountingStrategy.with_inconsistent_minor, CountingStrategy.all_minor,
-                        CountingStrategy.with_inconsistent, CountingStrategy.all]
+        return self in [CountingStrategy.unique_splicing_consistent,
+                        CountingStrategy.unique_inconsistent, CountingStrategy.all]
 
 
 COUNTING_STRATEGIES = [CountingStrategy.unique_only.name,
                        CountingStrategy.with_ambiguous.name,
-                       CountingStrategy.with_inconsistent.name,
+                       CountingStrategy.unique_splicing_consistent.name,
+                       CountingStrategy.unique_inconsistent.name,
                        CountingStrategy.all.name]
 
 
@@ -94,19 +95,17 @@ class TranscriptAssignmentExtractor:
 
 
 class ReadWeightCounter:
-    def __init__(self, strategy_str, relax_strategy=True):
+    def __init__(self, strategy_str):
         self.strategy = CountingStrategy[strategy_str]
-        if relax_strategy:
-            if self.strategy == CountingStrategy.with_inconsistent:
-                self.strategy = CountingStrategy.with_inconsistent_minor
-            elif self.strategy == CountingStrategy.all:
-                self.strategy = CountingStrategy.all_minor
         self.strategy_flags = CountingStrategyFlags(self.strategy)
 
     def process_inconsistent(self, assignment_type, feature_count):
         # use only for inconsistent assignments
         if assignment_type == ReadAssignmentType.inconsistent_ambiguous or feature_count > 1:
-            return 0.0
+            if self.strategy_flags.use_ambiguous:
+                return 1.0 / feature_count
+            else:
+                return 0.0
         if self.strategy_flags.use_inconsistent:
             return 1.0
         if self.strategy_flags.use_inconsistent_minor and assignment_type == ReadAssignmentType.inconsistent_non_intronic:
@@ -363,7 +362,7 @@ class AssignedFeatureCounter(AbstractCounter):
 
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
                         read_groups=None, ignore_read_groups=False, output_zeroes=True):
-    read_weight_counter = ReadWeightCounter(strategy, relax_strategy=False)
+    read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, ignore_read_groups, output_zeroes)
@@ -371,7 +370,7 @@ def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
 
 def create_transcript_counter(output_file_name, strategy, complete_feature_list=None,
                               read_groups=None, ignore_read_groups=False, output_zeroes=True):
-    read_weight_counter = ReadWeightCounter(strategy, relax_strategy=True)
+    read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, ignore_read_groups, output_zeroes)
