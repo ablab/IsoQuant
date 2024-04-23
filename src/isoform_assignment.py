@@ -43,6 +43,10 @@ class ReadAssignmentType(Enum):
         return self in [ReadAssignmentType.unique_minor_difference,
                         ReadAssignmentType.unique]
 
+    def is_ambiguous(self):
+        return self in [ReadAssignmentType.ambiguous,
+                        ReadAssignmentType.inconsistent_ambiguous]
+
 # SQANTI-like
 @unique
 class MatchClassification(Enum):
@@ -665,14 +669,6 @@ class ReadAssignment:
     def add_match_attribute(self, match_event):
         for m in self.isoform_matches:
             m.add_subclassification(match_event)
-
-
-def get_assigned_transcript_id(match):
-    return match.assigned_transcript
-
-
-def get_assigned_gene_id(match):
-    return match.assigned_gene
 
 
 match_subtype_printable_names = \

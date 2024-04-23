@@ -11,8 +11,6 @@ from enum import Enum, unique
 from .isoform_assignment import (
     ReadAssignmentType,
     nonintronic_events,
-    get_assigned_gene_id,
-    get_assigned_transcript_id
 )
 from .gene_info import FeatureInfo
 from .read_groups import AbstractReadGrouper
@@ -21,54 +19,106 @@ logger = logging.getLogger('IsoQuant')
 
 
 @unique
-class CountingStrategies(Enum):
+class CountingStrategy(Enum):
     unique_only = 1
     with_ambiguous = 2
-    inconsistent_all = 10
-    inconsistent_minor = 11
+    with_inconsistent = 10
+    with_inconsistent_minor = 11
     all = 20
     all_minor = 21
 
+    def no_inconsistent(self):
+        return self in [CountingStrategy.unique_only, CountingStrategy.with_ambiguous]
 
-COUNTING_STRATEGIES = ["unique_only", "with_ambiguous", "with_inconsistent", "all"]
+    def ambiguous(self):
+        return self in [CountingStrategy.all, CountingStrategy.all_minor, CountingStrategy.with_ambiguous]
+
+    def inconsistent_minor(self):
+        return self in [CountingStrategy.with_inconsistent_minor, CountingStrategy.all_minor]
+
+    def inconsistent(self):
+        return self in [CountingStrategy.with_inconsistent_minor, CountingStrategy.all_minor,
+                        CountingStrategy.with_inconsistent, CountingStrategy.all]
+
+
+COUNTING_STRATEGIES = [CountingStrategy.unique_only.name,
+                       CountingStrategy.with_ambiguous.name,
+                       CountingStrategy.with_inconsistent.name,
+                       CountingStrategy.all.name]
+
+
+class CountingStrategyFlags:
+    def __init__(self, counting_strategy):
+        self.use_ambiguous = counting_strategy.ambiguous()
+        self.use_inconsistent_minor = counting_strategy.inconsistent_minor()
+        self.use_inconsistent = counting_strategy.inconsistent()
+
+
+class GeneAssignmentExtractor:
+    @staticmethod
+    def get_features(read_assignment):
+        gene_set = set()
+        for m in read_assignment.isoform_matches:
+            if m.assigned_gene:
+                gene_set.add(m.assigned_gene)
+        return gene_set
+
+    @staticmethod
+    def get_assignment_type(read_assignment):
+        return read_assignment.gene_assignment_type
+
+    @staticmethod
+    def confirms_feature(read_assignment):
+        return read_assignment.gene_assignment_type.is_unique()
+
+
+class TranscriptAssignmentExtractor:
+    @staticmethod
+    def get_features(read_assignment):
+        transcript_set = set()
+        for m in read_assignment.isoform_matches:
+            if m.assigned_transcript:
+                transcript_set.add(m.assigned_transcript)
+        return transcript_set
+
+    @staticmethod
+    def get_assignment_type(read_assignment):
+        return read_assignment.assignment_type
+
+    @staticmethod
+    def confirms_feature(read_assignment):
+        transcript_id = read_assignment.isoform_matches[0].assigned_transcript
+        return (read_assignment.assignment_type.is_unique() and
+                (len(read_assignment.gene_info.all_isoforms_introns[transcript_id]) == 0 or
+                 len(read_assignment.corrected_exons) > 1))
 
 
 class ReadWeightCounter:
-    def __init__(self, strategy, gene_counting=True):
-        if strategy == "unique_only":
-            self.strategy = CountingStrategies.unique_only
-        elif strategy == "with_ambiguous":
-            self.strategy = CountingStrategies.with_ambiguous
-        elif strategy == "all":
-            if gene_counting:
-                self.strategy = CountingStrategies.all
-            else:
-                self.strategy = CountingStrategies.all_minor
-        elif strategy == "with_inconsistent":
-            if gene_counting:
-                self.strategy = CountingStrategies.inconsistent_all
-            else:
-                self.strategy = CountingStrategies.inconsistent_minor
-        else:
-            raise KeyError("Unknown quantification strategy: " + strategy)
+    def __init__(self, strategy_str, relax_strategy=True):
+        self.strategy = CountingStrategy[strategy_str]
+        if relax_strategy:
+            if self.strategy == CountingStrategy.with_inconsistent:
+                self.strategy = CountingStrategy.with_inconsistent_minor
+            elif self.strategy == CountingStrategy.all:
+                self.strategy = CountingStrategy.all_minor
+        self.strategy_flags = CountingStrategyFlags(self.strategy)
 
-    def process_inconsistent(self, isoform_match, feature_count):
-        if self.strategy == CountingStrategies.unique_only or self.strategy == CountingStrategies.with_ambiguous \
-                or feature_count > 1:
+    def process_inconsistent(self, assignment_type, feature_count):
+        # use only for inconsistent assignments
+        if assignment_type == ReadAssignmentType.inconsistent_ambiguous or feature_count > 1:
             return 0.0
-        elif self.strategy == CountingStrategies.all or self.strategy == CountingStrategies.inconsistent_all:
+        if self.strategy_flags.use_inconsistent:
             return 1.0
-        elif self.strategy == CountingStrategies.all_minor or self.strategy == CountingStrategies.inconsistent_minor:
-            for m in isoform_match.match_subclassifications:
-                if m.event_type not in nonintronic_events:
-                    return 0.0
+        if self.strategy_flags.use_inconsistent_minor and assignment_type == ReadAssignmentType.inconsistent_non_intronic:
             return 1.0
         return 0.0
 
     def process_ambiguous(self, feature_count):
-        if self.strategy in {CountingStrategies.with_ambiguous,
-                             CountingStrategies.all_minor,
-                             CountingStrategies.all}:
+        if feature_count == 0:
+            return 0.0
+        if feature_count == 1:
+            return 1.0
+        if self.strategy_flags.use_ambiguous:
             return 1.0 / float(feature_count)
         else:
             return 0.0
@@ -141,10 +191,10 @@ class CompositeCounter:
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, get_feature_id, read_groups, read_counter,
+    def __init__(self, output_prefix, assignment_extractor, read_groups, read_counter,
                  all_features=None, ignore_read_groups=False, output_zeroes=True):
         AbstractCounter.__init__(self, output_prefix, ignore_read_groups, output_zeroes)
-        self.get_feature_id = get_feature_id
+        self.assignment_extractor = assignment_extractor
         self.all_features = set(all_features) if all_features is not None else set()
         if ignore_read_groups:
             self.all_groups = [AbstractReadGrouper.default_group_id]
@@ -161,48 +211,45 @@ class AssignedFeatureCounter(AbstractCounter):
         self.output_stats_file_name = self.output_counts_file_name + ".stats"
 
     def add_read_info(self, read_assignment=None):
-        # TODO: add __alignment_not_unique / __too_low_aQual ?
         if not read_assignment:
             self.not_aligned_reads += 1
-        if read_assignment.assignment_type.is_unassigned() or not read_assignment.isoform_matches:
+            return
+        elif read_assignment.assignment_type.is_unassigned() or not read_assignment.isoform_matches:
             self.not_assigned_reads += 1
+            return
         elif read_assignment.isoform_matches and read_assignment.isoform_matches[0].assigned_transcript is None:
             self.not_assigned_reads += 1
             logger.warning("Assigned feature for read %s is None, will be skipped. "
                            "This message may be reported to the developers." % read_assignment.read_id)
-        elif read_assignment.assignment_type == ReadAssignmentType.ambiguous:
-            feature_ids = set([self.get_feature_id(m) for m in read_assignment.isoform_matches])
-            group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+            return
 
-            if len(feature_ids) == 1:  # different isoforms of same gene
-                feature_id = list(feature_ids)[0]
-                self.feature_counter[group_id][feature_id] += 1.0
-                self.all_features.add(feature_id)
-            else:
-                for feature_id in feature_ids:
-                    count_value = self.read_counter.process_ambiguous(len(feature_ids))
-                    self.feature_counter[group_id][feature_id] += count_value
-                    if count_value > 0:
-                        self.all_features.add(feature_id)
+        feature_ids = self.assignment_extractor.get_features(read_assignment)
+        assignment_type = self.assignment_extractor.get_assignment_type(read_assignment)
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+
+        if assignment_type == ReadAssignmentType.ambiguous:
+            count_value = self.read_counter.process_ambiguous(len(feature_ids))
+            for feature_id in feature_ids:
+                self.feature_counter[group_id][feature_id] += count_value
+                if count_value > 0:
+                    self.all_features.add(feature_id)
+            if len(feature_ids):
                 self.ambiguous_reads += 1
+
         elif read_assignment.assignment_type.is_inconsistent():
-            feature_ids = set([self.get_feature_id(m) for m in read_assignment.isoform_matches])
-            group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
-            count_value = self.read_counter.process_inconsistent(read_assignment.isoform_matches[0], len(feature_ids))
+            count_value = self.read_counter.process_inconsistent(assignment_type, len(feature_ids))
             if count_value > 0:
                 for feature_id in feature_ids:
-                    if feature_id:
-                        self.feature_counter[group_id][feature_id] += count_value
-                        self.all_features.add(feature_id)
-                        self.confirmed_features.add((group_id, feature_id))
+                    # if feature_id:
+                    self.feature_counter[group_id][feature_id] += count_value
+                    self.all_features.add(feature_id)
+                    #self.confirmed_features.add((group_id, feature_id))
+
         elif read_assignment.assignment_type.is_unique():
-            feature_id = self.get_feature_id(read_assignment.isoform_matches[0])
-            group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+            feature_id = list(feature_ids)[0]
             self.feature_counter[group_id][feature_id] += 1.0
             self.all_features.add(feature_id)
-            transcript_id = read_assignment.isoform_matches[0].assigned_transcript
-            if len(read_assignment.gene_info.all_isoforms_introns[transcript_id]) == 0 or len(read_assignment.corrected_exons) > 1:
-                # only add features to confirmed ones if it has unique spliced match
+            if self.assignment_extractor.confirms_feature(read_assignment):
                 self.confirmed_features.add((group_id, feature_id))
 
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
@@ -316,16 +363,16 @@ class AssignedFeatureCounter(AbstractCounter):
 
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
                         read_groups=None, ignore_read_groups=False, output_zeroes=True):
-    read_weight_counter = ReadWeightCounter(strategy, gene_counting=True)
-    return AssignedFeatureCounter(output_file_name, get_assigned_gene_id,
+    read_weight_counter = ReadWeightCounter(strategy, relax_strategy=False)
+    return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, ignore_read_groups, output_zeroes)
 
 
 def create_transcript_counter(output_file_name, strategy, complete_feature_list=None,
                               read_groups=None, ignore_read_groups=False, output_zeroes=True):
-    read_weight_counter = ReadWeightCounter(strategy, gene_counting=False)
-    return AssignedFeatureCounter(output_file_name, get_assigned_transcript_id,
+    read_weight_counter = ReadWeightCounter(strategy, relax_strategy=True)
+    return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, ignore_read_groups, output_zeroes)
 
