@@ -462,18 +462,18 @@ where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set)
 
 #### Quantification
 
-`--transcript_quantification` Transcript quantification strategy, should be one of:
+`--transcript_quantification` Transcript quantification strategy;
+`--gene_quantification` Gene quantification strategy;
 
-* `unique_only` - only reads that are uniquely assigned and consistent with a transcript are used for quantification;
-* `with_ambiguous` - ambiguously assigned reads are split between transcripts with equal weights (e.g. 1/2 when a read is assigned to 2 transcripts simultaneously, default mode);
-* `with_inconsistent` - uniquely assigned reads with non-intronic inconsistencies (i.e. alternative poly-A site, TSS etc) are also included;
-* `all` - all of the above.
+Available options for quantification:
 
-`--gene_quantification` Gene quantification strategy, should be one of:
-
-* `unique_only` -  only reads that are uniquely assigned to a gene and consistent with any of gene's isoforms are used for quantification;
-* `with_ambiguous` - ambiguously assigned reads are split between genes with equal weights (e.g. 1/2 when a read is assigned to 2 genes simultaneously);
-* `with_inconsistent` - only reads that are uniquely assigned to a gene but are not necessarily consistent with genes isoforms (default);
+* `unique_only` - use only reads that are uniquely assigned and consistent with a transcript/gene
+(i.e. flagged as unique/unique_minor_difference), default fot transcript quantification;
+* `with_ambiguous` - in addition to unique reads, ambiguously assigned consistent reads are split between features with equal weights 
+(e.g. 1/2 when a read is assigned to 2 features simultaneously);
+* `unique_splicing_consistent` - uses uniquely assigned reads that do not contradict annotated splice sites
+(i.e. flagged as unique/unique_minor_difference or inconsistent_non_intronic), default for gene quantification;
+* `unique_inconsistent` - uses uniquely assigned reads allowing any kind of inconsistency;
 * `all` - all of the above.
 
 
