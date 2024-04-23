@@ -138,18 +138,18 @@ def check_value(etalon_value, output_value, name):
     if output_value < 0:
         if output_value != etalon_value:
             log.error("Value of %s = %2.2f is not equal to value %2.2f" % (name, output_value, lower_bound))
-            exit_code = -40
+            exit_code = -2
         else:
             log.info("Value of %s = %2.2f == %2.2f as expected" % (name, output_value, upper_bound))
     else:
         if output_value < lower_bound:
             log.error("Value of %s = %2.2f is lower than the expected value %2.2f" % (name, output_value, lower_bound))
-            exit_code = -41
+            exit_code = -2
         else:
             log.info("Value of %s = %2.2f >= %2.2f as expected" % (name, output_value, lower_bound))
         if output_value > upper_bound:
             log.error("Value of %s = %2.2f is higher than the expected value %2.2f" % (name, output_value, upper_bound))
-            exit_code = -42
+            exit_code = -2
         else:
             log.info("Value of %s = %2.2f <= %2.2f as expected" % (name, output_value, upper_bound))
     return exit_code
@@ -186,7 +186,7 @@ def run_assignment_quality(args, config_dict):
         bam = find_bam(output_folder, label)
         if not bam or not os.path.exists(bam):
             log.error("BAM file was not found")
-            return -21
+            return -10
     else:
         bam = fix_path(config_file, config_dict["bam"])
 
@@ -205,7 +205,7 @@ def run_assignment_quality(args, config_dict):
     result = subprocess.run(qa_command_list)
     if result.returncode != 0:
         log.error("QA exited with non-zero status: %d" % result.returncode)
-        return -13
+        return -11
 
     if "etalon" not in config_dict:
         return 0
@@ -218,7 +218,7 @@ def run_assignment_quality(args, config_dict):
     for k, v in etalon_qaulity_dict.items():
         if k not in quality_report_dict:
             log.error("Metric %s was not found in the report" % k)
-            exit_code = -22
+            exit_code = -12
             continue
         new_etalon_outf.write("%s\t%.2f\n" % (k, float(quality_report_dict[k])))
         err_code = check_value(float(v), float(quality_report_dict[k]), k)
@@ -251,7 +251,7 @@ def run_transcript_quality(args, config_dict):
     out_gtf = os.path.join(output_folder, "%s/%s.transcript_models.gtf" % (label, label))
     if not os.path.exists(out_gtf):
         log.error("Output GTF file was not found" % out_gtf)
-        return -31
+        return -20
 
     quality_output = os.path.join(output_folder, "gffcompare")
     genedb_prefix = fix_path(config_file, config_dict["reduced_db"])
@@ -262,7 +262,7 @@ def run_transcript_quality(args, config_dict):
     result = subprocess.run(qa_command_list)
     if result.returncode != 0:
         log.error("Transcript evaluation exited with non-zero status: %d" % result.returncode)
-        return -13
+        return -21
 
     if "etalon" not in config_dict:
         return 0
@@ -311,14 +311,14 @@ def run_quantification(args, config_dict, mode):
 
     if not os.path.exists(out_tpm):
         log.error("Output TPM file %s was not found" % out_tpm)
-        return -32
+        return -30
 
     if "reference_tpm" not in config_dict:
         return 0
     ref_tpm = config_dict["reference_gene_tpm"] if mode == "gene" else config_dict["reference_tpm"]
     if not os.path.exists(ref_tpm):
         log.error("File %s with reference TPM was not detected" % ref_tpm)
-        return -18
+        return -31
 
     quantification_stats_output = os.path.join(output_folder, mode + ".quantification.tsv")
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/quantification_stats.py"),
@@ -336,7 +336,7 @@ def run_quantification(args, config_dict, mode):
     result = subprocess.run(qa_command_list)
     if result.returncode != 0:
         log.error("Quantification evaluation exited with non-zero status: %d" % result.returncode)
-        return -14
+        return -34
 
     etalon_to_use = "etalon_quantification_" + mode
     if etalon_to_use not in config_dict:
@@ -346,14 +346,14 @@ def run_quantification(args, config_dict, mode):
     ref_value_files = fix_path(config_file, config_dict[etalon_to_use])
     if not os.path.exists(ref_value_files):
         log.error("File %s with etalon metric values was not detected" % ref_value_files)
-        return -19
+        return -35
     etalon_quality_dict = load_tsv_config(ref_value_files)
     real_dict = load_tsv_config(quantification_stats_output)
     exit_code = 0
 
     for metric_name in etalon_quality_dict.keys():
         if metric_name not in real_dict:
-            exit_code = -15
+            exit_code = -36
             log.warning("Metric not found %s" % metric_name)
             continue
 
@@ -399,25 +399,26 @@ def main():
     for k in required:
         if k not in config_dict:
             log.error(k + " is not set in the config")
-            return -10
+            exit(-4)
 
     err_code = run_isoquant(args, config_dict)
     if err_code != 0:
         return err_code
 
     run_types = set(map(lambda x: x.strip().replace('"', ''), config_dict["run_type"].split(",")))
+    err_codes = []
     if RT_VOID in run_types:
-        err_code = 0
+        err_codes.append(0)
     if RT_ASSIGNMENT in run_types:
-        err_code = run_assignment_quality(args, config_dict)
+        err_codes.append(run_assignment_quality(args, config_dict))
     if RT_TRANSCRIPTS in run_types:
-        err_code = run_transcript_quality(args, config_dict)
+        err_codes.append(run_transcript_quality(args, config_dict))
     if RT_QUANTIFICATION_KNOWN in run_types:
-        err_code = run_quantification(args, config_dict, "ref")
+        err_codes.append(run_quantification(args, config_dict, "ref"))
     if RT_QUANTIFICATION_NOVEL in run_types:
-        err_code = run_quantification(args, config_dict, "novel")
+        err_codes.append(run_quantification(args, config_dict, "novel"))
     if RT_QUANTIFICATION_GENES in run_types:
-        err_code = run_quantification(args, config_dict, "gene")
+        err_codes.append(run_quantification(args, config_dict, "gene"))
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
@@ -427,7 +428,10 @@ def main():
         missing_files = check_output_files(output_folder, label, files_list)
         if missing_files:
             log.error("The following files were not detected in the output folder: %s" % "  ".join(missing_files))
-            err_code = -11
+            err_codes.append(-5)
+
+    if any(ec != 0 for ec in err_codes):
+        err_code = -6
 
     return err_code
 
