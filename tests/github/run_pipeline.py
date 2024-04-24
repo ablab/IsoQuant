@@ -358,7 +358,7 @@ def run_quantification(args, config_dict, mode):
             continue
 
         ref_value = float(etalon_quality_dict[metric_name])
-        real_value = float(etalon_quality_dict[metric_name])
+        real_value = float(real_dict[metric_name])
         err_code = check_value(ref_value, real_value, metric_name)
         if err_code != 0:
             exit_code = err_code
