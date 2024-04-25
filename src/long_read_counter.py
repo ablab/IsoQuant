@@ -236,7 +236,7 @@ class AssignedFeatureCounter(AbstractCounter):
             if len(feature_ids):
                 self.ambiguous_reads += 1
 
-        elif read_assignment.assignment_type.is_inconsistent():
+        elif assignment_type.is_inconsistent():
             count_value = self.read_counter.process_inconsistent(assignment_type, len(feature_ids))
             if count_value > 0:
                 for feature_id in feature_ids:
@@ -245,7 +245,7 @@ class AssignedFeatureCounter(AbstractCounter):
                     self.all_features.add(feature_id)
                     #self.confirmed_features.add((group_id, feature_id))
 
-        elif read_assignment.assignment_type.is_unique():
+        elif assignment_type.is_unique():
             feature_id = list(feature_ids)[0]
             self.feature_counter[group_id][feature_id] += 1.0
             self.all_features.add(feature_id)
