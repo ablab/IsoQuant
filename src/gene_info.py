@@ -33,15 +33,33 @@ class TranscriptModelType(Enum):
 
 # simple class for storing all information needed for GFF
 class TranscriptModel:
-    def __init__(self, chr_id, strand, transcript_id, gene_id, exon_blocks, transcript_type):
+    def __init__(self, chr_id, strand, transcript_id, gene_id, exon_blocks, transcript_type,
+                 other_features=None, source="IsoQuant"):
         self.chr_id = chr_id
         self.strand = strand
         self.transcript_id = transcript_id
         self.gene_id = gene_id
         self.exon_blocks = exon_blocks
         self.transcript_type = transcript_type
+        self.source = source
+        self.other_features = [] if not other_features else other_features
         self.additional_info = OrderedDict()
         self.intron_path = ()
+
+    @classmethod
+    def from_reference_transcript(cls, gene_info, isoform_id):
+        transcript_model = cls.__new__(cls)
+        transcript_model.chr_id = gene_info.chr_id
+        transcript_model.strand = gene_info.isoform_strands[isoform_id]
+        transcript_model.transcript_id = isoform_id
+        transcript_model.gene_id = gene_info.gene_id_map[isoform_id]
+        transcript_model.exon_blocks = gene_info.all_isoforms_exons[isoform_id]
+        transcript_model.transcript_type = TranscriptModelType.known
+        transcript_model.source = gene_info.sources[isoform_id]
+        transcript_model.other_features = gene_info.other_features[isoform_id]
+        transcript_model.additional_info = OrderedDict()
+        transcript_model.intron_path = ()
+        return transcript_model
 
     def get_start(self):
         return self.exon_blocks[0][0]
@@ -124,6 +142,7 @@ class FeatureInfo:
 # All gene(s) information
 class GeneInfo:
     EXTRA_BASES_FOR_SEQ = 20
+    OTHER_FEATURES = {'CDS', 'start_codon', 'stop_codon', 'UTR'}
 
     def __init__(self, gene_db_list, db, delta=0, prepare_profiles=True):
         if db is None:
@@ -158,6 +177,10 @@ class GeneInfo:
         self.isoform_strands = {}
         self.gene_strands = {}
         self.set_isoform_strands()
+        self.other_features = {}
+        self.set_other_features()
+        self.sources = {}
+        self.set_sources()
         self.gene_id_map = {}
         self.set_gene_ids()
         self.gene_attributes = {}
@@ -182,6 +205,8 @@ class GeneInfo:
         gene_info.all_isoforms_exons = {}
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
+        gene_info.sources = {}
+        gene_info.other_features = {}
         gene_info.gene_id_map = {}
         gene_info.gene_attributes = {}
         introns = set()
@@ -196,6 +221,9 @@ class GeneInfo:
             exons.update(gene_info.all_isoforms_exons[t_id])
             introns.update(gene_info.all_isoforms_introns[t_id])
             gene_info.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
+            gene_info.sources[transcript_model.transcript_id] = transcript_model.source
+            gene_info.sources[transcript_model.gene_id] = transcript_model.source
+            gene_info.other_features[transcript_model.transcript_id] = transcript_model.other_features
             gene_info.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
 
         # profiles for all known isoforoms
@@ -261,10 +289,11 @@ class GeneInfo:
         gene_info.exon_profiles.set_profiles(t_id, exons, transcript_region, partial(equal_ranges, delta=0))
         gene_info.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
 
-        gene_info.isoform_strands = {}
-        gene_info.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
-        gene_info.gene_id_map = {}
-        gene_info.gene_id_map[transcript_model.transcript_id] = transcript_model.gene_id
+        gene_info.isoform_strands = {transcript_model.transcript_id: transcript_model.strand}
+        gene_info.sources = {transcript_model.transcript_id: transcript_model.source,
+                             transcript_model.gene_id: transcript_model.source}
+        gene_info.other_features = {transcript_model.transcript_id: transcript_model.other_features}
+        gene_info.gene_id_map = {transcript_model.transcript_id: transcript_model.gene_id}
         gene_info.gene_attributes = {}
 
         gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
@@ -300,6 +329,8 @@ class GeneInfo:
         gene_info.all_isoforms_exons = {}
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
+        gene_info.other_features = {}
+        gene_info.sources = {}
         gene_info.gene_id_map = {}
         gene_info.gene_attributes = {}
         gene_info.regions_for_bam_fetch = [(start, end)]
@@ -353,6 +384,10 @@ class GeneInfo:
         gene_info.isoform_strands = {}
         gene_info.gene_strands = {}
         gene_info.set_isoform_strands()
+        gene_info.other_features = {}
+        gene_info.set_other_features()
+        gene_info.sources = {}
+        gene_info.set_sources()
         gene_info.gene_id_map = {}
         gene_info.set_gene_ids()
         gene_info.gene_attributes = {}
@@ -416,6 +451,21 @@ class GeneInfo:
         self.gene_strands = {}
         for gene_db in self.gene_db_list:
             self.gene_strands[gene_db.id] = gene_db.strand
+
+    def set_other_features(self):
+        self.other_features = defaultdict(list)
+        for gene in self.gene_db_list:
+            for t in self.db.children(gene, featuretype=('transcript', 'mRNA')):
+                for e in self.db.children(t):
+                    if e.featuretype in GeneInfo.OTHER_FEATURES:
+                        self.other_features[t.id].append((e.start, e.end, e.featuretype))
+
+    def set_sources(self):
+        self.sources = {}
+        for gene in self.gene_db_list:
+            self.sources[gene.id] = gene.source
+            for t in self.db.children(gene, featuretype=('transcript', 'mRNA')):
+                self.sources[t.id] = t.source
 
     # set isoform_id -> gene_id map
     def set_gene_ids(self):

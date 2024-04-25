@@ -698,10 +698,7 @@ class GraphBasedModelConstructor:
 
     # create transcript model object from reference isoforms
     def transcript_from_reference(self, isoform_id):
-        gene_id = self.gene_info.gene_id_map[isoform_id]
-        return TranscriptModel(self.gene_info.chr_id, self.gene_info.isoform_strands[isoform_id],
-                               isoform_id, gene_id, self.gene_info.all_isoforms_exons[isoform_id],
-                               TranscriptModelType.known)
+        return TranscriptModel.from_reference_transcript(self.gene_info, isoform_id)
 
     # assign reads back to constructed isoforms
     def assign_reads_to_models(self, read_assignments):
