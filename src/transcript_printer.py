@@ -100,9 +100,12 @@ class GFFPrinter:
                 gene_additiional_info = ""
                 if gene_info and gene_id in gene_info.gene_attributes:
                     gene_additiional_info = gene_info.gene_attributes[gene_id]
-                gene_line = '%s\tIsoQuant\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts "%d"; %s\n' % \
-                            (gene_info_dict[gene_id].chr_id, coords[0], coords[1], gene_info_dict[gene_id].strand,
-                             gene_id, len(gene_to_model_dict[gene_id]), gene_additiional_info)
+                source = "IsoQuant"
+                if gene_info and gene_id in gene_info.sources:
+                    source = gene_info.sources[gene_id]
+                gene_line = '%s\t%s\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts "%d"; %s\n' % \
+                        (gene_info_dict[gene_id].chr_id, source, coords[0], coords[1], gene_info_dict[gene_id].strand,
+                         gene_id, len(gene_to_model_dict[gene_id]), gene_additiional_info)
                 self.out_gff.write(gene_line)
                 self.printed_gene_ids.add(gene_id)
 
@@ -113,15 +116,20 @@ class GFFPrinter:
                 if not model.check_additional("exons"):
                     model.add_additional_attribute("exons", str(len(model.exon_blocks)))
 
-                transcript_line = '%s\tIsoQuant\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; %s\n' \
-                                  % (model.chr_id, model.exon_blocks[0][0], model.exon_blocks[-1][1], model.strand,
-                                     model.gene_id, model.transcript_id, model.additional_attributes_str())
+                transcript_line = '%s\t%s\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; %s\n' \
+                                  % (model.chr_id,  model.source, model.exon_blocks[0][0], model.exon_blocks[-1][1],
+                                     model.strand, model.gene_id, model.transcript_id,
+                                     model.additional_attributes_str())
                 self.out_gff.write(transcript_line)
 
-                prefix_columns = "%s\tIsoQuant\texon\t" % model.chr_id
+                prefix_columns = "%s\t%s\t" % (model.chr_id, model.source)
                 suffix_columns = '.\t%s\t.\tgene_id "%s"; transcript_id "%s";' % \
                                  (model.strand, model.gene_id, model.transcript_id)
-                exons_to_print = sorted(model.exon_blocks, reverse=True) if model.strand == '-' else model.exon_blocks
+
+                exons_to_print = model.other_features
+                for e in model.exon_blocks:
+                    exons_to_print.append((e[0], e[1], 'exon'))
+                exons_to_print = sorted(exons_to_print, reverse=True) if model.strand == '-' else sorted(exons_to_print)
                 for i, e in enumerate(exons_to_print):
                     exon_tuple = (model.chr_id, e[0], e[1], model.strand)
                     if exon_tuple not in GFFPrinter.transcript_id_dict:
@@ -130,7 +138,8 @@ class GFFPrinter:
                     else:
                         exon_id = GFFPrinter.transcript_id_dict[exon_tuple]
                     exon_str_id = model.chr_id + ".%d" % exon_id
-                    self.out_gff.write(prefix_columns + "%d\t%d\t" % (e[0], e[1]) + suffix_columns +
+                    feature_type = e[2]
+                    self.out_gff.write(prefix_columns + "%s\t%d\t%d\t" % (feature_type, e[0], e[1]) + suffix_columns +
                                        ' exon "%d"; exon_id "%s";\n' % ((i + 1), exon_str_id))
         self.out_gff.flush()
 
@@ -156,9 +165,7 @@ def create_extended_storage(genedb, chr_id, chr_record, novel_model_storage):
     gene_info = GeneInfo(gene_list, genedb, prepare_profiles=False)
     gene_info.set_reference_sequence(1, len(chr_record), chr_record)
     for isoform_id in gene_info.all_isoforms_exons.keys():
-        all_models.append(TranscriptModel(gene_info.chr_id, gene_info.isoform_strands[isoform_id],
-                                          isoform_id, gene_info.gene_id_map[isoform_id],
-                                          gene_info.all_isoforms_exons[isoform_id], TranscriptModelType.known))
+        all_models.append(TranscriptModel.from_reference_transcript(gene_info, isoform_id))
     for m in novel_model_storage:
         all_models.append(m)
 
