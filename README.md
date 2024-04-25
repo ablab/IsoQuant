@@ -579,7 +579,7 @@ but may improve running time when disk I/O is relatively slow.
 `--min_mapq`
     Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
 
-`--multi_intron_mapping_quality_cutoff`
+`--inconsistent_mapq_cutoff`
     Filers out inconsistent alignments with MAPQ less than this value (works when the reference annotation is provided, default is 5).
 
 `--simple_alignments_mapq_cutoff`
