@@ -202,6 +202,7 @@ class AssignedFeatureCounter(AbstractCounter):
         self.read_counter = read_counter
 
         self.ambiguous_reads = 0
+        self.reads_for_tpm = 0
         self.not_assigned_reads = 0
         self.not_aligned_reads = 0
         # group_id -> (feature_id -> count)
@@ -226,14 +227,14 @@ class AssignedFeatureCounter(AbstractCounter):
         assignment_type = self.assignment_extractor.get_assignment_type(read_assignment)
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
 
+        self.reads_for_tpm += 1
         if assignment_type == ReadAssignmentType.ambiguous:
             count_value = self.read_counter.process_ambiguous(len(feature_ids))
             for feature_id in feature_ids:
                 self.feature_counter[group_id][feature_id] += count_value
                 if count_value > 0:
                     self.all_features.add(feature_id)
-            if len(feature_ids):
-                self.ambiguous_reads += 1
+            self.ambiguous_reads += 1
 
         elif assignment_type.is_inconsistent():
             count_value = self.read_counter.process_inconsistent(assignment_type, len(feature_ids))
@@ -260,6 +261,7 @@ class AssignedFeatureCounter(AbstractCounter):
             self.not_assigned_reads += 1
         elif len(feature_ids) > 1:
             self.ambiguous_reads += 1
+            self.reads_for_tpm += 1
             for feature_id in feature_ids:
                 count_value = self.read_counter.process_ambiguous(len(feature_ids))
                 self.feature_counter[group_id][feature_id] += count_value
@@ -267,9 +269,11 @@ class AssignedFeatureCounter(AbstractCounter):
         else:
             self.feature_counter[group_id][feature_ids[0]] += 1
             self.all_features.add(feature_ids[0])
+            self.reads_for_tpm += 1
 
     def add_unassigned(self, n_reads=1):
         self.not_assigned_reads += n_reads
+        self.reads_for_tpm += n_reads
 
     def add_unaligned(self, n_reads=1):
         self.not_aligned_reads += n_reads
@@ -321,6 +325,7 @@ class AssignedFeatureCounter(AbstractCounter):
                 f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
                 f.write("__no_feature\t%d\n" % self.not_assigned_reads)
                 f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
+                f.write("__usable\t%d\n" % self.reads_for_tpm)
 
     def convert_counts_to_tpm(self):
         total_counts = defaultdict(float)
@@ -337,7 +342,11 @@ class AssignedFeatureCounter(AbstractCounter):
 
         scale_factors = {}
         for group_id in total_counts.keys():
-            scale_factors[group_id] = 1000000.0 / total_counts[group_id] if total_counts[group_id] > 0 else 1.0
+            if self.ignore_read_groups and self.reads_for_tpm:
+                total_reads = self.reads_for_tpm
+            else:
+                total_reads = total_counts[group_id] if total_counts[group_id] > 0 else 1.0
+            scale_factors[group_id] = 1000000.0 / total_reads
             logger.debug("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
 
         with open(self.output_tpm_file_name, "w") as outf:
