@@ -193,11 +193,16 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         self.output_file.write(self.header)
         self.io_support = io_support
 
-    def unmatched_line(self, read_assignment, additional_info=None):
+    @staticmethod
+    def unmatched_line(read_assignment, additional_info):
         read_exons = read_assignment.exons
         strand = read_assignment.strand
         line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t.\t.\t" + \
                read_assignment.assignment_type.name + "\t.\t" + range_list_to_str(read_exons)
+
+        for attr in read_assignment.additional_attributes.keys():
+            val = read_assignment.additional_attributes[attr]
+            additional_info.append("%s=%s;" % (attr, val))
         if additional_info:
             line += "\t" + " ".join(additional_info) + "\n"
         else:
@@ -222,13 +227,14 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
         read_introns = junctions_from_blocks(read_exons)
 
         if not read_assignment.isoform_matches:
-            self.output_file.write(self.unmatched_line(read_assignment))
+            self.output_file.write(BasicTSVAssignmentPrinter.unmatched_line(read_assignment, []))
             return
 
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
-                self.output_file.write(self.unmatched_line(read_assignment,
-                                                           ["Classification=" + str(m.match_classification.name) + ";"]))
+                self.output_file.write(
+                    BasicTSVAssignmentPrinter.unmatched_line(
+                        read_assignment, ["Classification=" + str(m.match_classification.name) + ";"]))
                 continue
             isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
             event_string = ",".join([match_subtype_to_str_with_additional_info(x, read_assignment.strand,
@@ -251,6 +257,11 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                     additional_info.append("Canonical=" + str(all_canonical) + ";")
 
             additional_info.append("Classification=" + str(m.match_classification.name) + ";")
+
+            for attr in read_assignment.additional_attributes.keys():
+                val = read_assignment.additional_attributes[attr]
+                additional_info.append("%s=%s;" % (attr, val))
+
             if additional_info:
                 line += "\t" + " ".join(additional_info) + "\n"
             else:
