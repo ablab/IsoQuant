@@ -2,6 +2,64 @@
 <title>IsoQuant changelog</title>
 <body>
 
+<h3>IsoQuant 3.4.0, 3 May 2024</h3>
+
+<p>Major novelties and improvements:</p>
+
+<p>Significant speed-up on datasets containing regions with extremely high coverage,
+    often encountered on mitochondrial chromosomes (<a href="https://github.com/ablab/IsoQuant/issues/97">#97</a>).</p>
+
+<p>Added support for Illumina reads for spliced alignment correction (thanks to @rkpfeil).</p>
+
+<p>Added support YAML files (thanks to @rkpfeil).</p>
+
+<p>Transcript discovery and GTF processing:</p>
+
+<p>Fixed missing genes in extended GTF (<a href="https://github.com/ablab/IsoQuant/issues/140">#140</a>,
+    <a href="https://github.com/ablab/IsoQuant/issues/147">#147</a>, <a href="https://github.com/ablab/IsoQuant/issues/151">#151</a>,
+    <a href="https://github.com/ablab/IsoQuant/issues/175">#175</a>).</p>
+
+<p>Fixed strand detection and output of transcripts with <code>.</code> strand (<a href="https://github.com/ablab/IsoQuant/issues/107">#107</a>).</p>
+
+<p>Added <code>--report_canonical</code> and <code>--polya_requirement</code> options that allows to control level of
+    filtering of output transcripts based on canonical splice sites and the presence of poly-A tails. (<a href="https://github.com/ablab/IsoQuant/issues/128">#128</a>)</p>
+
+<p>Added check for input GTFs (<a href="https://github.com/ablab/IsoQuant/issues/155">#155</a>).</p>
+
+<p>Extract CDS and other features from reference GTF to the output GTFs (<a href="https://github.com/ablab/IsoQuant/issues/176">#176</a>).</p>
+
+<p>Improved novel gene naming (<a href="https://github.com/ablab/IsoQuant/issues/164">#164</a>) </p>
+
+<p>Read assignment and quantification:</p>
+
+<p>Optimized read assignment algorithm.</p>
+
+<p>Added <code>gene_assignment_type</code> attribute to read assignments.</p>
+
+<p>Fixed duplicated records in <code>read_assignments.tsv</code> (<a href="https://github.com/ablab/IsoQuant/issues/168">#168</a>).</p>
+
+<p>Improved reference gene and transcript quantification. Only unique assignments are now used for transcript quantification.</p>
+
+<p>Improved consistency between <code>trascript_counts.tsv</code> and <code>transcript_model_counts.tsv</code>
+    (<a href="https://github.com/ablab/IsoQuant/issues/127">#127</a>).</p>
+
+<p>Introduced mapping quality filtering: <code>--min_mapq</code>, <code>--inconsistent_mapq_cutoff</code> and
+    <code>--simple_alignments_mapq_cutoff</code> (<a href="https://github.com/ablab/IsoQuant/issues/110">#110</a>).</p>
+
+<p>Minor fixes and improvements:</p>
+
+<p>Added <code>--bam_tags</code> option to import additional information from BAM files to read assignments output.</p>
+
+<p>Large output files are now gzipped by default, <code>--no_gzip</code> can be used to keep uncompressed output
+    (<a href="https://github.com/ablab/IsoQuant/issues/154">#154</a>).</p>
+
+<p>BAM stats are now printed to the log (<a href="https://github.com/ablab/IsoQuant/issues/139">#139</a>).</p>
+
+<p>Various minor fixes and requests (<a href="https://github.com/ablab/IsoQuant/issues/106">#106</a>,
+    <a href="https://github.com/ablab/IsoQuant/issues/141">#141</a>, <a href="https://github.com/ablab/IsoQuant/issues/143">#143</a>,
+    <a href="https://github.com/ablab/IsoQuant/issues/146">#146</a>)</p>
+
+
 <h3>IsoQuant 3.3.1, 26 July 2023</h3>
 
 <p>Fixed "<code>UnboundLocalError: local variable 'match' referenced before assignment</code>" error in SQANTI-like output.</p>
