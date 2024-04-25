@@ -431,6 +431,8 @@ where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set)
     Perform exon and intron counting in addition to gene and transcript counting.
     Will take effect only when reference annotation is provided.
 
+`--bam_tags`
+    Comma separated list of BAM tags that will be imported into `read_assignments.tsv`.
 
 ### Pipeline options
 

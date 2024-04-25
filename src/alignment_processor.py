@@ -269,7 +269,7 @@ class AlignmentCollector:
     def forward_alignments(self, alignment_storage):
         current_region = alignment_storage.region
         logger.debug("Splitting " + str(current_region))
-        split_regions = self.split_coverage_regions(current_region, alignment_storage)
+        split_regions = AlignmentCollector.split_coverage_regions(current_region, alignment_storage)
 
         if len(split_regions) == 1:
             yield self.process_alignments_in_region(current_region, alignment_storage.get_alignments())
@@ -342,6 +342,7 @@ class AlignmentCollector:
             read_assignment.chr_id = self.chr_id
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
+            AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
             assignment_storage.append(read_assignment)
         return assignment_storage
 
@@ -395,7 +396,8 @@ class AlignmentCollector:
             read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
-            self.check_antisense(read_assignment)
+            AlignmentCollector.check_antisense(read_assignment)
+            AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
 
             read_assignment.chr_id = gene_info.chr_id
             read_assignment.multimapper = alignment.is_secondary
@@ -477,7 +479,8 @@ class AlignmentCollector:
             gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
         return gene_info
 
-    def split_coverage_regions(self, genomic_region, alignment_storage):
+    @staticmethod
+    def split_coverage_regions(genomic_region, alignment_storage):
         if interval_len(genomic_region) < AlignmentCollector.MAX_REGION_LEN and \
                 alignment_storage.get_read_count() < AlignmentCollector.MIN_READS_TO_SPLIT:
             return [genomic_region]
@@ -502,7 +505,8 @@ class AlignmentCollector:
 
         return split_regions
 
-    def check_antisense(self, read_assignment):
+    @staticmethod
+    def check_antisense(read_assignment):
         for match in read_assignment.isoform_matches:
             if match.assigned_transcript is None:
                 continue
@@ -513,3 +517,12 @@ class AlignmentCollector:
                     [MatchClassification.novel_in_catalog, MatchClassification.novel_not_in_catalog]:
                 match.match_classification = MatchClassification.antisense
             match.match_subclassifications.append(MatchEvent(MatchEventSubtype.antisense))
+
+    @staticmethod
+    def import_bam_tags(bam_record, read_assignment, tag_list):
+        for tag in tag_list:
+            try:
+                tag_value = bam_record.get_tag(tag)
+                read_assignment.set_additional_attribute(tag, str(tag_value))
+            except KeyError:
+                pass

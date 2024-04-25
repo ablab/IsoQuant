@@ -172,6 +172,9 @@ def parse_args(cmd_args=None, namespace=None):
                                      action='store_true', default=False)
     pipeline_args_group.add_argument("--count_exons", help="perform exon and intron counting",
                                      action='store_true', default=False)
+    add_additional_option_to_group(pipeline_args_group,"--bam_tags",
+                                   help="comma separated list of BAM tags to be imported to read_assignments.tsv",
+                                   type=str)
 
     # PIPELINE STEPS
     resume_args = pipeline_args_group.add_mutually_exclusive_group()
@@ -702,6 +705,11 @@ def set_additional_params(args):
     args.simple_models_mapq_cutoff = 30
     args.polya_percentage_threshold = 0.7
     args.low_polya_percentage_threshold = 0.1
+
+    if args.bam_tags:
+        args.bam_tags = args.bam_tags.split(",")
+    else:
+        args.bam_tags = []
 
 
 def run_pipeline(args):
