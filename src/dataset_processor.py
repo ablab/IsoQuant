@@ -18,11 +18,11 @@ import gffutils
 import pysam
 from pyfaidx import Fasta, Faidx, UnsupportedCompressionFormat
 
-from .common import proper_plural_form, rreplace
+from .common import proper_plural_form
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .stats import EnumStats
-from .file_utils import merge_files
+from .file_utils import merge_files, merge_counts
 from .input_data_storage import SampleData
 from .alignment_processor import AlignmentCollector, AlignmentType
 from .long_read_counter import (
@@ -635,26 +635,14 @@ class DatasetProcessor:
             self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
             if self.args.genedb:
-                merge_files(
-                    [
-                        rreplace(extended_gff_printer.model_fname, sample.prefix, f"{sample.prefix}_{chr_id}")
-                        for chr_id in chr_ids
-                    ],
-                    extended_gff_printer.out_gff,
-                    copy_header=False
-                )
+                merge_files(extended_gff_printer.model_fname, sample.prefix, chr_ids,
+                            extended_gff_printer.out_gff, copy_header=False)
                 logger.info("Extended annotation is saved to " + extended_gff_printer.model_fname)
             transcript_stat_counter.print_start("Transcript model statistics")
 
         self.merge_assignments(sample, aggregator, chr_ids)
         if self.args.sqanti_output:
-            merge_files(
-                [
-                    rreplace(sample.out_t2t_tsv, sample.prefix, f"{sample.prefix}_{chr_id}")
-                    for chr_id in chr_ids
-                ],
-                open(sample.out_t2t_tsv, "w"), copy_header=False
-            )
+            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, open(sample.out_t2t_tsv, "w"), copy_header=False)
 
         aggregator.finalize_aggregators(sample)
 
@@ -668,34 +656,20 @@ class DatasetProcessor:
 
     def merge_assignments(self, sample, aggregator, chr_ids):
         if self.args.genedb:
-            merge_files(
-                [rreplace(sample.out_assigned_tsv, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
-                aggregator.basic_printer.output_file, copy_header=False)
-        merge_files(
-            [rreplace(sample.out_corrected_bed, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
-            aggregator.corrected_bed_printer.output_file, copy_header=False)
-        for p in aggregator.global_counter.counters:
-            merge_files(
-                [rreplace(p.output_counts_file_name, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
-                p.get_output_file_handler(),
-                stats_file_names=[rreplace(p.output_stats_file_name, sample.prefix, sample.prefix + "_" + chr_id) for
-                                  chr_id in chr_ids]
-                if p.output_stats_file_name else None,
-                ignore_read_groups=p.ignore_read_groups,
-                unaligned_reads=self.alignment_stat_counter.stats_dict[AlignmentType.unaligned])
-            p.convert_counts_to_tpm()
+            merge_files(sample.out_assigned_tsv, sample.prefix, chr_ids,
+                        aggregator.basic_printer.output_file, copy_header=False)
+        merge_files(sample.out_corrected_bed, sample.prefix, chr_ids,
+                    aggregator.corrected_bed_printer.output_file, copy_header=False)
+
+        for counter in aggregator.global_counter.counters:
+            unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
+            merge_counts(counter, sample.prefix, chr_ids, unaligned)
+            counter.convert_counts_to_tpm()
 
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
-        merge_files([rreplace(gff_printer.model_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
-                    gff_printer.out_gff, copy_header=False)
-        merge_files([rreplace(gff_printer.r2t_fname, label, label + "_" + chr_id) for chr_id in chr_ids],
-                    gff_printer.out_r2t, copy_header=False)
-        for p in aggregator.transcript_model_global_counter.counters:
-            merge_files([rreplace(p.output_counts_file_name, label, label + "_" + chr_id) for chr_id in chr_ids],
-                        p.get_output_file_handler(),
-                        stats_file_names=[rreplace(p.output_stats_file_name, label, label + "_" + chr_id) for chr_id in
-                                          chr_ids]
-                        if p.output_stats_file_name else None,
-                        ignore_read_groups=p.ignore_read_groups,
-                        unaligned_reads=self.alignment_stat_counter.stats_dict[AlignmentType.unaligned])
-            p.convert_counts_to_tpm()
+        merge_files(gff_printer.model_fname, label, chr_ids, gff_printer.out_gff, copy_header=False)
+        merge_files(gff_printer.r2t_fname, label, chr_ids, gff_printer.out_r2t, copy_header=False)
+        for counter in aggregator.transcript_model_global_counter.counters:
+            unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
+            merge_counts(counter, label, chr_ids, unaligned)
+            counter.convert_counts_to_tpm()
