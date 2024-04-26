@@ -542,7 +542,7 @@ class TestAssignIsoform:
                                                 PolyAInfo(polya_pos, polyt_pos, -1, -1))
 
         read_assignment = self.assigner.assign_to_isoform("read_id", combined_profile)
-        assert read_assignment.assignment_type == ReadAssignmentType.inconsistent
+        assert read_assignment.assignment_type.is_inconsistent()
         if isoform_id:
             assert isoform_id in {im.assigned_transcript for im in read_assignment.isoform_matches}
         if expected_event:
