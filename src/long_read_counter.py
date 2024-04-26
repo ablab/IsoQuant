@@ -48,6 +48,12 @@ COUNTING_STRATEGIES = [CountingStrategy.unique_only.name,
                        CountingStrategy.all.name]
 
 
+@unique
+class NormalizationMethod(Enum):
+    simple = 1
+    usable_reads = 2
+
+
 class CountingStrategyFlags:
     def __init__(self, counting_strategy):
         self.use_ambiguous = counting_strategy.ambiguous()
@@ -327,7 +333,8 @@ class AssignedFeatureCounter(AbstractCounter):
                 f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
                 f.write("__usable\t%d\n" % self.reads_for_tpm)
 
-    def convert_counts_to_tpm(self):
+    def convert_counts_to_tpm(self, normalization_str=NormalizationMethod.simple.name):
+        normalization = NormalizationMethod[normalization_str]
         total_counts = defaultdict(float)
         with open(self.output_counts_file_name) as f:
             for line in f:
@@ -341,9 +348,11 @@ class AssignedFeatureCounter(AbstractCounter):
                         total_counts[j] += float(fs[j + 1])
 
         scale_factors = {}
+        unassigned_tpm = 0.0
         for group_id in total_counts.keys():
-            if self.ignore_read_groups and self.reads_for_tpm:
+            if normalization == NormalizationMethod.usable_reads and self.ignore_read_groups and self.reads_for_tpm:
                 total_reads = self.reads_for_tpm
+                unassigned_tpm = 1000000.0 * (1 - total_counts[group_id] / total_reads)
             else:
                 total_reads = total_counts[group_id] if total_counts[group_id] > 0 else 1.0
             scale_factors[group_id] = 1000000.0 / total_reads
@@ -367,6 +376,8 @@ class AssignedFeatureCounter(AbstractCounter):
                         feature_id, counts = fs[0], list(map(float, fs[1:]))
                         tpm_values = [scale_factors[i] * counts[i] for i in range(len(scale_factors))]
                         outf.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
+                if self.ignore_read_groups:
+                    outf.write("%s\t%.6f\n" % ("__unassigned", unassigned_tpm))
 
 
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
@@ -424,7 +435,7 @@ class ProfileFeatureCounter(AbstractCounter):
                     if self.print_zeroes or incl_count > 0 or excl_count > 0:
                         f.write("%s\t%s\t%d\t%d\n" % (feature_name, group_id, incl_count, excl_count))
 
-    def convert_counts_to_tpm(self):
+    def convert_counts_to_tpm(self, normalization=NormalizationMethod.simple):
         return
 
     @staticmethod
