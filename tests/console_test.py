@@ -18,7 +18,7 @@ def test__help(option):
     print(result.returncode)
     assert result.returncode == 0
     assert b"usage" in result.stdout
-    assert b"optional arguments:" in result.stdout
+    assert b"options:" in result.stdout
 
 
 def test_clean_start():
