@@ -552,7 +552,7 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 `--no_gzip`
     Do not compress large output files.
 
-`--no_gzip`
+`--no_gtf_check`
     Do not perform input GTF checks.
 
 `--no_secondary`
@@ -562,13 +562,13 @@ We recommend _not_ to modify these options unless you are clearly aware of their
     Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.
 
 `--no_junc_bed`
-    Do not use annotation for read mapping.
+    Do not use gene annotation for read mapping.
 
 `--junc_bed_file`
     Annotation in BED12 format produced by `paftools.js gff2bed` (can be found in `minimap2`), will be created automatically if not given.
 
 `--delta`
-    Delta for inexact splice junction comparison, chosen automatically based on data type.
+    Delta for inexact splice junction comparison, chosen automatically based on data type (e.g. 4bp for PacBio, 6pb for ONT).
 
 `--genedb_output`
     If your output folder is located on a shared storage (e.g. NFS share), use this option to set another path
@@ -587,6 +587,16 @@ but may improve running time when disk I/O is relatively slow.
 
 `--simple_alignments_mapq_cutoff`
     Filers out alignments with 1 or 2 exons and MAPQ less than this value (works only in annotation-free mode, default is 1).
+
+`--normalization_method`
+    Method for normalizing non-grouped counts into TPMs:
+* `simple` - standard method, scale factor equals to 1 million divided by the counts sum (default);
+* `usable_reads` - includes all reads assigned to a feature including the ones that were filtered out
+during quantification (i.e. inconsistent or ambiguous);
+scale factor equals to 1 million divided by the number of all assigned reads.
+In this case the sum of all gene/transcript TPMs may not add up to 1 million.
+Experiments with simulated data show that this method could give more accurate estimations.
+However, normalization method does not affect correlation/relative proportions.
 
 
 ### Examples

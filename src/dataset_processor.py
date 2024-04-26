@@ -664,7 +664,7 @@ class DatasetProcessor:
         for counter in aggregator.global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, sample.prefix, chr_ids, unaligned)
-            counter.convert_counts_to_tpm()
+            counter.convert_counts_to_tpm(self.args.normalization_method)
 
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
         merge_files(gff_printer.model_fname, label, chr_ids, gff_printer.out_gff, copy_header=False)
@@ -672,4 +672,4 @@ class DatasetProcessor:
         for counter in aggregator.transcript_model_global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)
-            counter.convert_counts_to_tpm()
+            counter.convert_counts_to_tpm(self.args.normalization_method)
