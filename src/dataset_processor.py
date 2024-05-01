@@ -16,7 +16,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import gffutils
 import pysam
-from pyfaidx import Fasta, UnsupportedCompressionFormat
+from pyfaidx import Fasta, Faidx, UnsupportedCompressionFormat
 
 from .common import proper_plural_form, rreplace
 from .serialization import *
@@ -90,7 +90,7 @@ def set_polya_requirement_strategy(flag, polya_requirement_strategy):
 
 
 def collect_reads_in_parallel(sample, chr_id, args):
-    current_chr_record = Fasta(args.reference)[chr_id]
+    current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
         current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
@@ -189,7 +189,7 @@ class ReadAssignmentLoader:
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
     construct_models = not args.no_model_construction
-    current_chr_record = Fasta(args.reference)[chr_id]
+    current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     multimapped_reads = defaultdict(list)
     multimap_loader = open(dump_filename + "_multimappers_" + chr_id, "rb")
     list_size = read_int(multimap_loader)
@@ -378,24 +378,14 @@ class DatasetProcessor:
             ref_name, outer_ext = os.path.splitext(ref_file_name)
 
             # make symlink for pyfaidx index
-            fai_file_name = self.args.reference + ".fai"
-            if not os.path.exists(fai_file_name):
-                symlink_name = os.path.join(args.output, ref_file_name)
-                if os.path.exists(symlink_name) and os.path.isdir(symlink_name):
-                    # highly unlikely event of one of samples having exactly the same name as reference genome
-                    ref_file_name = "reference_" + ref_file_name
-                    symlink_name = os.path.join(args.output, ref_file_name)
-                if os.path.exists(symlink_name) and not self.args.resume:
-                    os.remove(symlink_name)
-                if not os.path.exists(symlink_name):
-                    os.symlink(self.args.reference, symlink_name)
-                self.args.original_ref = self.args.reference
-                self.args.reference = symlink_name
+            args.fai_file_name = self.args.reference + ".fai"
+            if not os.path.exists(args.fai_file_name):
+                args.fai_file_name = os.path.join(args.output, ref_file_name  + ".fai")
 
             low_ext = outer_ext.lower()
             if low_ext in ['.gz', '.gzip', '.bgz']:
                 try:
-                    self.reference_record_dict = Fasta(self.args.reference)
+                    self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
                 except UnsupportedCompressionFormat:
                     gunzipped_reference = os.path.join(args.output, ref_name)
                     if not os.path.exists(gunzipped_reference) or not self.args.resume:
@@ -403,9 +393,9 @@ class DatasetProcessor:
                             shutil.copyfileobj(gzip.open(self.args.reference, "rt"), outf)
                         logger.info("Loading uncompressed reference from " + gunzipped_reference)
                     self.args.reference = gunzipped_reference
-                    self.reference_record_dict = Fasta(self.args.reference)
+                    self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
             else:
-                self.reference_record_dict = Fasta(self.args.reference)
+                self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
         else:
             self.reference_record_dict = None
 
