@@ -115,11 +115,14 @@ class GFFPrinter:
 
                 if not model.check_additional("exons"):
                     model.add_additional_attribute("exons", str(len(model.exon_blocks)))
+                transcript_additiional_info = ""
+                if gene_info and model.transcript_id in gene_info.gene_attributes:
+                    transcript_additiional_info = " " + gene_info.gene_attributes[model.transcript_id]
 
                 transcript_line = '%s\t%s\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; %s\n' \
                                   % (model.chr_id,  model.source, model.exon_blocks[0][0], model.exon_blocks[-1][1],
                                      model.strand, model.gene_id, model.transcript_id,
-                                     model.additional_attributes_str())
+                                     model.additional_attributes_str() + transcript_additiional_info)
                 self.out_gff.write(transcript_line)
 
                 prefix_columns = "%s\t%s\t" % (model.chr_id, model.source)
