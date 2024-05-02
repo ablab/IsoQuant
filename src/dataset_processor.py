@@ -381,8 +381,8 @@ class DatasetProcessor:
             # make symlink for pyfaidx index
             args.fai_file_name = self.args.reference + ".fai"
             if not os.path.exists(args.fai_file_name) and not os.access(ref_dir, os.W_OK):
-                # either index does not exist near the reference or reference folder is not writable
-                # store index in the output folder in these cases
+                # index does not exist near the reference and reference folder is not writable
+                # store index in the output folder in this case
                 args.fai_file_name = os.path.join(args.output, ref_file_name  + ".fai")
 
             low_ext = outer_ext.lower()
