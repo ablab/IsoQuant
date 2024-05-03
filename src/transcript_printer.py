@@ -129,7 +129,8 @@ class GFFPrinter:
                 suffix_columns = '.\t%s\t.\tgene_id "%s"; transcript_id "%s";' % \
                                  (model.strand, model.gene_id, model.transcript_id)
 
-                exons_to_print = model.other_features
+                exons_to_print = []
+                exons_to_print += model.other_features
                 for e in model.exon_blocks:
                     exons_to_print.append((e[0], e[1], 'exon'))
                 exons_to_print = sorted(exons_to_print, reverse=True) if model.strand == '-' else sorted(exons_to_print)
