@@ -617,12 +617,14 @@ class GraphBasedModelConstructor:
             else:
                 five_prime_pos = max([a.corrected_exons[-1][1] for a in clustered_reads[three_prime_pos]])
 
-            new_transcript_id = self.transcript_prefix + str(self.get_transcript_id())
-            transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
-            transcript_type = TranscriptModelType.novel_not_in_catalog
-            id_suffix = self.nnic_transcript_suffix
             strand = '+' if forward else '-'
             coordinates = (five_prime_pos, three_prime_pos) if forward else (three_prime_pos, five_prime_pos)
+            new_transcript_id = self.transcript_prefix + str(self.get_transcript_id())
+            transcript_gene = self.select_reference_gene([], coordinates, strand)
+            if not transcript_gene:
+                transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
+            transcript_type = TranscriptModelType.novel_not_in_catalog
+            id_suffix = self.nnic_transcript_suffix
 
             is_valid = True
             half_len = interval_len(coordinates) / 2
