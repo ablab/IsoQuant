@@ -388,7 +388,7 @@ def main():
 
     config_file = args.config_file
     if not os.path.exists(config_file):
-        log.error("Provide correct path to configuration file")
+        log.error("Provide correct path to configuration file, %s does not exits" % config_file)
         exit(-3)
 
     log.info("Loading config from %s" % config_file)
