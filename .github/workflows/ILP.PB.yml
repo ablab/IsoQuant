@@ -17,7 +17,7 @@ concurrency:
 jobs:
   launch-runner:
     runs-on:
-      labels: [self-hosted]
+      labels: [isoquant]
     name: 'Running IsoQuant and QC'
 
     steps:
