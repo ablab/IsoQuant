@@ -34,11 +34,11 @@ class CountingStrategy(Enum):
         return self in [CountingStrategy.all, CountingStrategy.with_ambiguous]
 
     def inconsistent_minor(self):
-        return self == CountingStrategy.unique_splicing_consistent
-
-    def inconsistent(self):
         return self in [CountingStrategy.unique_splicing_consistent,
                         CountingStrategy.unique_inconsistent, CountingStrategy.all]
+
+    def inconsistent(self):
+        return self in [CountingStrategy.unique_inconsistent, CountingStrategy.all]
 
 
 COUNTING_STRATEGIES = [CountingStrategy.unique_only.name,
@@ -108,7 +108,7 @@ class ReadWeightCounter:
     def process_inconsistent(self, assignment_type, feature_count):
         # use only for inconsistent assignments
         if assignment_type == ReadAssignmentType.inconsistent_ambiguous or feature_count > 1:
-            if self.strategy_flags.use_ambiguous:
+            if self.strategy_flags.use_ambiguous and self.strategy_flags.use_inconsistent:
                 return 1.0 / feature_count
             else:
                 return 0.0
