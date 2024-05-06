@@ -172,9 +172,9 @@ class GraphBasedModelConstructor:
                     ambiguous_assignments[read_id] = [read_assignment.read_group]
                 ambiguous_assignments[read_id].append(transcript_id)
 
-            for read_id in ambiguous_assignments.keys():
-                self.transcript_counter.add_read_info_raw(read_id, ambiguous_assignments[read_id][1:],
-                                                          ambiguous_assignments[read_id][0])
+        for read_id in ambiguous_assignments.keys():
+            self.transcript_counter.add_read_info_raw(read_id, ambiguous_assignments[read_id][1:],
+                                                      ambiguous_assignments[read_id][0])
 
         self.transcript_counter.add_unassigned(sum(value == 0 for value in self.read_assignment_counts.values()))
         self.transcript_counter.add_confirmed_features([model.transcript_id for model in self.transcript_model_storage])
@@ -444,7 +444,7 @@ class GraphBasedModelConstructor:
                        and transcript_clean_strand == '.')
                       or (self.params.report_canonical_strategy == StrandnessReportingLevel.only_stranded
                           and transcript_strand == '.')):
-                    logger.info("Avoiding unreliable transcript with %d exons (strand cannot be detected)" % len(novel_exons))
+                    logger.debug("Avoiding unreliable transcript with %d exons (strand cannot be detected)" % len(novel_exons))
                     pass
                 else:
                     if self.params.use_technical_replicas and \
