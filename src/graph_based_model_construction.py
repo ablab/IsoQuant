@@ -256,18 +256,22 @@ class GraphBasedModelConstructor:
 
             if (model.transcript_type != TranscriptModelType.known and
                     self.internal_counter[model.transcript_id] < coverage_cutoff):
-                del self.transcript_read_ids[model.transcript_id]
-                del self.internal_counter[model.transcript_id]
+                self.delete_from_storage(model.transcript_id)
                 continue
 
             if (model.transcript_type != TranscriptModelType.known and
                     self.mapping_quality(model.transcript_id) < self.params.simple_models_mapq_cutoff):
-                del self.transcript_read_ids[model.transcript_id]
-                del self.internal_counter[model.transcript_id]
+                self.delete_from_storage(model.transcript_id)
                 continue
             filtered_storage.append(model)
 
         self.transcript_model_storage = filtered_storage
+
+    def delete_from_storage(self, transcript_id):
+        for a in self.transcript_read_ids[transcript_id]:
+            self.read_assignment_counts[a.read_id] -= 1
+        del self.transcript_read_ids[transcript_id]
+        del self.internal_counter[transcript_id]
 
     def filter_transcripts(self):
         filtered_storage = []
@@ -290,21 +294,14 @@ class GraphBasedModelConstructor:
 
             if model.transcript_id in to_substitute:
                 #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
-                #self.transcript_read_ids[to_substitute[model.transcript_id]] += self.transcript_read_ids[model.transcript_id]
-                for a in self.transcript_read_ids[model.transcript_id]:
-                    self.read_assignment_counts[a.read_id] -= 1
-                del self.transcript_read_ids[model.transcript_id]
-                del self.internal_counter[model.transcript_id]
+                self.delete_from_storage(model.transcript_id)
                 continue
 
             if self.internal_counter[model.transcript_id] < novel_isoform_cutoff:
                 #logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
                 #                                                        self.internal_counter[model.transcript_id],
                 #                                                        novel_isoform_cutoff, component_coverage))
-                for a in self.transcript_read_ids[model.transcript_id]:
-                    self.read_assignment_counts[a.read_id] -= 1
-                del self.transcript_read_ids[model.transcript_id]
-                del self.internal_counter[model.transcript_id]
+                self.delete_from_storage(model.transcript_id)
                 continue
 
             if len(model.exon_blocks) <= 2:
@@ -312,10 +309,7 @@ class GraphBasedModelConstructor:
                 #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.params.simple_models_mapq_cutoff:
                     #logger.debug("Novel model %s has poor quality" % model.transcript_id)
-                    for a in self.transcript_read_ids[model.transcript_id]:
-                        self.read_assignment_counts[a.read_id] -= 1
-                    del self.transcript_read_ids[model.transcript_id]
-                    del self.internal_counter[model.transcript_id]
+                    self.delete_from_storage(model.transcript_id)
                     continue
 
             # TODO: correct ends for known
