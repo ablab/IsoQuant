@@ -219,11 +219,9 @@ class AssignedFeatureCounter(AbstractCounter):
             for feature_id in feature_ids:
                 count_value = self.read_counter.process_ambiguous(len(feature_ids))
                 self.feature_counter[group_id][feature_id] += count_value
-                # self.confirmed_features.add((group_id, feature_id))
                 self.all_features.add(feature_id)
         else:
             self.feature_counter[group_id][feature_ids[0]] += 1
-            # self.confirmed_features.add((group_id, feature_ids[0]))
             self.all_features.add(feature_ids[0])
 
     def add_unassigned(self, n_reads=1):
