@@ -57,7 +57,7 @@ Minor fixes and improvements:
 
 - Various minor fixes and requests ([#106](https://github.com/ablab/IsoQuant/issues/106),
     [#141](https://github.com/ablab/IsoQuant/issues/141), [#143](https://github.com/ablab/IsoQuant/issues/143),
-    [#146](https://github.com/ablab/IsoQuant/issues/146))
+    [#146](https://github.com/ablab/IsoQuant/issues/146), [#179](https://github.com/ablab/IsoQuant/issues/179)).
 
 
 Special acknowledgement to [@almiheenko](https://github.com/almiheenko) for testing and reviewing PRs, 
