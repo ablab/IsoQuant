@@ -108,10 +108,12 @@ def parse_args(cmd_args=None, namespace=None):
     input_args.add_argument('--fastq', nargs='+', type=str,
                             help='input FASTQ file(s), each file will be treated as a separate sample; '
                                  'reference genome should be provided when using reads as input')
-    input_args.add_argument('--bam_list', type=str, help='text file with list of BAM files, one file per line'
-                                                         ', leave empty line between samples')
-    input_args.add_argument('--fastq_list', type=str, help='text file with list of FASTQ files, one file per line'
-                                                           ', leave empty line between samples')
+    add_additional_option_to_group(input_args,'--bam_list', type=str,
+                                   help='text file with list of BAM files, one file per line, '
+                                        'leave empty line between samples')
+    add_additional_option_to_group(input_args,'--fastq_list', type=str,
+                                   help='text file with list of FASTQ files, one file per line, '
+                                        'leave empty line between samples')
     input_args.add_argument('--yaml', type=str, help='yaml file containing all input files, one entry per sample'
                                                      ', check readme for format info')
 
