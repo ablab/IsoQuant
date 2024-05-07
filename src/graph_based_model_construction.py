@@ -146,7 +146,7 @@ class GraphBasedModelConstructor:
         self.forward_counts()
 
         # FIXME: remove asserts below
-        if self.transcript_model_storage and len(set([x.read_id for x in read_assignment_storage])) != len(self.read_assignment_counts):
+        if len(set([x.read_id for x in read_assignment_storage])) != len(self.read_assignment_counts):
             logger.warning("Some reads were not assigned %d %d" % (len(set([x.read_id for x in read_assignment_storage])), len(self.read_assignment_counts)))
         # FIXME: remove asserts below
         if any(value < 0 for value in self.read_assignment_counts.values()):
@@ -706,6 +706,9 @@ class GraphBasedModelConstructor:
     # assign reads back to constructed isoforms
     def assign_reads_to_models(self, read_assignments):
         if not self.transcript_model_storage:
+            for assignment in read_assignments:
+                read_id = assignment.read_id
+                self.read_assignment_counts[read_id] = 0
             logger.debug("No transcripts were assigned")
             return
 
@@ -721,7 +724,7 @@ class GraphBasedModelConstructor:
                 continue
 
             read_exons = assignment.corrected_exons
-            #logger.debug("# Checking read %s: %s" % (assignment.read_id, str(read_exons)))
+            # logger.debug("# Checking read %s: %s" % (assignment.read_id, str(read_exons)))
             model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
             model_assignment.read_group = assignment.read_group

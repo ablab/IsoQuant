@@ -138,7 +138,8 @@ class GFFPrinter:
         # write read_id -> transcript_id map
         if not self.output_r2t:
             return
-        for model_id, read_assignments in transcript_model_constructor.transcript_read_ids.items():
+        for model_id in transcript_model_constructor.transcript_read_ids.keys():
+            read_assignments = transcript_model_constructor.transcript_read_ids[model_id]
             for a in read_assignments:
                 self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
         for read_id in transcript_model_constructor.read_assignment_counts.keys():
