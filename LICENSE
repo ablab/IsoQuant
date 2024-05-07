@@ -1,6 +1,7 @@
 IsoQuant: A tool for isoform assignment and quantification fror long and barcoded reads
-Copyright (c) 2020-2022 Saint Petersburg State University
 Copyright (c) 2022-2024 University of Helsinki
+Copyright (c) 2020-2022 Saint Petersburg State University
+
 
 IsoQuant is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, Version 2,
@@ -22,9 +23,11 @@ A tool for transcript discovery, quantification and read-to-isoform assignment f
 Version: see VERSION
 
 Developed in
-Department of Computer Science, University of Helsinki,
-Center for Algorithmic Biotechnology, Institute of Translational Biomedicine, St. Petersburg State University and 
+Department of Computer Science, University of Helsinki and
 Hagen Tilgner Lab, Brain and Mind Research Institute, Weill Cornell Medicine
+
+Previously developed in
+Center for Algorithmic Biotechnology, Institute of Translational Biomedicine, St. Petersburg State University
 
 Current contributors:
 
