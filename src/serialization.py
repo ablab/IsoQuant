@@ -1,3 +1,10 @@
+
+############################################################################
+# Copyright (c) 2022-2024 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 # serialization stuff
 ENCODING = 'utf-8'
 BYTE_ORDER = "big"

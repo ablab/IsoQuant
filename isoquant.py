@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 #
 # ############################################################################
-# Copyright (c) 2019 Saint Petersburg State University
+# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2019-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################

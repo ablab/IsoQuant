@@ -1,3 +1,10 @@
+
+############################################################################
+# Copyright (c) 2022-2024 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 # Usage: python3 misc/isoseq_quantification.py -o examples --reference tests/toy_data/MAPT.Mouse.reference.fasta --gff tests/toy_data/MAPT.Mouse.genedb.gtf --complete --isp tools/IsoSeqSim --nbn 100
 
 import os

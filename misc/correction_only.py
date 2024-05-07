@@ -1,3 +1,10 @@
+
+############################################################################
+# Copyright (c) 2022-2024 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 import argparse
 import pysam
 import gffutils

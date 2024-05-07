@@ -1,3 +1,10 @@
+
+############################################################################
+# Copyright (c) 2022-2024 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 # Usage: python3 src/quantifiaction_calibration.py -rt ../mouse_rna/Mus_musculus.GRCm38.cdna.all.fa -rg ../mouse_rna/Mus_musculus.GRCm38.75.dna.fa -c ../mouse_rna/mouse_cdna/training -e ../mouse_rna/mouse_cdna_chr18/expression_abundance_chr18.tsv -n 100
 
 import os

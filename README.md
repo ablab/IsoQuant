@@ -7,7 +7,7 @@
 
 
 
-# IsoQuant 3.3 manual
+# IsoQuant 3.4 manual
 
 1. [About IsoQuant](#sec1) </br>
 1.1. [Supported data types](#sec1.1)</br>

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # ############################################################################
+# Copyright (c) 2022-2024 University of Helsinki
 # Copyright (c) 2019-2022 Saint Petersburg State University
 # Copyright (c) 2022-2024 University of Helsinki
 # # All Rights Reserved
@@ -17,7 +18,7 @@ from datetime import datetime
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--input", "-o", type=str, help="file name or directory for recursive copyright change", required=True)
+    parser.add_argument("--input", "-i", type=str, help="file name or directory for recursive copyright change", required=True)
     parser.add_argument("--extensions", "-e", type=str, nargs="+", help="file extensions to be modified (all)")
     parser.add_argument('--quite', action='store_true', default=False, help="dry run")
     args = parser.parse_args(argv)
