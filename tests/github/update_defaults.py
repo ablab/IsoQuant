@@ -66,7 +66,7 @@ def main():
     print("Loading config from %s" % config_file)
     config_dict = load_tsv_config(config_file)
     run_name = config_dict["name"]
-    output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)
+    output_folder = os.path.join(os.path.join(args.output if args.output else config_dict["output"], args.branch), run_name)
     for et in etalon_dict.keys():
         if et not in config_dict:
             continue
