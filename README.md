@@ -274,8 +274,7 @@ See more in [examples](#examples).
 
 This option is deprecated since version 3.4 and will be removed later. To process multiple experiments, please use `--yaml` instead.
 
-If you wish to process several independent experiments in a single run, you should provide a dataset description
-file via `--fastq_list` or `--bam_list` (see description below).
+A dataset description file can be provided via `--fastq_list` or `--bam_list` (see description below).
 A distinct output folder with individual GTFs and abundance tables will be generated for each experiment.
 
 Input files should be provided one per line. Experiments should be separated by blank lines or experiment names
@@ -372,15 +371,15 @@ Each experiment is represented as set of parameters (e.g. in curly brackets):
 All paths should be either absolute or relative to the YAML file.
 See more in [examples](#examples).
 
-#### Providing input reads via dataset description file (deprecated)
+#### Providing input reads via dataset description file (deprecated since 3.4)
 
-`--bam_list`
+`--bam_list` (_deprecated since 3.4_)
     Text file with list of BAM files, one file per line. Each file must be sorted and indexed.
 Leave empty line or experiment name starting with # between the experiments.
 For each experiment IsoQuant will generate a individual GTF and count tables.
 You may also give a label for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:replicate1`).
 
-`--fastq_list`
+`--fastq_list` (_deprecated since 3.4_)
     Text file with list of FASTQ/FASTA files (can be gzipped),  one file per line.
 Leave empty line or experiment name starting with # between the experiments.
 For each experiment IsoQuant will generate a individual GTF and count tables.
