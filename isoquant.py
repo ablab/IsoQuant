@@ -243,7 +243,7 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
     parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
 
-    isoquant_version = "3.2.0"
+    isoquant_version = "3.4.0"
     try:
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
             isoquant_version = version_f.readline().strip()
