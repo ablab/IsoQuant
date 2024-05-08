@@ -470,7 +470,7 @@ class DatasetProcessor:
                 os.remove(f)
             for f in glob.glob(sample.read_group_file + "*"):
                 os.remove(f)
-        logger.info("Processed sample " + sample.prefix)
+        logger.info("Processed experiment " + sample.prefix)
 
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
