@@ -410,15 +410,15 @@ class DatasetProcessor:
                 os.remove(self.args.gunzipped_reference)
 
     def process_all_samples(self, input_data):
-        logger.info("Processing " + proper_plural_form("sample", len(input_data.samples)))
+        logger.info("Processing " + proper_plural_form("experiment", len(input_data.samples)))
         for sample in input_data.samples:
             self.process_sample(sample)
-        logger.info("Processed " + proper_plural_form("sample", len(input_data.samples)))
+        logger.info("Processed " + proper_plural_form("experiment", len(input_data.samples)))
 
     # Run through all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
-        logger.info("Processing sample " + sample.prefix)
-        logger.info("Sample has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
+        logger.info("Processing experiment " + sample.prefix)
+        logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
 

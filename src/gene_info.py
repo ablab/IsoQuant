@@ -529,7 +529,7 @@ class GeneInfo:
     def set_feature_properties(self, isoforms_to_feature_map, feature_profiles):
         similar_features = set()
         contained_features = set()
-        # FIXME: change to interval tree instead of brute force
+        # TODO: change to interval tree instead of brute force
         for f1 in feature_profiles.features:
             for f2 in feature_profiles.features:
                 if f1 == f2:

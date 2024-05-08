@@ -60,6 +60,7 @@ def merge_counts(counter, label, chr_ids, unaligned_reads=0):
             merged_file_handler.write("%s\t%d\n" % (v, stat_dict[v]))
         counter.reads_for_tpm = stat_dict[ "__usable"]
 
+
 def normalize_path(config_path, file_path):
     if os.path.isabs(file_path):
         return os.path.normpath(file_path)
