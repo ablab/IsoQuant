@@ -409,13 +409,6 @@ class AlignmentCollector:
                 read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
                 read_assignment.intron_gene_profile = alignment_info.combined_profile.read_intron_profile.gene_profile
 
-            if self.params.sqanti_output:
-                indel_count, junctions_with_indels = self.count_indel_stats(alignment)
-                read_assignment.set_additional_info("indel_count", indel_count)
-                read_assignment.set_additional_info("junctions_with_indels", junctions_with_indels)
-                read_assignment.introns_match = \
-                    all(e == 1 for e in alignment_info.combined_profile.read_intron_profile.read_profile)
-
             assignment_storage.append(read_assignment)
             logger.debug("=== Finished read " + read_id + " ===")
         return assignment_storage
