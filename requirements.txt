@@ -7,3 +7,4 @@ packaging
 pyfaidx>=0.7
 ssw-py>=1.0.0
 pyyaml>=5.4
+editdistance>=0.8.1
