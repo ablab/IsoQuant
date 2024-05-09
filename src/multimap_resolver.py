@@ -168,18 +168,19 @@ class MultimapResolver:
                         example_assignment = assignment_list[index1]
                         if MultimapResolver.duplicate_counter == 5:
                             logger.warning(
-                                "More possible duplicates were detected but will not be printed to limit the log size. "
+                                "More possible duplicates were detected but will not be printed. "
+                                "Use --debug to see all of them in the isoquant.log."
                                 "All duplicated entries will be ignored. "
-                                "Use --debug to see all of them in the isoquant.log.")
+                                "This maybe caused either by the same read having more than one alignment with "
+                                "the same reference id, start and end coordinates, "
+                                "or by duplicated read names in the original files. ")
                         if MultimapResolver.duplicate_counter >= 5:
                             logger.debug(
                                 "Read %s seems to have duplicated alignment entries at %s: %d and will be ignored. "
-                                "Please, check you input." %
-                                (example_assignment.read_id, example_assignment.chr_id, example_assignment.start))
+                                % (example_assignment.read_id, example_assignment.chr_id, example_assignment.start))
                         else:
-                            logger.warning(
+                            logger.info(
                                 "Read %s seems to have duplicated alignment entries at %s: %d and will be ignored. "
-                                "Please, check you input."
                                 % (example_assignment.read_id, example_assignment.chr_id, example_assignment.start))
 
         return selected_assignments
