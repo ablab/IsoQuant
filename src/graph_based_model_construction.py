@@ -25,7 +25,14 @@ from .common import (
 from .assignment_io import ReadAssignmentType
 from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
 from .intron_graph import IntronGraph, VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
-from .isoform_assignment import is_matching_assignment, match_subtype_to_str_with_additional_info, MatchEventSubtype
+from .isoform_assignment import (
+    is_matching_assignment,
+    match_subtype_to_str_with_additional_info,
+    MatchEventSubtype,
+    ReadAssignment,
+    MatchClassification,
+    IsoformMatch
+)
 from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
@@ -163,6 +170,32 @@ class GraphBasedModelConstructor:
         self.transcript_counter.add_confirmed_features([model.transcript_id for model in self.transcript_model_storage])
 
     def compare_models_with_known(self):
+        if not self.gene_info.all_isoforms_exons:
+            for model in self.transcript_model_storage:
+                # create intergenic
+                assignment = ReadAssignment(model.transcript_id,
+                                            ReadAssignmentType.intergenic,
+                                            IsoformMatch(MatchClassification.intergenic))
+                if model.strand == "-":
+                    polya_info = PolyAInfo(-1, model.exon_blocks[0][0], -1, -1)
+                else:
+                    polya_info = PolyAInfo(model.exon_blocks[-1][1], -1, -1, -1)
+
+                assignment.polya_info = polya_info
+                assignment.cage_found = False
+                assignment.exons = model.exon_blocks
+                assignment.strand = model.strand
+                assignment.chr_id = model.chr_id
+                assignment.set_additional_info("indel_count", "NA")
+                assignment.set_additional_info("junctions_with_indels", "NA")
+                assignment.introns_match = False
+                assignment.gene_info = self.gene_info
+
+                FSM_class = "C"
+                assignment.set_additional_info("FSM_class", FSM_class)
+                self.transcript2transcript.append(assignment)
+            return
+
         gene_to_model_dict = defaultdict(list)
         for model in self.transcript_model_storage:
             gene_to_model_dict[model.gene_id].append(model.transcript_id)
