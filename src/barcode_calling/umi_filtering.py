@@ -6,6 +6,8 @@
 
 import pysam
 import sys
+import gzip
+import os.path
 from collections import defaultdict
 import logging
 import editdistance
@@ -43,7 +45,7 @@ def load_barcodes(in_file, use_untrusted_umis=False, barcode_column=1, umi_colum
             if l.startswith("#"):continue
             read_count += 1
             v = l.strip().split("\t")
-            if len(v) < 10: continue
+            if len(v) < 8: continue
             barcode = v[barcode_column]
             score = int(v[barcode_score_column])
             if barcode == "*": continue
@@ -271,7 +273,14 @@ class UMIFilter:
         spliced_count = 0
 
         self.unique_gene_barcode = set()
-        for l in open(assignment_file):
+        if os.path.exists(assignment_file):
+            handle = open(assignment_file, 'r')
+        elif os.path.exists(assignment_file + ".gz"):
+            handle = gzip.open(assignment_file + ".gz", "rt")
+        else:
+            logger.critical("Read assignment file is not found")
+            exit(-1)
+        for l in handle:
             if l.startswith("#"): continue
             v = l.strip().split("\t")
             read_id = v[0]
