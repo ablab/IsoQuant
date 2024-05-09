@@ -169,6 +169,7 @@ class GraphBasedModelConstructor:
 
         self.transcript2transcript = []
         for model in self.transcript_model_storage:
+            logger.debug("> Inspecting model %s: %s " % (str(model.transcript_id, str(model.exon_blocks))))
             if model.transcript_type == TranscriptModelType.known:
                 continue
             if model.strand == "-":

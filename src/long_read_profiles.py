@@ -191,6 +191,8 @@ class NonOverlappingFeaturesProfileConstructor:
         self.delta = delta
 
     def construct_profile(self, sorted_blocks, polya_position=-1, polyt_position=-1):
+        logger.debug("Constructing profiles %s" % str(sorted_blocks))
+        logger.debug("PolyA %d, PolyT %d" % (polya_position, polyt_position))
         exon_profile = [0] * (len(self.known_exons))
         read_profile = [0] * (len(sorted_blocks))
         read_exons = sorted_blocks
@@ -265,6 +267,8 @@ class CombinedProfileConstructor:
                                                      delta=self.params.delta)
 
     def construct_profiles(self, sorted_blocks, polya_info, cage_hits):
+        logger.debug("Constructing profiles %s" % str(sorted_blocks))
+        logger.debug("PolyA %d, PolyT %d" % (polya_info.external_polya_pos, polya_info.external_polyt_pos))
         intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks,
                                                                                   polya_info.external_polya_pos,
                                                                                   polya_info.external_polyt_pos)

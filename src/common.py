@@ -846,6 +846,8 @@ def interval_bin_search(ordered_intervals, pos):
 
 
 def interval_bin_search_rev(ordered_intervals, pos):
+    logger.debug(ordered_intervals)
+    logger.debug(pos)
     if pos > ordered_intervals[-1][1] or pos < ordered_intervals[0][0]:
         return -1
 
