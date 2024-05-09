@@ -2,7 +2,11 @@
 
 ## IsoQuant 3.4.1, 9 May 2024
 
-- Fixes `IndexError: list index out of range` when `--sqanti_output` is set.
+- Fixes `IndexError: list index out of range` when `--sqanti_output` is set ([#186](https://github.com/ablab/IsoQuant/issues/186)).
+
+- Fixes `IndexError: list index out of range` in printing grouped transcript models TPMs ([#187](https://github.com/ablab/IsoQuant/issues/187)).
+
+- Reduced running time when `--sqanti_output` is set.
 
 ## IsoQuant 3.4.0, 9 May 2024
 
