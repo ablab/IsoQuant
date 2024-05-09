@@ -446,7 +446,8 @@ class DatasetProcessor:
         polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
         logger.info("Total alignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_alignments, polya_found, polya_fraction * 100.0))
-        if polya_fraction < self.args.low_polya_percentage_threshold:
+        if (polya_fraction < self.args.low_polya_percentage_threshold and
+                self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
                            "If you aim to construct transcript models, consider using --polya_requirement option.")
 
