@@ -1,5 +1,9 @@
 # IsoQuant changelog
 
+## IsoQuant 3.4.1, 9 May 2024
+
+- Fixes `IndexError: list index out of range` when `--sqanti_output` is set.
+
 ## IsoQuant 3.4.0, 9 May 2024
 
 Major novelties and improvements:
