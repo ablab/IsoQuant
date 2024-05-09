@@ -299,8 +299,6 @@ class ReadAssignmentAggregator:
                                                            additional_header=self.common_header, gzipped=gzipped)
             printer_list.append(self.basic_printer)
         if self.args.sqanti_output:
-            # self.sqanti_printer = SqantiTSVPrinter(sample.out_alt_tsv, self.args, self.io_support)
-            # printer_list.append(self.sqanti_printer)
             self.t2t_sqanti_printer = SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
