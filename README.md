@@ -870,11 +870,6 @@ Tab-separated values, the columns are:
 * `TPM` or `count` - expression value (float).
 
 For grouped counts, each column contains expression values of a respective group.
-In the number of groups exceeds 10, file will contain 3 columns:
-
-* `feature_id` - genomic feature ID;
-* `group_id` - name of the assigned group;
-* `TPM` or `count` - expression value (float).
 
 #### Exon and intron count format
 
