@@ -10,7 +10,7 @@ def path(grb_edge): return int(grb_edge.split("[")[1].split(",")[2])
 
 class Enc:
 
-    def __init__(self,n,E,F,R=[],eps=10000):
+    def __init__(self,n,E,F,R=[],eps=1000):
         self.n = n
         self.m = len(E)
         self.source = 0
@@ -27,17 +27,21 @@ class Enc:
         self.epsilon   = eps #we could have a function that computes epsilon based on features of the data
 
         self.model = gp.Model("MFD")
+        self.model.Params.Threads = 16 #args.threads?
         if not self.model:
             print("FATAL: could not create GRB model")
             exit(0) #TODO: display error message and catch exception
         
+        source_outdegree = 0
+        target_indegree  = 0
         for (u,v) in self.E:
             if u==self.source:
-                self.f += self.F[(u,v)] #sum of out-going flow from the source
-                self.k += 1             #k = outdegree(s), trivial lower bound, think of funnels. (we assume that every edge has positive flow)
+                source_outdegree += 1
+            if v==self.target:
+                target_indegree += 1
             self.w_max = max(self.w_max,self.F[(u,v)])
         
-        self.M = self.w_max
+        self.k = max(source_outdegree, target_indegree) #trivial lower bound for the largest edge antichain of the graph
  
         self.paths      = []
 
@@ -80,8 +84,9 @@ class Enc:
     def solve(self):
         self.model.optimize()
 
+    #returns a value in ]0,1] that depends on the position of the edge in the graph (because of non uniform coverages, etc), 1 is maximum confidence
     def confidence(self, edge):
-        return 1 #should return a value in ]0,1]
+        return 1
 
     def encode(self):
 
@@ -117,11 +122,11 @@ class Enc:
         for i in range(self.k):
             for (u,v) in self.E:
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14f_u={}_v={}_i={}".format(u,v,i) )
-                self.model.addConstr( self.gam_vars[u,v,i] <=     self.M * self.edge_vars[u,v,i]                        , "14i_u={}_v={}_i={}".format(u,v,i) )
+                self.model.addConstr( self.gam_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14i_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.weights[i]                                           , "14g_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.gam_vars[u,v,i] <= self.slacks [i]                                           , "14j_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.phi_vars[u,v,i] >= self.weights[i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14h_u={}_v={}_i={}".format(u,v,i) )
-                self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.M    , "14k_u={}_v={}_i={}".format(u,v,i) )
+                self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14k_u={}_v={}_i={}".format(u,v,i) )
 
         '''
         Idea: might be interesting to try different strategies of subpath constraints wrt data
@@ -145,10 +150,7 @@ class Enc:
 
     def print_solution(self,solution):
         opt, slack, paths = solution
-        print("\n#####SOLUTION#####")
-        print("> FD size   :",   opt)
-        print("> Slack sum :", slack)
-        print("> Weight-Slack-Path decomposition:")
+        print("\n#####SOLUTION#####\n","> FD size   :",   opt,"\n> Slack sum :", slack,"\n> Weight-Slack-Path decomposition:")
         for p in paths:
             print(*p)
         visualize((self.E,self.F),paths)
@@ -168,35 +170,35 @@ class Enc:
         return (self.k, self.model.ObjVal, self.paths)
 
     def linear_search(self):
-        print("########################Feasibility########################")
+        print("############# Feasibility #############")
         #Feasibility: Find first feasible solution (there always exists one) and clear the solver for next stage
         while True:
-            print("\n########################\nCURRENT FD SIZE:",self.k,"\n########################\n")
+            print("############# CURRENT FD SIZE:",self.k," #############")
             self.encode()
             self.solve()
             if self.model.status == GRB.OPTIMAL:
                 previous_slack = self.model.ObjVal
                 solution       = self.build_solution()
                 self.clear()
-                #self.k += 1
+                self.k += 1
                 break
             self.clear()
             self.k += 1
 
-        print("########################Optimality########################")
+        print("#############Optimality#############")
         #Optimality: Find the k for which the difference in slacks of two consecutive iterations becomes sufficiently small
-        while self.k <= self.m:#min(self.m,self.f):
-            print("\n########################\nCURRENT FD SIZE:",self.k,"\n########################\n")
+        while self.k <= self.m:
+            print("############# CURRENT FD SIZE:",self.k," #############")
             self.encode()
             self.solve()
             
             if previous_slack-self.model.ObjVal < self.epsilon:
+                solution = self.build_solution()
                 _,_,p = solution
                 self.print_solution(solution)
                 p = list(map(lambda x : x[2], p))
                 return p
 
-            solution       = self.build_solution()
             previous_slack = self.model.ObjVal
             self.clear()
             self.k += 1
@@ -312,20 +314,23 @@ class Intron2Graph:
 
 def Encode_ILP(intron_graph, transcripts_constraints=[]):
 
+    #check if graph is empty
+    if len(intron_graph.outgoing_edges)==0:
+        return []
+
     g = Intron2Graph(intron_graph)
 
     path_constraints = g.transcripts_to_paths(transcripts_constraints)
 
     n,E,F = g.vertex_id, g.edge_list, g.flow_dict
 
-    # visualize((E,F))
-
+    visualize((E,F))
     e = Enc(n,E,F, path_constraints)
     e.encode()
     paths = e.linear_search()
 
     transcripts = g.paths_to_transcripts(paths)
-    # for t in transcripts:
-    #    print(*t)
+    #for t in transcripts:
+        #print(*t)
     
     return transcripts
