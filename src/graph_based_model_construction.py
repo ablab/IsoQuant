@@ -130,13 +130,15 @@ class GraphBasedModelConstructor:
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
-        # NOW ILP IS HERE
-        self.construct_ilp_isoforms()
-        # self.construct_assignment_based_isoforms(read_assignment_storage)
-        
-        #doesnt matter for now...
-        self.assign_reads_to_models(read_assignment_storage)
-        # self.filter_transcripts()
+        if self.params.no_ilp:
+            self.construct_fl_isoforms()
+            self.construct_assignment_based_isoforms(read_assignment_storage)
+            self.assign_reads_to_models(read_assignment_storage)
+            self.filter_transcripts()
+        else:
+            self.construct_ilp_isoforms()
+            self.assign_reads_to_models(read_assignment_storage)
+            # self.filter_transcripts()
 
         if self.params.genedb:
             self.create_extended_annotation()

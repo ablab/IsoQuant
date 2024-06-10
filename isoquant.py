@@ -126,6 +126,8 @@ def parse_args(cmd_args=None, namespace=None):
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
     input_args_group.add_argument('--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
+    input_args_group.add_argument('--no_ilp', action='store_true', default=False,
+                        help="use default transcript model construction")
 
     # ALGORITHM
     add_additional_option("--delta", type=int, default=None,

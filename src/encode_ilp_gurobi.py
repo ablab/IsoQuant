@@ -10,7 +10,7 @@ def path(grb_edge): return int(grb_edge.split("[")[1].split(",")[2])
 
 class Enc:
 
-    def __init__(self,n,E,F,R=[],eps=1000):
+    def __init__(self,n,E,F,R=[],eps=100):
         self.n = n
         self.m = len(E)
         self.source = 0
@@ -27,7 +27,7 @@ class Enc:
         self.epsilon   = eps #we could have a function that computes epsilon based on features of the data
 
         self.model = gp.Model("MFD")
-        self.model.Params.Threads = 16 #args.threads?
+        self.model.Params.Threads = 16 #FIXME magic number, use args.threads
         if not self.model:
             print("FATAL: could not create GRB model")
             exit(0) #TODO: display error message and catch exception
@@ -191,15 +191,17 @@ class Enc:
             print("############# CURRENT FD SIZE:",self.k," #############")
             self.encode()
             self.solve()
+
+            current_slack = self.model.ObjVal
             
-            if previous_slack-self.model.ObjVal < self.epsilon:
+            if previous_slack - current_slack < self.epsilon:
                 solution = self.build_solution()
                 _,_,p = solution
                 self.print_solution(solution)
                 p = list(map(lambda x : x[2], p))
                 return p
 
-            previous_slack = self.model.ObjVal
+            previous_slack = current_slack
             self.clear()
             self.k += 1
 
