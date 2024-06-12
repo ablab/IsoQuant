@@ -308,7 +308,7 @@ class IntronGraph:
             outgoing_paths = [self.signleton_dead_end(i) for i in self.outgoing_edges[current_intron]]
             if any(len(p) == 0 for p in outgoing_paths):
                 continue
-            to_clean[current_intron] = {}
+            to_clean[current_intron] = set()
             for p in outgoing_paths:
                 to_clean[current_intron].update(p)
 
@@ -328,7 +328,7 @@ class IntronGraph:
             incoming_paths = [self.signleton_dead_start(i) for i in self.incoming_edges[current_intron]]
             if any(len(p) == 0 for p in incoming_paths):
                 continue
-            to_clean[current_intron] = {}
+            to_clean[current_intron] = set()
             for p in incoming_paths:
                 to_clean[current_intron].update(p)
 
