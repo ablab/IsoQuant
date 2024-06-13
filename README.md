@@ -228,7 +228,7 @@ The first entry in the list should be the type of files the experiments contain,
 followed by the type in quotation marks. The type can be either `fastq` or `bam`.
 
 Each experiment is represented as set of parameters (e.g. in curly brackets).
-Each experiment must have a name and a list if long-read files in the specified format.
+Each experiment must have a name and a list of long-read files in the specified format.
 Additionally, it may contain one or multiple BAM files with short reads.
 The name is provided as `name: ` followed by the experiment name in quotation marks.
 Both short and long read files are provided as a list of file paths in quotation marks,
