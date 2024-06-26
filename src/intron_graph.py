@@ -163,14 +163,39 @@ class IntronGraph:
         if self.params.debug:
             self.print_graph()
 
-    def add_edge(self, v1, v2):
+    @classmethod
+    def from_reference(cls, params, gene_info, read_assignments):
+        intron_graph = cls.__new__(cls)
+        intron_graph.params = params
+        intron_graph.gene_info = gene_info
+        intron_graph.read_assignments = read_assignments
+
+        intron_graph.incoming_edges = defaultdict(set)
+        intron_graph.outgoing_edges = defaultdict(set)
+        intron_graph.intron_collector = IntronCollector(gene_info, params.delta)
+        intron_graph.max_coverage = 0
+        intron_graph.edge_weights = defaultdict(int)
+
+        intron_graph.starting_known_positions = defaultdict(list)
+        intron_graph.terminal_known_positions = defaultdict(list)
+        for t, introns in intron_graph.gene_info.all_isoforms_introns.items():
+            if not introns:
+                continue
+            intron_graph.starting_known_positions[introns[0]].append(intron_graph.gene_info.all_isoforms_exons[t][0][0])
+            intron_graph.terminal_known_positions[introns[-1]].append(intron_graph.gene_info.all_isoforms_exons[t][-1][1])
+
+        intron_graph.construct_from_reference()
+
+        return intron_graph
+
+    def add_edge(self, v1, v2, w=1):
         if v1 in self.intron_collector.intron_correction_map:
             v1 = self.intron_collector.intron_correction_map[v1]
         if v2 in self.intron_collector.intron_correction_map:
             v2 = self.intron_collector.intron_correction_map[v2]
         self.outgoing_edges[v1].add(v2)
         self.incoming_edges[v2].add(v1)
-        self.edge_weights[(v1, v2)] += 1
+        self.edge_weights[(v1, v2)] += w
 
     def vertices(self):
         return self.intron_collector.clustered_introns.keys()
@@ -265,6 +290,39 @@ class IntronGraph:
                 self.add_edge(intron1, intron2)
 
         self.max_coverage =  max(self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
+
+    def construct_from_reference(self):
+        logger.debug("Constructing intron graph from reference")
+        if not self.gene_info.all_isoforms_introns:
+            return
+        for t_id in self.gene_info.all_isoforms_introns.keys():
+            if t_id not in self.gene_info.all_isoforms_introns:
+                continue
+            intron_chain = self.gene_info.all_isoforms_introns[t_id]
+            if not intron_chain: continue
+
+            for i in intron_chain:
+                self.intron_collector.clustered_introns[i] = 0
+
+            for i in range(len(intron_chain) - 1):
+                intron1 = intron_chain[i]
+                intron2 = intron_chain[i + 1]
+                self.add_edge(intron1, intron2, 0)
+            if self.gene_info.isoform_strands[t_id] == '+':
+                starting_vertex = (VERTEX_read_start, self.gene_info.all_isoforms_exons[t_id][0][0])
+                terminal_vertex = (VERTEX_polya, self.gene_info.all_isoforms_exons[t_id][-1][1])
+            else:
+                starting_vertex = (VERTEX_polyt, self.gene_info.all_isoforms_exons[t_id][0][0])
+                terminal_vertex = (VERTEX_read_end, self.gene_info.all_isoforms_exons[t_id][-1][1])
+            self.incoming_edges[intron_chain[0]].add(starting_vertex)
+            self.outgoing_edges[starting_vertex].add(intron_chain[0])
+            self.outgoing_edges[intron_chain[-1]].add(terminal_vertex)
+            self.incoming_edges[terminal_vertex].add(intron_chain[-1])
+
+            self.intron_collector.clustered_introns[starting_vertex] = 0
+            self.intron_collector.clustered_introns[terminal_vertex] = 0
+
+        self.max_coverage = 0
 
     def simplify(self):
         logger.debug("Simplifying graph")

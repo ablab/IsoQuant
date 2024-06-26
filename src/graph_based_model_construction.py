@@ -119,8 +119,11 @@ class GraphBasedModelConstructor:
 
     def process(self, read_assignment_storage):
         #Construction of intron graph
-        self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
+        self.intron_graph = IntronGraph.from_reference(self.params, self.gene_info, read_assignment_storage)
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
+        self.fill_in_graph_weights(read_assignment_storage, self.intron_graph, self.path_processor)
+        # self.intron_graph.print_graph()
+        # leave path storage filling for now
         self.path_storage = IntronPathStorage(self.params, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
 
@@ -149,6 +152,38 @@ class GraphBasedModelConstructor:
 
         if self.params.sqanti_output:
             self.compare_models_with_known()
+
+    def fill_in_graph_weights(self, read_assignments, intron_graph, path_processor):
+        for a in read_assignments:
+            if a.multimapper:
+                continue
+            intron_path = path_processor.thread_introns(a.corrected_introns)
+            if not intron_path:
+                continue
+            read_end = a.corrected_exons[-1][1]
+            is_end_trusted = a.strand == '+' and \
+                             (a.polya_info.external_polya_pos != -1 or
+                              a.polya_info.internal_polya_pos != -1)
+            terminal_vertex = path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted)
+            if terminal_vertex:
+                intron_path.append(terminal_vertex)
+
+            read_start = a.corrected_exons[0][0]
+            is_start_trusted = a.strand == '-' and \
+                               (a.polya_info.external_polyt_pos != -1 or
+                                a.polya_info.internal_polyt_pos != -1)
+            starting_vertex = self.path_processor.thread_starts(intron_path[0], read_start, is_start_trusted)
+            if starting_vertex:
+                intron_path = [starting_vertex] + intron_path
+
+            matching_path = all(v in intron_graph.intron_collector.clustered_introns.keys() for v in intron_path)
+            if not matching_path: continue
+
+            for v in intron_path:
+                intron_graph.intron_collector.clustered_introns[v] += 1
+            for i in range(len(intron_path) - 1):
+                e = (intron_path[i], intron_path[i+1])
+                intron_graph.edge_weights[e] += 1
 
     def compare_models_with_known(self):
         gene_to_model_dict = defaultdict(list)
@@ -316,14 +351,17 @@ class GraphBasedModelConstructor:
 
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
-        for isoform_id in gene_info.all_isoforms_introns:
-            isoform_introns = gene_info.all_isoforms_introns[isoform_id]
-            intron_path = self.path_processor.thread_introns(isoform_introns)
-            if not intron_path:
-                #logger.debug("== No path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
-                continue
-            #logger.debug("== Path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
-            known_isoforms[tuple(intron_path)] = isoform_id
+        for t_id in gene_info.all_isoforms_introns:
+            isoform_introns = gene_info.all_isoforms_introns[t_id]
+            if gene_info.isoform_strands[t_id] == '+':
+                starting_vertex = (VERTEX_read_start, self.gene_info.all_isoforms_exons[t_id][0][0])
+                terminal_vertex = (VERTEX_polya, self.gene_info.all_isoforms_exons[t_id][-1][1])
+            else:
+                starting_vertex = (VERTEX_polyt, self.gene_info.all_isoforms_exons[t_id][0][0])
+                terminal_vertex = (VERTEX_read_end, self.gene_info.all_isoforms_exons[t_id][-1][1])
+
+            intron_path = isoform_introns # [starting_vertex] + isoform_introns + [terminal_vertex]
+            known_isoforms[tuple(intron_path)] = t_id
         return known_isoforms
 
     def save_assigned_read(self, read_assignment, transcript_id):
@@ -510,7 +548,7 @@ class GraphBasedModelConstructor:
 
     def construct_ilp_isoforms(self):
         logger.info("Using ILP to discover transcripts")
-        path_constraints = list(map(lambda x: list(x), filter(lambda p: self.path_storage.paths[p] >= 5, self.path_storage.fl_paths)))
+        path_constraints = list(map(lambda x: list(x), self.known_isoforms_in_graph.keys()))
 
         fl_transcript_paths = Encode_ILP(self.intron_graph, path_constraints)
         for path in map(lambda x: tuple(x), fl_transcript_paths):
