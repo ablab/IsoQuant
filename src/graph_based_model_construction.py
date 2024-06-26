@@ -352,7 +352,11 @@ class GraphBasedModelConstructor:
     def get_known_spliced_isoforms(self, gene_info, s="known"):
         known_isoforms = {}
         for t_id in gene_info.all_isoforms_introns:
+            if t_id not in self.gene_info.all_isoforms_introns:
+                continue
             isoform_introns = gene_info.all_isoforms_introns[t_id]
+            if not isoform_introns: continue
+
             if gene_info.isoform_strands[t_id] == '+':
                 starting_vertex = (VERTEX_read_start, self.gene_info.all_isoforms_exons[t_id][0][0])
                 terminal_vertex = (VERTEX_polya, self.gene_info.all_isoforms_exons[t_id][-1][1])
@@ -360,7 +364,7 @@ class GraphBasedModelConstructor:
                 starting_vertex = (VERTEX_polyt, self.gene_info.all_isoforms_exons[t_id][0][0])
                 terminal_vertex = (VERTEX_read_end, self.gene_info.all_isoforms_exons[t_id][-1][1])
 
-            intron_path = isoform_introns # [starting_vertex] + isoform_introns + [terminal_vertex]
+            intron_path = [starting_vertex] + isoform_introns + [terminal_vertex]
             known_isoforms[tuple(intron_path)] = t_id
         return known_isoforms
 
