@@ -4,6 +4,10 @@ from collections import defaultdict
 from gurobipy import GRB
 import gurobipy as gp
 
+
+import logging
+logger = logging.getLogger('IsoQuant')
+
 def tail(grb_edge): return int(grb_edge.split("[")[1].split(",")[0])
 def head(grb_edge): return int(grb_edge.split("[")[1].split(",")[1])
 def path(grb_edge): return int(grb_edge.split("[")[1].split(",")[2])
@@ -228,22 +232,6 @@ class Intron2Graph:
             self.vertex2intron[self.vertex_id] = intron
             self.vertex_id += 1
 
-        # add all starting vertices (avoid repeating incoming from the same starting vertex)
-        for intron in intron_graph.incoming_edges.keys():
-            for preceeding_intron in intron_graph.incoming_edges[intron]:
-                if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start] and preceeding_intron not in self.intron2vertex: #FIXME magic number
-                    self.intron2vertex[preceeding_intron] = self.vertex_id
-                    self.vertex2intron[self.vertex_id] = preceeding_intron
-                    self.vertex_id += 1
-
-        # add all terminal vertices (avoid repeating outgoing from the same terminal vertex)
-        for intron in intron_graph.outgoing_edges.keys():
-            for subsequent_intron in intron_graph.outgoing_edges[intron]:
-                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end] and subsequent_intron not in self.intron2vertex:   #FIXME magic number
-                    self.intron2vertex[subsequent_intron] = self.vertex_id
-                    self.vertex2intron[self.vertex_id] = subsequent_intron
-                    self.vertex_id += 1
-
         source = 0
         target = self.vertex_id
 
@@ -262,8 +250,6 @@ class Intron2Graph:
         for intron in intron_graph.outgoing_edges.keys():
             for subsequent_intron in intron_graph.outgoing_edges[intron]:
                 if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                    self.edge_list.append((self.intron2vertex[intron], self.intron2vertex[subsequent_intron]))
-                    edge_set.add((self.intron2vertex[intron], self.intron2vertex[subsequent_intron]))
                     terminal_introns[subsequent_intron] += intron_graph.edge_weights[(intron, subsequent_intron)]
 
         self.flow_dict = defaultdict(int)
@@ -272,13 +258,6 @@ class Intron2Graph:
                 u = self.intron2vertex[preceeding_intron]
                 v = self.intron2vertex[intron]
                 self.flow_dict[(u, v)] = intron_graph.edge_weights[(preceeding_intron, intron)]
-
-        for intron in intron_graph.outgoing_edges.keys():
-            for subsequent_intron in intron_graph.outgoing_edges[intron]:
-                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                    u = self.intron2vertex[intron]
-                    v = self.intron2vertex[subsequent_intron]
-                    self.flow_dict[(u, v)] = intron_graph.edge_weights[(intron, subsequent_intron)]
 
         # add connection to super source and total weight
         for starting_intron in starting_introns.keys():
@@ -298,6 +277,8 @@ class Intron2Graph:
         assert len(self.edge_list) == len(self.flow_dict)
 
         self.vertex_id += 1
+        logger.debug(self.vertex2intron)
+        logger.debug(self.flow_dict)
         #return self.vertex_id+1, self.edge_list, self.flow_dict
 
     def transcript_to_path(self, transcript):

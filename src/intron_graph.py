@@ -711,23 +711,6 @@ class IntronGraph:
             intron2vertex[intron] = vertex_id
             vertex2intron[vertex_id] = intron
             vertex_id += 1
-
-        # add all starting vertices (avoid repeating incoming from the same starting vertex)
-        for intron in self.get_incoming_edges():
-            for preceeding_intron in self.incoming_edges[intron]:
-                if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start] and preceeding_intron not in intron2vertex:
-                    intron2vertex[preceeding_intron] = vertex_id
-                    vertex2intron[vertex_id] = preceeding_intron
-                    vertex_id += 1
-
-        # add all terminal vertices (avoid repeating outgoing from the same terminal vertex)
-        for intron in self.get_outgoing_edges():
-            for subsequent_intron in self.outgoing_edges[intron]:
-                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end] and subsequent_intron not in intron2vertex:
-                    intron2vertex[subsequent_intron] = vertex_id
-                    vertex2intron[vertex_id] = subsequent_intron
-                    vertex_id += 1
-
         target = vertex_id
 
         # create edges
@@ -736,8 +719,9 @@ class IntronGraph:
         starting_introns = defaultdict(int)
         for intron in self.get_incoming_edges():
             for preceeding_intron in self.incoming_edges[intron]:
-                edge_list.append((intron2vertex[preceeding_intron], intron2vertex[intron]))
-                edge_set.add((intron2vertex[preceeding_intron], intron2vertex[intron]))
+                e = (intron2vertex[preceeding_intron], intron2vertex[intron])
+                edge_list.append(e)
+                edge_set.add(e)
                 if preceeding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
                     starting_introns[preceeding_intron] += self.edge_weights[(preceeding_intron, intron)]
 
@@ -745,8 +729,6 @@ class IntronGraph:
         for intron in self.get_outgoing_edges():
             for subsequent_intron in self.outgoing_edges[intron]:
                 if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                    edge_list.append((intron2vertex[intron], intron2vertex[subsequent_intron]))
-                    edge_set.add((intron2vertex[intron], intron2vertex[subsequent_intron]))
                     terminal_introns[subsequent_intron] += self.edge_weights[(intron, subsequent_intron)]
 
         flow_dict = defaultdict(int)
@@ -756,25 +738,20 @@ class IntronGraph:
                 v = intron2vertex[intron]
                 flow_dict[(u, v)] = self.edge_weights[(preceeding_intron, intron)]
 
-        for intron in self.get_outgoing_edges():
-            for subsequent_intron in self.outgoing_edges[intron]:
-                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                    u = intron2vertex[intron]
-                    v = intron2vertex[subsequent_intron]
-                    flow_dict[(u, v)] = self.edge_weights[(intron, subsequent_intron)]
-
         # add connection to super source and total weight
         for starting_intron in starting_introns.keys():
             starting_vertex = intron2vertex[starting_intron]
-            edge_list.append((source, starting_vertex))
-            edge_set.add((source, starting_vertex))
-            flow_dict[(source, starting_vertex)] = starting_introns[starting_intron]
+            e = (source, starting_vertex)
+            edge_list.append(e)
+            edge_set.add(e)
+            flow_dict[e] = starting_introns[starting_intron]
 
         for terminal_intron in terminal_introns.keys():
             terminal_vertex = intron2vertex[terminal_intron]
-            edge_list.append((terminal_vertex, target))
-            edge_set.add((terminal_vertex, target))
-            flow_dict[(terminal_vertex, target)] = terminal_introns[terminal_intron]
+            e = (terminal_vertex, target)
+            edge_list.append(e)
+            edge_set.add(e)
+            flow_dict[e] = terminal_introns[terminal_intron]
 
         assert len(edge_list) == len(edge_set)
         return vertex_id+1, edge_list, flow_dict

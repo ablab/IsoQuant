@@ -122,7 +122,7 @@ class GraphBasedModelConstructor:
         self.intron_graph = IntronGraph.from_reference(self.params, self.gene_info, read_assignment_storage)
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         self.fill_in_graph_weights(read_assignment_storage, self.intron_graph, self.path_processor)
-        # self.intron_graph.print_graph()
+        self.intron_graph.print_graph()
         # leave path storage filling for now
         self.path_storage = IntronPathStorage(self.params, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
