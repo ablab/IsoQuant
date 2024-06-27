@@ -200,10 +200,11 @@ class Enc:
             
             if previous_slack - current_slack < self.epsilon:
                 solution = self.build_solution()
-                _,_,p = solution
-                self.print_solution(solution)
-                p = list(map(lambda x : x[2], p))
-                return p
+                n_paths,total_slack,p = solution
+                self.print_solution("Number of paths:",n_paths,"\nTotal slack:",total_slack,"\nPaths:\n",solution)
+                #p = list(map(lambda x : x[2], p))
+                paths,weights = list(map(lambda x : x[2], p)), list(map(lambda x : x[0], p))
+                return paths,weights
 
             previous_slack = current_slack
             self.clear()
@@ -310,10 +311,12 @@ def Encode_ILP(intron_graph, transcripts_constraints=[]):
     visualize((E,F))
     e = Enc(n,E,F, path_constraints)
     e.encode()
-    paths = e.linear_search()
-
+    paths,weights = e.linear_search()
+    
     transcripts = g.paths_to_transcripts(paths)
+    weighted_transcripts = list(zip(transcripts,weights))
+    
     #for t in transcripts:
         #print(*t)
     
-    return transcripts
+    return weighted_transcripts
