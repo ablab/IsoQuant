@@ -14,7 +14,7 @@ def path(grb_edge): return int(grb_edge.split("[")[1].split(",")[2])
 
 class Enc:
 
-    def __init__(self,n,E,F,R=[],eps=100):
+    def __init__(self,n,E,F,R=[],eps=50):
         self.n = n
         self.m = len(E)
         self.source = 0
@@ -36,16 +36,16 @@ class Enc:
             print("FATAL: could not create GRB model")
             exit(0) #TODO: display error message and catch exception
         
-        source_outdegree = 0
-        target_indegree  = 0
+        source_outdegree_nonzero = 0
+        target_indegree_nonzero  = 0
         for (u,v) in self.E:
-            if u==self.source:
-                source_outdegree += 1
-            if v==self.target:
-                target_indegree += 1
+            if u==self.source and F[(u,v)]!=0:
+                source_outdegree_nonzero += 1
+            if v==self.target and F[(u,v)]!=0:
+                target_indegree_nonzero += 1
             self.w_max = max(self.w_max,self.F[(u,v)])
         
-        self.k = max(source_outdegree, target_indegree) #trivial lower bound for the largest edge antichain of the graph
+        self.k = max(source_outdegree_nonzero, target_indegree_nonzero) #trivial lower bound for the largest edge antichain of the graph
  
         self.paths      = []
 
@@ -315,8 +315,5 @@ def Encode_ILP(intron_graph, transcripts_constraints=[]):
     
     transcripts = g.paths_to_transcripts(paths)
     weighted_transcripts = list(zip(transcripts,weights))
-    
-    #for t in transcripts:
-        #print(*t)
     
     return weighted_transcripts
