@@ -559,7 +559,13 @@ class GraphBasedModelConstructor:
         # path_constraints = list(map(lambda x: list(x), self.known_isoforms_in_graph.keys()))
 
         fl_transcript_paths = Encode_ILP(self.intron_graph, path_constraints)
-        for path in map(lambda x: tuple(x), fl_transcript_paths):
+        for res in fl_transcript_paths:
+            path = tuple(res[0])
+            weight = res[1]
+            if path in self.known_isoforms_in_graph:
+                logger.info("Detected know isoform %s with weight %.2f" % (self.known_isoforms_in_graph[path], weight))
+            else:
+                logger.info("Detected novel isoform %s with weight %.2f" % (str(path), weight))
             intron_path = path[1:-1]
             if not intron_path: continue
             transcript_range = (path[0][1], path[-1][1])
