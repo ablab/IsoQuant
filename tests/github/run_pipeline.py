@@ -72,6 +72,7 @@ def fix_path(config_file, path):
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="Output file name")
+    parser.add_argument("--additional_options", "-a", type=str, help="additional options for IsoQuant")
     parser.add_argument("config_file", metavar="config_file", type=str, help="configuration .info file")
 
     args = parser.parse_args()
@@ -122,6 +123,9 @@ def run_isoquant(args, config_dict):
         opts = config_dict["isoquant_options"].replace('"', '').split()
         for o in opts:
             isoquant_command_list.append(o)
+
+    if args.additional_options:
+        isoquant_command_list += args.additional_options.split()
 
     log.info("IsoQuant command line: " + " ".join(isoquant_command_list))
     result = subprocess.run(isoquant_command_list)
