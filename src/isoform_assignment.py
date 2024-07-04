@@ -842,6 +842,11 @@ def is_matching_assignment(isoform_assignment):
                        MatchEventSubtype.terminal_site_match_left,
                        MatchEventSubtype.terminal_site_match_right,
                        MatchEventSubtype.terminal_site_match_left_precise,
-                       MatchEventSubtype.terminal_site_match_right_precise}
+                       MatchEventSubtype.terminal_site_match_right_precise,
+                       MatchEventSubtype.correct_polya_site_right,
+                       MatchEventSubtype.correct_polya_site_left,
+                       MatchEventSubtype.exon_elongation_left,
+                       MatchEventSubtype.exon_elongation_right}
+
         return all(m.event_type in allowed_set for m in isoform_assignment.isoform_matches[0].match_subclassifications)
     return False
