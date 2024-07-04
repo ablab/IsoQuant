@@ -286,12 +286,12 @@ class GraphBasedModelConstructor:
         del self.internal_counter[transcript_id]
 
     def filter_transcripts(self):
-        filtered_storage = []
+        pre_filtered_storage = []
         to_substitute = self.detect_similar_isoforms(self.transcript_model_storage)
 
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
-                filtered_storage.append(model)
+                pre_filtered_storage.append(model)
                 continue
             # check coverage
             component_coverage = self.intron_graph.get_max_component_coverage(model.intron_path)
@@ -326,6 +326,22 @@ class GraphBasedModelConstructor:
 
             # TODO: correct ends for known
             self.correct_novel_transcript_ends(model, self.transcript_read_ids[model.transcript_id])
+            pre_filtered_storage.append(model)
+
+
+        filtered_storage = []
+        to_substitute = self.detect_similar_isoforms(pre_filtered_storage)
+
+        for model in pre_filtered_storage:
+            if model.transcript_type == TranscriptModelType.known:
+                filtered_storage.append(model)
+                continue
+
+            if model.transcript_id in to_substitute:
+                #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
+                self.delete_from_storage(model.transcript_id)
+                continue
+
             filtered_storage.append(model)
 
         self.transcript_model_storage = filtered_storage
