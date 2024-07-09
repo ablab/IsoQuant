@@ -51,6 +51,34 @@ from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extend
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
 
+
+from types import ModuleType, FunctionType
+from gc import get_referents
+import sys
+# Custom objects know their class.
+# Function objects seem to know way too much, including modules.
+# Exclude modules as well.
+BLACKLIST = type, ModuleType, FunctionType
+
+
+def getsize(obj):
+    """sum size of object & members."""
+    if isinstance(obj, BLACKLIST):
+        raise TypeError('getsize() does not take argument of type: '+ str(type(obj)))
+    seen_ids = set()
+    size = 0
+    objects = [obj]
+    while objects:
+        need_referents = []
+        for obj in objects:
+            if not isinstance(obj, BLACKLIST) and id(obj) not in seen_ids:
+                seen_ids.add(id(obj))
+                size += sys.getsizeof(obj)
+                need_referents.append(obj)
+        objects = get_referents(*need_referents)
+    return size
+
+
 logger = logging.getLogger('IsoQuant')
 
 
@@ -417,6 +445,7 @@ class DatasetProcessor:
 
     # Run through all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
+        logger.info(getsize(self))
         logger.info("Processing experiment " + sample.prefix)
         logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
@@ -436,7 +465,9 @@ class DatasetProcessor:
             saves_file = self.args.read_assignments[0]
             logger.info('Using read assignments from {}*'.format(saves_file))
         else:
+            logger.info(getsize(self))
             self.collect_reads(sample)
+            logger.info(getsize(self))
             saves_file = sample.out_raw_file
             logger.info('Read assignments files saved to {}*. '.
                         format(sample.out_raw_file))
@@ -465,6 +496,7 @@ class DatasetProcessor:
             self.args.require_monoexonic_polya or self.args.requires_polya_for_construction,
             self.args.polya_requirement_strategy)
 
+        logger.info(getsize(self))
         self.process_assigned_reads(sample, saves_file)
         if not self.args.read_assignments and not self.args.keep_tmp:
             for f in glob.glob(saves_file + "_*"):
@@ -472,6 +504,7 @@ class DatasetProcessor:
             for f in glob.glob(sample.read_group_file + "*"):
                 os.remove(f)
         logger.info("Processed experiment " + sample.prefix)
+        logger.info(getsize(self))
 
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
