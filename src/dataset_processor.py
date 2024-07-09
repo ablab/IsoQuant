@@ -608,12 +608,9 @@ class DatasetProcessor:
         logger.info("Transcript models construction is turned %s" %
                     ("off" if self.args.no_model_construction else "on"))
 
-        # set up aggregators and outputs
-        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped)
         transcript_stat_counter = EnumStats()
+        global_read_stat_counter = EnumStats()
 
-        gff_printer = VoidTranscriptPrinter()
-        extended_gff_printer = VoidTranscriptPrinter()
         if not self.args.no_model_construction:
             logger.info("Transcript construction options:")
             logger.info("  Novel monoexonic transcripts will be reported: %s"
@@ -626,16 +623,6 @@ class DatasetProcessor:
                         % ("yes" if self.args.require_monoexonic_polya else "no"))
             logger.info("  PolyA tails are required for novel monoexon transcripts to be reported: %s" % "yes")
             logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
-
-            gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, header=self.common_header, gzipped=self.args.gzipped
-            )
-            if self.args.genedb:
-                extended_gff_printer = GFFPrinter(
-                    sample.out_dir, sample.prefix,
-                    gtf_suffix=".extended_annotation.gtf", output_r2t=False,
-                    header=self.common_header
-                )
 
         model_gen = (
             construct_models_in_parallel,
@@ -652,7 +639,7 @@ class DatasetProcessor:
 
                 for read_stat_counter, tsc in results:
                     for k, v in read_stat_counter.stats_dict.items():
-                        aggregator.read_stat_counter.stats_dict[k] += v
+                        global_read_stat_counter.stats_dict[k] += v
 
                     if not self.args.no_model_construction:
                         for k, v in tsc.stats_dict.items():
@@ -660,11 +647,27 @@ class DatasetProcessor:
         else:
             for read_stat_counter, tsc in map(*model_gen):
                 for k, v in read_stat_counter.stats_dict.items():
-                    aggregator.read_stat_counter.stats_dict[k] += v
+                    global_read_stat_counter.stats_dict[k] += v
 
                 if not self.args.no_model_construction:
                     for k, v in tsc.stats_dict.items():
                         transcript_stat_counter.stats_dict[k] += v
+
+        # set up aggregators and outputs
+        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped)
+        aggregator.read_stat_counter = global_read_stat_counter
+        gff_printer = VoidTranscriptPrinter()
+        extended_gff_printer = VoidTranscriptPrinter()
+        if not self.args.no_model_construction:
+            gff_printer = GFFPrinter(
+                sample.out_dir, sample.prefix, header=self.common_header, gzipped=self.args.gzipped
+            )
+            if self.args.genedb:
+                extended_gff_printer = GFFPrinter(
+                    sample.out_dir, sample.prefix,
+                    gtf_suffix=".extended_annotation.gtf", output_r2t=False,
+                    header=self.common_header
+                )
 
         if not self.args.no_model_construction:
             self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)
