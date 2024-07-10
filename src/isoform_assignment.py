@@ -472,7 +472,6 @@ class BasicReadAssignment:
         self.assignment_id = read_assignment.assignment_id
         self.read_id = read_assignment.read_id
         self.chr_id = read_assignment.chr_id
-        self.genomic_region = read_assignment.genomic_region
         self.multimapper = read_assignment.multimapper
         self.polyA_found = read_assignment.polyA_found
         self.assignment_type = read_assignment.assignment_type
@@ -506,7 +505,6 @@ class BasicReadAssignment:
         read_assignment.assignment_id = read_int(infile)
         read_assignment.read_id = read_string(infile)
         read_assignment.chr_id = read_string(infile)
-        read_assignment.genomic_region = (read_int(infile), read_int(infile))
         bool_arr = read_bool_array(infile, 2)
         read_assignment.multimapper = bool_arr[0]
         read_assignment.polyA_found = bool_arr[1]
@@ -521,8 +519,6 @@ class BasicReadAssignment:
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
         write_string(self.chr_id, outfile)
-        write_int(self.genomic_region[0], outfile)
-        write_int(self.genomic_region[1], outfile)
         write_bool_array([self.multimapper, self.polyA_found], outfile)
         write_short_int(self.assignment_type.value, outfile)
         write_short_int(self.gene_assignment_type.value, outfile)

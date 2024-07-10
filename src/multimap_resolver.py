@@ -163,24 +163,24 @@ class MultimapResolver:
 
                     # check if duplicates come from the same region,
                     # if they are - it means we have identical records in the BAM files, print a warning
-                    if assignment_list[index1].genomic_region == assignment_list[index2].genomic_region:
-                        MultimapResolver.duplicate_counter += 1
-                        example_assignment = assignment_list[index1]
-                        if MultimapResolver.duplicate_counter == 5:
-                            logger.warning(
-                                "More possible duplicates were detected but will not be printed. "
-                                "Use --debug to see all of them in the isoquant.log."
-                                "All duplicated entries will be ignored. "
-                                "This maybe caused either by the same read having more than one alignment with "
-                                "the same reference id, start and end coordinates, "
-                                "or by duplicated read names in the original files. ")
-                        if MultimapResolver.duplicate_counter >= 5:
-                            logger.debug(
-                                "Read %s seems to have duplicated alignment entries at %s: %d and will be ignored. "
-                                % (example_assignment.read_id, example_assignment.chr_id, 0))
-                        else:
-                            logger.info(
-                                "Read %s seems to have duplicated alignment entries at %s: %d and will be ignored. "
-                                % (example_assignment.read_id, example_assignment.chr_id, 0))
+                    # if assignment_list[index1].genomic_region == assignment_list[index2].genomic_region:
+                    #     MultimapResolver.duplicate_counter += 1
+                    #     example_assignment = assignment_list[index1]
+                    #     if MultimapResolver.duplicate_counter == 5:
+                    #         logger.warning(
+                    #             "More possible duplicates were detected but will not be printed. "
+                    #             "Use --debug to see all of them in the isoquant.log."
+                    #             "All duplicated entries will be ignored. "
+                    #             "This maybe caused either by the same read having more than one alignment with "
+                    #             "the same reference id, start and end coordinates, "
+                    #             "or by duplicated read names in the original files. ")
+                    #     if MultimapResolver.duplicate_counter >= 5:
+                    #         logger.debug(
+                    #             "Read %s seems to have duplicated alignment entries at %s: %d and will be ignored. "
+                    #             % (example_assignment.read_id, example_assignment.chr_id, 0))
+                    #     else:
+                    #         logger.info(
+                    #             "Read %s seems to have duplicated alignment entries at %s: %d and will be ignored. "
+                    #             % (example_assignment.read_id, example_assignment.chr_id, 0))
 
         return selected_assignments
