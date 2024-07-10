@@ -177,10 +177,10 @@ class MultimapResolver:
                         if MultimapResolver.duplicate_counter >= 5:
                             logger.debug(
                                 "Read %s seems to have duplicated alignment entries at %s: %d and will be ignored. "
-                                % (example_assignment.read_id, example_assignment.chr_id, example_assignment.start))
+                                % (example_assignment.read_id, example_assignment.chr_id, 0))
                         else:
                             logger.info(
                                 "Read %s seems to have duplicated alignment entries at %s: %d and will be ignored. "
-                                % (example_assignment.read_id, example_assignment.chr_id, example_assignment.start))
+                                % (example_assignment.read_id, example_assignment.chr_id, 0))
 
         return selected_assignments
