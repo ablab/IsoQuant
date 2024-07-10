@@ -15,6 +15,7 @@ from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 
+import gc
 import gffutils
 import pysam
 from pyfaidx import Fasta, Faidx, UnsupportedCompressionFormat
@@ -495,6 +496,10 @@ class DatasetProcessor:
             # do not require polyA tails for mono-intronic only if the data is reliable and polyA percentage is low
             self.args.require_monoexonic_polya or self.args.requires_polya_for_construction,
             self.args.polya_requirement_strategy)
+
+        gc.collect(0)
+        gc.collect(1)
+        gc.collect(2)
 
         logger.info(getsize(self))
         self.process_assigned_reads(sample, saves_file)
