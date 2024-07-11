@@ -101,6 +101,10 @@ def collect_reads_in_parallel(sample, chr_id, args):
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     bamstat_file = "{}_{}_bamstat".format(sample.out_raw_file, chr_id)
     processed_reads = []
+    if args.high_memory:
+        def collect_assignment_info(ra): return ra
+    else:
+        def collect_assignment_info(ra): return ra.read_id
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
@@ -113,7 +117,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
             while loader.has_next():
                 for read_assignment in loader.get_next():
                     if read_assignment is None: continue
-                    processed_reads.append(read_assignment.read_id)
+                    processed_reads.append(collect_assignment_info(read_assignment))
             logger.info("Loaded data for " + chr_id)
             return read_grouper.read_groups, alignment_stat_counter, processed_reads
         else:
@@ -133,7 +137,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
-            processed_reads.append(read_assignment.read_id)
+            processed_reads.append(collect_assignment_info(read_assignment))
     with open(group_file, "w") as group_dump:
         for g in read_grouper.read_groups:
             group_dump.write("%s\n" % g)
@@ -528,19 +532,25 @@ class DatasetProcessor:
         )
 
         all_read_groups = set()
-        multimappers_counts = defaultdict(int)
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
         else:
             results = map(*read_gen)
 
+        multimapped_reads = defaultdict(list)
+        multimappers_counts = defaultdict(int)
         for read_groups, alignment_stats, processed_reads in results:
             all_read_groups.update(read_groups)
             self.alignment_stat_counter.merge(alignment_stats)
-            for read_id in processed_reads: multimappers_counts[read_id] += 1
+            if self.args.high_memory:
+                for basic_read_assignment in processed_reads:
+                    multimapped_reads[basic_read_assignment.read_id].append(basic_read_assignment)
+            else:
+                for read_id in processed_reads: multimappers_counts[read_id] += 1
 
-        multimapped_reads = self.prepare_multimapper_dict(chr_ids, sample, multimappers_counts)
+        if not self.args.high_memory:
+            multimapped_reads = self.prepare_multimapper_dict(chr_ids, sample, multimappers_counts)
         total_assignments, polya_assignments = self.resolve_multimappers(chr_ids, sample, multimapped_reads)
 
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
@@ -564,6 +574,7 @@ class DatasetProcessor:
     def prepare_multimapper_dict(self, chr_ids, sample, multimappers_counts):
         logger.info("Counting multimapped reads")
         multimapped_reads = defaultdict(list)
+
         for chr_id in chr_ids:
             chr_dump_file = sample.out_raw_file + "_" + chr_id
             loader = BasicReadAssignmentLoader(chr_dump_file)
