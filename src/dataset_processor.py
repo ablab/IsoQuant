@@ -99,7 +99,6 @@ def collect_reads_in_parallel(sample, chr_id, args):
     save_file = "{}_{}".format(sample.out_raw_file, chr_id)
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     bamstat_file = "{}_{}_bamstat".format(sample.out_raw_file, chr_id)
-    processed_reads = []
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
@@ -108,13 +107,8 @@ def collect_reads_in_parallel(sample, chr_id, args):
             for g in open(group_file):
                 read_grouper.read_groups.add(g.strip())
             alignment_stat_counter = EnumStats(bamstat_file)
-            loader = ReadAssignmentLoader(save_file, None, None, None)
-            while loader.has_next():
-                gene_info, assignment_storage = loader.get_next()
-                for a in assignment_storage:
-                    processed_reads.append(BasicReadAssignment(a))
             logger.info("Loaded data for " + chr_id)
-            return processed_reads, read_grouper.read_groups, alignment_stat_counter
+            return read_grouper.read_groups, alignment_stat_counter
         else:
             logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
 
@@ -132,7 +126,6 @@ def collect_reads_in_parallel(sample, chr_id, args):
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
-            processed_reads.append(BasicReadAssignment(read_assignment))
     with open(group_file, "w") as group_dump:
         for g in read_grouper.read_groups:
             group_dump.write("%s\n" % g)
@@ -143,7 +136,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
     for bam in bam_file_pairs:
         bam[0].close()
 
-    return processed_reads, read_grouper.read_groups, alignment_collector.alignment_stat_counter
+    return read_grouper.read_groups, alignment_collector.alignment_stat_counter
 
 
 class ReadAssignmentLoader:
@@ -473,8 +466,17 @@ class DatasetProcessor:
                 os.remove(f)
         logger.info("Processed experiment " + sample.prefix)
 
+    def get_chr_list(self):
+        chr_ids = sorted(
+            self.reference_record_dict.keys(),
+            key=lambda x: len(self.reference_record_dict[x]),
+            reverse=True,
+        )
+        return chr_ids
+
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
+        chr_ids = self.get_chr_list()
         info_file = sample.out_raw_file + "_info"
         lock_file = sample.out_raw_file + "_lock"
 
@@ -485,17 +487,9 @@ class DatasetProcessor:
             else:
                 os.remove(lock_file)
 
-        chr_ids = sorted(
-            self.reference_record_dict.keys(),
-            key=lambda x: len(self.reference_record_dict[x]),
-            reverse=True,
-        )
         if not self.args.resume:
             clean_locks(chr_ids, sample.out_raw_file, reads_collected_lock_file_name)
             clean_locks(chr_ids, sample.out_raw_file, reads_processed_lock_file_name)
-
-        all_read_groups = set()
-        multimapped_reads = defaultdict(list)
 
         read_gen = (
             collect_reads_in_parallel,
@@ -504,19 +498,16 @@ class DatasetProcessor:
             itertools.repeat(self.args),
         )
 
+        all_read_groups = set()
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
 
-                for storage, read_groups, alignment_stats in results:
-                    for basic_read_assignment in storage:
-                        multimapped_reads[basic_read_assignment.read_id].append(basic_read_assignment)
+                for read_groups, alignment_stats in results:
                     all_read_groups.update(read_groups)
                     self.alignment_stat_counter.merge(alignment_stats)
         else:
-            for storage, read_groups, alignment_stats in map(*read_gen):
-                for basic_read_assignment in storage:
-                    multimapped_reads[basic_read_assignment.read_id].append(basic_read_assignment)
+            for read_groups, alignment_stats in map(*read_gen):
                 all_read_groups.update(read_groups)
                 self.alignment_stat_counter.merge(alignment_stats)
 
@@ -532,6 +523,18 @@ class DatasetProcessor:
             multimap_dumper[chr_id] = open(sample.out_raw_file + "_multimappers_" + chr_id, "wb")
         total_assignments = 0
         polya_assignments = 0
+
+        multimapped_reads = defaultdict(list)
+        for chr_id in chr_ids:
+            chr_dump_file = sample.out_raw_file + "_" + chr_id
+            loader = ReadAssignmentLoader(chr_dump_file, None, None, None)
+            while loader.has_next():
+                _, assignment_storage = loader.get_next()
+                logger.debug("Processing %d reads" % len(assignment_storage))
+                for read_assignment in assignment_storage:
+                    if read_assignment is None:
+                        continue
+                    multimapped_reads[read_assignment.read_id].append(BasicReadAssignment(read_assignment))
 
         for assignment_list in multimapped_reads.values():
             if len(assignment_list) > 1:
@@ -566,11 +569,7 @@ class DatasetProcessor:
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
     def process_assigned_reads(self, sample, dump_filename):
-        chr_ids = sorted(
-            self.reference_record_dict.keys(),
-            key=lambda x: len(self.reference_record_dict[x]),
-            reverse=True
-        )
+        chr_ids = self.get_chr_list()
         logger.info("Processing assigned reads " + sample.prefix)
         logger.info("Transcript models construction is turned %s" %
                     ("off" if self.args.no_model_construction else "on"))
