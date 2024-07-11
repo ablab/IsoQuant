@@ -527,21 +527,35 @@ class DatasetProcessor:
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
-                for read_groups, alignment_stats, processed_reads in results:
-                    all_read_groups.update(read_groups)
-                    self.alignment_stat_counter.merge(alignment_stats)
-                    for read_id in processed_reads: multimappers_counts[read_id] += 1
         else:
-            for read_groups, alignment_stats, processed_reads in map(*read_gen):
-                all_read_groups.update(read_groups)
-                self.alignment_stat_counter.merge(alignment_stats)
-                for read_id in processed_reads: multimappers_counts[read_id] += 1
+            results = map(*read_gen)
+
+        for read_groups, alignment_stats, processed_reads in results:
+            all_read_groups.update(read_groups)
+            self.alignment_stat_counter.merge(alignment_stats)
+            for read_id in processed_reads: multimappers_counts[read_id] += 1
 
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             self.alignment_stat_counter.add(AlignmentType.unaligned, bam.unmapped)
         self.alignment_stat_counter.print_start("Alignments collected, overall alignment statistics:")
 
+        total_assignments, polya_assignments = self.resolve_multimappers(chr_ids, sample, multimappers_counts)
+
+        info_dumper = open(info_file, "wb")
+        write_int(total_assignments, info_dumper)
+        write_int(polya_assignments, info_dumper)
+        write_list(list(all_read_groups), info_dumper, write_string)
+        info_dumper.close()
+        open(lock_file, "w").close()
+
+        if total_assignments == 0:
+            logger.warning("No reads were assigned to isoforms, check your input files")
+        else:
+            logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
+                        (total_assignments, 100 * polya_assignments / total_assignments))
+
+    def resolve_multimappers(self, chr_ids, sample, multimappers_counts):
         logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         multimap_dumper = {}
@@ -581,18 +595,7 @@ class DatasetProcessor:
             write_int(TERMINATION_INT, multimap_dumper[chr_id])
             multimap_dumper[chr_id].close()
 
-        info_dumper = open(info_file, "wb")
-        write_int(total_assignments, info_dumper)
-        write_int(polya_assignments, info_dumper)
-        write_list(list(all_read_groups), info_dumper, write_string)
-        info_dumper.close()
-        open(lock_file, "w").close()
-
-        if total_assignments == 0:
-            logger.warning("No reads were assigned to isoforms, check your input files")
-        else:
-            logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
-                        (total_assignments, 100 * polya_assignments / total_assignments))
+        return total_assignments, polya_assignments
 
     def process_assigned_reads(self, sample, dump_filename):
         chr_ids = self.get_chr_list()
