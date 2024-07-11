@@ -109,6 +109,11 @@ def collect_reads_in_parallel(sample, chr_id, args):
             for g in open(group_file):
                 read_grouper.read_groups.add(g.strip())
             alignment_stat_counter = EnumStats(bamstat_file)
+            loader = BasicReadAssignmentLoader(save_file)
+            while loader.has_next():
+                for read_assignment in loader.get_next():
+                    if read_assignment is None: continue
+                    processed_reads.append(read_assignment.read_id)
             logger.info("Loaded data for " + chr_id)
             return read_grouper.read_groups, alignment_stat_counter, processed_reads
         else:
