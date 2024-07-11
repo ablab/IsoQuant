@@ -526,6 +526,52 @@ class BasicReadAssignment:
         read_assignment.isoforms = read_list(infile, read_string)
         return read_assignment
 
+    @classmethod
+    def deserialize_from_read_assignment(cls, infile):
+        read_assignment = cls.__new__(cls)
+        read_assignment.assignment_id = read_int(infile)
+        read_assignment.read_id = read_string(infile)
+        read_assignment.genomic_region = (read_int(infile), read_int(infile))
+        exons = read_list_of_pairs(infile, read_int)
+        read_assignment.start = exons[0][0]
+        read_assignment.end = exons[-1][1]
+        read_list_of_pairs(infile, read_int)
+        bool_arr = read_bool_array(infile, 3)
+        read_assignment.multimapper = bool_arr[0]
+        read_assignment.polyA_found = bool_arr[1]
+        read_int_neg(infile)
+        read_int_neg(infile)
+        read_int_neg(infile)
+        read_int_neg(infile)
+        read_string(infile)
+        read_string(infile)
+        read_string(infile)
+        read_assignment.chr_id = read_string(infile)
+        read_short_int(infile)
+        read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
+        read_assignment.gene_assignment_type = ReadAssignmentType(read_short_int(infile))
+
+        read_assignment.penalty_score = 0.0
+        isoform_matches = read_list(infile, IsoformMatch.deserialize)
+        gene_set = set()
+        isoform_set = set()
+        for m in isoform_matches:
+            read_assignment.penalty_score = min(read_assignment.penalty_score, isoform_matches[0].penalty_score)
+            if m.assigned_gene:
+                gene_set.add(m.assigned_gene)
+            if m.assigned_transcript:
+                isoform_set.add(m.assigned_transcript)
+        read_assignment.genes = list(gene_set)
+        read_assignment.isoforms = list(isoform_set)
+
+        read_dict(infile)
+        read_dict(infile)
+        read_short_int(infile)
+        read_list(infile, read_int_neg)
+        read_list(infile, read_int_neg)
+        return read_assignment
+
+
     def serialize(self, outfile):
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
