@@ -45,7 +45,8 @@ from .assignment_io import (
     SqantiTSVPrinter,
     BasicTSVAssignmentPrinter,
     TmpFileAssignmentPrinter,
-    TmpFileAssignmentLoader,
+    NormalTmpFileAssignmentLoader,
+    QuickTmpFileAssignmentLoader
 )
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
@@ -144,7 +145,7 @@ class ReadAssignmentLoader:
         logger.info("Loading read assignments from " + save_file_name)
         assert os.path.exists(save_file_name)
         self.save_file_name = save_file_name
-        self.unpickler = TmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
+        self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
         self.multimapped_chr_dict = multimapped_chr_dict
 
     def has_next(self):
@@ -179,6 +180,27 @@ class ReadAssignmentLoader:
             assignment_storage.append(read_assignment)
 
         return gene_info, assignment_storage
+
+
+class BasicReadAssignmentLoader:
+    def __init__(self, save_file_name):
+        logger.info("Loading read assignments from " + save_file_name)
+        assert os.path.exists(save_file_name)
+        self.save_file_name = save_file_name
+        self.unpickler = QuickTmpFileAssignmentLoader(save_file_name)
+
+    def has_next(self):
+        return self.unpickler.has_next()
+
+    def get_next(self):
+        if not self.unpickler.has_next():
+            return
+
+        assert self.unpickler.is_gene_info()
+        self.unpickler.get_object()
+
+        while self.unpickler.is_read_assignment():
+            yield self.unpickler.get_object()
 
 
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups):
@@ -527,14 +549,12 @@ class DatasetProcessor:
         multimapped_reads = defaultdict(list)
         for chr_id in chr_ids:
             chr_dump_file = sample.out_raw_file + "_" + chr_id
-            loader = ReadAssignmentLoader(chr_dump_file, None, None, None)
+            loader = BasicReadAssignmentLoader(chr_dump_file)
             while loader.has_next():
-                _, assignment_storage = loader.get_next()
-                logger.debug("Processing %d reads" % len(assignment_storage))
-                for read_assignment in assignment_storage:
+                for read_assignment in loader.get_next():
                     if read_assignment is None:
                         continue
-                    multimapped_reads[read_assignment.read_id].append(BasicReadAssignment(read_assignment))
+                    multimapped_reads[read_assignment.read_id].append(read_assignment)
 
         for assignment_list in multimapped_reads.values():
             if len(assignment_list) > 1:
