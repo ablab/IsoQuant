@@ -507,6 +507,37 @@ class BasicReadAssignment:
                     self.isoforms == other.isoforms)
         return False
 
+    def __getstate__(self):
+        return (self.assignment_id,
+                self.read_id,
+                self.chr_id,
+                self.start,
+                self.end,
+                self.genomic_region[0],
+                self.genomic_region[1],
+                self.multimapper,
+                self.polyA_found,
+                self.assignment_type.value,
+                self.gene_assignment_type.value,
+                self.penalty_score,
+                self.isoforms,
+                self.genes)
+
+    def __setstate__(self, state):
+        self.assignment_id = state[0]
+        self.read_id = state[1]
+        self.chr_id = state[2]
+        self.start = state[3]
+        self.end = state[4]
+        self.genomic_region = (state[5], state[6])
+        self.multimapper = state[7]
+        self.polyA_found = state[8]
+        self.assignment_type = ReadAssignmentType(state[9])
+        self.gene_assignment_type = ReadAssignmentType(state[10])
+        self.penalty_score = state[11]
+        self.isoforms = state[12]
+        self.genes = state[13]
+
     @classmethod
     def deserialize(cls, infile):
         read_assignment = cls.__new__(cls)
