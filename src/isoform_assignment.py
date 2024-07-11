@@ -571,7 +571,6 @@ class BasicReadAssignment:
         read_list(infile, read_int_neg)
         return read_assignment
 
-
     def serialize(self, outfile):
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
