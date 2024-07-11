@@ -540,12 +540,13 @@ class DatasetProcessor:
             self.alignment_stat_counter.merge(alignment_stats)
             for read_id in processed_reads: multimappers_counts[read_id] += 1
 
+        multimapped_reads = self.prepare_multimapper_dict(chr_ids, sample, multimappers_counts)
+        total_assignments, polya_assignments = self.resolve_multimappers(chr_ids, sample, multimapped_reads)
+
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             self.alignment_stat_counter.add(AlignmentType.unaligned, bam.unmapped)
         self.alignment_stat_counter.print_start("Alignments collected, overall alignment statistics:")
-
-        total_assignments, polya_assignments = self.resolve_multimappers(chr_ids, sample, multimappers_counts)
 
         info_dumper = open(info_file, "wb")
         write_int(total_assignments, info_dumper)
@@ -560,15 +561,8 @@ class DatasetProcessor:
             logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
-    def resolve_multimappers(self, chr_ids, sample, multimappers_counts):
-        logger.info("Resolving multimappers")
-        multimap_resolver = MultimapResolver(self.args.multimap_strategy)
-        multimap_dumper = {}
-        for chr_id in chr_ids:
-            multimap_dumper[chr_id] = open(sample.out_raw_file + "_multimappers_" + chr_id, "wb")
-        total_assignments = 0
-        polya_assignments = 0
-
+    def prepare_multimapper_dict(self, chr_ids, sample, multimappers_counts):
+        logger.info("Counting multimapped reads")
         multimapped_reads = defaultdict(list)
         for chr_id in chr_ids:
             chr_dump_file = sample.out_raw_file + "_" + chr_id
@@ -580,6 +574,16 @@ class DatasetProcessor:
                              multimappers_counts[read_assignment.read_id] == 1)):
                         continue
                     multimapped_reads[read_assignment.read_id].append(read_assignment)
+        return multimapped_reads
+
+    def resolve_multimappers(self, chr_ids, sample, multimapped_reads):
+        logger.info("Resolving multimappers")
+        multimap_resolver = MultimapResolver(self.args.multimap_strategy)
+        multimap_dumper = {}
+        for chr_id in chr_ids:
+            multimap_dumper[chr_id] = open(sample.out_raw_file + "_multimappers_" + chr_id, "wb")
+        total_assignments = 0
+        polya_assignments = 0
 
         for assignment_list in multimapped_reads.values():
             if len(assignment_list) > 1:
@@ -600,6 +604,7 @@ class DatasetProcessor:
             write_int(TERMINATION_INT, multimap_dumper[chr_id])
             multimap_dumper[chr_id].close()
 
+        logger.info("Multimappers resolved")
         return total_assignments, polya_assignments
 
     def process_assigned_reads(self, sample, dump_filename):
