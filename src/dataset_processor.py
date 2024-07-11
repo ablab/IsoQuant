@@ -654,22 +654,16 @@ class DatasetProcessor:
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*model_gen, chunksize=1)
-
-                for read_stat_counter, tsc in results:
-                    for k, v in read_stat_counter.stats_dict.items():
-                        aggregator.read_stat_counter.stats_dict[k] += v
-
-                    if not self.args.no_model_construction:
-                        for k, v in tsc.stats_dict.items():
-                            transcript_stat_counter.stats_dict[k] += v
         else:
-            for read_stat_counter, tsc in map(*model_gen):
-                for k, v in read_stat_counter.stats_dict.items():
-                    aggregator.read_stat_counter.stats_dict[k] += v
+            results = map(*model_gen)
 
-                if not self.args.no_model_construction:
-                    for k, v in tsc.stats_dict.items():
-                        transcript_stat_counter.stats_dict[k] += v
+        for read_stat_counter, tsc in results:
+            for k, v in read_stat_counter.stats_dict.items():
+                aggregator.read_stat_counter.stats_dict[k] += v
+
+            if not self.args.no_model_construction:
+                for k, v in tsc.stats_dict.items():
+                    transcript_stat_counter.stats_dict[k] += v
 
         if not self.args.no_model_construction:
             self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)
