@@ -100,6 +100,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
     save_file = "{}_{}".format(sample.out_raw_file, chr_id)
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     bamstat_file = "{}_{}_bamstat".format(sample.out_raw_file, chr_id)
+    processed_reads = []
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
@@ -109,7 +110,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
                 read_grouper.read_groups.add(g.strip())
             alignment_stat_counter = EnumStats(bamstat_file)
             logger.info("Loaded data for " + chr_id)
-            return read_grouper.read_groups, alignment_stat_counter
+            return read_grouper.read_groups, alignment_stat_counter, processed_reads
         else:
             logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
 
@@ -127,6 +128,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
+            processed_reads.append(read_assignment.read_id)
     with open(group_file, "w") as group_dump:
         for g in read_grouper.read_groups:
             group_dump.write("%s\n" % g)
@@ -137,7 +139,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
     for bam in bam_file_pairs:
         bam[0].close()
 
-    return read_grouper.read_groups, alignment_collector.alignment_stat_counter
+    return read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads
 
 
 class ReadAssignmentLoader:
@@ -521,17 +523,19 @@ class DatasetProcessor:
         )
 
         all_read_groups = set()
+        multimappers_counts = defaultdict(int)
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
-
-                for read_groups, alignment_stats in results:
+                for read_groups, alignment_stats, processed_reads in results:
                     all_read_groups.update(read_groups)
                     self.alignment_stat_counter.merge(alignment_stats)
+                    for read_id in processed_reads: multimappers_counts[read_id] += 1
         else:
-            for read_groups, alignment_stats in map(*read_gen):
+            for read_groups, alignment_stats, processed_reads in map(*read_gen):
                 all_read_groups.update(read_groups)
                 self.alignment_stat_counter.merge(alignment_stats)
+                for read_id in processed_reads: multimappers_counts[read_id] += 1
 
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
@@ -552,7 +556,9 @@ class DatasetProcessor:
             loader = BasicReadAssignmentLoader(chr_dump_file)
             while loader.has_next():
                 for read_assignment in loader.get_next():
-                    if read_assignment is None:
+                    if (read_assignment is None or
+                            (read_assignment.read_id in multimappers_counts and
+                             multimappers_counts[read_assignment.read_id] == 1)):
                         continue
                     multimapped_reads[read_assignment.read_id].append(read_assignment)
 
