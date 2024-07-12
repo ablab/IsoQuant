@@ -134,12 +134,14 @@ def run_isoquant(args, config_dict):
 
     log.info("IsoQuant command line: " + " ".join(isoquant_command_list))
     if RT_PERFORMANCE in run_types:
-        os.makedirs(output_folder)
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
         run_sh_path = os.path.join(output_folder, "run_isoquant.sh")
         run_sh = open(run_sh_path, "w")
         run_sh.write(" ".join(isoquant_command_list))
         run_sh.close()
-        result = subprocess.run(["performance_counter.py", "--cmd_file", "run_isoquant.sh", "-o", output_folder])
+        performance_script = os.path.join(source_dir, "performance_counter.py")
+        result = subprocess.run(["python3", str(performance_script), "--cmd_file", str(run_sh_path), "-o", output_folder])
         if result.returncode != 0:
             log.error("IsoQuant exited with non-zero status: %d" % result.returncode)
             return -12
@@ -387,7 +389,7 @@ def run_quantification(args, config_dict, mode):
     return exit_code
 
 
-def run_performance_assessment(args, config_dict, mode):
+def run_performance_assessment(args, config_dict):
     log.info('== Running computational perfromance assessment ==')
     config_file = args.config_file
     name = config_dict["name"]
@@ -469,7 +471,7 @@ def main():
     if RT_QUANTIFICATION_GENES in run_types:
         err_codes.append(run_quantification(args, config_dict, "gene"))
     if RT_PERFORMANCE in run_types:
-        err_codes.append(run_quantification(args, config_dict))
+        err_codes.append(run_performance_assessment(args, config_dict))
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
