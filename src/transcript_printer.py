@@ -11,8 +11,8 @@ from collections import defaultdict
 from collections import namedtuple
 import gzip
 
-from .common import AtomicCounter, junctions_from_blocks, max_range
-from .gene_info import TranscriptModel, GeneInfo, TranscriptModelType
+from .common import max_range
+from .gene_info import TranscriptModel, GeneInfo
 
 logger = logging.getLogger('IsoQuant')
 
@@ -27,10 +27,9 @@ class VoidTranscriptPrinter:
 
 
 class GFFPrinter:
-    transcript_id_counter = AtomicCounter()
-    transcript_id_dict = {}
+    exon_id_dict = {}
 
-    def __init__(self, outf_prefix, sample_name,
+    def __init__(self, outf_prefix, sample_name, exon_id_distributor,
                  gtf_suffix = ".transcript_models.gtf",
                  r2t_suffix = ".transcript_model_reads.tsv",
                  output_r2t = True,
@@ -38,6 +37,7 @@ class GFFPrinter:
                  header = "",
                  gzipped = False):
         self.model_fname = os.path.join(outf_prefix, sample_name + gtf_suffix)
+        self.exon_id_distributor = exon_id_distributor
         self.printed_gene_ids = set()
         self.out_gff = open(self.model_fname, "w")
         if header:
@@ -137,11 +137,11 @@ class GFFPrinter:
                 exons_to_print = sorted(exons_to_print, reverse=True) if model.strand == '-' else sorted(exons_to_print)
                 for i, e in enumerate(exons_to_print):
                     exon_tuple = (model.chr_id, e[0], e[1], model.strand)
-                    if exon_tuple not in GFFPrinter.transcript_id_dict:
-                        exon_id = GFFPrinter.transcript_id_counter.increment()
-                        GFFPrinter.transcript_id_dict[exon_tuple] = exon_id
+                    if exon_tuple not in GFFPrinter.exon_id_dict:
+                        exon_id = self.exon_id_distributor.increment()
+                        GFFPrinter.exon_id_dict[exon_tuple] = exon_id
                     else:
-                        exon_id = GFFPrinter.transcript_id_dict[exon_tuple]
+                        exon_id = GFFPrinter.exon_id_dict[exon_tuple]
                     exon_str_id = model.chr_id + ".%d" % exon_id
                     feature_type = e[2]
                     self.out_gff.write(prefix_columns + "%s\t%d\t%d\t" % (feature_type, e[0], e[1]) + suffix_columns +

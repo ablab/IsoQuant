@@ -16,7 +16,7 @@ from collections import defaultdict
 logger = logging.getLogger('IsoQuant')
 
 
-class AtomicCounter(object):
+class AtomicIDDistributor(object):
     def __init__(self):
         self.value = 0
         self._lock = threading.Lock()
@@ -25,6 +25,15 @@ class AtomicCounter(object):
         with self._lock:
             self.value += 1
             return self.value
+
+
+class SimpleIDDistributor(object):
+    def __init__(self):
+        self.value = 0
+
+    def increment(self):
+        self.value += 1
+        return self.value
 
 
 # key, value

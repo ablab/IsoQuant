@@ -11,16 +11,12 @@ from functools import cmp_to_key
 from enum import unique, Enum
 
 from .common import (
-    AtomicCounter,
     cmp,
     get_exons,
-    get_top_count,
     intersection_len,
     interval_len,
     junctions_from_blocks,
-    read_coverage_fraction,
     jaccard_similarity,
-    merge_ranges
 )
 from .assignment_io import ReadAssignmentType
 from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
@@ -50,7 +46,6 @@ class StrandnessReportingLevel(Enum):
 
 
 class GraphBasedModelConstructor:
-    transcript_id_counter = AtomicCounter()
     transcript_prefix = "transcript"
     known_transcript_suffix = ".known"
     nic_transcript_suffix = ".nic"
@@ -58,10 +53,11 @@ class GraphBasedModelConstructor:
     detected_known_isoforms = set()
     extended_transcript_ids = set()
 
-    def __init__(self, gene_info, chr_record, params, transcript_counter):
+    def __init__(self, gene_info, chr_record, params, transcript_counter, id_distributor):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
+        self.id_distributor = id_distributor
 
         self.strand_detector = StrandDetector(self.chr_record)
         self.intron_genes = defaultdict(set)
@@ -85,7 +81,7 @@ class GraphBasedModelConstructor:
         self.transcript2transcript = []
 
     def get_transcript_id(self):
-        return GraphBasedModelConstructor.transcript_id_counter.increment()
+        return self.id_distributor.increment()
 
     def set_gene_properties(self):
         intron_strands_dicts = defaultdict(lambda: defaultdict(int))
