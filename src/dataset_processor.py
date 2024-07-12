@@ -17,9 +17,9 @@ from concurrent.futures import ProcessPoolExecutor
 
 import gffutils
 import pysam
-from pyfaidx import Fasta, Faidx, UnsupportedCompressionFormat
+from pyfaidx import Fasta, UnsupportedCompressionFormat
 
-from .common import proper_plural_form
+from .common import proper_plural_form, SimpleIDDistributor
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .stats import EnumStats
@@ -241,7 +241,6 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
         return read_stat, transcript_stat
 
-
     if args.genedb:
         gffutils_db = gffutils.FeatureDB(args.genedb)
     else:
@@ -250,11 +249,20 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
-    tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, check_canonical=args.check_canonical) \
-        if construct_models else VoidTranscriptPrinter()
-    tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, gtf_suffix=".extended_annotation.gtf",
-                                          output_r2t=False, check_canonical=args.check_canonical) \
-        if (construct_models and args.genedb) else VoidTranscriptPrinter()
+    transcript_id_distributor = SimpleIDDistributor()
+    exon_id_distributor = SimpleIDDistributor()
+
+    if construct_models:
+        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_distributor,
+                                     check_canonical=args.check_canonical)
+    else:
+        tmp_gff_printer = VoidTranscriptPrinter()
+    if construct_models and args.genedb:
+        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_distributor,
+                                              gtf_suffix=".extended_annotation.gtf",
+                                              output_r2t=False, check_canonical=args.check_canonical)
+    else:
+        tmp_extended_gff_printer = VoidTranscriptPrinter()
 
     sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args)) \
         if args.sqanti_output else VoidTranscriptPrinter()
@@ -273,7 +281,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
         if construct_models:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
-                                                           aggregator.transcript_model_global_counter)
+                                                           aggregator.transcript_model_global_counter, transcript_id_distributor)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
@@ -645,12 +653,13 @@ class DatasetProcessor:
             logger.info("  PolyA tails are required for novel monoexon transcripts to be reported: %s" % "yes")
             logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
 
+            exon_id_distributor = SimpleIDDistributor()
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, header=self.common_header, gzipped=self.args.gzipped
+                sample.out_dir, sample.prefix, exon_id_distributor, header=self.common_header, gzipped=self.args.gzipped
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
-                    sample.out_dir, sample.prefix,
+                    sample.out_dir, sample.prefix, exon_id_distributor,
                     gtf_suffix=".extended_annotation.gtf", output_r2t=False,
                     header=self.common_header
                 )
