@@ -102,9 +102,11 @@ def collect_reads_in_parallel(sample, chr_id, args):
     bamstat_file = "{}_{}_bamstat".format(sample.out_raw_file, chr_id)
     processed_reads = []
     if args.high_memory:
-        def collect_assignment_info(ra): return ra
+        def collect_assignment_info(ra): return BasicReadAssignment(ra)
+        def load_assignment_info(ra): return ra
     else:
         def collect_assignment_info(ra): return ra.read_id
+        def load_assignment_info(ra): return ra.read_id
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
@@ -117,7 +119,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
             while loader.has_next():
                 for read_assignment in loader.get_next():
                     if read_assignment is None: continue
-                    processed_reads.append(collect_assignment_info(read_assignment))
+                    processed_reads.append(load_assignment_info(read_assignment))
             logger.info("Loaded data for " + chr_id)
             return read_grouper.read_groups, alignment_stat_counter, processed_reads
         else:
