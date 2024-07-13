@@ -85,11 +85,11 @@ IsoQuant further performs annotated gene, isoform, exon and intron quantificatio
 If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping.
 
 IsoQuant consists of two stages, which generate its own output:
-1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isofrom assignment,
+1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isoform assignment,
 splice site correction and abundance quantification for reference genes/transcripts.
 2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.
 
-IsoQuant version 3.4 was released under GPLv2 on May 9th, 2024 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+Latest IsoQuant version can be downloaded from [https://github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
 
 #### IsoQuant pipeline
 ![Pipeline](figs/isoquant_pipeline.png)

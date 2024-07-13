@@ -1,5 +1,29 @@
 # IsoQuant changelog
 
+## IsoQuant 3.4.2, 13 July 2024
+
+- Dramatically reduce RAM consumption.
+Should fix [#209](https://github.com/ablab/IsoQuant/issues/209).
+
+IsoQuant 3.4.2 was tested on a simulated ONT dataset with 30M reads using 12 threads.
+In the default mode RAM consumption decreased from 280GB to 12GB when using
+the reference annotation and from 230GB down to 6GB in the reference-free mode.
+Running time in the default mode increased by approximately 20-25%.
+When using `--high_memory` option, running time remains the same as in 3.4.1,
+RAM consumption in the reference-based mode is 46GB, and 36GB in the reference-free mode.
+Note, that in general RAM consumption depends on the particular data being used and the number of threads.
+
+In brief, in 3.4.0 and 3.4.1 inadequate RAM consumption was caused by
+[this commit](https://github.com/ablab/IsoQuant/commit/557e5834d0503587b918a0eedf3ff5cee3253141).
+Apparently, adding a couple of `int` fields to the `BasicReadAssignment` class made the default pickle serialization
+not to clean used memory (possibly, a leak). Since some large lists of `BasicReadAssignment` were sent between
+processes, this caused the main process to consume unnecessary RAM. When later new processes were created
+for GTF construction, total RAM consumption exploded thanks to the way Python multiprocessing works.
+This release implements two ways fixing the issue: sending objects via disk (default) and
+using custom pickle serialization (when `--high_memory` is used).
+
+- Transcript and exon ids are now identical between runs, including ones with different number of threads.
+
 ## IsoQuant 3.4.1, 9 May 2024
 
 - Fixes `IndexError: list index out of range` when `--sqanti_output` is set ([#186](https://github.com/ablab/IsoQuant/issues/186)).
