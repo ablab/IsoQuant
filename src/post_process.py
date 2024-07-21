@@ -1,10 +1,11 @@
 import csv
 import os
-import re
+import pickle
 import gzip
 import shutil
 import copy
 import json
+from argparse import Namespace
 
 
 class OutputConfig:
@@ -33,7 +34,7 @@ class OutputConfig:
         self.use_counts = use_counts
         self.ref_only = ref_only
 
-        self._parse_isoquant_log()  # Always parse the log
+        self._load_params_file()  # Load the params file instead of parsing the log
         self._find_files()
         self._conditional_unzip()
 
@@ -43,29 +44,33 @@ class OutputConfig:
                 "Input GTF file is required when ref_only is set. Please provide it using the --gtf flag."
             )
 
-    def _parse_isoquant_log(self):
-        """Parse the isoquant.log for necessary configuration and commands."""
-        log_path = os.path.join(self.output_directory, "isoquant.log")
-        assert os.path.exists(log_path), f"Log file not found: {log_path}"
-        if os.path.exists(log_path):
-            with open(log_path, "r") as file:
-                log_content = file.read()
-                gene_db_match = re.search(r"--genedb (\S+)", log_content)
-                fastq_flag = "--fastq" in log_content
-                processing_sample_match = re.search(
-                    r"Processed experiment (\S+)", log_content
-                )
-                if gene_db_match and not self.input_gtf:
-                    self.input_gtf = gene_db_match.group(1)
-                    self.log_details["gene_db"] = self.input_gtf
-                self.log_details["fastq_used"] = fastq_flag
-
-                if processing_sample_match:
-                    self.output_directory = os.path.join(
-                        self.output_directory, processing_sample_match.group(1)
-                    )
+    def _load_params_file(self):
+        """Load the .params file for necessary configuration and commands."""
+        params_path = os.path.join(self.output_directory, ".params")
+        assert os.path.exists(params_path), f"Params file not found: {params_path}"
+        try:
+            with open(params_path, "rb") as file:
+                params = pickle.load(file)
+                if isinstance(params, Namespace):
+                    self._process_params(vars(params))
                 else:
-                    raise ValueError("Processing sample directory not found in log.")
+                    print("Unexpected params format.")
+        except Exception as e:
+            raise ValueError(f"An error occurred while loading params: {e}")
+
+    def _process_params(self, params):
+        """Process parameters loaded from the .params file."""
+        self.log_details["gene_db"] = params.get("genedb")
+        self.log_details["fastq_used"] = bool(params.get("fastq"))
+        self.input_gtf = self.input_gtf or params.get("genedb")
+
+        processing_sample = params.get("prefix")
+        if processing_sample:
+            self.output_directory = os.path.join(
+                self.output_directory, processing_sample
+            )
+        else:
+            raise ValueError("Processing sample directory not found in params.")
 
     def _conditional_unzip(self):
         """Check if unzip is needed and perform it conditionally based on the model use."""
@@ -81,7 +86,7 @@ class OutputConfig:
         new_path = file_path[:-3]  # Remove .gz extension
 
         if os.path.exists(new_path):
-            print(f"File {new_path} already exists, using this file.")
+            # print(f"File {new_path} already exists, using this file.")
             return new_path
 
         if not os.path.exists(file_path):
@@ -502,6 +507,6 @@ class DictionaryBuilder:
     def save_gene_dict_to_json(self, gene_dict, output_path):
         """Saves the gene dictionary to a JSON file."""
         # name the gene_dict file
-        output_path = os.path.join(self.config.output_directory, "gene_dict.json")
+        output_path = os.path.join(output_path, "gene_dict.json")
         with open(output_path, "w") as file:
             json.dump(gene_dict, file, indent=4)

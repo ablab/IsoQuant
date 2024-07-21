@@ -3,6 +3,17 @@
 from src.post_process import OutputConfig, DictionaryBuilder
 from src.plot_output import PlotOutput
 import argparse
+from src.process_dict import simplify_and_sum_transcripts
+from src.gene_model import rank_and_visualize_genes
+
+import argparse
+
+
+class FindGenesAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values is None:
+            values = 100  # Default value when the flag is used without a value
+        setattr(namespace, self.dest, values)
 
 
 def parse_arguments():
@@ -33,7 +44,7 @@ def parse_arguments():
     parser.add_argument(
         "--filter_transcripts",
         type=float,
-        help="Filter transcripts by minimum value occuring in at least one condition.",
+        help="Filter transcripts by minimum value occurring in at least one condition.",
         default=None,
     )
     parser.add_argument(
@@ -41,6 +52,13 @@ def parse_arguments():
         type=str,
         required=True,
         help="Path to a .txt file containing a list of genes, each on its own line.",
+    )
+    parser.add_argument(
+        "--find_genes",
+        nargs="?",
+        const=100,
+        type=int,
+        help="Find genes with the highest combined rank and visualize them. Optionally specify the number of top genes to evaluate (default is 100).",
     )
     return parser.parse_args()
 
@@ -73,7 +91,7 @@ def main():
     updated_gene_dict = dictionary_builder.update_gene_dict(gene_dict, gene_file)
 
     if update_names:
-        print("Updating gene names to gene symbols.")
+        print("Updating Ensembl IDs to gene symbols.")
         updated_gene_dict = dictionary_builder.update_gene_names(updated_gene_dict)
 
     if output.ref_only or not output.extended_annotation:
@@ -131,18 +149,29 @@ def main():
 
     # Visualization output directory decision
     viz_output_directory = args.viz_output if args.viz_output else args.output_directory
-    dictionary_builder.save_gene_dict_to_json(updated_gene_dict, args.output_directory)
+
+    if args.find_genes:
+        print("Finding genes.")
+        simple_gene_dict = simplify_and_sum_transcripts(updated_gene_dict)
+        path = rank_and_visualize_genes(
+            simple_gene_dict, viz_output_directory, args.find_genes
+        )
+        gene_list = dictionary_builder.read_gene_list(path)
+
+    # dictionary_builder.save_gene_dict_to_json(updated_gene_dict, viz_output_directory)
     plot_output = PlotOutput(
         updated_gene_dict,
         gene_list,
         viz_output_directory,
-        reads_and_class,
+        create_visualization_subdir=(viz_output_directory == args.output_directory),
+        reads_and_class=reads_and_class,
         filter_transcripts=args.filter_transcripts,
         conditions=output.conditions,
         use_counts=args.counts,
     )
     plot_output.plot_transcript_map()
     plot_output.plot_transcript_usage()
+    plot_output.make_pie_charts()
 
 
 if __name__ == "__main__":
