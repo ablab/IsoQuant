@@ -10,6 +10,7 @@ class PlotOutput:
         updated_gene_dict,
         gene_names,
         output_directory,
+        create_visualization_subdir=False,
         reads_and_class=None,
         filter_transcripts=None,
         conditions=False,
@@ -23,9 +24,14 @@ class PlotOutput:
         self.conditions = conditions
         self.use_counts = use_counts
 
-        # Create visualization subdirectory if it doesn't exist
-        self.visualization_dir = os.path.join(self.output_directory, "visualization")
-        os.makedirs(self.visualization_dir, exist_ok=True)
+        # Create visualization subdirectory if specified
+        if create_visualization_subdir:
+            self.visualization_dir = os.path.join(
+                self.output_directory, "visualization"
+            )
+            os.makedirs(self.visualization_dir, exist_ok=True)
+        else:
+            self.visualization_dir = self.output_directory
 
     def plot_transcript_map(self):
         # Get the first condition's gene dictionary
@@ -76,8 +82,6 @@ class PlotOutput:
                 ):
                     # Determine the direction based on the gene's strand information
                     direction_marker = ">" if gene_data["strand"] == "+" else "<"
-
-                    # Add a direction marker to indicate the direction of the transcript
                     marker_pos = (
                         transcript_info["end"] + 100
                         if gene_data["strand"] == "+"
@@ -144,12 +148,12 @@ class PlotOutput:
             bar_width = 0.35
             opacity = 0.8
 
-            for sample_type, transcripts in gene_data.items():
-                print(f"Sample Type: {sample_type}")
-                for transcript_id, transcript_info in transcripts.items():
-                    print(
-                        f"  Transcript ID: {transcript_id}, Value: {transcript_info['value']}"
-                    )
+            # for sample_type, transcripts in gene_data.items():
+            # print(f"Sample Type: {sample_type}")
+            # for transcript_id, transcript_info in transcripts.items():
+            # print(
+            # f"  Transcript ID: {transcript_id}, Value: {transcript_info['value']}"
+            # )
             # Adjusting the colors for better within-bar comparison
             max_transcripts = max(len(gene_data[condition]) for condition in conditions)
             colors = plt.cm.plasma(
@@ -191,75 +195,45 @@ class PlotOutput:
             plt.savefig(plot_path)
             plt.close(fig)
 
+    def make_pie_charts(self):
+        """
+        Create pie charts for transcript alignment classifications and read assignment consistency.
+        """
+        titles = ["Transcript Alignment Classifications", "Read Assignment Consistency"]
 
-def make_pie_chart():
+        for i, (title, reads_dict) in enumerate(zip(titles, self.reads_and_class)):
+            labels = reads_dict.keys()
+            sizes = reads_dict.values()
+            total = sum(sizes)
 
-    data = {
-        "ambiguous": 236646,
-        "inconsistent": 1212565,
-        "intergenic": 6886,
-        "noninformative": 130493,
-        "unique": 745194,
-        "unique_minor_difference": 79178,
-    }
-    labels = data.keys()
-    sizes = data.values()
-    total = sum(sizes)
-    print(total)
-    plt.pie(sizes, labels=labels, autopct="%1.1f%%")
-    plt.axis("equal")
-    plt.title(f"Total: {total}")
-    plt.show()
-    plt.savefig("read_assignment_pie_chart.png")
+            # Generate a file-friendly title
+            file_title = title.lower().replace(" ", "_")
 
-
-def visualize_transcript_usage_single_gene(gene_data, gene_name):
-    """
-
-    :param gene_data: Dict containing transcript usage data for a given gene across different sample types.
-    :param gene_name: The gene to visualize.
-    """
-
-    if gene_name not in gene_data:
-        print(f"Gene {gene_name} not found in the data.")
-        return
-
-    sample_types = gene_data[gene_name].keys()
-    n_bars = len(sample_types)
-
-    fig, ax = plt.subplots(figsize=(10, 7))
-    index = np.arange(n_bars)
-    bar_width = 0.35
-    opacity = 0.8
-
-    # Adjusting the colors for better within-bar comparison
-    max_transcripts = max(len(gene_data[gene_name][sample]) for sample in sample_types)
-    colors = plt.cm.plasma(
-        np.linspace(0, 1, num=max_transcripts)
-    )  # Using plasma for better color gradation
-
-    bottom_val = np.zeros(n_bars)
-    for i, sample_type in enumerate(sample_types):
-        transcripts = gene_data[gene_name][sample_type]
-        for j, (transcript_id, value) in enumerate(transcripts):
-            color = colors[j % len(colors)]
-            plt.bar(
-                i,
-                float(value),
-                bar_width,
-                bottom=bottom_val[i],
-                alpha=opacity,
-                color=color,
-                label=transcript_id if i == 0 else "",
+            plt.figure()
+            wedges, texts, autotexts = plt.pie(
+                sizes,
+                labels=labels,
+                autopct="%1.1f%%",
+                startangle=140,
+                textprops=dict(color="w"),
             )
-            bottom_val[i] += float(value)
+            plt.setp(autotexts, size=10, weight="bold")
+            plt.setp(texts, size=9)
 
-    plt.xlabel("Sample Type")
-    plt.ylabel("Transcript Usage (TPM)")
-    plt.title(f"Transcript Usage for {gene_name} by Sample Type")
-    plt.xticks(index, sample_types)
-    plt.legend(title="Transcript IDs", bbox_to_anchor=(1.05, 1), loc="upper left")
+            plt.axis(
+                "equal"
+            )  # Equal aspect ratio ensures that pie is drawn as a circle.
+            plt.title(f"{title}\nTotal: {total}")
 
-    plt.tight_layout()
-    plt.show()
-    plt.savefig(f"{gene_name}_transcript_usage_by_sample_type_ref.png")
+            plt.legend(
+                wedges,
+                labels,
+                title="Categories",
+                loc="center left",
+                bbox_to_anchor=(1, 0, 0.5, 1),
+            )
+            plot_path = os.path.join(
+                self.visualization_dir, f"{file_title}_pie_chart.png"
+            )
+            plt.savefig(plot_path, bbox_inches="tight")
+            plt.close()
