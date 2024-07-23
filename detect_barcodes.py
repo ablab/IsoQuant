@@ -154,11 +154,12 @@ def process_chunk(mode, barcodes, read_chunk, output_file, num, min_score=None):
 def process_single_thread(args):
     barcodes = load_barcodes(args.barcodes)
     logger.info("Loaded %d barcodes" % len(barcodes))
-    logger.info("Processing " + args.input)
+    logger.info("Preparing barcodes")
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
         barcode_detector.min_score = args.min_score
     barcode_caller = BarcodeCaller(args.output, barcode_detector)
+    logger.info("Processing " + args.input)
     barcode_caller.process(args.input)
     logger.info("Finished barcode calling")
 
