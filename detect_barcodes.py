@@ -141,8 +141,11 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-def process_chunk(barcode_detector, read_chunk, output_file, num):
+def process_chunk(mode, barcodes, read_chunk, output_file, num, min_score=None):
     output_file += "_" + str(num)
+    barcode_detector = BARCODE_CALLING_MODES[mode](barcodes)
+    if min_score:
+        barcode_detector.min_score = min_score
     barcode_caller = BarcodeCaller(output_file, barcode_detector)
     barcode_caller.process_chunk(read_chunk)
     return output_file
@@ -193,15 +196,14 @@ def process_in_parallel(args):
         tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
     os.makedirs(tmp_dir)
 
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
-    if args.min_score:
-        barcode_detector.min_score = args.min_score
     barcode_calling_gen = (
         process_chunk,
-        itertools.repeat(barcode_detector),
+        itertools.repeat(args.mode),
+        itertools.repeat(barcodes),
         read_chunk_gen,
         itertools.repeat(os.path.join(tmp_dir, "bc")),
         itertools.count(start=0, step=1),
+        itertools.repeat(args.min_score)
     )
 
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
