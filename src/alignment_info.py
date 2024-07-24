@@ -14,6 +14,8 @@ logger = logging.getLogger('IsoQuant')
 
 
 class AlignmentInfo:
+    REGION_TO_CHECK_LEN = 12
+
     def __init__(self, alignment):
         self.alignment = alignment
         # concat indels
@@ -22,7 +24,6 @@ class AlignmentInfo:
         self.aligned_pairs = None
         self.aligned_pairs_start_index = None
         self.aligned_pairs_end_index = None
-        self.region_to_check = 12
         if not self.read_exons:
             return
         self.read_start = self.read_exons[0][0]
@@ -60,14 +61,15 @@ class AlignmentInfo:
         if intron_index is None:
             selected_pairs = self.aligned_pairs
         elif left_site:
-            # find alinned pairs near intron start (previous exon end)
-            selected_pairs = self.aligned_pairs[max(0, self.aligned_pairs_end_index[intron_index] - self.region_to_check):
-                                                self.aligned_pairs_end_index[intron_index] + self.region_to_check]
+            # find aligned pairs near intron start (previous exon end)
+            selected_pairs = self.aligned_pairs[
+                             max(0, self.aligned_pairs_end_index[intron_index] - AlignmentInfo.REGION_TO_CHECK_LEN):
+                             self.aligned_pairs_end_index[intron_index] + AlignmentInfo.REGION_TO_CHECK_LEN]
         else:
             # find aligned pairs near intron end (next exon start)
             selected_pairs = self.aligned_pairs[
-                             max(0, self.aligned_pairs_start_index[intron_index+1] - self.region_to_check):
-                             self.aligned_pairs_start_index[intron_index+1] + self.region_to_check]
+                             max(0, self.aligned_pairs_start_index[intron_index + 1] - AlignmentInfo.REGION_TO_CHECK_LEN):
+                             self.aligned_pairs_start_index[intron_index + 1] + AlignmentInfo.REGION_TO_CHECK_LEN]
 
         indel_count = 0
         mismatch_count = 0

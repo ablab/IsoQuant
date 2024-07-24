@@ -564,13 +564,13 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 but may improve running time when disk I/O is relatively slow.
 
 `--min_mapq`
-    Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
+    Filters out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
 
 `--inconsistent_mapq_cutoff`
-    Filers out inconsistent alignments with MAPQ less than this value (works when the reference annotation is provided, default is 5).
+    Filters out inconsistent alignments with MAPQ less than this value (works when the reference annotation is provided, default is 5).
 
 `--simple_alignments_mapq_cutoff`
-    Filers out alignments with 1 or 2 exons and MAPQ less than this value (works only in annotation-free mode, default is 1).
+    Filters out alignments with 1 or 2 exons and MAPQ less than this value (works only in annotation-free mode, default is 1).
 
 `--normalization_method`
     Method for normalizing non-grouped counts into TPMs:
