@@ -67,11 +67,12 @@ class SimpleReadStorage:
 
 
 class BarcodeCaller:
-    def __init__(self, output_table, barcode_detector):
+    def __init__(self, output_table, barcode_detector, header=False):
         self.barcode_detector = barcode_detector
         self.output_table = output_table
         self.output_file = open(output_table, "w")
-        #self.output_file.write(barcode_detector.result_type().header() + "\n")
+        if header:
+            self.output_file.write(barcode_detector.result_type().header() + "\n")
         self.read_stat = ReadStats()
 
     def __del__(self):
@@ -174,7 +175,7 @@ def process_single_thread(args):
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
         barcode_detector.min_score = args.min_score
-    barcode_caller = BarcodeCaller(args.output, barcode_detector)
+    barcode_caller = BarcodeCaller(args.output, barcode_detector, header=True)
     logger.info("Processing " + args.input)
     barcode_caller.process(args.input)
     logger.info("Finished barcode calling")
