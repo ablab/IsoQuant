@@ -172,6 +172,13 @@ class TestExonFunctions:
     def test_concat(self, exons, cigar_tuples, expected):
         assert expected == c.concat_gapless_blocks(exons, cigar_tuples)
 
+# TODO: check existing and add some more test data
+    @pytest.mark.parametrize("ref_start, cigar_tuples, expected",
+                             [(75896, [(0, 99)], ([(75897, 75995)], [(0, 98)], [(0, 0)]))])
+    def test_get_read_blocks(self, ref_start, cigar_tuples, expected):
+        c.get_read_blocks(ref_start, cigar_tuples)
+        assert expected == c.get_read_blocks(ref_start, cigar_tuples)
+
 
 class TestProfiles:
     @pytest.mark.parametrize("profile1, profile2, expected", [([-2, 1], [1, 1], True), ([-2, -1, -2], [-1, -1, -1], True),

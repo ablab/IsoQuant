@@ -60,7 +60,7 @@ class AlignmentInfo:
         if intron_index is None:
             selected_pairs = self.aligned_pairs
         elif left_site:
-            # find alinned pairs near intron start (previous exon end)
+            # find aligned pairs near intron start (previous exon end)
             selected_pairs = self.aligned_pairs[max(0, self.aligned_pairs_end_index[intron_index] - self.region_to_check):
                                                 self.aligned_pairs_end_index[intron_index] + self.region_to_check]
         else:
