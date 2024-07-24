@@ -38,17 +38,32 @@ BARCODE_CALLING_MODES = {'tenX': TenXBarcodeDetector,
                          'double_slow': BruteForceDoubleBarcodeDetector}
 
 
-class SimpleReadInfo:
-    def __init__(self, read_id, seq):
-        self.read_id = read_id
-        self.seq = seq
+class SimpleReadStorage:
+    def __init__(self):
+        self.read_ids = []
+        self.sequences = []
+
+    def add(self, read_id, seq):
+        self.read_ids.append(read_id)
+        self.sequences.append(seq)
+
+    def clear(self):
+        self.read_ids.clear()
+        self.sequences.clear()
+
+    def __len__(self):
+        return len(self.read_ids)
+
+    def __iter__(self):
+        for i in range(len(self.read_ids)):
+            yield self.read_ids[i], self.sequences[i]
 
     def __getstate__(self):
-        return (self.read_id, self.seq)
+        return self.read_ids, self.sequences
 
     def __setstate__(self, state):
-        self.read_id = state[0]
-        self.seq = state[1]
+        self.read_ids = state[0]
+        self.sequences = state[1]
 
 
 class BarcodeCaller:
@@ -115,34 +130,35 @@ class BarcodeCaller:
         self.read_stat.add_read(barcode_result)
 
     def process_chunk(self, read_chunk):
-        for read_info in read_chunk:
-            self._process_read(read_info.read_id, read_info.seq)
+        for read_id, seq in read_chunk:
+            self._process_read(read_id, seq)
 
 
 def fastx_file_chunk_reader(handler):
-    current_chunk = []
+    current_chunk = SimpleReadStorage()
     for r in handler:
-        current_chunk.append(SimpleReadInfo(r.id, str(r.seq)))
+        current_chunk.add(r.id, str(r.seq))
         if len(current_chunk) >= READ_CHUNK_SIZE:
             yield current_chunk
-            current_chunk = []
+            current_chunk.clear()
     yield current_chunk
 
 
 def bam_file_chunk_reader(handler):
-    current_chunk = []
+    current_chunk = SimpleReadStorage()
     for r in handler:
         if r.is_secondary or r.is_supplementary:
             continue
-        current_chunk.append(SimpleReadInfo(r.query_name, r.query_sequence))
+        current_chunk.add(r.query_name, r.query_sequence)
         if len(current_chunk) >= READ_CHUNK_SIZE:
             yield current_chunk
-            current_chunk = []
+            current_chunk.clear()
     yield current_chunk
 
 
-def process_chunk(mode, barcodes, read_chunk, output_file, num, min_score=None):
+def process_chunk(mode, barcodes_file, read_chunk, output_file, num, min_score=None):
     output_file += "_" + str(num)
+    barcodes = load_barcodes(barcodes_file)
     barcode_detector = BARCODE_CALLING_MODES[mode](barcodes)
     if min_score:
         barcode_detector.min_score = min_score
@@ -200,7 +216,7 @@ def process_in_parallel(args):
     barcode_calling_gen = (
         process_chunk,
         itertools.repeat(args.mode),
-        itertools.repeat(barcodes),
+        itertools.repeat(args.barcodes),
         read_chunk_gen,
         itertools.repeat(os.path.join(tmp_dir, "bc")),
         itertools.count(start=0, step=1),
