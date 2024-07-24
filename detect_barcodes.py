@@ -141,7 +141,7 @@ def fastx_file_chunk_reader(handler):
         current_chunk.add(r.id, str(r.seq))
         if len(current_chunk) >= READ_CHUNK_SIZE:
             yield current_chunk
-            current_chunk.clear()
+            current_chunk = SimpleReadStorage()
     yield current_chunk
 
 
@@ -153,7 +153,7 @@ def bam_file_chunk_reader(handler):
         current_chunk.add(r.query_name, r.query_sequence)
         if len(current_chunk) >= READ_CHUNK_SIZE:
             yield current_chunk
-            current_chunk.clear()
+            current_chunk = SimpleReadStorage()
     yield current_chunk
 
 
@@ -165,6 +165,7 @@ def process_chunk(mode, barcodes_file, read_chunk, output_file, num, min_score=N
         barcode_detector.min_score = min_score
     barcode_caller = BarcodeCaller(output_file, barcode_detector)
     barcode_caller.process_chunk(read_chunk)
+    read_chunk.clear()
     return output_file
 
 
