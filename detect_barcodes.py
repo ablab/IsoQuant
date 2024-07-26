@@ -5,14 +5,13 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
-
+import concurrent.futures
 import os
 import random
 import sys
 import argparse
 import gzip
 from traceback import print_exc
-import itertools
 import shutil
 from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
@@ -215,18 +214,35 @@ def process_in_parallel(args):
         tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
     os.makedirs(tmp_dir)
 
-    barcode_calling_gen = (
-        process_chunk,
-        itertools.repeat(args.mode),
-        itertools.repeat(args.barcodes),
-        read_chunk_gen,
-        itertools.repeat(os.path.join(tmp_dir, "bc")),
-        itertools.count(start=0, step=1),
-        itertools.repeat(args.min_score)
-    )
-
+    tmp_barcode_file = os.path.join(tmp_dir, "bc")
+    count = 0
+    feature_results = []
+    output_files = []
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
-        output_files = proc.map(*barcode_calling_gen, chunksize=1)
+        for chunk in read_chunk_gen:
+            feature_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
+            count += 1
+            if count >= args.threads:
+                break
+
+        reads_left = True
+        while reads_left:
+            completed_features, _ = concurrent.futures.wait(feature_results, return_when=concurrent.futures.FIRST_COMPLETED)
+            for c in completed_features:
+                feature_results.remove(c)
+                output_files.append(c.result())
+                if reads_left:
+                    try:
+                        chunk = next(read_chunk_gen)
+                        feature_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
+                        count += 1
+                    except StopIteration:
+                        reads_left = False
+
+        completed_features, _ = concurrent.futures.wait(feature_results, return_when=concurrent.futures.ALL_COMPLETED)
+        for c in completed_features:
+            output_files.append(c.result())
+
     outf = open(args.output, "w")
     header = BARCODE_CALLING_MODES[args.mode].result_type().header()
     outf.write(header + "\n")
