@@ -216,30 +216,30 @@ def process_in_parallel(args):
 
     tmp_barcode_file = os.path.join(tmp_dir, "bc")
     count = 0
-    feature_results = []
+    future_results = []
     output_files = []
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
         for chunk in read_chunk_gen:
-            feature_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
+            future_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
             count += 1
             if count >= args.threads:
                 break
 
         reads_left = True
         while reads_left:
-            completed_features, _ = concurrent.futures.wait(feature_results, return_when=concurrent.futures.FIRST_COMPLETED)
+            completed_features, _ = concurrent.futures.wait(future_results, return_when=concurrent.futures.FIRST_COMPLETED)
             for c in completed_features:
-                feature_results.remove(c)
+                future_results.remove(c)
                 output_files.append(c.result())
                 if reads_left:
                     try:
                         chunk = next(read_chunk_gen)
-                        feature_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
+                        future_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
                         count += 1
                     except StopIteration:
                         reads_left = False
 
-        completed_features, _ = concurrent.futures.wait(feature_results, return_when=concurrent.futures.ALL_COMPLETED)
+        completed_features, _ = concurrent.futures.wait(future_results, return_when=concurrent.futures.ALL_COMPLETED)
         for c in completed_features:
             output_files.append(c.result())
 
@@ -257,7 +257,6 @@ def process_in_parallel(args):
 
     for k, v in stat_dict.items():
         logger.info("%s: %d" % (k, v))
-    out_stats = open(args.output + ".stats", "w")
     shutil.rmtree(tmp_dir)
     logger.info("Finished barcode calling")
 
