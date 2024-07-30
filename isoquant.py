@@ -779,9 +779,9 @@ def call_barcodes(args):
                 bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode.name,
                                              output_barcodes, sample.aux_dir, args.threads)
                 if args.threads == 1:
-                    process = Process(target=process_single_thread, args=(bc_args))
+                    process = Process(target=process_single_thread, args=(bc_args,))
                 else:
-                    process = Process(target=process_in_parallel, args=(bc_args))
+                    process = Process(target=process_in_parallel, args=(bc_args,))
                 process.start()
                 logger.info("Detecting barcodes")
                 process.join()
