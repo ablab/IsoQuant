@@ -144,7 +144,7 @@ class ReadStats:
             self.umi_count += 1
 
     def __str__(self):
-        human_readable_str =  ("Total reads:\t%d\nBarcode detected:\t%d\nReliable UMI:\t%d\n" %
+        human_readable_str =  ("Total reads\t%d\nBarcode detected\t%d\nReliable UMI\t%d\n" %
                       (self.read_count, self.bc_count, self.umi_count))
         for a in self.additional_attributes_counts:
             human_readable_str += "%s\t%d\n" % (a, self.additional_attributes_counts[a])
