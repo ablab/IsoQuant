@@ -19,6 +19,7 @@ import gzip
 from collections import namedtuple
 from io import StringIO
 from traceback import print_exc
+from multiprocessing import Process
 
 import pysam
 import gffutils
@@ -832,9 +833,12 @@ def call_barcodes(args):
                 bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode.name,
                                              output_barcodes, sample.aux_dir, args.threads)
                 if args.threads == 1:
-                    process_single_thread(bc_args)
+                    process = Process(target=process_single_thread, args=(bc_args))
                 else:
-                    process_in_parallel(bc_args)
+                    process = Process(target=process_in_parallel, args=(bc_args))
+                process.start()
+                logger.info("Detecting barcodes")
+                process.join()
             args.input_data.samples[0].barcoded_reads.append(output_barcodes)
     else:
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
