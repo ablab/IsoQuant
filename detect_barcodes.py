@@ -263,7 +263,11 @@ def process_in_parallel(args):
 
 def load_barcodes(inf):
     barcode_list = []
-    for l in open(inf):
+    if inf.endswith("gz") or inf.endswith("gzip"):
+        handle = gzip.open(inf, "rt")
+    else:
+        handle = open(inf, "r")
+    for l in handle:
         barcode_list.append(l.strip().split()[0])
     return barcode_list
 
