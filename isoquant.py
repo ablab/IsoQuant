@@ -19,7 +19,8 @@ import gzip
 from collections import namedtuple
 from io import StringIO
 from traceback import print_exc
-from multiprocessing import Process
+from concurrent.futures import ProcessPoolExecutor
+import concurrent.futures
 
 import pysam
 import gffutils
@@ -832,17 +833,21 @@ def call_barcodes(args):
             else:
                 bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode.name,
                                              output_barcodes, sample.aux_dir, args.threads)
-                if args.threads == 1:
-                    process = Process(target=process_single_thread, args=(bc_args,))
-                else:
-                    process = Process(target=process_in_parallel, args=(bc_args,))
                 # Launching barcode calling in a separate process has the following reason:
                 # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
                 # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
                 # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
-                process.start()
-                logger.info("Detecting barcodes")
-                process.join()
+                with ProcessPoolExecutor(max_workers=1) as proc:
+                    logger.info("Detecting barcodes")
+                    if args.threads == 1:
+                        future_res = proc.submit(process_single_thread, bc_args)
+                    else:
+                        future_res = proc.submit(process_in_parallel, bc_args)
+
+                concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
+                if future_res.exception() is not None:
+                    raise future_res.exception()
+
             args.input_data.samples[0].barcoded_reads.append(output_barcodes)
     else:
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
