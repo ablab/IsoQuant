@@ -6,6 +6,8 @@ import shutil
 import copy
 import json
 from argparse import Namespace
+import tempfile
+import gffutils
 
 
 class OutputConfig:
@@ -217,8 +219,7 @@ class DictionaryBuilder:
         return classification_counts, assignment_type_counts
 
     def parse_input_gtf(self):
-        """Parses the GTF file to build a detailed dictionary of genes, transcripts, and exons,
-        while skipping entries that are not genes, transcripts, or exons."""
+        """Parses the GTF file using gffutils to build a detailed dictionary of genes, transcripts, and exons."""
         gene_dict = {}
         if not self.config.input_gtf:
             raise FileNotFoundError("Extended annotation GTF file is missing.")
@@ -226,82 +227,62 @@ class DictionaryBuilder:
         input_gtf_path = self.config.input_gtf
 
         try:
-            # Try opening the file as a regular text file first
-            file = open(input_gtf_path, "r")
-        except FileNotFoundError:
-            raise FileNotFoundError(
-                f"Extended annotation GTF file is missing at {input_gtf_path}."
-            )
-        except OSError:
-            # If it fails, assume it's likely gzipped and try opening it with gzip
-            try:
-                file = gzip.open(input_gtf_path, "rt")
-            except FileNotFoundError:
-                input_gtf_path = input_gtf_path.rstrip(".gz")
-                try:
-                    file = open(input_gtf_path, "r")
-                except FileNotFoundError:
-                    raise FileNotFoundError(
-                        f"Extended annotation GTF file is missing at {input_gtf_path}."
-                    )
+            # Create a temporary database
+            with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+                db = gffutils.create_db(
+                    input_gtf_path,
+                    dbfn=tmp.name,
+                    force=True,
+                    keep_order=True,
+                    merge_strategy="merge",
+                    sort_attribute_values=True,
+                    disable_infer_genes=True,
+                    disable_infer_transcripts=True,
+                )
 
-        with file:
-            for line in file:
-                if line.startswith("#") or not line.strip():
-                    continue
-                fields = line.strip().split("\t")
-                if len(fields) < 9:
-                    print(
-                        f"Skipping malformed line due to insufficient fields: {line.strip()}"
-                    )
-                    continue
+                for gene in db.features_of_type("gene"):
+                    gene_id = gene.id
+                    gene_dict[gene_id] = {
+                        "chromosome": gene.seqid,
+                        "start": gene.start,
+                        "end": gene.end,
+                        "strand": gene.strand,
+                        "name": gene.attributes.get("gene_name", [""])[0],
+                        "biotype": gene.attributes.get("gene_biotype", [""])[0],
+                        "transcripts": {},
+                    }
 
-                entry_type = fields[2].lower()
-                if entry_type not in {"gene", "transcript", "exon"}:
-                    continue  # Skip types like CDS, start_codon, etc.
-
-                info_fields = fields[8].strip(";").split(";")
-                details = {
-                    field.strip().split(" ")[0]: field.strip().split(" ")[1].strip('"')
-                    for field in info_fields
-                    if " " in field
-                }
-
-                try:
-                    if entry_type == "gene":
-                        gene_id = details["gene_id"]
-                        gene_dict[gene_id] = {
-                            "chromosome": fields[0],
-                            "start": int(fields[3]),
-                            "end": int(fields[4]),
-                            "strand": fields[6],
-                            "name": details.get("gene_name", ""),
-                            "biotype": details.get("gene_biotype", ""),
-                            "transcripts": {},
-                        }
-                    elif entry_type == "transcript":
-                        transcript_id = details["transcript_id"]
-                        gene_dict[details["gene_id"]]["transcripts"][transcript_id] = {
-                            "start": int(fields[3]),
-                            "end": int(fields[4]),
-                            "name": details.get("transcript_name", ""),
-                            "biotype": details.get("transcript_biotype", ""),
+                    for transcript in db.children(gene, featuretype="transcript"):
+                        transcript_id = transcript.id
+                        gene_dict[gene_id]["transcripts"][transcript_id] = {
+                            "start": transcript.start,
+                            "end": transcript.end,
+                            "name": transcript.attributes.get("transcript_name", [""])[
+                                0
+                            ],
+                            "biotype": transcript.attributes.get(
+                                "transcript_biotype", [""]
+                            )[0],
                             "exons": [],
-                            "tags": details.get("tag", "").split(","),
+                            "tags": transcript.attributes.get("tag", [""])[0].split(
+                                ","
+                            ),
                         }
-                    elif entry_type == "exon":
-                        transcript_id = details["transcript_id"]
-                        exon_info = {
-                            "exon_id": details["exon_id"],
-                            "start": int(fields[3]),
-                            "end": int(fields[4]),
-                            "number": details.get("exon_number", ""),
-                        }
-                        gene_dict[details["gene_id"]]["transcripts"][transcript_id][
-                            "exons"
-                        ].append(exon_info)
-                except KeyError as e:
-                    print(f"Key error in line: {line.strip()} | Missing key: {e}")
+
+                        for exon in db.children(transcript, featuretype="exon"):
+                            exon_info = {
+                                "exon_id": exon.id,
+                                "start": exon.start,
+                                "end": exon.end,
+                                "number": exon.attributes.get("exon_number", [""])[0],
+                            }
+                            gene_dict[gene_id]["transcripts"][transcript_id][
+                                "exons"
+                            ].append(exon_info)
+
+        except Exception as e:
+            raise Exception(f"Error parsing GTF file: {str(e)}")
+
         return gene_dict
 
     def parse_extended_annotation(self):
@@ -451,8 +432,12 @@ class DictionaryBuilder:
         for condition, genes in gene_dict.items():
             updated_genes = {}
             for gene_id, gene_info in genes.items():
-                gene_name_upper = gene_info["name"].upper()
-                updated_genes[gene_name_upper] = gene_info
+                if gene_info["name"]:
+                    gene_name_upper = gene_info["name"].upper()
+                    updated_genes[gene_name_upper] = gene_info
+                else:
+                    # If name is empty, use the original gene_id
+                    updated_genes[gene_id] = gene_info
             updated_dict[condition] = updated_genes
         return updated_dict
 
