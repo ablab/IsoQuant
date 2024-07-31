@@ -836,6 +836,10 @@ def call_barcodes(args):
                     process = Process(target=process_single_thread, args=(bc_args,))
                 else:
                     process = Process(target=process_in_parallel, args=(bc_args,))
+                # Launching barcode calling in a separate process has the following reason:
+                # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
+                # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
+                # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
                 process.start()
                 logger.info("Detecting barcodes")
                 process.join()
