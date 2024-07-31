@@ -89,7 +89,6 @@ def main():
         gene_file = output.gene_tpm if not output.use_counts else output.gene_counts
 
     updated_gene_dict = dictionary_builder.update_gene_dict(gene_dict, gene_file)
-
     if update_names:
         print("Updating Ensembl IDs to gene symbols.")
         updated_gene_dict = dictionary_builder.update_gene_names(updated_gene_dict)

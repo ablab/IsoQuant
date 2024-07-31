@@ -85,7 +85,29 @@ def calculate_metrics(genes):
     return pd.DataFrame(metrics)
 
 
+def check_known_target(gene, known_targets):
+    for target in known_targets:
+        if "|" in target:
+            if any(part in gene for part in target.split("|")):
+                return 1
+        elif target == gene:
+            return 1
+    return 0
+
+
 def rank_genes(df):
+    target_genes_df = pd.read_csv(
+        "/w5home/jfreeman/IsoQuant/Target_genes.csv", header=None, names=["gene"]
+    )
+
+    # Convert the known targets to a list
+    known_targets = target_genes_df["gene"].tolist()
+
+    # Apply the function to create the 'known_target' column
+    df["known_target"] = df["gene"].apply(
+        lambda x: check_known_target(x, known_targets)
+    )
+
     value_ranking = df.groupby("gene")["value"].mean().reset_index()
     abs_diff_ranking = df.groupby("gene")["abs_diff"].mean().reset_index()
     deviance_ranking = df.groupby("gene")["deviance"].mean().reset_index()
@@ -102,7 +124,7 @@ def rank_genes(df):
         abs_diff_ranking[["gene", "rank_abs_diff"]], on="gene"
     )
     merged_df = merged_df.merge(deviance_ranking[["gene", "rank_deviance"]], on="gene")
-
+    merged_df = merged_df.merge(df[["gene", "known_target"]], on="gene")
     # Devalue the importance of overall expression by reducing its weight
     merged_df["combined_rank"] = (
         merged_df["rank_value"]  # Reduced weight for rank_value
@@ -256,11 +278,12 @@ def save_top_genes(top_combined_ranking, output_dir, num_genes):
 
 def rank_and_visualize_genes(input_data, output_dir, num_genes=100):
     genes = parse_data(input_data)
+    print(genes)
     metrics_df = calculate_metrics(genes)
     top_combined_ranking, top_deviance_ranking, top_100_combined_ranking, merged_df = (
         rank_genes(metrics_df)
     )
-
+    merged_df = merged_df.drop_duplicates(subset="gene", keep="first")
     top_combined_ranking = merged_df.sort_values(by="combined_rank").head(num_genes)
     top_deviance_ranking = merged_df.sort_values(by="rank_deviance").head(num_genes)
 
@@ -274,4 +297,7 @@ def rank_and_visualize_genes(input_data, output_dir, num_genes=100):
     print(f"\nNumber of Genes: {len(merged_df)}")
     print(f"\nTop {num_genes} Genes by Transcript Deviance from Wild Type:")
     print(top_deviance_ranking)
+
+    merged_df.to_csv(os.path.join(output_dir, "gene_metrics.csv"), index=False)
+
     return path
