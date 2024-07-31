@@ -30,7 +30,7 @@ from src.barcode_calling.barcode_callers import (
 logger = logging.getLogger('IsoQuant')
 
 
-READ_CHUNK_SIZE = 1000
+READ_CHUNK_SIZE = 100000
 BARCODE_CALLING_MODES = {'tenX': TenXBarcodeDetector,
                          'double': DoubleBarcodeDetector,
                          'double_illumina': IlluminaDoubleBarcodeDetector,
