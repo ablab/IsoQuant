@@ -368,7 +368,7 @@ class AssignedFeatureCounter(AbstractCounter):
             assert linear_output_file is not None
 
             output_file.write(self.format_header(all_groups))
-            linear_output_file.write("feature_id\tgroup_id\tcount")
+            linear_output_file.write("#feature_id\tgroup_id\tcount\n")
             for feature_id in all_features:
                 row_count = 0
                 for group_id in self.feature_counter[feature_id].data.keys():
