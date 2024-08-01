@@ -64,18 +64,19 @@ class CountingStrategyFlags:
 
 # the difference from defaultdict is that it does not add 0 to the dict when get is called for inexistent key
 class IncrementalDict:
-    def __init__(self):
+    def __init__(self, default_type=float):
         self.data = {}
+        self.default_type = default_type
 
-    def inc(self, key, value=1.0):
+    def inc(self, key, value=1):
         if key not in self.data:
-            self.data[key] = value
+            self.data[key] = self.default_type(value)
         else:
             self.data[key] += value
 
     def get(self, key):
         if key not in self.data:
-            return 0
+            return self.default_type()
         else:
             return self.data[key]
 
@@ -417,42 +418,49 @@ def create_transcript_counter(output_file_name, strategy, complete_feature_list=
 
 # count simple features inclusion/exclusion (exons / introns)
 class ProfileFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, ignore_read_groups=False, print_zeroes=False):
+    def __init__(self, output_prefix, ignore_read_groups=False):
         AbstractCounter.__init__(self, output_prefix, ignore_read_groups)
-        # group_id -> (feature_id -> count)
-        self.inclusion_feature_counter = defaultdict(lambda: defaultdict(int))
-        self.exclusion_feature_counter = defaultdict(lambda: defaultdict(int))
+        # feature_id -> (group_id -> count)
+        self.inclusion_feature_counter = defaultdict(lambda: IncrementalDict(int))
+        self.exclusion_feature_counter = defaultdict(lambda: IncrementalDict(int))
         self.feature_name_dict = OrderedDict()
-        self.print_zeroes = print_zeroes
+        if ignore_read_groups:
+            self.group_numeric_ids = {AbstractReadGrouper.default_group_id: 0}
+        else:
+            self.group_numeric_ids = OrderedDict()
+        self.current_group_id = 1
 
     def add_read_info_from_profile(self, gene_feature_profile, feature_property_map,
                                    read_group = AbstractReadGrouper.default_group_id):
+        if read_group not in self.group_numeric_ids:
+            self.group_numeric_ids[read_group] = self.current_group_id
+            self.current_group_id += 1
+
+        group_id = self.group_numeric_ids[read_group]
         for i in range(len(gene_feature_profile)):
             if gene_feature_profile[i] == 1:
                 feature_id = feature_property_map[i].id
-                self.inclusion_feature_counter[read_group][feature_id] += 1
+                self.inclusion_feature_counter[feature_id].inc(group_id)
                 if feature_id not in self.feature_name_dict:
                     self.feature_name_dict[feature_id] = feature_property_map[i].to_str()
             elif gene_feature_profile[i] == -1:
                 feature_id = feature_property_map[i].id
-                self.exclusion_feature_counter[read_group][feature_id] += 1
+                self.exclusion_feature_counter[feature_id].inc(group_id)
                 if feature_id not in self.feature_name_dict:
                     self.feature_name_dict[feature_id] = feature_property_map[i].to_str()
 
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
             f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
-            all_groups = set(self.inclusion_feature_counter.keys())
-            all_groups.update(self.exclusion_feature_counter.keys())
-            all_groups = sorted(all_groups)
 
             for feature_id in self.feature_name_dict.keys():
-                for group_id in all_groups:
+                for group_name in self.group_numeric_ids.keys():
                     feature_name = self.feature_name_dict[feature_id]
-                    incl_count = self.inclusion_feature_counter[group_id][feature_id]
-                    excl_count = self.exclusion_feature_counter[group_id][feature_id]
-                    if self.print_zeroes or incl_count > 0 or excl_count > 0:
-                        f.write("%s\t%s\t%d\t%d\n" % (feature_name, group_id, incl_count, excl_count))
+                    group_id = self.group_numeric_ids[group_name]
+                    incl_count = self.inclusion_feature_counter[feature_id].get(group_id)
+                    excl_count = self.exclusion_feature_counter[feature_id].get(group_id)
+                    if incl_count > 0 or excl_count > 0:
+                        f.write("%s\t%s\t%d\t%d\n" % (feature_name, group_name, incl_count, excl_count))
 
     def convert_counts_to_tpm(self, normalization=NormalizationMethod.simple):
         return
