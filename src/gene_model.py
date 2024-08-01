@@ -95,18 +95,15 @@ def check_known_target(gene, known_targets):
     return 0
 
 
-def rank_genes(df):
-    target_genes_df = pd.read_csv(
-        "/w5home/jfreeman/IsoQuant/Target_genes.csv", header=None, names=["gene"]
-    )
-
-    # Convert the known targets to a list
-    known_targets = target_genes_df["gene"].tolist()
-
-    # Apply the function to create the 'known_target' column
-    df["known_target"] = df["gene"].apply(
-        lambda x: check_known_target(x, known_targets)
-    )
+def rank_genes(df, known_genes_path=None):
+    if known_genes_path:
+        target_genes_df = pd.read_csv(known_genes_path, header=None, names=["gene"])
+        known_targets = target_genes_df["gene"].tolist()
+        df["known_target"] = df["gene"].apply(
+            lambda x: check_known_target(x, known_targets)
+        )
+    else:
+        df["known_target"] = 0
 
     value_ranking = df.groupby("gene")["value"].mean().reset_index()
     abs_diff_ranking = df.groupby("gene")["abs_diff"].mean().reset_index()
@@ -276,12 +273,13 @@ def save_top_genes(top_combined_ranking, output_dir, num_genes):
     return os.path.join(output_dir, f"top_{num_genes}_genes.txt")
 
 
-def rank_and_visualize_genes(input_data, output_dir, num_genes=100):
+def rank_and_visualize_genes(
+    input_data, output_dir, num_genes=100, known_genes_path=None
+):
     genes = parse_data(input_data)
-    print(genes)
     metrics_df = calculate_metrics(genes)
     top_combined_ranking, top_deviance_ranking, top_100_combined_ranking, merged_df = (
-        rank_genes(metrics_df)
+        rank_genes(metrics_df, known_genes_path)
     )
     merged_df = merged_df.drop_duplicates(subset="gene", keep="first")
     top_combined_ranking = merged_df.sort_values(by="combined_rank").head(num_genes)
@@ -294,9 +292,6 @@ def rank_and_visualize_genes(input_data, output_dir, num_genes=100):
     print(top_combined_ranking[["gene", "combined_rank"]])
     print(f"\nDetailed Metrics for Top {num_genes} Genes by Combined Ranking:")
     print(top_combined_ranking)
-    print(f"\nNumber of Genes: {len(merged_df)}")
-    print(f"\nTop {num_genes} Genes by Transcript Deviance from Wild Type:")
-    print(top_deviance_ranking)
 
     merged_df.to_csv(os.path.join(output_dir, "gene_metrics.csv"), index=False)
 

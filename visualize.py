@@ -6,8 +6,6 @@ import argparse
 from src.process_dict import simplify_and_sum_transcripts
 from src.gene_model import rank_and_visualize_genes
 
-import argparse
-
 
 class FindGenesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
@@ -59,6 +57,12 @@ def parse_arguments():
         const=100,
         type=int,
         help="Find genes with the highest combined rank and visualize them. Optionally specify the number of top genes to evaluate (default is 100).",
+    )
+    parser.add_argument(
+        "--known_genes_path",
+        type=str,
+        help="Path to a CSV file containing known target genes.",
+        default=None,
     )
     return parser.parse_args()
 
@@ -153,7 +157,10 @@ def main():
         print("Finding genes.")
         simple_gene_dict = simplify_and_sum_transcripts(updated_gene_dict)
         path = rank_and_visualize_genes(
-            simple_gene_dict, viz_output_directory, args.find_genes
+            simple_gene_dict,
+            viz_output_directory,
+            args.find_genes,
+            known_genes_path=args.known_genes_path,
         )
         gene_list = dictionary_builder.read_gene_list(path)
 
