@@ -479,11 +479,11 @@ class DatasetProcessor:
             if not self.args.keep_tmp:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
 
-        total_alignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
+        total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
-        polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
-        logger.info("Total alignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
-                    (total_alignments, polya_found, polya_fraction * 100.0))
+        polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
+        logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
+                    (total_assignments, polya_found, polya_fraction * 100.0))
         if (polya_fraction < self.args.low_polya_percentage_threshold and
                 self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
@@ -559,9 +559,13 @@ class DatasetProcessor:
             else:
                 for read_id in processed_reads: multimappers_counts[read_id] += 1
 
+        unique_assignments, polya_unique_assignments = 0, 0
         if not self.args.high_memory:
-            multimapped_reads = self.prepare_multimapper_dict(chr_ids, sample, multimappers_counts)
+            multimapped_reads, unique_assignments, polya_unique_assignments \
+                = self.prepare_multimapper_dict(chr_ids, sample, multimappers_counts)
         total_assignments, polya_assignments = self.resolve_multimappers(chr_ids, sample, multimapped_reads)
+        total_assignments += unique_assignments
+        polya_assignments += polya_unique_assignments
 
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
@@ -584,18 +588,23 @@ class DatasetProcessor:
     def prepare_multimapper_dict(self, chr_ids, sample, multimappers_counts):
         logger.info("Counting multimapped reads")
         multimapped_reads = defaultdict(list)
+        unique_assignments = 0
+        polya_unique_assignments = 0
 
         for chr_id in chr_ids:
             chr_dump_file = sample.out_raw_file + "_" + chr_id
             loader = BasicReadAssignmentLoader(chr_dump_file)
             while loader.has_next():
                 for read_assignment in loader.get_next():
-                    if (read_assignment is None or
-                            (read_assignment.read_id in multimappers_counts and
-                             multimappers_counts[read_assignment.read_id] == 1)):
+                    if read_assignment is None:
+                        continue
+                    if (read_assignment.read_id in multimappers_counts and
+                            multimappers_counts[read_assignment.read_id] == 1):
+                        unique_assignments += 1
+                        polya_unique_assignments += 1 if read_assignment.polyA_found else 0
                         continue
                     multimapped_reads[read_assignment.read_id].append(read_assignment)
-        return multimapped_reads
+        return multimapped_reads, unique_assignments, polya_unique_assignments
 
     def resolve_multimappers(self, chr_ids, sample, multimapped_reads):
         logger.info("Resolving multimappers")
