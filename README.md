@@ -13,6 +13,20 @@
 
 [New IsoQuant documentation](https://ablab.github.io/IsoQuant/) is available. This README will be removed at some point.
 
+1. [About IsoQuant](#sec1) </br>
+1.1. [Supported data types](#sec1.1)</br>
+1.2. [Supported reference data](#sec1.2)</br>
+2. [Installation](#sec2)</br>
+2.1. [Installing from conda](#sec2.1)</br>
+2.2. [Manual installation and requirements](#sec2.2)</br>
+2.3. [Verifying your installation](#sec2.3)</br>
+3. [Running IsoQuant](#sec3)</br>
+3.1. [IsoQuant input](#sec3.1)</br>
+3.2. [Command line options](#sec3.2)</br>
+3.3. [IsoQuant output](#sec3.3)</br>
+4. [Citation](#sec4)</br>
+5. [Feedback and bug reports](#sec5)</br>
+
 
 **Quick start:**  
 
@@ -79,6 +93,7 @@
 3.1. [IsoQuant input](#sec3.1)</br>
 3.2. [Command line options](#sec3.2)</br>
 3.3. [IsoQuant output](#sec3.3)</br>
+3.4. [Visualization](#sec3.4)</br>
 4. [Citation](#sec4)</br>
 5. [Feedback and bug reports](#sec5)</br>
 
@@ -922,6 +937,46 @@ this novel transcript and the similar reference transcript.
 
 #### PolyA classifications
 ![PolyA](docs/polya.png)
+
+<a name="sec3.4"></a>
+
+## Visualization
+
+IsoQuant provides a visualization tool to help interpret and explore the output data. The goal of this visualization is to create informative plots that represent transcript usage, splicing patterns, and read assignment statistics from the IsoQuant analysis.
+
+### Running the visualization tool
+
+To run the visualization tool, use the following command:
+
+```bash
+
+python visualize.py <output_directory> [options]
+
+```
+
+### Command line options
+
+* `output_directory` (required): Directory containing IsoQuant output files.
+* `--viz_output`: Optional directory to save visualization output files. Defaults to the main output directory if not specified.
+* `--gtf`: Optional path to a GTF file if it cannot be extracted from the IsoQuant log.
+* `--counts`: Use counts instead of TPM files for visualization.
+* `--ref_only`: Use only reference transcript quantification instead of transcript model quantification.
+* `--filter_transcripts`: Filter transcripts by minimum value occurring in at least one condition.
+* `--gene_list`: Path to a .txt file containing a list of genes, each on its own line (required).
+
+### Output
+
+The visualization tool generates the following plots based on the IsoQuant output:
+
+1. Transcript usage profiles: For each gene specified in the gene list, a plot showing the relative usage of different transcripts across conditions or samples.
+
+2. Gene-specific transcript maps: Visual representation of the different splicing patterns of transcripts for each gene, allowing easy comparison of exon usage and alternative splicing events.
+
+3. Global read assignment consistency: A summary plot showing the overall consistency of read assignments across all genes and transcripts analyzed.
+
+4. Global transcript alignment classifications: A chart or plot representing the distribution of different transcript alignment categories (e.g., full splice match, incomplete splice match, novel isoforms) across the entire dataset.
+
+These visualizations provide valuable insights into transcript diversity, splicing patterns, and the overall quality of the IsoQuant analysis.
 
 <a name="sec4"></a>
 ## Citation
