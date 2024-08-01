@@ -363,23 +363,23 @@ class AssignedFeatureCounter(AbstractCounter):
                 f.write("__usable\t%d\n" % self.reads_for_tpm)
 
     def dump_grouped(self, all_features, all_groups):
-        with (self.get_output_file_handler() as output_file,
-              self.get_linear_output_file_handler() as linear_output_file):
-            assert linear_output_file is not None
+        with self.get_output_file_handler() as output_file:
+            with self.get_linear_output_file_handler() as linear_output_file:
+                assert linear_output_file is not None
 
-            output_file.write(self.format_header(all_groups))
-            linear_output_file.write("#feature_id\tgroup_id\tcount\n")
-            for feature_id in all_features:
-                row_count = 0
-                for group_id in self.feature_counter[feature_id].data.keys():
-                    count = self.feature_counter[feature_id].data[group_id]
-                    linear_output_file.write("%s\t%s\t%.2f\n" % (feature_id, self.ordered_groups[group_id], count))
-                    row_count += count
-                if not self.output_zeroes and row_count == 0:
-                    continue
-                count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in
-                                all_groups]
-                output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+                output_file.write(self.format_header(all_groups))
+                linear_output_file.write("#feature_id\tgroup_id\tcount\n")
+                for feature_id in all_features:
+                    row_count = 0
+                    for group_id in self.feature_counter[feature_id].data.keys():
+                        count = self.feature_counter[feature_id].data[group_id]
+                        linear_output_file.write("%s\t%s\t%.2f\n" % (feature_id, self.ordered_groups[group_id], count))
+                        row_count += count
+                    if not self.output_zeroes and row_count == 0:
+                        continue
+                    count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in
+                                    all_groups]
+                    output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
     def convert_counts_to_tpm(self, normalization_str=NormalizationMethod.simple.name):
         normalization = NormalizationMethod[normalization_str]
