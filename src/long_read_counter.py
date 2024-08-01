@@ -235,8 +235,6 @@ class AssignedFeatureCounter(AbstractCounter):
         self.not_aligned_reads = 0
         # feature_id -> (group_id -> count)
         self.feature_counter = defaultdict(IncrementalDict)
-        #for f in self.all_features:
-        #    self.feature_counter[f] = IncrementalDict()
         self.confirmed_features = set()
         self.output_stats_file_name = self.output_counts_file_name + ".stats"
 
@@ -344,7 +342,7 @@ class AssignedFeatureCounter(AbstractCounter):
                         row_count += count
                     if not self.output_zeroes and row_count == 0:
                         continue
-                    count_values = [self.feature_counter[feature_id].get(group_id) for group_id in all_groups]
+                    count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in all_groups]
                     output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
         if self.ignore_read_groups:
