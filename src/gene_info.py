@@ -568,10 +568,10 @@ class GeneInfo:
                 # similar features
                 feature_type += "S"
             if feature in contained_features:
-                # feature contained in anther one
+                # feature contained in another one
                 feature_type += "C"
 
-            strands = set([self.isoform_strands[t[0]] for t in feature_to_isoform[feature]])
+            strands = sorted(set([self.isoform_strands[t[0]] for t in feature_to_isoform[feature]]))
             strand_str = "".join(strands)
             gene_ids = set([self.gene_id_map[t[0]] for t in feature_to_isoform[feature]])
 
