@@ -155,9 +155,6 @@ class AbstractCounter:
         self.output_counts_file_name = output_prefix + "_counts.tsv"
         self.output_file = self.output_counts_file_name
         open(self.output_file, "w").close()
-        self.linear_output_file = output_prefix + "_counts_linear.tsv"
-        if not ignore_read_groups:
-            open(self.linear_output_file, "w").close()
         self.output_tpm_file_name = output_prefix + "_tpm.tsv"
         self.output_zeroes = output_zeroes
         self.output_stats_file_name = None
@@ -166,10 +163,7 @@ class AbstractCounter:
         return open(self.output_file, "a")
 
     def get_linear_output_file_handler(self):
-        if not self.ignore_read_groups:
-            return open(self.linear_output_file, "a")
-        else:
-            return None
+        return None
 
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
@@ -249,6 +243,16 @@ class AssignedFeatureCounter(AbstractCounter):
         self.feature_counter = defaultdict(IncrementalDict)
         self.confirmed_features = set()
         self.output_stats_file_name = self.output_counts_file_name + ".stats"
+        self.linear_output_file = output_prefix + "_counts_linear.tsv"
+        if not self.ignore_read_groups:
+            open(self.linear_output_file, "w").close()
+
+    def get_linear_output_file_handler(self):
+        if not self.ignore_read_groups:
+            return open(self.linear_output_file, "a")
+        else:
+            return None
+
 
     def add_read_info(self, read_assignment=None):
         if not read_assignment:
@@ -344,7 +348,7 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def dump_ungrouped(self, all_features):
         with self.get_output_file_handler() as output_file:
-            default_group_id = self.ordered_groups[0]
+            default_group_id = list(self.group_numeric_ids.values())[0]
             output_file.write(self.format_header(self.ordered_groups))
             for feature_id in all_features:
                 count = self.feature_counter[feature_id].get(default_group_id)
@@ -368,7 +372,7 @@ class AssignedFeatureCounter(AbstractCounter):
                 row_count = 0
                 for group_id in self.feature_counter[feature_id].data.keys():
                     count = self.feature_counter[feature_id].data[group_id]
-                    linear_output_file.write("%s\t%s\t%.2f" % (feature_id, self.ordered_groups[group_id], count))
+                    linear_output_file.write("%s\t%s\t%.2f\n" % (feature_id, self.ordered_groups[group_id], count))
                     row_count += count
                 if not self.output_zeroes and row_count == 0:
                     continue
