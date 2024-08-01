@@ -315,11 +315,14 @@ def check_and_load_args(args, parser):
         else:
             logger.warning("Output folder already exists, some files may be overwritten.")
 
-    args.gtf = args.genedb
     if args.genedb_output is None:
         args.genedb_output = args.output
     elif not os.path.exists(args.genedb_output):
         os.makedirs(args.genedb_output)
+    if args.genedb.lower().endswith("db"):
+        args.genedb_filename = args.genedb
+    else:
+        args.genedb_filename = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".db")
 
     if not check_input_params(args):
         parser.print_usage()
