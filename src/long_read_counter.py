@@ -453,8 +453,9 @@ class ProfileFeatureCounter(AbstractCounter):
         with open(self.output_counts_file_name, "w") as f:
             f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
 
+            all_groups = sorted(self.group_numeric_ids.keys())
             for feature_id in self.feature_name_dict.keys():
-                for group_name in self.group_numeric_ids.keys():
+                for group_name in all_groups:
                     feature_name = self.feature_name_dict[feature_id]
                     group_id = self.group_numeric_ids[group_name]
                     incl_count = self.inclusion_feature_counter[feature_id].get(group_id)
