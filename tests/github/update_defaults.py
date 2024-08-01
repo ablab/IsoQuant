@@ -40,7 +40,7 @@ def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--branch", type=str, help="branch to use [master]", default="master")
     parser.add_argument("--output", type=str, help="custom output folder (do not set if default)")
-    parser.add_argument("config_file", metavar="config_file", type=str, help="configuration .info file")
+    parser.add_argument("config_file", metavar="config_file", type=str, nargs="+", help="configuration .info file")
 
     args = parser.parse_args()
     return args
@@ -58,22 +58,22 @@ def main():
         print("Provide configuration file")
         exit(-2)
 
-    config_file = args.config_file
-    if not os.path.exists(config_file):
-        print("Provide correct path to configuration file, %s does not exits" % config_file)
-        exit(-3)
+    for config_file in args.config_file:
+        if not os.path.exists(config_file):
+            print("Provide correct path to configuration file, %s does not exits" % config_file)
+            exit(-3)
 
-    print("Loading config from %s" % config_file)
-    config_dict = load_tsv_config(config_file)
-    run_name = config_dict["name"]
-    output_folder = os.path.join(os.path.join(args.output if args.output else config_dict["output"], args.branch), run_name)
-    for et in etalon_dict.keys():
-        if et not in config_dict:
-            continue
-        new_etalon = os.path.join(output_folder, etalon_dict[et])
-        old_etalon = fix_path(config_file, config_dict[et])
-        print("Updating %s from %s" % (new_etalon, old_etalon))
-        shutil.copy2(new_etalon, old_etalon)
+        print("Loading config from %s" % config_file)
+        config_dict = load_tsv_config(config_file)
+        run_name = config_dict["name"]
+        output_folder = os.path.join(os.path.join(args.output if args.output else config_dict["output"], args.branch), run_name)
+        for et in etalon_dict.keys():
+            if et not in config_dict:
+                continue
+            new_etalon = os.path.join(output_folder, etalon_dict[et])
+            old_etalon = fix_path(config_file, config_dict[et])
+            print("Updating %s from %s" % (new_etalon, old_etalon))
+            shutil.copy2(new_etalon, old_etalon)
 
 
 if __name__ == "__main__":
