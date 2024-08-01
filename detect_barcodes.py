@@ -218,6 +218,38 @@ def process_in_parallel(args):
     count = 0
     future_results = []
     output_files = []
+
+    # TODO substitute with a more elegant version
+    # def lazy_multiprocessing_map(func, iterable, processes=None):
+    #     with ProcessPoolExecutor(max_workers=processes) as executor:
+    #         futures = []
+    #         iterable = iter(iterable)
+    #
+    #         # Submit initial batch of tasks
+    #         try:
+    #             for _ in range(executor._max_workers):
+    #                 item = next(iterable)
+    #                 futures.append(executor.submit(func, item))
+    #         except StopIteration:
+    #             pass
+    #
+    #         while futures:
+    #             # Wait for the next completed future
+    #             for future in as_completed(futures):
+    #                 futures.remove(future)
+    #                 try:
+    #                     yield future.result()
+    #                 except Exception as e:
+    #                     yield f"Error for input {future}: {e}"
+    #                 break  # Process only one completed future at a time
+    #
+    #             # Submit the next item from the iterable
+    #             try:
+    #                 item = next(iterable)
+    #                 futures.append(executor.submit(func, item))
+    #             except StopIteration:
+    #                 pass
+
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
         for chunk in read_chunk_gen:
             future_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
