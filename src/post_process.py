@@ -224,7 +224,22 @@ class DictionaryBuilder:
         """Parses the GTF file using gffutils to build a detailed dictionary of genes, transcripts, and exons."""
         gene_dict = {}
         if not self.config.genedb_filename:
-            raise FileNotFoundError("IsoQuant annotation DB file is missing.")
+            # convert GFT to DB if we use previous IsoQuant runs
+            # remove this functionality later
+            tmp_file = tempfile.NamedTemporaryFile(suffix=".db")
+            self.config.genedb_filename = tmp_file.name
+            input_gtf_path = self.config.input_gtf
+            gffutils.create_db(
+                input_gtf_path,
+                dbfn=self.config.genedb_filename,
+                force=True,
+                keep_order=True,
+                merge_strategy="merge",
+                sort_attribute_values=True,
+                disable_infer_genes=True,
+                disable_infer_transcripts=True,
+            )
+            # raise FileNotFoundError("IsoQuant annotation DB file is missing.")
 
         try:
             # Create a temporary database
