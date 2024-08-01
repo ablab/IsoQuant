@@ -217,11 +217,11 @@ class CompositeCounter:
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
     def __init__(self, output_prefix, assignment_extractor, read_groups, read_counter,
-                 all_features=None, ignore_read_groups=False, output_zeroes=True):
-        AbstractCounter.__init__(self, output_prefix, ignore_read_groups, output_zeroes)
+                 all_features=None, output_zeroes=True):
+        AbstractCounter.__init__(self, output_prefix, not read_groups, output_zeroes)
         self.assignment_extractor = assignment_extractor
         self.all_features = set(all_features) if all_features is not None else set()
-        if ignore_read_groups:
+        if not read_groups:
             self.group_numeric_ids = {AbstractReadGrouper.default_group_id: 0}
         else:
             self.group_numeric_ids = OrderedDict()
@@ -401,19 +401,19 @@ class AssignedFeatureCounter(AbstractCounter):
 
 
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
-                        read_groups=None, ignore_read_groups=False, output_zeroes=True):
+                        read_groups=None, output_zeroes=True):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
                                   read_groups, read_weight_counter,
-                                  complete_feature_list, ignore_read_groups, output_zeroes)
+                                  complete_feature_list, output_zeroes)
 
 
 def create_transcript_counter(output_file_name, strategy, complete_feature_list=None,
-                              read_groups=None, ignore_read_groups=False, output_zeroes=True):
+                              read_groups=None, output_zeroes=True):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
                                   read_groups, read_weight_counter,
-                                  complete_feature_list, ignore_read_groups, output_zeroes)
+                                  complete_feature_list, output_zeroes)
 
 
 # count simple features inclusion/exclusion (exons / introns)
