@@ -155,12 +155,21 @@ class AbstractCounter:
         self.output_counts_file_name = output_prefix + "_counts.tsv"
         self.output_file = self.output_counts_file_name
         open(self.output_file, "w").close()
+        self.linear_output_file = output_prefix + "_counts_linear.tsv"
+        if not ignore_read_groups:
+            open(self.linear_output_file, "w").close()
         self.output_tpm_file_name = output_prefix + "_tpm.tsv"
         self.output_zeroes = output_zeroes
         self.output_stats_file_name = None
 
     def get_output_file_handler(self):
         return open(self.output_file, "a")
+
+    def get_linear_output_file_handler(self):
+        if not self.ignore_read_groups:
+            return open(self.linear_output_file, "a")
+        else:
+            return None
 
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
@@ -223,9 +232,11 @@ class AssignedFeatureCounter(AbstractCounter):
         self.all_features = set(all_features) if all_features is not None else set()
         if not read_groups:
             self.group_numeric_ids = {AbstractReadGrouper.default_group_id: 0}
+            self.ordered_groups = [AbstractReadGrouper.default_group_id]
         else:
-            self.group_numeric_ids = OrderedDict()
-            if read_groups:
+            self.group_numeric_ids = {}
+            self.ordered_groups = sorted(read_groups)
+            if self.ordered_groups:
                 for i, g in enumerate(read_groups):
                     self.group_numeric_ids[g] = i
         self.read_counter = read_counter
@@ -318,7 +329,6 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def dump(self):
         all_features = sorted(filter(lambda x: x is not None, self.all_features))
-        all_groups = sorted(self.group_numeric_ids.keys())
 
         for feature_id in all_features:
             if feature_id in self.confirmed_features:
@@ -327,40 +337,44 @@ class AssignedFeatureCounter(AbstractCounter):
             for g in self.feature_counter[feature_id].data.keys():
                 self.feature_counter[feature_id].data[g] = 0.0
 
+        if self.ignore_read_groups:
+            self.dump_ungrouped(all_features)
+        else:
+            self.dump_grouped(all_features,  self.ordered_groups)
+
+    def dump_ungrouped(self, all_features):
         with self.get_output_file_handler() as output_file:
-            if self.ignore_read_groups:
-                self.dump_ungrouped(output_file, all_features)
-            else:
-                self.dump_grouped(output_file, all_features, all_groups)
+            default_group_id = self.ordered_groups[0]
+            output_file.write(self.format_header(self.ordered_groups))
+            for feature_id in all_features:
+                count = self.feature_counter[feature_id].get(default_group_id)
+                if not self.output_zeroes and count == 0:
+                    continue
+                output_file.write("%s\t%.2f\n" % (feature_id, count))
 
-    def dump_ungrouped(self, output_file, all_features):
-        default_group_id = list(self.group_numeric_ids.values())[0]
-        output_file.write(self.format_header(self.group_numeric_ids.keys()))
-        for feature_id in all_features:
-            count = self.feature_counter[feature_id].get(default_group_id)
-            if not self.output_zeroes and count == 0:
-                continue
-            output_file.write("%s\t%.2f\n" % (feature_id, count))
+            with open(self.output_stats_file_name, "w") as f:
+                f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
+                f.write("__no_feature\t%d\n" % self.not_assigned_reads)
+                f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
+                f.write("__usable\t%d\n" % self.reads_for_tpm)
 
-        with open(self.output_stats_file_name, "w") as f:
-            f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
-            f.write("__no_feature\t%d\n" % self.not_assigned_reads)
-            f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
-            f.write("__usable\t%d\n" % self.reads_for_tpm)
+    def dump_grouped(self, all_features, all_groups):
+        with (self.get_output_file_handler() as output_file,
+              self.get_linear_output_file_handler() as linear_output_file):
+            assert linear_output_file is not None
 
-    def dump_grouped(self, output_file, all_features, all_groups):
-        output_file.write(self.format_header(all_groups))
-        default_group_id = list(self.group_numeric_ids.values())[0]
-        for feature_id in all_features:
-            row_count = 0
-            for group_id in self.feature_counter[feature_id].data.keys():
-                count = self.feature_counter[feature_id].data[group_id]
-                row_count += count
-            if not self.output_zeroes and row_count == 0:
-                continue
-            count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in
-                            all_groups]
-            output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+            output_file.write(self.format_header(all_groups))
+            for feature_id in all_features:
+                row_count = 0
+                for group_id in self.feature_counter[feature_id].data.keys():
+                    count = self.feature_counter[feature_id].data[group_id]
+                    linear_output_file.write("%s\t%s\t%.2f" % (feature_id, self.ordered_groups[group_id], count))
+                    row_count += count
+                if not self.output_zeroes and row_count == 0:
+                    continue
+                count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in
+                                all_groups]
+                output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
     def convert_counts_to_tpm(self, normalization_str=NormalizationMethod.simple.name):
         normalization = NormalizationMethod[normalization_str]
@@ -436,7 +450,7 @@ class ProfileFeatureCounter(AbstractCounter):
         if ignore_read_groups:
             self.group_numeric_ids = {AbstractReadGrouper.default_group_id: 0}
         else:
-            self.group_numeric_ids = OrderedDict()
+            self.group_numeric_ids = {}
         self.current_group_id = 1
 
     def add_read_info_from_profile(self, gene_feature_profile, feature_property_map,
