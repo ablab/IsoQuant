@@ -796,8 +796,11 @@ class TestMode(argparse.Action):
         return all([result in log for result in correct_results])
 
 
-def main(args):
-    args, parser = parse_args(args)
+def main(cmd_args):
+    args, parser = parse_args(cmd_args)
+    if not cmd_args:
+        parser.print_usage()
+        exit(0)
     set_logger(args, logger)
     args = check_and_load_args(args, parser)
     create_output_dirs(args)
