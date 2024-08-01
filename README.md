@@ -757,10 +757,16 @@ If `--count_exons` is set, exon and intron counts will be produced:
 * `SAMPLE_ID.intron_counts.tsv` - reference intron inclusion/exclusion read counts;
 
 If `--read_group` is set, the per-group expression values for reference features will be also computed:
+
+In matrix format (feature X groups)
 * `SAMPLE_ID.gene_grouped_tpm.tsv`
 * `SAMPLE_ID.transcript_grouped_tpm.tsv`
 * `SAMPLE_ID.gene_grouped_counts.tsv`
 * `SAMPLE_ID.transcript_grouped_counts.tsv`
+
+In linear format (feature, group, value(s) per each line)
+* `SAMPLE_ID.gene_grouped_counts_linear.tsv`
+* `SAMPLE_ID.transcript_grouped_counts_linear.tsv`
 * `SAMPLE_ID.exon_grouped_counts.tsv`
 * `SAMPLE_ID.intron_grouped_counts.tsv`
 
