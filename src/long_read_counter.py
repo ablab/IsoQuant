@@ -328,30 +328,39 @@ class AssignedFeatureCounter(AbstractCounter):
                 self.feature_counter[feature_id].data[g] = 0.0
 
         with self.get_output_file_handler() as output_file:
-            output_file.write(self.format_header(all_groups))
-            default_group_id = list(self.group_numeric_ids.values())[0]
-            for feature_id in all_features:
-                if self.ignore_read_groups:
-                    count = self.feature_counter[feature_id].get(default_group_id)
-                    if not self.output_zeroes and count == 0:
-                        continue
-                    output_file.write("%s\t%.2f\n" % (feature_id, count))
-                else:
-                    row_count = 0
-                    for group_id in self.feature_counter[feature_id].data.keys():
-                        count = self.feature_counter[feature_id].data[group_id]
-                        row_count += count
-                    if not self.output_zeroes and row_count == 0:
-                        continue
-                    count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in all_groups]
-                    output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+            if self.ignore_read_groups:
+                self.dump_ungrouped(output_file, all_features)
+            else:
+                self.dump_grouped(output_file, all_features, all_groups)
 
-        if self.ignore_read_groups:
-            with open(self.output_stats_file_name, "w") as f:
-                f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
-                f.write("__no_feature\t%d\n" % self.not_assigned_reads)
-                f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
-                f.write("__usable\t%d\n" % self.reads_for_tpm)
+    def dump_ungrouped(self, output_file, all_features):
+        default_group_id = list(self.group_numeric_ids.values())[0]
+        output_file.write(self.format_header(self.group_numeric_ids.keys()))
+        for feature_id in all_features:
+            count = self.feature_counter[feature_id].get(default_group_id)
+            if not self.output_zeroes and count == 0:
+                continue
+            output_file.write("%s\t%.2f\n" % (feature_id, count))
+
+        with open(self.output_stats_file_name, "w") as f:
+            f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
+            f.write("__no_feature\t%d\n" % self.not_assigned_reads)
+            f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
+            f.write("__usable\t%d\n" % self.reads_for_tpm)
+
+    def dump_grouped(self, output_file, all_features, all_groups):
+        output_file.write(self.format_header(all_groups))
+        default_group_id = list(self.group_numeric_ids.values())[0]
+        for feature_id in all_features:
+            row_count = 0
+            for group_id in self.feature_counter[feature_id].data.keys():
+                count = self.feature_counter[feature_id].data[group_id]
+                row_count += count
+            if not self.output_zeroes and row_count == 0:
+                continue
+            count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in
+                            all_groups]
+            output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
 
     def convert_counts_to_tpm(self, normalization_str=NormalizationMethod.simple.name):
         normalization = NormalizationMethod[normalization_str]
