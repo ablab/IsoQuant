@@ -9,7 +9,7 @@
 
 
 
-# IsoQuant 3.4 manual
+# IsoQuant 3.5 manual
 
 [New IsoQuant documentation](https://ablab.github.io/IsoQuant/) is available. This README will be removed at some point.
 

@@ -1,5 +1,16 @@
 # IsoQuant changelog
 
+## IsoQuant 3.5.0, 2 August 2024
+
+- New visualization software developed by @jackfreeman88. See more [here](https://ablab.github.io/IsoQuant/visualization.html).
+
+- Dramatically reduce RAM consumption for grouped counts, about 10-20x decrease on datasets with large number of groups.
+  Important fix for single-cell data processing. Should fix [#189](https://github.com/ablab/IsoQuant/issues/189).
+
+- Fix [#195](https://github.com/ablab/IsoQuant/issues/195): output GTF contained very similar isoforms and estimated their expression as 0.
+
+- New documentation is now available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
+
 ## IsoQuant 3.4.2, 13 July 2024
 
 - Dramatically reduce RAM consumption.
