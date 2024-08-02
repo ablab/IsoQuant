@@ -14,7 +14,7 @@
 1.2. [Supported reference data](#sec1.2)</br>
 2. [Installation](#sec2)</br>
 2.1. [Installing from conda](#sec2.1)</br>
-2.2. [Manual installation and requirements](#sec2.2)</br>
+2.2. [Installation from GitHub](#sec2.2)</br>
 2.3. [Verifying your installation](#sec2.3)</br>
 3. [Running IsoQuant](#sec3)</br>
 3.1. [IsoQuant input](#sec3.1)</br>
@@ -92,7 +92,7 @@ splice site correction and abundance quantification for reference genes/transcri
 Latest IsoQuant version can be downloaded from [https://github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
 
 #### IsoQuant pipeline
-![Pipeline](figs/isoquant_pipeline.png)
+![Pipeline](docs/isoquant_pipeline.png)
 
 <a name="sec1.1"></a>
 ## Supported data types
@@ -142,11 +142,11 @@ You will also need
 ## Installing from conda
 IsoQuant can be installed with conda:
 ```bash
-conda install -c bioconda isoquant
+conda create -c conda-forge -c bioconda -n isoquant python=3.8 isoquant
 ```
 
 <a name="sec2.2"></a>
-## Manual installation and requirements
+## Installing from GitHub
 To obtain IsoQuant you can download repository and install requirements.  
 Clone IsoQuant repository and switch to the latest release:
 ```bash
@@ -271,36 +271,6 @@ Both sub-folders will contain predicted transcript models and abundance tables.
 Abundance table for `Experiment2` with have columns "Sample1" and "Sample2".
 
 Note, that  `--bam`, `--fastq` and `--label` options are not compatible with `--yaml`.
-See more in [examples](#examples).
-
-
-### Specifying input data via dataset description file (deprecated)
-
-This option is deprecated since version 3.4 and will be removed later. To process multiple experiments, please use `--yaml` instead.
-
-A dataset description file can be provided via `--fastq_list` or `--bam_list` (see description below).
-A distinct output folder with individual GTFs and abundance tables will be generated for each experiment.
-
-Input files should be provided one per line. Experiments should be separated by blank lines or experiment names
-starting with #. You can also set a specific label for each listed file using colon. For example:
-
-```
-#EXPERIMENT1
-/PATH/TO/FILE1A.fastq:SAMPLE_A
-/PATH/TO/FILE2A.fastq:SAMPLE_A
-/PATH/TO/FILE1B.fastq:SAMPLE_B
-/PATH/TO/FILE2B.fastq:SAMPLE_B
-#EXPERIMENT2
-/PATH/TO/FILE3.fastq:SAMPLE_C1
-/PATH/TO/FILE4.fastq:SAMPLE_C2
-```
-
-Output sub-folders will be named `EXPERIMENT1` and `EXPERIMENT2`.
-Abundance tables will have specified labels as column names.
-If you want to group multiple files as a single sample within the experiment, use identical labels.
-
-
-Note, that  `--label` option has no effect in this case.
 See more in [examples](#examples).
 
 
@@ -907,16 +877,16 @@ In addition, it contains `canonical` property if `--check_canonical` is set.
 
 ### Event classification figures
 #### Consistent match classifications
-![Correct](figs/correct_match.png) <br><br>
+![Correct](docs/correct_match.png) <br><br>
 
 #### Misalignment classifications
-![Misalignment](figs/misalignment.png) <br><br>
+![Misalignment](docs/misalignment.png) <br><br>
 
 #### Inconsistency classifications
-![Inconsistent](figs/inconsistent.png) <br><br>
+![Inconsistent](docs/inconsistent.png) <br><br>
 
 #### PolyA classifications
-![PolyA](figs/polya.png)
+![PolyA](docs/polya.png)
 
 <a name="sec4"></a>
 ## Citation
