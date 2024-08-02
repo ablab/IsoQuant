@@ -1,4 +1,4 @@
-name: docs
+name: User manual
 
 on:
   workflow_dispatch:

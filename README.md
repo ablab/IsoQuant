@@ -4,24 +4,15 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
 [![UnitTests](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml/badge.svg)](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml)
+[![User manual](https://github.com/ablab/IsoQuant/actions/workflows/docs.yml/badge.svg)](https://ablab.github.io/IsoQuant/)
+
 
 
 
 # IsoQuant 3.4 manual
 
-1. [About IsoQuant](#sec1) </br>
-1.1. [Supported data types](#sec1.1)</br>
-1.2. [Supported reference data](#sec1.2)</br>
-2. [Installation](#sec2)</br>
-2.1. [Installing from conda](#sec2.1)</br>
-2.2. [Installation from GitHub](#sec2.2)</br>
-2.3. [Verifying your installation](#sec2.3)</br>
-3. [Running IsoQuant](#sec3)</br>
-3.1. [IsoQuant input](#sec3.1)</br>
-3.2. [Command line options](#sec3.2)</br>
-3.3. [IsoQuant output](#sec3.3)</br>
-4. [Citation](#sec4)</br>
-5. [Feedback and bug reports](#sec5)</br>
+[New IsoQuant documentation](https://ablab.github.io/IsoQuant/) is available. This README will be removed at some point.
+
 
 **Quick start:**  
 
@@ -74,6 +65,21 @@
 
 * If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
 
+
+1. [About IsoQuant](#sec1) </br>
+1.1. [Supported data types](#sec1.1)</br>
+1.2. [Supported reference data](#sec1.2)</br>
+2. [Installation](#sec2)</br>
+2.1. [Installing from conda](#sec2.1)</br>
+2.2. [Installation from GitHub](#sec2.2)</br>
+2.3. [Verifying your installation](#sec2.3)</br>
+3. [Running IsoQuant](#sec3)</br>
+3.1. [IsoQuant input](#sec3.1)</br>
+3.2. [Command line options](#sec3.2)</br>
+3.3. [IsoQuant output](#sec3.3)</br>
+4. [Citation](#sec4)</br>
+5. [Feedback and bug reports](#sec5)</br>
+
 <a name="sec1"></a>
 # About IsoQuant
 
@@ -90,6 +96,8 @@ splice site correction and abundance quantification for reference genes/transcri
 2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.
 
 Latest IsoQuant version can be downloaded from [https://github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
+
+New IsoQuant documentation is available [here](https://ablab.github.io/IsoQuant/).
 
 #### IsoQuant pipeline
 ![Pipeline](docs/isoquant_pipeline.png)
