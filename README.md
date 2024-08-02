@@ -66,6 +66,8 @@
 * If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
 
 
+## Table of contents
+
 1. [About IsoQuant](#sec1) </br>
 1.1. [Supported data types](#sec1.1)</br>
 1.2. [Supported reference data](#sec1.2)</br>
@@ -795,8 +797,11 @@ Tab-separated values, the columns are:
     - `unique` - reads was unambiguously assigned to a single known isoform;
     - `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
     - `inconsistent` - read was matched with inconsistencies, closest match(es) are reported;
+    - `inconsistent_non_intronic` - read was matched with inconsistencies, which do not affect intron chain (e.g. olly TSS/TES);
+    - `inconsistent_ambiguous`  - read was matched with inconsistencies equally well to two or more isoforms;
     - `ambiguous` - read was assigned to multiple isoforms equally well;
-    - `noninfomative` - reads is intronic/intergenic.
+    - `noninfomative` - reads is intronic or has an insignificant overlap with a known gene;
+    - `intergenic` - read is intergenic.
 * `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible events are (see graphical representation below):
     - consistent events:
         - `none` / `.` / `undefined` - no special event detected;
@@ -841,8 +846,10 @@ Tab-separated values, the columns are:
         - `alternative_tss` - alternative transcription start site.
 * `exons` - list of coordinates for normalized read exons (1-based, indels and polyA exons are excluded);
 * `additional` - field for supplementary information, which may include:
+    - `gene_assignment` - Gene assignment classification; possible values are the same as for transcript classification.
     - `PolyA` - True if poly-A tail is detected;
-    - `Canonical` - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use `--check_canonical`)
+    - `Canonical` - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use `--check_canonical`);
+    - `Classification` - SQANTI-like assignment classification.
 
 Note, that a single read may occur more than once if assigned ambiguously.
 
@@ -853,7 +860,14 @@ Tab-separated values, the columns are:
 * `feature_id` - genomic feature ID;
 * `TPM` or `count` - expression value (float).
 
-For grouped counts, each column contains expression values of a respective group.
+For grouped counts, each column contains expression values of a respective group (matrix representation).
+
+Beside count matrix, transcript and gene grouped counts are also printed in a linear format,
+in which each line contains 3 tab-separated values:
+
+* `feature_id` - genomic feature ID;
+* `group_id` - group name;
+* `count` - read count of the feature in this group. 
 
 #### Exon and intron count format
 
@@ -880,14 +894,21 @@ Tab-separated values, the columns are:
 
 Constructed transcript models are stored in usual [GTF format](https://www.ensembl.org/info/website/upload/gff.html).
 Contains `exon`, `transcript` and `gene` features.
-Transcript ids have the following format: `transcript_###.TYPE`,
-where `###` is the unique number (not necessarily consecutive) and TYPE can be one of the following:
-* known - previously annotated transcripts;
+
+Known genes and transcripts are reposted with their reference IDs. 
+Novel genes IDs have format `novel_gene_XXX_###` and novel transcript IDs are formatted as `transcript###.XXX.TYPE`,
+where `###` is the unique number (not necessarily consecutive), `XXX` is the chromosome name and TYPE can be one of the following:
+
 * nic - novel in catalog, new transcript that contains only annotated introns;
 * nnic - novel not in catalog, new transcript that contains unannotated introns.
 
-The `attribute` field also contains `gene_id` (either matches reference gene id or can be `novel_gene_###`), `reference_gene_id` (same value) and `reference_transcript_id` (either original isoform id or `novel`).
-In addition, it contains `canonical` property if `--check_canonical` is set.
+Each exon also has a unique ID stored in `exon_id` attribute.
+
+In addition, each transcript contains `canonical` property if `--check_canonical` is set.
+
+If `--sqanti_output` option is set, each novel transcript also has a `similar_reference_id` field containing ID of
+a most similar reference isoform and `alternatives` attribute, which indicates the exact differences between
+this novel transcript and the similar reference transcript.
 
 ### Event classification figures
 #### Consistent match classifications
