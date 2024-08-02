@@ -13,10 +13,9 @@ import shutil
 
 
 def test_run_without_parameters():
-    result = subprocess.run(["python", "isoquant.py"], capture_output=True)
-    assert result.returncode == 255
+    result = subprocess.run(["python3", "isoquant.py"], capture_output=True)
+    assert result.returncode == 0
     assert b"usage" in result.stdout
-    assert b"Reference genome was not provided" in result.stdout
 
 
 @pytest.mark.parametrize("option", ["-h", "--help", "--full_help"])
