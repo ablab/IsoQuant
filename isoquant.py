@@ -319,7 +319,9 @@ def check_and_load_args(args, parser):
         args.genedb_output = args.output
     elif not os.path.exists(args.genedb_output):
         os.makedirs(args.genedb_output)
-    if args.genedb.lower().endswith("db"):
+    if not args.genedb:
+        args.genedb_filename = None
+    elif args.genedb.lower().endswith("db"):
         args.genedb_filename = args.genedb
     else:
         args.genedb_filename = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".db")
