@@ -13,20 +13,6 @@
 
 [New IsoQuant documentation](https://ablab.github.io/IsoQuant/) is available. This README will be removed at some point.
 
-1. [About IsoQuant](#sec1) </br>
-1.1. [Supported data types](#sec1.1)</br>
-1.2. [Supported reference data](#sec1.2)</br>
-2. [Installation](#sec2)</br>
-2.1. [Installing from conda](#sec2.1)</br>
-2.2. [Manual installation and requirements](#sec2.2)</br>
-2.3. [Verifying your installation](#sec2.3)</br>
-3. [Running IsoQuant](#sec3)</br>
-3.1. [IsoQuant input](#sec3.1)</br>
-3.2. [Command line options](#sec3.2)</br>
-3.3. [IsoQuant output](#sec3.3)</br>
-4. [Citation](#sec4)</br>
-5. [Feedback and bug reports](#sec5)</br>
-
 
 **Quick start:**  
 
@@ -93,9 +79,9 @@
 3.1. [IsoQuant input](#sec3.1)</br>
 3.2. [Command line options](#sec3.2)</br>
 3.3. [IsoQuant output](#sec3.3)</br>
-3.4. [Visualization](#sec3.4)</br>
-4. [Citation](#sec4)</br>
-5. [Feedback and bug reports](#sec5)</br>
+4. [Visualization](#sec4)</br>
+5. [Citation](#sec5)</br>
+6. [Feedback and bug reports](#sec6)</br>
 
 <a name="sec1"></a>
 # About IsoQuant
@@ -938,7 +924,7 @@ this novel transcript and the similar reference transcript.
 #### PolyA classifications
 ![PolyA](docs/polya.png)
 
-<a name="sec3.4"></a>
+<a name="sec4"></a>
 
 ## Visualization
 
@@ -979,13 +965,13 @@ The visualization tool generates the following plots based on the IsoQuant outpu
 
 These visualizations provide valuable insights into transcript diversity, splicing patterns, and the overall quality of the IsoQuant analysis.
 
-<a name="sec4"></a>
+<a name="sec5"></a>
 ## Citation
 The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
 
 To try IsoQuant you can use the data that was used in the publication [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
 
-<a name="sec5"></a>
+<a name="sec6"></a>
 ## Feedback and bug reports
 Your comments, bug reports, and suggestions are very welcome. They will help us to further improve IsoQuant. If you have any troubles running IsoQuant, please send us `isoquant.log` from the `<output_dir>` directory.
 
