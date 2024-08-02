@@ -13,6 +13,7 @@ nav:
      - Output files: output.md
      - File formats: formats.md
      - Assignment classification: classification.md
+  - Visualization: visualization.md
   - Citation: citation.md
   - Feedback: feedback.md
 
