@@ -2,7 +2,7 @@
 
 ## IsoQuant 3.5.0, 2 August 2024
 
-- New visualization software developed by @jackfreeman88. See more [here](https://ablab.github.io/IsoQuant/visualization.html).
+- New visualization software developed by [@jackfreeman88](https://github.com/jackfreeman88). See more [here](https://ablab.github.io/IsoQuant/visualization.html).
 
 - Dramatically reduce RAM consumption for grouped counts, about 10-20x decrease on datasets with large number of groups.
   Important fix for single-cell data processing. Should fix [#189](https://github.com/ablab/IsoQuant/issues/189).
