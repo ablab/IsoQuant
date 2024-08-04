@@ -24,6 +24,7 @@ from .serialization import (
 )
 from .isoform_assignment import (match_subtype_to_str_with_additional_info,
                                  ReadAssignment,
+                                 BasicReadAssignment,
                                  MatchClassification,
                                  ReadAssignmentType)
 from .gene_info import GeneInfo
@@ -145,12 +146,9 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
         read_assignment.serialize(self.dumper)
 
 
-class TmpFileAssignmentLoader:
-    def __init__(self, input_file_name, genedb, chr_record):
+class BaseTmpFileAssignmentLoader:
+    def __init__(self, input_file_name):
         self.loader = open(input_file_name, "rb")
-        self.genedb = genedb
-        self.chr_record = chr_record
-        self.current_gene_info = None
         self.current_id = None
         self._read_id()
 
@@ -169,6 +167,14 @@ class TmpFileAssignmentLoader:
     def is_read_assignment(self):
         return self.current_id == TmpFileAssignmentPrinter.READ_ASSIGNMENT
 
+
+class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
+    def __init__(self, input_file_name, genedb, chr_record):
+        BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
+        self.genedb = genedb
+        self.chr_record = chr_record
+        self.current_gene_info = None
+
     def get_object(self):
         if self.is_gene_info():
             self.current_gene_info = GeneInfo.deserialize(self.loader, self.genedb)
@@ -181,6 +187,23 @@ class TmpFileAssignmentLoader:
         elif self.is_read_assignment():
             assert self.current_gene_info is not None
             assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info)
+            self._read_id()
+            return assignment
+        else:
+            return None
+
+
+class QuickTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
+    def __init__(self, input_file_name):
+        BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
+
+    def get_object(self):
+        if self.is_gene_info():
+            GeneInfo.deserialize(self.loader, None)
+            self._read_id()
+            return None
+        elif self.is_read_assignment():
+            assignment = BasicReadAssignment.deserialize_from_read_assignment(self.loader)
             self._read_id()
             return assignment
         else:

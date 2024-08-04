@@ -17,9 +17,9 @@ from concurrent.futures import ProcessPoolExecutor
 
 import gffutils
 import pysam
-from pyfaidx import Fasta, Faidx, UnsupportedCompressionFormat
+from pyfaidx import Fasta, UnsupportedCompressionFormat
 
-from .common import proper_plural_form
+from .common import proper_plural_form, SimpleIDDistributor
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .stats import EnumStats
@@ -45,7 +45,8 @@ from .assignment_io import (
     SqantiTSVPrinter,
     BasicTSVAssignmentPrinter,
     TmpFileAssignmentPrinter,
-    TmpFileAssignmentLoader,
+    NormalTmpFileAssignmentLoader,
+    QuickTmpFileAssignmentLoader
 )
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
@@ -100,6 +101,12 @@ def collect_reads_in_parallel(sample, chr_id, args):
     group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
     bamstat_file = "{}_{}_bamstat".format(sample.out_raw_file, chr_id)
     processed_reads = []
+    if args.high_memory:
+        def collect_assignment_info(ra): return BasicReadAssignment(ra)
+        def load_assignment_info(ra): return ra
+    else:
+        def collect_assignment_info(ra): return ra.read_id
+        def load_assignment_info(ra): return ra.read_id
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
@@ -108,13 +115,13 @@ def collect_reads_in_parallel(sample, chr_id, args):
             for g in open(group_file):
                 read_grouper.read_groups.add(g.strip())
             alignment_stat_counter = EnumStats(bamstat_file)
-            loader = ReadAssignmentLoader(save_file, None, None, None)
+            loader = BasicReadAssignmentLoader(save_file)
             while loader.has_next():
-                gene_info, assignment_storage = loader.get_next()
-                for a in assignment_storage:
-                    processed_reads.append(BasicReadAssignment(a))
+                for read_assignment in loader.get_next():
+                    if read_assignment is None: continue
+                    processed_reads.append(load_assignment_info(read_assignment))
             logger.info("Loaded data for " + chr_id)
-            return processed_reads, read_grouper.read_groups, alignment_stat_counter
+            return read_grouper.read_groups, alignment_stat_counter, processed_reads
         else:
             logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
 
@@ -132,7 +139,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
         tmp_printer.add_gene_info(gene_info)
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
-            processed_reads.append(BasicReadAssignment(read_assignment))
+            processed_reads.append(collect_assignment_info(read_assignment))
     with open(group_file, "w") as group_dump:
         for g in read_grouper.read_groups:
             group_dump.write("%s\n" % g)
@@ -143,7 +150,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
     for bam in bam_file_pairs:
         bam[0].close()
 
-    return processed_reads, read_grouper.read_groups, alignment_collector.alignment_stat_counter
+    return read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads
 
 
 class ReadAssignmentLoader:
@@ -151,7 +158,7 @@ class ReadAssignmentLoader:
         logger.info("Loading read assignments from " + save_file_name)
         assert os.path.exists(save_file_name)
         self.save_file_name = save_file_name
-        self.unpickler = TmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
+        self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
         self.multimapped_chr_dict = multimapped_chr_dict
 
     def has_next(self):
@@ -188,6 +195,27 @@ class ReadAssignmentLoader:
         return gene_info, assignment_storage
 
 
+class BasicReadAssignmentLoader:
+    def __init__(self, save_file_name):
+        logger.info("Loading read assignments from " + save_file_name)
+        assert os.path.exists(save_file_name)
+        self.save_file_name = save_file_name
+        self.unpickler = QuickTmpFileAssignmentLoader(save_file_name)
+
+    def has_next(self):
+        return self.unpickler.has_next()
+
+    def get_next(self):
+        if not self.unpickler.has_next():
+            return
+
+        assert self.unpickler.is_gene_info()
+        self.unpickler.get_object()
+
+        while self.unpickler.is_read_assignment():
+            yield self.unpickler.get_object()
+
+
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
     construct_models = not args.no_model_construction
@@ -213,7 +241,6 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
         return read_stat, transcript_stat
 
-
     if args.genedb:
         gffutils_db = gffutils.FeatureDB(args.genedb)
     else:
@@ -222,11 +249,20 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
-    tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, check_canonical=args.check_canonical) \
-        if construct_models else VoidTranscriptPrinter()
-    tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, gtf_suffix=".extended_annotation.gtf",
-                                          output_r2t=False, check_canonical=args.check_canonical) \
-        if (construct_models and args.genedb) else VoidTranscriptPrinter()
+    transcript_id_distributor = SimpleIDDistributor()
+    exon_id_distributor = SimpleIDDistributor()
+
+    if construct_models:
+        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_distributor,
+                                     check_canonical=args.check_canonical)
+    else:
+        tmp_gff_printer = VoidTranscriptPrinter()
+    if construct_models and args.genedb:
+        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_distributor,
+                                              gtf_suffix=".extended_annotation.gtf",
+                                              output_r2t=False, check_canonical=args.check_canonical)
+    else:
+        tmp_extended_gff_printer = VoidTranscriptPrinter()
 
     sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args)) \
         if args.sqanti_output else VoidTranscriptPrinter()
@@ -245,7 +281,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
         if construct_models:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
-                                                           aggregator.transcript_model_global_counter)
+                                                           aggregator.transcript_model_global_counter, transcript_id_distributor)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
@@ -307,18 +343,18 @@ class ReadAssignmentAggregator:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
                                                     self.args.gene_quantification,
                                                     complete_feature_list=self.gene_set,
-                                                    ignore_read_groups=True, output_zeroes=True)
+                                                    output_zeroes=True)
             self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
                                                                 self.args.transcript_quantification,
                                                                 complete_feature_list=self.transcript_set,
-                                                                ignore_read_groups=True, output_zeroes=True)
+                                                                output_zeroes=True)
             self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
 
         self.transcript_model_global_counter = CompositeCounter([])
         if not self.args.no_model_construction:
             self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
                                                                       self.args.transcript_quantification,
-                                                                      ignore_read_groups=True, output_zeroes=False)
+                                                                      output_zeroes=False)
             self.transcript_model_global_counter.add_counters([self.transcript_model_counter])
 
         if self.args.count_exons and self.args.genedb:
@@ -443,11 +479,11 @@ class DatasetProcessor:
             if not self.args.keep_tmp:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
 
-        total_alignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
+        total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
-        polya_fraction = polya_found / total_alignments if total_alignments > 0 else 0.0
-        logger.info("Total alignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
-                    (total_alignments, polya_found, polya_fraction * 100.0))
+        polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
+        logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
+                    (total_assignments, polya_found, polya_fraction * 100.0))
         if (polya_fraction < self.args.low_polya_percentage_threshold and
                 self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
@@ -473,8 +509,17 @@ class DatasetProcessor:
                 os.remove(f)
         logger.info("Processed experiment " + sample.prefix)
 
+    def get_chr_list(self):
+        chr_ids = sorted(
+            self.reference_record_dict.keys(),
+            key=lambda x: len(self.reference_record_dict[x]),
+            reverse=True,
+        )
+        return chr_ids
+
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
+        chr_ids = self.get_chr_list()
         info_file = sample.out_raw_file + "_info"
         lock_file = sample.out_raw_file + "_lock"
 
@@ -485,17 +530,9 @@ class DatasetProcessor:
             else:
                 os.remove(lock_file)
 
-        chr_ids = sorted(
-            self.reference_record_dict.keys(),
-            key=lambda x: len(self.reference_record_dict[x]),
-            reverse=True,
-        )
         if not self.args.resume:
             clean_locks(chr_ids, sample.out_raw_file, reads_collected_lock_file_name)
             clean_locks(chr_ids, sample.out_raw_file, reads_processed_lock_file_name)
-
-        all_read_groups = set()
-        multimapped_reads = defaultdict(list)
 
         read_gen = (
             collect_reads_in_parallel,
@@ -504,27 +541,72 @@ class DatasetProcessor:
             itertools.repeat(self.args),
         )
 
+        all_read_groups = set()
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
-
-                for storage, read_groups, alignment_stats in results:
-                    for basic_read_assignment in storage:
-                        multimapped_reads[basic_read_assignment.read_id].append(basic_read_assignment)
-                    all_read_groups.update(read_groups)
-                    self.alignment_stat_counter.merge(alignment_stats)
         else:
-            for storage, read_groups, alignment_stats in map(*read_gen):
-                for basic_read_assignment in storage:
+            results = map(*read_gen)
+
+        multimapped_reads = defaultdict(list)
+        multimappers_counts = defaultdict(int)
+        for read_groups, alignment_stats, processed_reads in results:
+            all_read_groups.update(read_groups)
+            self.alignment_stat_counter.merge(alignment_stats)
+            if self.args.high_memory:
+                for basic_read_assignment in processed_reads:
                     multimapped_reads[basic_read_assignment.read_id].append(basic_read_assignment)
-                all_read_groups.update(read_groups)
-                self.alignment_stat_counter.merge(alignment_stats)
+            else:
+                for read_id in processed_reads: multimappers_counts[read_id] += 1
+
+        unique_assignments, polya_unique_assignments = 0, 0
+        if not self.args.high_memory:
+            multimapped_reads, unique_assignments, polya_unique_assignments \
+                = self.prepare_multimapper_dict(chr_ids, sample, multimappers_counts)
+        total_assignments, polya_assignments = self.resolve_multimappers(chr_ids, sample, multimapped_reads)
+        total_assignments += unique_assignments
+        polya_assignments += polya_unique_assignments
 
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             self.alignment_stat_counter.add(AlignmentType.unaligned, bam.unmapped)
         self.alignment_stat_counter.print_start("Alignments collected, overall alignment statistics:")
 
+        info_dumper = open(info_file, "wb")
+        write_int(total_assignments, info_dumper)
+        write_int(polya_assignments, info_dumper)
+        write_list(list(all_read_groups), info_dumper, write_string)
+        info_dumper.close()
+        open(lock_file, "w").close()
+
+        if total_assignments == 0:
+            logger.warning("No reads were assigned to isoforms, check your input files")
+        else:
+            logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
+                        (total_assignments, 100 * polya_assignments / total_assignments))
+
+    def prepare_multimapper_dict(self, chr_ids, sample, multimappers_counts):
+        logger.info("Counting multimapped reads")
+        multimapped_reads = defaultdict(list)
+        unique_assignments = 0
+        polya_unique_assignments = 0
+
+        for chr_id in chr_ids:
+            chr_dump_file = sample.out_raw_file + "_" + chr_id
+            loader = BasicReadAssignmentLoader(chr_dump_file)
+            while loader.has_next():
+                for read_assignment in loader.get_next():
+                    if read_assignment is None:
+                        continue
+                    if (read_assignment.read_id in multimappers_counts and
+                            multimappers_counts[read_assignment.read_id] == 1):
+                        unique_assignments += 1
+                        polya_unique_assignments += 1 if read_assignment.polyA_found else 0
+                        continue
+                    multimapped_reads[read_assignment.read_id].append(read_assignment)
+        return multimapped_reads, unique_assignments, polya_unique_assignments
+
+    def resolve_multimappers(self, chr_ids, sample, multimapped_reads):
         logger.info("Resolving multimappers")
         multimap_resolver = MultimapResolver(self.args.multimap_strategy)
         multimap_dumper = {}
@@ -552,25 +634,11 @@ class DatasetProcessor:
             write_int(TERMINATION_INT, multimap_dumper[chr_id])
             multimap_dumper[chr_id].close()
 
-        info_dumper = open(info_file, "wb")
-        write_int(total_assignments, info_dumper)
-        write_int(polya_assignments, info_dumper)
-        write_list(list(all_read_groups), info_dumper, write_string)
-        info_dumper.close()
-        open(lock_file, "w").close()
-
-        if total_assignments == 0:
-            logger.warning("No reads were assigned to isoforms, check your input files")
-        else:
-            logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
-                        (total_assignments, 100 * polya_assignments / total_assignments))
+        logger.info("Multimappers resolved")
+        return total_assignments, polya_assignments
 
     def process_assigned_reads(self, sample, dump_filename):
-        chr_ids = sorted(
-            self.reference_record_dict.keys(),
-            key=lambda x: len(self.reference_record_dict[x]),
-            reverse=True
-        )
+        chr_ids = self.get_chr_list()
         logger.info("Processing assigned reads " + sample.prefix)
         logger.info("Transcript models construction is turned %s" %
                     ("off" if self.args.no_model_construction else "on"))
@@ -594,12 +662,13 @@ class DatasetProcessor:
             logger.info("  PolyA tails are required for novel monoexon transcripts to be reported: %s" % "yes")
             logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
 
+            exon_id_distributor = SimpleIDDistributor()
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, header=self.common_header, gzipped=self.args.gzipped
+                sample.out_dir, sample.prefix, exon_id_distributor, header=self.common_header, gzipped=self.args.gzipped
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
-                    sample.out_dir, sample.prefix,
+                    sample.out_dir, sample.prefix, exon_id_distributor,
                     gtf_suffix=".extended_annotation.gtf", output_r2t=False,
                     header=self.common_header
                 )
@@ -616,22 +685,16 @@ class DatasetProcessor:
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*model_gen, chunksize=1)
-
-                for read_stat_counter, tsc in results:
-                    for k, v in read_stat_counter.stats_dict.items():
-                        aggregator.read_stat_counter.stats_dict[k] += v
-
-                    if not self.args.no_model_construction:
-                        for k, v in tsc.stats_dict.items():
-                            transcript_stat_counter.stats_dict[k] += v
         else:
-            for read_stat_counter, tsc in map(*model_gen):
-                for k, v in read_stat_counter.stats_dict.items():
-                    aggregator.read_stat_counter.stats_dict[k] += v
+            results = map(*model_gen)
 
-                if not self.args.no_model_construction:
-                    for k, v in tsc.stats_dict.items():
-                        transcript_stat_counter.stats_dict[k] += v
+        for read_stat_counter, tsc in results:
+            for k, v in read_stat_counter.stats_dict.items():
+                aggregator.read_stat_counter.stats_dict[k] += v
+
+            if not self.args.no_model_construction:
+                for k, v in tsc.stats_dict.items():
+                    transcript_stat_counter.stats_dict[k] += v
 
         if not self.args.no_model_construction:
             self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)

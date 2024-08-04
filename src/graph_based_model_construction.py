@@ -11,16 +11,12 @@ from functools import cmp_to_key
 from enum import unique, Enum
 
 from .common import (
-    AtomicCounter,
     cmp,
     get_exons,
-    get_top_count,
     intersection_len,
     interval_len,
     junctions_from_blocks,
-    read_coverage_fraction,
     jaccard_similarity,
-    merge_ranges
 )
 from .assignment_io import ReadAssignmentType
 from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
@@ -50,7 +46,6 @@ class StrandnessReportingLevel(Enum):
 
 
 class GraphBasedModelConstructor:
-    transcript_id_counter = AtomicCounter()
     transcript_prefix = "transcript"
     known_transcript_suffix = ".known"
     nic_transcript_suffix = ".nic"
@@ -58,10 +53,11 @@ class GraphBasedModelConstructor:
     detected_known_isoforms = set()
     extended_transcript_ids = set()
 
-    def __init__(self, gene_info, chr_record, params, transcript_counter):
+    def __init__(self, gene_info, chr_record, params, transcript_counter, id_distributor):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
+        self.id_distributor = id_distributor
 
         self.strand_detector = StrandDetector(self.chr_record)
         self.intron_genes = defaultdict(set)
@@ -85,7 +81,7 @@ class GraphBasedModelConstructor:
         self.transcript2transcript = []
 
     def get_transcript_id(self):
-        return GraphBasedModelConstructor.transcript_id_counter.increment()
+        return self.id_distributor.increment()
 
     def set_gene_properties(self):
         intron_strands_dicts = defaultdict(lambda: defaultdict(int))
@@ -290,12 +286,12 @@ class GraphBasedModelConstructor:
         del self.internal_counter[transcript_id]
 
     def filter_transcripts(self):
-        filtered_storage = []
+        pre_filtered_storage = []
         to_substitute = self.detect_similar_isoforms(self.transcript_model_storage)
 
         for model in self.transcript_model_storage:
             if model.transcript_type == TranscriptModelType.known:
-                filtered_storage.append(model)
+                pre_filtered_storage.append(model)
                 continue
             # check coverage
             component_coverage = self.intron_graph.get_max_component_coverage(model.intron_path)
@@ -330,6 +326,22 @@ class GraphBasedModelConstructor:
 
             # TODO: correct ends for known
             self.correct_novel_transcript_ends(model, self.transcript_read_ids[model.transcript_id])
+            pre_filtered_storage.append(model)
+
+
+        filtered_storage = []
+        to_substitute = self.detect_similar_isoforms(pre_filtered_storage)
+
+        for model in pre_filtered_storage:
+            if model.transcript_type == TranscriptModelType.known:
+                filtered_storage.append(model)
+                continue
+
+            if model.transcript_id in to_substitute:
+                #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
+                self.delete_from_storage(model.transcript_id)
+                continue
+
             filtered_storage.append(model)
 
         self.transcript_model_storage = filtered_storage

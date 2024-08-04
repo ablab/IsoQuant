@@ -1,4 +1,3 @@
-
 ############################################################################
 # Copyright (c) 2022-2024 University of Helsinki
 # All Rights Reserved
@@ -109,6 +108,7 @@ def read_bool_array(inf, arr_size=1):
     return bool_arr
 
 
+# transforms a signed integer into an unsigned integer while using the 31st bit as a flag to remember the original sign
 def write_int_neg(val, outf):
     if val < 0:
         val = abs(val)

@@ -19,6 +19,7 @@ class OutputConfig:
         self.extended_annotation = None
         self.read_assignments = None
         self.input_gtf = gtf  # Initialize with the provided gtf flag
+        self.genedb_filename = None
         self.gtf_flag_needed = False  # Initialize flag to check if "--gtf" is needed.
         self.conditions = False
         self.gene_grouped_counts = None
@@ -65,6 +66,7 @@ class OutputConfig:
         self.log_details["gene_db"] = params.get("genedb")
         self.log_details["fastq_used"] = bool(params.get("fastq"))
         self.input_gtf = self.input_gtf or params.get("genedb")
+        self.genedb_filename = params.get("genedb_filename")
 
         processing_sample = params.get("prefix")
         if processing_sample:
@@ -221,25 +223,27 @@ class DictionaryBuilder:
     def parse_input_gtf(self):
         """Parses the GTF file using gffutils to build a detailed dictionary of genes, transcripts, and exons."""
         gene_dict = {}
-        if not self.config.input_gtf:
-            raise FileNotFoundError("Extended annotation GTF file is missing.")
-
-        input_gtf_path = self.config.input_gtf
+        if not self.config.genedb_filename:
+            # convert GFT to DB if we use previous IsoQuant runs
+            # remove this functionality later
+            tmp_file = tempfile.NamedTemporaryFile(suffix=".db")
+            self.config.genedb_filename = tmp_file.name
+            input_gtf_path = self.config.input_gtf
+            gffutils.create_db(
+                input_gtf_path,
+                dbfn=self.config.genedb_filename,
+                force=True,
+                keep_order=True,
+                merge_strategy="merge",
+                sort_attribute_values=True,
+                disable_infer_genes=True,
+                disable_infer_transcripts=True,
+            )
+            # raise FileNotFoundError("IsoQuant annotation DB file is missing.")
 
         try:
             # Create a temporary database
-            with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
-                db = gffutils.create_db(
-                    input_gtf_path,
-                    dbfn=tmp.name,
-                    force=True,
-                    keep_order=True,
-                    merge_strategy="merge",
-                    sort_attribute_values=True,
-                    disable_infer_genes=True,
-                    disable_infer_transcripts=True,
-                )
-
+            with gffutils.FeatureDB(self.config.genedb_filename) as db:
                 for gene in db.features_of_type("gene"):
                     gene_id = gene.id
                     gene_dict[gene_id] = {

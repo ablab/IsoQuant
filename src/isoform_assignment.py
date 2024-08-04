@@ -7,7 +7,7 @@
 
 import logging
 from enum import Enum, unique
-from src.common import AtomicCounter, junctions_from_blocks
+from src.common import AtomicIDDistributor, junctions_from_blocks
 from src.serialization import *
 from src.polya_finder import PolyAInfo
 
@@ -507,6 +507,37 @@ class BasicReadAssignment:
                     self.isoforms == other.isoforms)
         return False
 
+    def __getstate__(self):
+        return (self.assignment_id,
+                self.read_id,
+                self.chr_id,
+                self.start,
+                self.end,
+                self.genomic_region[0],
+                self.genomic_region[1],
+                self.multimapper,
+                self.polyA_found,
+                self.assignment_type.value,
+                self.gene_assignment_type.value,
+                self.penalty_score,
+                self.isoforms,
+                self.genes)
+
+    def __setstate__(self, state):
+        self.assignment_id = state[0]
+        self.read_id = state[1]
+        self.chr_id = state[2]
+        self.start = state[3]
+        self.end = state[4]
+        self.genomic_region = (state[5], state[6])
+        self.multimapper = state[7]
+        self.polyA_found = state[8]
+        self.assignment_type = ReadAssignmentType(state[9])
+        self.gene_assignment_type = ReadAssignmentType(state[10])
+        self.penalty_score = state[11]
+        self.isoforms = state[12]
+        self.genes = state[13]
+
     @classmethod
     def deserialize(cls, infile):
         read_assignment = cls.__new__(cls)
@@ -526,6 +557,51 @@ class BasicReadAssignment:
         read_assignment.isoforms = read_list(infile, read_string)
         return read_assignment
 
+    @classmethod
+    def deserialize_from_read_assignment(cls, infile):
+        read_assignment = cls.__new__(cls)
+        read_assignment.assignment_id = read_int(infile)
+        read_assignment.read_id = read_string(infile)
+        read_assignment.genomic_region = (read_int(infile), read_int(infile))
+        exons = read_list_of_pairs(infile, read_int)
+        read_assignment.start = exons[0][0]
+        read_assignment.end = exons[-1][1]
+        read_list_of_pairs(infile, read_int)
+        bool_arr = read_bool_array(infile, 3)
+        read_assignment.multimapper = bool_arr[0]
+        read_assignment.polyA_found = bool_arr[1]
+        read_int_neg(infile)
+        read_int_neg(infile)
+        read_int_neg(infile)
+        read_int_neg(infile)
+        read_string(infile)
+        read_string(infile)
+        read_string(infile)
+        read_assignment.chr_id = read_string(infile)
+        read_short_int(infile)
+        read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
+        read_assignment.gene_assignment_type = ReadAssignmentType(read_short_int(infile))
+
+        read_assignment.penalty_score = 0.0
+        isoform_matches = read_list(infile, IsoformMatch.deserialize)
+        gene_set = set()
+        isoform_set = set()
+        for m in isoform_matches:
+            read_assignment.penalty_score = min(read_assignment.penalty_score, isoform_matches[0].penalty_score)
+            if m.assigned_gene:
+                gene_set.add(m.assigned_gene)
+            if m.assigned_transcript:
+                isoform_set.add(m.assigned_transcript)
+        read_assignment.genes = list(gene_set)
+        read_assignment.isoforms = list(isoform_set)
+
+        read_dict(infile)
+        read_dict(infile)
+        read_short_int(infile)
+        read_list(infile, read_int_neg)
+        read_list(infile, read_int_neg)
+        return read_assignment
+
     def serialize(self, outfile):
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
@@ -543,7 +619,7 @@ class BasicReadAssignment:
 
 
 class ReadAssignment:
-    assignment_id_generator = AtomicCounter()
+    assignment_id_generator = AtomicIDDistributor()
 
     def __init__(self, read_id, assignment_type, match=None):
         self.assignment_id = ReadAssignment.assignment_id_generator.increment()
@@ -766,6 +842,11 @@ def is_matching_assignment(isoform_assignment):
                        MatchEventSubtype.terminal_site_match_left,
                        MatchEventSubtype.terminal_site_match_right,
                        MatchEventSubtype.terminal_site_match_left_precise,
-                       MatchEventSubtype.terminal_site_match_right_precise}
+                       MatchEventSubtype.terminal_site_match_right_precise,
+                       MatchEventSubtype.correct_polya_site_right,
+                       MatchEventSubtype.correct_polya_site_left,
+                       MatchEventSubtype.exon_elongation_left,
+                       MatchEventSubtype.exon_elongation_right}
+
         return all(m.event_type in allowed_set for m in isoform_assignment.isoform_matches[0].match_subclassifications)
     return False

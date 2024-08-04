@@ -1,0 +1,45 @@
+site_name: IsoQuant
+
+nav:
+  - Home: index.md
+  - Quick start: getting-started.md
+  - Installation: installation.md
+  - Supported data: data.md
+  - Running IsoQuant:
+    - Ways of providing input data: input.md
+    - Command line options: cmd.md
+    - Examples: examples.md
+  - IsoQuant output:
+     - Output files: output.md
+     - File formats: formats.md
+     - Assignment classification: classification.md
+  - Visualization: visualization.md
+  - Citation: citation.md
+  - Feedback: feedback.md
+
+
+use_directory_urls: false
+
+theme:
+  name: material
+  palette:
+    primary: white
+  features:
+    - content.code.copy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      use_pygments: true
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+
+plugins:
+  - macros:
+        module_name: docs/getversion
+

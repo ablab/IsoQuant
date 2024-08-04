@@ -28,6 +28,7 @@ RT_TRANSCRIPTS = "transcripts"
 RT_QUANTIFICATION_KNOWN = "quantification_known"
 RT_QUANTIFICATION_NOVEL = "quantification_novel"
 RT_QUANTIFICATION_GENES = "quantification_genes"
+RT_PERFORMANCE = "performance"
 
 
 log = logging.getLogger('GitHubRunner')
@@ -49,6 +50,9 @@ def set_logger(args, logger_instance):
 
 
 def load_tsv_config(config_file):
+    if not os.path.exists(config_file):
+        log.error("Config file %s was not found" % config_file)
+        return {}
     config_dict = {}
     for l in open(config_file):
         if l.startswith("#"):
@@ -72,6 +76,7 @@ def fix_path(config_file, path):
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="Output file name")
+    parser.add_argument("--additional_options", "-a", type=str, help="additional options for IsoQuant")
     parser.add_argument("config_file", metavar="config_file", type=str, help="configuration .info file")
 
     args = parser.parse_args()
@@ -82,6 +87,7 @@ def run_isoquant(args, config_dict):
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
     config_file = args.config_file
+    run_types = set(map(lambda x: x.strip().replace('"', ''), config_dict["run_type"].split(",")))
 
     run_name = config_dict["name"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)
@@ -123,18 +129,34 @@ def run_isoquant(args, config_dict):
         for o in opts:
             isoquant_command_list.append(o)
 
+    if args.additional_options:
+        isoquant_command_list += args.additional_options.split()
+
     log.info("IsoQuant command line: " + " ".join(isoquant_command_list))
-    result = subprocess.run(isoquant_command_list)
-    if result.returncode != 0:
-        log.error("IsoQuant exited with non-zero status: %d" % result.returncode)
-        return -11
+    if RT_PERFORMANCE in run_types:
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        run_sh_path = os.path.join(output_folder, "run_isoquant.sh")
+        run_sh = open(run_sh_path, "w")
+        run_sh.write(" ".join(isoquant_command_list))
+        run_sh.close()
+        performance_script = os.path.join(source_dir, "performance_counter.py")
+        result = subprocess.run(["python3", str(performance_script), "--cmd_file", str(run_sh_path), "-o", output_folder])
+        if result.returncode != 0:
+            log.error("IsoQuant exited with non-zero status: %d" % result.returncode)
+            return -12
+    else:
+        result = subprocess.run(isoquant_command_list)
+        if result.returncode != 0:
+            log.error("IsoQuant exited with non-zero status: %d" % result.returncode)
+            return -11
 
     return 0
 
 
-def check_value(etalon_value, output_value, name):
-    lower_bound = etalon_value * 0.99
-    upper_bound = etalon_value * 1.01
+def check_value(etalon_value, output_value, name, percent=0.01):
+    lower_bound = etalon_value * (1-percent)
+    upper_bound = etalon_value * (1+percent)
     exit_code = 0
     if output_value < 0:
         if output_value != etalon_value:
@@ -367,6 +389,34 @@ def run_quantification(args, config_dict, mode):
     return exit_code
 
 
+def run_performance_assessment(args, config_dict):
+    log.info('== Running computational perfromance assessment ==')
+    config_file = args.config_file
+    name = config_dict["name"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
+    stat_file = os.path.join(output_folder, "stats.tsv")
+    if not os.path.exists(stat_file):
+        log.warning("Performance statistics file was not found %s" % stat_file)
+
+    log.info('== Checking quality metrics ==')
+    etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["performance_baseline"]))
+    performance_report_dict = load_tsv_config(stat_file)
+    exit_code = 0
+    new_etalon_outf = open(os.path.join(output_folder, "new_performance_baseline.tsv"), "w")
+    for k, v in etalon_qaulity_dict.items():
+        if k not in performance_report_dict:
+            log.error("Metric %s was not found in the report" % k)
+            exit_code = -12
+            continue
+        new_etalon_outf.write("%s\t%.2f\n" % (k, float(performance_report_dict[k])))
+        err_code = check_value(float(v), float(performance_report_dict[k]), k, 0.2)
+        if err_code != 0:
+            exit_code = err_code
+
+    new_etalon_outf.close()
+    return exit_code
+
+
 def check_output_files(out_dir, label, file_list):
     missing_files = []
     internal_output_dir = os.path.join(out_dir, label)
@@ -420,6 +470,8 @@ def main():
         err_codes.append(run_quantification(args, config_dict, "novel"))
     if RT_QUANTIFICATION_GENES in run_types:
         err_codes.append(run_quantification(args, config_dict, "gene"))
+    if RT_PERFORMANCE in run_types:
+        err_codes.append(run_performance_assessment(args, config_dict))
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()

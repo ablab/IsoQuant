@@ -19,7 +19,7 @@ from .common import (
     is_subprofile,
     overlaps,
     junctions_from_blocks,
-    AtomicCounter
+    AtomicIDDistributor
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -121,7 +121,7 @@ class FeatureProfiles:
 
 # exon/intron info
 class FeatureInfo:
-    feature_id_counter = AtomicCounter()
+    feature_id_counter = AtomicIDDistributor()
     def __init__(self, chr_id, start, end, strand, type, gene_ids):
         self.id = FeatureInfo.feature_id_counter.increment()
         self.chr_id = chr_id
@@ -568,10 +568,10 @@ class GeneInfo:
                 # similar features
                 feature_type += "S"
             if feature in contained_features:
-                # feature contained in anther one
+                # feature contained in another one
                 feature_type += "C"
 
-            strands = set([self.isoform_strands[t[0]] for t in feature_to_isoform[feature]])
+            strands = sorted(set([self.isoform_strands[t[0]] for t in feature_to_isoform[feature]]))
             strand_str = "".join(strands)
             gene_ids = set([self.gene_id_map[t[0]] for t in feature_to_isoform[feature]])
 

@@ -22,10 +22,11 @@ rm -rf ./tests/.config/
 
 cp -r ./src $TARGET_DIR/
 cp -r ./tests $TARGET_DIR/
-cp -r ./figs $TARGET_DIR/
+cp -r ./docs $TARGET_DIR/
 
 
 cp isoquant.py $TARGET_DIR/
+cp visualize.py $TARGET_DIR/
 cp README.md $TARGET_DIR/
 cp VERSION $TARGET_DIR/
 cp LICENSE $TARGET_DIR/

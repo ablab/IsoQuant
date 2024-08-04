@@ -4,25 +4,15 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
 [![UnitTests](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml/badge.svg)](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml)
+[![User manual](https://github.com/ablab/IsoQuant/actions/workflows/docs.yml/badge.svg)](https://ablab.github.io/IsoQuant/)
 
 
 
-# IsoQuant 3.4 manual
 
-1. [About IsoQuant](#sec1) </br>
-1.1. [Supported data types](#sec1.1)</br>
-1.2. [Supported reference data](#sec1.2)</br>
-2. [Installation](#sec2)</br>
-2.1. [Installing from conda](#sec2.1)</br>
-2.2. [Manual installation and requirements](#sec2.2)</br>
-2.3. [Verifying your installation](#sec2.3)</br>
-3. [Running IsoQuant](#sec3)</br>
-3.1. [IsoQuant input](#sec3.1)</br>
-3.2. [Command line options](#sec3.2)</br>
-3.3. [IsoQuant output](#sec3.3)</br>
-3.4. [Visualization](#sec3.4)</br>
-4. [Citation](#sec4)</br>
-5. [Feedback and bug reports](#sec5)</br>
+# IsoQuant 3.5 manual
+
+[New IsoQuant documentation](https://ablab.github.io/IsoQuant/) is available. This README will be removed at some point.
+
 
 **Quick start:**  
 
@@ -75,6 +65,24 @@
 
 * If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
 
+
+## Table of contents
+
+1. [About IsoQuant](#sec1) </br>
+1.1. [Supported data types](#sec1.1)</br>
+1.2. [Supported reference data](#sec1.2)</br>
+2. [Installation](#sec2)</br>
+2.1. [Installing from conda](#sec2.1)</br>
+2.2. [Installation from GitHub](#sec2.2)</br>
+2.3. [Verifying your installation](#sec2.3)</br>
+3. [Running IsoQuant](#sec3)</br>
+3.1. [IsoQuant input](#sec3.1)</br>
+3.2. [Command line options](#sec3.2)</br>
+3.3. [IsoQuant output](#sec3.3)</br>
+4. [Visualization](#sec4)</br>
+5. [Citation](#sec5)</br>
+6. [Feedback and bug reports](#sec6)</br>
+
 <a name="sec1"></a>
 # About IsoQuant
 
@@ -86,14 +94,16 @@ IsoQuant further performs annotated gene, isoform, exon and intron quantificatio
 If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping.
 
 IsoQuant consists of two stages, which generate its own output:
-1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isofrom assignment,
+1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isoform assignment,
 splice site correction and abundance quantification for reference genes/transcripts.
 2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.
 
-IsoQuant version 3.4 was released under GPLv2 on May 9th, 2024 and can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant).
+Latest IsoQuant version can be downloaded from [https://github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
+
+New IsoQuant documentation is available [here](https://ablab.github.io/IsoQuant/).
 
 #### IsoQuant pipeline
-![Pipeline](figs/isoquant_pipeline.png)
+![Pipeline](docs/isoquant_pipeline.png)
 
 <a name="sec1.1"></a>
 ## Supported data types
@@ -143,11 +153,11 @@ You will also need
 ## Installing from conda
 IsoQuant can be installed with conda:
 ```bash
-conda install -c bioconda isoquant
+conda create -c conda-forge -c bioconda -n isoquant python=3.8 isoquant
 ```
 
 <a name="sec2.2"></a>
-## Manual installation and requirements
+## Installing from GitHub
 To obtain IsoQuant you can download repository and install requirements.  
 Clone IsoQuant repository and switch to the latest release:
 ```bash
@@ -229,7 +239,7 @@ The first entry in the list should be the type of files the experiments contain,
 followed by the type in quotation marks. The type can be either `fastq` or `bam`.
 
 Each experiment is represented as set of parameters (e.g. in curly brackets).
-Each experiment must have a name and a list if long-read files in the specified format.
+Each experiment must have a name and a list of long-read files in the specified format.
 Additionally, it may contain one or multiple BAM files with short reads.
 The name is provided as `name: ` followed by the experiment name in quotation marks.
 Both short and long read files are provided as a list of file paths in quotation marks,
@@ -272,36 +282,6 @@ Both sub-folders will contain predicted transcript models and abundance tables.
 Abundance table for `Experiment2` with have columns "Sample1" and "Sample2".
 
 Note, that  `--bam`, `--fastq` and `--label` options are not compatible with `--yaml`.
-See more in [examples](#examples).
-
-
-### Specifying input data via dataset description file (deprecated)
-
-This option is deprecated since version 3.4 and will be removed later. To process multiple experiments, please use `--yaml` instead.
-
-A dataset description file can be provided via `--fastq_list` or `--bam_list` (see description below).
-A distinct output folder with individual GTFs and abundance tables will be generated for each experiment.
-
-Input files should be provided one per line. Experiments should be separated by blank lines or experiment names
-starting with #. You can also set a specific label for each listed file using colon. For example:
-
-```
-#EXPERIMENT1
-/PATH/TO/FILE1A.fastq:SAMPLE_A
-/PATH/TO/FILE2A.fastq:SAMPLE_A
-/PATH/TO/FILE1B.fastq:SAMPLE_B
-/PATH/TO/FILE2B.fastq:SAMPLE_B
-#EXPERIMENT2
-/PATH/TO/FILE3.fastq:SAMPLE_C1
-/PATH/TO/FILE4.fastq:SAMPLE_C2
-```
-
-Output sub-folders will be named `EXPERIMENT1` and `EXPERIMENT2`.
-Abundance tables will have specified labels as column names.
-If you want to group multiple files as a single sample within the experiment, use identical labels.
-
-
-Note, that  `--label` option has no effect in this case.
 See more in [examples](#examples).
 
 
@@ -758,10 +738,16 @@ If `--count_exons` is set, exon and intron counts will be produced:
 * `SAMPLE_ID.intron_counts.tsv` - reference intron inclusion/exclusion read counts;
 
 If `--read_group` is set, the per-group expression values for reference features will be also computed:
+
+In matrix format (feature X groups)
 * `SAMPLE_ID.gene_grouped_tpm.tsv`
 * `SAMPLE_ID.transcript_grouped_tpm.tsv`
 * `SAMPLE_ID.gene_grouped_counts.tsv`
 * `SAMPLE_ID.transcript_grouped_counts.tsv`
+
+In linear format (feature, group, value(s) per each line)
+* `SAMPLE_ID.gene_grouped_counts_linear.tsv`
+* `SAMPLE_ID.transcript_grouped_counts_linear.tsv`
 * `SAMPLE_ID.exon_grouped_counts.tsv`
 * `SAMPLE_ID.intron_grouped_counts.tsv`
 
@@ -812,8 +798,11 @@ Tab-separated values, the columns are:
     - `unique` - reads was unambiguously assigned to a single known isoform;
     - `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
     - `inconsistent` - read was matched with inconsistencies, closest match(es) are reported;
+    - `inconsistent_non_intronic` - read was matched with inconsistencies, which do not affect intron chain (e.g. olly TSS/TES);
+    - `inconsistent_ambiguous`  - read was matched with inconsistencies equally well to two or more isoforms;
     - `ambiguous` - read was assigned to multiple isoforms equally well;
-    - `noninfomative` - reads is intronic/intergenic.
+    - `noninfomative` - reads is intronic or has an insignificant overlap with a known gene;
+    - `intergenic` - read is intergenic.
 * `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible events are (see graphical representation below):
     - consistent events:
         - `none` / `.` / `undefined` - no special event detected;
@@ -858,8 +847,10 @@ Tab-separated values, the columns are:
         - `alternative_tss` - alternative transcription start site.
 * `exons` - list of coordinates for normalized read exons (1-based, indels and polyA exons are excluded);
 * `additional` - field for supplementary information, which may include:
+    - `gene_assignment` - Gene assignment classification; possible values are the same as for transcript classification.
     - `PolyA` - True if poly-A tail is detected;
-    - `Canonical` - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use `--check_canonical`)
+    - `Canonical` - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use `--check_canonical`);
+    - `Classification` - SQANTI-like assignment classification.
 
 Note, that a single read may occur more than once if assigned ambiguously.
 
@@ -870,7 +861,14 @@ Tab-separated values, the columns are:
 * `feature_id` - genomic feature ID;
 * `TPM` or `count` - expression value (float).
 
-For grouped counts, each column contains expression values of a respective group.
+For grouped counts, each column contains expression values of a respective group (matrix representation).
+
+Beside count matrix, transcript and gene grouped counts are also printed in a linear format,
+in which each line contains 3 tab-separated values:
+
+* `feature_id` - genomic feature ID;
+* `group_id` - group name;
+* `count` - read count of the feature in this group. 
 
 #### Exon and intron count format
 
@@ -897,27 +895,34 @@ Tab-separated values, the columns are:
 
 Constructed transcript models are stored in usual [GTF format](https://www.ensembl.org/info/website/upload/gff.html).
 Contains `exon`, `transcript` and `gene` features.
-Transcript ids have the following format: `transcript_###.TYPE`,
-where `###` is the unique number (not necessarily consecutive) and TYPE can be one of the following:
-* known - previously annotated transcripts;
+
+Known genes and transcripts are reposted with their reference IDs. 
+Novel genes IDs have format `novel_gene_XXX_###` and novel transcript IDs are formatted as `transcript###.XXX.TYPE`,
+where `###` is the unique number (not necessarily consecutive), `XXX` is the chromosome name and TYPE can be one of the following:
+
 * nic - novel in catalog, new transcript that contains only annotated introns;
 * nnic - novel not in catalog, new transcript that contains unannotated introns.
 
-The `attribute` field also contains `gene_id` (either matches reference gene id or can be `novel_gene_###`), `reference_gene_id` (same value) and `reference_transcript_id` (either original isoform id or `novel`).
-In addition, it contains `canonical` property if `--check_canonical` is set.
+Each exon also has a unique ID stored in `exon_id` attribute.
+
+In addition, each transcript contains `canonical` property if `--check_canonical` is set.
+
+If `--sqanti_output` option is set, each novel transcript also has a `similar_reference_id` field containing ID of
+a most similar reference isoform and `alternatives` attribute, which indicates the exact differences between
+this novel transcript and the similar reference transcript.
 
 ### Event classification figures
 #### Consistent match classifications
-![Correct](figs/correct_match.png) <br><br>
+![Correct](docs/correct_match.png) <br><br>
 
 #### Misalignment classifications
-![Misalignment](figs/misalignment.png) <br><br>
+![Misalignment](docs/misalignment.png) <br><br>
 
 #### Inconsistency classifications
-![Inconsistent](figs/inconsistent.png) <br><br>
+![Inconsistent](docs/inconsistent.png) <br><br>
 
 #### PolyA classifications
-![PolyA](figs/polya.png)
+![PolyA](docs/polya.png)
 
 <a name="sec3.4"></a>
 
@@ -961,12 +966,53 @@ The visualization tool generates the following plots based on the IsoQuant outpu
 These visualizations provide valuable insights into transcript diversity, splicing patterns, and the overall quality of the IsoQuant analysis.
 
 <a name="sec4"></a>
+
+## Visualization
+
+IsoQuant provides a visualization tool to help interpret and explore the output data. The goal of this visualization is to create informative plots that represent transcript usage and splicing patterns for genes of interest. Additionally, we provide global transcript and read assignment statistics from the IsoQuant analysis.
+
+### Running the visualization tool
+
+To run the visualization tool, use the following command:
+
+```bash
+
+python visualize.py <output_directory> --gene_list <gene_list> [options]
+
+```
+
+### Command line options
+
+* `output_directory` (required): Directory containing IsoQuant output files.
+* * `--gene_list` (required): Path to a .txt file containing a list of genes, each on its own line.
+* `--viz_output`: Optional directory to save visualization output files. Defaults to the main output directory if not specified.
+* `--gtf`: Optional path to a GTF file if it cannot be extracted from the IsoQuant log.
+* `--counts`: Use counts instead of TPM files for visualization.
+* `--ref_only`: Use only reference transcript quantification instead of transcript model quantification.
+* `--filter_transcripts`: Filter transcripts by minimum value occurring in at least one condition.
+
+
+### Output
+
+The visualization tool generates the following plots based on the IsoQuant output:
+
+1. Transcript usage profiles: For each gene specified in the gene list, a plot showing the relative usage of different transcripts across conditions or samples.
+
+2. Gene-specific transcript maps: Visual representation of the different splicing patterns of transcripts for each gene, allowing easy comparison of exon usage and alternative splicing events.
+
+3. Global read assignment consistency: A summary plot showing the overall consistency of read assignments across all genes and transcripts analyzed.
+
+4. Global transcript alignment classifications: A chart or plot representing the distribution of different transcript alignment categories (e.g., full splice match, incomplete splice match, novel isoforms) across the entire dataset.
+
+These visualizations provide valuable insights into transcript diversity, splicing patterns, and the overall quality of the IsoQuant analysis.
+
+<a name="sec5"></a>
 ## Citation
 The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
 
 To try IsoQuant you can use the data that was used in the publication [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
 
-<a name="sec5"></a>
+<a name="sec6"></a>
 ## Feedback and bug reports
 Your comments, bug reports, and suggestions are very welcome. They will help us to further improve IsoQuant. If you have any troubles running IsoQuant, please send us `isoquant.log` from the `<output_dir>` directory.
 
