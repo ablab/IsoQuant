@@ -2,6 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
+import pprint
 
 
 class PlotOutput:
@@ -198,42 +199,58 @@ class PlotOutput:
     def make_pie_charts(self):
         """
         Create pie charts for transcript alignment classifications and read assignment consistency.
+        Handles both combined and separate sample data structures.
         """
+        print("self.reads_and_class structure:")
+        pprint.pprint(self.reads_and_class)
+
         titles = ["Transcript Alignment Classifications", "Read Assignment Consistency"]
 
-        for i, (title, reads_dict) in enumerate(zip(titles, self.reads_and_class)):
-            labels = reads_dict.keys()
-            sizes = reads_dict.values()
-            total = sum(sizes)
+        for title, data in zip(titles, self.reads_and_class):
+            if isinstance(data, dict):
+                if any(isinstance(v, dict) for v in data.values()):
+                    # Separate 'Mutants' and 'WildType' case
+                    for sample_name, sample_data in data.items():
+                        self._create_pie_chart(f"{title} - {sample_name}", sample_data)
+                else:
+                    # Combined data case
+                    self._create_pie_chart(title, data)
+            else:
+                print(f"Skipping unexpected data type for {title}: {type(data)}")
 
-            # Generate a file-friendly title
-            file_title = title.lower().replace(" ", "_")
+    def _create_pie_chart(self, title, data):
+        """
+        Helper method to create a single pie chart.
+        """
+        labels = list(data.keys())
+        sizes = list(data.values())
+        total = sum(sizes)
 
-            plt.figure()
-            wedges, texts, autotexts = plt.pie(
-                sizes,
-                labels=labels,
-                autopct="%1.1f%%",
-                startangle=140,
-                textprops=dict(color="w"),
-            )
-            plt.setp(autotexts, size=10, weight="bold")
-            plt.setp(texts, size=9)
+        # Generate a file-friendly title
+        file_title = title.lower().replace(" ", "_").replace("-", "_")
 
-            plt.axis(
-                "equal"
-            )  # Equal aspect ratio ensures that pie is drawn as a circle.
-            plt.title(f"{title}\nTotal: {total}")
+        plt.figure(figsize=(12, 8))
+        wedges, texts, autotexts = plt.pie(
+            sizes,
+            labels=labels,
+            autopct=lambda pct: f"{pct:.1f}%\n({int(pct/100.*total):d})",
+            startangle=140,
+            textprops=dict(color="w"),
+        )
+        plt.setp(autotexts, size=8, weight="bold")
+        plt.setp(texts, size=7)
 
-            plt.legend(
-                wedges,
-                labels,
-                title="Categories",
-                loc="center left",
-                bbox_to_anchor=(1, 0, 0.5, 1),
-            )
-            plot_path = os.path.join(
-                self.visualization_dir, f"{file_title}_pie_chart.png"
-            )
-            plt.savefig(plot_path, bbox_inches="tight")
-            plt.close()
+        plt.axis("equal")  # Equal aspect ratio ensures that pie is drawn as a circle.
+        plt.title(f"{title}\nTotal: {total}")
+
+        plt.legend(
+            wedges,
+            labels,
+            title="Categories",
+            loc="center left",
+            bbox_to_anchor=(1, 0, 0.5, 1),
+            fontsize=8,
+        )
+        plot_path = os.path.join(self.visualization_dir, f"{file_title}_pie_chart.png")
+        plt.savefig(plot_path, bbox_inches="tight", dpi=300)
+        plt.close()
