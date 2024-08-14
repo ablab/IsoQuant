@@ -5,6 +5,7 @@ from src.plot_output import PlotOutput
 import argparse
 from src.process_dict import simplify_and_sum_transcripts
 from src.gene_model import rank_and_visualize_genes
+import os
 
 
 class FindGenesAction(argparse.Action):
@@ -64,10 +65,54 @@ def parse_arguments():
         help="Path to a CSV file containing known target genes.",
         default=None,
     )
-    return parser.parse_args()
+
+    args = parser.parse_args()
+
+    # If --find_genes is used, prompt for reference condition
+    if args.find_genes:
+        output = OutputConfig(
+            args.output_directory,
+            use_counts=args.counts,
+            ref_only=args.ref_only,
+            gtf=args.gtf,
+        )
+
+        # Read the first line of the transcript_grouped_tpm file to get the conditions
+        with open(output.transcript_grouped_tpm, "r") as f:
+            header = f.readline().strip().split("\t")
+
+        # The first column is typically '#feature_id', so we skip it
+        conditions = header[1:]
+
+        if len(conditions) == 2:
+            # If there are only two conditions, automatically use the first as reference
+            args.reference_condition = conditions[0]
+            print(
+                f"Automatically selected '{args.reference_condition}' as the reference condition."
+            )
+        else:
+            print("Available conditions:")
+            for i, condition in enumerate(conditions, 1):
+                print(f"{i}. {condition}")
+
+            while True:
+                try:
+                    choice = int(
+                        input("Enter the number of the condition to use as reference: ")
+                    )
+                    if 1 <= choice <= len(conditions):
+                        args.reference_condition = conditions[choice - 1]
+                        break
+                    else:
+                        print("Invalid choice. Please enter a number from the list.")
+                except ValueError:
+                    print("Invalid input. Please enter a number.")
+
+    return args
 
 
 def main():
+    print("Reading IsoQuant parameters.")
     args = parse_arguments()
     output = OutputConfig(
         args.output_directory,
@@ -78,7 +123,9 @@ def main():
     dictionary_builder = DictionaryBuilder(output)
     gene_list = dictionary_builder.read_gene_list(args.gene_list)
     update_names = not all(gene.startswith("ENS") for gene in gene_list)
+    print("Building gene, transcript, and exon dictionaries.")
     gene_dict = dictionary_builder.build_gene_transcript_exon_dictionaries()
+    print("Building read assignment and classification dictionaries.")
     reads_and_class = (
         dictionary_builder.build_read_assignment_and_classification_dictionaries()
     )
@@ -151,7 +198,11 @@ def main():
         )
 
     # Visualization output directory decision
-    viz_output_directory = args.viz_output if args.viz_output else args.output_directory
+    if args.viz_output:
+        viz_output_directory = args.viz_output
+    else:
+        viz_output_directory = os.path.join(args.output_directory, "visualization")
+        os.makedirs(viz_output_directory, exist_ok=True)
 
     if args.find_genes:
         print("Finding genes.")
@@ -161,15 +212,23 @@ def main():
             viz_output_directory,
             args.find_genes,
             known_genes_path=args.known_genes_path,
+            reference_condition=args.reference_condition,
         )
         gene_list = dictionary_builder.read_gene_list(path)
 
-    # dictionary_builder.save_gene_dict_to_json(updated_gene_dict, viz_output_directory)
+        # Create gene_visualizations subdirectory
+        viz_output_directory = os.path.join(viz_output_directory, "gene_visualizations")
+        os.makedirs(viz_output_directory, exist_ok=True)
+
+    # Create read_assignments subdirectory
+    read_assignments_dir = os.path.join(viz_output_directory, "read_assignments")
+    os.makedirs(read_assignments_dir, exist_ok=True)
+
     plot_output = PlotOutput(
         updated_gene_dict,
         gene_list,
         viz_output_directory,
-        create_visualization_subdir=(viz_output_directory == args.output_directory),
+        read_assignments_dir=read_assignments_dir,
         reads_and_class=reads_and_class,
         filter_transcripts=args.filter_transcripts,
         conditions=output.conditions,

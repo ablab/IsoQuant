@@ -2,7 +2,6 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
-import pprint
 
 
 class PlotOutput:
@@ -11,7 +10,7 @@ class PlotOutput:
         updated_gene_dict,
         gene_names,
         output_directory,
-        create_visualization_subdir=False,
+        read_assignments_dir,
         reads_and_class=None,
         filter_transcripts=None,
         conditions=False,
@@ -19,20 +18,16 @@ class PlotOutput:
     ):
         self.updated_gene_dict = updated_gene_dict
         self.gene_names = gene_names
-        self.output_directory = output_directory
+        self.visualization_dir = output_directory
+        self.read_assignments_dir = read_assignments_dir
         self.reads_and_class = reads_and_class
         self.filter_transcripts = filter_transcripts
         self.conditions = conditions
         self.use_counts = use_counts
 
-        # Create visualization subdirectory if specified
-        if create_visualization_subdir:
-            self.visualization_dir = os.path.join(
-                self.output_directory, "visualization"
-            )
-            os.makedirs(self.visualization_dir, exist_ok=True)
-        else:
-            self.visualization_dir = self.output_directory
+        # Ensure the visualization directory exists
+        os.makedirs(self.visualization_dir, exist_ok=True)
+        os.makedirs(self.read_assignments_dir, exist_ok=True)
 
     def plot_transcript_map(self):
         # Get the first condition's gene dictionary
@@ -148,14 +143,6 @@ class PlotOutput:
             index = np.arange(n_bars)
             bar_width = 0.35
             opacity = 0.8
-
-            # for sample_type, transcripts in gene_data.items():
-            # print(f"Sample Type: {sample_type}")
-            # for transcript_id, transcript_info in transcripts.items():
-            # print(
-            # f"  Transcript ID: {transcript_id}, Value: {transcript_info['value']}"
-            # )
-            # Adjusting the colors for better within-bar comparison
             max_transcripts = max(len(gene_data[condition]) for condition in conditions)
             colors = plt.cm.plasma(
                 np.linspace(0, 1, num=max_transcripts)
@@ -201,8 +188,6 @@ class PlotOutput:
         Create pie charts for transcript alignment classifications and read assignment consistency.
         Handles both combined and separate sample data structures.
         """
-        print("self.reads_and_class structure:")
-        pprint.pprint(self.reads_and_class)
 
         titles = ["Transcript Alignment Classifications", "Read Assignment Consistency"]
 
@@ -251,6 +236,8 @@ class PlotOutput:
             bbox_to_anchor=(1, 0, 0.5, 1),
             fontsize=8,
         )
-        plot_path = os.path.join(self.visualization_dir, f"{file_title}_pie_chart.png")
+        plot_path = os.path.join(
+            self.read_assignments_dir, f"{file_title}_pie_chart.png"
+        )
         plt.savefig(plot_path, bbox_inches="tight", dpi=300)
         plt.close()
