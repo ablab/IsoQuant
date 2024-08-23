@@ -47,7 +47,7 @@ class StrandnessReportingLevel(Enum):
 
 class GraphBasedModelConstructor:
     transcript_prefix = "transcript"
-    known_transcript_suffix = ".known"
+    novel_gene_prefix = "novel_gene_"
     nic_transcript_suffix = ".nic"
     nnic_transcript_suffix = ".nnic"
     detected_known_isoforms = set()
@@ -482,7 +482,8 @@ class GraphBasedModelConstructor:
 
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
                     if transcript_gene is None:
-                        transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
+                        transcript_gene = (GraphBasedModelConstructor.novel_gene_prefix + self.gene_info.chr_id +
+                                           "_" + str(self.get_transcript_id()))
                     elif transcript_strand == '.':
                         transcript_strand = self.gene_info.gene_strands[transcript_gene]
 
@@ -644,7 +645,8 @@ class GraphBasedModelConstructor:
             strand = '+' if forward else '-'
             coordinates = (five_prime_pos, three_prime_pos) if forward else (three_prime_pos, five_prime_pos)
             new_transcript_id = self.transcript_prefix + str(self.get_transcript_id())
-            transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
+            transcript_gene = (GraphBasedModelConstructor.novel_gene_prefix + self.gene_info.chr_id +
+                               "_" + str(self.get_transcript_id()))
             transcript_type = TranscriptModelType.novel_not_in_catalog
             id_suffix = self.nnic_transcript_suffix
 
