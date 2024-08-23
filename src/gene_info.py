@@ -485,7 +485,7 @@ class GeneInfo:
                     self.gene_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
             for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
                 for attr in t.attributes.keys():
-                    if attr in ['transcript_id', 'gene_id', 'ID', 'level']:
+                    if attr in ['transcript_id', 'gene_id', 'ID', 'level', 'exons']:
                         continue
                     if t.attributes[attr]:
                         self.gene_attributes[t.id] += '%s "%s"; ' % (attr, t.attributes[attr][0])
