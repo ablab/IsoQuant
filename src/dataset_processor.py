@@ -19,7 +19,7 @@ import gffutils
 import pysam
 from pyfaidx import Fasta, UnsupportedCompressionFormat
 
-from .common import proper_plural_form, SimpleIDDistributor
+from .common import proper_plural_form
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .stats import EnumStats
@@ -48,6 +48,7 @@ from .assignment_io import (
     NormalTmpFileAssignmentLoader,
     QuickTmpFileAssignmentLoader
 )
+from .id_policy import SimpleIDDistributor, ExcludingIdDistributor
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
@@ -89,6 +90,7 @@ def set_polya_requirement_strategy(flag, polya_requirement_strategy):
         return False
     else:
         return True
+
 
 
 def collect_reads_in_parallel(sample, chr_id, args):
@@ -249,7 +251,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
-    transcript_id_distributor = SimpleIDDistributor()
+    transcript_id_distributor = ExcludingIdDistributor(gffutils_db, chr_id)
     exon_id_distributor = SimpleIDDistributor()
 
     if construct_models:
@@ -281,7 +283,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
         if construct_models:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
-                                                           aggregator.transcript_model_global_counter, transcript_id_distributor)
+                                                           aggregator.transcript_model_global_counter,
+                                                           transcript_id_distributor)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
@@ -738,3 +741,4 @@ class DatasetProcessor:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)
             counter.convert_counts_to_tpm(self.args.normalization_method)
+

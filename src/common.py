@@ -27,15 +27,6 @@ class AtomicIDDistributor(object):
             return self.value
 
 
-class SimpleIDDistributor(object):
-    def __init__(self):
-        self.value = 0
-
-    def increment(self):
-        self.value += 1
-        return self.value
-
-
 # key, value
 def get_first_best_from_sorted(sorted_list_of_pairs):
     if not sorted_list_of_pairs:
