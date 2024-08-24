@@ -51,3 +51,18 @@ class ExcludingIdDistributor(SimpleIDDistributor):
             self.value += 1
         return self.value
 
+
+class FeatureIdStorage:
+    def __init__(self, id_distributor):
+        self.id_distributor = id_distributor
+        self.id_dict = {}
+
+    def get_id(self, chr_id, feature, strand):
+        feature_tuple = (chr_id, feature[0], feature[1], strand)
+        if feature_tuple not in self.id_dict:
+            feature_id = self.id_distributor.increment()
+            self.id_dict[feature_tuple] = feature_id
+        else:
+            feature_id =  self.id_dict[feature_tuple]
+
+        return feature_id

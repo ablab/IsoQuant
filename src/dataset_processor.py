@@ -48,7 +48,7 @@ from .assignment_io import (
     NormalTmpFileAssignmentLoader,
     QuickTmpFileAssignmentLoader
 )
-from .id_policy import SimpleIDDistributor, ExcludingIdDistributor
+from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
@@ -252,15 +252,15 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
     transcript_id_distributor = ExcludingIdDistributor(gffutils_db, chr_id)
-    exon_id_distributor = SimpleIDDistributor()
+    exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
 
     if construct_models:
-        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_distributor,
+        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
     if construct_models and args.genedb:
-        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_distributor,
+        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
                                               gtf_suffix=".extended_annotation.gtf",
                                               output_r2t=False, check_canonical=args.check_canonical)
     else:
@@ -665,13 +665,15 @@ class DatasetProcessor:
             logger.info("  PolyA tails are required for novel monoexon transcripts to be reported: %s" % "yes")
             logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
 
-            exon_id_distributor = SimpleIDDistributor()
+            # GFF printers below only serve for creating the main output files,
+            # not intended for dumping transcript models directly
+            exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, exon_id_distributor, header=self.common_header, gzipped=self.args.gzipped
+                sample.out_dir, sample.prefix, exon_id_storage, header=self.common_header, gzipped=self.args.gzipped
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
-                    sample.out_dir, sample.prefix, exon_id_distributor,
+                    sample.out_dir, sample.prefix, exon_id_storage,
                     gtf_suffix=".extended_annotation.gtf", output_r2t=False,
                     header=self.common_header
                 )
