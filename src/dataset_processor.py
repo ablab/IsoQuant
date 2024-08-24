@@ -252,7 +252,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
     transcript_id_distributor = ExcludingIdDistributor(gffutils_db, chr_id)
-    exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
+    exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), gffutils_db, chr_id, "exon")
 
     if construct_models:
         tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
