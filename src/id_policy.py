@@ -53,15 +53,27 @@ class ExcludingIdDistributor(SimpleIDDistributor):
 
 
 class FeatureIdStorage:
-    def __init__(self, id_distributor):
+    def __init__(self, id_distributor, genedb = None, chr_id = None, feature = "exon"):
         self.id_distributor = id_distributor
         self.id_dict = {}
+        self.feature_name = feature
+        if not genedb or not chr_id:
+            return
+
+        id_attribute = feature + "_id"
+        for f in genedb.region(seqid=chr_id, start=1, featuretype=feature):
+            if id_attribute in f.attributes:
+                feature_tuple = (chr_id, f.start, f.end, f.strand)
+                try:
+                    self.id_dict[feature_tuple] = f.attributes[id_attribute][0]
+                except IndexError:
+                    pass
 
     def get_id(self, chr_id, feature, strand):
         feature_tuple = (chr_id, feature[0], feature[1], strand)
         if feature_tuple not in self.id_dict:
             feature_id = self.id_distributor.increment()
-            self.id_dict[feature_tuple] = feature_id
+            self.id_dict[feature_tuple] = chr_id + ".%d" % feature_id
         else:
             feature_id =  self.id_dict[feature_tuple]
 

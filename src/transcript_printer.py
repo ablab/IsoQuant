@@ -136,8 +136,7 @@ class GFFPrinter:
                     exons_to_print.append((e[0], e[1], 'exon'))
                 exons_to_print = sorted(exons_to_print, reverse=True) if model.strand == '-' else sorted(exons_to_print)
                 for i, e in enumerate(exons_to_print):
-                    exon_id = self.exon_id_storage.get_id(model.chr_id, e, model.strand)
-                    exon_str_id = model.chr_id + ".%d" % exon_id
+                    exon_str_id = self.exon_id_storage.get_id(model.chr_id, e, model.strand)
                     feature_type = e[2]
                     self.out_gff.write(prefix_columns + "%s\t%d\t%d\t" % (feature_type, e[0], e[1]) + suffix_columns +
                                        ' exon "%d"; exon_id "%s";\n' % ((i + 1), exon_str_id))
