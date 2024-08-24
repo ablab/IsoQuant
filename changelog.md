@@ -1,5 +1,16 @@
 # IsoQuant changelog
 
+## IsoQuant 3.5.0, 26 August 2024
+
+- Fix YAML support in visualization [#222](https://github.com/ablab/IsoQuant/issues/222).
+
+- Fix transcript naming when IsoQuant-generated GTF is provided as input [#219](https://github.com/ablab/IsoQuant/issues/219).
+
+- Fix `exons` attribute duplication [#219](https://github.com/ablab/IsoQuant/issues/219).
+
+- Exon ids are now consistent between input and output annotations if present.
+
+
 ## IsoQuant 3.5.0, 2 August 2024
 
 - New visualization software developed by [@jackfreeman88](https://github.com/jackfreeman88). See more [here](https://ablab.github.io/IsoQuant/visualization.html).
