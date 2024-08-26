@@ -10,6 +10,8 @@
 
 - Exon ids are now consistent between input and output annotations if present.
 
+- New `--count_format` option for setting desired grouped counts format (matrix/linear/both), fixes [#223](https://github.com/ablab/IsoQuant/issues/223).
+
 
 ## IsoQuant 3.5.0, 2 August 2024
 
