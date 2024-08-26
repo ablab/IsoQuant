@@ -62,6 +62,19 @@ class CountingStrategyFlags:
         self.use_inconsistent = counting_strategy.inconsistent()
 
 
+@unique
+class GroupedOutputFormat(Enum):
+    matrix = 1
+    linear = 2
+    both = 3
+
+    def output_matrix(self):
+        return self in [GroupedOutputFormat.matrix, GroupedOutputFormat.both]
+
+    def output_linear(self):
+        return self in [GroupedOutputFormat.linear, GroupedOutputFormat.both]
+
+
 # the difference from defaultdict is that it does not add 0 to the dict when get is called for inexistent key
 class IncrementalDict:
     def __init__(self, default_type=float):
@@ -220,8 +233,11 @@ class CompositeCounter:
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
     def __init__(self, output_prefix, assignment_extractor, read_groups, read_counter,
-                 all_features=None, output_zeroes=True):
+                 all_features=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
         AbstractCounter.__init__(self, output_prefix, not read_groups, output_zeroes)
+        self.output_grouped_matrix = grouped_format.output_matrix()
+        self.output_grouped_linear = grouped_format.output_linear()
+
         self.assignment_extractor = assignment_extractor
         self.all_features = set(all_features) if all_features is not None else set()
         if not read_groups:
@@ -252,7 +268,6 @@ class AssignedFeatureCounter(AbstractCounter):
             return open(self.linear_output_file, "a")
         else:
             return None
-
 
     def add_read_info(self, read_assignment=None):
         if not read_assignment:
@@ -363,23 +378,30 @@ class AssignedFeatureCounter(AbstractCounter):
                 f.write("__usable\t%d\n" % self.reads_for_tpm)
 
     def dump_grouped(self, all_features, all_groups):
-        with self.get_output_file_handler() as output_file:
-            with self.get_linear_output_file_handler() as linear_output_file:
-                assert linear_output_file is not None
+        output_file = self.get_output_file_handler()
+        linear_output_file = self.get_linear_output_file_handler()
 
-                output_file.write(self.format_header(all_groups))
-                linear_output_file.write("#feature_id\tgroup_id\tcount\n")
-                for feature_id in all_features:
-                    row_count = 0
-                    for group_id in self.feature_counter[feature_id].data.keys():
-                        count = self.feature_counter[feature_id].data[group_id]
-                        linear_output_file.write("%s\t%s\t%.2f\n" % (feature_id, self.ordered_groups[group_id], count))
-                        row_count += count
-                    if not self.output_zeroes and row_count == 0:
-                        continue
-                    count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in
-                                    all_groups]
-                    output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+        if self.output_grouped_matrix:
+            output_file.write(self.format_header(all_groups))
+        if self.output_grouped_linear:
+            linear_output_file.write("#feature_id\tgroup_id\tcount\n")
+        for feature_id in all_features:
+            row_count = 0
+            for group_id in self.feature_counter[feature_id].data.keys():
+                count = self.feature_counter[feature_id].data[group_id]
+                if self.output_grouped_linear:
+                    linear_output_file.write("%s\t%s\t%.2f\n" % (feature_id, self.ordered_groups[group_id], count))
+                row_count += count
+            if not self.output_zeroes and row_count == 0:
+                continue
+
+            if self.output_grouped_matrix:
+                count_values = [self.feature_counter[feature_id].get(self.group_numeric_ids[group_id]) for group_id in
+                                all_groups]
+                output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+
+        output_file.close()
+        linear_output_file.close()
 
     def convert_counts_to_tpm(self, normalization_str=NormalizationMethod.simple.name):
         normalization = NormalizationMethod[normalization_str]
@@ -429,19 +451,19 @@ class AssignedFeatureCounter(AbstractCounter):
 
 
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
-                        read_groups=None, output_zeroes=True):
+                        read_groups=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
                                   read_groups, read_weight_counter,
-                                  complete_feature_list, output_zeroes)
+                                  complete_feature_list, output_zeroes, grouped_format)
 
 
 def create_transcript_counter(output_file_name, strategy, complete_feature_list=None,
-                              read_groups=None, output_zeroes=True):
+                              read_groups=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
                                   read_groups, read_weight_counter,
-                                  complete_feature_list, output_zeroes)
+                                  complete_feature_list, output_zeroes, grouped_format)
 
 
 # count simple features inclusion/exclusion (exons / introns)
