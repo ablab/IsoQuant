@@ -32,6 +32,7 @@ from .long_read_counter import (
     CompositeCounter,
     create_gene_counter,
     create_transcript_counter,
+    GroupedOutputFormat,
 )
 from .multimap_resolver import MultimapResolver
 from .read_groups import (
@@ -320,6 +321,7 @@ class ReadAssignmentAggregator:
         self.read_groups = read_groups
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
+        self.grouped_format = GroupedOutputFormat[self.args.counts_format]
 
         self.gene_set = set()
         self.transcript_set = set()
@@ -369,11 +371,13 @@ class ReadAssignmentAggregator:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
                                                             self.args.gene_quantification,
                                                             complete_feature_list=self.gene_set,
-                                                            read_groups=self.read_groups)
+                                                            read_groups=self.read_groups,
+                                                            grouped_format=self.grouped_format)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
                                                                         self.args.transcript_quantification,
                                                                         complete_feature_list=self.transcript_set,
-                                                                        read_groups=self.read_groups)
+                                                                        read_groups=self.read_groups,
+                                                                        grouped_format=self.grouped_format)
             self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 
             if self.args.count_exons:

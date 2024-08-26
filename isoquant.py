@@ -36,7 +36,7 @@ from src.read_mapper import (
 from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
-from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, NormalizationMethod
+from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, NormalizationMethod, GroupedOutputFormat
 from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
@@ -228,6 +228,9 @@ def parse_args(cmd_args=None, namespace=None):
                           help="TPM normalization method: simple - conventional normalization using all counted reads;"
                                "usable_reads - includes all assigned reads.",
                           default=NormalizationMethod.simple.name)
+    add_additional_option("--counts_format", type=str, choices=[e.name for e in GroupedOutputFormat],
+                          help="output format for grouped counts",
+                          default=GroupedOutputFormat.both.name)
 
     add_additional_option_to_group(pipeline_args_group, "--keep_tmp", help="do not remove temporary files "
                                                                            "in the end", action='store_true',
