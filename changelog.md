@@ -1,6 +1,10 @@
 # IsoQuant changelog
 
-## IsoQuant 3.5.0, 26 August 2024
+## IsoQuant 3.5.2, 3 September 2024
+
+- Fix exon counting algorithm [#229](https://github.com/ablab/IsoQuant/issues/229).
+
+## IsoQuant 3.5.1, 26 August 2024
 
 - Fix YAML support in visualization [#222](https://github.com/ablab/IsoQuant/issues/222).
 
