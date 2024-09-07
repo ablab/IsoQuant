@@ -210,7 +210,7 @@ class MultimapResolver:
         min_region_start = math.inf
         best_assignment = -1
         for info in overlap_index_list:
-            if info[0] == max_overlap_len and min_region_start < info[1]:
+            if info[0] == max_overlap_len and info[1] < min_region_start:
                 min_region_start = info[1]
                 best_assignment = info[2]
 
