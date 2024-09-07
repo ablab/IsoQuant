@@ -6,10 +6,12 @@
 ############################################################################
 
 import logging
+import math
 from enum import Enum
-from collections import defaultdict
 
 from .isoform_assignment import ReadAssignmentType
+from .common import intersection_len
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -51,6 +53,7 @@ class MultimapResolver:
         consistent_assignments = []
         inconsistent_assignments = []
         primary_inconsistent = []
+        noninformative = []
 
         for i, a in enumerate(assignment_list):
             if a.assignment_type.is_inconsistent():
@@ -61,6 +64,8 @@ class MultimapResolver:
                 consistent_assignments.append(i)
                 if not a.multimapper and not a.assignment_type == ReadAssignmentType.ambiguous:
                     primary_unique.append(i)
+            else:
+                noninformative.append(i)
 
         if primary_unique:
             return self.filter_assignments(assignment_list, primary_unique)
@@ -74,7 +79,11 @@ class MultimapResolver:
         if inconsistent_assignments:
             return self.select_best_inconsistent(assignment_list, inconsistent_assignments)
 
-        return assignment_list
+        if noninformative:
+            return self.select_noninformative(assignment_list, noninformative)
+
+        logger.warning("Unexpected assignments in multimap resolution %s" % assignment_list[0].read_id)
+        return assignment_list[0:1]
 
     @staticmethod
     def select_best_inconsistent(assignment_list, inconsistent_assignments):
@@ -184,3 +193,27 @@ class MultimapResolver:
                                 % (example_assignment.read_id, example_assignment.chr_id, example_assignment.start))
 
         return selected_assignments
+
+    @staticmethod
+    def select_noninformative(assignment_list, assignment_indices):
+        # triplets (overlap_length, genomic_region_start, index)
+        overlap_index_list = []
+        max_overlap_len = 0
+
+        for i in assignment_indices:
+            assignment = assignment_list[i]
+            overlap_len = intersection_len(assignment.genomic_region, (assignment.start, assignment.end))
+            max_overlap_len = max(overlap_len, max_overlap_len)
+            overlap_index_list.append((overlap_len, assignment.genomic_region[0], i))
+
+        # select assignment with the best overlap with genic region and lowest region start (for reproducibility)
+        min_region_start = math.inf
+        best_assignment = -1
+        for info in overlap_index_list:
+            if info[0] == max_overlap_len and min_region_start < info[1]:
+                min_region_start = info[1]
+                best_assignment = info[2]
+
+        assert best_assignment != -1
+        return [assignment_list[best_assignment]]
+
