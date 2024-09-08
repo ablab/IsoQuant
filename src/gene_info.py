@@ -16,11 +16,10 @@ from .common import (
     equal_ranges,
     get_intron_strand,
     intervals_total_length,
-    is_subprofile,
     overlaps,
-    junctions_from_blocks,
-    AtomicIDDistributor
+    junctions_from_blocks
 )
+from .id_policy import SimpleIDDistributor
 
 logger = logging.getLogger('IsoQuant')
 
@@ -121,7 +120,7 @@ class FeatureProfiles:
 
 # exon/intron info
 class FeatureInfo:
-    feature_id_counter = AtomicIDDistributor()
+    feature_id_counter = SimpleIDDistributor()
     def __init__(self, chr_id, start, end, strand, type, gene_ids):
         self.id = FeatureInfo.feature_id_counter.increment()
         self.chr_id = chr_id

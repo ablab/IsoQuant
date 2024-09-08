@@ -3,9 +3,9 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
+import threading
 
-
-from .graph_based_model_construction import GraphBasedModelConstructor
+from src.common import TranscriptNaming
 
 
 class SimpleIDDistributor(object):
@@ -25,7 +25,7 @@ class ExcludingIdDistributor(SimpleIDDistributor):
             return
 
         for g in genedb.region(seqid=chr_id, start=1, featuretype="gene"):
-            if g.id.startswith(GraphBasedModelConstructor.novel_gene_prefix):
+            if g.id.startswith(TranscriptNaming.novel_gene_prefix):
                 try:
                     gene_num = int(g.id.split("_")[-1])
                     self.forbidden_ids.add(gene_num)
@@ -34,9 +34,9 @@ class ExcludingIdDistributor(SimpleIDDistributor):
                 except ValueError:
                     pass
 
-        transcript_num_start_pos = len(GraphBasedModelConstructor.transcript_prefix)
+        transcript_num_start_pos = len(TranscriptNaming.transcript_prefix)
         for t in genedb.region(seqid=chr_id, start=1, featuretype=("transcript", "mRNA")):
-            if t.id.startswith(GraphBasedModelConstructor.transcript_prefix):
+            if t.id.startswith(TranscriptNaming.transcript_prefix):
                 try:
                     transcript_num = int(t.id.split(".")[0][transcript_num_start_pos:])
                     self.forbidden_ids.add(transcript_num)
@@ -78,3 +78,14 @@ class FeatureIdStorage:
             feature_id =  self.id_dict[feature_tuple]
 
         return feature_id
+
+
+class AtomicIDDistributor(object):
+    def __init__(self):
+        self.value = 0
+        self._lock = threading.Lock()
+
+    def increment(self):
+        with self._lock:
+            self.value += 1
+            return self.value

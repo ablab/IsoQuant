@@ -7,7 +7,8 @@
 
 import logging
 from enum import Enum, unique
-from src.common import AtomicIDDistributor, junctions_from_blocks
+from src.common import junctions_from_blocks
+from src.id_policy import SimpleIDDistributor
 from src.serialization import *
 from src.polya_finder import PolyAInfo
 
@@ -619,7 +620,7 @@ class BasicReadAssignment:
 
 
 class ReadAssignment:
-    assignment_id_generator = AtomicIDDistributor()
+    assignment_id_generator = SimpleIDDistributor()
 
     def __init__(self, read_id, assignment_type, match=None):
         self.assignment_id = ReadAssignment.assignment_id_generator.increment()
