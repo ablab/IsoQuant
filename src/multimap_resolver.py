@@ -215,5 +215,5 @@ class MultimapResolver:
                 best_assignment = info[2]
 
         assert best_assignment != -1
-        return [assignment_list[best_assignment]]
+        return MultimapResolver.filter_assignments(assignment_list, {best_assignment})
 

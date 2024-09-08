@@ -624,7 +624,7 @@ class DatasetProcessor:
 
         for assignment_list in multimapped_reads.values():
             if len(assignment_list) > 1:
-                multimap_resolver.resolve(assignment_list)
+                assignment_list = multimap_resolver.resolve(assignment_list)
                 resolved_lists = defaultdict(list)
                 for a in assignment_list:
                     resolved_lists[a.chr_id].append(a)
