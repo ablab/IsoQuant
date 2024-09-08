@@ -9,23 +9,11 @@ import logging
 import os
 import re
 import subprocess
-import threading
 import math
 from collections import defaultdict
 from enum import Enum
 
 logger = logging.getLogger('IsoQuant')
-
-
-class AtomicIDDistributor(object):
-    def __init__(self):
-        self.value = 0
-        self._lock = threading.Lock()
-
-    def increment(self):
-        with self._lock:
-            self.value += 1
-            return self.value
 
 
 class CigarEvent(Enum):
@@ -46,6 +34,13 @@ class CigarEvent(Enum):
     @classmethod
     def get_ins_del_match_events(cls):
         return {cls.match, cls.insertion, cls.deletion, cls.seq_match, cls.seq_mismatch}
+
+
+class TranscriptNaming:
+    transcript_prefix = "transcript"
+    novel_gene_prefix = "novel_gene_"
+    nic_transcript_suffix = ".nic"
+    nnic_transcript_suffix = ".nnic"
 
 
 # key, value
