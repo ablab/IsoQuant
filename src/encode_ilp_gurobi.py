@@ -125,12 +125,12 @@ class Enc:
 
         for i in range(self.k):
             for (u,v) in self.E:
-                self.model.addConstr( self.phi_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14f_u={}_v={}_i={}".format(u,v,i) )
-                self.model.addConstr( self.gam_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14i_u={}_v={}_i={}".format(u,v,i) )
+                self.model.addConstr( self.phi_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14f_u={}_v={}_i={}".format(u,v,i) ) 
+                self.model.addConstr( self.gam_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14i_u={}_v={}_i={}".format(u,v,i) ) #FIXME w_max vs M
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.weights[i]                                           , "14g_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.gam_vars[u,v,i] <= self.slacks [i]                                           , "14j_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.phi_vars[u,v,i] >= self.weights[i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14h_u={}_v={}_i={}".format(u,v,i) )
-                self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14k_u={}_v={}_i={}".format(u,v,i) )
+                self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14k_u={}_v={}_i={}".format(u,v,i) ) #FIXME w_max vs M
 
         '''
         Idea: might be interesting to try different strategies of subpath constraints wrt data
