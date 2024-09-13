@@ -7,7 +7,7 @@
 [![User manual](https://github.com/ablab/IsoQuant/actions/workflows/docs.yml/badge.svg)](https://ablab.github.io/IsoQuant/)
 
 
-# IsoQuant 3.5
+# IsoQuant 3.6
 
 [Full IsoQuant documentation can found here](https://ablab.github.io/IsoQuant/).
 Information in this README is given only for convenience and is not a full user manual.
