@@ -99,8 +99,8 @@ class GFFPrinter:
         for gene_id, coords in gene_order:
             if gene_id not in self.printed_gene_ids:
                 gene_additiional_info = ""
-                if gene_info and gene_id in gene_info.gene_attributes:
-                    gene_additiional_info = gene_info.gene_attributes[gene_id]
+                if gene_info and gene_id in gene_info.feature_attributes:
+                    gene_additiional_info = gene_info.feature_attributes[gene_id]
                 source = "IsoQuant"
                 if gene_info and gene_id in gene_info.sources:
                     source = gene_info.sources[gene_id]
@@ -117,8 +117,8 @@ class GFFPrinter:
                 if not model.check_additional("exons"):
                     model.add_additional_attribute("exons", str(len(model.exon_blocks)))
                 transcript_additiional_info = ""
-                if gene_info and model.transcript_id in gene_info.gene_attributes:
-                    transcript_additiional_info = " " + gene_info.gene_attributes[model.transcript_id]
+                if gene_info and model.transcript_id in gene_info.feature_attributes:
+                    transcript_additiional_info = " " + gene_info.feature_attributes[model.transcript_id]
 
                 transcript_line = '%s\t%s\ttranscript\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcript_id "%s"; %s\n' \
                                   % (model.chr_id,  model.source, model.exon_blocks[0][0], model.exon_blocks[-1][1],
@@ -137,9 +137,14 @@ class GFFPrinter:
                 exons_to_print = sorted(exons_to_print, reverse=True) if model.strand == '-' else sorted(exons_to_print)
                 for i, e in enumerate(exons_to_print):
                     exon_str_id = self.exon_id_storage.get_id(model.chr_id, e, model.strand)
+
+                    exon_id = model.transcript_id + "_%d_%d_%s" % (e[0], e[1], model.strand)
+                    exon_additiional_info = ""
+                    if gene_info and exon_id in gene_info.feature_attributes:
+                        exon_additiional_info = " " + gene_info.feature_attributes[model.transcript_id]
                     feature_type = e[2]
                     self.out_gff.write(prefix_columns + "%s\t%d\t%d\t" % (feature_type, e[0], e[1]) + suffix_columns +
-                                       ' exon "%d"; exon_id "%s";\n' % ((i + 1), exon_str_id))
+                                       ' exon_number "%d"; exon_id "%s"; %s\n' % ((i + 1), exon_str_id, exon_additiional_info))
         self.out_gff.flush()
 
     def dump_read_assignments(self, transcript_model_constructor):
