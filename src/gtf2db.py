@@ -59,6 +59,8 @@ def db2bed(db, bed, _=None):
                 gene_name = record["gene_name"][0]
             elif "gene_id" in record.attributes:
                 gene_name = record["gene_id"][0]
+            elif "Parent" in record.attributes:
+                gene_name = record["Parent"][0]
             else:
                 gene_name = "unknown_gene"
             transcript_name = record.id + "|" + transcript_type + "|" + gene_name
@@ -97,12 +99,13 @@ def check_input_gtf(gtf, db, complete_db):
     gtf_is_correct, corrected_gtf, out_fname, has_meta_features = check_gtf_duplicates(gtf)
     if not gtf_is_correct:
         outdir = os.path.dirname(db)
-        new_gtf_path = os.path.join(outdir, out_fname)
-        with open(new_gtf_path, "w") as out_gtf:
-            out_gtf.write(corrected_gtf)
         logger.error("Input GTF seems to be corrupted (see warnings above).")
-        logger.error("An attempt to correct this GTF was made, the result is written to %s" % new_gtf_path)
-        logger.error("NB! some transcript / gene ids in the corrected annotation are modified.")
+        if out_fname and corrected_gtf:
+            new_gtf_path = os.path.join(outdir, out_fname)
+            with open(new_gtf_path, "w") as out_gtf:
+                out_gtf.write(corrected_gtf)
+            logger.error("An attempt to correct this GTF was made, the result is written to %s" % new_gtf_path)
+            logger.error("NB! some transcript / gene ids in the corrected annotation are modified.")
         logger.error("Provide a correct GTF by fixing the original input GTF or checking the corrected one.")
         exit(-3)
     else:
@@ -167,6 +170,10 @@ def check_gtf_duplicates(gtf):
         handle = open(gtf, "rt")
         inner_ext = outer_ext
 
+    if inner_ext.lower() == 'gff3':
+        return check_gff3_duplicates(handle)
+
+    gff3_checked = False
     for l in handle.readlines():
         line_count += 1
         if l.startswith("#"):
@@ -177,8 +184,14 @@ def check_gtf_duplicates(gtf):
             corrected_gtf += l
             continue
 
-        feature_type = v[2]
-        attrs = v[8].split(" ")
+        attribute_column = v[8]
+        if not gff3_checked:
+            gff3_checked = True
+            if attribute_column.find("ID=") != -1:
+                handle.seek(0)
+                return check_gff3_duplicates(handle)
+
+        attrs = attribute_column.split(" ")
 
         gene_id_pos = -1
         for i in range(len(attrs)):
@@ -190,6 +203,7 @@ def check_gtf_duplicates(gtf):
             gtf_correct = False
             continue
 
+        feature_type = v[2]
         gene_str = attrs[gene_id_pos + 1]
         start_pos = gene_str.find('"')
         end_pos = gene_str.rfind('"')
@@ -257,6 +271,53 @@ def check_gtf_duplicates(gtf):
         complete_genedb = 0
 
     return gtf_correct, corrected_gtf, gtf_name + ".corrected" + inner_ext.lower(), complete_genedb
+
+
+def check_gff3_duplicates(handle):
+    gtf_correct = True
+    gene_count = 0
+    transcript_count = 0
+    line_count = 0
+    feature_ids = {}
+
+    for l in handle.readlines():
+        line_count += 1
+        if l.startswith("#"):
+            continue
+        v = l.strip().split("\t")
+        if len(v) < 9:
+            continue
+
+        feature_type = v[2]
+        if feature_type == 'gene':
+            gene_count += 1
+        elif feature_type in ["transcript", "mRNA"]:
+            transcript_count += 1
+
+        attrs = v[8].split(";")
+        id_pos = -1
+        for i in range(len(attrs)):
+            if attrs[i].startswith('ID'):
+                id_pos = i
+        if id_pos == -1:
+            if feature_type in ["gene", "transcript", "mRNA"]:
+                logger.warning("Malformed GTF line %d (ID attribute value cannot be found)" % line_count)
+                logger.warning(l.strip())
+                gtf_correct = False
+            continue
+
+        id_str = attrs[id_pos]
+        id_value = id_str.split("=")[1]
+        if id_value in feature_ids:
+            logger.warning("Duplicated ID %s on line %d" % (id_value, line_count))
+            gtf_correct = False
+            feature_ids[id_value] += 1
+
+    complete_genedb = 1
+    if transcript_count == 0 or gene_count == 0:
+        complete_genedb = -1
+
+    return gtf_correct, None, None, complete_genedb
 
 
 def find_converted_db(converted_gtfs, gtf_filename, complete_genedb):
