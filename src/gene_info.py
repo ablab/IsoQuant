@@ -183,7 +183,7 @@ class GeneInfo:
         self.set_sources()
         self.gene_id_map = {}
         self.set_gene_ids()
-        self.gene_attributes = {}
+        self.feature_attributes = {}
         self.set_gene_attributes()
         if prepare_profiles:
             self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
@@ -208,7 +208,7 @@ class GeneInfo:
         gene_info.sources = {}
         gene_info.other_features = {}
         gene_info.gene_id_map = {}
-        gene_info.gene_attributes = {}
+        gene_info.feature_attributes = {}
         introns = set()
         exons = set()
 
@@ -294,7 +294,7 @@ class GeneInfo:
                              transcript_model.gene_id: transcript_model.source}
         gene_info.other_features = {transcript_model.transcript_id: transcript_model.other_features}
         gene_info.gene_id_map = {transcript_model.transcript_id: transcript_model.gene_id}
-        gene_info.gene_attributes = {}
+        gene_info.feature_attributes = {}
 
         gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
         gene_info.exon_property_map = None
@@ -332,7 +332,7 @@ class GeneInfo:
         gene_info.other_features = {}
         gene_info.sources = {}
         gene_info.gene_id_map = {}
-        gene_info.gene_attributes = {}
+        gene_info.feature_attributes = {}
         gene_info.regions_for_bam_fetch = [(start, end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
@@ -390,7 +390,7 @@ class GeneInfo:
         gene_info.set_sources()
         gene_info.gene_id_map = {}
         gene_info.set_gene_ids()
-        gene_info.gene_attributes = {}
+        gene_info.feature_attributes = {}
         gene_info.set_gene_attributes()
         gene_info.exon_property_map = gene_info.set_feature_properties(gene_info.all_isoforms_exons, gene_info.exon_profiles)
         gene_info.intron_property_map = gene_info.set_feature_properties(gene_info.all_isoforms_introns, gene_info.intron_profiles)
@@ -475,19 +475,26 @@ class GeneInfo:
                 self.gene_id_map[t.id] = gene_db.id
 
     def set_gene_attributes(self):
-        self.gene_attributes = defaultdict(str)
+        self.feature_attributes = defaultdict(str)
         for gene_db in self.gene_db_list:
             for attr in gene_db.attributes.keys():
-                if attr in ['gene_id', 'ID', 'level']:
+                if attr in ['gene_id', 'ID', 'level', 'Parent']:
                     continue
                 if gene_db.attributes[attr]:
-                    self.gene_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
-            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
+                    self.feature_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
+            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
                 for attr in t.attributes.keys():
-                    if attr in ['transcript_id', 'gene_id', 'ID', 'level', 'exons']:
+                    if attr in ['transcript_id', 'gene_id', 'ID', 'level', 'exons', 'Parent']:
                         continue
                     if t.attributes[attr]:
-                        self.gene_attributes[t.id] += '%s "%s"; ' % (attr, t.attributes[attr][0])
+                        self.feature_attributes[t.id] += '%s "%s"; ' % (attr, t.attributes[attr][0])
+                for e in self.db.children(gene_db, featuretype=('exon')):
+                    exon_id = t.id + "_%d_%d_%s" % (e.start, e.end, e.strand)
+                    for attr in t.attributes.keys():
+                        if attr in ['transcript_id', 'gene_id', 'ID', 'Parent', 'level', 'exon_id', 'exon', 'exon_number']:
+                            continue
+                        if t.attributes[attr]:
+                            self.feature_attributes[exon_id] += '%s "%s"; ' % (attr, t.attributes[attr][0])
 
     # assigns an ordered list of all known exons and introns to self.exons and self.introns
     # returns 2 maps, isoform id -> intron / exon list
