@@ -4,6 +4,7 @@
 # See file LICENSE for details.
 ############################################################################
 
+import os
 import logging
 from collections import defaultdict
 from functools import cmp_to_key
@@ -25,8 +26,6 @@ from .isoform_assignment import is_matching_assignment, match_subtype_to_str_wit
 from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
-#from .encode_ilp_OR import Encode_ILP
-from .encode_ilp_gurobi import Encode_ILP
 
 
 logger = logging.getLogger('IsoQuant')
@@ -118,40 +117,15 @@ class GraphBasedModelConstructor:
         return None
 
     def process(self, read_assignment_storage):
-        #Construction of intron graph
-        self.intron_graph = IntronGraph.from_reference(self.params, self.gene_info, read_assignment_storage)
+        # Construction of intron graph
+        if self.params.only_ref:
+            self.intron_graph = IntronGraph.from_reference(self.params, self.gene_info, read_assignment_storage)
+        else:
+            self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
+
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         self.fill_in_graph_weights(read_assignment_storage, self.intron_graph, self.path_processor)
         self.intron_graph.print_graph()
-        # leave path storage filling for now
-        self.path_storage = IntronPathStorage(self.params, self.path_processor)
-        self.path_storage.fill(read_assignment_storage)
-
-        self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
-        self.known_introns = set(self.gene_info.intron_profiles.features)
-
-        for intron_path, isoform_id in self.known_isoforms_in_graph.items():
-            self.known_isoforms_in_graph_ids[isoform_id] = intron_path
-
-        if self.params.no_ilp:
-            self.construct_fl_isoforms()
-            self.construct_assignment_based_isoforms(read_assignment_storage)
-            self.assign_reads_to_models(read_assignment_storage)
-            self.filter_transcripts()
-        else:
-            self.construct_ilp_isoforms()
-            self.assign_reads_to_models(read_assignment_storage)
-            # self.filter_transcripts()
-
-        if self.params.genedb:
-            self.create_extended_annotation()
-
-        if not self.gene_info.all_isoforms_exons:
-            transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage)
-            self.transcript_model_storage = transcript_joiner.join_transcripts()
-
-        if self.params.sqanti_output:
-            self.compare_models_with_known()
 
     def fill_in_graph_weights(self, read_assignments, intron_graph, path_processor):
         for a in read_assignments:
@@ -1084,3 +1058,55 @@ class TranscriptToGeneJoiner:
             model.gene_id = transcript_to_new_gene_id[model.transcript_id]
 
         return self.transcipt_model_storage
+
+
+class GraphPrinter:
+
+    def __init__(self, outf_prefix, sample_name):
+        self.model_fname = os.path.join(outf_prefix, sample_name + ".grp")
+        self.out_gff = open(self.model_fname, "w")
+
+    def __del__(self):
+        self.out_gff.close()
+
+    def dump(self, transcript_model_constructor):
+        current_vertex_id = 0
+        inrton_id_map = {}
+        printed_edges = set()
+        vertex_count = len(transcript_model_constructor.intron_graph.intron_collector.clustered_introns)
+        self.out_gff.write("%d\n" % vertex_count)
+        for v in transcript_model_constructor.intron_graph.outgoing_edges.keys():
+            for u in transcript_model_constructor.intron_graph.outgoing_edges[v]:
+                if (u, v) in printed_edges: continue
+                printed_edges.add((u, v))
+                printed_edges.add((v, u))
+                if v not in inrton_id_map:
+                    inrton_id_map[v] = current_vertex_id
+                    current_vertex_id += 1
+                v_id = inrton_id_map[v]
+
+                if u not in inrton_id_map:
+                    inrton_id_map[u] = current_vertex_id
+                    current_vertex_id += 1
+                u_id = inrton_id_map[u]
+
+                self.out_gff.write(
+                    "%d %d %d\n" % (u_id, v_id, transcript_model_constructor.intron_graph.edge_weights[(u, v)]))
+
+        for u in transcript_model_constructor.intron_graph.outgoing_edges.keys():
+            for v in transcript_model_constructor.intron_graph.outgoing_edges[u]:
+                if (u, v) in printed_edges: continue
+                printed_edges.add((u, v))
+                printed_edges.add((v, u))
+                if v not in inrton_id_map:
+                    inrton_id_map[v] = current_vertex_id
+                    current_vertex_id += 1
+                v_id = inrton_id_map[v]
+
+                if u not in inrton_id_map:
+                    inrton_id_map[u] = current_vertex_id
+                    current_vertex_id += 1
+                u_id = inrton_id_map[u]
+
+                self.out_gff.write(
+                    "%d %d %d\n" % (u_id, v_id, transcript_model_constructor.intron_graph.edge_weights[(u, v)]))

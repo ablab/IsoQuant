@@ -158,7 +158,7 @@ class IntronGraph:
         self.construct()
         if self.params.debug:
             self.print_graph()
-        self.simplify()
+        # self.simplify()
         self.attach_terminal_positions()
         if self.params.debug:
             self.print_graph()
