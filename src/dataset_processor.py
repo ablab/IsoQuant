@@ -47,7 +47,7 @@ from .assignment_io import (
     TmpFileAssignmentLoader,
 )
 from .transcript_printer import GFFPrinter
-from .graph_based_model_construction import GraphBasedModelConstructor
+from .graph_based_model_construction import GraphBasedModelConstructor, GraphPrinter
 
 logger = logging.getLogger('IsoQuant')
 
@@ -195,16 +195,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         gffutils_db = None
 
     transcript_stat_counter = EnumStats()
-    if construct_models:
-        io_support = IOSupport(args)
-        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support)
-        tmp_extended_gff_printer = None
-        if gffutils_db:
-            tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, io_support,
-                                                  gtf_suffix=".extended_annotation.gtf", output_r2t=False)
-        sqanti_t2t_printer = None
-        if args.sqanti_output:
-            sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args))
+    graph_printer = GraphPrinter(sample.out_dir, sample.prefix)
 
     loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
     while loader.has_next():
@@ -217,19 +208,10 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             aggregator.global_printer.add_read_info(read_assignment)
             aggregator.global_counter.add_read_info(read_assignment)
 
-        if construct_models:
-            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
+        model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
                                                            aggregator.transcript_model_global_counter)
-            model_constructor.process(assignment_storage)
-            #break SENA
-            tmp_gff_printer.dump(model_constructor)
-            if tmp_extended_gff_printer:
-                tmp_extended_gff_printer.dump(model_constructor, model_constructor.extended_annotation_storage)
-            if args.sqanti_output:
-                for a in model_constructor.transcript2transcript:
-                    sqanti_t2t_printer.add_read_info(a)
-            for t in model_constructor.transcript_model_storage:
-                transcript_stat_counter.add(t.transcript_type)
+        model_constructor.process(assignment_storage)
+        graph_printer.dump(model_constructor)
 
     aggregator.global_counter.dump()
     aggregator.read_stat_counter.dump(read_stat_file)
@@ -514,20 +496,8 @@ class DatasetProcessor:
 
         # set up aggregators and outputs
         aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups)
+        graph_printer = GraphPrinter(sample.out_dir, sample.prefix)
         transcript_stat_counter = EnumStats()
-
-        if not self.args.no_model_construction:
-            gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, self.io_support, header=self.common_header
-            )
-            if self.args.genedb:
-                extended_gff_printer = GFFPrinter(
-                    sample.out_dir, sample.prefix, self.io_support,
-                    gtf_suffix=".extended_annotation.gtf", output_r2t=False,
-                    header=self.common_header
-                )
-            else:
-                extended_gff_printer = None
 
         model_gen = (
             construct_models_in_parallel,
@@ -558,20 +528,8 @@ class DatasetProcessor:
                     for k, v in tsc.stats_dict.items():
                         transcript_stat_counter.stats_dict[k] += v
 
-        if not self.args.no_model_construction:
-            self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)
-            logger.info("Transcript model file " + gff_printer.model_fname)
-            if extended_gff_printer:
-                merge_files(
-                    [
-                        rreplace(extended_gff_printer.model_fname, sample.prefix, f"{sample.prefix}_{chr_id}")
-                        for chr_id in chr_ids
-                    ],
-                    extended_gff_printer.model_fname,
-                    copy_header=False
-                )
-                logger.info("Extended annotation is saved to " + extended_gff_printer.model_fname)
-            transcript_stat_counter.print_start("Transcript model statistics")
+        merge_files([rreplace(graph_printer.model_fname, sample.prefix, sample.prefix + "_" + chr_id) for chr_id in chr_ids],
+                    graph_printer.model_fname, copy_header=True)
 
         self.merge_assignments(sample, aggregator, chr_ids)
         if self.args.sqanti_output:

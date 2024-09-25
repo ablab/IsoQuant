@@ -1061,6 +1061,7 @@ class TranscriptToGeneJoiner:
 
 
 class GraphPrinter:
+    graph_id_distributor = AtomicCounter()
 
     def __init__(self, outf_prefix, sample_name):
         self.model_fname = os.path.join(outf_prefix, sample_name + ".grp")
@@ -1070,43 +1071,42 @@ class GraphPrinter:
         self.out_gff.close()
 
     def dump(self, transcript_model_constructor):
+        graph_id = GraphPrinter.graph_id_distributor.increment()
         current_vertex_id = 0
         inrton_id_map = {}
         printed_edges = set()
-        vertex_count = len(transcript_model_constructor.intron_graph.intron_collector.clustered_introns)
+        all_vertices = set(transcript_model_constructor.intron_graph.outgoing_edges.keys())
+        all_vertices.update(transcript_model_constructor.intron_graph.incoming_edges.keys())
+        for outv in transcript_model_constructor.intron_graph.outgoing_edges.values():
+            all_vertices.update(outv)
+        for inv in transcript_model_constructor.intron_graph.incoming_edges.values():
+            all_vertices.update(inv)
+
+        for v in all_vertices:
+            inrton_id_map[v] = current_vertex_id
+            current_vertex_id += 1
+
+        vertex_count = current_vertex_id
+        if vertex_count == 0: return
+
+        self.out_gff.write("Graph #%d\n" % graph_id)
         self.out_gff.write("%d\n" % vertex_count)
         for v in transcript_model_constructor.intron_graph.outgoing_edges.keys():
             for u in transcript_model_constructor.intron_graph.outgoing_edges[v]:
-                if (u, v) in printed_edges: continue
-                printed_edges.add((u, v))
+                if (v, u) in printed_edges: continue
                 printed_edges.add((v, u))
-                if v not in inrton_id_map:
-                    inrton_id_map[v] = current_vertex_id
-                    current_vertex_id += 1
                 v_id = inrton_id_map[v]
-
-                if u not in inrton_id_map:
-                    inrton_id_map[u] = current_vertex_id
-                    current_vertex_id += 1
                 u_id = inrton_id_map[u]
 
                 self.out_gff.write(
-                    "%d %d %d\n" % (u_id, v_id, transcript_model_constructor.intron_graph.edge_weights[(u, v)]))
+                    "%d %d %d\n" % (v_id, u_id, transcript_model_constructor.intron_graph.edge_weights[(v, u)]))
 
-        for u in transcript_model_constructor.intron_graph.outgoing_edges.keys():
-            for v in transcript_model_constructor.intron_graph.outgoing_edges[u]:
-                if (u, v) in printed_edges: continue
-                printed_edges.add((u, v))
+        for u in transcript_model_constructor.intron_graph.incoming_edges.keys():
+            for v in transcript_model_constructor.intron_graph.incoming_edges[u]:
+                if (v, u) in printed_edges: continue
                 printed_edges.add((v, u))
-                if v not in inrton_id_map:
-                    inrton_id_map[v] = current_vertex_id
-                    current_vertex_id += 1
                 v_id = inrton_id_map[v]
-
-                if u not in inrton_id_map:
-                    inrton_id_map[u] = current_vertex_id
-                    current_vertex_id += 1
                 u_id = inrton_id_map[u]
 
                 self.out_gff.write(
-                    "%d %d %d\n" % (u_id, v_id, transcript_model_constructor.intron_graph.edge_weights[(u, v)]))
+                    "%d %d %d\n" % (v_id, u_id, transcript_model_constructor.intron_graph.edge_weights[(v, u)]))

@@ -155,7 +155,7 @@ def parse_args(cmd_args=None, namespace=None):
                                "default: False for ONT, True for other data types")
     # OUTPUT PROPERTIES
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
-                                     default="16")
+                                     default="1")
     pipeline_args_group.add_argument('--check_canonical', action='store_true', default=False,
                                      help="report whether splice junctions are canonical")
     add_additional_option_to_group(pipeline_args_group, "--report_unstranded",
