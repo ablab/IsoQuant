@@ -1088,6 +1088,7 @@ class GraphPrinter:
 
         vertex_count = current_vertex_id
         if vertex_count == 0: return
+        if sum(transcript_model_constructor.intron_graph.edge_weights.values()) == 0: return
 
         self.out_gff.write("Graph #%d\n" % graph_id)
         self.out_gff.write("%d\n" % vertex_count)
