@@ -1,5 +1,12 @@
 # IsoQuant changelog
 
+## IsoQuant 3.6.1, 25 September 2024
+
+- Import exon attributes from the reference annotation [#175](https://github.com/ablab/IsoQuant/issues/175).
+
+- Fixed annotation checks for GFF3 [#240](https://github.com/ablab/IsoQuant/issues/240).
+
+
 ## IsoQuant 3.6.0, 13 September 2024
 
 - Fixed duplicated `noninformative` and `intergenic` reads assignments.
