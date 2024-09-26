@@ -255,10 +255,11 @@ class ReadAssignmentAggregator:
 
         self.transcript_model_global_counter = CompositeCounter([])
         if not self.args.no_model_construction:
-            self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
-                                                                      self.args.transcript_quantification,
-                                                                      ignore_read_groups=True, output_zeroes=False)
-            self.transcript_model_global_counter.add_counters([self.transcript_model_counter])
+            pass
+            # self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
+            #                                                           self.args.transcript_quantification,
+            #                                                           ignore_read_groups=True, output_zeroes=False)
+            # self.transcript_model_global_counter.add_counters([self.transcript_model_counter])
 
         if self.args.count_exons and self.args.genedb:
             self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
