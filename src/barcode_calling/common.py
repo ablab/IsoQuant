@@ -105,9 +105,9 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
     if start_pos is None:
         return None, None
 
-    if start_delta > 0 and pattern_start > start_delta:
+    if start_delta >= 0 and pattern_start > start_delta:
         return None, None
-    if end_delta > 0 and len(pattern) - pattern_end - 1 > end_delta:
+    if end_delta >= 0 and len(pattern) - pattern_end - 1 > end_delta:
         return None, None
     leftover_bases = len(pattern) - pattern_end - 1
     return start_pos, end_pos + leftover_bases
