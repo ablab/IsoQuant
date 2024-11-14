@@ -9,31 +9,38 @@ import logging
 import os
 import re
 import subprocess
-import threading
 import math
 from collections import defaultdict
+from enum import Enum
 
 logger = logging.getLogger('IsoQuant')
 
 
-class AtomicIDDistributor(object):
-    def __init__(self):
-        self.value = 0
-        self._lock = threading.Lock()
+class CigarEvent(Enum):
+    match = 0
+    insertion = 1
+    deletion = 2
+    skipped = 3
+    soft_clipping = 4
+    hard_clipping = 5
+    padding = 6
+    seq_match = 7
+    seq_mismatch = 8
 
-    def increment(self):
-        with self._lock:
-            self.value += 1
-            return self.value
+    @classmethod
+    def get_match_events(cls):
+        return {cls.match, cls.seq_match, cls.seq_mismatch}
+
+    @classmethod
+    def get_ins_del_match_events(cls):
+        return {cls.match, cls.insertion, cls.deletion, cls.seq_match, cls.seq_mismatch}
 
 
-class SimpleIDDistributor(object):
-    def __init__(self):
-        self.value = 0
-
-    def increment(self):
-        self.value += 1
-        return self.value
+class TranscriptNaming:
+    transcript_prefix = "transcript"
+    novel_gene_prefix = "novel_gene_"
+    nic_transcript_suffix = ".nic"
+    nnic_transcript_suffix = ".nnic"
 
 
 # key, value
@@ -469,25 +476,25 @@ def concat_gapless_blocks(blocks, cigar_tuples):
 
     while cigar_index < len(cigar_tuples) and block_index < len(blocks):
         # init new block
-        cigar_event = cigar_tuples[cigar_index][0]
+        cigar_event = CigarEvent(cigar_tuples[cigar_index][0])
         if current_block is None:
             # init new block from match
-            if cigar_event in [0, 7, 8]:
+            if cigar_event in CigarEvent.get_match_events():
                 current_block = (blocks[block_index][0] - deletions_before_block, blocks[block_index][1])
                 deletions_before_block = 0
                 block_index += 1
             # keep track of deletions before matched block
-            elif cigar_event == 2:
+            elif cigar_event == CigarEvent.deletion:
                 deletions_before_block = cigar_tuples[cigar_index][1]
         # found intron, add current block
-        elif cigar_event == 3:
+        elif cigar_event == CigarEvent.skipped:
             resulting_blocks.append(current_block)
             current_block = None
         # add deletion to block
-        elif cigar_event == 2:
+        elif cigar_event == CigarEvent.deletion:
             current_block = (current_block[0], current_block[1] + cigar_tuples[cigar_index][1])
         # found match - merge blocks
-        elif cigar_event in [0, 7, 8]:
+        elif cigar_event in CigarEvent.get_match_events():
             # if abs(current_block[1] - blocks[block_index][0]) > 1:
             #    logger.debug("Distant blocks")
             #    logger.debug(current_block, blocks[block_index])
@@ -509,38 +516,38 @@ def get_read_blocks(ref_start, cigar_tuples):
     current_ref_block_start = None
     current_read_block_start = None
     current_cigar_block_start = None
-    has_match=False
+    has_match = False
     ref_blocks = []
     cigar_blocks = []
     read_blocks = []
 
     while cigar_index < len(cigar_tuples):
-        cigar_event = cigar_tuples[cigar_index][0]
+        cigar_event = CigarEvent(cigar_tuples[cigar_index][0])
         event_len = cigar_tuples[cigar_index][1]
 
-        if current_ref_block_start is None and cigar_event in [0, 1, 2, 7, 8]:
+        if current_ref_block_start is None and cigar_event in CigarEvent.get_ins_del_match_events():
             # init new block from match
             current_ref_block_start = ref_pos
             current_read_block_start = read_pos
             current_cigar_block_start = cigar_index
-            if cigar_event == 1:
+            if cigar_event == CigarEvent.insertion:
                 read_pos += event_len
-            elif cigar_event == 2:
+            elif cigar_event == CigarEvent.deletion:
                 ref_pos += event_len
             else:
                 read_pos += event_len
                 ref_pos += event_len
                 has_match = True
         # found intron, add current block
-        elif cigar_event in [0, 7, 8]:
+        elif cigar_event in CigarEvent.get_match_events():
             read_pos += event_len
             ref_pos += event_len
             has_match = True
-        elif cigar_event == 1:
+        elif cigar_event == CigarEvent.insertion:
             read_pos += event_len
-        elif cigar_event == 2:
+        elif cigar_event == CigarEvent.deletion:
             ref_pos += event_len
-        elif cigar_event == 3:
+        elif cigar_event == CigarEvent.skipped:
             if current_ref_block_start:
                 if has_match:
                     ref_blocks.append((current_ref_block_start, ref_pos - 1))
@@ -551,7 +558,7 @@ def get_read_blocks(ref_start, cigar_tuples):
                 current_read_block_start = None
                 current_cigar_block_start = None
             ref_pos += event_len
-        elif cigar_event == 4:
+        elif cigar_event == CigarEvent.soft_clipping:
             if current_ref_block_start:
                 if has_match:
                     ref_blocks.append((current_ref_block_start, ref_pos - 1))

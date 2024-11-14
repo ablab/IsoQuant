@@ -2,6 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
+import pprint
 
 
 class PlotOutput:
@@ -236,8 +237,6 @@ class PlotOutput:
             bbox_to_anchor=(1, 0, 0.5, 1),
             fontsize=8,
         )
-        plot_path = os.path.join(
-            self.read_assignments_dir, f"{file_title}_pie_chart.png"
-        )
+        plot_path = os.path.join(self.visualization_dir, f"{file_title}_pie_chart.png")
         plt.savefig(plot_path, bbox_inches="tight", dpi=300)
         plt.close()

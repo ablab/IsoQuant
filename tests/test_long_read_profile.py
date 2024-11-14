@@ -72,7 +72,9 @@ class TestOverlappingFeatureProfile:
                               ([(20, 60), (90, 110), (180, 200)], (20, 200), [(20, 60), (90, 110)],
                                -1, -1, 3, [1, 1, 0], [1, 1]),
                               ([(20, 60), (90, 110), (180, 200)], (20, 200), [(90, 110), (180, 200)],
-                               -1, -1, 3, [0, 1, 1], [1, 1])
+                               -1, -1, 3, [0, 1, 1], [1, 1]),
+                              ([(20, 60), (90, 110), (180, 200)], (20, 200), [(20, 60), (90, 100)],
+                               -1, -1, 3, [1, 0, 0], [1, -1]),
                               ])
     def test_exon_profile(self, known_features, gene_region, read_exons, polya_pos, polyt_pos, delta, expected_gene, expected_read):
         exon_profile_constructor = \

@@ -7,16 +7,71 @@
 [![User manual](https://github.com/ablab/IsoQuant/actions/workflows/docs.yml/badge.svg)](https://ablab.github.io/IsoQuant/)
 
 
+# IsoQuant 3.6
+
+[Full IsoQuant documentation can found here](https://ablab.github.io/IsoQuant/).
+Information in this README is given only for convenience and is not a full user manual.
+
+* [Citation information](#citation)
+* [Feedback and bug reports](#feedback-and-bug-reports)
+* [Quick start examples](#quick-start)
 
 
-# IsoQuant 3.5 manual
+## About IsoQuant
 
-[New IsoQuant documentation](https://ablab.github.io/IsoQuant/) is available. This README will be removed at some point.
+IsoQuant is a tool for the genome-based analysis of long RNA reads, such as PacBio or
+Oxford Nanopores. IsoQuant allows to reconstruct and quantify transcript models with
+high precision and decent recall. If the reference annotation is given, IsoQuant also
+assigns reads to the annotated isoforms based on their intron and exon structure.
+IsoQuant further performs annotated gene, isoform, exon and intron quantification.
+If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping.
+
+Latest IsoQuant version can be downloaded from [github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
+
+Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
+
+## Supported sequencing data
+
+IsoQuant support all kinds of long RNA data:
+* PacBio CCS
+* ONT dRNA / ONT cDNA
+* Assembled / corrected transcript sequences
+
+Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
+IsoQuant expect reads to contain polyA tails. For more reliable transcript model construction do not trim polyA tails.
+
+IsoQuant can also take aligned Illumina reads to correct long-read spliced alignments. However, short reads are _not_
+used to discover transcript models or compute abundances.
 
 
-**Quick start:**  
+## Supported reference data
 
-*   IsoQuant can be downloaded from [https://github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda:
+Reference genome is mandatory and should be provided in multi-FASTA format (can be gzipped).
+
+Reference gene annotation is not mandatory, but is likely to increase precision and recall.
+It can be provided in GFF/GTF format (can be gzipped).
+
+Pre-constructed `minimap2` index can also be provided to increase mapping time.
+
+
+## Citation
+The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
+
+To try IsoQuant you can use the data that was used in the publication [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
+
+
+## Feedback and bug reports
+Your comments, bug reports, and suggestions are very welcome. They will help us to further improve IsoQuant. If you have any troubles running IsoQuant, please send us `isoquant.log` from the `<output_dir>` directory.
+
+You can leave your comments and bug reports at our [GitHub repository tracker](https://github.com/ablab/IsoQuant/issues) or send them via email: isoquant.rna@gmail.com.
+
+
+
+## Quick start
+
+*   Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
+
+*   IsoQuant can be downloaded from [github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda:
 
         conda create -c conda-forge -c bioconda -n isoquant python=3.8 isoquant
 

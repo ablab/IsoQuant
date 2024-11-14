@@ -11,6 +11,7 @@ from functools import cmp_to_key
 from enum import unique, Enum
 
 from .common import (
+    TranscriptNaming,
     cmp,
     get_exons,
     intersection_len,
@@ -46,10 +47,6 @@ class StrandnessReportingLevel(Enum):
 
 
 class GraphBasedModelConstructor:
-    transcript_prefix = "transcript"
-    known_transcript_suffix = ".known"
-    nic_transcript_suffix = ".nic"
-    nnic_transcript_suffix = ".nnic"
     detected_known_isoforms = set()
     extended_transcript_ids = set()
 
@@ -411,7 +408,7 @@ class GraphBasedModelConstructor:
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
             count = self.path_storage.paths[path]
-            new_transcript_id = self.transcript_prefix + str(self.get_transcript_id())
+            new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
             # logger.debug("uuu %s: %s" % (new_transcript_id, str(novel_exons)))
 
             reference_isoform = None
@@ -482,16 +479,17 @@ class GraphBasedModelConstructor:
 
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
                     if transcript_gene is None:
-                        transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
+                        transcript_gene = (TranscriptNaming.novel_gene_prefix + self.gene_info.chr_id +
+                                           "_" + str(self.get_transcript_id()))
                     elif transcript_strand == '.':
                         transcript_strand = self.gene_info.gene_strands[transcript_gene]
 
                     if all(intron in self.known_introns for intron in intron_path):
                         transcript_type = TranscriptModelType.novel_in_catalog
-                        id_suffix = self.nic_transcript_suffix
+                        id_suffix = TranscriptNaming.nic_transcript_suffix
                     else:
                         transcript_type = TranscriptModelType.novel_not_in_catalog
-                        id_suffix = self.nnic_transcript_suffix
+                        id_suffix = TranscriptNaming.nnic_transcript_suffix
 
                     new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
                                                 new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
@@ -643,10 +641,11 @@ class GraphBasedModelConstructor:
 
             strand = '+' if forward else '-'
             coordinates = (five_prime_pos, three_prime_pos) if forward else (three_prime_pos, five_prime_pos)
-            new_transcript_id = self.transcript_prefix + str(self.get_transcript_id())
-            transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
+            new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
+            transcript_gene = (TranscriptNaming.novel_gene_prefix + self.gene_info.chr_id +
+                               "_" + str(self.get_transcript_id()))
             transcript_type = TranscriptModelType.novel_not_in_catalog
-            id_suffix = self.nnic_transcript_suffix
+            id_suffix = TranscriptNaming.nnic_transcript_suffix
 
             is_valid = True
             half_len = interval_len(coordinates) / 2

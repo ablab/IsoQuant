@@ -139,7 +139,8 @@ class OverlappingFeaturesProfileConstructor:
                 matched_features[read_pos].append(gene_pos)
                 gene_pos += 1
             elif overlaps(read_feature, isoform_feature):
-                intron_profile[gene_pos] = -1
+                if self.absence_condition(mapped_region, isoform_feature):
+                    intron_profile[gene_pos] = -1
                 gene_pos += 1
 
         # eliminating non unique features

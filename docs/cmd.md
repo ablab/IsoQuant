@@ -294,3 +294,10 @@ scale factor equals to 1 million divided by the number of all assigned reads.
 In this case the sum of all gene/transcript TPMs may not add up to 1 million.
 Experiments with simulated data show that this method could give more accurate estimations.
 However, normalization method does not affect correlation/relative proportions.
+
+`--counts_format`
+    Output format for grouped counts:
+
+* `matrix` - usual format with genes as rows and groups as columns;
+* `linear` - linear format, each line contains gene/transcript id, group name and respective count value (no TPM output); 
+* `both` - output counts in both formats (default).

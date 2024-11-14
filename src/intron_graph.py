@@ -209,6 +209,8 @@ class IntronGraph:
 
     def get_outgoing(self, intron, v_type=None):
         res = []
+        if intron not in self.outgoing_edges:
+            return res
         if v_type is None:
             for v in self.outgoing_edges[intron]:
                 if v[0] >= 0:
@@ -221,6 +223,8 @@ class IntronGraph:
 
     def get_incoming(self, intron, v_type=None):
         res = []
+        if intron not in self.incoming_edges:
+            return res
         if v_type is None:
             for v in self.incoming_edges[intron]:
                 if v[0] >= 0:

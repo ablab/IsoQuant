@@ -1,19 +1,41 @@
 # IsoQuant changelog
 
+## IsoQuant 3.6.0, 13 September 2024
+
+- Fixed duplicated `noninformative` and `intergenic` reads assignments.
+As a results, fixed duplicated novel transcripts [#236](https://github.com/ablab/IsoQuant/issues/236).
+
+## IsoQuant 3.5.2, 3 September 2024
+
+- Fixes exon counting algorithm [#229](https://github.com/ablab/IsoQuant/issues/229).
+
+## IsoQuant 3.5.1, 26 August 2024
+
+- Fixed YAML support in visualization [#222](https://github.com/ablab/IsoQuant/issues/222).
+
+- Fixed transcript naming when IsoQuant-generated GTF is provided as input [#219](https://github.com/ablab/IsoQuant/issues/219).
+
+- Fixed `exons` attribute duplication [#219](https://github.com/ablab/IsoQuant/issues/219).
+
+- Exon ids are now consistent between input and output annotations if present.
+
+- New `--count_format` option for setting desired grouped counts format (matrix/linear/both), fixes [#223](https://github.com/ablab/IsoQuant/issues/223).
+
+
 ## IsoQuant 3.5.0, 2 August 2024
 
 - New visualization software developed by [@jackfreeman88](https://github.com/jackfreeman88). See more [here](https://ablab.github.io/IsoQuant/visualization.html).
 
-- Dramatically reduce RAM consumption for grouped counts, about 10-20x decrease on datasets with large number of groups.
+- Dramatically reduced RAM consumption for grouped counts, about 10-20x decrease on datasets with large number of groups.
   Important fix for single-cell data processing. Should fix [#189](https://github.com/ablab/IsoQuant/issues/189).
 
-- Fix [#195](https://github.com/ablab/IsoQuant/issues/195): output GTF contained very similar isoforms and estimated their expression as 0.
+- Fixed [#195](https://github.com/ablab/IsoQuant/issues/195): output GTF contained very similar isoforms and estimated their expression as 0.
 
 - New documentation is now available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
 
 ## IsoQuant 3.4.2, 13 July 2024
 
-- Dramatically reduce RAM consumption.
+- Dramatically reduced RAM consumption.
 Should fix [#209](https://github.com/ablab/IsoQuant/issues/209).
 
 IsoQuant 3.4.2 was tested on a simulated ONT dataset with 30M reads using 12 threads.
@@ -37,9 +59,9 @@ using custom pickle serialization (when `--high_memory` is used).
 
 ## IsoQuant 3.4.1, 9 May 2024
 
-- Fixes `IndexError: list index out of range` when `--sqanti_output` is set ([#186](https://github.com/ablab/IsoQuant/issues/186)).
+- Fixed `IndexError: list index out of range` when `--sqanti_output` is set ([#186](https://github.com/ablab/IsoQuant/issues/186)).
 
-- Fixes `IndexError: list index out of range` in printing grouped transcript models TPMs ([#187](https://github.com/ablab/IsoQuant/issues/187)).
+- Fixed `IndexError: list index out of range` in printing grouped transcript models TPMs ([#187](https://github.com/ablab/IsoQuant/issues/187)).
 
 - Reduced running time when `--sqanti_output` is set.
 
@@ -157,7 +179,7 @@ and to [@alexandrutomescu](https://github.com/alexandrutomescu) for supporting t
 
 - Fixed duplicate canonical attribute in extended annotation.
 
-- Fix `--resume` option when relative paths were provided.
+- Fixed `--resume` option when relative paths were provided.
 
 ## IsoQuant 3.1.1, 16 January 2023
 

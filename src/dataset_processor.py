@@ -19,7 +19,7 @@ import gffutils
 import pysam
 from pyfaidx import Fasta, UnsupportedCompressionFormat
 
-from .common import proper_plural_form, SimpleIDDistributor
+from .common import proper_plural_form
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .stats import EnumStats
@@ -32,6 +32,7 @@ from .long_read_counter import (
     CompositeCounter,
     create_gene_counter,
     create_transcript_counter,
+    GroupedOutputFormat,
 )
 from .multimap_resolver import MultimapResolver
 from .read_groups import (
@@ -48,6 +49,7 @@ from .assignment_io import (
     NormalTmpFileAssignmentLoader,
     QuickTmpFileAssignmentLoader
 )
+from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
@@ -89,6 +91,7 @@ def set_polya_requirement_strategy(flag, polya_requirement_strategy):
         return False
     else:
         return True
+
 
 
 def collect_reads_in_parallel(sample, chr_id, args):
@@ -249,16 +252,16 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
-    transcript_id_distributor = SimpleIDDistributor()
-    exon_id_distributor = SimpleIDDistributor()
+    transcript_id_distributor = ExcludingIdDistributor(gffutils_db, chr_id)
+    exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), gffutils_db, chr_id, "exon")
 
     if construct_models:
-        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_distributor,
+        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
     if construct_models and args.genedb:
-        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_distributor,
+        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
                                               gtf_suffix=".extended_annotation.gtf",
                                               output_r2t=False, check_canonical=args.check_canonical)
     else:
@@ -281,7 +284,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
         if construct_models:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
-                                                           aggregator.transcript_model_global_counter, transcript_id_distributor)
+                                                           aggregator.transcript_model_global_counter,
+                                                           transcript_id_distributor)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
@@ -317,6 +321,7 @@ class ReadAssignmentAggregator:
         self.read_groups = read_groups
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
+        self.grouped_format = GroupedOutputFormat[self.args.counts_format]
 
         self.gene_set = set()
         self.transcript_set = set()
@@ -366,11 +371,13 @@ class ReadAssignmentAggregator:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
                                                             self.args.gene_quantification,
                                                             complete_feature_list=self.gene_set,
-                                                            read_groups=self.read_groups)
+                                                            read_groups=self.read_groups,
+                                                            grouped_format=self.grouped_format)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
                                                                         self.args.transcript_quantification,
                                                                         complete_feature_list=self.transcript_set,
-                                                                        read_groups=self.read_groups)
+                                                                        read_groups=self.read_groups,
+                                                                        grouped_format=self.grouped_format)
             self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 
             if self.args.count_exons:
@@ -617,7 +624,7 @@ class DatasetProcessor:
 
         for assignment_list in multimapped_reads.values():
             if len(assignment_list) > 1:
-                multimap_resolver.resolve(assignment_list)
+                assignment_list = multimap_resolver.resolve(assignment_list)
                 resolved_lists = defaultdict(list)
                 for a in assignment_list:
                     resolved_lists[a.chr_id].append(a)
@@ -662,13 +669,15 @@ class DatasetProcessor:
             logger.info("  PolyA tails are required for novel monoexon transcripts to be reported: %s" % "yes")
             logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
 
-            exon_id_distributor = SimpleIDDistributor()
+            # GFF printers below only serve for creating the main output files,
+            # not intended for dumping transcript models directly
+            exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, exon_id_distributor, header=self.common_header, gzipped=self.args.gzipped
+                sample.out_dir, sample.prefix, exon_id_storage, header=self.common_header, gzipped=self.args.gzipped
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
-                    sample.out_dir, sample.prefix, exon_id_distributor,
+                    sample.out_dir, sample.prefix, exon_id_storage,
                     gtf_suffix=".extended_annotation.gtf", output_r2t=False,
                     header=self.common_header
                 )
@@ -738,3 +747,4 @@ class DatasetProcessor:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)
             counter.convert_counts_to_tpm(self.args.normalization_method)
+
