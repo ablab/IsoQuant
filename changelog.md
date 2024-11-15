@@ -1,5 +1,9 @@
 # IsoQuant changelog
 
+## IsoQuant 3.6.2, 15 November 2024
+
+- Fixes linear grouped counts output [#258](https://github.com/ablab/IsoQuant/issues/258).
+
 ## IsoQuant 3.6.1, 25 September 2024
 
 - Import exon attributes from the reference annotation [#175](https://github.com/ablab/IsoQuant/issues/175).
