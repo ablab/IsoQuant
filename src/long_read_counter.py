@@ -247,7 +247,7 @@ class AssignedFeatureCounter(AbstractCounter):
             self.group_numeric_ids = {}
             self.ordered_groups = sorted(read_groups)
             if self.ordered_groups:
-                for i, g in enumerate(read_groups):
+                for i, g in enumerate(self.ordered_groups):
                     self.group_numeric_ids[g] = i
         self.read_counter = read_counter
 
