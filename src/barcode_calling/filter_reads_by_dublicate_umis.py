@@ -11,7 +11,7 @@ import argparse
 from traceback import print_exc
 import logging
 
-from umi_filtering import UMIFilter, filter_bam, load_barcodes, create_transcript_type_dict
+from umi_filtering import UMIFilter, filter_bam, load_barcodes, create_transcript_info_dict
 
 
 logger = logging.getLogger('IsoQuant')
@@ -61,9 +61,9 @@ def main():
         barcode_umi_dict = load_barcodes(args.barcodes, args.untrusted_umis)
 
     if args.genedb:
-        transcript_type_dict = create_transcript_type_dict(args.genedb)
+        transcript_info_dict = create_transcript_info_dict(args.genedb)
     else:
-        transcript_type_dict = {}
+        transcript_info_dict = {}
 
     for d in {-1, 2, 3, 4, 5, args.min_distance}:
         logger.info("== Filtering by UMIs with edit distance %d ==" % d)
@@ -71,7 +71,7 @@ def main():
         logger.info("Results will be saved to %s" % output_prefix)
         umi_filter = UMIFilter(barcode_umi_dict, d, args.disregard_length_diff,
                                args.only_unique, args.only_spliced)
-        umi_filter.process(args.read_assignments, output_prefix, transcript_type_dict)
+        umi_filter.process(args.read_assignments, output_prefix, transcript_info_dict)
         if args.bam:
             filter_bam(args.bam, output_prefix  + ".UMI_filtered.reads.bam", umi_filter.selected_reads)
         logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
