@@ -39,13 +39,13 @@ def parse_args():
                                                          "length difference is added to this values by default;"
                                                          "0 for equal UMIs, -1 for keeping only a single gene-barcode "
                                                          "read. By default will be process with -1, 2, 3", default=3)
-    parser.add_argument("--untrusted_umis", action="store_true", help="allow untrusted UMIs to be used", default=False)
+    parser.add_argument("--untrusted_umis", action="store_true", help="allow untrusted UMIs to be used", default=True)
     parser.add_argument("--only_spliced", action="store_true", help="keep only spliced reads", default=False)
     parser.add_argument("--only_unique", action="store_true", help="keep only non-ambiguous reads", default=False)
     parser.add_argument("--disregard_length_diff", action="store_true", help="do not account for length difference "
                                                                              "when comparing UMIs", default=False)
     parser.add_argument("--old_barcode_format", action="store_true",
-                        help="use previous barcode formate (barcode column = 6)", default=False)
+                        help="use previous barcode formate (barcode column = 6)", default=True)
 
     args = parser.parse_args()
     return args

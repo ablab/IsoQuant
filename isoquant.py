@@ -816,7 +816,7 @@ def filter_umis(args):
     else:
         transcript_type_dict = {}
 
-    barcode_umi_dict = load_barcodes(args.input_data.samples[0].barcoded_reads, False)
+    barcode_umi_dict = load_barcodes(args.input_data.samples[0].barcoded_reads, True, 6, 7, 8, 9)
     for d in {-1, 2, 3}:
         logger.info("== Filtering by UMIs with edit distance %d ==" % d)
         output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else "ED%d" % d)
