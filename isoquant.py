@@ -44,7 +44,7 @@ from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
 from detect_barcodes import process_single_thread, process_in_parallel
-from src.barcode_calling.umi_filtering import UMIFilter, create_transcript_type_dict, load_barcodes
+from src.barcode_calling.umi_filtering import UMIFilter, create_transcript_info_dict, load_barcodes
 
 
 logger = logging.getLogger('IsoQuant')
@@ -865,7 +865,7 @@ def filter_umis(args):
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
 
     if args.genedb:
-        transcript_type_dict = create_transcript_type_dict(args.genedb)
+        transcript_type_dict = create_transcript_info_dict(args.genedb)
     else:
         transcript_type_dict = {}
 
