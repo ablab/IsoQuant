@@ -82,12 +82,13 @@ class ShortReadAssignmentInfo:
 
 class ReadAssignmentInfo:
     def __init__(self, read_id, chr_id, gene_id, transcript_id, strand, exon_blocks, assignment_type,
-                 matching_events, barcode, umi, transcript_type = "unknown"):
+                 matching_events, barcode, umi, polya_site=-1, transcript_type = "unknown"):
         self.read_id = read_id
         self.chr_id = chr_id
         self.gene_id = gene_id
         self.transcript_id = transcript_id
         self.strand = strand
+        self.polya_site = polya_site
         self.exon_blocks = exon_blocks
         self.assignment_type = assignment_type
         self.matching_events = matching_events
@@ -113,7 +114,7 @@ class ReadAssignmentInfo:
             tss_pos = self.exon_blocks[-1][1] if self.strand == "-" else self.exon_blocks[0][0]
             TSS = "%s_%d_%d_%s" % (self.chr_id, tss_pos, tss_pos, self.strand)
         if "correct_polya" in self.matching_events:
-            polyA_pos = self.exon_blocks[-1][1] if self.strand == "+" else self.exon_blocks[0][0]
+            polyA_pos = self.polya_site
             polyA = "%s_%d_%d_%s" % (self.chr_id, polyA_pos, polyA_pos, self.strand)
         return  "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s" % (self.read_id, self.gene_id, cell_type,
                                                                         self.barcode, self.umi, introns_str, TSS, polyA,
@@ -302,10 +303,11 @@ class UMIFilter:
             spliced = len(exon_blocks) > 1
             #unique = assignment_type.startswith("unique")
             barcoded = barcode is not None
-            transcript_type = transcript_type_dict[transcript_id] if transcript_id in transcript_type_dict else "unknown"
+            transcript_type, polya_site = (transcript_type_dict[transcript_id] if transcript_id in transcript_type_dict
+                                           else ("unknown_type", -1))
             assignment_info = ReadAssignmentInfo(read_id, chr_id, gene_id, transcript_id, strand, exon_blocks,
                                                  assignment_type, matching_events, barcode, umi,
-                                                 transcript_type)
+                                                 polya_site, transcript_type)
             read_info_storage[read_id].append(assignment_info.short())
 
             if not barcoded or not assigned:
@@ -411,11 +413,14 @@ def filter_bam(in_file_name, out_file_name, read_set):
     pysam.index(out_file_name)
 
 
-def create_transcript_type_dict(genedb):
+def create_transcript_info_dict(genedb):
     gffutils_db = gffutils.FeatureDB(genedb)
     transcript_type_dict = {}
     for t in gffutils_db.features_of_type(('transcript', 'mRNA')):
+        polya_site = t.start - 1 if t.strand == '-' else t.end + 1
         if "transcript_type" in t.attributes.keys():
-            transcript_type_dict[t.id] = t.attributes["transcript_type"][0]
+            transcript_type_dict[t.id] = (t.attributes["transcript_type"][0], polya_site)
+        else:
+            transcript_type_dict[t.id] = ("unknown_type", polya_site)
     return transcript_type_dict
 
