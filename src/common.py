@@ -35,6 +35,13 @@ class CigarEvent(Enum):
     def get_ins_del_match_events(cls):
         return {cls.match, cls.insertion, cls.deletion, cls.seq_match, cls.seq_mismatch}
 
+    @classmethod
+    def get_clipping_events(cls):
+        return {cls.soft_clipping, cls.hard_clipping}
+
+    @classmethod
+    def get_skipping_events(cls):
+        return {cls.skipped, cls.deletion}
 
 class TranscriptNaming:
     transcript_prefix = "transcript"
@@ -613,6 +620,73 @@ def truncate_read_to_polya(read_exons, polya_pos, polyt_pos):
     new_exons += read_exons[start_index+1:end_index]
     new_exons.append((read_exons[end_index][0], end_position))
     return new_exons
+
+
+# given a cigar string of an alignment, move shift bases along the alignment from the start
+# if shift is negative, moves from the alignment's end
+# return value is always positive
+def move_ref_coord_along_alignment(alignment, shift):
+    if shift == 0:
+        return 0
+
+    cigar_tuples = alignment.cigartuples
+    assert cigar_tuples
+
+    direction = 1 if shift > 0 else -1 # 1 for forward -1 for backward
+    shift = abs(shift)
+
+    if direction == 1:
+        current_pos = 0
+        if (len(cigar_tuples) > 1 and cigar_tuples[0][0] == CigarEvent.hard_clipping.value and
+                cigar_tuples[1][0] == CigarEvent.soft_clipping.value):
+            # hard clipped
+            current_pos = 2
+        elif CigarEvent(cigar_tuples[0][0]) in CigarEvent.get_clipping_events():
+            # soft clipped
+            current_pos = 1
+    else:
+        current_pos = -1
+        if (len(cigar_tuples) > 1 and cigar_tuples[-1][0] == CigarEvent.hard_clipping.value and
+                cigar_tuples[-2][0] == CigarEvent.soft_clipping.value):
+            # hard clipped
+            current_pos -= 2
+        elif CigarEvent(cigar_tuples[-1][0]) in CigarEvent.get_clipping_events():
+            # soft clipped
+            current_pos -= 1
+
+    read_length_consumed = 0
+    reference_length_consumed = 0
+    shift += 1 # a hack to jump to the next event
+    while len(cigar_tuples) > current_pos >= -len(cigar_tuples) and read_length_consumed < shift:
+        cigar_event = CigarEvent(cigar_tuples[current_pos][0])
+        event_len = cigar_tuples[current_pos][1]
+        if cigar_event == 1:
+            # insertion
+            read_length_consumed += event_len
+        elif cigar_event in CigarEvent.get_skipping_events():
+            # deletion or intron
+            reference_length_consumed += event_len
+        elif cigar_event in CigarEvent.get_match_events():
+            # match
+            remaining_bases = shift - read_length_consumed # how many nucleotides in read to complete shift
+            #logger.debug("%d" % remaining_bases)
+            if event_len < remaining_bases:
+                reference_length_consumed += event_len
+                read_length_consumed += event_len
+            else:
+                read_length_consumed += remaining_bases
+                reference_length_consumed += remaining_bases
+        elif cigar_event in CigarEvent.get_clipping_events():
+            # met clipping on the other side
+            break
+        else:
+            # unexpected event
+            logger.warning("Unexpected event: " + cigar_event)
+        #logger.debug("%d, %d, %d, %d" % (cigar_event, event_len, read_length_consumed, reference_length_consumed))
+
+        current_pos += direction
+
+    return reference_length_consumed-1
 
 
 # == profile functions ==

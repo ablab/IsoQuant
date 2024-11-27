@@ -9,73 +9,10 @@ import logging
 
 import pybedtools as pbt
 from Bio import Seq
+from common import move_ref_coord_along_alignment, CigarEvent
+
 
 logger = logging.getLogger('IsoQuant')
-
-
-# given a cigar string of an alignment, move shift bases along the alignment from the start
-# if shift is negative, moves from the alignment's end
-# return value is always positive
-def move_ref_coord_alogn_alignment(alignment, shift):
-    if shift == 0:
-        return 0
-
-    cigar_tuples = alignment.cigartuples
-    assert cigar_tuples
-
-    direction = 1 if shift > 0 else -1 # 1 for forward -1 for backward
-    shift = abs(shift)
-
-    if direction == 1:
-        current_pos = 0
-        if len(cigar_tuples) > 1 and cigar_tuples[0][0] == 5 and cigar_tuples[1][0] == 4:
-            # hard clipped
-            current_pos = 2
-        elif cigar_tuples[0][0] in [4, 5]:
-            # soft clipped
-            current_pos = 1
-    else:
-        current_pos = -1
-        if len(cigar_tuples) > 1 and cigar_tuples[-1][0] == 5 and cigar_tuples[-2][0] == 4:
-            # hard clipped
-            current_pos -= 2
-        elif cigar_tuples[-1][0] in [4, 5]:
-            # soft clipped
-            current_pos -= 1
-
-    read_length_consumed = 0
-    reference_length_consumed = 0
-    shift += 1 # a hack to jump to the next event
-    while current_pos < len(cigar_tuples) and current_pos >= -len(cigar_tuples) and read_length_consumed < shift:
-        cigar_event = cigar_tuples[current_pos][0]
-        event_len = cigar_tuples[current_pos][1]
-        if cigar_event == 1:
-            # insertion
-            read_length_consumed += event_len
-        elif cigar_event in [2, 3]:
-            # deletion or intron
-            reference_length_consumed += event_len
-        elif cigar_event in [0, 7, 8]:
-            # match
-            remaining_bases = shift - read_length_consumed # how many nucleotides in read to complete shift
-            #logger.debug("%d" % remaining_bases)
-            if event_len < remaining_bases:
-                reference_length_consumed += event_len
-                read_length_consumed += event_len
-            else:
-                read_length_consumed += remaining_bases
-                reference_length_consumed += remaining_bases
-        elif cigar_event in [4, 5]:
-            # met clipping on the other side
-            break
-        else:
-            # unexpected event
-            logger.warning("Unexpected event: " + cigar_event)
-        #logger.debug("%d, %d, %d, %d" % (cigar_event, event_len, read_length_consumed, reference_length_consumed))
-
-        current_pos += direction
-
-    return reference_length_consumed-1
 
 
 class PolyAInfo:
@@ -97,13 +34,13 @@ class PolyAFinder:
                          self.find_polya_internal(alignement), self.find_polyt_internal(alignement))
 
     def find_polya_external(self, alignment):
-        return self.find_polya_tail(alignment, 2, 2 * self.window_size)
+        return self.find_polya_tail(alignment, 6, 2 * self.window_size)
 
     def find_polya_internal(self, alignment):
         return self.find_polya_tail(alignment, 4 * self.window_size, 2, check_entire_tail=True)
 
     def find_polyt_external(self, alignment):
-        return self.find_polyt_head(alignment, 2, 2 * self.window_size)
+        return self.find_polyt_head(alignment, 6, 2 * self.window_size)
 
     def find_polyt_internal(self, alignment):
         return self.find_polyt_head(alignment, 4 * self.window_size, 2, check_entire_head=True)
@@ -151,7 +88,7 @@ class PolyAFinder:
             reference_polya_start = alignment.reference_end + shift
         else:
             shift = pos - read_mapped_region_end
-            ref_shift = move_ref_coord_alogn_alignment(alignment, shift)
+            ref_shift = move_ref_coord_along_alignment(alignment, shift)
             reference_polya_start = alignment.reference_end - ref_shift
             #logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polya_start))
 
@@ -201,7 +138,7 @@ class PolyAFinder:
             reference_polyt_end = alignment.reference_start - shift
         else:
             shift = pos - read_mapped_region_start
-            ref_shift = move_ref_coord_alogn_alignment(alignment, shift)
+            ref_shift = move_ref_coord_along_alignment(alignment, shift)
             reference_polyt_end = alignment.reference_start + ref_shift
             #logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polyt_end))
 
@@ -266,3 +203,108 @@ class CagePeakFinder:
             logger.debug('No CAGE peaks found')
 
         return cage_intersections
+
+    def check_aligned_bases_near_polya(self, alignment, chr_str, reference_polya_start, bases_to_check=10):
+        total_errors = 0
+        remaining_bases = bases_to_check
+        cigar_tuples = alignment.cigartuples
+        cigar_pos = len(cigar_tuples) - 1
+        read_pos = len(alignment.seq) - 1
+        ref_pos = alignment.reference_end
+
+        if alignment.reference_end < reference_polya_start:
+            dist = reference_polya_start - alignment.reference_end
+            total_errors += dist
+            remaining_bases -= dist
+
+        skip_bases = 0
+        if reference_polya_start < alignment.reference_end:
+            skip_bases = alignment.reference_end - reference_polya_start
+
+
+
+        if CigarEvent(cigar_tuples[cigar_pos][0]) == CigarEvent.hard_clipping:
+            cigar_pos -= 1
+        if CigarEvent(cigar_tuples[cigar_pos][0]) == CigarEvent.soft_clipping:
+            cigar_pos -= 1
+            read_pos -= cigar_tuples[cigar_pos][1]
+
+        remaining_cigar_event_len = cigar_tuples[cigar_pos][1]
+        current_event = CigarEvent(cigar_tuples[cigar_pos][0])
+        while remaining_bases > 0:
+            if remaining_cigar_event_len == 0:
+                if cigar_pos == 0:
+                    break
+                cigar_pos -= 1
+                remaining_cigar_event_len = cigar_tuples[cigar_pos][1]
+                current_event = CigarEvent(cigar_tuples[cigar_pos][0])
+
+            if current_event in CigarEvent.get_match_events():
+                if skip_bases == 0:
+                    if current_event == CigarEvent.seq_mismatch:
+                        total_errors += 1
+                    elif current_event == CigarEvent.match and alignment.seq[read_pos] != chr_str[ref_pos]:
+                        total_errors += 1
+                ref_pos -= 1
+                read_pos -= 1
+            elif current_event == CigarEvent.deletion:
+                if skip_bases == 0:
+                    total_errors += 1
+                ref_pos -= 1
+            elif current_event == CigarEvent.insertion:
+                if skip_bases == 0:
+                    total_errors += 1
+                read_pos -= 1
+            else:
+                break
+
+            if skip_bases == 0:
+                remaining_bases -= 1
+            else:
+                skip_bases -= 1
+            remaining_cigar_event_len -= 1
+
+        if remaining_bases > 0:
+            total_errors += remaining_bases
+
+    def concat_gapless_blocks(blocks, cigar_tuples):
+        cigar_index = 0
+        block_index = 0
+        resulting_blocks = []
+
+        current_block = None
+        deletions_before_block = 0
+
+        while cigar_index < len(cigar_tuples) and block_index < len(blocks):
+            # init new block
+            cigar_event = CigarEvent(cigar_tuples[cigar_index][0])
+            if current_block is None:
+                # init new block from match
+                if cigar_event in CigarEvent.get_match_events():
+                    current_block = (blocks[block_index][0] - deletions_before_block, blocks[block_index][1])
+                    deletions_before_block = 0
+                    block_index += 1
+                # keep track of deletions before matched block
+                elif cigar_event == CigarEvent.deletion:
+                    deletions_before_block = cigar_tuples[cigar_index][1]
+            # found intron, add current block
+            elif cigar_event == CigarEvent.skipped:
+                resulting_blocks.append(current_block)
+                current_block = None
+            # add deletion to block
+            elif cigar_event == CigarEvent.deletion:
+                current_block = (current_block[0], current_block[1] + cigar_tuples[cigar_index][1])
+            # found match - merge blocks
+            elif cigar_event in CigarEvent.get_match_events():
+                # if abs(current_block[1] - blocks[block_index][0]) > 1:
+                #    logger.debug("Distant blocks")
+                #    logger.debug(current_block, blocks[block_index])
+                current_block = (current_block[0], blocks[block_index][1])
+
+                block_index += 1
+            cigar_index += 1
+
+        if current_block is not None:
+            resulting_blocks.append(current_block)
+
+        return resulting_blocks
