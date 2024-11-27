@@ -113,7 +113,7 @@ class ReadAssignmentInfo:
         if "tss_match" in self.matching_events:
             tss_pos = self.exon_blocks[-1][1] if self.strand == "-" else self.exon_blocks[0][0]
             TSS = "%s_%d_%d_%s" % (self.chr_id, tss_pos, tss_pos, self.strand)
-        if "correct_polya" in self.matching_events:
+        if "correct_polya" in self.matching_events: # and self.assignment_type.startswith("unique"):
             polyA_pos = self.polya_site
             polyA = "%s_%d_%d_%s" % (self.chr_id, polyA_pos, polyA_pos, self.strand)
         return  "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s" % (self.read_id, self.gene_id, cell_type,
@@ -196,7 +196,9 @@ class UMIFilter:
             logger.debug("Selecting from:")
             for m in umi_dict[umi]:
                 logger.debug("%s %s" % (m.read_id, m.umi))
-                if len(m.exon_blocks) > len(best_read.exon_blocks):
+                if not best_read.assignment_type.startswith("unique") and m.assignment_type.startswith("unique"):
+                    best_read = m
+                elif len(m.exon_blocks) > len(best_read.exon_blocks):
                     best_read = m
                 elif len(m.exon_blocks) == len(best_read.exon_blocks) and \
                         m.exon_blocks[-1][1] - m.exon_blocks[0][0] > \
