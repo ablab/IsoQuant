@@ -107,14 +107,21 @@ class ReadAssignmentInfo:
         introns_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (self.chr_id, e[0], e[1], self.strand) for e in intron_blocks])
 
         cell_type = "None"
-        read_type = "known" if self.assignment_type.startswith("unique") else "novel"
+        if self.assignment_type.startswith("unique"):
+            read_type = "known"
+        elif self.assignment_type.startswith("inconsistent"):
+            read_type = "novel"
+        elif self.assignment_type.startswith("ambiguous"):
+            read_type = "known_ambiguous"
+        else:
+            read_type = "none"
 
         polyA = "NoPolyA"
         TSS = "NoTSS"
         if "tss_match" in self.matching_events:
             tss_pos = self.exon_blocks[-1][1] if self.strand == "-" else self.exon_blocks[0][0]
             TSS = "%s_%d_%d_%s" % (self.chr_id, tss_pos, tss_pos, self.strand)
-        if "correct_polya" in self.matching_events:
+        if "correct_polya" in self.matching_events and self.polya_site != -1: # and self.assignment_type.startswith("unique"):
             polyA_pos = self.polya_site
             polyA = "%s_%d_%d_%s" % (self.chr_id, polyA_pos, polyA_pos, self.strand)
         return  "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s" % (self.read_id, self.gene_id, cell_type,
@@ -205,12 +212,41 @@ class UMIFilter:
             logger.debug("Selecting from:")
             for m in umi_dict[umi]:
                 logger.debug("%s %s" % (m.read_id, m.umi))
-                if len(m.exon_blocks) > len(best_read.exon_blocks):
+                if not best_read.assignment_type.startswith("unique") and m.assignment_type.startswith("unique"):
+                    best_read = m
+                elif len(m.exon_blocks) > len(best_read.exon_blocks):
                     best_read = m
                 elif len(m.exon_blocks) == len(best_read.exon_blocks) and \
                         m.exon_blocks[-1][1] - m.exon_blocks[0][0] > \
                         best_read.exon_blocks[-1][1] - best_read.exon_blocks[0][0]:
                     best_read = m
+
+            polyas = set()
+            transcript_types = set()
+            isoform_ids = set()
+            for m in umi_dict[umi]:
+                if m.read_id != best_read.read_id:
+                    continue
+                transcript_types.add(m.transcript_type)
+                polyas.add(m.polya_site)
+                isoform_ids.add(m.transcript_id)
+
+            if len(transcript_types) > 1:
+                self.ambiguous_type += 1
+                best_read.transcript_type = "None"
+            if len(polyas) > 1:
+                self.ambiguous_polya += 1
+                self.ambiguous_polya_dist[max(polyas) - min(polyas)] += 1
+                best_read.polya_site = -1
+            if len(isoform_ids) > 1:
+                best_read.transcript_id = "None"
+
+            if best_read.assignment_type.startswith("inconsistent"):
+                self.inconsistent_assignments += 1
+                best_read.transcript_id = "None"
+                best_read.polya_site = -1
+                best_read.transcript_type = "None"
+
             logger.debug("Selected %s %s" % (best_read.read_id, best_read.umi))
             resulting_reads.append((best_read, umi))
 
@@ -275,7 +311,12 @@ class UMIFilter:
                 self.unique_gene_barcode.add((read_infos[0].gene_id, read_infos[0].barcode))
 
     def process(self, assignment_file, output_prefix, transcript_type_dict):
-        outf = open(output_prefix + ".read_ids.tsv", "w")
+        self.ambiguous_type = 0
+        self.ambiguous_polya = 0
+        self.inconsistent_assignments = 0
+        self.ambiguous_polya_dist = defaultdict(int)
+
+        outf = open(output_prefix + ".reads_ids.tsv", "w")
         allinfo_outf = open(output_prefix + ".allinfo", "w")
 
         # 1251f521-d4c2-4dcc-96d7-85070cc44e12    chr1    -       ENST00000477740.5       ENSG00000238009.6       ambiguous       ism_internal    112699-112804,120721-120759     PolyA=False
@@ -358,6 +399,8 @@ class UMIFilter:
 
         logger.info("Saved %d reads, of them spliced %d to %s" % (read_count, spliced_count, output_prefix))
         logger.info("Total assignments processed %d (typically much more than read count)" % self.total_assignments)
+        # logger.info(", ".join([("%d:%d" % (k, self.ambiguous_polya_dist[k])) for  k in sorted(self.ambiguous_polya_dist.keys())]))
+        logger.info("Ambiguous polyAs %d, ambiguous types %d, inconsistent reads %d" % (self.ambiguous_polya, self.ambiguous_type, self.inconsistent_assignments))
         self.count_stats_for_storage(read_info_storage)
         logger.info("Unique gene-barcodes pairs %d" % len(self.unique_gene_barcode))
         for k in sorted(self.stats.keys()):
