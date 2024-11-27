@@ -16,6 +16,11 @@ import gffutils
 logger = logging.getLogger('IsoQuant')
 
 
+global ambiguous_type
+global ambiguous_polya
+global inconsistent_assignments
+
+
 def overlaps(range1, range2):
     return not (range1[1] < range2[0] or range1[0] > range2[1])
 
@@ -106,7 +111,14 @@ class ReadAssignmentInfo:
         introns_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (self.chr_id, e[0], e[1], self.strand) for e in intron_blocks])
 
         cell_type = "None"
-        read_type = "known" if self.assignment_type.startswith("unique") else "novel"
+        if self.assignment_type.startswith("unique"):
+            read_type = "known"
+        elif self.assignment_type.startswith("inconsistent"):
+            read_type = "novel"
+        elif self.assignment_type.startswith("ambiguous"):
+            read_type = "known_ambiguous"
+        else:
+            read_type = "none"
 
         polyA = "NoPolyA"
         TSS = "NoTSS"
@@ -204,6 +216,34 @@ class UMIFilter:
                         m.exon_blocks[-1][1] - m.exon_blocks[0][0] > \
                         best_read.exon_blocks[-1][1] - best_read.exon_blocks[0][0]:
                     best_read = m
+
+            polyas = set()
+            transcript_types = set()
+            isoform_ids = set()
+            for m in umi_dict[umi]:
+                if m.read_id != best_read.read_id:
+                    continue
+                transcript_types.add(m.transcript_type)
+                polyas.add(m.polya_site)
+                isoform_ids.add(m.transcript_id)
+
+            global ambiguous_type
+            global ambiguous_polya
+            global inconsistent_assignments
+            if len(transcript_types) > 1:
+                ambiguous_type += 1
+                best_read.transcript_type = "ambiguous"
+            if len(polyas) > 1:
+                ambiguous_type += 1
+                best_read.polya_site = -1
+            if len(isoform_ids) > 1:
+                best_read.transcript_id = "None"
+
+            if best_read.assignment_type.startswith("inconsistent"):
+                inconsistent_assignments += 1
+                best_read.transcript_id = "None"
+                best_read.polya_site = -1
+
             logger.debug("Selected %s %s" % (best_read.read_id, best_read.umi))
             resulting_reads.append(best_read)
 
@@ -343,6 +383,7 @@ class UMIFilter:
 
         logger.info("Saved %d reads, of them spliced %d to %s" % (read_count, spliced_count, output_prefix))
         logger.info("Total assignments processed %d (typically much more than read count)" % self.total_assignments)
+        logger.info("Ambiguous polyAs %d, ambiguous types %d, inconsistent reads %d" % (ambiguous_polya, ambiguous_type, inconsistent_assignments))
         self.count_stats_for_storage(read_info_storage)
         logger.info("Unique gene-barcodes pairs %d" % len(self.unique_gene_barcode))
         for k in sorted(self.stats.keys()):
