@@ -432,16 +432,13 @@ class DatasetProcessor:
 
             low_ext = outer_ext.lower()
             if low_ext in ['.gz', '.gzip', '.bgz']:
-                try:
-                    self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
-                except UnsupportedCompressionFormat:
-                    gunzipped_reference = os.path.join(args.output, ref_name)
-                    if not os.path.exists(gunzipped_reference) or not self.args.resume:
-                        with open(gunzipped_reference, "w") as outf:
-                            shutil.copyfileobj(gzip.open(self.args.reference, "rt"), outf)
-                        logger.info("Loading uncompressed reference from " + gunzipped_reference)
-                    self.args.reference = gunzipped_reference
-                    self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
+                gunzipped_reference = os.path.join(args.output, ref_name)
+                if not os.path.exists(gunzipped_reference) or not self.args.resume:
+                    with open(gunzipped_reference, "w") as outf:
+                        shutil.copyfileobj(gzip.open(self.args.reference, "rt"), outf)
+                    logger.info("Loading uncompressed reference from " + str(gunzipped_reference))
+                self.args.reference = gunzipped_reference
+                self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
             else:
                 self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
         else:
