@@ -27,7 +27,7 @@ from src.barcode_calling.barcode_callers import (
     StereoBarcodeDetector,
     StereoBarcodeDetectorTSO,
     StereoBarcodeDetectorPC,
-    ReadStats
+    ReadStats, DoubleBarcodeDetectionResult
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -131,8 +131,24 @@ class BarcodeCaller:
     def _process_read(self, read_id, read_sequence):
         logger.debug("==== %s ====" % read_id)
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
-        self.output_file.write("%s\n" % str(barcode_result))
-        self.read_stat.add_read(barcode_result)
+        if isinstance(barcode_result, list):
+            for r in barcode_result:
+                self.output_file.write("%s\n" % str(r))
+            if len(barcode_result) > 1 and isinstance(barcode_result[0], DoubleBarcodeDetectionResult):
+                strands = set([r.strand for r in barcode_result])
+                linkers = set([r.linker_start for r in barcode_result])
+                if len(strands) == 1:
+                    self.read_stat.additional_attributes_counts["Multiple polyAs (same strand)"] += 1
+                    if len(linkers) > 1:
+                        self.read_stat.additional_attributes_counts["Multiple linkers (same strand)"] += 1
+                else:
+                    self.read_stat.additional_attributes_counts["Multiple polyAs (opposite strand)"] += 1
+                    if len(linkers) > 1:
+                        self.read_stat.additional_attributes_counts["Multiple linkers (opposite strand)"] += 1
+            self.read_stat.add_read(r)
+        else:
+            self.output_file.write("%s\n" % str(barcode_result))
+            self.read_stat.add_read(barcode_result)
 
     def process_chunk(self, read_chunk):
         for read_id, seq in read_chunk:
