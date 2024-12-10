@@ -175,20 +175,32 @@ class StereoBarcodeDetector:
 
 
     def find_barcode_umi(self, read_id, sequence):
-        read_result = self._find_barcode_umi_fwd(read_id, sequence)
-        if read_result.polyT != -1:
-            read_result.set_strand("+")
-        if read_result.is_valid():
-            return read_result
+        read_result = []
+        r = self._find_barcode_umi_fwd(read_id, sequence)
+        while r.polyT != -1:
+            r.set_strand("+")
+            read_result.append(r)
+            new_start = r.polyT + 50
+            if len(sequence) - new_start < 50:
+                break
+            new_seq = sequence[new_start:]
+            new_id = read_id + "_%d" % new_start
+            r = self._find_barcode_umi_fwd(new_id, new_seq)
 
         rev_seq = reverese_complement(sequence)
-        read_rev_result = self._find_barcode_umi_fwd(read_id, rev_seq)
-        if read_rev_result.polyT != -1:
-            read_rev_result.set_strand("-")
-        if read_rev_result.is_valid():
-            return read_rev_result
+        read_id += "_R"
+        rr = self._find_barcode_umi_fwd(read_id, rev_seq)
+        while rr.polyT != -1:
+            rr.set_strand("-")
+            read_result.append(rr)
+            new_start = rr.polyT + 50
+            if len(rev_seq) - new_start < 50:
+                break
+            new_seq = rev_seq[new_start:]
+            new_id = read_id + "_%d" % new_start
+            rr = self._find_barcode_umi_fwd(new_id, new_seq)
 
-        return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
+        return read_result
 
     def _find_barcode_umi_fwd(self, read_id, sequence):
         polyt_start = find_polyt_start(sequence)
