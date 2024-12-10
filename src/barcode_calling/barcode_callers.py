@@ -168,7 +168,7 @@ class StereoBarcodeDetector:
         else:
             self.MAIN_PRIMER = StereoBarcodeDetector.PC1_PRIMER
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=7)
-        self.linker_indexer = ArrayKmerIndexer([DoubleBarcodeDetector.LINKER], kmer_size=5)
+        self.linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=5)
         self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=6)
         self.umi_set = None
         self.min_score = min_score
