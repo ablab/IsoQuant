@@ -153,7 +153,7 @@ class ReadStats:
 
 class StereoBarcodeDetector:
     LINKER = "TTGTCTTCCTAAGAC"
-    TSO_PRIMER = "CTGCTGACGTACTGAGAGGCATGGCGACCTTATCAG"
+    TSO_PRIMER = "ACTGAGAGGCATGGCGACCTTATCAG"
     PC1_PRIMER = "CTTCCGATCTATGGCGACCTTATCAG"
     BC_LENGTH = 25
     UMI_LENGTH = 10
@@ -210,7 +210,7 @@ class StereoBarcodeDetector:
             # use relaxed parameters is polyA is found
             linker_occurrences = self.linker_indexer.get_occurrences(sequence[0:polyt_start + 1])
             linker_start, linker_end = detect_exact_positions(sequence, 0, polyt_start + 1,
-                                                              self.linker_indexer.k, self.LINKER,
+                                                              self.linker_indexer.k, StereoBarcodeDetector.LINKER,
                                                               linker_occurrences, min_score=10,
                                                               start_delta=self.TERMINAL_MATCH_DELTA,
                                                               end_delta=self.TERMINAL_MATCH_DELTA)
@@ -219,7 +219,7 @@ class StereoBarcodeDetector:
             # if polyT was not found, or linker was not found to the left of polyT, look for linker in the entire read
             linker_occurrences = self.linker_indexer.get_occurrences(sequence)
             linker_start, linker_end = detect_exact_positions(sequence, 0, len(sequence),
-                                                              self.linker_indexer.k, self.LINKER,
+                                                              self.linker_indexer.k, StereoBarcodeDetector.LINKER,
                                                               linker_occurrences, min_score=13,
                                                               start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
                                                               end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
@@ -259,12 +259,12 @@ class StereoBarcodeDetector:
 
 class StereoBarcodeDetectorTSO(StereoBarcodeDetector):
     def __init__(self, barcode_list, min_score=13):
-        StereoBarcodeDetector.__init__(barcode_list, min_score, primer=1)
+        StereoBarcodeDetector.__init__(self, barcode_list, min_score, primer=1)
 
 
 class StereoBarcodeDetectorPC(StereoBarcodeDetector):
     def __init__(self, barcode_list, min_score=13):
-        StereoBarcodeDetector.__init__(barcode_list, min_score, primer=2)
+        StereoBarcodeDetector.__init__(self, barcode_list, min_score, primer=2)
 
 
 
