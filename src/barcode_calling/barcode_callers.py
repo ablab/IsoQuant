@@ -200,6 +200,8 @@ class StereoBarcodeDetector:
             new_id = read_id + "_%d" % new_start
             rr = self._find_barcode_umi_fwd(new_id, new_seq)
 
+        if not read_result:
+            read_result.append(r)
         return read_result
 
     def _find_barcode_umi_fwd(self, read_id, sequence):
