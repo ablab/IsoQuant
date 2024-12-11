@@ -134,6 +134,7 @@ class BarcodeCaller:
         if isinstance(barcode_result, list):
             for r in barcode_result:
                 self.output_file.write("%s\n" % str(r))
+                self.read_stat.add_read(r)
             if len(barcode_result) > 1 and isinstance(barcode_result[0], DoubleBarcodeDetectionResult):
                 strands = set([r.strand for r in barcode_result])
                 linkers = set([r.linker_start for r in barcode_result])
@@ -145,7 +146,7 @@ class BarcodeCaller:
                     self.read_stat.additional_attributes_counts["Multiple polyAs (opposite strand)"] += 1
                     if len(linkers) > 1:
                         self.read_stat.additional_attributes_counts["Multiple linkers (opposite strand)"] += 1
-            self.read_stat.add_read(r)
+
         else:
             self.output_file.write("%s\n" % str(barcode_result))
             self.read_stat.add_read(barcode_result)
