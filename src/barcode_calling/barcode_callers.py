@@ -177,28 +177,32 @@ class StereoBarcodeDetector:
     def find_barcode_umi(self, read_id, sequence):
         read_result = []
         r = self._find_barcode_umi_fwd(read_id, sequence)
+        current_start = 0
         while r.polyT != -1:
             r.set_strand("+")
             read_result.append(r)
             new_start = r.polyT + 50
-            if len(sequence) - new_start < 50:
+            current_start += new_start
+            if len(sequence) - current_start < 50:
                 break
-            new_seq = sequence[new_start:]
-            new_id = read_id + "_%d" % new_start
-            r = self._find_barcode_umi_fwd(new_id, new_seq)
+            seq = sequence[current_start:]
+            new_id = read_id + "_%d" % current_start
+            r = self._find_barcode_umi_fwd(new_id, seq)
 
         rev_seq = reverese_complement(sequence)
         read_id += "_R"
         rr = self._find_barcode_umi_fwd(read_id, rev_seq)
+        current_start = 0
         while rr.polyT != -1:
             rr.set_strand("-")
             read_result.append(rr)
             new_start = rr.polyT + 50
-            if len(rev_seq) - new_start < 50:
+            current_start += new_start
+            if len(rev_seq) - current_start < 50:
                 break
-            new_seq = rev_seq[new_start:]
-            new_id = read_id + "_%d" % new_start
-            rr = self._find_barcode_umi_fwd(new_id, new_seq)
+            seq = rev_seq[current_start:]
+            new_id = read_id + "_%d" % current_start
+            rr = self._find_barcode_umi_fwd(new_id, seq)
 
         if not read_result:
             read_result.append(r)
@@ -213,7 +217,7 @@ class StereoBarcodeDetector:
             linker_occurrences = self.linker_indexer.get_occurrences(sequence[0:polyt_start + 1])
             linker_start, linker_end = detect_exact_positions(sequence, 0, polyt_start + 1,
                                                               self.linker_indexer.k, StereoBarcodeDetector.LINKER,
-                                                              linker_occurrences, min_score=10,
+                                                              linker_occurrences, min_score=12,
                                                               start_delta=self.TERMINAL_MATCH_DELTA,
                                                               end_delta=self.TERMINAL_MATCH_DELTA)
 
@@ -222,7 +226,7 @@ class StereoBarcodeDetector:
             linker_occurrences = self.linker_indexer.get_occurrences(sequence)
             linker_start, linker_end = detect_exact_positions(sequence, 0, len(sequence),
                                                               self.linker_indexer.k, StereoBarcodeDetector.LINKER,
-                                                              linker_occurrences, min_score=13,
+                                                              linker_occurrences, min_score=15,
                                                               start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
                                                               end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
