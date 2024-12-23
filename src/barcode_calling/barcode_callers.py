@@ -162,14 +162,14 @@ class StereoBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, joint_barcode_list, min_score=13, primer=1):
+    def __init__(self, barcodes, min_score=13, primer=1):
         if primer == 1:
             self.MAIN_PRIMER = StereoBarcodeDetector.TSO_PRIMER
         else:
             self.MAIN_PRIMER = StereoBarcodeDetector.PC1_PRIMER
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=7)
         self.linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=5)
-        self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=6)
+        self.barcode_indexer = ArrayKmerIndexer(barcodes, kmer_size=6)
         self.umi_set = None
         self.min_score = min_score
 
@@ -271,7 +271,6 @@ class StereoBarcodeDetectorTSO(StereoBarcodeDetector):
 class StereoBarcodeDetectorPC(StereoBarcodeDetector):
     def __init__(self, barcode_list, min_score=13):
         StereoBarcodeDetector.__init__(self, barcode_list, min_score, primer=2)
-
 
 
 class DoubleBarcodeDetector:
