@@ -15,6 +15,7 @@ from traceback import print_exc
 import shutil
 from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
+import h5py
 
 import pysam
 from Bio import SeqIO
@@ -183,10 +184,8 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-def process_chunk(mode, barcodes_file, read_chunk, output_file, num, min_score=None):
+def process_chunk(barcode_detector, read_chunk, output_file, num, min_score=None):
     output_file += "_" + str(num)
-    barcodes = load_barcodes(barcodes_file)
-    barcode_detector = BARCODE_CALLING_MODES[mode](barcodes)
     if min_score:
         barcode_detector.min_score = min_score
     barcode_caller = BarcodeCaller(output_file, barcode_detector)
@@ -209,9 +208,6 @@ def process_single_thread(args):
 
 
 def process_in_parallel(args):
-    barcodes = load_barcodes(args.barcodes)
-    logger.info("Loaded %d barcodes" % len(barcodes))
-
     input_file = args.input
     logger.info("Processing " + input_file)
     fname, outer_ext = os.path.splitext(os.path.basename(input_file))
@@ -277,9 +273,13 @@ def process_in_parallel(args):
     #             except StopIteration:
     #                 pass
 
+    barcodes = load_barcodes(args.barcodes)
+    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    logger.info("Loaded %d barcodes" % len(barcodes))
+
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
         for chunk in read_chunk_gen:
-            future_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
+            future_results.append(proc.submit(process_chunk, barcode_detector, chunk, tmp_barcode_file, count, args.min_score))
             count += 1
             if count >= args.threads:
                 break
@@ -295,7 +295,7 @@ def process_in_parallel(args):
                 if reads_left:
                     try:
                         chunk = next(read_chunk_gen)
-                        future_results.append(proc.submit(process_chunk, args.mode, args.barcodes, chunk, tmp_barcode_file, count, args.min_score))
+                        future_results.append(proc.submit(process_chunk, barcode_detector, chunk, tmp_barcode_file, count, args.min_score))
                         count += 1
                     except StopIteration:
                         reads_left = False
@@ -326,13 +326,39 @@ def process_in_parallel(args):
 
 def load_barcodes(inf):
     barcode_list = []
-    if inf.endswith("gz") or inf.endswith("gzip"):
-        handle = gzip.open(inf, "rt")
+    if inf.endswith("h5") or inf.endswith("hdf5"):
+        barcode_list = list(iterate_h5_barcode(inf))
     else:
-        handle = open(inf, "r")
-    for l in handle:
-        barcode_list.append(l.strip().split()[0])
+        if inf.endswith("gz") or inf.endswith("gzip"):
+            handle = gzip.open(inf, "rt")
+        else:
+            handle = open(inf, "r")
+        for l in handle:
+            barcode_list.append(l.strip().split()[0])
     return barcode_list
+
+
+def decode_dna_sequence(encoded_int, sequence_length=25):
+    """Decode a 2-bit encoded DNA sequence from a uint64 integer."""
+    base_map = ['A', 'C', 'G', 'T']
+    sequence = []
+    for i in range(sequence_length):
+        # Extract 2 bits at a time from right to left
+        base_index = (encoded_int >> (2 * (sequence_length - 1 - i))) & 0b11
+        sequence.append(base_map[base_index])
+    return ''.join(sequence)
+
+
+def iterate_h5_barcode(h5_file_path, dataset_name=""):
+    """Iterate over DNA sequences stored in an H5 file as a 3D matrix."""
+    with h5py.File(h5_file_path, 'r') as h5_file:
+        dataset = h5_file[dataset_name]
+        rows, cols, _ = dataset.shape
+
+        for row in range(rows):
+            for col in range(cols):
+                encoded_int = dataset[row, col, 0]  # Access the uint64 value
+                yield decode_dna_sequence(encoded_int)
 
 
 def set_logger(logger_instance):
