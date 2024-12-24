@@ -196,6 +196,7 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, min_score=None
 
 
 def process_single_thread(args):
+    logger.info("Loading barcodes from %s" % args.barcodes)
     barcodes = load_barcodes(args.barcodes)
     logger.info("Loaded %d barcodes" % len(barcodes))
     logger.info("Preparing barcodes")
@@ -274,9 +275,11 @@ def process_in_parallel(args):
     #             except StopIteration:
     #                 pass
 
+    logger.info("Loading barcodes from %s" % args.barcodes)
     barcodes = load_barcodes(args.barcodes)
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     logger.info("Loaded %d barcodes" % len(barcodes))
+    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    logger.info("Barcode caller created")
 
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
         for chunk in read_chunk_gen:
@@ -340,26 +343,22 @@ def load_barcodes(inf):
 
 
 def decode_dna_sequence(encoded_int, sequence_length=25):
-    """Decode a 2-bit encoded DNA sequence from a uint64 integer."""
-    base_map = ['A', 'C', 'G', 'T']
+    base_map = ['A', 'C', 'T', 'G']
     sequence = []
     for i in range(sequence_length):
-        # Extract 2 bits at a time from right to left
-        base_index = int(encoded_int >> numpy.uint64(2 * (sequence_length - 1 - i))) & 0b11
+        base_index = int(encoded_int >> numpy.uint64(2 * (sequence_length - 1 - i))) & 3
         sequence.append(base_map[base_index])
     return ''.join(sequence)
 
 
 def iterate_h5_barcode(h5_file_path, dataset_name='bpMatrix_1'):
-    """Iterate over DNA sequences stored in an H5 file as a 3D matrix."""
+    barcode_list = []
     with h5py.File(h5_file_path, 'r') as h5_file:
-        dataset = h5_file[dataset_name]
-        rows, cols, _ = dataset.shape
-
-        for row in range(rows):
-            for col in range(cols):
-                encoded_int = dataset[row, col, 0]  # Access the uint64 value
-                yield decode_dna_sequence(encoded_int)
+        dataset = numpy.array(h5_file[dataset_name])
+        for row in dataset:
+            for col in row:
+                barcode_list.append(decode_dna_sequence(col[0]))
+    return barcode_list
 
 
 def set_logger(logger_instance):
