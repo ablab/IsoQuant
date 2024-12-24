@@ -16,6 +16,7 @@ import shutil
 from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
 import h5py
+import numpy
 
 import pysam
 from Bio import SeqIO
@@ -344,12 +345,12 @@ def decode_dna_sequence(encoded_int, sequence_length=25):
     sequence = []
     for i in range(sequence_length):
         # Extract 2 bits at a time from right to left
-        base_index = (encoded_int >> (2 * (sequence_length - 1 - i))) & 0b11
+        base_index = int(encoded_int >> numpy.uint64(2 * (sequence_length - 1 - i))) & 0b11
         sequence.append(base_map[base_index])
     return ''.join(sequence)
 
 
-def iterate_h5_barcode(h5_file_path, dataset_name=""):
+def iterate_h5_barcode(h5_file_path, dataset_name='bpMatrix_1'):
     """Iterate over DNA sequences stored in an H5 file as a 3D matrix."""
     with h5py.File(h5_file_path, 'r') as h5_file:
         dataset = h5_file[dataset_name]
