@@ -173,7 +173,6 @@ class StereoBarcodeDetector:
         self.umi_set = None
         self.min_score = min_score
 
-
     def find_barcode_umi(self, read_id, sequence):
         read_result = self._find_barcode_umi_fwd(read_id, sequence)
         if read_result.polyT != -1:
