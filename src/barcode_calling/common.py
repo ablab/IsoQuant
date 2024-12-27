@@ -110,7 +110,8 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
     if end_delta >= 0 and len(pattern) - pattern_end - 1 > end_delta:
         return None, None
     leftover_bases = len(pattern) - pattern_end - 1
-    return start_pos, end_pos + leftover_bases
+    skipped_bases = pattern_start
+    return start_pos - skipped_bases, end_pos + leftover_bases
 
 
 NUCL2BIN = {'A': 0, 'C': 1, 'G': 3, 'T': 2, 'a': 0, 'c': 1, 'g': 3, 't': 2}
