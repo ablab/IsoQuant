@@ -130,6 +130,15 @@ class BarcodeCaller:
             seq = r.query_sequence
             self._process_read(read_id, seq)
 
+    # standard method, finds only a single barcode
+    def _process_read_sinlge(self, read_id, read_sequence):
+        logger.debug("==== %s ====" % read_id)
+        barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
+        self.output_file.write("%s\n" % str(barcode_result))
+        if isinstance(barcode_result, list):
+            barcode_result = barcode_result[0]
+        self.read_stat.add_read(barcode_result)
+
     def _process_read(self, read_id, read_sequence):
         logger.debug("==== %s ====" % read_id)
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
