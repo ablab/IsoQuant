@@ -111,3 +111,21 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
         return None, None
     leftover_bases = len(pattern) - pattern_end - 1
     return start_pos, end_pos + leftover_bases
+
+
+NUCL2BIN = {'A': 0, 'C': 1, 'G': 3, 'T': 2, 'a': 0, 'c': 1, 'g': 3, 't': 2}
+BIN2NUCL = ["A", "C", "T", "G"]
+
+
+def str_to_2bit(seq, seq_len):
+    kmer_idx = 0
+    for i in range(seq_len):
+        kmer_idx |= ((seq[i] & 6) >> 1) << ((seq_len - i - 1) * 2)
+    return kmer_idx
+
+
+def bit_to_str(seq, seq_len):
+    str_seq = ""
+    for i in range(seq_len):
+        str_seq += BIN2NUCL[(seq >> ((seq_len - i - 1) * 2)) & 3]
+    return str_seq
