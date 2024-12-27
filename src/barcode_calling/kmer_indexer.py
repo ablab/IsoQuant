@@ -5,7 +5,7 @@
 ############################################################################
 import math
 from collections import defaultdict
-from common import bit_to_str, str_to_2bit
+from .common import bit_to_str, str_to_2bit
 
 
 class KmerIndexer:
@@ -169,8 +169,8 @@ class Array2BitKmerIndexer:
         self.mask = (1 << (2 * self.k)) - 1
         self.seq_len = seq_len
         self.seq_mask = (1 << (2 * self.seq_len)) - 1
-        self._index(known_bin_seq)
         self.total_sequences = 0
+        self._index(known_bin_seq)
 
     def _get_kmer_bin_indexes(self, bin_seq):
         kmer_idx = 0
@@ -201,7 +201,7 @@ class Array2BitKmerIndexer:
         barcode_counts = defaultdict(int)
         barcode_positions = defaultdict(list)
 
-        seq = str_to_2bit(sequence, self.seq_len)
+        seq = str_to_2bit(sequence, len(sequence))
         for pos, kmer_idx in enumerate(self._get_kmer_bin_indexes(seq)):
             for barcode in self.index[kmer_idx]:
                 barcode_counts[barcode] += 1

@@ -120,7 +120,7 @@ BIN2NUCL = ["A", "C", "T", "G"]
 def str_to_2bit(seq, seq_len):
     kmer_idx = 0
     for i in range(seq_len):
-        kmer_idx |= ((seq[i] & 6) >> 1) << ((seq_len - i - 1) * 2)
+        kmer_idx |= ((ord(seq[i]) & 6) >> 1) << ((seq_len - i - 1) * 2)
     return kmer_idx
 
 
