@@ -117,8 +117,9 @@ NUCL2BIN = {'A': 0, 'C': 1, 'G': 3, 'T': 2, 'a': 0, 'c': 1, 'g': 3, 't': 2}
 BIN2NUCL = ["A", "C", "T", "G"]
 
 
-def str_to_2bit(seq, seq_len):
+def str_to_2bit(seq):
     kmer_idx = 0
+    seq_len = len(seq)
     for i in range(seq_len):
         kmer_idx |= ((ord(seq[i]) & 6) >> 1) << ((seq_len - i - 1) * 2)
     return kmer_idx

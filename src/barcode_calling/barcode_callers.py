@@ -6,9 +6,10 @@
 
 import logging
 from collections import defaultdict
+from functools import partial
 
-from .kmer_indexer import KmerIndexer, ArrayKmerIndexer
-from .common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions
+from .kmer_indexer import KmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
+from .common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions, str_to_2bit
 
 logger = logging.getLogger('IsoQuant')
 
@@ -270,7 +271,8 @@ class DoubleBarcodeDetector:
     def __init__(self, joint_barcode_list, umi_list=None, min_score=13):
         self.pcr_primer_indexer = ArrayKmerIndexer([DoubleBarcodeDetector.PCR_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([DoubleBarcodeDetector.LINKER], kmer_size=5)
-        self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=6)
+        bit_barcodes = map(str_to_2bit, joint_barcode_list)
+        self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=6, seq_len=DoubleBarcodeDetector.BC_LENGTH)
         self.umi_set = None
         if umi_list:
             self.umi_set =  set(umi_list)

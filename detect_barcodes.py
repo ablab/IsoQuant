@@ -19,6 +19,7 @@ from collections import defaultdict
 import pysam
 from Bio import SeqIO
 import logging
+from src.barcode_calling.common import str_to_2bit
 from src.barcode_calling.barcode_callers import (
     TenXBarcodeDetector,
     DoubleBarcodeDetector,
@@ -163,7 +164,7 @@ def bam_file_chunk_reader(handler):
 
 def process_chunk(mode, barcodes_file, read_chunk, output_file, num, min_score=None):
     output_file += "_" + str(num)
-    barcodes = load_barcodes(barcodes_file)
+    barcodes = load_barcodes_iter(barcodes_file)
     barcode_detector = BARCODE_CALLING_MODES[mode](barcodes)
     if min_score:
         barcode_detector.min_score = min_score
@@ -174,8 +175,8 @@ def process_chunk(mode, barcodes_file, read_chunk, output_file, num, min_score=N
 
 
 def process_single_thread(args):
-    barcodes = load_barcodes(args.barcodes)
-    logger.info("Loaded %d barcodes" % len(barcodes))
+    barcodes = load_barcodes_iter(args.barcodes)
+    # logger.info("Loaded %d barcodes" % len(barcodes))
     logger.info("Preparing barcodes")
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
@@ -187,8 +188,8 @@ def process_single_thread(args):
 
 
 def process_in_parallel(args):
-    barcodes = load_barcodes(args.barcodes)
-    logger.info("Loaded %d barcodes" % len(barcodes))
+    barcodes = load_barcodes_iter(args.barcodes)
+    # logger.info("Loaded %d barcodes" % len(barcodes))
 
     input_file = args.input
     logger.info("Processing " + input_file)
@@ -311,6 +312,16 @@ def load_barcodes(inf):
     for l in handle:
         barcode_list.append(l.strip().split()[0])
     return barcode_list
+
+
+def load_barcodes_iter(inf):
+    barcode_list = []
+    if inf.endswith("gz") or inf.endswith("gzip"):
+        handle = gzip.open(inf, "rt")
+    else:
+        handle = open(inf, "r")
+    for l in handle:
+        yield l.strip().split()[0]
 
 
 def set_logger(logger_instance):

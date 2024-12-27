@@ -203,7 +203,7 @@ class Array2BitKmerIndexer:
         barcode_counts = defaultdict(int)
         barcode_positions = defaultdict(list)
 
-        seq = str_to_2bit(sequence, len(sequence))
+        seq = str_to_2bit(sequence)
         for pos, kmer_idx in enumerate(self._get_kmer_bin_indexes(seq, len(sequence))):
             for barcode in self.index[kmer_idx]:
                 barcode_counts[barcode] += 1
