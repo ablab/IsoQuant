@@ -5,7 +5,7 @@
 ############################################################################
 import math
 from collections import defaultdict
-from common import bit_to_str, str_to_2bit
+from .common import bit_to_str, str_to_2bit
 
 
 class KmerIndexer:
