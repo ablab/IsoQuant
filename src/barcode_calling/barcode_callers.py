@@ -251,9 +251,45 @@ class StereoBarcodeDetector:
             logger.debug("PRIMER: %d-%d" % (primer_start, primer_end))
         else:
             primer_start = -1
-            primer_end = -1
+            primer_end = linker_start - self.BC_LENGTH - 1
 
-        return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start, primer=primer_end,
+        if primer_end < 0:
+            return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start, primer=-1,
+                                                linker_start=linker_start, linker_end=linker_end)
+
+        barcode_start = primer_end + 1
+        barcode_end = linker_end - 1
+        bc_len = barcode_end - barcode_start
+        if abs(bc_len - self.BC_LENGTH) > 10:
+            return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start, primer=-1,
+                                                linker_start=linker_start, linker_end=linker_end)
+
+        potential_barcode = sequence[barcode_start:barcode_end + 1]
+        logger.debug("Barcode: %s" % (potential_barcode))
+        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode)
+        barcode, bc_score, bc_start, bc_end = \
+            find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode, min_score=self.min_score)
+
+        if barcode is None:
+            return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start, primer=primer_end,
+                                                linker_start=linker_start, linker_end=linker_end)
+        logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
+
+        potential_umi_start = linker_end + 1
+        potential_umi_end = polyt_start - 1
+        umi = None
+        good_umi = False
+        if potential_umi_end > potential_umi_start:
+            umi = sequence[potential_umi_start:potential_umi_end + 1]
+            logger.debug("Potential UMI: %s" % umi)
+            good_umi = abs(len(umi) - self.UMI_LENGTH) <= self.UMI_LEN_DELTA
+
+        if not umi:
+            return DoubleBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
+                                            polyT=polyt_start, primer=primer_end,
+                                            linker_start=linker_start, linker_end=linker_end)
+        return DoubleBarcodeDetectionResult(read_id, barcode, umi, bc_score, good_umi,
+                                            polyT=polyt_start, primer=primer_end,
                                             linker_start=linker_start, linker_end=linker_end)
 
 
