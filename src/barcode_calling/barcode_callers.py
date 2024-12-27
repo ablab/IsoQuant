@@ -7,8 +7,9 @@
 import logging
 from collections import defaultdict
 
-from .kmer_indexer import KmerIndexer, ArrayKmerIndexer
-from .common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions
+from .kmer_indexer import KmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
+from .common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions, \
+    str_to_2bit
 
 logger = logging.getLogger('IsoQuant')
 
@@ -169,7 +170,9 @@ class StereoBarcodeDetector:
             self.MAIN_PRIMER = StereoBarcodeDetector.PC1_PRIMER
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=7)
         self.linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=5)
-        self.barcode_indexer = ArrayKmerIndexer(barcodes, kmer_size=12)
+        bit_barcodes = map(str_to_2bit, barcodes)
+        self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=12, seq_len=self.BC_LENGTH)
+        logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
         self.umi_set = None
         self.min_score = min_score
 
