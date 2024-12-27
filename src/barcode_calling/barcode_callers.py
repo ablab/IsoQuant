@@ -163,7 +163,7 @@ class StereoBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcodes, min_score=13, primer=1):
+    def __init__(self, barcodes, min_score=22, primer=1):
         if primer == 1:
             self.MAIN_PRIMER = StereoBarcodeDetector.TSO_PRIMER
         else:
@@ -261,7 +261,7 @@ class StereoBarcodeDetector:
                                                 linker_start=linker_start, linker_end=linker_end)
 
         barcode_start = primer_end + 1
-        barcode_end = linker_end - 1
+        barcode_end = linker_start - 1
         bc_len = barcode_end - barcode_start
         if abs(bc_len - self.BC_LENGTH) > 10:
             return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start, primer=-1,
@@ -294,7 +294,6 @@ class StereoBarcodeDetector:
         return DoubleBarcodeDetectionResult(read_id, barcode, umi, bc_score, good_umi,
                                             polyT=polyt_start, primer=primer_end,
                                             linker_start=linker_start, linker_end=linker_end)
-
 
     @staticmethod
     def result_type():
