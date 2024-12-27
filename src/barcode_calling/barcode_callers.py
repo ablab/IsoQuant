@@ -282,7 +282,7 @@ class StereoBarcodeDetector:
         potential_umi_end = polyt_start - 1
         umi = None
         good_umi = False
-        if potential_umi_end > potential_umi_start:
+        if potential_umi_start + 2 * self.UMI_LENGTH > potential_umi_end > potential_umi_start:
             umi = sequence[potential_umi_start:potential_umi_end + 1]
             logger.debug("Potential UMI: %s" % umi)
             good_umi = abs(len(umi) - self.UMI_LENGTH) <= self.UMI_LEN_DELTA
