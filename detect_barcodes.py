@@ -21,6 +21,7 @@ import numpy
 import pysam
 from Bio import SeqIO
 import logging
+from src.barcode_calling.common import bit_to_str, str_to_2bit
 from src.barcode_calling.barcode_callers import (
     TenXBarcodeDetector,
     DoubleBarcodeDetector,
@@ -206,8 +207,8 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, min_score=None
 
 def process_single_thread(args):
     logger.info("Loading barcodes from %s" % args.barcodes)
-    barcodes = load_barcodes(args.barcodes)
-    logger.info("Loaded %d barcodes" % len(barcodes))
+    barcodes = load_barcodes_iter(args.barcodes)
+    # logger.info("Loaded %d barcodes" % len(barcodes))
     logger.info("Preparing barcodes")
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
@@ -285,8 +286,8 @@ def process_in_parallel(args):
     #                 pass
 
     logger.info("Loading barcodes from %s" % args.barcodes)
-    barcodes = load_barcodes(args.barcodes)
-    logger.info("Loaded %d barcodes" % len(barcodes))
+    barcodes = load_barcodes_iter(args.barcodes)
+    # logger.info("Loaded %d barcodes" % len(barcodes))
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     logger.info("Barcode caller created")
 
@@ -340,7 +341,7 @@ def process_in_parallel(args):
 def load_barcodes(inf):
     barcode_list = []
     if inf.endswith("h5") or inf.endswith("hdf5"):
-        barcode_list = list(iterate_h5_barcode(inf))
+        barcode_list = load_h5_barcodes_bit(inf)
     else:
         if inf.endswith("gz") or inf.endswith("gzip"):
             handle = gzip.open(inf, "rt")
@@ -351,23 +352,23 @@ def load_barcodes(inf):
     return barcode_list
 
 
-def decode_dna_sequence(encoded_int, sequence_length=25):
-    base_map = ['A', 'C', 'T', 'G']
-    sequence = []
-    for i in range(sequence_length):
-        base_index = int(encoded_int >> numpy.uint64(2 * (sequence_length - 1 - i))) & 3
-        sequence.append(base_map[base_index])
-    return ''.join(sequence)
-
-
-def iterate_h5_barcode(h5_file_path, dataset_name='bpMatrix_1'):
+def load_h5_barcodes_bit(h5_file_path, dataset_name='bpMatrix_1'):
     barcode_list = []
     with h5py.File(h5_file_path, 'r') as h5_file:
         dataset = numpy.array(h5_file[dataset_name])
         for row in dataset:
             for col in row:
-                barcode_list.append(decode_dna_sequence(col[0]))
+                barcode_list.append(bit_to_str(int(col[0])))
     return barcode_list
+
+
+def load_barcodes_iter(inf):
+    if inf.endswith("gz") or inf.endswith("gzip"):
+        handle = gzip.open(inf, "rt")
+    else:
+        handle = open(inf, "r")
+    for l in handle:
+        yield l.strip().split()[0]
 
 
 def set_logger(logger_instance):
