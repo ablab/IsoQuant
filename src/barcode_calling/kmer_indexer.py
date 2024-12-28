@@ -46,7 +46,8 @@ class KmerIndexer:
     # max_hits: return at most max_hits candidates
     # min_kmers: minimal number of matching k-mers
     # @return
-    # a list of pairs (string, numer of common k-mers) sorted descending by the number of shared k-mers
+    # a list of (pattern: str, number of shared kmers: int, their positions: list)
+    # sorted descending by the number of shared k-mers
     def get_occurrences(self, sequence, max_hits=0, min_kmers=1, hits_delta=1, ignore_equal=False):
         barcode_counts = defaultdict(int)
         barcode_positions = defaultdict(list)
@@ -65,15 +66,15 @@ class KmerIndexer:
             result.append((self.seq_list[i], count, barcode_positions[i]))
 
         if not result:
-            return {}
+            return []
 
         top_hits = max(result, key=lambda x: x[1])[1]
         result = filter(lambda x: x[1] >= top_hits - hits_delta, result)
-        result = sorted(result, reverse=True, key=lambda x: x[1])
+        result = list(sorted(result, reverse=True, key=lambda x: x[1]))
 
         if max_hits == 0:
-            return {x[0]:x for x in result}
-        return {x[0]:x for x in list(result)[:max_hits]}
+            return result
+        return result[:max_hits]
 
 
 class ArrayKmerIndexer:
@@ -125,7 +126,8 @@ class ArrayKmerIndexer:
     # max_hits: return at most max_hits candidates
     # min_kmers: minimal number of matching k-mers
     # @return
-    # a list of pairs (string, numer of common k-mers) sorted descending by the number of shared k-mers
+    # a list of (pattern: str, number of shared kmers: int, their positions: list)
+    # sorted descending by the number of shared k-mers
     def get_occurrences(self, sequence, max_hits=0, min_kmers=1, hits_delta=1, ignore_equal=False):
         barcode_counts = defaultdict(int)
         barcode_positions = defaultdict(list)
@@ -145,15 +147,15 @@ class ArrayKmerIndexer:
             result.append((self.seq_list[i], count, barcode_positions[i]))
 
         if not result:
-            return {}
+            return []
 
         top_hits = max(result, key=lambda x: x[1])[1]
         result = filter(lambda x: x[1] >= top_hits - hits_delta, result)
-        result = sorted(result, reverse=True, key=lambda x: x[1])
+        result = list(sorted(result, reverse=True, key=lambda x: x[1]))
 
         if max_hits == 0:
-            return {x[0]:x for x in result}
-        return {x[0]:x for x in list(result)[:max_hits]}
+            return result
+        return result[:max_hits]
 
 
 class Array2BitKmerIndexer:
@@ -196,7 +198,8 @@ class Array2BitKmerIndexer:
     # max_hits: return at most max_hits candidates
     # min_kmers: minimal number of matching k-mers
     # @return
-    # a list of pairs (string, numer of common k-mers) sorted descending by the number of shared k-mers
+    # a list of (pattern: str, number of shared kmers: int, their positions: list)
+    # sorted descending by the number of shared k-m
     def get_occurrences(self, sequence, max_hits=0, min_kmers=1, hits_delta=1, ignore_equal=False):
         barcode_counts = defaultdict(int)
         barcode_positions = defaultdict(list)
@@ -217,12 +220,12 @@ class Array2BitKmerIndexer:
             result.append((barcode, count, barcode_positions[barcode]))
 
         if not result:
-            return {}
+            return []
 
         top_hits = max(result, key=lambda x: x[1])[1]
         result = filter(lambda x: x[1] >= top_hits - hits_delta, result)
         result = sorted(result, reverse=True, key=lambda x: x[1])
 
         if max_hits == 0:
-            return {bit_to_str(x[0], self.seq_len):x for x in result}
-        return {bit_to_str(x[0], self.seq_len):x for x in list(result)[:max_hits]}
+            return  [(bit_to_str(x[0], self.seq_len), x[1], x[2]) for x in result]
+        return [(bit_to_str(x[0], self.seq_len), x[1], x[2]) for x in list(result)[:max_hits]]
