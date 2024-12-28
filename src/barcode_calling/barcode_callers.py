@@ -60,13 +60,13 @@ class DoubleBarcodeDetectionResult(BarcodeDetectionResult):
         return self.barcode != BarcodeDetectionResult.NOSEQ
 
     def more_informative_than(self, that):
-        if self.polyT != that.polyT:
-            return self.polyT > that.polyT
-        if self.primer != that.primer:
-            return self.primer > that.primer
+        if self.BC_score != that.BC_score:
+            return self.BC_score > that.BC_score
         if self.linker_start != that.linker_start:
             return self.linker_start > that.linker_start
-        return self.BC_score > that.BC_score
+        if self.primer != that.primer:
+            return self.primer > that.primer
+        return self.polyT > that.polyT
 
     def get_additional_attributes(self):
         attr = []
@@ -176,7 +176,7 @@ class StereoBarcodeDetector:
         self.umi_set = None
         self.min_score = min_score
 
-    def find_barcode_umi(self, read_id, sequence):
+    def find_barcode_umi_multiple(self, read_id, sequence):
         read_result = []
         r = self._find_barcode_umi_fwd(read_id, sequence)
         current_start = 0
@@ -209,6 +209,22 @@ class StereoBarcodeDetector:
         if not read_result:
             read_result.append(r)
         return read_result
+
+    def find_barcode_umi(self, read_id, sequence):
+        read_result = self._find_barcode_umi_fwd(read_id, sequence)
+        if read_result.polyT != -1:
+            read_result.set_strand("+")
+        if read_result.is_valid():
+            return read_result
+
+        rev_seq = reverese_complement(sequence)
+        read_rev_result = self._find_barcode_umi_fwd(read_id, rev_seq)
+        if read_rev_result.polyT != -1:
+            read_rev_result.set_strand("-")
+        if read_rev_result.is_valid():
+            return read_rev_result
+
+        return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
 
     def _find_barcode_umi_fwd(self, read_id, sequence):
         polyt_start = find_polyt_start(sequence)
