@@ -280,7 +280,7 @@ class StereoBarcodeDetector:
         barcode_end = linker_start - 1
         bc_len = barcode_end - barcode_start
         if abs(bc_len - self.BC_LENGTH) > 10:
-            return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start, primer=-1,
+            return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start, primer=primer_end,
                                                 linker_start=linker_start, linker_end=linker_end)
 
         potential_barcode = sequence[barcode_start:barcode_end + 1]
