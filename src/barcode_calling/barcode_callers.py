@@ -163,12 +163,12 @@ class StereoBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcodes, min_score=22, primer=1):
+    def __init__(self, barcodes, min_score=21, primer=1):
         if primer == 1:
             self.MAIN_PRIMER = StereoBarcodeDetector.TSO_PRIMER
         else:
             self.MAIN_PRIMER = StereoBarcodeDetector.PC1_PRIMER
-        self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=7)
+        self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=5)
         bit_barcodes = map(str_to_2bit, barcodes)
         self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=12, seq_len=self.BC_LENGTH)
@@ -264,7 +264,7 @@ class StereoBarcodeDetector:
         primer_occurrences = self.pcr_primer_indexer.get_occurrences(sequence[:linker_start])
         primer_start, primer_end = detect_exact_positions(sequence, 0, linker_start,
                                                           self.pcr_primer_indexer.k, self.MAIN_PRIMER,
-                                                          primer_occurrences, min_score=15,
+                                                          primer_occurrences, min_score=12,
                                                           end_delta=self.TERMINAL_MATCH_DELTA)
         if primer_start is not None:
             logger.debug("PRIMER: %d-%d" % (primer_start, primer_end))
@@ -318,12 +318,12 @@ class StereoBarcodeDetector:
 
 
 class StereoBarcodeDetectorTSO(StereoBarcodeDetector):
-    def __init__(self, barcode_list, min_score=13):
+    def __init__(self, barcode_list, min_score=21):
         StereoBarcodeDetector.__init__(self, barcode_list, min_score, primer=1)
 
 
 class StereoBarcodeDetectorPC(StereoBarcodeDetector):
-    def __init__(self, barcode_list, min_score=13):
+    def __init__(self, barcode_list, min_score=21):
         StereoBarcodeDetector.__init__(self, barcode_list, min_score, primer=2)
 
 
