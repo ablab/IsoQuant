@@ -51,16 +51,17 @@ def align_pattern_ssw(sequence, start, end, pattern, min_score=0):
         alignment.read_start, alignment.read_end, alignment.optimal_score
 
 
-def find_candidate_with_max_score_ssw(barcode_matches, read_sequence, min_score=10, score_diff=0):
+def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_score=10, score_diff=0, sufficient_score=0):
     best_match = [0, 0, 0]
     best_barcode = None
     second_best_score = 0
 
     align_mgr = AlignmentMgr(match_score=1, mismatch_penalty=1)
     align_mgr.set_reference(read_sequence)
-    for barcode in barcode_matches.keys():
+    for barcode_match in barcode_matches:
+        barcode = barcode_match[0]
         align_mgr.set_read(barcode)
-        alignment = align_mgr.align(gap_open=1.5, gap_extension=1)
+        alignment = align_mgr.align(gap_open=1, gap_extension=1)
         if alignment.optimal_score < min_score:
             continue
 
@@ -76,20 +77,29 @@ def find_candidate_with_max_score_ssw(barcode_matches, read_sequence, min_score=
             best_match[1] = alignment.reference_start
             best_match[2] = alignment.reference_end
 
+        if alignment.optimal_score > sufficient_score > 0:
+            # dirty hack to select first "sufficiently good" alignment
+            break
+
     if best_match[0] - second_best_score < score_diff:
         return None, 0, 0, 0
 
     return best_barcode, best_match[0], best_match[1], best_match[2]
 
 
-def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences,
+def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences: list,
                            min_score=0, start_delta=-1, end_delta=-1):
-    if not pattern_occurrences:
+    pattern_index = None
+    for i, p in enumerate(pattern_occurrences):
+        if p[0] == pattern:
+            pattern_index = i
+            break
+    if pattern_index is None:
         return None, None
 
     start_pos, end_pos, pattern_start, pattern_end, score  = None, None, None, None, 0
     last_potential_pos = -2*len(pattern)
-    for match_position in pattern_occurrences[pattern][2]:
+    for match_position in pattern_occurrences[pattern_index][2]:
         if match_position - last_potential_pos < len(pattern):
             continue
 
