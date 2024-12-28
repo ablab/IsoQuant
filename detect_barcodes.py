@@ -291,9 +291,13 @@ def process_in_parallel(args):
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     logger.info("Barcode caller created")
 
+    min_score = None
+    if args.min_score:
+        min_score = args.min_score
+
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
         for chunk in read_chunk_gen:
-            future_results.append(proc.submit(process_chunk, barcode_detector, chunk, tmp_barcode_file, count, args.min_score))
+            future_results.append(proc.submit(process_chunk, barcode_detector, chunk, tmp_barcode_file, count, min_score))
             count += 1
             if count >= args.threads:
                 break
