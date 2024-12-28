@@ -269,9 +269,10 @@ class StereoBarcodeDetector:
 
         potential_barcode = sequence[barcode_start:barcode_end + 1]
         logger.debug("Barcode: %s" % (potential_barcode))
-        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode)
+        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode, max_hits=10, min_kmers=2)
         barcode, bc_score, bc_start, bc_end = \
-            find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode, min_score=self.min_score)
+            find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
+                                              min_score=self.min_score, sufficient_score=self.BC_LENGTH - 1)
 
         if barcode is None:
             return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start, primer=primer_end,
