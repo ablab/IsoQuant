@@ -56,10 +56,11 @@ def load_barcodes(in_file, use_untrusted_umis=False, barcode_column=1, umi_colum
             if v[umi_property_column] != "True":
                 if not use_untrusted_umis:
                     continue
+                umi = "None"
             else:
+                umi = v[umi_column]
                 trusted_umi += 1
 
-            umi = v[umi_column]
             barcode_dict[v[0]] = (barcode, umi)
 
     logger.info("Total reads: %d" % read_count)
@@ -168,7 +169,10 @@ class UMIFilter:
         return similar_umi
 
     def _process_duplicates(self, molecule_list):
-        if len(molecule_list) <= 1:
+        if not molecule_list:
+            return []
+
+        if len(molecule_list) == 1:
             self.duplicated_molecule_counts[1] += 1
             logger.debug("Unique " + molecule_list[0].read_id)
             return molecule_list
@@ -177,6 +181,11 @@ class UMIFilter:
         umi_dict = defaultdict(list)
         trusted_umi_list = []
         for m in molecule_list:
+            if m.umi is None:
+                # collect untrusted UMIs together
+                umi_dict[m.umi].append(m)
+                continue
+
             similar_umi = self._find_similar_umi(m.umi, trusted_umi_list)
             if similar_umi is None:
                 # if none is added, add to indexer
@@ -189,7 +198,7 @@ class UMIFilter:
             duplicate_count = len(umi_dict[umi])
             self.duplicated_molecule_counts[duplicate_count] += 1
             if duplicate_count == 1:
-                resulting_reads.append(umi_dict[umi][0])
+                resulting_reads.append((umi_dict[umi][0], umi))
                 continue
 
             best_read = umi_dict[umi][0]
@@ -203,9 +212,13 @@ class UMIFilter:
                         best_read.exon_blocks[-1][1] - best_read.exon_blocks[0][0]:
                     best_read = m
             logger.debug("Selected %s %s" % (best_read.read_id, best_read.umi))
-            resulting_reads.append(best_read)
+            resulting_reads.append((best_read, umi))
 
-        return resulting_reads
+        if len(resulting_reads) == 1:
+            # if we have a single UMI - we do not care whether it's trusted or not
+            return [resulting_reads[0][0]]
+        # if we have > 1 UMIs, we ignore untrusted ones
+        return [x[0] for x in filter(lambda x: x is not None, resulting_reads)]
 
     def _process_gene(self, gene_dict):
         resulting_reads = []
