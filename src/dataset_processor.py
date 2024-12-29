@@ -62,9 +62,16 @@ class IsoQuantMode(Enum):
     bulk = 1
     tenX = 2
     double = 3
+    stereo_pc = 4
+
+    def needs_barcode_calling(self):
+        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc]
+
+    def needs_pcr_deduplication(self):
+        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc]
 
 
-ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.double.name]
+ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.double.name, IsoQuantMode.stereo_pc.name]
 
 
 def reads_collected_lock_file_name(sample_out_raw, chr_id):
