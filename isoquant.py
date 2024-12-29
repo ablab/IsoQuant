@@ -483,9 +483,9 @@ def check_input_params(args):
     args.mode = IsoQuantMode[args.mode]
     if not isinstance(args.mode, IsoQuantMode):
         args.mode = IsoQuantMode[args.mode]
-    if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+    if args.mode.needs_barcode_calling():
         if not args.barcode_whitelist and not args.barcoded_reads:
-            logger.critical("You have chosen single-cell mode %s, please specify barcode whitelist or file with "
+            logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
                             "barcoded reads" % args.mode.name)
             exit(-3)
 
@@ -868,6 +868,7 @@ def call_barcodes(args):
                     raise future_res.exception()
 
             args.input_data.samples[0].barcoded_reads.append(output_barcodes)
+            logger.info("Processed %s, barcodes are stored in %s" % (files[0], output_barcodes))
     else:
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
 
@@ -884,7 +885,7 @@ def filter_umis(args):
     barcode_umi_dict = load_barcodes(args.input_data.samples[0].barcoded_reads, True)
     for d in [2, -1]:
         logger.info("== Filtering by UMIs with edit distance %d ==" % d)
-        output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else "ED%d" % d)
+        output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
         logger.info("Results will be saved to %s" % output_prefix)
         umi_filter = UMIFilter(barcode_umi_dict, d)
         umi_filter.process(args.input_data.samples[0].out_assigned_tsv, output_prefix, transcript_type_dict)
@@ -897,7 +898,7 @@ def run_pipeline(args):
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
-    if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+    if args.mode.needs_barcode_calling():
         # call barcodes
         call_barcodes(args)
 
@@ -927,7 +928,7 @@ def run_pipeline(args):
         if len(args.input_data.samples) > 1 and args.genedb:
             combine_counts(args.input_data, args.output)
 
-    if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
+    if args.mode.needs_pcr_deduplication():
         filter_umis(args)
 
     logger.info(" === IsoQuant pipeline finished === ")
