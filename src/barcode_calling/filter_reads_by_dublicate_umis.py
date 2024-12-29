@@ -65,7 +65,7 @@ def main():
     else:
         transcript_info_dict = {}
 
-    for d in {-1, 2, 3, 4, 5, args.min_distance}:
+    for d in sorted({-1, 2, args.min_distance}):
         logger.info("== Filtering by UMIs with edit distance %d ==" % d)
         output_prefix = args.output + (".ALL" if d < 0 else "ED%d" % d)
         logger.info("Results will be saved to %s" % output_prefix)
