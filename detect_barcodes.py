@@ -15,7 +15,7 @@ from traceback import print_exc
 import shutil
 from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
-import h5py
+# import h5py
 import numpy
 
 import pysam

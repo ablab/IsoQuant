@@ -275,8 +275,8 @@ class UMIFilter:
                 self.unique_gene_barcode.add((read_infos[0].gene_id, read_infos[0].barcode))
 
     def process(self, assignment_file, output_prefix, transcript_type_dict):
-        outf = open(output_prefix + ".UMI_filtered.reads.tsv", "w")
-        allinfo_outf = open(output_prefix + ".UMI_filtered.allinfo", "w")
+        outf = open(output_prefix + ".read_ids.tsv", "w")
+        allinfo_outf = open(output_prefix + ".allinfo", "w")
 
         # 1251f521-d4c2-4dcc-96d7-85070cc44e12    chr1    -       ENST00000477740.5       ENSG00000238009.6       ambiguous       ism_internal    112699-112804,120721-120759     PolyA=False
         gene_barcode_dict = defaultdict(lambda: defaultdict(list))
