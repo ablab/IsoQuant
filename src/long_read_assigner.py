@@ -184,8 +184,8 @@ class LongReadAssigner:
         read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
         for isoform_id, diff_introns in intron_matching_isoforms:
             transcript_start, transcript_end = self.gene_info.transcript_region(isoform_id)
-            extra_left = 1 if read_region[0] + self.params.delta < transcript_start else 0
-            extra_right = 1 if read_region[1] - self.params.delta > transcript_end else 0
+            extra_left = 0.5 if read_region[0] + self.params.delta < transcript_start else 0
+            extra_right = 0.5 if read_region[1] - self.params.delta > transcript_end else 0
             candidates.append((isoform_id, diff_introns + extra_right + extra_left))
         # select isoforms that have similar number of potential inconsistencies
         best_diff = min(candidates, key=lambda x: x[1])[1]
