@@ -389,7 +389,8 @@ class ReadAssignmentAggregator:
             self.transcript_model_grouped_counter = create_transcript_counter(
                 sample.out_transcript_model_grouped_counts_tsv,
                 self.args.transcript_quantification,
-                read_groups=self.read_groups, output_zeroes=False)
+                read_groups=self.read_groups, output_zeroes=False,
+                grouped_format=self.grouped_format)
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
 
     def finalize_aggregators(self, sample):
