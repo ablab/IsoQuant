@@ -1,5 +1,11 @@
 # IsoQuant changelog
 
+## IsoQuant 3.6.3, 13 January 2026
+
+- Fix penalty score for terminal exon elongation when selecting similar isoforms for inconsistent reads [#270](https://github.com/ablab/IsoQuant/issues/270).
+
+- Fix `transcript_model_grouped_counts` output format [#275](https://github.com/ablab/IsoQuant/issues/275).
+
 ## IsoQuant 3.6.2, 15 November 2024
 
 - Fixes linear grouped counts output [#258](https://github.com/ablab/IsoQuant/issues/258).
