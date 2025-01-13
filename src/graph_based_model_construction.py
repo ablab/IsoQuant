@@ -558,6 +558,7 @@ class GraphBasedModelConstructor:
             path_constraints.append(list(p))
         # path_constraints = list(map(lambda x: list(x), self.known_isoforms_in_graph.keys()))
 
+        #Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
         fl_transcript_paths = Encode_ILP(self.intron_graph, path_constraints)
         for res in fl_transcript_paths:
             path = tuple(res[0])

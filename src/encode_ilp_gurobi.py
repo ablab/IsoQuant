@@ -3,38 +3,37 @@ from src.visualization import visualize
 from collections import defaultdict
 from gurobipy import GRB
 import gurobipy as gp
-
-
 import logging
+
 logger = logging.getLogger('IsoQuant')
+
+TOLERANCE = 0.1  #tolerance allowed for Gurobi numerical values
 
 def tail(grb_edge): return int(grb_edge.split("[")[1].split(",")[0])
 def head(grb_edge): return int(grb_edge.split("[")[1].split(",")[1])
 def path(grb_edge): return int(grb_edge.split("[")[1].split(",")[2])
 
-class Enc:
+class Encode:
 
-    def __init__(self,n,E,F,R=[],eps=50):
-        self.n = n
-        self.m = len(E)
-        self.source = 0
-        self.target = self.n-1
-        self.E = E
-        self.F = F
-        self.R = R
-        self.f = 0
-        self.k = 0
-        self.w_max = 0
-        self.constraints = []
-
-        self.tolerance = 0.1 #tolerance allowed for gurobi numerical values
-        self.epsilon   = eps #we could have a function that computes epsilon based on features of the data
-
-        self.model = gp.Model("MFD")
-        self.model.Params.Threads = 16 #FIXME magic number, use args.threads
-        if not self.model:
-            print("FATAL: could not create GRB model")
-            exit(0) #TODO: display error message and catch exception
+    def __init__(self,n,E,F,epsilon,timeout,threads,R=[]):
+        self.n          = n
+        self.m          = len(E)
+        self.source     = 0
+        self.target     = self.n-1
+        self.E          = E
+        self.F          = F
+        self.R          = R
+        self.epsilon    = epsilon #we could have a function that finds a good epsilon based on features of the data
+        self.timeout    = timeout
+        self.threads    = threads
+        self.w_max      = 0
+        self.edge_vars  = {}
+        self.phi_vars   = {}
+        self.gam_vars   = {}
+        self.weights    = {}
+        self.slacks     = {}
+        self.spc_vars   = {}
+        self.model      = self.create_solver()
         
         source_outdegree_nonzero = 0
         target_indegree_nonzero  = 0
@@ -44,35 +43,31 @@ class Enc:
             if v==self.target and F[(u,v)]!=0:
                 target_indegree_nonzero += 1
             self.w_max = max(self.w_max,self.F[(u,v)])
-        
-        self.k = max(source_outdegree_nonzero, target_indegree_nonzero) #trivial lower bound for the largest edge antichain of the graph
- 
-        self.paths      = []
+        self.k = max(source_outdegree_nonzero, target_indegree_nonzero) #a lower bound for the largest edge antichain of the graph
 
-        self.edge_vars  = {}
-        self.phi_vars   = {}
-        self.gam_vars   = {}
-        self.weights    = {}
-        self.slacks     = {}
-        self.spc_vars   = {}
-
-    def add_constraint(self, constraint):
-        self.constraints.append(str(constraint))
-
-    def show_constraints(self):
-        #TODO
-        return self.constraints
+    def create_solver(self):
+        env = gp.Env(empty=True) #https://docs.gurobi.com/projects/optimizer/en/current/reference/python/env.html#Env.Env
+        env.setParam('OutputFlag'   ,              0)
+        env.setParam('LogToConsole' ,              0)
+        env.setParam('TimeLimit'    ,   self.timeout)
+        env.setParam('Threads'      ,   self.threads)
+        env.start()
+        model = gp.Model("MFD_Robust", env=env)
+        if not model:
+            logger.error("FATAL, could not create Gurobi model")
+            exit(0) #TODO: use try except
+        return model
 
     def clear(self):
-        self.constraints = []
+        #self.env.close()
+        #self.model.close()
+        self.model       = self.create_solver()
         self.edge_vars   = {}
         self.phi_vars    = {}
         self.gam_vars    = {}
         self.weights     = {}
         self.slacks      = {}
         self.spc_vars    = {}
-        self.model       = gp.Model("MFD") #gurobi model does not have an "easy" clear() method so we just create a fresh model whenever we want to reset the encoder
-        self.paths       = []
 
     def display_stats(self):
         print("###################################\nSTATS####################################\n")
@@ -99,11 +94,12 @@ class Enc:
         path_indexes    = [ (    i) for i in range(self.k)                             ]
         subpath_indexes = [ (i,j  ) for i in range(self.k) for j in range(len(self.R)) ]
 
+        #try to replace all the CONTINUOUS variables with INTEGER variables
         self.edge_vars = self.model.addVars(   edge_indexes, vtype=GRB.BINARY    ,  name='e'                     )
         self.spc_vars  = self.model.addVars(subpath_indexes, vtype=GRB.BINARY    ,  name='r'                     )
         self.phi_vars  = self.model.addVars(   edge_indexes, vtype=GRB.CONTINUOUS,  name='p', lb=0, ub=self.w_max)
         self.gam_vars  = self.model.addVars(   edge_indexes, vtype=GRB.CONTINUOUS,  name='g', lb=0, ub=self.w_max)
-        self.weights   = self.model.addVars(   path_indexes, vtype=GRB.CONTINUOUS,  name='w', lb=1, ub=self.w_max)
+        self.weights   = self.model.addVars(   path_indexes, vtype=GRB.CONTINUOUS,  name='w', lb=1, ub=self.w_max) #might be worth to test lower bound to zero and assess the consequences on ObjVal
         self.slacks    = self.model.addVars(   path_indexes, vtype=GRB.CONTINUOUS,  name='s', lb=0, ub=self.w_max)
 
         #The identifiers of the constraints come from https://www.biorxiv.org/content/10.1101/2023.03.20.533019v1.full.pdf page 13
@@ -122,9 +118,7 @@ class Enc:
             gam_sum = self.gam_vars.sum(u,v,'*')
             self.model.addConstr( f_uv - phi_sum <=  gam_sum / self.confidence((u,v)), "14d_u={}_v={}".format(u,v) )
             self.model.addConstr( f_uv - phi_sum >= -gam_sum / self.confidence((u,v)), "14e_u={}_v={}".format(u,v) )
-
-        for i in range(self.k):
-            for (u,v) in self.E:
+            for i in range(self.k):
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14f_u={}_v={}_i={}".format(u,v,i) ) 
                 self.model.addConstr( self.gam_vars[u,v,i] <= self.w_max * self.edge_vars[u,v,i]                        , "14i_u={}_v={}_i={}".format(u,v,i) ) #FIXME w_max vs M
                 self.model.addConstr( self.phi_vars[u,v,i] <= self.weights[i]                                           , "14g_u={}_v={}_i={}".format(u,v,i) )
@@ -132,23 +126,18 @@ class Enc:
                 self.model.addConstr( self.phi_vars[u,v,i] >= self.weights[i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14h_u={}_v={}_i={}".format(u,v,i) )
                 self.model.addConstr( self.gam_vars[u,v,i] >= self.slacks [i] - (1 - self.edge_vars[u,v,i]) * self.w_max, "14k_u={}_v={}_i={}".format(u,v,i) ) #FIXME w_max vs M
 
-        '''
-        Idea: might be interesting to try different strategies of subpath constraints wrt data
-        '''
         #Example of a subpath constraint: R=[ [(1,3),(3,5)], [(0,1)] ], means that we have 2 paths to cover, the first one is 1-3-5. the second path is just a single edge 0-1
         def EncodeSubpathConstraints():
             for i in range(self.k):
                 for j in range(len(self.R)):
                     edgevars_on_subpath = list(map(lambda e: self.edge_vars[e[0],e[1],i], self.R[j]))
                     self.model.addConstr( sum(edgevars_on_subpath) >= len(self.R[j]) * self.spc_vars[i,j] )
-                    #for the sum over edgevars_on_subpath, test if it's faster to do: fold(+, 0, edgevars_on_subpath)
             for j in range(len(self.R)):
                 self.model.addConstr( self.spc_vars.sum('*',j) >= 1 )
 
         if self.R!=[]:
             EncodeSubpathConstraints()
 
-        #Add objective function minimizing the sum of slack of all the paths
         self.model.setObjective( self.slacks.sum(), GRB.MINIMIZE )
 
 
@@ -158,26 +147,37 @@ class Enc:
         for p in paths:
             print(*p)
         visualize((self.E,self.F),paths)
-    
+
+    ''' About the "build_solution" function:
+    paths in the solution are of the form [ (weight_0, slack_0, p_0), ... (weight_i, slack_i, p_i), ...]
+    where p_i is of the form [v_1,v_2,...,v_k], where source and target are not included (see build_solution)
+    '''    
     def build_solution(self):
+        paths = []
         for i in range(self.k):
             path = []
             u    = self.source
             while u != self.target:
-                edges = list(filter(lambda grb_var : grb_var.X>1-self.tolerance , self.edge_vars.select(u,'*',i) ))
+                edges = list(filter(lambda grb_var : grb_var.X>1-TOLERANCE , self.edge_vars.select(u,'*',i) ))
                 assert(len(edges)==1)
                 v = head(edges[0].VarName)
                 path.append(v)
                 u = v
-            self.paths.append( (self.weights[i].X, self.slacks[i].X, path[:-1]) )
+            paths.append( (self.weights[i].X, self.slacks[i].X, path[:-1]) )
 
-        return (self.k, self.model.ObjVal, self.paths)
+        return (self.k, self.model.ObjVal, paths)
 
+    def get_paths_from_solution(self, solution):
+        _,_,p = solution
+        self.print_solution(solution)
+        paths,weights = list(map(lambda x : x[2], p)), list(map(lambda x : x[0], p))
+        return (paths,weights)
+    
     def linear_search(self):
         print("############# Feasibility #############")
+        logger.info(">>> Feasibility, starting with " + str(self.k))
         #Feasibility: Find first feasible solution (there always exists one) and clear the solver for next stage
         while True:
-            print("############# CURRENT FD SIZE:",self.k," #############")
             self.encode()
             self.solve()
             if self.model.status == GRB.OPTIMAL:
@@ -189,24 +189,38 @@ class Enc:
             self.clear()
             self.k += 1
 
+        if previous_slack == 0:
+            logger.info(">>> No optimization required, found optimal solution in feasibility step with width " + str(self.k-1))
+            return self.get_paths_from_solution(solution)
+
         print("#############Optimality#############")
+        logger.info(">>> Optimality, starting with " + str(self.k))
         #Optimality: Find the k for which the difference in slacks of two consecutive iterations becomes sufficiently small
         while self.k <= self.m:
-            print("############# CURRENT FD SIZE:",self.k," #############")
             self.encode()
             self.solve()
 
-            current_slack = self.model.ObjVal
-            
-            if previous_slack - current_slack < self.epsilon:
-                solution = self.build_solution()
-                _,_,p = solution
-                self.print_solution(solution)
-                #p = list(map(lambda x : x[2], p))
-                paths,weights = list(map(lambda x : x[2], p)), list(map(lambda x : x[0], p))
-                return (paths,weights)
+            if self.model.status == GRB.TIME_LIMIT: #TODO: use try except
+                raise GRB_TimeOut("ilp.Robust.optimize_linear while optimizing")
 
-            previous_slack = current_slack
+            ''' NOTE: there is an interplay between the lower bound of the weight variables and this block of code
+            if self.model.ObjVal >= previous_slack: #if we do not improve by allowing more paths we stop
+                self.final_k = self.k-1
+                break
+            '''
+
+            solution = self.build_solution()
+
+            if self.model.ObjVal==0: #if we found a perfect solution we stop
+                return self.get_paths_from_solution(solution)
+            
+            assert(previous_slack != 0)
+
+            #The stopping condition can also be (previous_slack - self.model.ObjVal < self.epsilon), or perhaps even another thing. Can play with this
+            if 1-self.model.ObjVal/previous_slack < self.epsilon: # if the relative improvement is small we also stop
+                return self.get_paths_from_solution(solution)
+            
+            previous_slack = self.model.ObjVal
             self.clear()
             self.k += 1
 
@@ -296,10 +310,16 @@ class Intron2Graph:
         return list(map(self.path_to_transcript, paths))
 
 
-def Encode_ILP(intron_graph, transcripts_constraints=[]):
+class GRB_TimeOut(Exception):
+    def __init__(self, message:str):
+        super(GRB_TimeOut, self).__init__('Gurobi TimeOut: ' + message)
+
+
+def Encode_ILP(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
 
     #check if graph is empty
     if len(intron_graph.outgoing_edges)==0:
+        logger.warning("Empty edge list in graph.")
         return []
 
     g = Intron2Graph(intron_graph)
@@ -309,7 +329,7 @@ def Encode_ILP(intron_graph, transcripts_constraints=[]):
     n,E,F = g.vertex_id, g.edge_list, g.flow_dict
 
     visualize((E,F))
-    e = Enc(n,E,F, path_constraints)
+    e = Encode(n, E, F, epsilon, timeout, threads, path_constraints)
     e.encode()
     paths,weights = e.linear_search()
     
