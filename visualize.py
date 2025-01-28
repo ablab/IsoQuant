@@ -1,25 +1,79 @@
-#!/usr/bin/env python3
-
-from src.post_process import OutputConfig, DictionaryBuilder
-from src.plot_output import PlotOutput
 import argparse
-from src.process_dict import simplify_and_sum_transcripts
-from src.gene_model import rank_and_visualize_genes
-import os
+import sys
+import logging
+from src.visualization_output_config import OutputConfig
+from src.visualization_dictionary_builder import DictionaryBuilder
+from src.visualization_plotter import PlotOutput
+from src.visualization_differential_exp import DifferentialAnalysis
+from src.visualization_gsea import GSEAAnalysis
+from pathlib import Path
+
+
+def setup_logging(viz_output_dir: Path) -> None:
+    """Configure centralized logging for all visualization processes."""
+    log_file = viz_output_dir / "visualize.log"
+
+    # Create formatters
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s'
+    )
+    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+
+    # File handler - detailed logging
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(file_formatter)
+
+    # Console handler - less detailed
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(console_formatter)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.handlers = []  # Clear existing handlers
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+
+    # Create logger for the visualization package
+    viz_logger = logging.getLogger('IsoQuant.visualization')
+    viz_logger.setLevel(logging.DEBUG)
+    
+    # Create logger for differential expression
+    diff_logger = logging.getLogger('IsoQuant.visualization.differential_exp')
+    diff_logger.setLevel(logging.DEBUG)
+    
+    logging.info("Initialized centralized logging system")
+    logging.debug(f"Log file location: {log_file}")
+
+
+def setup_viz_output(output_directory: str, viz_output: str = None) -> Path:
+    """Set up visualization output directory."""
+    if viz_output:
+        viz_output_dir = Path(viz_output)
+    else:
+        viz_output_dir = Path(output_directory) / "visualization"
+    viz_output_dir.mkdir(parents=True, exist_ok=True)
+    return viz_output_dir
 
 
 class FindGenesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         if values is None:
-            values = 100  # Default value when the flag is used without a value
+            values = 100  # Default if flag used without value
         setattr(namespace, self.dest, values)
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Visualize your IsoQuant output.")
+
+    # Positional Argument
     parser.add_argument(
         "output_directory", type=str, help="Directory containing IsoQuant output files."
     )
+
+    # Optional Arguments
     parser.add_argument(
         "--viz_output",
         type=str,
@@ -47,73 +101,120 @@ def parse_arguments():
         default=None,
     )
     parser.add_argument(
+        "--gsea",
+        action="store_true",
+        help="Perform GSEA analysis on differential expression results",
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         "--gene_list",
         type=str,
-        required=True,
-        help="Path to a .txt file containing a list of genes, each on its own line.",
+        help="Path to a .txt file containing a list of genes to evaluate.",
     )
-    parser.add_argument(
+    group.add_argument(
         "--find_genes",
         nargs="?",
         const=100,
         type=int,
-        help="Find genes with the highest combined rank and visualize them. Optionally specify the number of top genes to evaluate (default is 100).",
-    )
-    parser.add_argument(
-        "--known_genes_path",
-        type=str,
-        help="Path to a CSV file containing known target genes.",
-        default=None,
+        help="Find top genes with highest combined rank (default 100).",
     )
 
     args = parser.parse_args()
 
-    # If --find_genes is used, prompt for reference condition
-    if args.find_genes:
+    if args.find_genes is not None:
         output = OutputConfig(
             args.output_directory,
             use_counts=args.counts,
             ref_only=args.ref_only,
             gtf=args.gtf,
         )
-
-        # Read the first line of the transcript_grouped_tpm file to get the conditions
-        with open(output.transcript_grouped_tpm, "r") as f:
-            header = f.readline().strip().split("\t")
-
-        # The first column is typically '#feature_id', so we skip it
-        conditions = header[1:]
-
-        if len(conditions) == 2:
-            # If there are only two conditions, automatically use the first as reference
-            args.reference_condition = conditions[0]
-            print(
-                f"Automatically selected '{args.reference_condition}' as the reference condition."
+        if output.conditions:
+            gene_file = (
+                output.transcript_grouped_tpm
+                if not output.use_counts
+                else output.transcript_grouped_counts
             )
         else:
-            print("Available conditions:")
-            for i, condition in enumerate(conditions, 1):
-                print(f"{i}. {condition}")
+            gene_file = (
+                output.transcript_tpm
+                if not output.use_counts
+                else output.transcript_counts
+            )
 
-            while True:
-                try:
-                    choice = int(
-                        input("Enter the number of the condition to use as reference: ")
-                    )
-                    if 1 <= choice <= len(conditions):
-                        args.reference_condition = conditions[choice - 1]
-                        break
-                    else:
-                        print("Invalid choice. Please enter a number from the list.")
-                except ValueError:
-                    print("Invalid input. Please enter a number.")
+        if not gene_file or not Path(gene_file).is_file():
+            print(f"Error: Grouped TPM/Counts file not found at {gene_file}.")
+            sys.exit(1)
+
+        with open(gene_file, "r") as f:
+            header = f.readline().strip().split("\t")
+
+        if len(header) < 2:
+            print(
+                "Error: The grouped TPM/Counts file does not contain condition information."
+            )
+            sys.exit(1)
+
+        available_conditions = header[1:]
+        if not available_conditions:
+            print("Error: No conditions found in the grouped TPM/Counts file.")
+            sys.exit(1)
+
+        args.available_conditions = available_conditions
 
     return args
 
 
+def select_conditions_interactively(args):
+    print("\nAvailable conditions:")
+    for idx, condition in enumerate(args.available_conditions, 1):
+        print(f"{idx}. {condition}")
+
+    def get_selection(prompt, max_selection, exclude=[]):
+        while True:
+            try:
+                choices = input(prompt)
+                choice_indices = [int(x.strip()) for x in choices.split(",")]
+                if all(1 <= idx <= max_selection for idx in choice_indices):
+                    selected = [
+                        args.available_conditions[idx - 1]
+                        for idx in choice_indices
+                        if args.available_conditions[idx - 1] not in exclude
+                    ]
+                    if not selected:
+                        print("No valid conditions selected. Please try again.")
+                        continue
+                    return selected
+                else:
+                    print(f"Please enter numbers between 1 and {max_selection}.")
+            except ValueError:
+                print("Invalid input. Please enter numbers separated by commas.")
+
+    max_idx = len(args.available_conditions)
+    args.reference_conditions = get_selection(
+        "\nEnter refs (comma-separated): ", max_idx
+    )
+    selected_refs = set(args.reference_conditions)
+    args.target_conditions = get_selection(
+        "\nEnter targets (comma-separated): ", max_idx, exclude=selected_refs
+    )
+
+    print("\nSelected Reference Conditions:", ", ".join(args.reference_conditions))
+    print("Selected Target Conditions:", ", ".join(args.target_conditions), "\n")
+
+
 def main():
-    print("Reading IsoQuant parameters.")
+    # Parse args first without logging
     args = parse_arguments()
+
+    # Set up visualization directory and logging
+    viz_output_dir = setup_viz_output(args.output_directory, args.viz_output)
+    setup_logging(viz_output_dir)
+
+    # If find_genes is specified, get conditions interactively
+    if args.find_genes is not None:
+        select_conditions_interactively(args)
+
+    logging.info("Reading IsoQuant parameters.")
     output = OutputConfig(
         args.output_directory,
         use_counts=args.counts,
@@ -121,122 +222,110 @@ def main():
         gtf=args.gtf,
     )
     dictionary_builder = DictionaryBuilder(output)
-    gene_list = dictionary_builder.read_gene_list(args.gene_list)
-    update_names = not all(gene.startswith("ENS") for gene in gene_list)
-    print("Building gene, transcript, and exon dictionaries.")
-    gene_dict = dictionary_builder.build_gene_transcript_exon_dictionaries()
-    print("Building read assignment and classification dictionaries.")
-    reads_and_class = (
-        dictionary_builder.build_read_assignment_and_classification_dictionaries()
+    # logging.debug("OutputConfig details:")
+    # logging.debug(vars(output))
+
+    # Ask user about read assignments (optional)
+    use_read_assignments = (
+        input("Do you want to look at read_assignment data? (y/n): ")
+        .strip()
+        .lower()
+        .startswith("y")
     )
 
-    if output.conditions:
-        gene_file = (
-            output.gene_grouped_tpm
-            if not output.use_counts
-            else output.gene_grouped_counts
+    # If gene_list was given, read it; might use later for some optional steps
+    if args.gene_list:
+        logging.info(f"Reading gene list from {args.gene_list}")
+        gene_list = dictionary_builder.read_gene_list(args.gene_list)
+        # Decide if you need to rename Genes -> Symbol
+        update_names = not all(gene.startswith("ENS") for gene in gene_list)
+    else:
+        gene_list = None
+        update_names = True
+
+    # 1. Build a dictionary that includes transcript expression
+    #    and filters transcripts if they do NOT exceed args.filter_transcripts
+    #    (defaulting to 1.0 if not provided)
+    min_val = args.filter_transcripts if args.filter_transcripts is not None else 1.0
+    updated_gene_dict = dictionary_builder.build_gene_dict_with_expression_and_filter(
+        min_value=min_val
+    )
+
+    # 2. If read assignments are desired, build those as well (cached)
+    if use_read_assignments:
+        logging.info("Building read assignment and classification dictionaries.")
+        reads_and_class = (
+            dictionary_builder.build_read_assignment_and_classification_dictionaries()
         )
     else:
-        gene_file = output.gene_tpm if not output.use_counts else output.gene_counts
+        reads_and_class = None
 
-    updated_gene_dict = dictionary_builder.update_gene_dict(gene_dict, gene_file)
+    # 3. If user wants to find top genes (--find_genes), run your differential analysis
+    if args.find_genes is not None:
+        ref_str = "_".join(
+            x.upper().replace(" ", "_") for x in args.reference_conditions
+        )
+        target_str = "_".join(
+            x.upper().replace(" ", "_") for x in args.target_conditions
+        )
+        main_dir_name = f"find_genes_{ref_str}_vs_{target_str}"
+        base_dir = (
+            viz_output_dir / main_dir_name if not args.viz_output else viz_output_dir
+        )
+        base_dir.mkdir(exist_ok=True)
+
+        logging.info("Finding genes via differential analysis.")
+        diff_analysis = DifferentialAnalysis(
+            output_dir=args.output_directory,
+            viz_output=base_dir,
+            ref_conditions=args.reference_conditions,
+            target_conditions=args.target_conditions,
+            updated_gene_dict=updated_gene_dict,
+            ref_only=args.ref_only,
+            dictionary_builder=dictionary_builder,
+        )
+        gene_results, transcript_results, _ = diff_analysis.run_complete_analysis()
+        find_genes_list_path = gene_results.parent / "genes_from_top_100_transcripts.txt"
+        gene_list = dictionary_builder.read_gene_list(find_genes_list_path)
+
+        if args.gsea:
+            gsea = GSEAAnalysis(output_path=base_dir)
+            target_label = f"{'+'.join(args.target_conditions)}_vs_{'+'.join(args.reference_conditions)}"
+            gsea.run_gsea_analysis(deseq2_df, target_label)
+
+        # Use genes from top transcripts instead of top genes
+        find_genes_list_path = gene_results.parent / "genes_from_top_100_transcripts.txt"
+        gene_list = dictionary_builder.read_gene_list(find_genes_list_path)
+    else:
+        base_dir = viz_output_dir
+
     if update_names:
-        print("Updating Ensembl IDs to gene symbols.")
+        logging.info("Updating Ensembl IDs to gene symbols.")
         updated_gene_dict = dictionary_builder.update_gene_names(updated_gene_dict)
 
-    if output.ref_only or not output.extended_annotation:
-        print("Using reference-only based quantification.")
-        if output.conditions:
-            updated_gene_dict = dictionary_builder.update_transcript_values(
-                updated_gene_dict,
-                (
-                    output.transcript_grouped_tpm
-                    if not output.use_counts
-                    else output.transcript_grouped_counts
-                ),
-            )
-        else:
-            updated_gene_dict = dictionary_builder.update_transcript_values(
-                updated_gene_dict,
-                (
-                    output.transcript_tpm
-                    if not output.use_counts
-                    else output.transcript_counts
-                ),
-            )
-    else:
-        print("Using transcript model quantification.")
-        if output.conditions:
-            updated_gene_dict = dictionary_builder.update_transcript_values(
-                updated_gene_dict,
-                (
-                    output.transcript_model_grouped_tpm
-                    if not output.use_counts
-                    else output.transcript_model_grouped_counts
-                ),
-            )
-        else:
-            updated_gene_dict = dictionary_builder.update_transcript_values(
-                updated_gene_dict,
-                (
-                    output.transcript_model_tpm
-                    if not output.use_counts
-                    else output.transcript_model_counts
-                ),
-            )
+    # 5. Set up output directories
+    read_assignments_dir = base_dir / "read_assignments"
+    gene_visualizations_dir = base_dir / "gene_visualizations"
+    read_assignments_dir.mkdir(exist_ok=True)
+    gene_visualizations_dir.mkdir(exist_ok=True)
 
-    if args.filter_transcripts is not None:
-        print(
-            f"Filtering transcripts with minimum value {args.filter_transcripts} in at least one condition."
-        )
-        updated_gene_dict = dictionary_builder.filter_transcripts_by_minimum_value(
-            updated_gene_dict, min_value=args.filter_transcripts
-        )
-    else:
-        updated_gene_dict = dictionary_builder.filter_transcripts_by_minimum_value(
-            updated_gene_dict
-        )
-
-    # Visualization output directory decision
-    if args.viz_output:
-        viz_output_directory = args.viz_output
-    else:
-        viz_output_directory = os.path.join(args.output_directory, "visualization")
-        os.makedirs(viz_output_directory, exist_ok=True)
-
-    if args.find_genes:
-        print("Finding genes.")
-        simple_gene_dict = simplify_and_sum_transcripts(updated_gene_dict)
-        path = rank_and_visualize_genes(
-            simple_gene_dict,
-            viz_output_directory,
-            args.find_genes,
-            known_genes_path=args.known_genes_path,
-            reference_condition=args.reference_condition,
-        )
-        gene_list = dictionary_builder.read_gene_list(path)
-
-        # Create gene_visualizations subdirectory
-        viz_output_directory = os.path.join(viz_output_directory, "gene_visualizations")
-        os.makedirs(viz_output_directory, exist_ok=True)
-
-    # Create read_assignments subdirectory
-    read_assignments_dir = os.path.join(viz_output_directory, "read_assignments")
-    os.makedirs(read_assignments_dir, exist_ok=True)
-
+    # 6. Plotting with PlotOutput
     plot_output = PlotOutput(
         updated_gene_dict,
         gene_list,
-        viz_output_directory,
-        read_assignments_dir=read_assignments_dir,
+        str(gene_visualizations_dir),
+        read_assignments_dir=str(read_assignments_dir),
         reads_and_class=reads_and_class,
-        filter_transcripts=args.filter_transcripts,
+        filter_transcripts=min_val,  # Just pass your chosen threshold for reference
         conditions=output.conditions,
         use_counts=args.counts,
     )
+    
     plot_output.plot_transcript_map()
     plot_output.plot_transcript_usage()
-    plot_output.make_pie_charts()
+
+    if use_read_assignments:
+        plot_output.make_pie_charts()
 
 
 if __name__ == "__main__":
