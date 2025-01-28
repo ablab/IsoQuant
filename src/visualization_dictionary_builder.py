@@ -465,7 +465,8 @@ class DictionaryBuilder:
                             "end": int(fields[4]),
                             "exons": [],
                             "expression": 0.0,
-                            "tags": attrs.get("tags", "").split(",")
+                            "tags": attrs.get("tags", "").split(","),
+                            "name": attrs.get("transcript_name", transcript_id),
                         }
                     
                     elif feature_type == "exon" and transcript_id and gene_id:

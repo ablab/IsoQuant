@@ -186,12 +186,13 @@ class DifferentialAnalysis:
         results.reset_index(inplace=True)
         mapping = self._map_gene_symbols(results["feature_id"].unique(), level)
         
-        # Add symbol column
-        results["symbol"] = results["feature_id"].map(lambda x: mapping[x][0])
-        
-        # Add gene_name column only for transcript level
-        if level == "transcript":
-            results["gene_name"] = results["feature_id"].map(lambda x: mapping[x][1])
+        # Add transcript_symbol and gene_name columns
+        results["transcript_symbol"] = results["feature_id"].map(lambda x: mapping[x]["transcript_symbol"])
+        results["gene_name"] = results["feature_id"].map(lambda x: mapping[x]["gene_name"])
+
+        # Drop transcript_symbol column for gene-level analysis as it's redundant
+        if level == "gene":
+            results = results.drop(columns=["transcript_symbol"])
 
         # Save results
         target_label = "+".join(self.target_conditions)
@@ -308,106 +309,20 @@ class DifferentialAnalysis:
                 robjects.conversion.rpy2py(r("data.frame")(res)), index=count_data.index
             )
 
-    def _map_gene_symbols(self, feature_ids: List[str], level: str) -> Dict[str, Tuple[str, str]]:
-        """Map feature IDs to symbols with MyGene.info fallback."""
-        if level == "gene":
-            return self.gene_mapper.map_genes(feature_ids, self.updated_gene_dict)
-        else:
-            return self._map_transcript_symbols(feature_ids)
+    def _map_gene_symbols(self, feature_ids: List[str], level: str) -> Dict[str, Dict[str, Optional[str]]]:
+        """
+        Map feature IDs to gene and transcript names using GeneMapper class.
 
-    def _map_transcript_symbols(self, feature_ids: List[str]) -> Dict[str, Tuple[str, str]]:
-        mapping = {}
-        missing_count = 0
-        found_count = 0
-        missing_samples = []  # Track first few missing transcripts for logging
-        
-        # Store expression stats for missing transcripts
-        missing_stats = []
-        missing_expression_values = {} # Store expression values for logging
+        Args:
+            feature_ids: List of feature IDs (gene symbols or transcript IDs)
+            level: Analysis level ("gene" or "transcript")
 
-        self.logger.debug(f"_map_transcript_symbols: Shape of self.transcript_count_data: {self.transcript_count_data.shape}")
-        self.logger.debug(f"_map_transcript_symbols: Sample indices of self.transcript_count_data (first 10): {self.transcript_count_data.index[:10].tolist()}")
-        self.logger.debug(f"_map_transcript_symbols: Sample feature_ids (first 10 from DESeq2 results): {feature_ids[:10]}")
-
-        for fid in feature_ids:
-            transcript_found = False
-            
-            # Existing search logic through updated_gene_dict
-            for gene_category, genes in self.updated_gene_dict.items():
-                for gene_id, gene_info in genes.items():
-                    transcripts = gene_info.get("transcripts", {})
-                    if fid in transcripts:
-                        gene_name = gene_info.get("name", gene_id)
-                        transcript_info = transcripts[fid]
-                        transcript_name = transcript_info.get("name", fid)
-                        mapping[fid] = (transcript_name, gene_name)
-                        found_count += 1
-                        transcript_found = True
-                        break
-                if transcript_found:
-                    break
-
-            if not transcript_found:
-                # Get expression data from filtered counts
-                if fid in self.transcript_count_data.index:
-                    counts = self.transcript_count_data.loc[fid]
-                    stats = {
-                        'mean': counts.mean(),
-                        'max': counts.max(),
-                        'samples_gt0': sum(counts > 0),
-                        'total_samples': len(counts)
-                    }
-                    missing_stats.append(stats)
-
-                    # Store first 5 missing IDs for logging and expression values
-                    if len(missing_samples) < 5:
-                        missing_samples.append(fid)
-                        missing_expression_values[fid] = counts.to_dict() # Store expression values
-                else:
-                    # Store first 5 missing IDs not in matrix
-                    if len(missing_samples) < 5:
-                        missing_samples.append(fid)
-
-                mapping[fid] = (fid, "Unknown")
-                missing_count += 1
-
-        # Log aggregate statistics
-        if missing_count > 0:
-            log_msg = [
-                f"Missing {missing_count} transcripts in gene dictionary:",
-                f"- Sample missing IDs: {missing_samples[:5]}"
-            ]
-            
-            if missing_stats:
-                avg_mean = sum(s['mean'] for s in missing_stats) / len(missing_stats)
-                avg_max = sum(s['max'] for s in missing_stats) / len(missing_stats)
-                avg_expression_rate = sum(s['samples_gt0'] for s in missing_stats) / sum(s['total_samples'] for s in missing_stats)
-                
-                log_msg.extend([
-                    f"- Average mean count: {avg_mean:.1f}",
-                    f"- Average max count: {avg_max:.1f}",
-                    f"- Average expression rate: {avg_expression_rate:.1%}"
-                ])
-
-                # Add expression values to log for sample missing transcripts
-                if missing_expression_values:
-                    expression_log = []
-                    for missing_id in missing_samples:
-                        if missing_id in missing_expression_values:
-                            expr_vals = missing_expression_values[missing_id]
-                            expr_str = ", ".join([f"{sample}:{val}" for sample, val in expr_vals.items()])
-                            expression_log.append(f"  - {missing_id} expression: [{expr_str}]")
-                    if expression_log:
-                        log_msg.append("- Sample missing transcript expression values:")
-                        log_msg.extend(expression_log)
-
-
-            else:
-                log_msg.append("- All missing transcripts absent from count matrix")
-                
-            self.logger.warning("\n".join(log_msg))
-
-        return mapping
+        Returns:
+            Dict[str, Dict[str, Optional[str]]]: Mapping from feature ID to a dictionary
+                                                  containing 'transcript_symbol' and 'gene_name'.
+                                                  'transcript_symbol' is None for gene-level analysis.
+        """
+        return self.gene_mapper.map_gene_symbols(feature_ids, level, self.updated_gene_dict)
 
     def _write_top_genes(self, results: pd.DataFrame, level: str) -> None:
         """Write genes associated with top 100 transcripts by absolute fold change to file."""
@@ -437,20 +352,10 @@ class DifferentialAnalysis:
             top_genes_file = self.deseq_dir / "genes_from_top_100_transcripts.txt"
             pd.Series(top_genes).to_csv(top_genes_file, index=False, header=False)
             self.logger.info(f"Wrote genes from top 100 transcripts to {top_genes_file}")
-            
-            # Log the top transcripts for debugging - UPDATED LOGGING
-            self.logger.debug(f"Total transcripts considered to get top 100 unique genes: {transcript_count}")
-            self.logger.debug(f"Number of unique genes found: {unique_gene_count}")
-            for row in top_unique_gene_transcripts: # Iterate through selected transcripts
-                self.logger.debug(
-                    f"Transcript ID: {row['feature_id']}, "
-                    f"Transcript Name: {row['symbol']}, "
-                    f"Gene Name: {row['gene_name']}, "
-                    f"abs_stat: {row['abs_stat']}"
-                )
         else:
             # For gene-level analysis, keep original behavior
-            top_genes = results.nlargest(100, "abs_stat")["symbol"]
+            # top_genes = results.nlargest(100, "abs_stat")["symbol"] # OLD: was writing symbols (gene IDs)
+            top_genes = results.nlargest(100, "abs_stat")["gene_name"]
             top_genes_file = self.deseq_dir / "top_100_genes.txt"
             top_genes.to_csv(top_genes_file, index=False, header=False)
             self.logger.info(f"Wrote top 100 genes to {top_genes_file}")
