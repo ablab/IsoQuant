@@ -9,6 +9,11 @@ from rpy2.robjects import pandas2ri
 from rpy2.robjects.conversion import localconverter
 from src.visualization_plotter import ExpressionVisualizer
 from src.visualization_mapping import GeneMapper
+import numpy as np
+from scipy.stats import gmean
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 class DifferentialAnalysis:
@@ -117,12 +122,13 @@ class DifferentialAnalysis:
 
         # --- 5. Run DESeq2 Analysis ---
         if not self.ref_only:
-            deseq2_results_gene_file, _ = self._run_level_analysis(
+            deseq2_results_gene_file, gene_normalized_counts = self._run_level_analysis(
                 level="gene",
                 pattern="gene_grouped_counts.tsv", # Pattern is still needed in _run_level_analysis for output file naming
-                count_data=gene_counts_filtered # Pass PRE-FILTERED gene counts
+                count_data=gene_counts_filtered,
+                coldata=self._build_design_matrix(gene_counts_filtered)
             )
-            deseq2_results_transcript_file, deseq2_transcript_df = self._run_level_analysis(
+            deseq2_results_transcript_file, transcript_normalized_counts = self._run_level_analysis(
                 level="transcript",
                 pattern="transcript_model_grouped_counts.tsv" if not self.ref_only else "transcript_grouped_counts.tsv", # Pattern is still needed in _run_level_analysis for output file naming
                 count_data=transcript_counts_filtered # Pass PRE-FILTERED transcript counts
@@ -141,6 +147,8 @@ class DifferentialAnalysis:
             )
             self.logger.info(f"Gene-level visualizations saved to {self.deseq_dir}")
 
+            normalized_gene_counts = self._median_ratio_normalization(gene_counts_filtered) # Normalize gene counts in Python
+            self._run_pca(normalized_gene_counts, "gene", coldata=self._build_design_matrix(gene_counts_filtered)) # Run PCA for gene level, pass normalized_counts
 
             # --- Visualize Transcript-Level Results ---
             transcript_results_df = pd.read_csv(deseq2_results_transcript_file)
@@ -153,10 +161,13 @@ class DifferentialAnalysis:
             )
             self.logger.info(f"Transcript-level visualizations saved to {self.deseq_dir}")
 
+            normalized_transcript_counts = self._median_ratio_normalization(transcript_counts_filtered) # Normalize transcript counts in Python
+            self._run_pca(normalized_transcript_counts, "transcript", coldata=self._build_design_matrix(transcript_counts_filtered)) # Run PCA for transcript level, pass normalized_counts
+
         return deseq2_results_gene_file, deseq2_results_transcript_file, transcript_counts_filtered
 
     def _run_level_analysis(
-        self, level: str, count_data: pd.DataFrame, pattern: Optional[str] = None
+        self, level: str, count_data: pd.DataFrame, pattern: Optional[str] = None, coldata=None
     ) -> Tuple[Path, pd.DataFrame]:
         """
         Run DESeq2 analysis for a specific level and return results.
@@ -179,7 +190,7 @@ class DifferentialAnalysis:
 
         # Create design matrix and run DESeq2
         coldata = self._build_design_matrix(filtered_data)
-        results = self._run_deseq2(filtered_data, coldata)
+        results, normalized_counts_r = self._run_deseq2(filtered_data, coldata, level)
 
         # Process results
         results.index.name = "feature_id"
@@ -204,7 +215,8 @@ class DifferentialAnalysis:
         # Write top genes
         self._write_top_genes(results, level)
 
-        return outfile, results
+        # No normalized counts returned from _run_deseq2 anymore
+        return outfile, pd.DataFrame() # Return empty DataFrame for normalized counts
 
     def _get_condition_data(self, pattern: str) -> pd.DataFrame:
         """Combine count data from all conditions."""
@@ -289,25 +301,29 @@ class DifferentialAnalysis:
         return pd.DataFrame({"group": groups}, index=count_data.columns)
 
     def _run_deseq2(
-        self, count_data: pd.DataFrame, coldata: pd.DataFrame
-    ) -> pd.DataFrame:
+        self, count_data: pd.DataFrame, coldata: pd.DataFrame, level: str
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Run DESeq2 analysis."""
         deseq2 = importr("DESeq2")
         count_data = count_data.fillna(0).round().astype(int)
 
         with localconverter(robjects.default_converter + pandas2ri.converter):
+            # Convert count_data and coldata to R DataFrames explicitly before creating DESeqDataSet
+            count_data_r = pandas2ri.py2rpy(count_data)
+            coldata_r = pandas2ri.py2rpy(coldata)
+
             dds = deseq2.DESeqDataSetFromMatrix(
-                countData=pandas2ri.py2rpy(count_data),
-                colData=pandas2ri.py2rpy(coldata),
-                design=Formula("~ group"),
+                countData=count_data_r, colData=coldata_r, design=Formula("~ group")
             )
             dds = deseq2.DESeq(dds)
             res = deseq2.results(
                 dds, contrast=robjects.StrVector(["group", "Target", "Reference"])
             )
+            # No normalized counts from DESeq2 anymore
+
             return pd.DataFrame(
                 robjects.conversion.rpy2py(r("data.frame")(res)), index=count_data.index
-            )
+            ), pd.DataFrame() # Return empty DataFrame for normalized counts
 
     def _map_gene_symbols(self, feature_ids: List[str], level: str) -> Dict[str, Dict[str, Optional[str]]]:
         """
@@ -359,3 +375,76 @@ class DifferentialAnalysis:
             top_genes_file = self.deseq_dir / "top_100_genes.txt"
             top_genes.to_csv(top_genes_file, index=False, header=False)
             self.logger.info(f"Wrote top 100 genes to {top_genes_file}")
+
+    def _run_pca(self, normalized_counts, level, coldata): # Add coldata parameter
+        self.logger.info(f"Running PCA for {level} level in Python using median-by-ratio normalized counts...")
+
+        pca_plot_file = str(self.deseq_dir / f"pca_{level}_pca.png")
+
+        # Debugging logs before PCA
+        self.logger.debug(f"PCA Input - Level: {level}")
+        self.logger.debug(f"PCA Input - Normalized Counts Shape: {normalized_counts.shape}")
+        self.logger.debug(f"PCA Input - Normalized Counts Dtype: {normalized_counts.dtypes}")
+        self.logger.debug(f"PCA Input - Normalized Counts Head:\n{normalized_counts.head()}")
+
+        pca = PCA(n_components=2)
+        self.logger.debug(f"PCA Input - PCA Object: {pca}")
+        self.logger.debug(f"PCA Input - PCA Object Attributes: {dir(pca)}")
+        # Log transform normalized counts (adding small constant to avoid log(0))
+        log_normalized_counts = np.log2(normalized_counts + 1)
+        self.logger.debug(f"PCA Input - Log Transformed Counts Shape: {log_normalized_counts.shape}")
+        self.logger.debug(f"PCA Input - Log Transformed Counts Head:\n{log_normalized_counts.head()}")
+
+        pca_result = pca.fit_transform(log_normalized_counts.transpose()) # Transpose for samples as rows
+
+        pca_df = pd.DataFrame(data=pca_result, columns=['PC1', 'PC2'], index=log_normalized_counts.columns) # Index with sample names
+        pca_df['group'] = coldata['group'].values # Add group info
+
+        # Calculate explained variance
+        explained_variance = pca.explained_variance_ratio_
+        VarExplPC1 = f"{100*explained_variance[0]:.2f}%"
+        VarExplPC2 = f"{100*explained_variance[1]:.2f}%"
+
+        # Create PCA plot using matplotlib and seaborn
+        plt.figure(figsize=(8, 6))
+        sns.scatterplot(x='PC1', y='PC2', hue='group', data=pca_df, s=100)
+        plt.xlabel(f"PC1 ({VarExplPC1})")
+        plt.ylabel(f"PC2 ({VarExplPC2})")
+        plt.title(f"{level.capitalize()} Level PCA (Median-by-Ratio Normalized Counts)")
+
+        # Label each point with the sample name
+        for i, sample_name in enumerate(pca_df.index):
+            plt.text(pca_df.loc[sample_name, 'PC1'], pca_df.loc[sample_name, 'PC2'], sample_name, fontsize=8, ha='left', va='bottom')
+
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+        plt.tight_layout()
+
+        plt.savefig(pca_plot_file)
+        self.logger.info(f"Python PCA plot saved to {pca_plot_file}")
+        plt.close()
+
+    def _median_ratio_normalization(self, count_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Perform median-by-ratio normalization on count data.
+        This is similar to the normalization used in DESeq2.
+        """
+        # 1. Calculate geometric mean for each feature (row)
+        geometric_means = count_data.apply(gmean, axis=1)
+
+        # 2. Handle rows with zero geometric mean (replace with NaN to avoid division by zero)
+        geometric_means[geometric_means == 0] = np.nan
+
+        # 3. Calculate ratio of each count to the geometric mean
+        count_ratios = count_data.divide(geometric_means, axis=0)
+
+        # 4. Calculate size factor for each sample (column) as the median of ratios
+        size_factors = count_ratios.median(axis=0)
+
+        # 5. Normalize counts by dividing by size factors
+        normalized_counts = count_data.divide(size_factors, axis=1)
+
+        # 6. Fill NaN values with 0 after normalization
+        normalized_counts = normalized_counts.fillna(0)
+
+        return normalized_counts
