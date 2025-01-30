@@ -4,9 +4,8 @@ import numpy as np
 from pathlib import Path
 import logging
 import pandas as pd
-import random
-import json
 import matplotlib.patches as patches
+import seaborn as sns
 
 
 class PlotOutput:
@@ -298,15 +297,13 @@ class PlotOutput:
 
 
 class ExpressionVisualizer:
-    def __init__(self, output_path: Path):
-        """
-        Initialize visualizer with output directory.
-
-        Args:
-            output_path: Path to output directory
-        """
+    def __init__(self, output_path):
+        """Initialize with output path for plots."""
         self.output_path = Path(output_path)
         self.output_path.mkdir(parents=True, exist_ok=True)
+        self.logger = logging.getLogger(__name__)  # Logger for this class
+        # Suppress matplotlib font debug messages
+        logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
 
     def create_volcano_plot(
         self,
@@ -316,7 +313,7 @@ class ExpressionVisualizer:
         padj_threshold: float = 0.05,
         lfc_threshold: float = 1,
         top_n: int = 10,
-        feature_type: str = "genes",  # Added parameter
+        feature_type: str = "genes",
     ) -> None:
         """Create volcano plot from differential expression results."""
         plt.figure(figsize=(10, 8))
@@ -511,3 +508,43 @@ class ExpressionVisualizer:
         except Exception as e:
             logging.exception("Failed to create visualizations")
             raise
+
+    
+    def plot_pca(self, pca_df: pd.DataFrame, title: str, output_prefix: str) -> Path:
+        """Plot PCA scatter plot."""
+        plt.figure(figsize=(8, 6))
+        
+        # Extract variance info from title for axis labels only
+        pc1_var = title.split("PC1 (")[1].split("%)")[0]
+        pc2_var = title.split("PC2 (")[1].split("%)")[0]
+        
+        # Get clean title without PCs and variance - using string literal instead of \n
+        base_title = title.split(' Level PCA: ')[0]
+        comparison = title.split(': ')[1].split('PC1')[0].strip()
+        clean_title = f"{base_title} Level PCA: {comparison}"
+        
+        # Update group labels in the DataFrame
+        condition_mapping = {'Target': title.split(": ")[1].split(" vs ")[0],
+                            'Reference': title.split(" vs ")[1].split("PC1")[0].strip()}
+        pca_df['group'] = pca_df['group'].map(condition_mapping)
+        
+        # Create plot with updated labels
+        sns.scatterplot(x='PC1', y='PC2', hue='group', data=pca_df, s=100)
+        plt.xlabel(f'PC1 ({pc1_var}%)')
+        plt.ylabel(f'PC2 ({pc2_var}%)')
+        plt.title(clean_title)
+        
+        # Label points
+        for sample_name in pca_df.index:
+            plt.text(pca_df.loc[sample_name, 'PC1'], pca_df.loc[sample_name, 'PC2'],
+                    sample_name, fontsize=8, ha='left', va='bottom')
+        
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+        plt.tight_layout()
+
+        output_path = self.output_path / f"{output_prefix}_pca.png"
+        plt.savefig(output_path)
+        plt.close()
+        return output_path
+
