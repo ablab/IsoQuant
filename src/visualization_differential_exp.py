@@ -134,25 +134,34 @@ class DifferentialAnalysis:
                 count_data=transcript_counts_filtered # Pass PRE-FILTERED transcript counts
             )
 
+            # Update how we create the labels
+            target_label = "+".join(self.target_conditions)
+            reference_label = "+".join(self.ref_conditions)
+
             # --- Visualize Gene-Level Results ---
             gene_results_df = pd.read_csv(deseq2_results_gene_file)
-            target_label = f"{'+'.join(self.target_conditions)}_vs_{'+'.join(self.ref_conditions)}"
-            reference_label = f"{'+'.join(self.ref_conditions)}" # Corrected reference label
-            self.visualizer.visualize_results( # Call visualize_results for gene-level
+            self.visualizer.visualize_results(
                 results=gene_results_df,
                 target_label=target_label,
                 reference_label=reference_label,
-                min_count=10, # Assuming min_count_threshold is defined in DifferentialAnalysis
+                min_count=10,
                 feature_type="genes",
             )
             self.logger.info(f"Gene-level visualizations saved to {self.deseq_dir}")
 
-            normalized_gene_counts = self._median_ratio_normalization(gene_counts_filtered) # Normalize gene counts in Python
-            self._run_pca(normalized_gene_counts, "gene", coldata=self._build_design_matrix(gene_counts_filtered)) # Run PCA for gene level, pass normalized_counts
+            # Run PCA with correct labels
+            normalized_gene_counts = self._median_ratio_normalization(gene_counts_filtered)
+            self._run_pca(
+                normalized_gene_counts, 
+                "gene", 
+                coldata=self._build_design_matrix(gene_counts_filtered),
+                target_label=target_label,
+                reference_label=reference_label
+            )
 
             # --- Visualize Transcript-Level Results ---
             transcript_results_df = pd.read_csv(deseq2_results_transcript_file)
-            self.visualizer.visualize_results( # Call visualize_results for transcript-level
+            self.visualizer.visualize_results(
                 results=transcript_results_df,
                 target_label=target_label,
                 reference_label=reference_label,
@@ -161,8 +170,15 @@ class DifferentialAnalysis:
             )
             self.logger.info(f"Transcript-level visualizations saved to {self.deseq_dir}")
 
-            normalized_transcript_counts = self._median_ratio_normalization(transcript_counts_filtered) # Normalize transcript counts in Python
-            self._run_pca(normalized_transcript_counts, "transcript", coldata=self._build_design_matrix(transcript_counts_filtered)) # Run PCA for transcript level, pass normalized_counts
+            # Run PCA with correct labels for transcript level
+            normalized_transcript_counts = self._median_ratio_normalization(transcript_counts_filtered)
+            self._run_pca(
+                normalized_transcript_counts, 
+                "transcript", 
+                coldata=self._build_design_matrix(transcript_counts_filtered),
+                target_label=target_label,
+                reference_label=reference_label
+            )
 
         return deseq2_results_gene_file, deseq2_results_transcript_file, transcript_counts_filtered
 
@@ -376,53 +392,29 @@ class DifferentialAnalysis:
             top_genes.to_csv(top_genes_file, index=False, header=False)
             self.logger.info(f"Wrote top 100 genes to {top_genes_file}")
 
-    def _run_pca(self, normalized_counts, level, coldata): # Add coldata parameter
-        self.logger.info(f"Running PCA for {level} level in Python using median-by-ratio normalized counts...")
-
-        pca_plot_file = str(self.deseq_dir / f"pca_{level}_pca.png")
-
-        # Debugging logs before PCA
-        self.logger.debug(f"PCA Input - Level: {level}")
-        self.logger.debug(f"PCA Input - Normalized Counts Shape: {normalized_counts.shape}")
-        self.logger.debug(f"PCA Input - Normalized Counts Dtype: {normalized_counts.dtypes}")
-        self.logger.debug(f"PCA Input - Normalized Counts Head:\n{normalized_counts.head()}")
-
+    def _run_pca(self, normalized_counts, level, coldata, target_label, reference_label):
+        """Run PCA analysis and create visualization."""
+        self.logger.info(f"Running PCA for {level} level...")
+        
+        # Run PCA
         pca = PCA(n_components=2)
-        self.logger.debug(f"PCA Input - PCA Object: {pca}")
-        self.logger.debug(f"PCA Input - PCA Object Attributes: {dir(pca)}")
-        # Log transform normalized counts (adding small constant to avoid log(0))
         log_normalized_counts = np.log2(normalized_counts + 1)
-        self.logger.debug(f"PCA Input - Log Transformed Counts Shape: {log_normalized_counts.shape}")
-        self.logger.debug(f"PCA Input - Log Transformed Counts Head:\n{log_normalized_counts.head()}")
-
-        pca_result = pca.fit_transform(log_normalized_counts.transpose()) # Transpose for samples as rows
-
-        pca_df = pd.DataFrame(data=pca_result, columns=['PC1', 'PC2'], index=log_normalized_counts.columns) # Index with sample names
-        pca_df['group'] = coldata['group'].values # Add group info
-
-        # Calculate explained variance
+        pca_result = pca.fit_transform(log_normalized_counts.transpose())
+        
+        # Create DataFrame
+        pca_df = pd.DataFrame(data=pca_result, columns=['PC1', 'PC2'], index=log_normalized_counts.columns)
+        pca_df['group'] = coldata['group'].values
+        
+        # Calculate variance
         explained_variance = pca.explained_variance_ratio_
-        VarExplPC1 = f"{100*explained_variance[0]:.2f}%"
-        VarExplPC2 = f"{100*explained_variance[1]:.2f}%"
-
-        # Create PCA plot using matplotlib and seaborn
-        plt.figure(figsize=(8, 6))
-        sns.scatterplot(x='PC1', y='PC2', hue='group', data=pca_df, s=100)
-        plt.xlabel(f"PC1 ({VarExplPC1})")
-        plt.ylabel(f"PC2 ({VarExplPC2})")
-        plt.title(f"{level.capitalize()} Level PCA (Median-by-Ratio Normalized Counts)")
-
-        # Label each point with the sample name
-        for i, sample_name in enumerate(pca_df.index):
-            plt.text(pca_df.loc[sample_name, 'PC1'], pca_df.loc[sample_name, 'PC2'], sample_name, fontsize=8, ha='left', va='bottom')
-
-        plt.gca().spines['top'].set_visible(False)
-        plt.gca().spines['right'].set_visible(False)
-        plt.tight_layout()
-
-        plt.savefig(pca_plot_file)
-        self.logger.info(f"Python PCA plot saved to {pca_plot_file}")
-        plt.close()
+        title = f"{level.capitalize()} Level PCA: {target_label} vs {reference_label}\nPC1 ({100*explained_variance[0]:.2f}%) / PC2 ({100*explained_variance[1]:.2f}%)"
+        
+        # Use the plotter's PCA method
+        self.visualizer.plot_pca(
+            pca_df=pca_df,
+            title=title,
+            output_prefix=f"pca_{level}"
+        )
 
     def _median_ratio_normalization(self, count_data: pd.DataFrame) -> pd.DataFrame:
         """
