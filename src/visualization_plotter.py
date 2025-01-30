@@ -533,12 +533,6 @@ class ExpressionVisualizer:
         plt.xlabel(f'PC1 ({pc1_var}%)')
         plt.ylabel(f'PC2 ({pc2_var}%)')
         plt.title(clean_title)
-        
-        # Label points
-        for sample_name in pca_df.index:
-            plt.text(pca_df.loc[sample_name, 'PC1'], pca_df.loc[sample_name, 'PC2'],
-                    sample_name, fontsize=8, ha='left', va='bottom')
-        
         plt.gca().spines['top'].set_visible(False)
         plt.gca().spines['right'].set_visible(False)
         plt.tight_layout()
