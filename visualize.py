@@ -26,7 +26,7 @@ def setup_logging(viz_output_dir: Path) -> None:
 
     # Console handler - less detailed
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(console_formatter)
 
     # Configure root logger
@@ -284,7 +284,7 @@ def main():
             ref_only=args.ref_only,
             dictionary_builder=dictionary_builder,
         )
-        gene_results, transcript_results, _ = diff_analysis.run_complete_analysis()
+        gene_results, transcript_results, _, deseq2_df = diff_analysis.run_complete_analysis()
         find_genes_list_path = gene_results.parent / "genes_from_top_100_transcripts.txt"
         gene_list = dictionary_builder.read_gene_list(find_genes_list_path)
 
