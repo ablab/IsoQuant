@@ -73,8 +73,16 @@ class DifferentialAnalysis:
                     transcript_map[transcript_id] = transcript_name
         return transcript_map
 
-    def run_complete_analysis(self) -> Tuple[Path, Path, pd.DataFrame]:
-        """Run differential expression analysis for both genes and transcripts."""
+    def run_complete_analysis(self) -> Tuple[Path, Path, pd.DataFrame, pd.DataFrame]:
+        """Run differential expression analysis for both genes and transcripts.
+        
+        Returns:
+            Tuple containing:
+                - Path to gene results file
+                - Path to transcript results file
+                - DataFrame of transcript counts
+                - DataFrame of DESeq2 gene-level results
+        """
         self.logger.info("Starting differential expression analysis")
 
         valid_transcripts = set()
@@ -124,24 +132,26 @@ class DifferentialAnalysis:
         if not self.ref_only:
             deseq2_results_gene_file, gene_normalized_counts = self._run_level_analysis(
                 level="gene",
-                pattern="gene_grouped_counts.tsv", # Pattern is still needed in _run_level_analysis for output file naming
+                pattern="gene_grouped_counts.tsv",
                 count_data=gene_counts_filtered,
                 coldata=self._build_design_matrix(gene_counts_filtered)
             )
             deseq2_results_transcript_file, transcript_normalized_counts = self._run_level_analysis(
                 level="transcript",
-                pattern="transcript_model_grouped_counts.tsv" if not self.ref_only else "transcript_grouped_counts.tsv", # Pattern is still needed in _run_level_analysis for output file naming
-                count_data=transcript_counts_filtered # Pass PRE-FILTERED transcript counts
+                pattern="transcript_model_grouped_counts.tsv" if not self.ref_only else "transcript_grouped_counts.tsv",
+                count_data=transcript_counts_filtered
             )
+
+            # Load the gene-level results for GSEA
+            deseq2_results_df = pd.read_csv(deseq2_results_gene_file)
 
             # Update how we create the labels
             target_label = "+".join(self.target_conditions)
             reference_label = "+".join(self.ref_conditions)
 
             # --- Visualize Gene-Level Results ---
-            gene_results_df = pd.read_csv(deseq2_results_gene_file)
             self.visualizer.visualize_results(
-                results=gene_results_df,
+                results=deseq2_results_df,
                 target_label=target_label,
                 reference_label=reference_label,
                 min_count=10,
@@ -160,9 +170,8 @@ class DifferentialAnalysis:
             )
 
             # --- Visualize Transcript-Level Results ---
-            transcript_results_df = pd.read_csv(deseq2_results_transcript_file)
             self.visualizer.visualize_results(
-                results=transcript_results_df,
+                results=pd.read_csv(deseq2_results_transcript_file),
                 target_label=target_label,
                 reference_label=reference_label,
                 min_count=10,
@@ -180,7 +189,7 @@ class DifferentialAnalysis:
                 reference_label=reference_label
             )
 
-        return deseq2_results_gene_file, deseq2_results_transcript_file, transcript_counts_filtered
+        return deseq2_results_gene_file, deseq2_results_transcript_file, transcript_counts_filtered, deseq2_results_df
 
     def _run_level_analysis(
         self, level: str, count_data: pd.DataFrame, pattern: Optional[str] = None, coldata=None
