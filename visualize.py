@@ -15,7 +15,7 @@ def setup_logging(viz_output_dir: Path) -> None:
 
     # Create formatters
     file_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s'
+        '%(asctime)s - %(levelname)s - %(module)s - %(funcName)s - %(levelname)s - %(message)s'
     )
     console_formatter = logging.Formatter('%(levelname)s: %(message)s')
 
@@ -26,24 +26,17 @@ def setup_logging(viz_output_dir: Path) -> None:
 
     # Console handler - less detailed
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.INFO) # Console output at INFO level
     console_handler.setFormatter(console_formatter)
 
     # Configure root logger
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    root_logger.setLevel(logging.DEBUG) # Root logger at DEBUG level
     root_logger.handlers = []  # Clear existing handlers
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
 
-    # Create logger for the visualization package
-    viz_logger = logging.getLogger('IsoQuant.visualization')
-    viz_logger.setLevel(logging.DEBUG)
-    
-    # Create logger for differential expression
-    diff_logger = logging.getLogger('IsoQuant.visualization.differential_exp')
-    diff_logger.setLevel(logging.DEBUG)
-    
+
     logging.info("Initialized centralized logging system")
     logging.debug(f"Log file location: {log_file}")
 
@@ -285,7 +278,7 @@ def main():
             dictionary_builder=dictionary_builder,
         )
         gene_results, transcript_results, _, deseq2_df = diff_analysis.run_complete_analysis()
-        find_genes_list_path = gene_results.parent / "genes_from_top_100_transcripts.txt"
+        find_genes_list_path = gene_results.parent / "genes_of_top_100_DE_transcripts.txt"
         gene_list = dictionary_builder.read_gene_list(find_genes_list_path)
 
         if args.gsea:
@@ -294,27 +287,27 @@ def main():
             gsea.run_gsea_analysis(deseq2_df, target_label)
 
         # Use genes from top transcripts instead of top genes
-        find_genes_list_path = gene_results.parent / "genes_from_top_100_transcripts.txt"
+        find_genes_list_path = gene_results.parent / "genes_of_top_100_DE_transcripts.txt"
         gene_list = dictionary_builder.read_gene_list(find_genes_list_path)
     else:
         base_dir = viz_output_dir
 
-    if update_names:
-        logging.info("Updating Ensembl IDs to gene symbols.")
-        updated_gene_dict = dictionary_builder.update_gene_names(updated_gene_dict)
-
     # 5. Set up output directories
-    read_assignments_dir = base_dir / "read_assignments"
     gene_visualizations_dir = base_dir / "gene_visualizations"
-    read_assignments_dir.mkdir(exist_ok=True)
     gene_visualizations_dir.mkdir(exist_ok=True)
+
+    if use_read_assignments:
+        read_assignments_dir = base_dir / "read_assignments"
+        read_assignments_dir.mkdir(exist_ok=True)
+    else:
+        read_assignments_dir = None # Set to None if not used
 
     # 6. Plotting with PlotOutput
     plot_output = PlotOutput(
         updated_gene_dict,
         gene_list,
         str(gene_visualizations_dir),
-        read_assignments_dir=str(read_assignments_dir),
+        read_assignments_dir=str(read_assignments_dir), # Pass None if not used
         reads_and_class=reads_and_class,
         filter_transcripts=min_val,  # Just pass your chosen threshold for reference
         conditions=output.conditions,

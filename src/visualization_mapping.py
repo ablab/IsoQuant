@@ -43,7 +43,7 @@ class GeneMapper:
                 }
 
             # Log query statistics
-            self.logger.info(
+            self.logger.debug(
                 f"MyGene.info query stats: "
                 f"Total={len(ensembl_ids)}, "
                 f"Found={len(mapping)}, "
@@ -86,7 +86,7 @@ class GeneMapper:
 
         # For unmapped genes, try MyGene.info batch query
         if unmapped_ids:
-            self.logger.info(f"Querying MyGene.info for {len(unmapped_ids)} unmapped genes")
+            self.logger.debug(f"Querying MyGene.info for {len(unmapped_ids)} unmapped genes")
             mygene_results = self.get_gene_info_from_mygene(unmapped_ids)
             
             remaining_unmapped = []
@@ -191,7 +191,7 @@ class GeneMapper:
 
         # Perform batched MyGene API query for all unmapped gene IDs at once (gene-level only)
         if level == "gene" and unmapped_gene_ids_batch:
-            self.logger.info(f"Gene-level mapping: Performing batched MyGene API query for {len(unmapped_gene_ids_batch)} gene IDs")
+            self.logger.debug(f"Gene-level mapping: Performing batched MyGene API query for {len(unmapped_gene_ids_batch)} gene IDs")
             mygene_batch_info = self.get_gene_info_from_mygene(unmapped_gene_ids_batch) # Batched query
 
             if mygene_batch_info:

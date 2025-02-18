@@ -12,9 +12,7 @@ from src.visualization_mapping import GeneMapper
 import numpy as np
 from scipy.stats import gmean
 from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
-import seaborn as sns
-
+from rpy2.rinterface_lib import callbacks
 
 class DifferentialAnalysis:
     def __init__(
@@ -28,10 +26,6 @@ class DifferentialAnalysis:
         dictionary_builder: "DictionaryBuilder" = None,
     ):
         """Initialize differential expression analysis."""
-        # Configure rpy2 to suppress R console output
-        from rpy2.rinterface_lib import callbacks
-        
-        # Create a custom callback that does nothing
         def quiet_cb(x):
             pass
         
@@ -41,7 +35,7 @@ class DifferentialAnalysis:
         callbacks.consolewrite_warnerror = quiet_cb
         
         self.output_dir = Path(output_dir)
-        self.deseq_dir = Path(viz_output) / "deseq2_results"
+        self.deseq_dir = Path(viz_output) / "differential_expression"
         self.deseq_dir.mkdir(parents=True, exist_ok=True)
         self.ref_conditions = ref_conditions
         self.target_conditions = target_conditions
@@ -105,8 +99,8 @@ class DifferentialAnalysis:
             transcript_counts = transcript_counts[~transcript_counts.index.isin(novel_transcript_ids)] # Filter out novel transcripts
             novel_filtered_count = transcript_counts.shape[0]
             removed_novel_count = original_transcript_count_novel_filter - novel_filtered_count
-            self.logger.info(f"Novel transcript filtering: Removed {removed_novel_count} novel transcripts ({removed_novel_count / original_transcript_count_novel_filter * 100:.1f}%)")
-            self.logger.debug(f"Transcript counts shape after novel filtering: {transcript_counts.shape}")
+            self.logger.info(f"Novel transcript filtering: Removed {removed_novel_count} transcripts from novel genes ({removed_novel_count / original_transcript_count_novel_filter * 100:.1f}%)")
+            self.logger.debug(f"Transcript counts shape after novel gene filtering: {transcript_counts.shape}")
         else:
             self.logger.info("Novel transcript filtering: Skipped (no dictionary builder)")
 
@@ -129,65 +123,65 @@ class DifferentialAnalysis:
         self.transcript_count_data = transcript_counts_filtered # Store filtered transcript counts
 
         # --- 5. Run DESeq2 Analysis ---
-        if not self.ref_only:
-            deseq2_results_gene_file, gene_normalized_counts = self._run_level_analysis(
-                level="gene",
-                pattern="gene_grouped_counts.tsv",
-                count_data=gene_counts_filtered,
-                coldata=self._build_design_matrix(gene_counts_filtered)
-            )
-            deseq2_results_transcript_file, transcript_normalized_counts = self._run_level_analysis(
-                level="transcript",
-                pattern="transcript_model_grouped_counts.tsv" if not self.ref_only else "transcript_grouped_counts.tsv",
-                count_data=transcript_counts_filtered
-            )
+    
+        deseq2_results_gene_file, gene_normalized_counts = self._run_level_analysis(
+            level="gene",
+            pattern="gene_grouped_counts.tsv",
+            count_data=gene_counts_filtered,
+            coldata=self._build_design_matrix(gene_counts_filtered)
+        )
+        deseq2_results_transcript_file, transcript_normalized_counts = self._run_level_analysis(
+            level="transcript",
+            pattern="transcript_model_grouped_counts.tsv" if not self.ref_only else "transcript_grouped_counts.tsv",
+            count_data=transcript_counts_filtered
+        )
 
-            # Load the gene-level results for GSEA
-            deseq2_results_df = pd.read_csv(deseq2_results_gene_file)
+        # Load the gene-level results for GSEA
+        deseq2_results_df = pd.read_csv(deseq2_results_gene_file)
 
-            # Update how we create the labels
-            target_label = "+".join(self.target_conditions)
-            reference_label = "+".join(self.ref_conditions)
+        # Update how we create the labels
+        target_label = "+".join(self.target_conditions)
+        reference_label = "+".join(self.ref_conditions)
 
-            # --- Visualize Gene-Level Results ---
-            self.visualizer.visualize_results(
-                results=deseq2_results_df,
-                target_label=target_label,
-                reference_label=reference_label,
-                min_count=10,
-                feature_type="genes",
-            )
-            self.logger.info(f"Gene-level visualizations saved to {self.deseq_dir}")
+        # --- Visualize Gene-Level Results ---
+        self.visualizer.visualize_results(
+            results=deseq2_results_df,
+            target_label=target_label,
+            reference_label=reference_label,
+            min_count=10,
+            feature_type="genes",
+        )
+        self.logger.info(f"Gene-level visualizations saved to {self.deseq_dir}")
 
-            # Run PCA with correct labels
-            normalized_gene_counts = self._median_ratio_normalization(gene_counts_filtered)
-            self._run_pca(
-                normalized_gene_counts, 
-                "gene", 
-                coldata=self._build_design_matrix(gene_counts_filtered),
-                target_label=target_label,
-                reference_label=reference_label
-            )
+        # Run PCA with correct labels
+        normalized_gene_counts = self._median_ratio_normalization(gene_counts_filtered)
+        self._run_pca(
+            normalized_gene_counts, 
+            "gene", 
+            coldata=self._build_design_matrix(gene_counts_filtered),
+            target_label=target_label,
+            reference_label=reference_label
+        )
 
-            # --- Visualize Transcript-Level Results ---
-            self.visualizer.visualize_results(
-                results=pd.read_csv(deseq2_results_transcript_file),
-                target_label=target_label,
-                reference_label=reference_label,
-                min_count=10,
-                feature_type="transcripts",
-            )
-            self.logger.info(f"Transcript-level visualizations saved to {self.deseq_dir}")
+        # --- Visualize Transcript-Level Results ---
+        self.visualizer.visualize_results(
+            results=pd.read_csv(deseq2_results_transcript_file),
+            target_label=target_label,
+            reference_label=reference_label,
+            min_count=10,
+            feature_type="transcripts",
+        )
+        self.logger.info(f"Transcript-level visualizations saved to {self.deseq_dir}")
 
-            # Run PCA with correct labels for transcript level
-            normalized_transcript_counts = self._median_ratio_normalization(transcript_counts_filtered)
-            self._run_pca(
-                normalized_transcript_counts, 
-                "transcript", 
-                coldata=self._build_design_matrix(transcript_counts_filtered),
-                target_label=target_label,
-                reference_label=reference_label
-            )
+        # Run PCA with correct labels for transcript level
+        normalized_transcript_counts = self._median_ratio_normalization(transcript_counts_filtered)
+        self._run_pca(
+            normalized_transcript_counts, 
+            "transcript", 
+            coldata=self._build_design_matrix(transcript_counts_filtered),
+            target_label=target_label,
+            reference_label=reference_label
+        )
 
         return deseq2_results_gene_file, deseq2_results_transcript_file, transcript_counts_filtered, deseq2_results_df
 
@@ -257,7 +251,7 @@ class DifferentialAnalysis:
             count_files = list(condition_dir.glob(f"*{adjusted_pattern}")) # Use adjusted pattern
 
             for file_path in count_files:
-                self.logger.info(f"Reading count data from: {file_path}")
+                self.logger.debug(f"Reading count data from: {file_path}")
                 df = pd.read_csv(file_path, sep="\t", dtype={"#feature_id": str})
                 df.set_index("#feature_id", inplace=True)
 
@@ -308,8 +302,7 @@ class DifferentialAnalysis:
 
         filtered_data = count_data[keep_features]
         self.logger.info(
-            f"After filtering: Retained {filtered_data.shape[0]}/{count_data.shape[0]} features "
-            f"({(filtered_data.shape[0]/count_data.shape[0]*100):.1f}%)"
+            f"After filtering: Retained {filtered_data.shape[0]} features"
         )
         
         return filtered_data
@@ -390,39 +383,48 @@ class DifferentialAnalysis:
             top_genes = [row["gene_name"] for row in top_unique_gene_transcripts] # Extract gene names from selected transcripts
 
             # Write to file
-            top_genes_file = self.deseq_dir / "genes_from_top_100_transcripts.txt"
+            top_genes_file = self.deseq_dir / "genes_of_top_100_DE_transcripts.txt"
             pd.Series(top_genes).to_csv(top_genes_file, index=False, header=False)
-            self.logger.info(f"Wrote genes from top 100 transcripts to {top_genes_file}")
+            self.logger.debug(f"Wrote genes of top 100 DE transcripts to {top_genes_file}")
         else:
             # For gene-level analysis, keep original behavior
             # top_genes = results.nlargest(100, "abs_stat")["symbol"] # OLD: was writing symbols (gene IDs)
             top_genes = results.nlargest(100, "abs_stat")["gene_name"]
-            top_genes_file = self.deseq_dir / "top_100_genes.txt"
+            top_genes_file = self.deseq_dir / "top_100_DE_genes.txt"
             top_genes.to_csv(top_genes_file, index=False, header=False)
-            self.logger.info(f"Wrote top 100 genes to {top_genes_file}")
+            self.logger.debug(f"Wrote top 100 DE genes to {top_genes_file}")
 
     def _run_pca(self, normalized_counts, level, coldata, target_label, reference_label):
         """Run PCA analysis and create visualization."""
         self.logger.info(f"Running PCA for {level} level...")
-        
-        # Run PCA
-        pca = PCA(n_components=2)
+
+        # Run PCA - Calculate 10 components
+        pca = PCA(n_components=10) # Keep n_components=10 to generate scree plot with 10 components
         log_normalized_counts = np.log2(normalized_counts + 1)
         pca_result = pca.fit_transform(log_normalized_counts.transpose())
-        
-        # Create DataFrame
-        pca_df = pd.DataFrame(data=pca_result, columns=['PC1', 'PC2'], index=log_normalized_counts.columns)
-        pca_df['group'] = coldata['group'].values
-        
-        # Calculate variance
+        #map the feature names to gene names using the gene_mapper
+        feature_names = normalized_counts.index.tolist()
+        gene_names = self.gene_mapper.map_gene_symbols(feature_names, level, self.updated_gene_dict)
+
+        # Get explained variance ratio and loadings
         explained_variance = pca.explained_variance_ratio_
+        loadings = pca.components_  # Loadings are in pca.components_
+
+        # Create DataFrame with columns for all 10 components
+        pc_columns = [f'PC{i+1}' for i in range(10)] # Generate column names: PC1, PC2, ..., PC10
+        pca_df = pd.DataFrame(data=pca_result, columns=pc_columns, index=log_normalized_counts.columns) # Use all 10 column names
+        pca_df['group'] = coldata['group'].values
+
         title = f"{level.capitalize()} Level PCA: {target_label} vs {reference_label}\nPC1 ({100*explained_variance[0]:.2f}%) / PC2 ({100*explained_variance[1]:.2f}%)"
-        
-        # Use the plotter's PCA method
+
+        # Use the plotter's PCA method, passing explained variance and loadings
         self.visualizer.plot_pca(
-            pca_df=pca_df,
+            pca_df=pca_df, # pca_df now contains 10 components
             title=title,
-            output_prefix=f"pca_{level}"
+            output_prefix=f"pca_{level}",
+            explained_variance=explained_variance, # Pass explained variance (for scree plot)
+            loadings=loadings, # Pass loadings (for loadings output)
+            feature_names=gene_names # Pass feature names (gene names)
         )
 
     def _median_ratio_normalization(self, count_data: pd.DataFrame) -> pd.DataFrame:

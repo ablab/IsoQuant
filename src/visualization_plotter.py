@@ -6,7 +6,7 @@ import logging
 import pandas as pd
 import matplotlib.patches as patches
 import seaborn as sns
-
+from typing import List
 
 class PlotOutput:
     def __init__(
@@ -19,6 +19,7 @@ class PlotOutput:
         filter_transcripts=None,
         conditions=False,
         use_counts=False,
+        ref_only=False,
     ):
         self.updated_gene_dict = updated_gene_dict
         self.gene_names = gene_names
@@ -28,6 +29,7 @@ class PlotOutput:
         self.filter_transcripts = filter_transcripts
         self.conditions = conditions
         self.use_counts = use_counts
+        self.ref_only = ref_only
 
         # Ensure output directories exist
         if self.gene_visualizations_dir:
@@ -40,16 +42,24 @@ class PlotOutput:
             logging.warning("No gene_visualizations_dir provided. Skipping transcript map plotting.")
             return
 
-        for gene_name in self.gene_names:
-            gene_data = {}
-            for condition, genes in self.updated_gene_dict.items():
-                if gene_name in genes:
-                    gene_data = genes[gene_name]
-                    break
+        for gene_name_or_id in self.gene_names: # gene_names list contains gene names (symbols)
+            gene_data = None # Initialize gene_data to None
+            found_by_name = False # Flag to track if gene was found by name
 
-            if not gene_data:
-                logging.warning(f"Gene {gene_name} not found in the data.")
-                continue
+            for condition, genes in self.updated_gene_dict.items():
+                for gene_id, gene_info in genes.items():
+                    if "name" in gene_info and gene_info["name"] == gene_name_or_id.upper(): # Compare gene names (case-insensitive)
+                        gene_data = gene_info
+                        found_by_name = True
+                        break # Found gene, break inner loop
+                if found_by_name:
+                    break # Found gene, break outer loop
+
+            if gene_data:
+                logging.debug(f"Gene {gene_name_or_id} found by name in the data.")
+            else:
+                logging.warning(f"Gene {gene_name_or_id} not found in the data.")
+                continue # Skip to the next gene if not found
 
             # Get chromosome info and calculate buffer
             chromosome = gene_data.get("chromosome", "Unknown")
@@ -63,25 +73,18 @@ class PlotOutput:
             plot_end = end + buffer
 
             plot_height = max(8, len(gene_data["transcripts"]) * 0.4)
-            logging.debug(f"Creating transcript map for gene '{gene_name}' with {len(gene_data['transcripts'])} transcripts")
+            logging.debug(f"Creating transcript map for gene '{gene_name_or_id}' with {len(gene_data['transcripts'])} transcripts")
 
-            # Collect all reference exon coordinates from reference transcripts
-            reference_exons = set()
-            for transcript_id, transcript_info in gene_data["transcripts"].items():
-                if transcript_id.startswith("ENST"):
-                    for exon in transcript_info["exons"]:
-                        # Store exon coordinates as tuple for easy comparison
-                        reference_exons.add((exon["start"], exon["end"]))
-            
-            logging.debug(f"Found {len(reference_exons)} reference exons for gene '{gene_name}'")
+
 
             fig, ax = plt.subplots(figsize=(12, plot_height))
             
             # Add legend handles
             legend_elements = [
-                patches.Patch(facecolor='skyblue', label='Reference Exon'),
-                patches.Patch(facecolor='red', alpha=0.6, label='Novel Exon')
+                patches.Patch(facecolor='skyblue', label='Exon'),
             ]
+            if not self.ref_only:
+                legend_elements.append(patches.Patch(facecolor='red', alpha=0.6, label='Novel Exon'))
 
             # Plot each transcript
             y_ticks = []
@@ -109,10 +112,13 @@ class PlotOutput:
                 # Exon blocks with color based on reference status
                 for exon in transcript_info["exons"]:
                     exon_length = exon["end"] - exon["start"]
-                    # Check if this exon's coordinates match any reference exon
-                    is_reference_exon = (exon["start"], exon["end"]) in reference_exons
-                    exon_color = "skyblue" if is_reference_exon else "red"
-                    exon_alpha = 1.0 if is_reference_exon else 0.6
+                    if self.ref_only: # Check ref_only flag
+                        exon_color = "skyblue" # If ref_only, always treat as reference
+                        exon_alpha = 1.0
+                    else:
+                        is_reference_exon = exon["exon_id"].startswith("ENSE") # Original logic
+                        exon_color = "skyblue" if is_reference_exon else "red"
+                        exon_alpha = 1.0 if is_reference_exon else 0.6
                     
                     ax.add_patch(
                         plt.Rectangle(
@@ -124,8 +130,12 @@ class PlotOutput:
                         )
                     )
 
-                if not any((exon["start"], exon["end"]) in reference_exons for exon in transcript_info["exons"]):
-                    logging.debug(f"Transcript {transcript_id} in gene {gene_name} contains all novel exons")
+                if not any(exon["exon_id"].startswith("ENSE") for exon in transcript_info["exons"]):
+                    logging.debug(f"Transcript {transcript_id} in gene {gene_name_or_id} contains NO reference exons (based on ENSEMBL IDs)")
+                    #log the exon_ids
+                    logging.debug(f"Exon IDs: {[exon['exon_id'] for exon in transcript_info['exons']]}")
+                else:
+                    logging.debug(f"Transcript {transcript_id} in gene {gene_name_or_id} contains at least one reference exon (based on ENSEMBL IDs)")
 
                 # Store y-axis label information
                 y_ticks.append(i)
@@ -136,10 +146,11 @@ class PlotOutput:
                 y_labels.append(transcript_name)
 
             # Set up the plot formatting with just chromosome
+            gene_display_name = gene_data.get("name", gene_name_or_id) # Fallback to ID if no name
             if self.filter_transcripts:
-                title = f"Transcript Structure - {gene_name} (Chromosome {chromosome}) (Count > {self.filter_transcripts})"
+                title = f"Transcript Structure - {gene_display_name} (Chromosome {chromosome}) (Count > {self.filter_transcripts})"
             else:
-                title = f"Transcript Structure - {gene_name} (Chromosome {chromosome})"
+                title = f"Transcript Structure - {gene_display_name} (Chromosome {chromosome})"
             
             ax.set_title(title, pad=20)  # Increase padding to move title up
             ax.set_xlabel("Chromosomal position")
@@ -161,11 +172,11 @@ class PlotOutput:
 
             plt.tight_layout()
             plot_path = os.path.join(
-                self.gene_visualizations_dir, f"{gene_name}_splicing.png"
+                self.gene_visualizations_dir, f"{gene_name_or_id}_splicing.png" # Use gene_name_or_id in filename
             )
             plt.savefig(plot_path, bbox_inches='tight', dpi=300)
             plt.close(fig)
-            logging.debug(f"Saved transcript map for gene '{gene_name}' at: {plot_path}")
+            logging.debug(f"Saved transcript map for gene '{gene_name_or_id}' at: {plot_path}")
 
    
     def plot_transcript_usage(self):
@@ -174,35 +185,43 @@ class PlotOutput:
             logging.warning("No gene_visualizations_dir provided. Skipping transcript usage plotting.")
             return
 
-        for gene_name in self.gene_names:
-            gene_data = {}
+        for gene_name_or_id in self.gene_names: # gene_names list contains gene names (symbols)
+            gene_data_per_condition = {} # Store gene data per condition
+            found_gene_any_condition = False # Flag if gene found in any condition
+
             for condition, genes in self.updated_gene_dict.items():
-                if gene_name in genes:
-                    gene_data[condition] = genes[gene_name]["transcripts"]
+                condition_gene_data = None
+                for gene_id, gene_info in genes.items():
+                    if "name" in gene_info and gene_info["name"] == gene_name_or_id.upper(): # Compare gene names (case-insensitive)
+                        condition_gene_data = gene_info["transcripts"] # Only need transcripts for usage plot
+                        found_gene_any_condition = True
+                        break # Found gene in this condition, break inner loop
+                if condition_gene_data:
+                    gene_data_per_condition[condition] = condition_gene_data # Store transcripts for this condition
 
-            if not gene_data:
-                logging.warning(f"Gene {gene_name} not found in the data.")
-                continue
+            if not found_gene_any_condition:
+                logging.warning(f"Gene {gene_name_or_id} not found in the data.")
+                continue # Skip to the next gene if not found
 
-            conditions = list(gene_data.keys())
+            conditions = list(gene_data_per_condition.keys())
             n_bars = len(conditions)
 
             fig, ax = plt.subplots(figsize=(12, 8))
             index = np.arange(n_bars)
             bar_width = 0.35
             opacity = 0.8
-            max_transcripts = max(len(gene_data[condition]) for condition in conditions)
+            max_transcripts = max(len(gene_data_per_condition[condition]) for condition in conditions)
             colors = plt.cm.plasma(np.linspace(0, 1, num=max_transcripts))
 
             bottom_val = np.zeros(n_bars)
             for i, condition in enumerate(conditions):
-                transcripts = gene_data[condition]
+                transcripts = gene_data_per_condition[condition]
                 for j, (transcript_id, transcript_info) in enumerate(transcripts.items()):
                     color = colors[j % len(colors)]
                     value = transcript_info["value"]
                     # Get transcript name with fallback options
-                    transcript_name = (transcript_info.get("name") or 
-                                     transcript_info.get("transcript_id") or 
+                    transcript_name = (transcript_info.get("name") or
+                                     transcript_info.get("transcript_id") or
                                      transcript_id)
                     ax.bar(
                         i,
@@ -217,7 +236,8 @@ class PlotOutput:
 
             ax.set_xlabel("Sample Type")
             ax.set_ylabel("Transcript Usage (TPM)")
-            ax.set_title(f"Transcript Usage for {gene_name} by Sample Type")
+            gene_display_name = list(gene_data_per_condition.values())[0].get("name", gene_name_or_id) # Fallback to ID if no name
+            ax.set_title(f"Transcript Usage for {gene_display_name} by Sample Type")
             ax.set_xticks(index)
             ax.set_xticklabels(conditions)
             ax.legend(
@@ -230,7 +250,7 @@ class PlotOutput:
             plt.tight_layout()
             plot_path = os.path.join(
                 self.gene_visualizations_dir,
-                f"{gene_name}_transcript_usage_by_sample_type.png",
+                f"{gene_name_or_id}_transcript_usage_by_sample_type.png", # Use gene_name_or_id in filename
             )
             plt.savefig(plot_path)
             plt.close(fig)
@@ -510,25 +530,33 @@ class ExpressionVisualizer:
             raise
 
     
-    def plot_pca(self, pca_df: pd.DataFrame, title: str, output_prefix: str) -> Path:
-        """Plot PCA scatter plot."""
+    def plot_pca(
+        self,
+        pca_df: pd.DataFrame,
+        title: str,
+        output_prefix: str,
+        explained_variance: np.ndarray,
+        loadings: np.ndarray,
+        feature_names: List[str]
+    ) -> Path:
+        """Plot PCA scatter plot, scree plot, and loadings."""
         plt.figure(figsize=(8, 6))
-        
+
         # Extract variance info from title for axis labels only
         pc1_var = title.split("PC1 (")[1].split("%)")[0]
         pc2_var = title.split("PC2 (")[1].split("%)")[0]
-        
-        # Get clean title without PCs and variance - using string literal instead of \n
+
+        # Get clean title without PCs and variance
         base_title = title.split(' Level PCA: ')[0]
         comparison = title.split(': ')[1].split('PC1')[0].strip()
         clean_title = f"{base_title} Level PCA: {comparison}"
-        
+
         # Update group labels in the DataFrame
         condition_mapping = {'Target': title.split(": ")[1].split(" vs ")[0],
                             'Reference': title.split(" vs ")[1].split("PC1")[0].strip()}
         pca_df['group'] = pca_df['group'].map(condition_mapping)
-        
-        # Create plot with updated labels
+
+        # Create scatter plot
         sns.scatterplot(x='PC1', y='PC2', hue='group', data=pca_df, s=100)
         plt.xlabel(f'PC1 ({pc1_var}%)')
         plt.ylabel(f'PC2 ({pc2_var}%)')
@@ -537,8 +565,54 @@ class ExpressionVisualizer:
         plt.gca().spines['right'].set_visible(False)
         plt.tight_layout()
 
-        output_path = self.output_path / f"{output_prefix}_pca.png"
-        plt.savefig(output_path)
+        scatter_plot_path = self.output_path / f"{output_prefix}.png" # Separate path for scatter plot
+        plt.savefig(scatter_plot_path)
         plt.close()
+
+        # --- Scree Plot ---
+        self._plot_scree(explained_variance, output_prefix)
+
+        # --- Loadings ---
+        self._output_loadings(loadings, feature_names, output_prefix)
+
+        return scatter_plot_path # Return path to scatter plot
+
+    def _plot_scree(self, explained_variance: np.ndarray, output_prefix: str) -> Path:
+        """Plot scree plot of explained variance."""
+        plt.figure(figsize=(8, 6))
+        num_components = len(explained_variance)
+        component_numbers = range(1, num_components + 1)
+
+        plt.bar(component_numbers, explained_variance * 100)
+        plt.xlabel('Principal Component')
+        plt.ylabel('Percentage of Explained Variance')
+        plt.title('Scree Plot')
+        plt.xticks(component_numbers) # Ensure all component numbers are labeled
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+        plt.tight_layout()
+
+        scree_plot_path = self.output_path / f"scree_{output_prefix}.png"
+        plt.savefig(scree_plot_path)
+        plt.close()
+        return scree_plot_path
+
+    def _output_loadings(self, loadings: np.ndarray, feature_names: List[str], output_prefix: str, top_n: int = 10) -> Path:
+        """Output top N loadings for PC1 and PC2."""
+        # Generate column names dynamically based on the number of components
+        num_components = loadings.shape[0] # Get the number of components from loadings shape
+        pc_columns = [f'PC{i+1}' for i in range(num_components)]
+
+        loadings_df = pd.DataFrame(loadings.T, index=feature_names, columns=pc_columns) # Use dynamic column names
+
+        output_path = self.output_path / f"loadings_{output_prefix}.txt"
+        with open(output_path, 'w') as f:
+            f.write("PCA Loadings (Top {} Features for PC1 and PC2):\n\n".format(top_n))
+            for pc_name in ['PC1', 'PC2']:
+                f.write(f"\n--- {pc_name} ---\n")
+                # Sort by absolute value of loading
+                top_loadings = loadings_df.sort_values(by=pc_name, key=lambda x: x.abs(), ascending=False).head(top_n)
+                for gene, loading in top_loadings[pc_name].items(): # Iterate over series items
+                    f.write(f"{gene}:\t{loading:.4f}\n") # Tab-separated for readability
         return output_path
 
