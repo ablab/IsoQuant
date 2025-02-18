@@ -70,7 +70,10 @@ class DictionaryBuilder:
 
         # 2. Filter novel genes from the base gene dict (not per-condition)
         self.logger.info("Parsing GTF and filtering novel genes")
-        parsed_data = self.parse_extended_annotation()
+        if self.config.ref_only:
+            parsed_data = self.parse_input_gtf()
+        else:
+            parsed_data = self.parse_extended_annotation()
         self._validate_gene_structure(parsed_data)
         base_gene_dict = self._filter_novel_genes(parsed_data)
 
@@ -472,6 +475,7 @@ class DictionaryBuilder:
         """
         Parse the reference GTF file using gffutils with optimized settings,
         building a dictionary of genes, transcripts, and exons.
+        Updated to match the structure of parse_extended_annotation.
         """
         if not self.config.genedb_filename:
             db_path = self.cache_dir / "gtf.db"
@@ -503,13 +507,16 @@ class DictionaryBuilder:
                 continue
 
             gene_id = feature.id
+            gene_name = feature.attributes.get("gene_name", [gene_id])[0] # Default to gene_id if name missing
+            gene_biotype = feature.attributes.get("gene_biotype", ["unknown"])[0] # Default to "unknown"
+
             gene_dict[gene_id] = {
                 "chromosome": feature.seqid,
                 "start": feature.start,
                 "end": feature.end,
                 "strand": feature.strand,
-                "name": feature.attributes.get("gene_name", [""])[0],
-                "biotype": feature.attributes.get("gene_biotype", [""])[0],
+                "name": gene_name, # Use updated gene_name
+                "biotype": gene_biotype, # Use updated gene_biotype
                 "transcripts": {},
             }
 
@@ -521,13 +528,17 @@ class DictionaryBuilder:
                     continue
 
                 transcript_id = feature.id
+                transcript_name = feature.attributes.get("transcript_name", [transcript_id])[0] # Default to transcript_id
+                transcript_biotype = feature.attributes.get("transcript_biotype", ["unknown"])[0] # Default to "unknown"
+                transcript_tags = feature.attributes.get("tag", [""])[0].split(",") # Get tags
+
                 gene_dict[gene_id]["transcripts"][transcript_id] = {
                     "start": feature.start,
                     "end": feature.end,
-                    "name": feature.attributes.get("transcript_name", [""])[0],
-                    "biotype": feature.attributes.get("transcript_biotype", [""])[0],
+                    "name": transcript_name, # Use updated transcript_name
+                    "biotype": transcript_biotype, # Use updated transcript_biotype
                     "exons": [],
-                    "tags": feature.attributes.get("tag", [""])[0].split(","),
+                    "tags": transcript_tags, # Use updated transcript_tags
                 }
             elif feature.featuretype == "exon":
                 gene_id = feature.attributes.get("gene_id", [""])[0]
@@ -536,12 +547,15 @@ class DictionaryBuilder:
                     gene_id in gene_dict
                     and transcript_id in gene_dict[gene_id]["transcripts"]
                 ):
+                    exon_number = feature.attributes.get("exon_number", ["1"])[0] # Default to "1"
+                    exon_id = feature.attributes.get("exon_id", [""])[0] # Get exon_id
+
                     gene_dict[gene_id]["transcripts"][transcript_id]["exons"].append(
                         {
-                            "exon_id": feature.id,
+                            "exon_id": exon_id, # Use retrieved exon_id
                             "start": feature.start,
                             "end": feature.end,
-                            "number": feature.attributes.get("exon_number", [""])[0],
+                            "number": exon_number, # Use updated exon_number
                         }
                     )
 
@@ -676,7 +690,7 @@ class DictionaryBuilder:
         try:
             with open(gene_list_path, "r") as file:
                 gene_list = [line.strip().upper() for line in file if line.strip()]
-            self.logger.info(f"Read {len(gene_list)} genes from {gene_list_path}")
+            self.logger.debug(f"Read {len(gene_list)} genes from {gene_list_path}")
             return gene_list
         except Exception as e:
             self.logger.error(f"Error reading gene list from {gene_list_path}: {e}")
