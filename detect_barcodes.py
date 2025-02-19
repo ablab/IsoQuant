@@ -153,7 +153,7 @@ class BarcodeCaller:
                 new_read_seq = read_sequence
                 if r.tso5 != -1 and r.polyT != -1:
                     new_read_seq = read_sequence[max(0, r.polyT - 50) : r.tso5]
-                self.output_file.write("%s\n" % str(barcode_result))
+                self.output_file.write("%s\n" % str(r))
                 if self.output_sequences:
                     self.output_sequences.write(">%s\n" % new_read_id)
                     self.output_sequences.write("%s\n" % new_read_seq)
@@ -236,7 +236,7 @@ def process_single_thread(args):
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
         barcode_detector.min_score = args.min_score
-    barcode_caller = BarcodeCaller(args.output, barcode_detector, header=True)
+    barcode_caller = BarcodeCaller(args.output, barcode_detector, header=True, output_sequences=args.output + ".fa")
     logger.info("Processing " + args.input)
     barcode_caller.process(args.input)
     logger.info("Finished barcode calling")
