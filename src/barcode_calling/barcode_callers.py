@@ -98,6 +98,10 @@ class StereoBarcodeDetectionResult(DoubleBarcodeDetectionResult):
                                               polyT, primer, linker_start, linker_end)
         self.tso5 = tso
 
+    def __str__(self):
+        return (DoubleBarcodeDetectionResult.__str__(self) +
+                "\t%d" % self.tso5)
+
     @staticmethod
     def header():
         return DoubleBarcodeDetectionResult.header() + "\tTSO5"
@@ -148,6 +152,10 @@ class SplittingBarcodeDetectionResult:
 
     def append(self, barcode_detection_result):
         self.detected_patterns.append(barcode_detection_result)
+
+    @staticmethod
+    def header():
+        return StereoBarcodeDetectionResult.header()
 
 
 class ReadStats:
@@ -370,12 +378,12 @@ class StereoSplttingBarcodeDetector:
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([self.LINKER], kmer_size=5)
         bit_barcodes = map(str_to_2bit, barcodes)
-        self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
-        logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
+        self.barcode_indexer = KmerIndexer(barcodes, kmer_size=14)
+        logger.info("Indexed %d barcodes" % len(self.barcode_indexer.seq_list))
         self.umi_set = None
         self.min_score = min_score
 
-    def find_barcode_umi_multiple(self, read_id, sequence):
+    def find_barcode_umi(self, read_id, sequence):
         read_result = SplittingBarcodeDetectionResult(read_id)
         r = self._find_barcode_umi_fwd(read_id, sequence)
         current_start = 0
@@ -410,7 +418,7 @@ class StereoSplttingBarcodeDetector:
 
         return read_result
 
-    def find_barcode_umi(self, read_id, sequence):
+    def find_barcode_umi_single(self, read_id, sequence):
         read_result = self._find_barcode_umi_fwd(read_id, sequence)
         if read_result.polyT != -1:
             read_result.set_strand("+")
@@ -543,7 +551,17 @@ class StereoSplttingBarcodeDetector:
 
     @staticmethod
     def result_type():
-        return DoubleBarcodeDetectionResult
+        return SplittingBarcodeDetectionResult
+
+
+class StereoSplitBarcodeDetectorTSO(StereoSplttingBarcodeDetector):
+    def __init__(self, barcode_list, min_score=21):
+        StereoSplttingBarcodeDetector.__init__(self, barcode_list, min_score, primer=1)
+
+
+class StereoSplitBarcodeDetectorPC(StereoSplttingBarcodeDetector):
+    def __init__(self, barcode_list, min_score=21):
+        StereoSplttingBarcodeDetector.__init__(self, barcode_list, min_score, primer=2)
 
 
 class DoubleBarcodeDetector:
