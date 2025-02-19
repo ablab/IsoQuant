@@ -30,6 +30,9 @@ from src.barcode_calling.barcode_callers import (
     StereoBarcodeDetector,
     StereoBarcodeDetectorTSO,
     StereoBarcodeDetectorPC,
+    StereoSplitBarcodeDetectorTSO,
+    StereoSplitBarcodeDetectorPC,
+    SplittingBarcodeDetectionResult,
     ReadStats, DoubleBarcodeDetectionResult
 )
 
@@ -42,7 +45,10 @@ BARCODE_CALLING_MODES = {'tenX': TenXBarcodeDetector,
                          'double_illumina': IlluminaDoubleBarcodeDetector,
                          'double_slow': BruteForceDoubleBarcodeDetector,
                          'stereo_tso': StereoBarcodeDetectorTSO,
-                         'stereo_pc': StereoBarcodeDetectorPC}
+                         'stereo_pc': StereoBarcodeDetectorPC,
+                         'stereo_split_tso': StereoSplitBarcodeDetectorTSO,
+                         'stereo_split_pc': StereoSplitBarcodeDetectorPC,
+}
 
 
 class SimpleReadStorage:
@@ -74,10 +80,13 @@ class SimpleReadStorage:
 
 
 class BarcodeCaller:
-    def __init__(self, output_table, barcode_detector, header=False):
+    def __init__(self, output_table, barcode_detector, header=False, output_sequences=None):
         self.barcode_detector = barcode_detector
         self.output_table = output_table
         self.output_file = open(output_table, "w")
+        self.output_sequences = None
+        if output_sequences:
+            self.output_sequences = open(output_sequences, "w")
         if header:
             self.output_file.write(barcode_detector.result_type().header() + "\n")
         self.read_stat = ReadStats()
@@ -88,6 +97,8 @@ class BarcodeCaller:
         stat_out.write(str(self.read_stat))
         stat_out.close()
         self.output_file.close()
+        if self.output_sequences:
+            self.output_sequences.close()
 
     def process(self, input_file):
         logger.info("Processing " + input_file)
@@ -132,15 +143,27 @@ class BarcodeCaller:
             self._process_read(read_id, seq)
 
     # standard method, finds only a single barcode
-    def _process_read_sinlge(self, read_id, read_sequence):
+    def _process_read(self, read_id, read_sequence):
         logger.debug("==== %s ====" % read_id)
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
-        self.output_file.write("%s\n" % str(barcode_result))
-        if isinstance(barcode_result, list):
-            barcode_result = barcode_result[0]
-        self.read_stat.add_read(barcode_result)
+        if isinstance(barcode_result, SplittingBarcodeDetectionResult):
+            for r in barcode_result.detected_patterns:
+                self.read_stat.add_read(r)
+                new_read_id = read_id + ("_%d_%d_%s" % (r.polyT, r.tso5, r.strand))
+                new_read_seq = read_sequence
+                if r.tso5 != -1 and r.polyT != -1:
+                    new_read_seq = read_sequence[max(0, r.polyT - 50) : r.tso5]
+                self.output_file.write("%s\n" % str(barcode_result))
+                if self.output_sequences:
+                    self.output_sequences.write(">%s\n" % new_read_id)
+                    self.output_sequences.write("%s\n" % new_read_seq)
+        else:
+            if isinstance(barcode_result, list):
+                barcode_result = barcode_result[0]
+            self.output_file.write("%s\n" % str(barcode_result))
+            self.read_stat.add_read(barcode_result)
 
-    def _process_read(self, read_id, read_sequence):
+    def _process_read_m(self, read_id, read_sequence):
         logger.debug("==== %s ====" % read_id)
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
         if isinstance(barcode_result, list):
