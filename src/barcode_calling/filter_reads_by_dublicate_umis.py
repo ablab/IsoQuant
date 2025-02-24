@@ -29,8 +29,8 @@ def set_logger(logger_instance):
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
-    parser.add_argument("--barcodes", "-b", type=str, help="read - barcode - UMI table", required=True)
-    parser.add_argument("--read_assignments", "-r", type=str, help="IsoQuant read assignments", required=True)
+    parser.add_argument("--barcodes", "-b", nargs='+', type=str, help="read - barcode - UMI table", required=True)
+    parser.add_argument("--read_assignments", "-r", nargs='+', type=str, help="IsoQuant read assignments", required=True)
     parser.add_argument("--genedb", "-g", help="gene database in gffutils DB format (optional)", type=str)
     parser.add_argument("--bam", type=str, help="original BAM file, provide only if you need a BAM file"
                                                 " with UMI-filtered alignments")
