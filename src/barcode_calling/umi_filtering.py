@@ -291,9 +291,10 @@ class UMIFilter:
 
         for af in assignment_files:
             if os.path.exists(af):
-                handle = open(af, 'r')
-            elif os.path.exists(af + ".gz"):
-                handle = gzip.open(af + ".gz", "rt")
+                if af.endswith("gz"):
+                    handle = gzip.open(af, "rt")
+                else:
+                    handle = open(af, 'r')
             else:
                 logger.critical("Read assignment file is not found")
                 exit(-1)
