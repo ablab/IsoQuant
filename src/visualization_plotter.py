@@ -371,7 +371,7 @@ class ExpressionVisualizer:
             df.loc[down_regulated, "-log10(padj)"],
             color="blue",
             alpha=0.7,
-            label=f"Up-regulated in ({reference_label})",
+            label=f"Down-regulated in ({target_label})",
         )
 
         # Add threshold lines and labels

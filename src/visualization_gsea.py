@@ -8,6 +8,7 @@ from rpy2.robjects import r, pandas2ri
 from rpy2.robjects.packages import importr
 from rpy2.robjects.conversion import localconverter
 from rpy2.rinterface_lib import callbacks
+from matplotlib.patches import Patch
 
 
 class GSEAAnalysis:
@@ -48,32 +49,27 @@ class GSEAAnalysis:
         logging.debug(f"Full DE results shape: {results.shape}")
         logging.debug(f"DE results columns: {results.columns.tolist()}")
 
-        # Filter for significant DE genes
-        sig_genes = results.dropna(subset=["padj"])
-        logging.debug(f"After dropping genes with NaN padj: {sig_genes.shape}")
-        sig_genes = sig_genes[sig_genes["padj"] < 0.05]
-        logging.debug(f"Significantly DE genes (padj<0.05): {sig_genes.shape}")
-        if sig_genes.empty:
-            logging.info("No significantly DE genes found for GSEA.")
-            return
-
-        sig_genes = sig_genes[sig_genes["pvalue"] > 0]
-        logging.debug(f"Significantly DE genes with pvalue>0: {sig_genes.shape}")
-        if sig_genes.empty:
-            logging.info("No genes with valid p-values for GSEA.")
+        # Don't filter for significant genes - use ALL genes with valid statistics
+        # Just remove NaN values
+        valid_genes = results.dropna(subset=["stat", "gene_name"])
+        logging.debug(f"Genes with valid statistics: {valid_genes.shape}")
+        
+        if valid_genes.empty:
+            logging.info("No genes with valid statistics found for GSEA.")
             return
 
         # Use gene_name instead of symbol
-        gene_symbols_final = sig_genes["gene_name"].values
+        gene_symbols = valid_genes["gene_name"].values
 
+        # Create ranked list using ALL genes (not just significant ones)
         ranked_genes = pd.Series(
-            sig_genes["stat"].values, index=gene_symbols_final
+            valid_genes["stat"].values, index=gene_symbols
         ).dropna()
         ranked_genes = ranked_genes[~ranked_genes.index.duplicated(keep="first")]
         logging.debug(f"Final ranked genes count: {len(ranked_genes)}")
 
-        if ranked_genes.empty:
-            logging.info("No valid ranked genes after processing.")
+        if ranked_genes.empty or len(ranked_genes) < 50:  # Ensure we have enough genes
+            logging.info(f"Not enough valid ranked genes for GSEA: {len(ranked_genes)}")
             return
 
         # Save the ranked genes
@@ -98,18 +94,56 @@ class GSEAAnalysis:
 
             df["label"] = df["ID"] + ": " + df["Description"]
             df["-log10(p.adjust)"] = -np.log10(df["p.adjust"])
+            
+            # Sort by NES value - for up-regulated, highest NES first; for down-regulated, lowest NES first
+            if direction == "up":
+                df = df.sort_values(by="NES", ascending=False)
+                plot_values = df["NES"]  # Use NES directly for up-regulated
+            else:  # down
+                df = df.sort_values(by="NES", ascending=True)
+                plot_values = df["NES"].abs()  # Use absolute NES for down-regulated
+            
+            # Use NES for bar length but -log10(p.adjust) for color
             values = df["-log10(p.adjust)"]
-            norm = plt.Normalize(vmin=values.min(), vmax=values.max())
+            
+            # Use the data's own range for each direction
+            vmin = values.min()
+            vmax = values.max()
+            
+            norm = plt.Normalize(vmin=vmin, vmax=vmax)
             cmap = plt.cm.get_cmap("viridis")
             colors_for_bars = [cmap(norm(v)) for v in values]
 
-            plt.figure(figsize=(12, 8))
+            plt.figure(figsize=(14, 8))  # Wider figure to accommodate legend
+            
+            # Use NES for bar length (absolute value for down-regulated)
             plt.barh(
                 df["label"].iloc[::-1],
-                df["-log10(p.adjust)"].iloc[::-1],
-                color=colors_for_bars[::-1],
+                plot_values.iloc[::-1],  # Use appropriate values based on direction
+                color=colors_for_bars[::-1],  # Still color by significance
             )
-            plt.xlabel("-log10(adjusted p-value)")
+            
+            # Add a colorbar to show the significance scale
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array([])
+            cbar = plt.colorbar(sm)
+            cbar.set_label("-log10(adjusted p-value)")
+            
+            # Add legend explaining the visualization
+            legend_elements = [
+                Patch(facecolor='gray', alpha=0.5, 
+                      label='Bar length: Normalized Enrichment Score (NES)'),
+                Patch(facecolor=cmap(0.25), alpha=0.8, 
+                      label='Bar color: Statistical significance'),
+            ]
+            # Move legend much further to the right
+            plt.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.25, 1))
+            
+            # Set x-axis label based on direction
+            if direction == "up":
+                plt.xlabel("Normalized Enrichment Score (NES)")
+            else:
+                plt.xlabel("Absolute Normalized Enrichment Score (|NES|)")
 
             # Split target label into reference and target parts
             target_parts = target_label.split("_vs_")
@@ -123,9 +157,12 @@ class GSEAAnalysis:
                 condition_str = f"Pathways enriched in {ref_condition}\nvs {target_condition} - {ont}"
 
             plt.title(condition_str, fontsize=10)
+            
+            # Adjust layout to make room for legend
             plt.tight_layout()
-            plot_path = self.output_path / f"GSEA_top_pathways_{direction}_{ont}.png"
-            plt.savefig(plot_path)
+            # Save with extra space for the legend
+            plot_path = self.output_path / f"GSEA_top_pathways_{direction}_{ont}.pdf"
+            plt.savefig(plot_path, format="pdf", bbox_inches="tight", dpi=300)
             plt.close()
             logging.info(f"GSEA {direction} pathways plot saved to {plot_path}")
 
@@ -181,12 +218,13 @@ class GSEAAnalysis:
                 ].copy()  # Using 0.05 threshold
                 if not sig_gsea_df.empty:
                     up_pathways = sig_gsea_df[sig_gsea_df["NES"] > 0].nsmallest(
-                        10, "p.adjust"
+                        15, "p.adjust"
                     )
                     down_pathways = sig_gsea_df[sig_gsea_df["NES"] < 0].nsmallest(
-                        10, "p.adjust"
+                        15, "p.adjust"
                     )
 
+                    # Use separate color scales for each direction
                     if not up_pathways.empty:
                         plot_pathways(up_pathways, "up", ont)
                     if not down_pathways.empty:
