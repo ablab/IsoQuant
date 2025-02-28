@@ -58,6 +58,9 @@ def parse_args(cmd_args=None, namespace=None):
     output_args_group = parser.add_argument_group('Output naming')
     pipeline_args_group = parser.add_argument_group('Pipeline options')
     algo_args_group = parser.add_argument_group('Algorithm settings')
+    output_setup_args_group = parser.add_argument_group('Output configuration')
+    align_args_group = parser.add_argument_group('Aligner settings')
+    filer_args_group = parser.add_argument_group('Read filtering options')
 
     other_options = parser.add_argument_group("Additional options:")
     show_full_help = '--full_help' in cmd_args
@@ -77,6 +80,8 @@ def parse_args(cmd_args=None, namespace=None):
         parser.add_argument(*args, **kwargs)
 
     parser.add_argument("--full_help", action='help', help="show full list of options")
+
+    parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
     add_hidden_option('--debug', action='store_true', default=False,
                       help='Debug log output.')
 
@@ -127,6 +132,9 @@ def parse_args(cmd_args=None, namespace=None):
                                              "using read id (read_id:DELIM); "
                                              "by original file name (file_name)", type=str)
 
+    add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
+                                   help="reuse read assignments (binary format)", default=None)
+
     # INPUT PROPERTIES
     input_args_group.add_argument("--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
                         help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
@@ -169,82 +177,91 @@ def parse_args(cmd_args=None, namespace=None):
                                    choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
                                             "default_ont", "sensitive_ont", "all", "assembly"],
                                    help="transcript model construction strategy to use", type=str, default=None)
+    add_additional_option_to_group(algo_args_group, "--delta", type=int, default=None,
+                                   help="delta for inexact splice junction comparison, chosen automatically based on data type")
 
-    # OUTPUT PROPERTIES
-    pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
-                                     default="16")
-    pipeline_args_group.add_argument('--check_canonical', action='store_true', default=False,
-                                     help="report whether splice junctions are canonical")
-    pipeline_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
-                                     action='store_true', default=False)
-    pipeline_args_group.add_argument("--count_exons", help="perform exon and intron counting",
-                                     action='store_true', default=False)
-    add_additional_option_to_group(pipeline_args_group,"--bam_tags",
-                                   help="comma separated list of BAM tags to be imported to read_assignments.tsv",
-                                   type=str)
 
     # PIPELINE STEPS
+    pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
+                                     default="16")
+
     resume_args = pipeline_args_group.add_mutually_exclusive_group()
     resume_args.add_argument("--resume", action="store_true", default=False,
                              help="resume failed run, specify output folder, input options are not allowed")
     resume_args.add_argument("--force", action="store_true", default=False,
                              help="force to overwrite the previous run")
+
     add_additional_option_to_group(pipeline_args_group, '--clean_start', action='store_true', default=False,
                                    help='Do not use previously generated index, feature db or alignments.')
-
     add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
                                    default=False, help="run only read assignment and quantification")
     add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
                                    help="align reads to reference without running further analysis")
-
-    # ADDITIONAL
-    add_additional_option("--delta", type=int, default=None,
-                          help="delta for inexact splice junction comparison, chosen automatically based on data type")
-    add_hidden_option("--graph_clustering_distance", type=int, default=None,
-                      help="intron graph clustering distance, "
-                           "splice junctions less that this number of bp apart will not be differentiated")
-    add_additional_option("--no_gzip", help="do not gzip large output files", dest="gzipped",
-                          action='store_false', default=True)
-    add_additional_option("--no_gtf_check", help="do not perform GTF checks", dest="gtf_check",
-                          action='store_false', default=True)
-    add_additional_option("--high_memory", help="increase RAM consumption (store alignment and the genome in RAM)",
-                          action='store_true', default=False)
-    add_additional_option("--no_junc_bed", action="store_true", default=False,
-                          help="do NOT use annotation for read mapping")
-    add_additional_option("--junc_bed_file", type=str,
-                          help="annotation in BED format produced by minimap's paftools.js gff2bed "
-                               "(will be created automatically if not given)")
-    add_additional_option("--no_secondary", help="ignore secondary alignments (not recommended)", action='store_true',
-                          default=False)
-    add_additional_option("--min_mapq", help="ignore alignments with MAPQ < this"
-                                             "(also filters out secondary alignments, default: None)", type=int)
-    add_additional_option("--inconsistent_mapq_cutoff", help="ignore inconsistent alignments with MAPQ < this "
-                                                             "(works only with the reference annotation, default=5)",
-                          type=int, default=5)
-    add_additional_option("--simple_alignments_mapq_cutoff", help="ignore alignments with 1 or 2 exons and "
-                                                                  "MAPQ < this (works only in annotation-free mode, "
-                                                                  "default=1)", type=int, default=1)
-    add_additional_option("--normalization_method", type=str, choices=[e.name for e in NormalizationMethod],
-                          help="TPM normalization method: simple - conventional normalization using all counted reads;"
-                               "usable_reads - includes all assigned reads.",
-                          default=NormalizationMethod.simple.name)
-    add_additional_option("--counts_format", type=str, choices=[e.name for e in GroupedOutputFormat],
-                          help="output format for grouped counts",
-                          default=GroupedOutputFormat.both.name)
-
+    add_additional_option_to_group(pipeline_args_group, "--no_gtf_check", help="do not perform GTF checks",
+                                   dest="gtf_check",
+                                   action='store_false', default=True)
+    add_additional_option_to_group(pipeline_args_group, "--high_memory",
+                                   help="increase RAM consumption (store alignment and the genome in RAM)",
+                                   action='store_true', default=False)
     add_additional_option_to_group(pipeline_args_group, "--keep_tmp", help="do not remove temporary files "
                                                                            "in the end", action='store_true',
                                    default=False)
-    add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
-                                   help="reuse read assignments (binary format)", default=None)
-    add_hidden_option("--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS)
+
+    # OUTPUT SETUP
+    output_setup_args_group.add_argument('--check_canonical', action='store_true', default=False,
+                                     help="report whether splice junctions are canonical")
+    output_setup_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
+                                     action='store_true', default=False)
+    output_setup_args_group.add_argument("--count_exons", help="perform exon and intron counting",
+                                     action='store_true', default=False)
+    add_additional_option_to_group(output_setup_args_group,"--bam_tags",
+                                   help="comma separated list of BAM tags to be imported to read_assignments.tsv",
+                                   type=str)
+    add_additional_option_to_group(output_setup_args_group, "--no_gzip", help="do not gzip large output files", dest="gzipped",
+                                   action='store_false', default=True)
+    add_additional_option_to_group(output_setup_args_group, "--normalization_method", type=str, choices=[e.name for e in NormalizationMethod],
+                                   help="TPM normalization method: simple - conventional normalization using all counted reads;"
+                                        "usable_reads - includes all assigned reads.",
+                                   default=NormalizationMethod.simple.name)
+    add_additional_option_to_group(output_setup_args_group, "--counts_format", type=str, choices=[e.name for e in GroupedOutputFormat],
+                                   help="output format for grouped counts",
+                                   default=GroupedOutputFormat.both.name)
+
+    add_additional_option_to_group(output_setup_args_group, "--genedb_output", help="output folder for converted gene "
+                                                                                    "database, will be created automatically "
+                                                                                    " (same as output by default)", type=str)
+
+    # ALIGNER
+    add_additional_option_to_group(align_args_group, "--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS)
                                         + "; chosen based on data type if not set", type=str)
-    add_additional_option_to_group(output_args_group, "--genedb_output", help="output folder for converted gene "
-                                                                              "database, will be created automatically "
-                                                                              " (same as output by default)", type=str)
+    add_additional_option_to_group(align_args_group,  "--no_junc_bed", action="store_true", default=False,
+                          help="do NOT use annotation for read mapping")
+    add_additional_option_to_group(align_args_group, "--junc_bed_file", type=str,
+                          help="annotation in BED format produced by minimap's paftools.js gff2bed "
+                               "(will be created automatically if not given)")
+    add_additional_option_to_group(align_args_group, "--indexing_options", type=str,
+                                   help="additional options that will be passed to the aligindexerner indexer")
+    add_additional_option_to_group(align_args_group, "--mapping_options", type=str,
+                                   help="additional options that will be passed to the aligner")
+
+    # READ FILTERING
+    add_additional_option_to_group(filer_args_group, "--no_secondary", help="ignore secondary alignments (not recommended)",
+                                   action='store_true', default=False)
+    add_additional_option_to_group(filer_args_group, "--min_mapq", help="ignore alignments with MAPQ < this"
+                                                                        "(also filters out secondary alignments, default: None)", type=int)
+    add_additional_option_to_group(filer_args_group, "--inconsistent_mapq_cutoff", help="ignore inconsistent alignments with MAPQ < this "
+                                                                                        "(works only with the reference annotation, default=5)",
+                                   type=int, default=5)
+    add_additional_option_to_group(filer_args_group, "--simple_alignments_mapq_cutoff", help="ignore alignments with 1 or 2 exons and "
+                                                                                             "MAPQ < this (works only in annotation-free mode, "
+                                                                                             "default=1)", type=int, default=1)
+
+    # REST
+    add_hidden_option("--graph_clustering_distance", type=int, default=None,
+                      help="intron graph clustering distance, "
+                           "splice junctions less that this number of bp apart will not be differentiated")
     add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
-    parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
 
     isoquant_version = "3.4.0"
     try:
