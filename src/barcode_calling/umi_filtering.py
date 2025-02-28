@@ -181,9 +181,9 @@ class UMIFilter:
         umi_dict = defaultdict(list)
         trusted_umi_list = []
         for m in molecule_list:
-            if m.umi is None:
+            if m.umi is None or m.umi == "None":
                 # collect untrusted UMIs together
-                umi_dict[m.umi].append(m)
+                umi_dict["None"].append(m)
                 continue
 
             similar_umi = self._find_similar_umi(m.umi, trusted_umi_list)
@@ -218,7 +218,7 @@ class UMIFilter:
             # if we have a single UMI - we do not care whether it's trusted or not
             return [resulting_reads[0][0]]
         # if we have > 1 UMIs, we ignore untrusted ones
-        return [x[0] for x in filter(lambda x: x is not None, resulting_reads)]
+        return [x[0] for x in filter(lambda x: x != "None", resulting_reads)]
 
     def _process_gene(self, gene_dict):
         resulting_reads = []
