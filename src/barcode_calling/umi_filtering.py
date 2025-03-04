@@ -218,7 +218,7 @@ class UMIFilter:
             # if we have a single UMI - we do not care whether it's trusted or not
             return [resulting_reads[0][0]]
         # if we have > 1 UMIs, we ignore untrusted ones
-        return [x[0] for x in filter(lambda x: x != "None", resulting_reads)]
+        return [x[0] for x in filter(lambda x: x[1] != "None", resulting_reads)]
 
     def _process_gene(self, gene_dict):
         resulting_reads = []
