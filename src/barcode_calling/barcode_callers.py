@@ -153,6 +153,18 @@ class SplittingBarcodeDetectionResult:
     def append(self, barcode_detection_result):
         self.detected_patterns.append(barcode_detection_result)
 
+
+    def filter(self):
+        if not self.detected_patterns: return
+        barcoded_results = []
+        for r in self.detected_patterns:
+            if r.barcode != BarcodeDetectionResult.NOSEQ:
+                barcoded_results.append(r)
+
+        if not barcoded_results:
+            self.detected_patterns = [self.detected_patterns[0]]
+        self.detected_patterns = barcoded_results
+
     @staticmethod
     def header():
         return StereoBarcodeDetectionResult.header()
@@ -200,9 +212,9 @@ class StereoBarcodeDetector:
             self.MAIN_PRIMER = StereoBarcodeDetector.PC1_PRIMER
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=5)
-        bit_barcodes = map(str_to_2bit, barcodes)
-        self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
-        logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
+        #bit_barcodes = map(str_to_2bit, barcodes)
+        self.barcode_indexer = KmerIndexer(barcodes, kmer_size=14)
+        logger.info("Indexed %d barcodes" % len(self.barcode_indexer.seq_list))
         self.umi_set = None
         self.min_score = min_score
 
@@ -374,24 +386,27 @@ class StereoSplttingBarcodeDetector:
             self.MAIN_PRIMER = self.TSO_PRIMER
         else:
             self.MAIN_PRIMER = self.PC1_PRIMER
-        self.tso5_indexer = ArrayKmerIndexer([self.TSO5], kmer_size=6)
+        self.tso5_indexer = ArrayKmerIndexer([self.TSO5], kmer_size=5)
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([self.LINKER], kmer_size=5)
+        #self.barcode_indexer = KmerIndexer(barcodes, kmer_size=14)
+        #logger.info("Indexed %d barcodes" % len(self.barcode_indexer.seq_list))
         bit_barcodes = map(str_to_2bit, barcodes)
-        self.barcode_indexer = KmerIndexer(barcodes, kmer_size=14)
-        logger.info("Indexed %d barcodes" % len(self.barcode_indexer.seq_list))
+        self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+        logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
         self.umi_set = None
         self.min_score = min_score
 
     def find_barcode_umi(self, read_id, sequence):
         read_result = SplittingBarcodeDetectionResult(read_id)
+        logger.debug("Looking in forward direction")
         r = self._find_barcode_umi_fwd(read_id, sequence)
         current_start = 0
         while r.polyT != -1:
             r.set_strand("+")
             read_result.append(r)
             if r.tso5 != -1:
-                new_start = r.tso5 + 20
+                new_start = r.tso5 + 15
             else:
                 new_start = r.polyT + 100
 
@@ -399,23 +414,30 @@ class StereoSplttingBarcodeDetector:
             if len(sequence) - current_start < 50:
                 break
 
+            logger.debug("Looking further from %d" % current_start)
             seq = sequence[current_start:]
             r = self._find_barcode_umi_fwd(read_id, seq)
 
+        logger.debug("Looking in reverse direction")
         rev_seq = reverese_complement(sequence)
-
-        rr = self._find_barcode_umi_fwd(read_id, rev_seq)
+        r = self._find_barcode_umi_fwd(read_id, rev_seq)
         current_start = 0
-        while rr.polyT != -1:
-            rr.set_strand("-")
-            read_result.append(rr)
-            new_start = rr.polyT + 50
+        while r.polyT != -1:
+            r.set_strand("-")
+            read_result.append(r)
+            if r.tso5 != -1:
+                new_start = r.tso5 + 15
+            else:
+                new_start = r.polyT + 100
+
             current_start += new_start
             if len(rev_seq) - current_start < 50:
                 break
+            logger.debug("Looking further from %d" % current_start)
             seq = rev_seq[current_start:]
-            rr = self._find_barcode_umi_fwd(read_id, seq)
+            r = self._find_barcode_umi_fwd(read_id, seq)
 
+        read_result.filter()
         return read_result
 
     def find_barcode_umi_single(self, read_id, sequence):
@@ -436,15 +458,17 @@ class StereoSplttingBarcodeDetector:
 
     def _find_barcode_umi_fwd(self, read_id, sequence):
         polyt_start = find_polyt_start(sequence)
+        logger.debug("PolyT found right away %d" % polyt_start)
 
         linker_start, linker_end = None, None
         tso5_start = None
         if polyt_start != -1:
             # use relaxed parameters is polyA is found
+            logger.debug("Looking for linker in %d" % len(sequence[0:polyt_start + 1]))
             linker_occurrences = self.linker_indexer.get_occurrences(sequence[0:polyt_start + 1])
             linker_start, linker_end = detect_exact_positions(sequence, 0, polyt_start + 1,
                                                               self.linker_indexer.k, self.LINKER,
-                                                              linker_occurrences, min_score=12,
+                                                              linker_occurrences, min_score=10,
                                                               start_delta=self.TERMINAL_MATCH_DELTA,
                                                               end_delta=self.TERMINAL_MATCH_DELTA)
 
@@ -468,7 +492,7 @@ class StereoSplttingBarcodeDetector:
             return StereoBarcodeDetectionResult(read_id, polyT=polyt_start)
         logger.debug("LINKER: %d-%d" % (linker_start, linker_end))
 
-        if polyt_start == -1:
+        if polyt_start == -1 or polyt_start < linker_start:
             # if polyT was not detected earlier, use relaxed parameters once the linker is found
             presumable_polyt_start = linker_end + self.UMI_LENGTH
             search_start = presumable_polyt_start - 4
@@ -476,6 +500,9 @@ class StereoSplttingBarcodeDetector:
             polyt_start = find_polyt_start(sequence[search_start:search_end], window_size=5, polya_fraction=1.0)
             if polyt_start != -1:
                 polyt_start += search_start
+                logger.debug("PolyT found later %d" % polyt_start)
+            else:
+                logger.debug("PolyT was not found %d" % polyt_start)
 
             tso5_occurrences = self.tso5_indexer.get_occurrences(sequence[polyt_start + 1:])
             tso5_start, tso5_end = detect_exact_positions(sequence, polyt_start + 1, len(sequence),
@@ -485,17 +512,20 @@ class StereoSplttingBarcodeDetector:
                                                           end_delta=self.TERMINAL_MATCH_DELTA)
 
         if tso5_start:
+            logger.debug("TSO found %d" % tso5_start)
             # check that no another linker is found inbetween polyA and TSO 5'
             linker_occurrences = self.linker_indexer.get_occurrences(sequence[polyt_start + 1: tso5_start])
-            linker_start, linker_end = detect_exact_positions(sequence, polyt_start + 1, tso5_start,
+            new_linker_start, new_linker_end = detect_exact_positions(sequence, polyt_start + 1, tso5_start,
                                                               self.linker_indexer.k, self.LINKER,
                                                               linker_occurrences, min_score=12,
                                                               start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
                                                               end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
-            if linker_start != -1 and linker_start - polyt_start > 100:
+            if new_linker_start is not None and new_linker_start != -1 and new_linker_start - polyt_start > 100:
                 # another linker found inbetween polyT and TSO
-                tso5_start = linker_start - self.BC_LENGTH - len(self.MAIN_PRIMER) - len(self.TSO5)
+                logger.debug("Another linker was found before TSO: %d" % new_linker_start)
+                tso5_start = new_linker_start - self.BC_LENGTH - len(self.MAIN_PRIMER) - len(self.TSO5)
+                logger.debug("TSO updated %d" % tso5_start)
         else:
             tso5_start = -1
 
