@@ -429,7 +429,7 @@ def parse_args(sys_argv):
 def main(sys_argv):
     args = parse_args(sys_argv)
     set_logger(logger)
-    if args.threads == 1:
+    if args.threads == 1 or args.mode.startswith('stereo'):
         process_single_thread(args)
     else:
         process_in_parallel(args)
