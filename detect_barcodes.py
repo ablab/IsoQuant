@@ -398,10 +398,14 @@ def load_barcodes_iter(inf):
         yield l.strip().split()[0]
 
 
-def set_logger(logger_instance):
+def set_logger(logger_instance, args):
     logger_instance.setLevel(logging.INFO)
+    if args.debug:
+        logger_instance.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
+    if args.debug:
+        ch.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
@@ -409,6 +413,10 @@ def set_logger(logger_instance):
 
 
 def parse_args(sys_argv):
+    def add_hidden_option(*args, **kwargs):  # show command only with --full-help
+        kwargs['help'] = argparse.SUPPRESS
+        parser.add_argument(*args, **kwargs)
+
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
     parser.add_argument("--barcodes", "-b", type=str, help="barcode whitelist", required=False)
@@ -421,6 +429,8 @@ def parse_args(sys_argv):
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
     parser.add_argument("--min_score", type=int, help="minimal barcode score "
                                                       "(scoring system is +1, -1, -1, -1)", default=22)
+    add_hidden_option('--debug', action='store_true', default=False,
+                      help='Debug log output.')
 
     args = parser.parse_args(sys_argv)
     return args
@@ -428,7 +438,7 @@ def parse_args(sys_argv):
 
 def main(sys_argv):
     args = parse_args(sys_argv)
-    set_logger(logger)
+    set_logger(logger, args)
     if args.threads == 1 or args.mode.startswith('stereo'):
         process_single_thread(args)
     else:
