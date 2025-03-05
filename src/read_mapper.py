@@ -218,6 +218,7 @@ def index_reference(aligner, args):
 
     command = ""
     index_name = os.path.join(os.path.abspath(args.output), "%s_k%s_idx" % (ref_name, KMER_SIZE[args.data_type]))
+
     if aligner == "starlong":
         if os.path.isdir(index_name) and os.path.exists(os.path.join(index_name, "genomeParameters.txt")):
             logger.debug('Reusing reference index ' + index_name)
@@ -227,6 +228,9 @@ def index_reference(aligner, args):
             os.makedirs(index_name)
         command = [exec_path, '--runMode', 'genomeGenerate', '--runThreadN', str(args.threads),
                    '--genomeDir', index_name, '--genomeFastaFiles', args.reference]
+        if args.indexing_options:
+            command += args.indexing_options.split()
+
     elif aligner == "minimap2":
         if os.path.isfile(index_name):
             logger.debug('Reusing reference index ' + index_name)
@@ -234,7 +238,12 @@ def index_reference(aligner, args):
         minimap2_path = get_aligner('minimap2')
         command = [minimap2_path, '-t', str(args.threads),
                    '-k', str(KMER_SIZE[args.data_type]),
-                   '-w', '5', '-d', index_name, args.reference]
+                   '-w', '5']
+
+        if args.indexing_options:
+            command += args.indexing_options.split()
+        command += ['-d', index_name, args.reference]
+
     else:
         logger.critical("Aligner " + aligner + " is not supported")
         exit(-1)
@@ -274,7 +283,6 @@ def find_annotation(aligner, args):
 
 
 def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
-    # TODO: fix paired end reads
     fastq_path = os.path.abspath(fastq_file)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
     alignment_prefix = os.path.join(out_dir, label)
@@ -293,7 +301,7 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
 
     log_fpath = os.path.join(args.output, "alignment.log")
     log_file = open(log_fpath, "a")
-    # TODO: add star for barcoded reads
+
     if aligner == "starlong":
         star_path = get_aligner('STARlong')
         zcat_option = " --readFilesCommand zcat " if ext.endswith('gz') else ""
@@ -303,18 +311,17 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
         #  --outFileNamePrefix {alignment_out}'.format(star=star_path, ref_index_name=star_index, transcripts=short_id_contigs_name, alignment_out=alignment_sam_path)
         annotation_opts = "" if not annotation_file else " --sjdbGTFfile " + annotation_file + " --sjdbOverhang 140 "
         command = '{exec_path} {zcat} --runThreadN {threads} --genomeDir {ref_index_name}  --readFilesIn {transcripts}  ' \
-                  '--outSAMtype BAM Unsorted --outSAMattributes NH HI NM MD --outFilterMultimapScoreRange 1 ' \
-                  '--outFilterMismatchNmax 2000 --scoreGapNoncan -20 --scoreGapGCAG -4 --scoreGapATAC -8 --scoreDelOpen ' \
-                  '-1 --scoreDelBase -1 --scoreInsOpen -1 --scoreInsBase -1 ' \
-                  ' --alignEndsType Local --seedSearchStartLmax 50 --seedPerReadNmax 1000000 --seedPerWindowNmax 1000 '\
+                  '--outSAMtype BAM Unsorted --outSAMattributes NH HI NM MD ' \
                   + annotation_opts + \
-                  ' --alignTranscriptsPerReadNmax 100000 --alignTranscriptsPerWindowNmax 10000 ' \
                   '--outFileNamePrefix {alignment_out}'.format(exec_path=star_path,
                                                                zcat=zcat_option,
                                                                threads=str(args.threads),
                                                                ref_index_name=args.index,
                                                                transcripts=fastq_path,
                                                                alignment_out=alignment_prefix)
+        if args.mapping_options:
+            command += " " + args.mapping_options
+
         logger.info("Running STAR (takes a while)")
         if subprocess.call(command.split(), stdout=log_file, stderr=log_file) != 0:
             logger.critical("STAR finished with errors! See " + log_fpath)
@@ -338,6 +345,9 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
 
         command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
                    '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
+
+        if args.mapping_options:
+            command += args.mapping_options.split()
 
         minimap_version = "unknown"
         version_run = subprocess.run([minimap2_path, '--version'], capture_output=True)
