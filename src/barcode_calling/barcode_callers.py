@@ -209,6 +209,9 @@ class ReadStats:
         if barcode_detection_result.UMI_good:
             self.umi_count += 1
 
+    def add_custom_stats(self, stat_name, val: int):
+        self.additional_attributes_counts[stat_name] += val
+
     def __str__(self):
         human_readable_str =  ("Total reads\t%d\nBarcode detected\t%d\nReliable UMI\t%d\n" %
                       (self.read_count, self.bc_count, self.umi_count))

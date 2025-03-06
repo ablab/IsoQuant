@@ -169,6 +169,8 @@ class BarcodeCaller:
                 if self.output_sequences:
                     seq_records.append(SeqRecord.SeqRecord(seq=Seq.Seq(new_read_seq), id=r.read_id, description=""))
 
+            self.read_stat.add_custom_stats("Splits", len(barcode_result.detected_patterns))
+            self.read_stat.add_custom_stats("Splits %d" % len(barcode_result.detected_patterns), 1)
             if self.output_sequences:
                 SeqIO.write(seq_records, self.output_sequences, "fasta")
 
