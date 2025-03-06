@@ -124,6 +124,44 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
     return start_pos - skipped_bases, end_pos + leftover_bases
 
 
+def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences: list,
+                           min_score=0, start_delta=-1, end_delta=-1):
+    pattern_index = None
+    for i, p in enumerate(pattern_occurrences):
+        if p[0] == pattern:
+            pattern_index = i
+            break
+    if pattern_index is None:
+        return None, None
+
+    start_pos, end_pos, pattern_start, pattern_end, score  = None, None, None, None, 0
+    last_potential_pos = -2*len(pattern)
+    for match_position in pattern_occurrences[pattern_index][2]:
+        if match_position - last_potential_pos < len(pattern):
+            continue
+
+        potential_start = start + match_position - len(pattern) + kmer_size
+        potential_start = max(start, potential_start)
+        potential_end = start + match_position + len(pattern) + 1
+        potential_end = min(end, potential_end)
+        alignment = \
+            align_pattern_ssw(sequence, potential_start, potential_end, pattern, min_score)
+        if alignment[4] is not None:
+            start_pos, end_pos, pattern_start, pattern_end, score = alignment
+            break
+
+    if start_pos is None:
+        return None, None
+
+    if start_delta >= 0 and pattern_start > start_delta:
+        return None, None
+    if end_delta >= 0 and len(pattern) - pattern_end - 1 > end_delta:
+        return None, None
+    leftover_bases = len(pattern) - pattern_end - 1
+    skipped_bases = pattern_start
+    return start_pos - skipped_bases, end_pos + leftover_bases
+
+
 NUCL2BIN = {'A': 0, 'C': 1, 'G': 3, 'T': 2, 'a': 0, 'c': 1, 'g': 3, 't': 2}
 BIN2NUCL = ["A", "C", "T", "G"]
 
