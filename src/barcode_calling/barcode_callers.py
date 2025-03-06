@@ -14,6 +14,12 @@ from .common import find_polyt_start, reverese_complement, find_candidate_with_m
 logger = logging.getLogger('IsoQuant')
 
 
+def increase_if_valid(val, delta):
+    if val and val != -1:
+        return val + delta
+    return val
+
+
 class BarcodeDetectionResult:
     NOSEQ = "*"
 
@@ -27,6 +33,9 @@ class BarcodeDetectionResult:
 
     def is_valid(self):
         return self.barcode != BarcodeDetectionResult.NOSEQ
+
+    def update_coordinates(self, delta):
+        pass
 
     def more_informative_than(self, that):
         raise NotImplemented()
@@ -58,6 +67,12 @@ class DoubleBarcodeDetectionResult(BarcodeDetectionResult):
 
     def is_valid(self):
         return self.barcode != BarcodeDetectionResult.NOSEQ
+
+    def update_coordinates(self, delta):
+        self.primer = increase_if_valid(self.primer, delta)
+        self.linker_start = increase_if_valid(self.linker_start, delta)
+        self.linker_end = increase_if_valid(self.linker_end, delta)
+        self.polyT = increase_if_valid(self.polyT, delta)
 
     def more_informative_than(self, that):
         if self.BC_score != that.BC_score:
@@ -98,6 +113,10 @@ class StereoBarcodeDetectionResult(DoubleBarcodeDetectionResult):
                                               polyT, primer, linker_start, linker_end)
         self.tso5 = tso
 
+    def update_coordinates(self, delta):
+        self.tso5 = increase_if_valid(self.tso5, delta)
+        DoubleBarcodeDetectionResult.update_coordinates(self, delta)
+
     def __str__(self):
         return (DoubleBarcodeDetectionResult.__str__(self) +
                 "\t%d" % self.tso5)
@@ -117,6 +136,10 @@ class TenXBarcodeDetectionResult(BarcodeDetectionResult):
 
     def is_valid(self):
         return self.barcode != BarcodeDetectionResult.NOSEQ
+
+    def update_coordinates(self, delta):
+        self.r1 = increase_if_valid(self.r1, delta)
+        self.polyT = increase_if_valid(self.polyT, delta)
 
     def more_informative_than(self, that):
         if self.polyT != that.polyT:
@@ -403,41 +426,38 @@ class StereoSplttingBarcodeDetector:
         read_result = SplittingBarcodeDetectionResult(read_id)
         logger.debug("Looking in forward direction")
         r = self._find_barcode_umi_fwd(read_id, sequence)
-        current_start = 0
         while r.polyT != -1:
             r.set_strand("+")
             read_result.append(r)
             if r.tso5 != -1:
-                new_start = r.tso5 + 15
+                current_start = r.tso5 + 15
             else:
-                new_start = r.polyT + 100
-
-            current_start += new_start
+                current_start = r.polyT + 100
             if len(sequence) - current_start < 50:
                 break
 
             logger.debug("Looking further from %d" % current_start)
             seq = sequence[current_start:]
             r = self._find_barcode_umi_fwd(read_id, seq)
+            r.update_coordinates(current_start)
 
         logger.debug("Looking in reverse direction")
         rev_seq = reverese_complement(sequence)
         r = self._find_barcode_umi_fwd(read_id, rev_seq)
-        current_start = 0
         while r.polyT != -1:
             r.set_strand("-")
             read_result.append(r)
             if r.tso5 != -1:
-                new_start = r.tso5 + 15
+                current_start = r.tso5 + 15
             else:
-                new_start = r.polyT + 100
-
-            current_start += new_start
+                current_start = r.polyT + 100
             if len(rev_seq) - current_start < 50:
                 break
+
             logger.debug("Looking further from %d" % current_start)
             seq = rev_seq[current_start:]
             r = self._find_barcode_umi_fwd(read_id, seq)
+            r.update_coordinates(current_start)
 
         read_result.filter()
         logger.debug("Total barcodes detected %d" % len(read_result.detected_patterns))
