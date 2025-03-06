@@ -19,9 +19,9 @@ from collections import defaultdict
 import numpy
 
 import pysam
-from Bio import SeqIO
+from Bio import SeqIO, Seq, SeqRecord
 import logging
-from src.barcode_calling.common import bit_to_str, str_to_2bit
+from src.barcode_calling.common import bit_to_str, reverese_complement
 from src.barcode_calling.barcode_callers import (
     TenXBarcodeDetector,
     DoubleBarcodeDetector,
@@ -32,6 +32,7 @@ from src.barcode_calling.barcode_callers import (
     StereoBarcodeDetectorPC,
     StereoSplitBarcodeDetectorTSO,
     StereoSplitBarcodeDetectorPC,
+    BarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats, DoubleBarcodeDetectionResult
 )
@@ -86,7 +87,8 @@ class BarcodeCaller:
         self.output_file = open(output_table, "w")
         self.output_sequences = None
         if output_sequences:
-            self.output_sequences = open(output_sequences, "w")
+            self.output_sequences = output_sequences
+            open(self.output_sequences, "w").close()
         if header:
             self.output_file.write(barcode_detector.result_type().header() + "\n")
         self.read_stat = ReadStats()
@@ -102,6 +104,8 @@ class BarcodeCaller:
 
     def process(self, input_file):
         logger.info("Processing " + input_file)
+        if self.output_sequences:
+            self.output_sequences = open(self.output_sequences, "a")
         fname, outer_ext = os.path.splitext(os.path.basename(input_file))
         low_ext = outer_ext.lower()
 
@@ -147,16 +151,27 @@ class BarcodeCaller:
         logger.debug("==== %s ====" % read_id)
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
         if isinstance(barcode_result, SplittingBarcodeDetectionResult):
+            seq_records = []
             for r in barcode_result.detected_patterns:
                 self.read_stat.add_read(r)
-                new_read_id = read_id + ("_%d_%d_%s" % (r.polyT, r.tso5, r.strand))
-                new_read_seq = read_sequence
-                if r.tso5 != -1 and r.polyT != -1:
-                    new_read_seq = read_sequence[max(0, r.polyT - 50) : r.tso5]
+                if not r.is_valid():
+                    self.output_file.write("%s\n" % str(r))
+                    continue
+
+                read_segment_start = max(0, r.primer - 25, r.polyT - 75)
+                read_segment_end = len(read_sequence) if r.tso5 == -1 else min(len(read_sequence), r.tso5 + 25)
+                r.read_id = read_id + ("_%d_%d_%s" % (read_segment_start, read_segment_end, r.strand))
+                if r.strand == "+":
+                    new_read_seq = read_sequence[read_segment_start:read_segment_end]
+                else:
+                    new_read_seq = reverese_complement(read_sequence)[read_segment_start:read_segment_end]
                 self.output_file.write("%s\n" % str(r))
                 if self.output_sequences:
-                    self.output_sequences.write(">%s\n" % new_read_id)
-                    self.output_sequences.write("%s\n" % new_read_seq)
+                    seq_records.append(SeqRecord.SeqRecord(seq=Seq.Seq(new_read_seq), id=r.read_id, description=""))
+
+            if self.output_sequences:
+                SeqIO.write(seq_records, self.output_sequences, "fasta")
+
         else:
             if isinstance(barcode_result, list):
                 barcode_result = barcode_result[0]
@@ -236,7 +251,7 @@ def process_single_thread(args):
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
         barcode_detector.min_score = args.min_score
-    barcode_caller = BarcodeCaller(args.output, barcode_detector, header=True, output_sequences=args.output + ".fa")
+    barcode_caller = BarcodeCaller(args.output, barcode_detector, header=True, output_sequences=args.out_fasta)
     logger.info("Processing " + args.input)
     barcode_caller.process(args.input)
     logger.info("Finished barcode calling")
@@ -429,8 +444,8 @@ def parse_args(sys_argv):
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
     parser.add_argument("--min_score", type=int, help="minimal barcode score "
                                                       "(scoring system is +1, -1, -1, -1)", default=22)
-    add_hidden_option('--debug', action='store_true', default=False,
-                      help='Debug log output.')
+    parser.add_argument('--out_fasta', type=str, help='Print deconcatenated reads into a FASTA file')
+    add_hidden_option('--debug', action='store_true', default=False, help='Debug log output.')
 
     args = parser.parse_args(sys_argv)
     return args
