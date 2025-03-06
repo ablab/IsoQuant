@@ -9,7 +9,7 @@ from collections import defaultdict
 
 from .kmer_indexer import KmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
 from .common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions, \
-    str_to_2bit
+    detect_first_exact_positions, str_to_2bit
 
 logger = logging.getLogger('IsoQuant')
 
@@ -153,7 +153,6 @@ class SplittingBarcodeDetectionResult:
     def append(self, barcode_detection_result):
         self.detected_patterns.append(barcode_detection_result)
 
-
     def filter(self):
         if not self.detected_patterns: return
         barcoded_results = []
@@ -163,7 +162,8 @@ class SplittingBarcodeDetectionResult:
 
         if not barcoded_results:
             self.detected_patterns = [self.detected_patterns[0]]
-        self.detected_patterns = barcoded_results
+        else:
+            self.detected_patterns = barcoded_results
 
     @staticmethod
     def header():
@@ -200,9 +200,9 @@ class StereoBarcodeDetector:
     PC1_PRIMER = "CTTCCGATCTATGGCGACCTTATCAG"
     BC_LENGTH = 25
     UMI_LENGTH = 10
-    NON_T_UMI_BASES = 2
-    UMI_LEN_DELTA = 2
-    TERMINAL_MATCH_DELTA = 2
+    NON_T_UMI_BASES = 0
+    UMI_LEN_DELTA = 4
+    TERMINAL_MATCH_DELTA = 3
     STRICT_TERMINAL_MATCH_DELTA = 1
 
     def __init__(self, barcodes, min_score=21, primer=1):
@@ -212,6 +212,7 @@ class StereoBarcodeDetector:
             self.MAIN_PRIMER = StereoBarcodeDetector.PC1_PRIMER
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=5)
+        self.strict_linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=6)
         bit_barcodes = map(str_to_2bit, barcodes)
         self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
@@ -283,10 +284,10 @@ class StereoBarcodeDetector:
 
         if linker_start is None:
             # if polyT was not found, or linker was not found to the left of polyT, look for linker in the entire read
-            linker_occurrences = self.linker_indexer.get_occurrences(sequence)
+            linker_occurrences = self.strict_linker_indexer.get_occurrences(sequence)
             linker_start, linker_end = detect_exact_positions(sequence, 0, len(sequence),
                                                               self.linker_indexer.k, StereoBarcodeDetector.LINKER,
-                                                              linker_occurrences, min_score=15,
+                                                              linker_occurrences, min_score=12,
                                                               start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
                                                               end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
@@ -376,9 +377,9 @@ class StereoSplttingBarcodeDetector:
     PC1_PRIMER = "CTTCCGATCTATGGCGACCTTATCAG"
     BC_LENGTH = 25
     UMI_LENGTH = 10
-    NON_T_UMI_BASES = 2
-    UMI_LEN_DELTA = 2
-    TERMINAL_MATCH_DELTA = 2
+    NON_T_UMI_BASES = 0
+    UMI_LEN_DELTA = 3
+    TERMINAL_MATCH_DELTA = 3
     STRICT_TERMINAL_MATCH_DELTA = 1
 
     def __init__(self, barcodes, min_score=21, primer=1):
@@ -386,9 +387,10 @@ class StereoSplttingBarcodeDetector:
             self.MAIN_PRIMER = self.TSO_PRIMER
         else:
             self.MAIN_PRIMER = self.PC1_PRIMER
-        self.tso5_indexer = ArrayKmerIndexer([self.TSO5], kmer_size=5)
+        self.tso5_indexer = ArrayKmerIndexer([self.TSO5], kmer_size=6)
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([self.LINKER], kmer_size=5)
+        self.strict_linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=6)
         #self.barcode_indexer = KmerIndexer(barcodes, kmer_size=14)
         #logger.info("Indexed %d barcodes" % len(self.barcode_indexer.seq_list))
         bit_barcodes = map(str_to_2bit, barcodes)
@@ -438,6 +440,7 @@ class StereoSplttingBarcodeDetector:
             r = self._find_barcode_umi_fwd(read_id, seq)
 
         read_result.filter()
+        logger.debug("Total barcodes detected %d" % len(read_result.detected_patterns))
         return read_result
 
     def find_barcode_umi_single(self, read_id, sequence):
@@ -473,20 +476,20 @@ class StereoSplttingBarcodeDetector:
                                                               end_delta=self.TERMINAL_MATCH_DELTA)
 
             tso5_occurrences = self.tso5_indexer.get_occurrences(sequence[polyt_start + 1:])
-            tso5_start, tso5_end = detect_exact_positions(sequence, polyt_start + 1, len(sequence),
-                                                          self.tso5_indexer.k, self.TSO5,
-                                                          tso5_occurrences, min_score=16,
-                                                          start_delta=self.TERMINAL_MATCH_DELTA,
-                                                          end_delta=self.TERMINAL_MATCH_DELTA)
+            tso5_start, tso5_end = detect_first_exact_positions(sequence, polyt_start + 1, len(sequence),
+                                                                self.tso5_indexer.k, self.TSO5,
+                                                                tso5_occurrences, min_score=15,
+                                                                start_delta=self.TERMINAL_MATCH_DELTA,
+                                                                end_delta=self.TERMINAL_MATCH_DELTA)
 
         if linker_start is None:
             # if polyT was not found, or linker was not found to the left of polyT, look for linker in the entire read
-            linker_occurrences = self.linker_indexer.get_occurrences(sequence)
-            linker_start, linker_end = detect_exact_positions(sequence, 0, len(sequence),
-                                                              self.linker_indexer.k, StereoBarcodeDetector.LINKER,
-                                                              linker_occurrences, min_score=15,
-                                                              start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
-                                                              end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
+            linker_occurrences = self.strict_linker_indexer.get_occurrences(sequence)
+            linker_start, linker_end = detect_first_exact_positions(sequence, 0, len(sequence),
+                                                                    self.linker_indexer.k, StereoBarcodeDetector.LINKER,
+                                                                    linker_occurrences, min_score=12,
+                                                                    start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
+                                                                    end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
         if linker_start is None:
             return StereoBarcodeDetectionResult(read_id, polyT=polyt_start)
@@ -505,21 +508,21 @@ class StereoSplttingBarcodeDetector:
                 logger.debug("PolyT was not found %d" % polyt_start)
 
             tso5_occurrences = self.tso5_indexer.get_occurrences(sequence[polyt_start + 1:])
-            tso5_start, tso5_end = detect_exact_positions(sequence, polyt_start + 1, len(sequence),
-                                                          self.tso5_indexer.k, self.TSO5,
-                                                          tso5_occurrences, min_score=16,
-                                                          start_delta=self.TERMINAL_MATCH_DELTA,
-                                                          end_delta=self.TERMINAL_MATCH_DELTA)
+            tso5_start, tso5_end = detect_first_exact_positions(sequence, polyt_start + 1, len(sequence),
+                                                                self.tso5_indexer.k, self.TSO5,
+                                                                tso5_occurrences, min_score=15,
+                                                                start_delta=self.TERMINAL_MATCH_DELTA,
+                                                                end_delta=self.TERMINAL_MATCH_DELTA)
 
         if tso5_start:
             logger.debug("TSO found %d" % tso5_start)
             # check that no another linker is found inbetween polyA and TSO 5'
-            linker_occurrences = self.linker_indexer.get_occurrences(sequence[polyt_start + 1: tso5_start])
+            linker_occurrences = self.strict_linker_indexer.get_occurrences(sequence[polyt_start + 1: tso5_start])
             new_linker_start, new_linker_end = detect_exact_positions(sequence, polyt_start + 1, tso5_start,
-                                                              self.linker_indexer.k, self.LINKER,
-                                                              linker_occurrences, min_score=12,
-                                                              start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
-                                                              end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
+                                                                      self.linker_indexer.k, self.LINKER,
+                                                                      linker_occurrences, min_score=12,
+                                                                      start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
+                                                                      end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
             if new_linker_start is not None and new_linker_start != -1 and new_linker_start - polyt_start > 100:
                 # another linker found inbetween polyT and TSO
