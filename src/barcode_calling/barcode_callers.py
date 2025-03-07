@@ -429,6 +429,7 @@ class StereoSplttingBarcodeDetector:
         read_result = SplittingBarcodeDetectionResult(read_id)
         logger.debug("Looking in forward direction")
         r = self._find_barcode_umi_fwd(read_id, sequence)
+        prev_start = 0
         while r.polyT != -1:
             r.set_strand("+")
             read_result.append(r)
@@ -436,6 +437,9 @@ class StereoSplttingBarcodeDetector:
                 current_start = r.tso5 + 15
             else:
                 current_start = r.polyT + 100
+            # always make a step
+            current_start = max(prev_start + 150, current_start)
+            prev_start = current_start
             if len(sequence) - current_start < 50:
                 break
 
@@ -447,6 +451,7 @@ class StereoSplttingBarcodeDetector:
         logger.debug("Looking in reverse direction")
         rev_seq = reverese_complement(sequence)
         r = self._find_barcode_umi_fwd(read_id, rev_seq)
+        prev_start = 0
         while r.polyT != -1:
             r.set_strand("-")
             read_result.append(r)
@@ -454,6 +459,9 @@ class StereoSplttingBarcodeDetector:
                 current_start = r.tso5 + 15
             else:
                 current_start = r.polyT + 100
+            # always make a step
+            current_start = max(prev_start + 150, current_start)
+            prev_start = current_start
             if len(rev_seq) - current_start < 50:
                 break
 
