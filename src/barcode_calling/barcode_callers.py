@@ -470,6 +470,10 @@ class StereoSplttingBarcodeDetector:
             r = self._find_barcode_umi_fwd(read_id, seq)
             r.update_coordinates(current_start)
 
+        if not read_result:
+            # add empty result anyway
+            read_result.append(r)
+
         read_result.filter()
         logger.debug("Total barcodes detected %d" % len(read_result.detected_patterns))
         return read_result
