@@ -296,7 +296,7 @@ class UMIFilter:
                 else:
                     handle = open(af, 'r')
             else:
-                logger.critical("Read assignment file is not found")
+                logger.critical("Read assignment file is not found %s" % af)
                 exit(-1)
             for l in handle:
                 if l.startswith("#"): continue
