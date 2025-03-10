@@ -39,6 +39,7 @@ class SampleData:
 
     def _init_paths(self):
         self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
+        self.out_assigned_tsv_result = self.out_assigned_tsv
         self.out_raw_file = self._make_aux_path(self.prefix + ".save")
         self.read_group_file = self._make_aux_path(self.prefix + ".read_group")
         self.out_corrected_bed = self._make_path(self.prefix + ".corrected_reads.bed")
@@ -59,6 +60,7 @@ class SampleData:
         self.barcodes_tsv = self._make_path(self.prefix + ".barcoded_reads")
         self.barcodes_split_reads = self._make_aux_path(self.prefix + ".barcodes")
         self.out_umi_filtered = self._make_path(self.prefix + ".UMI_filtered")
+        self.split_reads_fasta = self._make_path(self.prefix + ".split_reads")
 
 
 class InputDataStorage:
