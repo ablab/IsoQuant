@@ -62,15 +62,23 @@ class IsoQuantMode(Enum):
     tenX = 2
     double = 3
     stereo_pc = 4
+    stereo_split_pc = 5
 
     def needs_barcode_calling(self):
-        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc]
+        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
 
     def needs_pcr_deduplication(self):
-        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc]
+        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
+
+    def produces_new_fasta(self):
+        return self in [IsoQuantMode.stereo_split_pc]
+
+    def enforces_single_thread(self):
+        return self in [IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
 
 
-ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.double.name, IsoQuantMode.stereo_pc.name]
+ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.double.name,
+                  IsoQuantMode.stereo_pc.name, IsoQuantMode.stereo_split_pc.name]
 
 
 def reads_collected_lock_file_name(sample_out_raw, chr_id):
@@ -300,6 +308,7 @@ class ReadAssignmentAggregator:
         if self.args.genedb:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                            additional_header=self.common_header, gzipped=gzipped)
+            sample.out_assigned_tsv_result = self.basic_printer.output_file_name
             printer_list.append(self.basic_printer)
         self.t2t_sqanti_printer = VoidTranscriptPrinter()
         if self.args.sqanti_output:

@@ -831,11 +831,12 @@ def prepare_reference_genome(args):
 
 
 class BarcodeCallingArgs:
-    def __init__(self, input, barcode_whitelist, mode, output, tmp_dir, threads):
+    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads):
         self.input = input
         self.barcodes = barcode_whitelist
         self.mode = mode
         self.output = output
+        self.out_fasta = out_fasta
         self.tmp_dir = tmp_dir
         self.threads = threads
         self.min_score = None
@@ -843,33 +844,49 @@ class BarcodeCallingArgs:
 
 def call_barcodes(args):
     if not args.barcoded_reads:
-        sample = args.input_data.samples[0]
-        for i, files in enumerate(sample.file_list):
-            output_barcodes = sample.barcodes_tsv + "_%d.tsv" % i
-            if args.resume and os.path.exists(output_barcodes):
-                # FIXME could be incomplete barcode calling run
-                logger.info("Barcodes were called during the previous run, skipping")
-            else:
-                bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode.name,
-                                             output_barcodes, sample.aux_dir, args.threads)
-                # Launching barcode calling in a separate process has the following reason:
-                # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
-                # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
-                # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
-                with ProcessPoolExecutor(max_workers=1) as proc:
-                    logger.info("Detecting barcodes")
-                    if args.threads == 1:
-                        future_res = proc.submit(process_single_thread, bc_args)
-                    else:
-                        future_res = proc.submit(process_in_parallel, bc_args)
+        for sample in args.input_data.samples:
+            new_reads = []
+            for i, files in enumerate(sample.file_list):
+                output_barcodes = sample.barcodes_tsv + "_%d.tsv" % i
+                output_fasta = None
+                if args.mode.produces_new_fasta:
+                    if args.input_data.input_type == 'bam':
+                        logger.critical("%s mode splits reads and produces new FASTA file, but BAM files are provided. "
+                                        "Provide original FASTQ/FASTA or ")
+                        exit(-1)
+                    output_fasta = sample.split_reads_fasta + "_%d.fa" % i
+                    new_reads.append([output_fasta])
+                bc_threads = 1 if args.mode.enforces_single_thread else args.threads
+                if args.resume and os.path.exists(output_barcodes):
+                    # FIXME could be incomplete barcode calling run
+                    logger.info("Barcodes were called during the previous run, skipping")
+                else:
+                    bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode.name,
+                                                 output_barcodes, output_fasta, sample.aux_dir, bc_threads)
+                    # Launching barcode calling in a separate process has the following reason:
+                    # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
+                    # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
+                    # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
+                    with ProcessPoolExecutor(max_workers=1) as proc:
+                        logger.info("Detecting barcodes")
+                        if bc_threads == 1:
+                            future_res = proc.submit(process_single_thread, bc_args)
+                        else:
+                            future_res = proc.submit(process_in_parallel, bc_args)
 
-                concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
-                if future_res.exception() is not None:
-                    raise future_res.exception()
+                    concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
+                    if future_res.exception() is not None:
+                        raise future_res.exception()
 
-            args.input_data.samples[0].barcoded_reads.append(output_barcodes)
-            logger.info("Processed %s, barcodes are stored in %s" % (files[0], output_barcodes))
+                sample.barcoded_reads.append(output_barcodes)
+                logger.info("Processed %s, barcodes are stored in %s" % (files[0], output_barcodes))
+
+            if args.mode.produces_new_fasta:
+                logger.info("Reads were split during barcode calling")
+                logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
+                sample.file_list = new_reads
     else:
+        # TODO barcoded files via YAML
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
 
 
@@ -888,7 +905,7 @@ def filter_umis(args):
         output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
         logger.info("Results will be saved to %s" % output_prefix)
         umi_filter = UMIFilter(barcode_umi_dict, d)
-        umi_filter.process(args.input_data.samples[0].out_assigned_tsv, output_prefix, transcript_type_dict)
+        umi_filter.process(args.input_data.samples[0].out_assigned_tsv_result, output_prefix, transcript_type_dict)
         logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
 
