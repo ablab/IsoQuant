@@ -879,6 +879,11 @@ def call_barcodes(args):
 
 
 def filter_umis(args):
+    umi_ed_dict = {IsoQuantMode.bulk: [],
+                   IsoQuantMode.tenX: [2, -1],
+                   IsoQuantMode.double: [2, -1],
+                   IsoQuantMode.stereo_pc: [4, -1],
+                   IsoQuantMode.stereo_split_pc: [4, -1]}
     if args.barcoded_reads:
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
 
@@ -888,7 +893,7 @@ def filter_umis(args):
         transcript_type_dict = {}
 
     barcode_umi_dict = load_barcodes(args.input_data.samples[0].barcoded_reads, True)
-    for d in [2, -1]:
+    for d in umi_ed_dict[args.mode]:
         logger.info("== Filtering by UMIs with edit distance %d ==" % d)
         output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
         logger.info("Results will be saved to %s" % output_prefix)
