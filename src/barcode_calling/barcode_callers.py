@@ -417,11 +417,11 @@ class StereoSplttingBarcodeDetector:
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([self.LINKER], kmer_size=5)
         self.strict_linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=6)
-        #self.barcode_indexer = KmerIndexer(barcodes, kmer_size=14)
-        #logger.info("Indexed %d barcodes" % len(self.barcode_indexer.seq_list))
-        bit_barcodes = map(str_to_2bit, barcodes)
-        self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
-        logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
+        self.barcode_indexer = KmerIndexer(barcodes, kmer_size=14)
+        logger.info("Indexed %d barcodes" % len(self.barcode_indexer.seq_list))
+        #bit_barcodes = map(str_to_2bit, barcodes)
+        #self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+        #logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
         self.umi_set = None
         self.min_score = min_score
 
