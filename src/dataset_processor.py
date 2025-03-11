@@ -46,13 +46,12 @@ from .assignment_io import (
     SqantiTSVPrinter,
     BasicTSVAssignmentPrinter,
     TmpFileAssignmentPrinter,
-    NormalTmpFileAssignmentLoader,
-    QuickTmpFileAssignmentLoader
 )
 from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
+from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 
 logger = logging.getLogger('IsoQuant')
 
@@ -185,87 +184,15 @@ def collect_reads_in_parallel(sample, chr_id, args):
     return read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads
 
 
-class ReadAssignmentLoader:
-    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict):
-        logger.info("Loading read assignments from " + save_file_name)
-        assert os.path.exists(save_file_name)
-        self.save_file_name = save_file_name
-        self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
-        self.multimapped_chr_dict = multimapped_chr_dict
-
-    def has_next(self):
-        return self.unpickler.has_next()
-
-    def get_next(self):
-        if not self.unpickler.has_next():
-            return None, None
-
-        assert self.unpickler.is_gene_info()
-        gene_info = self.unpickler.get_object()
-        assignment_storage = []
-        while self.unpickler.is_read_assignment():
-            read_assignment = self.unpickler.get_object()
-            if self.multimapped_chr_dict is not None and read_assignment.read_id in self.multimapped_chr_dict:
-                resolved_assignment = None
-                for a in self.multimapped_chr_dict[read_assignment.read_id]:
-                    if a.assignment_id == read_assignment.assignment_id and a.chr_id == read_assignment.chr_id:
-                        if resolved_assignment is not None:
-                            logger.info("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
-                        resolved_assignment = a
-
-                if not resolved_assignment:
-                    logger.warning("Incomplete information on read %s" % read_assignment.read_id)
-                    continue
-                elif resolved_assignment.assignment_type == ReadAssignmentType.suspended:
-                    continue
-                else:
-                    read_assignment.assignment_type = resolved_assignment.assignment_type
-                    read_assignment.gene_assignment_type = resolved_assignment.gene_assignment_type
-                    read_assignment.multimapper = resolved_assignment.multimapper
-            assignment_storage.append(read_assignment)
-
-        return gene_info, assignment_storage
-
-
-class BasicReadAssignmentLoader:
-    def __init__(self, save_file_name):
-        logger.info("Loading read assignments from " + save_file_name)
-        assert os.path.exists(save_file_name)
-        self.save_file_name = save_file_name
-        self.unpickler = QuickTmpFileAssignmentLoader(save_file_name)
-
-    def has_next(self):
-        return self.unpickler.has_next()
-
-    def get_next(self):
-        if not self.unpickler.has_next():
-            return
-
-        assert self.unpickler.is_gene_info()
-        self.unpickler.get_object()
-
-        while self.unpickler.is_read_assignment():
-            yield self.unpickler.get_object()
-
-
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
-    construct_models = not args.no_model_construction
-    current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
-    multimapped_reads = defaultdict(list)
-    multimap_loader = open(dump_filename + "_multimappers_" + chr_id, "rb")
-    list_size = read_int(multimap_loader)
-    while list_size != TERMINATION_INT:
-        for i in range(list_size):
-            a = BasicReadAssignment.deserialize(multimap_loader)
-            if a.chr_id == chr_id:
-                multimapped_reads[a.read_id].append(a)
-        list_size = read_int(multimap_loader)
+    loader = create_assignment_loader(chr_id, dump_filename, args.genedb, args.reference, args.fai_file_name)
 
     chr_dump_file = dump_filename + "_" + chr_id
     lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
     read_stat_file = "{}_read_stat".format(chr_dump_file)
     transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
+    construct_models = not args.no_model_construction
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
@@ -273,16 +200,12 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
         return read_stat, transcript_stat
 
-    if args.genedb:
-        gffutils_db = gffutils.FeatureDB(args.genedb)
-    else:
-        gffutils_db = None
-    aggregator = ReadAssignmentAggregator(args, sample, read_groups, gffutils_db, chr_id)
+    aggregator = ReadAssignmentAggregator(args, sample, read_groups, loader.genedb, chr_id)
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
-    transcript_id_distributor = ExcludingIdDistributor(gffutils_db, chr_id)
-    exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), gffutils_db, chr_id, "exon")
+    transcript_id_distributor = ExcludingIdDistributor(loader.genedb, chr_id)
+    exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), loader.genedb, chr_id, "exon")
 
     if construct_models:
         tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
@@ -300,7 +223,6 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         if args.sqanti_output else VoidTranscriptPrinter()
     novel_model_storage = []
 
-    loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
     while loader.has_next():
         gene_info, assignment_storage = loader.get_next()
         logger.debug("Processing %d reads" % len(assignment_storage))
@@ -312,7 +234,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             aggregator.global_counter.add_read_info(read_assignment)
 
         if construct_models:
-            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
+            model_constructor = GraphBasedModelConstructor(gene_info, loader.chr_record, args,
                                                            aggregator.transcript_model_global_counter,
                                                            transcript_id_distributor)
             model_constructor.process(assignment_storage)
@@ -331,8 +253,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     aggregator.global_counter.dump()
     aggregator.read_stat_counter.dump(read_stat_file)
     if construct_models:
-        if gffutils_db:
-            all_models, gene_info = create_extended_storage(gffutils_db, chr_id, current_chr_record, novel_model_storage)
+        if loader.genedb:
+            all_models, gene_info = create_extended_storage(loader.genedb, chr_id, loader.chr_record, novel_model_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(all_models, gene_info)
             tmp_extended_gff_printer.dump(gene_info, all_models)
