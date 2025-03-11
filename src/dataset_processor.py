@@ -52,6 +52,7 @@ from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdSto
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
+from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 
 logger = logging.getLogger('IsoQuant')
 
@@ -188,23 +189,13 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
 
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
-    construct_models = not args.no_model_construction
-    current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
-
-    multimapped_reads = defaultdict(list)
-    multimap_loader = open(dump_filename + "_multimappers_" + convert_chr_id_to_file_name_str(chr_id), "rb")
-    list_size = read_int(multimap_loader)
-    while list_size != TERMINATION_INT:
-        for i in range(list_size):
-            a = BasicReadAssignment.deserialize(multimap_loader)
-            if a.chr_id == chr_id:
-                multimapped_reads[a.read_id].append(a)
-        list_size = read_int(multimap_loader)
+    loader = create_assignment_loader(chr_id, dump_filename, args.genedb, args.reference, args.fai_file_name)
 
     chr_dump_file = dump_filename + "_" + convert_chr_id_to_file_name_str(chr_id)
     lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
     read_stat_file = "{}_read_stat".format(chr_dump_file)
     transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
+    construct_models = not args.no_model_construction
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
@@ -212,16 +203,12 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
         return read_stat, transcript_stat
 
-    if args.genedb:
-        gffutils_db = gffutils.FeatureDB(args.genedb)
-    else:
-        gffutils_db = None
-    aggregator = ReadAssignmentAggregator(args, sample, read_groups, gffutils_db, chr_id)
+    aggregator = ReadAssignmentAggregator(args, sample, read_groups, loader.genedb, chr_id)
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
-    transcript_id_distributor = ExcludingIdDistributor(gffutils_db, chr_id)
-    exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), gffutils_db, chr_id, "exon")
+    transcript_id_distributor = ExcludingIdDistributor(loader.genedb, chr_id)
+    exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), loader.genedb, chr_id, "exon")
 
     if construct_models:
         tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
@@ -239,8 +226,6 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         if args.sqanti_output else VoidTranscriptPrinter()
     novel_model_storage = []
 
-
-    loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
     while loader.has_next():
         gene_info, assignment_storage = loader.get_next()
         logger.debug("Processing %d reads" % len(assignment_storage))
@@ -252,7 +237,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             aggregator.global_counter.add_read_info(read_assignment)
 
         if construct_models:
-            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
+            model_constructor = GraphBasedModelConstructor(gene_info, loader.chr_record, args,
                                                            aggregator.transcript_model_global_counter,
                                                            aggregator.gene_model_global_counter,
                                                            transcript_id_distributor)
@@ -272,8 +257,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     aggregator.global_counter.dump()
     aggregator.read_stat_counter.dump(read_stat_file)
     if construct_models:
-        if gffutils_db:
-            all_models, gene_info = create_extended_storage(gffutils_db, chr_id, current_chr_record, novel_model_storage)
+        if loader.genedb:
+            all_models, gene_info = create_extended_storage(loader.genedb, chr_id, loader.chr_record, novel_model_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(all_models, gene_info)
             tmp_extended_gff_printer.dump(gene_info, all_models)
