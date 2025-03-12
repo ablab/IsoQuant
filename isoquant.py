@@ -908,9 +908,6 @@ def run_pipeline(args):
     if len(args.input_data.samples) > 1 and args.genedb:
         combine_counts(args.input_data, args.output)
 
-    if args.mode.needs_pcr_deduplication():
-        dataset_processor.filter_umis()
-
     logger.info(" === IsoQuant pipeline finished === ")
 
 
