@@ -52,6 +52,7 @@ from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extend
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
 from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
+from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter, load_barcodes
 
 logger = logging.getLogger('IsoQuant')
 
@@ -358,6 +359,7 @@ class ReadAssignmentAggregator:
 class DatasetProcessor:
     def __init__(self, args):
         self.args = args
+        self.input_data = args.input_data
         self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
@@ -378,15 +380,25 @@ class DatasetProcessor:
         self.chr_ids = []
 
     def __del__(self):
+        self.clean_up()
+
+    def clean_up(self):
         if not self.args.keep_tmp and self.args.gunzipped_reference:
             if os.path.exists(self.args.gunzipped_reference):
                 os.remove(self.args.gunzipped_reference)
 
-    def process_all_samples(self, input_data):
-        logger.info("Processing " + proper_plural_form("experiment", len(input_data.samples)))
-        for sample in input_data.samples:
+        for sample in self.input_data.samples:
+            if not self.args.read_assignments and not self.args.keep_tmp:
+                for f in glob.glob(sample.out_raw_file + "_*"):
+                    os.remove(f)
+                for f in glob.glob(sample.read_group_file + "*"):
+                    os.remove(f)
+
+    def process_all_samples(self):
+        logger.info("Processing " + proper_plural_form("experiment", len(self.input_data.samples)))
+        for sample in self.input_data.samples:
             self.process_sample(sample)
-        logger.info("Processed " + proper_plural_form("experiment", len(input_data.samples)))
+        logger.info("Processed " + proper_plural_form("experiment", len(self.input_data.samples)))
 
     # Run through all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
@@ -450,11 +462,6 @@ class DatasetProcessor:
             self.args.polya_requirement_strategy)
 
         self.process_assigned_reads(sample, saves_file)
-        if not self.args.read_assignments and not self.args.keep_tmp:
-            for f in glob.glob(saves_file + "_*"):
-                os.remove(f)
-            for f in glob.glob(sample.read_group_file + "*"):
-                os.remove(f)
         logger.info("Processed experiment " + sample.prefix)
 
     def get_chromosome_ids(self, sample):
@@ -724,6 +731,30 @@ class DatasetProcessor:
                             aggregator.transcript_grouped_counter.output_counts_file_name)
             logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
             aggregator.global_counter.finalize(self.args)
+
+    def filter_umis(self):
+        umi_ed_dict = {IsoQuantMode.bulk: [],
+                       IsoQuantMode.tenX: [2, -1],
+                       IsoQuantMode.double: [2, -1],
+                       IsoQuantMode.stereo_pc: [4, -1],
+                       IsoQuantMode.stereo_split_pc: [4, -1]}
+        if self.args.barcoded_reads:
+            self.args.input_data.samples[0].barcoded_reads = self.args.barcoded_reads
+
+        if self.args.genedb:
+            transcript_type_dict = create_transcript_info_dict(self.args.genedb)
+        else:
+            transcript_type_dict = {}
+
+        barcode_umi_dict = load_barcodes(self.args.input_data.samples[0].barcoded_reads, True)
+        for d in umi_ed_dict[self.args.mode]:
+            logger.info("== Filtering by UMIs with edit distance %d ==" % d)
+            output_prefix = self.args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
+            logger.info("Results will be saved to %s" % output_prefix)
+            umi_filter = UMIFilter(barcode_umi_dict, d)
+            umi_filter.process_from_raw_assignments(self.args.input_data.samples[0], self.get_chr_list(), self.args, output_prefix,
+                                                    transcript_type_dict)
+            logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
     @staticmethod
     def load_read_info(dump_filename):
