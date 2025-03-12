@@ -878,30 +878,6 @@ def call_barcodes(args):
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
 
 
-def filter_umis(args):
-    umi_ed_dict = {IsoQuantMode.bulk: [],
-                   IsoQuantMode.tenX: [2, -1],
-                   IsoQuantMode.double: [2, -1],
-                   IsoQuantMode.stereo_pc: [4, -1],
-                   IsoQuantMode.stereo_split_pc: [4, -1]}
-    if args.barcoded_reads:
-        args.input_data.samples[0].barcoded_reads = args.barcoded_reads
-
-    if args.genedb:
-        transcript_type_dict = create_transcript_info_dict(args.genedb)
-    else:
-        transcript_type_dict = {}
-
-    barcode_umi_dict = load_barcodes(args.input_data.samples[0].barcoded_reads, True)
-    for d in umi_ed_dict[args.mode]:
-        logger.info("== Filtering by UMIs with edit distance %d ==" % d)
-        output_prefix = args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
-        logger.info("Results will be saved to %s" % output_prefix)
-        umi_filter = UMIFilter(barcode_umi_dict, d)
-        umi_filter.process(args.input_data.samples[0].out_assigned_tsv_result, output_prefix, transcript_type_dict)
-        logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
-
-
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
     logger.info("Python version: %s" % sys.version)
@@ -929,17 +905,18 @@ def run_pipeline(args):
 
     if args.run_aligner_only:
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
-    else:
-        # run isoform assignment
-        dataset_processor = DatasetProcessor(args)
-        dataset_processor.process_all_samples(args.input_data)
+        return
 
-        # aggregate counts for all samples
-        if len(args.input_data.samples) > 1 and args.genedb:
-            combine_counts(args.input_data, args.output)
+    # run isoform assignment
+    dataset_processor = DatasetProcessor(args)
+    dataset_processor.process_all_samples()
+
+    # aggregate counts for all samples
+    if len(args.input_data.samples) > 1 and args.genedb:
+        combine_counts(args.input_data, args.output)
 
     if args.mode.needs_pcr_deduplication():
-        filter_umis(args)
+        dataset_processor.filter_umis()
 
     logger.info(" === IsoQuant pipeline finished === ")
 
