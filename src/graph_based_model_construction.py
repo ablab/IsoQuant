@@ -33,6 +33,7 @@ from .isoform_assignment import (
 from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
+from .ilp_model import ILP_Solver
 
 
 logger = logging.getLogger('IsoQuant')
@@ -126,13 +127,20 @@ class GraphBasedModelConstructor:
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
-        self.construct_fl_isoforms()
-        self.construct_assignment_based_isoforms(read_assignment_storage)
+        if self.params.no_ilp:
+            self.construct_fl_isoforms()
+            self.construct_assignment_based_isoforms(read_assignment_storage)
+            self.pre_filter_transcripts()
+            self.assign_reads_to_models(read_assignment_storage)
+            self.filter_transcripts()
+        else:
+            # This is the last "time" we can play with the isoQuant graph before entering into the ILP world
+            # self.pre_filter_transcripts()
+            self.construct_ilp_isoforms()
+            self.assign_reads_to_models(read_assignment_storage)
+            # self.filter_transcripts() #this filters out some predictions based on Andrey's heuristic
 
-        self.pre_filter_transcripts()
-        self.assign_reads_to_models(read_assignment_storage)
-        self.filter_transcripts()
-        # reassign reads
+        # reassign reads. why is it like this?
         self.assign_reads_to_models(read_assignment_storage)
         self.forward_counts()
 
@@ -141,6 +149,7 @@ class GraphBasedModelConstructor:
 
         if self.params.sqanti_output:
             self.compare_models_with_known()
+
 
     def forward_counts(self):
         ambiguous_assignments = {}
@@ -577,6 +586,98 @@ class GraphBasedModelConstructor:
             self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
         if self.params.report_novel_unspliced:
             self.construct_monoexon_novel(novel_mono_exon_reads)
+
+    def construct_ilp_isoforms(self):
+        logger.info("Using ILP to discover transcripts")
+        path_constraints = []
+
+        #Now we add path constraints in the ILP world based on transcript constraints
+        for p in self.known_isoforms_in_graph.keys():
+            if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
+            path_constraints.append(list(p))
+        # path_constraints = list(map(lambda x: list(x), self.known_isoforms_in_graph.keys()))
+
+        # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
+        fl_transcript_paths = ILP_Solver(self.intron_graph, path_constraints)
+        for res in fl_transcript_paths:
+            path = tuple(res[0])
+            weight = res[1]
+            if path in self.known_isoforms_in_graph:
+                logger.info("Detected know isoform %s with weight %.2f" % (self.known_isoforms_in_graph[path], weight))
+            else:
+                logger.info("Detected novel isoform %s with weight %.2f" % (str(path), weight))
+            intron_path = path[1:-1]
+            if not intron_path: continue
+            transcript_range = (path[0][1], path[-1][1])
+            novel_exons = get_exons(transcript_range, list(intron_path))
+            new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
+
+            reference_isoform = None
+            # check if new transcript matches a reference one
+            if intron_path[0][0] == VERTEX_polyt:
+                polya_info = PolyAInfo(-1, intron_path[0][1], -1, -1)
+            elif intron_path[-1][0] == VERTEX_polya:
+                polya_info = PolyAInfo(intron_path[-1][1], -1, -1, -1)
+            else:
+                polya_info = PolyAInfo(-1, -1, -1, -1)
+
+            combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
+            assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
+            # check that no serious contradiction occurs
+            # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
+            #             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
+
+            if is_matching_assignment(assignment):
+                reference_isoform = assignment.isoform_matches[0].assigned_transcript
+                # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
+            elif intron_path in self.known_isoforms_in_graph:
+                # path was not assigned to any known isoform but intron chain still matches
+                continue
+
+            new_model = None
+            if reference_isoform:
+                # adding FL reference isoform
+                if reference_isoform in GraphBasedModelConstructor.detected_known_isoforms:
+                    pass
+                else:
+                    new_model = self.transcript_from_reference(reference_isoform)
+                    GraphBasedModelConstructor.detected_known_isoforms.add(reference_isoform)
+            else:
+                has_polyt = intron_path[0][0] == VERTEX_polyt
+                has_polya = intron_path[-1][0] == VERTEX_polya
+                polya_site = has_polya or has_polyt
+                transcript_strand = self.strand_detector.get_strand(intron_path, has_polya, has_polyt)
+                transcript_ss_strand = self.strand_detector.get_strand(intron_path)
+
+                if len(novel_exons) == 2 and (not polya_site or transcript_ss_strand == '.'):
+                    pass
+                elif transcript_strand == '.' and not self.params.report_unstranded:
+                    logger.info("Avoiding unreliable transcript with %d exons" % len(novel_exons))
+                    pass
+                else:
+                    if self.params.use_technical_replicas and \
+                            len(set([a.read_group for a in self.path_storage.paths_to_reads[path]])) <= 1:
+                        # logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
+                        continue
+
+                    transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
+                    if transcript_gene is None:
+                        transcript_gene = "novel_gene_" + self.gene_info.chr_id + "_" + str(self.get_transcript_id())
+                    elif transcript_strand == '.':
+                        transcript_strand = self.gene_info.gene_strands[transcript_gene]
+
+                    if all(intron in self.known_introns for intron in intron_path):
+                        transcript_type = TranscriptModelType.novel_in_catalog
+                        id_suffix = TranscriptNaming.nic_transcript_suffix
+                    else:
+                        transcript_type = TranscriptModelType.novel_not_in_catalog
+                        id_suffix = TranscriptNaming.nnic_transcript_suffix
+
+                    new_model = TranscriptModel(self.gene_info.chr_id, transcript_strand,
+                                                new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
+                                                transcript_gene, novel_exons, transcript_type)
+            if new_model:
+                self.transcript_model_storage.append(new_model)
 
     def collect_terminal_exons_from_graph(self):
         polya_exons = []
