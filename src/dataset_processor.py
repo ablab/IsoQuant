@@ -366,10 +366,13 @@ class DatasetProcessor:
         self.io_support = IOSupport(self.args)
         self.all_read_groups = set()
         self.alignment_stat_counter = EnumStats()
+        self.transcript_type_dict = {}
 
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
             self.gffutils_db = gffutils.FeatureDB(self.args.genedb)
+            if self.args.mode.needs_pcr_deduplication():
+                self.transcript_type_dict = create_transcript_info_dict(self.args.genedb)
         else:
             self.gffutils_db = None
 
@@ -414,7 +417,7 @@ class DatasetProcessor:
         self.all_read_groups = set()
         fname = read_group_lock_filename(sample)
         if self.args.resume and os.path.exists(fname):
-            logger.info("Barcode table was split during the previous run, existing files will be used")
+            logger.info("Read group table was split during the previous run, existing files will be used")
         else:
             if os.path.exists(fname):
                 os.remove(fname)
@@ -424,7 +427,7 @@ class DatasetProcessor:
         # if self.args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
         #     fname = split_barcodes_lock_filename(sample)
         #     if self.args.resume and os.path.exists(fname):
-        #         logger.info("Read group table was split during the previous run, existing files will be used")
+        #         logger.info("Barcode table was split during the previous run, existing files will be used")
         #     else:
         #         if os.path.exists(fname):
         #             os.remove(fname)
@@ -451,6 +454,9 @@ class DatasetProcessor:
                 self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
                            "If you aim to construct transcript models, consider using --polya_requirement option.")
+
+        if self.args.mode.needs_pcr_deduplication():
+            self.filter_umis(sample)
 
         self.args.requires_polya_for_construction = set_polya_requirement_strategy(
             polya_fraction >= self.args.polya_percentage_threshold,
@@ -691,28 +697,23 @@ class DatasetProcessor:
             logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
             aggregator.global_counter.finalize(self.args)
 
-    def filter_umis(self):
+    def filter_umis(self, sample):
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX: [2, -1],
                        IsoQuantMode.double: [2, -1],
                        IsoQuantMode.stereo_pc: [4, -1],
                        IsoQuantMode.stereo_split_pc: [4, -1]}
         if self.args.barcoded_reads:
-            self.args.input_data.samples[0].barcoded_reads = self.args.barcoded_reads
+            sample.barcoded_reads = self.args.barcoded_reads
 
-        if self.args.genedb:
-            transcript_type_dict = create_transcript_info_dict(self.args.genedb)
-        else:
-            transcript_type_dict = {}
-
-        barcode_umi_dict = load_barcodes(self.args.input_data.samples[0].barcoded_reads, True)
+        barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
         for d in umi_ed_dict[self.args.mode]:
             logger.info("== Filtering by UMIs with edit distance %d ==" % d)
-            output_prefix = self.args.input_data.samples[0].out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
+            output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
             logger.info("Results will be saved to %s" % output_prefix)
             umi_filter = UMIFilter(barcode_umi_dict, d)
-            umi_filter.process_from_raw_assignments(self.args.input_data.samples[0], self.get_chr_list(), self.args, output_prefix,
-                                                    transcript_type_dict)
+            umi_filter.process_from_raw_assignments(sample, self.get_chr_list(), self.args, output_prefix,
+                                                    self.transcript_type_dict)
             logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
     @staticmethod
