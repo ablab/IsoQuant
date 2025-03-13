@@ -27,7 +27,7 @@ def convert_chr_id_to_file_name_str(chr_id: str):
 
 
 class ReadAssignmentLoader:
-    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict):
+    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict, filtered_read_set=None):
         logger.info("Loading read assignments from " + save_file_name)
         assert os.path.exists(save_file_name)
         self.save_file_name = save_file_name
@@ -35,6 +35,7 @@ class ReadAssignmentLoader:
         self.chr_record = chr_record
         self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
         self.multimapped_chr_dict = multimapped_chr_dict
+        self.filtered_read_set = filtered_read_set
 
     def has_next(self):
         return self.unpickler.has_next()
@@ -48,6 +49,8 @@ class ReadAssignmentLoader:
         assignment_storage = []
         while self.unpickler.is_read_assignment():
             read_assignment = self.unpickler.get_object()
+            if self.filtered_read_set and read_assignment.read_id not in self.filtered_read_set:
+                continue
             if self.multimapped_chr_dict is not None and read_assignment.read_id in self.multimapped_chr_dict:
                 resolved_assignment = None
                 for a in self.multimapped_chr_dict[read_assignment.read_id]:
@@ -91,10 +94,10 @@ class BasicReadAssignmentLoader:
             yield self.unpickler.get_object()
 
 
-def create_assignment_loader(chr_id, dump_filename, genedb, reference_fasta, reference_fai):
-    logger.info("Processing chromosome " + chr_id)
+def create_assignment_loader(chr_id, dump_filename, genedb, reference_fasta, reference_fai, use_filtered_reads=False):
     current_chr_record = Fasta(reference_fasta, indexname=reference_fai)[chr_id]
     multimapped_reads = defaultdict(list)
+    # FIXME use proper file name construction
     multimap_loader = open(dump_filename + "_multimappers_" + convert_chr_id_to_file_name_str(chr_id), "rb")
     list_size = read_int(multimap_loader)
     while list_size != TERMINATION_INT:
@@ -104,6 +107,11 @@ def create_assignment_loader(chr_id, dump_filename, genedb, reference_fasta, ref
                 multimapped_reads[a.read_id].append(a)
         list_size = read_int(multimap_loader)
 
+    filtered_reads = set()
+    if use_filtered_reads:
+        # FIXME use proper file name construction
+        for l in open(dump_filename + "_filtered_" + chr_id, "r"):
+            filtered_reads.add(l.rstrip())
     chr_dump_file = dump_filename + "_" + convert_chr_id_to_file_name_str(chr_id)
 
     if genedb:
@@ -111,4 +119,4 @@ def create_assignment_loader(chr_id, dump_filename, genedb, reference_fasta, ref
     else:
         gffutils_db = None
 
-    return ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
+    return ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads, filtered_reads)
