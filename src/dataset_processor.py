@@ -445,6 +445,9 @@ class DatasetProcessor:
             if not self.args.keep_tmp:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
 
+            if self.args.mode.needs_pcr_deduplication():
+                self.filter_umis(sample)
+
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
@@ -454,9 +457,6 @@ class DatasetProcessor:
                 self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
                            "If you aim to construct transcript models, consider using --polya_requirement option.")
-
-        if self.args.mode.needs_pcr_deduplication():
-            self.filter_umis(sample)
 
         self.args.requires_polya_for_construction = set_polya_requirement_strategy(
             polya_fraction >= self.args.polya_percentage_threshold,
@@ -697,6 +697,7 @@ class DatasetProcessor:
             logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
             aggregator.global_counter.finalize(self.args)
 
+    # TODO: add locks and --resume
     def filter_umis(self, sample):
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX: [2, -1],
@@ -712,7 +713,7 @@ class DatasetProcessor:
             output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
             logger.info("Results will be saved to %s" % output_prefix)
             umi_filter = UMIFilter(barcode_umi_dict, d)
-            umi_filter.process_from_raw_assignments(sample, self.get_chr_list(), self.args, output_prefix,
+            umi_filter.process_from_raw_assignments(sample.out_raw_file, self.get_chr_list(), self.args, output_prefix,
                                                     self.transcript_type_dict)
             logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
