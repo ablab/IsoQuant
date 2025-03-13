@@ -42,6 +42,18 @@ def Intron2Nx(intron_graph):
         intron2vertex[intron] = vertex_id
         vertex2intron[vertex_id] = intron
         vertex_id += 1
+    for intron_set in intron_graph.outgoing_edges.values():
+        for intron in intron_set:
+            if intron in intron2vertex: continue
+            intron2vertex[intron] = vertex_id
+            vertex2intron[vertex_id] = intron
+            vertex_id += 1
+    for intron_set in intron_graph.incoming_edges.values():
+        for intron in intron_set:
+            if intron in intron2vertex: continue
+            intron2vertex[intron] = vertex_id
+            vertex2intron[vertex_id] = intron
+            vertex_id += 1
 
     source = 0
     target = vertex_id
