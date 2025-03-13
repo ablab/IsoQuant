@@ -437,8 +437,8 @@ class UMIFilter:
             for k in sorted(self.stats.keys()):
                 count_hist_file.write("%s\t%d\n" % (k, self.stats[k]))
 
-    def process_from_raw_assignments(self, sample, chr_ids, args, output_prefix, transcript_type_dict):
-        outf = open(output_prefix + ".read_ids.tsv", "w")
+    # TODO: make parallel
+    def process_from_raw_assignments(self, saves_file, chr_ids, args, output_prefix, transcript_type_dict):
         allinfo_outf = open(output_prefix + ".allinfo", "w")
 
         read_info_storage = defaultdict(list)
@@ -447,8 +447,9 @@ class UMIFilter:
         self.unique_gene_barcode = set()
 
         for chr_id in chr_ids:
+            outf = open(saves_file + "_filtered_" + chr_id, "w")
             logger.info("Processing chromosome " + chr_id)
-            loader = create_assignment_loader(chr_id, sample.out_raw_file, args.genedb, args.reference, args.fai_file_name)
+            loader = create_assignment_loader(chr_id, saves_file, args.genedb, args.reference, args.fai_file_name)
             while loader.has_next():
                 gene_barcode_dict = defaultdict(lambda: defaultdict(list))
                 gene_info, assignment_storage = loader.get_next()
@@ -489,10 +490,9 @@ class UMIFilter:
                 processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
                 read_count += processed_read_count
                 spliced_count += processed_spliced_count
+            outf.close()
 
-        outf.close()
         allinfo_outf.close()
-
         logger.info("Saved %d reads, of them spliced %d to %s" % (read_count, spliced_count, output_prefix))
         logger.info("Total assignments processed %d (typically much more than read count)" % self.total_assignments)
         logger.info("Ambiguous polyAs %d, ambiguous types %d, inconsistent reads %d" %
