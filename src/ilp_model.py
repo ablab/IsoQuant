@@ -24,6 +24,10 @@ if mfd_solver.is_solved(): # We get the solution
     print(mfd_solver.get_solution())
     # {'paths': [['s', 'b', 't'], ['s', 'a', 't']], 'weights': [5, 2]}
 '''
+def node2string(nodetup):
+    (x,y)=nodetup
+    return ""+x+","+y
+
 
 def Intron2Nx(intron_graph):
     intron2vertex = dict()
@@ -33,15 +37,12 @@ def Intron2Nx(intron_graph):
 
     #TODO add id to nxGraph
     #graph.graph["id"] = "simple_graph"
-
     # add all intron vertices
-    print(list(intron_graph.intron_collector.clustered_introns.keys())[:10])
-    print((-20, 2506) in intron_graph.intron_collector.clustered_introns.keys())
-
-    for intron in intron_graph.intron_collector.clustered_introns.keys():
+    for intron in intron_graph.intron_collector.clustered_introns.keys(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
         intron2vertex[intron] = vertex_id
         vertex2intron[vertex_id] = intron
         vertex_id += 1
+
     for intron_set in intron_graph.outgoing_edges.values():
         for intron in intron_set:
             if intron in intron2vertex: continue
@@ -65,7 +66,7 @@ def Intron2Nx(intron_graph):
     starting_introns = defaultdict(int)
     for intron in intron_graph.incoming_edges.keys():
         for preceding_intron in intron_graph.incoming_edges[intron]:
-            edge_list.append((intron2vertex[preceding_intron], intron2vertex[intron]))
+            edge_list.append((str(intron2vertex[preceding_intron]), str(intron2vertex[intron])))
             if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
                 starting_introns[preceding_intron] += intron_graph.edge_weights[(preceding_intron, intron)]
 
@@ -78,31 +79,33 @@ def Intron2Nx(intron_graph):
     flow_dict = defaultdict(int)
     for intron in intron_graph.incoming_edges.keys():
         for preceding_intron in intron_graph.incoming_edges[intron]:
-            u = intron2vertex[preceding_intron]
-            v = intron2vertex[intron]
+            u = str(intron2vertex[preceding_intron])
+            v = str(intron2vertex[intron])
             nodes.add(u)
+            #print("Node "+ str(u))
             nodes.add(v)
             flow_dict[(u, v)] = intron_graph.edge_weights[(preceding_intron, intron)]
 
     # add connection to super source and total weight
     for starting_intron in starting_introns.keys():
         starting_vertex = intron2vertex[starting_intron]
-        edge_list.append((source, starting_vertex))
-        flow_dict[(source, starting_vertex)] = starting_introns[starting_intron]
+        edge_list.append((str(source), str(starting_vertex)))
+        flow_dict[(str(source), str(starting_vertex))] = starting_introns[starting_intron]
 
     for terminal_intron in terminal_introns.keys():
         terminal_vertex = intron2vertex[terminal_intron]
-        edge_list.append((terminal_vertex, target))
-        flow_dict[(terminal_vertex, target)] = terminal_introns[terminal_intron]
+        edge_list.append((str(terminal_vertex), str(target)))
+        flow_dict[(str(terminal_vertex), str(target))] = terminal_introns[terminal_intron]
 
     assert len(edge_list) == len(flow_dict)
 
     # add nodes and edges to networkx graph
     for node in nodes:
+        print("Adding ", node, ", ",type(node))
         G.add_node(node)
     for (u,v) in edge_list:
         G.add_edge(u,v,flow=flow_dict[(u,v)])
-
+    print(G.nodes)
     vertex_id += 1 #vertex_id equals the number of nods in G.nx
     logger.debug(vertex2intron)
     logger.debug(flow_dict)
@@ -111,7 +114,9 @@ def Intron2Nx(intron_graph):
 
 def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
     graph = Intron2Nx(intron_graph)
-    mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=63, weight_type=float)
+    this_k = 5
+    mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
+    print("Attempting to solve mpe_model with k=",str(this_k))
     mpe_model.solve()
     process_solution(mpe_model)
 
