@@ -290,7 +290,7 @@ class UMIFilter:
             resulting_reads += self._process_duplicates(gene_dict[barcode])
         return resulting_reads
 
-    def _process_chunk(self, gene_barcode_dict, outf, allinfo_outf=None):
+    def _process_chunk(self, gene_barcode_dict, allinfo_outf, read_ids_outf=None):
         read_count = 0
         spliced_count = 0
         for gene_id in gene_barcode_dict:
@@ -302,7 +302,8 @@ class UMIFilter:
                 read_count += 1
                 if len(read_assignment.exon_blocks) > 1:
                     spliced_count += 1
-                outf.write(read_assignment.read_id + "\n")
+                if read_ids_outf:
+                    read_ids_outf.write(read_assignment.read_id + "\n")
                 self.selected_reads.add(read_assignment.read_id)
                 if allinfo_outf:
                     allinfo_outf.write(read_assignment.to_allinfo_str() + "\n")
@@ -402,7 +403,7 @@ class UMIFilter:
 
                 read_interval = (exon_blocks[0][0], exon_blocks[-1][1])
                 if current_chr != chr_id or not overlaps(current_interval, read_interval):
-                    processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
+                    processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, allinfo_outf, outf)
                     read_count += processed_read_count
                     spliced_count += processed_spliced_count
                     if current_chr != chr_id:
@@ -414,7 +415,7 @@ class UMIFilter:
                 gene_barcode_dict[gene_id][barcode].append(assignment_info)
                 current_interval = (current_interval[0], max(current_interval[1], read_interval[1]))
 
-        processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
+        processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, allinfo_outf, outf)
         read_count += processed_read_count
         spliced_count += processed_spliced_count
         outf.close()
@@ -438,7 +439,7 @@ class UMIFilter:
                 count_hist_file.write("%s\t%d\n" % (k, self.stats[k]))
 
     # TODO: make parallel
-    def process_from_raw_assignments(self, saves_file, chr_ids, args, output_prefix, transcript_type_dict):
+    def process_from_raw_assignments(self, saves_file, chr_ids, args, output_prefix, transcript_type_dict, output_filtered_reads=False):
         allinfo_outf = open(output_prefix + ".allinfo", "w")
 
         read_info_storage = defaultdict(list)
@@ -447,7 +448,7 @@ class UMIFilter:
         self.unique_gene_barcode = set()
 
         for chr_id in chr_ids:
-            outf = open(saves_file + "_filtered_" + chr_id, "w")
+            outf = open(saves_file + "_filtered_" + chr_id, "w") if output_filtered_reads else None
             logger.info("Processing chromosome " + chr_id)
             loader = create_assignment_loader(chr_id, saves_file, args.genedb, args.reference, args.fai_file_name)
             while loader.has_next():
@@ -487,10 +488,11 @@ class UMIFilter:
 
                         gene_barcode_dict[gene_id][barcode].append(assignment_info)
 
-                processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, outf, allinfo_outf)
+                processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, allinfo_outf, outf)
                 read_count += processed_read_count
                 spliced_count += processed_spliced_count
-            outf.close()
+            if outf:
+                outf.close()
 
         allinfo_outf.close()
         logger.info("Saved %d reads, of them spliced %d to %s" % (read_count, spliced_count, output_prefix))

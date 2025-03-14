@@ -190,7 +190,8 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
 
 def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
-    loader = create_assignment_loader(chr_id, dump_filename, args.genedb, args.reference, args.fai_file_name)
+    use_filtered_reads = args.mode.needs_pcr_deduplication()
+    loader = create_assignment_loader(chr_id, dump_filename, args.genedb, args.reference, args.fai_file_name, use_filtered_reads)
 
     chr_dump_file = dump_filename + "_" + convert_chr_id_to_file_name_str(chr_id)
     lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
@@ -706,6 +707,7 @@ class DatasetProcessor:
 
     # TODO: add locks and --resume
     def filter_umis(self, sample):
+        # edit distances for UMI filtering, first one will be used for counts
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX: [2, -1],
                        IsoQuantMode.double: [2, -1],
@@ -715,13 +717,14 @@ class DatasetProcessor:
             sample.barcoded_reads = self.args.barcoded_reads
 
         barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
-        for d in umi_ed_dict[self.args.mode]:
+        for i, d in enumerate(umi_ed_dict[self.args.mode]):
             logger.info("== Filtering by UMIs with edit distance %d ==" % d)
             output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
             logger.info("Results will be saved to %s" % output_prefix)
             umi_filter = UMIFilter(barcode_umi_dict, d)
+            output_filtered_reads = i == 0
             umi_filter.process_from_raw_assignments(sample.out_raw_file, self.get_chr_list(), self.args, output_prefix,
-                                                    self.transcript_type_dict)
+                                                    self.transcript_type_dict, output_filtered_reads)
             logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
     @staticmethod
