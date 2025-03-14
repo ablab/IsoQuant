@@ -434,7 +434,7 @@ class UMIFilter:
         logger.info("Stats are written to written to %s" % stats_output)
         with open(stats_output, "w") as count_hist_file:
             count_hist_file.write("Unique gene-barcodes pairs %d\n" % len(self.unique_gene_barcode))
-
+            count_hist_file.write("Duplicate counts: %s \n" % ", ".join(["%d: %d" % (x, self.duplicated_molecule_counts[x]) for x in sorted(self.duplicated_molecule_counts.keys())]))
             for k in sorted(self.stats.keys()):
                 count_hist_file.write("%s\t%d\n" % (k, self.stats[k]))
 
@@ -508,7 +508,7 @@ class UMIFilter:
         logger.info("Stats are written to written to %s" % stats_output)
         with open(stats_output, "w") as count_hist_file:
             count_hist_file.write("Unique gene-barcodes pairs %d\n" % len(self.unique_gene_barcode))
-
+            count_hist_file.write("Duplicate counts: %s \n" % ", ".join(["%d: %d" % (x, self.duplicated_molecule_counts[x]) for x in sorted(self.duplicated_molecule_counts.keys())]))
             for k in sorted(self.stats.keys()):
                 count_hist_file.write("%s\t%d\n" % (k, self.stats[k]))
 
