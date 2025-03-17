@@ -152,6 +152,8 @@ class BarcodeCaller:
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
         if isinstance(barcode_result, SplittingBarcodeDetectionResult):
             seq_records = []
+            require_tso = len(barcode_result.detected_patterns) > 1
+            strands = set()
             for r in barcode_result.detected_patterns:
                 self.read_stat.add_read(r)
                 if not r.is_valid():
@@ -165,12 +167,13 @@ class BarcodeCaller:
                     new_read_seq = read_sequence[read_segment_start:read_segment_end]
                 else:
                     new_read_seq = reverese_complement(read_sequence)[read_segment_start:read_segment_end]
+                strands.add(r.strand)
                 self.output_file.write("%s\n" % str(r))
-                if self.output_sequences:
+                if self.output_sequences and (not require_tso or r.tso5 != -1):
                     seq_records.append(SeqRecord.SeqRecord(seq=Seq.Seq(new_read_seq), id=r.read_id, description=""))
 
             self.read_stat.add_custom_stats("Splits", len(barcode_result.detected_patterns))
-            self.read_stat.add_custom_stats("Splits %d" % len(barcode_result.detected_patterns), 1)
+            self.read_stat.add_custom_stats("Splits %d %s" % (len(barcode_result.detected_patterns), "".join(list(sorted(strands)))), 1)
             if self.output_sequences:
                 SeqIO.write(seq_records, self.output_sequences, "fasta")
 
