@@ -188,6 +188,9 @@ class SplittingBarcodeDetectionResult:
     def append(self, barcode_detection_result):
         self.detected_patterns.append(barcode_detection_result)
 
+    def empty(self):
+        return not self.detected_patterns
+
     def filter(self):
         if not self.detected_patterns: return
         barcoded_results = []
@@ -482,7 +485,7 @@ class StereoSplttingBarcodeDetector:
             r = self._find_barcode_umi_fwd(read_id, seq)
             r.update_coordinates(current_start)
 
-        if not read_result:
+        if read_result.empty():
             # add empty result anyway
             read_result.append(r)
 
