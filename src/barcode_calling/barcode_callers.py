@@ -121,6 +121,18 @@ class StereoBarcodeDetectionResult(DoubleBarcodeDetectionResult):
         return (DoubleBarcodeDetectionResult.__str__(self) +
                 "\t%d" % self.tso5)
 
+    def get_additional_attributes(self):
+        attr = []
+        if self.polyT != -1:
+            attr.append("PolyT detected")
+        if self.primer != -1:
+            attr.append("Primer detected")
+        if self.linker_start != -1:
+            attr.append("Linker detected")
+        if self.tso5 != -1:
+            attr.append("TSO detected")
+        return attr
+
     @staticmethod
     def header():
         return DoubleBarcodeDetectionResult.header() + "\tTSO5"
