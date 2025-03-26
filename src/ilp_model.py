@@ -3,6 +3,7 @@ import networkx as nx
 from collections import defaultdict
 from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
 import logging
+from itertools import chain
 
 logger = logging.getLogger('IsoQuant')
 
@@ -30,6 +31,44 @@ def node2string(nodetup):
 
 
 def Intron2Nx(intron_graph):
+
+    G = nx.DiGraph()
+
+    # We create the full networkx graph
+
+    # We add all the nodes
+    for intron in intron_graph.intron_collector.clustered_introns.keys(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
+        G.add_node(str(intron))
+    for intron in chain.from_iterable(chain(intron_graph.outgoing_edges.values(), intron_graph.incoming_edges.values())):
+        if intron not in G:
+            G.add_node(str(intron))
+
+    # We add all the edges
+    additional_starts = []
+    additional_ends = []
+    edges_to_ignore = []
+
+    for intron in intron_graph.incoming_edges.keys():
+        for preceding_intron in intron_graph.incoming_edges[intron]:
+            edge_weight = intron_graph.edge_weights[(preceding_intron, intron)]
+            G.add_edge(str(preceding_intron), str(intron), flow=edge_weight)
+            if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
+                additional_starts.append(str(preceding_intron))
+                edges_to_ignore.append((str(preceding_intron), str(intron)))
+
+    for intron in intron_graph.outgoing_edges.keys():
+        for subsequent_intron in intron_graph.outgoing_edges[intron]:
+            edge_weight = intron_graph.edge_weights[(intron, subsequent_intron)]
+            G.add_edge(str(intron), str(subsequent_intron), flow=edge_weight)
+            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
+                additional_ends.append(str(subsequent_intron))
+                edges_to_ignore.append((str(intron), str(subsequent_intron)))
+    
+    logger.debug(G.edges(data=True))
+
+    return G, additional_starts, additional_ends, edges_to_ignore
+
+def Intron2Nx_old(intron_graph):
     intron2vertex = dict()
     vertex2intron = dict()
     vertex_id = 1
@@ -117,19 +156,46 @@ def Intron2Nx(intron_graph):
 def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
     #for key in intron_graph.edge_weights.keys():
         #print(key,", ",intron_graph.edge_weights[key])
-    graph = Intron2Nx(intron_graph)
+    # graph = Intron2Nx_old(intron_graph)
+    graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx(intron_graph)
     #print(graph.edges(data=True))
-    this_k = 5
-    mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
+    graph.graph["id"] = "graph" + str(id(graph))
+    min_path_error_model = fp.NumPathsOptimization(
+        model_type = fp.kMinPathError,
+        stop_on_first_feasible=True,
+        G=graph, 
+        flow_attr="flow",
+        additional_starts=additional_starts,
+        additional_ends=additional_ends,
+        edges_to_ignore=edges_to_ignore,
+        )
     print("Attempting to solve mpe_model with k=",str(this_k))
-    mpe_model.solve()
-    process_solution(mpe_model)
+    min_path_error_model.solve()
+    
+    # this_k = 5
+    # mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
+    # mpe_model.solve()
+    process_solution(graph, min_path_error_model)
 
 
-def process_solution(model: fp.kMinPathError):
+def process_solution(graph: nx.DiGraph, model: fp.kMinPathError):
     if model.is_solved():
-        print(model.get_solution())
+        solution = model.get_solution()
+        print(solution)
         print(model.solve_statistics)
         print("model.is_valid_solution()", model.is_valid_solution())
+        fp.utils.draw_solution_basic(
+            graph=graph,
+            flow_attr="flow",
+            paths=solution["paths"],
+            weights=solution["weights"],
+            id=graph.graph["id"], # this will be used as filename
+            draw_options={
+            "show_graph_edges": True,
+            "show_edge_weights": True,
+            "show_path_weights": False,
+            "show_path_weight_on_first_edge": True,
+            "pathwidth": 2,
+        })
     else:
         print("Model could not be solved.")
