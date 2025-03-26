@@ -159,7 +159,18 @@ def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=3
     # graph = Intron2Nx_old(intron_graph)
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx(intron_graph)
     #print(graph.edges(data=True))
-    graph.graph["id"] = "graph" + str(id(graph))
+    fp.utils.draw_solution_basic(
+        graph=graph,
+        flow_attr="flow",
+        id="this_graph",  # this will be used as filename
+        draw_options={
+            "show_graph_edges": True,
+            "show_edge_weights": True,
+            "show_path_weights": False,
+            "show_path_weight_on_first_edge": True,
+            "pathwidth": 2,
+        })
+    #graph.graph["id"] = "graph" + str(id(graph))
     min_path_error_model = fp.NumPathsOptimization(
         model_type = fp.kMinPathError,
         stop_on_first_feasible=True,
@@ -169,7 +180,7 @@ def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=3
         additional_ends=additional_ends,
         edges_to_ignore=edges_to_ignore,
         )
-    print("Attempting to solve mpe_model with k=",str(this_k))
+    #print("Attempting to solve mpe_model with k=",str(this_k))
     min_path_error_model.solve()
     
     # this_k = 5
