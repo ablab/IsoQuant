@@ -186,7 +186,9 @@ def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=3
             "show_path_weights": False,
             "show_path_weight_on_first_edge": True,
             "pathwidth": 2,
-        })
+        },
+        additional_starts=additional_starts,
+        additional_ends=additional_ends,)
     #graph.graph["id"] = "graph" + str(id(graph))
     min_path_error_model = fp.NumPathsOptimization(
         model_type = fp.kMinPathError,
@@ -203,10 +205,18 @@ def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=3
     # this_k = 5
     # mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
     # mpe_model.solve()
-    process_solution(graph, min_path_error_model)
+    process_solution(
+        graph=graph, 
+        model=min_path_error_model,
+        additional_starts=additional_starts,
+        additional_ends=additional_ends)
 
 
-def process_solution(graph: nx.DiGraph, model: fp.kMinPathError):
+def process_solution(
+        graph: nx.DiGraph, 
+        model: fp.kMinPathError,
+        additional_starts: list = [],
+        additional_ends: list = []):
     if model.is_solved():
         solution = model.get_solution()
         print(solution)
@@ -224,6 +234,8 @@ def process_solution(graph: nx.DiGraph, model: fp.kMinPathError):
             "show_path_weights": False,
             "show_path_weight_on_first_edge": True,
             "pathwidth": 2,
-        })
+        },
+        additional_starts=additional_starts,
+        additional_ends=additional_ends,)
     else:
         print("Model could not be solved.")
