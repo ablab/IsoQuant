@@ -30,18 +30,23 @@ def node2string(nodetup):
     return ""+x+","+y
 
 
-def Intron2Nx(intron_graph):
+def Intron2Nx(
+        intron_graph, 
+        skip_isolated_nodes=True,
+        skip_terminal_nodes=True,
+    ):
 
     G = nx.DiGraph()
 
     # We create the full networkx graph
 
-    # We add all the nodes
-    for intron in intron_graph.intron_collector.clustered_introns.keys(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
-        G.add_node(str(intron))
-    for intron in chain.from_iterable(chain(intron_graph.outgoing_edges.values(), intron_graph.incoming_edges.values())):
-        if intron not in G:
+    if not skip_isolated_nodes:
+        # We add all the nodes
+        for intron in intron_graph.intron_collector.clustered_introns.keys(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
             G.add_node(str(intron))
+        for intron in chain.from_iterable(chain(intron_graph.outgoing_edges.values(), intron_graph.incoming_edges.values())):
+            if intron not in G:
+                G.add_node(str(intron))
 
     # We add all the edges
     additional_starts = []
@@ -51,18 +56,30 @@ def Intron2Nx(intron_graph):
     for intron in intron_graph.incoming_edges.keys():
         for preceding_intron in intron_graph.incoming_edges[intron]:
             edge_weight = intron_graph.edge_weights[(preceding_intron, intron)]
-            G.add_edge(str(preceding_intron), str(intron), flow=edge_weight)
-            if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
-                additional_starts.append(str(preceding_intron))
-                edges_to_ignore.append((str(preceding_intron), str(intron)))
+            if skip_terminal_nodes:
+                if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
+                    additional_starts.append(str(intron))
+                else:
+                    G.add_edge(str(preceding_intron), str(intron), flow=edge_weight)
+            else:
+                G.add_edge(str(preceding_intron), str(intron), flow=edge_weight)
+                if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
+                    additional_starts.append(str(preceding_intron))
+                    edges_to_ignore.append((str(preceding_intron), str(intron)))
 
     for intron in intron_graph.outgoing_edges.keys():
         for subsequent_intron in intron_graph.outgoing_edges[intron]:
             edge_weight = intron_graph.edge_weights[(intron, subsequent_intron)]
-            G.add_edge(str(intron), str(subsequent_intron), flow=edge_weight)
-            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                additional_ends.append(str(subsequent_intron))
-                edges_to_ignore.append((str(intron), str(subsequent_intron)))
+            if skip_terminal_nodes:
+                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
+                    additional_ends.append(str(intron))
+                else:
+                    G.add_edge(str(intron), str(subsequent_intron), flow=edge_weight)
+            else:
+                G.add_edge(str(intron), str(subsequent_intron), flow=edge_weight)
+                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
+                    additional_ends.append(str(subsequent_intron))
+                    edges_to_ignore.append((str(intron), str(subsequent_intron)))
     
     logger.debug(G.edges(data=True))
 
