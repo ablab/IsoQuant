@@ -168,28 +168,49 @@ def Intron2Nx_old(intron_graph):
     logger.debug(vertex2intron)
     logger.debug(flow_dict)
     return G
+def transfer_constraints(transcripts_constrints):
+    pc_transformed=[]
+    for constraint in transcripts_constrints:
+        this_constraint=[]
+        for first, second in zip(constraint, constraint[1:]):
+            print("elem",first)
+            this_constraint.append((str(first),str(second)))
+        pc_transformed.append(this_constraint)
+    print(pc_transformed)
+    return pc_transformed
 
 
 def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
+
+    print(transcripts_constraints)
+    print("Running ILP part")
+    constraints = transfer_constraints(transcripts_constraints)
     #for key in intron_graph.edge_weights.keys():
         #print(key,", ",intron_graph.edge_weights[key])
     # graph = Intron2Nx_old(intron_graph)
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx(intron_graph)
+    print(graph.nodes())
     #print(graph.edges(data=True))
-    fp.utils.draw_solution_basic(
+    fp.utils.draw_solution(
         graph=graph,
         flow_attr="flow",
-        id="this_graph",  # this will be used as filename
+        filename=str(id(graph))+".png",  # this will be used as filename
         draw_options={
             "show_graph_edges": True,
             "show_edge_weights": True,
             "show_path_weights": False,
             "show_path_weight_on_first_edge": True,
             "pathwidth": 2,
+
         },
         additional_starts=additional_starts,
-        additional_ends=additional_ends,)
+        additional_ends=additional_ends,
+        subpath_constraints=constraints,)
     #graph.graph["id"] = "graph" + str(id(graph))
+    optimization_options = {
+        "optimize_with_safe_paths": False,
+        "optimize_with_safe_sequences": True
+    }
     min_path_error_model = fp.NumPathsOptimization(
         model_type = fp.kMinPathError,
         stop_on_first_feasible=True,
@@ -198,6 +219,8 @@ def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=3
         additional_starts=additional_starts,
         additional_ends=additional_ends,
         edges_to_ignore=edges_to_ignore,
+        subpath_constraints=constraints,
+        optimization_options=optimization_options,
         )
     #print("Attempting to solve mpe_model with k=",str(this_k))
     min_path_error_model.solve()
@@ -205,11 +228,11 @@ def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=3
     # this_k = 5
     # mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
     # mpe_model.solve()
-    process_solution(
-        graph=graph, 
-        model=min_path_error_model,
-        additional_starts=additional_starts,
-        additional_ends=additional_ends)
+    #process_solution(
+    #    graph=graph,
+    #    model=min_path_error_model,
+    #    additional_starts=additional_starts,
+    #    additional_ends=additional_ends)
 
 
 def process_solution(
@@ -227,7 +250,7 @@ def process_solution(
             flow_attr="flow",
             paths=solution["paths"],
             weights=solution["weights"],
-            id=graph.graph["id"], # this will be used as filename
+            filename = str(id(graph))+".png", # this will be used as filename
             draw_options={
             "show_graph_edges": True,
             "show_edge_weights": True,
