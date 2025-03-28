@@ -788,7 +788,7 @@ def call_barcodes(args):
             for i, files in enumerate(sample.file_list):
                 output_barcodes = sample.barcodes_tsv + "_%d.tsv" % i
                 output_fasta = None
-                if args.mode.produces_new_fasta:
+                if args.mode.produces_new_fasta():
                     if args.input_data.input_type == 'bam':
                         logger.critical("%s mode splits reads and produces new FASTA file, but BAM files are provided. "
                                         "Provide original FASTQ/FASTA or ")
@@ -820,7 +820,7 @@ def call_barcodes(args):
                 sample.barcoded_reads.append(output_barcodes)
                 logger.info("Processed %s, barcodes are stored in %s" % (files[0], output_barcodes))
 
-            if args.mode.produces_new_fasta:
+            if args.mode.produces_new_fasta():
                 logger.info("Reads were split during barcode calling")
                 logger.info("The following files will be used instead of original reads %s " % ", ".join(
                     map(lambda x: x[0], new_reads)))
