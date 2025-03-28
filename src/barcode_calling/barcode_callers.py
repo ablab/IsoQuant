@@ -942,14 +942,6 @@ class TenXVersions(Enum):
      v3 = 3
 
 
-def TenXBarcodeDetectorV2(barcode_list):
-    return TenXBarcodeDetector(barcode_list, TenXVersions.v2)
-
-
-def TenXBarcodeDetectorV3(barcode_list):
-    return TenXBarcodeDetector(barcode_list, TenXVersions.v3)
-
-
 class TenXBarcodeDetector:
     TSO = "CCCATGTACTCTGCGTTGATACCACTGCTT"
     # R1 = "ACACTCTTTCCCTACACGACGCTCTTCCGATCT"  #
@@ -963,13 +955,13 @@ class TenXBarcodeDetector:
 
     def __init__(self, barcode_list, protocol_version=TenXVersions.v3):
         self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=6)
-        bit_barcodes = map(str_to_2bit, barcode_list)
+        bit_barcodes = list(map(str_to_2bit, barcode_list))
         self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=6, seq_len=self.BARCODE_LEN_10X)
         self.UMI_LEN_10X = self.UMI_LENGTHS[protocol_version]
         # self.barcode_indexer = KmerIndexer(barcode_list, kmer_size=6)
 
         self.min_score = 14
-        if len(barcode_list) > 100000:
+        if len(bit_barcodes) > 100000:
             self.min_score = 16
         logger.debug("Min score set to %d" % self.min_score)
 
@@ -1073,3 +1065,14 @@ class TenXBarcodeDetector:
     @staticmethod
     def result_type():
         return TenXBarcodeDetectionResult
+
+
+
+class TenXBarcodeDetectorV2(TenXBarcodeDetector):
+    def __init__(self, barcode_list):
+        TenXBarcodeDetector.__init__(self, barcode_list, TenXVersions.v2)
+
+
+class TenXBarcodeDetectorV3(TenXBarcodeDetector):
+    def __init__(self, barcode_list):
+        TenXBarcodeDetector.__init__(self, barcode_list, TenXVersions.v3)
