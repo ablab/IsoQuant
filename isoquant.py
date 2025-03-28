@@ -35,7 +35,7 @@ from src.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies,  ISOQUANT_MODES, IsoQuantMode
+from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies, ISOQUANT_MODES, IsoQuantMode
 from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, NormalizationMethod, GroupedOutputFormat
@@ -44,7 +44,6 @@ from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
 from detect_barcodes import process_single_thread, process_in_parallel
 from src.barcode_calling.umi_filtering import UMIFilter, create_transcript_info_dict, load_barcodes
-
 
 logger = logging.getLogger('IsoQuant')
 
@@ -115,10 +114,10 @@ def parse_args(cmd_args=None, namespace=None):
     input_args.add_argument('--fastq', nargs='+', type=str,
                             help='input FASTQ file(s), each file will be treated as a separate sample; '
                                  'reference genome should be provided when using reads as input')
-    add_additional_option_to_group(input_args,'--bam_list', type=str,
+    add_additional_option_to_group(input_args, '--bam_list', type=str,
                                    help='text file with list of BAM files, one file per line, '
                                         'leave empty line between samples')
-    add_additional_option_to_group(input_args,'--fastq_list', type=str,
+    add_additional_option_to_group(input_args, '--fastq_list', type=str,
                                    help='text file with list of FASTQ files, one file per line, '
                                         'leave empty line between samples')
     input_args.add_argument('--yaml', type=str, help='yaml file containing all input files, one entry per sample'
@@ -128,18 +127,19 @@ def parse_args(cmd_args=None, namespace=None):
                                   help='sorted and indexed file(s) with Illumina reads from the same sample')
 
     input_args_group.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
-                                             "by BAM file tag (tag:TAG); "
-                                             "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM); "
-                                             "using read id (read_id:DELIM); "
-                                             "by original file name (file_name)", type=str)
+                                                       "by BAM file tag (tag:TAG); "
+                                                       "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM); "
+                                                       "using read id (read_id:DELIM); "
+                                                       "by original file name (file_name)", type=str)
 
     # INPUT PROPERTIES
     input_args_group.add_argument("--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
-                        help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
-    input_args_group.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
-                        ", ".join(SUPPORTED_STRANDEDNESS), default="none")
+                                  help="type of data to process, supported types are: " + ", ".join(
+                                      DATA_TYPE_ALIASES.keys()))
+    input_args_group.add_argument('--stranded', type=str, help="reads strandness type, supported values are: " +
+                                                               ", ".join(SUPPORTED_STRANDEDNESS), default="none")
     input_args_group.add_argument('--fl_data', action='store_true', default=False,
-                        help="reads represent FL transcripts; both ends of the read are considered to be reliable")
+                                  help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
     # SC ARGUMENTS
     sc_args_group.add_argument("--mode", "-m", type=str, choices=ISOQUANT_MODES,
@@ -153,12 +153,11 @@ def parse_args(cmd_args=None, namespace=None):
                                help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
                                default=1)
 
-
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
                                    help="report novel monoexonic transcripts (true/false), "
                                         "default: false for ONT, true for other data types")
-    add_additional_option_to_group(algo_args_group, "--report_canonical",  type=str,
+    add_additional_option_to_group(algo_args_group, "--report_canonical", type=str,
                                    choices=[e.name for e in StrandnessReportingLevel],
                                    help="reporting level for novel transcripts based on canonical splice sites;"
                                         " default: " + StrandnessReportingLevel.auto.name,
@@ -198,7 +197,7 @@ def parse_args(cmd_args=None, namespace=None):
                                      action='store_true', default=False)
     pipeline_args_group.add_argument("--count_exons", help="perform exon and intron counting",
                                      action='store_true', default=False)
-    add_additional_option_to_group(pipeline_args_group,"--bam_tags",
+    add_additional_option_to_group(pipeline_args_group, "--bam_tags",
                                    help="comma separated list of BAM tags to be imported to read_assignments.tsv",
                                    type=str)
 
@@ -386,7 +385,7 @@ def save_params(args):
             vals[1] = os.path.abspath(vals[1])
             args.read_group = ":".join(vals)
 
-    pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
+    pickler = pickle.Pickler(open(args.param_file, "wb"), -1)
     pickler.dump(args)
     pass
 
@@ -400,7 +399,8 @@ def check_input_params(args):
         logger.error("Data type is not provided, choose one of " + " ".join(DATA_TYPE_ALIASES.keys()))
         return False
     elif args.data_type not in DATA_TYPE_ALIASES.keys():
-        logger.error("Unsupported data type " + args.data_type + ", choose one of: " + " ".join(DATA_TYPE_ALIASES.keys()))
+        logger.error(
+            "Unsupported data type " + args.data_type + ", choose one of: " + " ".join(DATA_TYPE_ALIASES.keys()))
         return False
     args.data_type = DATA_TYPE_ALIASES[args.data_type]
 
@@ -447,8 +447,9 @@ def check_input_params(args):
         args.mode = IsoQuantMode[args.mode]
     if args.mode.needs_barcode_calling():
         if not args.barcode_whitelist and not args.barcoded_reads:
-            logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
-                            "barcoded reads" % args.mode.name)
+            logger.critical(
+                "You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
+                "barcoded reads" % args.mode.name)
             exit(-3)
 
     check_input_files(args)
@@ -558,13 +559,15 @@ def set_data_dependent_options(args):
     if args.matching_strategy is None:
         args.matching_strategy = matching_strategies[args.data_type]
 
-    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_pacbio", NANOPORE_DATA: "default_ont"}
+    model_construction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_pacbio",
+                                     NANOPORE_DATA: "default_ont"}
     if args.model_construction_strategy is None:
         args.model_construction_strategy = model_construction_strategies[args.data_type]
         if args.fl_data and args.model_construction_strategy == "default_pacbio":
             args.model_construction_strategy = "fl_pacbio"
 
-    splice_correction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_pacbio", NANOPORE_DATA: "default_ont"}
+    splice_correction_strategies = {ASSEMBLY: "assembly", PACBIO_CCS_DATA: "default_pacbio",
+                                    NANOPORE_DATA: "default_ont"}
     if args.splice_correction_strategy is None:
         args.splice_correction_strategy = splice_correction_strategies[args.data_type]
 
@@ -582,10 +585,10 @@ def set_matching_options(args):
                                    'resolve_ambiguous', 'correct_minor_errors'))
 
     strategies = {
-        'exact':   MatchingStrategy(0, 0, 0, 0, 0, 0.0, 'monoexon_only', False),
+        'exact': MatchingStrategy(0, 0, 0, 0, 0, 0.0, 'monoexon_only', False),
         'precise': MatchingStrategy(4, 30, 50, 20, 0, 0.0, 'monoexon_and_fsm', True),
         'default': MatchingStrategy(6, 60, 100, 40, 60, 1.0, 'monoexon_and_fsm', True),
-        'loose':   MatchingStrategy(12, 60, 100, 40, 60, 1.0, 'all',  True),
+        'loose': MatchingStrategy(12, 60, 100, 40, 60, 1.0, 'all', True),
     }
 
     strategy = strategies[args.matching_strategy]
@@ -663,22 +666,23 @@ def set_model_construction_options(args):
                                             'require_monointronic_polya', 'require_monoexonic_polya',
                                             'report_canonical'))
     strategies = {
-        'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50,
-                                                     True, False, True, True, StrandnessReportingLevel.only_canonical),
-        'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100,
-                                                     False, True, False, True, StrandnessReportingLevel.only_canonical),
-        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100,
-                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
-        'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10,
-                                                     False, False, True, True, StrandnessReportingLevel.only_canonical),
-        'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10,
-                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
-        'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100,
-                                                     True, True, False, False, StrandnessReportingLevel.only_canonical),
-        'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500,
-                                                     False, True, False, False, StrandnessReportingLevel.all),
-        'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50,
-                                                     False, True, False, False, StrandnessReportingLevel.only_stranded)
+        'reliable': ModelConstructionStrategy(2, 0.5, 20, 5, 0.05, 1, 0.1, 0.1, 2, 4, 8, 0.05, 0.05, 50,
+                                              True, False, True, True, StrandnessReportingLevel.only_canonical),
+        'default_pacbio': ModelConstructionStrategy(1, 0.5, 10, 2, 0.02, 1, 0.05, 0.05, 1, 2, 2, 0.02, 0.005, 100,
+                                                    False, True, False, True, StrandnessReportingLevel.only_canonical),
+        'sensitive_pacbio': ModelConstructionStrategy(1, 0.5, 5, 2, 0.005, 1, 0.01, 0.02, 1, 2, 2, 0.005, 0.001, 100,
+                                                      False, True, False, False,
+                                                      StrandnessReportingLevel.only_stranded),
+        'default_ont': ModelConstructionStrategy(1, 0.5, 20, 3, 0.02, 1, 0.05, 0.05, 1, 3, 3, 0.02, 0.02, 10,
+                                                 False, False, True, True, StrandnessReportingLevel.only_canonical),
+        'sensitive_ont': ModelConstructionStrategy(1, 0.5, 20, 3, 0.005, 1, 0.01, 0.02, 1, 2, 3, 0.005, 0.005, 10,
+                                                   False, True, False, False, StrandnessReportingLevel.only_stranded),
+        'fl_pacbio': ModelConstructionStrategy(1, 0.5, 10, 2, 0.02, 1, 0.05, 0.01, 1, 2, 3, 0.02, 0.005, 100,
+                                               True, True, False, False, StrandnessReportingLevel.only_canonical),
+        'all': ModelConstructionStrategy(0, 0.3, 5, 1, 0.002, 1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500,
+                                         False, True, False, False, StrandnessReportingLevel.all),
+        'assembly': ModelConstructionStrategy(0, 0.3, 5, 1, 0.05, 1, 0.01, 0.02, 1, 1, 1, 0.05, 0.01, 50,
+                                              False, True, False, False, StrandnessReportingLevel.only_stranded)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -809,7 +813,7 @@ def call_barcodes(args):
                         else:
                             future_res = proc.submit(process_in_parallel, bc_args)
 
-                    concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
+                    concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
                     if future_res.exception() is not None:
                         raise future_res.exception()
 
@@ -818,7 +822,8 @@ def call_barcodes(args):
 
             if args.mode.produces_new_fasta:
                 logger.info("Reads were split during barcode calling")
-                logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
+                logger.info("The following files will be used instead of original reads %s " % ", ".join(
+                    map(lambda x: x[0], new_reads)))
                 sample.file_list = new_reads
     else:
         # TODO barcoded files via YAML
@@ -887,7 +892,8 @@ class TestMode(argparse.Action):
         with open('isoquant_test/isoquant.log', 'r') as f:
             log = f.read()
 
-        correct_results = ['total assignments 4', 'polyA tail detected in 2', 'unique: 1', 'known: 2', 'Processed 1 experiment']
+        correct_results = ['total assignments 4', 'polyA tail detected in 2', 'unique: 1', 'known: 2',
+                           'Processed 1 experiment']
         return all([result in log for result in correct_results])
 
 

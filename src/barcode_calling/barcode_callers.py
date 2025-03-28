@@ -1016,7 +1016,7 @@ class TenXBarcodeDetector:
                 polyt_start += search_start
 
         barcode_start = r1_end + 1
-        barcode_end = r1_end + self.BARCODE_LEN_10X + 1
+        barcode_end = barcode_start + self.BARCODE_LEN_10X - 1
         potential_barcode = sequence[barcode_start:barcode_end + 1]
         logger.debug("Barcode: %s" % (potential_barcode))
         matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode)
