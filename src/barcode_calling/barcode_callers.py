@@ -6,6 +6,7 @@
 
 import logging
 from collections import defaultdict
+from enum import Enum, unique
 
 from .kmer_indexer import KmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
 from .common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions, \
@@ -935,25 +936,38 @@ class IlluminaDoubleBarcodeDetector:
         return DoubleBarcodeDetectionResult
 
 
+@unique
+class TenXVersions(Enum):
+     v2 = 2
+     v3 = 3
+
+
+def TenXBarcodeDetectorV2(barcode_list):
+    return TenXBarcodeDetector(barcode_list, TenXVersions.v2)
+
+
+def TenXBarcodeDetectorV3(barcode_list):
+    return TenXBarcodeDetector(barcode_list, TenXVersions.v3)
+
+
 class TenXBarcodeDetector:
     TSO = "CCCATGTACTCTGCGTTGATACCACTGCTT"
     # R1 = "ACACTCTTTCCCTACACGACGCTCTTCCGATCT"  #
     R1 = "CTACACGACGCTCTTCCGATCT" # 10x 3'
     BARCODE_LEN_10X = 16
-    UMI_LEN_10X = 12
+    UMI_LENGTHS = {TenXVersions.v2: 10, TenXVersions.v3: 12}
 
-    UMI_LEN_DELTA = 2
-    TERMINAL_MATCH_DELTA = 2
+    UMI_LEN_DELTA = 4
+    TERMINAL_MATCH_DELTA = 3
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcode_list, umi_list=None):
-        self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
-        self.barcode_indexer = KmerIndexer(barcode_list, kmer_size=6)
-        self.umi_set = None
-        if umi_list:
-            self.umi_set =  set(umi_list)
-            logger.debug("Loaded %d UMIs" % len(umi_list))
-            self.umi_indexer = KmerIndexer(umi_list, kmer_size=5)
+    def __init__(self, barcode_list, protocol_version=TenXVersions.v3):
+        self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=6)
+        bit_barcodes = map(str_to_2bit, barcode_list)
+        self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=6, seq_len=self.BARCODE_LEN_10X)
+        self.UMI_LEN_10X = self.UMI_LENGTHS[protocol_version]
+        # self.barcode_indexer = KmerIndexer(barcode_list, kmer_size=6)
+
         self.min_score = 14
         if len(barcode_list) > 100000:
             self.min_score = 16
@@ -984,7 +998,7 @@ class TenXBarcodeDetector:
             r1_occurrences = self.r1_indexer.get_occurrences(sequence[0:polyt_start + 1])
             r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
                                                       self.r1_indexer.k, self.R1,
-                                                      r1_occurrences, min_score=11,
+                                                      r1_occurrences, min_score=9,
                                                       end_delta=self.TERMINAL_MATCH_DELTA)
 
         if r1_start is None:
@@ -992,7 +1006,7 @@ class TenXBarcodeDetector:
             r1_occurrences = self.r1_indexer.get_occurrences(sequence)
             r1_start, r1_end = detect_exact_positions(sequence, 0, len(sequence),
                                                       self.r1_indexer.k, self.R1,
-                                                      r1_occurrences, min_score=18,
+                                                      r1_occurrences, min_score=17,
                                                       start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
                                                       end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
@@ -1031,12 +1045,6 @@ class TenXBarcodeDetector:
 
         umi = None
         good_umi = False
-        if self.umi_set:
-            matching_umis = self.umi_indexer.get_occurrences(potential_umi)
-            umi, umi_score, umi_start, umi_end = \
-                find_candidate_with_max_score_ssw(matching_umis, potential_umi, min_score=7)
-            logger.debug("Found UMI %s %d-%d" % (umi, umi_start, umi_end))
-
         if not umi :
             umi = potential_umi
             if self.UMI_LEN_10X - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN_10X + self.UMI_LEN_DELTA:

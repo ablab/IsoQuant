@@ -24,6 +24,8 @@ import logging
 from src.barcode_calling.common import bit_to_str, reverese_complement
 from src.barcode_calling.barcode_callers import (
     TenXBarcodeDetector,
+    TenXBarcodeDetectorV2,
+    TenXBarcodeDetectorV3,
     DoubleBarcodeDetector,
     IlluminaDoubleBarcodeDetector,
     BruteForceDoubleBarcodeDetector,
@@ -41,7 +43,8 @@ logger = logging.getLogger('IsoQuant')
 
 
 READ_CHUNK_SIZE = 100000
-BARCODE_CALLING_MODES = {'tenX': TenXBarcodeDetector,
+BARCODE_CALLING_MODES = {'tenX_v2': TenXBarcodeDetectorV2,
+                         'tenX_v3': TenXBarcodeDetectorV3,
                          'double': DoubleBarcodeDetector,
                          'double_illumina': IlluminaDoubleBarcodeDetector,
                          'double_slow': BruteForceDoubleBarcodeDetector,

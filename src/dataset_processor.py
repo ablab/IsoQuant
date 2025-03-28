@@ -60,16 +60,17 @@ logger = logging.getLogger('IsoQuant')
 @unique
 class IsoQuantMode(Enum):
     bulk = 1
-    tenX = 2
+    tenX_v3 = 23
+    tenX_v2 = 22
     double = 3
     stereo_pc = 4
     stereo_split_pc = 5
 
     def needs_barcode_calling(self):
-        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
+        return self in [IsoQuantMode.tenX_v2, IsoQuantMode.tenX_v3, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
 
     def needs_pcr_deduplication(self):
-        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
+        return self in [IsoQuantMode.tenX_v2, IsoQuantMode.tenX_v3, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
 
     def produces_new_fasta(self):
         return self in [IsoQuantMode.stereo_split_pc]
@@ -78,7 +79,7 @@ class IsoQuantMode(Enum):
         return self in [IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
 
 
-ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.double.name,
+ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX_v2.name, IsoQuantMode.tenX_v2.name, IsoQuantMode.double.name,
                   IsoQuantMode.stereo_pc.name, IsoQuantMode.stereo_split_pc.name]
 
 
