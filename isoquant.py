@@ -795,7 +795,7 @@ def call_barcodes(args):
                         exit(-1)
                     output_fasta = sample.split_reads_fasta + "_%d.fa" % i
                     new_reads.append([output_fasta])
-                bc_threads = 1 if args.mode.enforces_single_thread else args.threads
+                bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
                 if args.resume and os.path.exists(output_barcodes):
                     # FIXME could be incomplete barcode calling run
                     logger.info("Barcodes were called during the previous run, skipping")

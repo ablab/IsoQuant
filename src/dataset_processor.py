@@ -82,7 +82,7 @@ class IsoQuantMode(Enum):
         return self in [IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
 
 
-ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX_v2.name, IsoQuantMode.tenX_v2.name, IsoQuantMode.double.name,
+ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX_v3.name, IsoQuantMode.tenX_v2.name, IsoQuantMode.double.name,
                   IsoQuantMode.stereo_pc.name, IsoQuantMode.stereo_split_pc.name]
 
 
@@ -705,7 +705,8 @@ class DatasetProcessor:
     def filter_umis(self, sample):
         # edit distances for UMI filtering, first one will be used for counts
         umi_ed_dict = {IsoQuantMode.bulk: [],
-                       IsoQuantMode.tenX: [2, -1],
+                       IsoQuantMode.tenX_v2: [2],
+                       IsoQuantMode.tenX_v3: [2],
                        IsoQuantMode.double: [2, -1],
                        IsoQuantMode.stereo_pc: [4, -1],
                        IsoQuantMode.stereo_split_pc: [4, -1]}
