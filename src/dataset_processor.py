@@ -474,6 +474,9 @@ class DatasetProcessor:
 
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
+        if len(self.all_read_groups) > 100:
+            self.args.counts_format = GroupedOutputFormat.linear.name
+
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_assignments, polya_found, polya_fraction * 100.0))
