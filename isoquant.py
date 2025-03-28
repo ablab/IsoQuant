@@ -854,6 +854,9 @@ def run_pipeline(args):
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
         return
 
+    if args.mode.generate_per_cell_counts():
+        args.read_group = "file:" + ",".join(args.input_data.samples[0].barcoded_reads)
+
     # run isoform assignment
     dataset_processor = DatasetProcessor(args)
     dataset_processor.process_all_samples()

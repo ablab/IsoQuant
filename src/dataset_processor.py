@@ -72,6 +72,9 @@ class IsoQuantMode(Enum):
     def needs_pcr_deduplication(self):
         return self in [IsoQuantMode.tenX_v2, IsoQuantMode.tenX_v3, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
 
+    def generate_per_cell_counts(self):
+        return self in [IsoQuantMode.tenX_v2, IsoQuantMode.tenX_v3]
+
     def produces_new_fasta(self):
         return self in [IsoQuantMode.stereo_split_pc]
 
@@ -347,8 +350,6 @@ class ReadAssignmentAggregator:
                 read_groups=self.read_groups, output_zeroes=False)
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
 
-        if args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
-            pass
 
     def finalize_aggregators(self, sample):
         if self.args.genedb:

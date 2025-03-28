@@ -70,7 +70,7 @@ class ReadTableGrouper(AbstractReadGrouper):
     def __init__(self, table_tsv_file, read_id_column_index=0, group_id_column_index=1, delim='\t'):
         AbstractReadGrouper.__init__(self)
         logger.debug("Reading read groups from " + table_tsv_file)
-        self.read_map = load_table(table_tsv_file, read_id_column_index, group_id_column_index, delim)
+        self.read_map = load_table([table_tsv_file], read_id_column_index, group_id_column_index, delim)
 
     def get_group_id(self, alignment, filename=None):
         if alignment.query_name not in self.read_map:
@@ -108,11 +108,11 @@ class FileNameGrouper(AbstractReadGrouper):
 def get_file_grouping_properties(values):
     assert len(values) >= 2
     if len(values) > 4:
-        return values[1], int(values[2]), int(values[3]), values[4]
+        return values[1].split(","), int(values[2]), int(values[3]), values[4]
     elif len(values) > 3:
-        return values[1], int(values[2]), int(values[3]), "\t"
+        return values[1].split(","), int(values[2]), int(values[3]), "\t"
     else:
-        return values[1], 0, 1, "\t"
+        return values[1].split(","), 0, 1, "\t"
 
 
 def prepare_read_groups(args, sample):
@@ -122,9 +122,9 @@ def prepare_read_groups(args, sample):
     values = option.split(':')
     if values[0] != 'file':
         return
-    table_filename, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
-    logger.info("Splitting read group file %s for better memory consumption" % table_filename)
-    split_read_group_table(table_filename, sample, read_id_column_index, group_id_column_index, delim)
+    table_filenames, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
+    logger.info("Splitting read group file %s for better memory consumption" % ", ".join(table_filenames))
+    split_read_group_table(table_filenames, sample, read_id_column_index, group_id_column_index, delim)
 
 
 def create_read_grouper(args, sample, chr_id):
@@ -149,37 +149,38 @@ def create_read_grouper(args, sample, chr_id):
         return DefaultReadGrouper()
 
 
-def load_table(table_tsv_file, read_id_column_index, group_id_column_index, delim):
-    min_columns = max(read_id_column_index, group_id_column_index)
-    _, outer_ext = os.path.splitext(table_tsv_file)
-    if outer_ext.lower() in ['.gz', '.gzip']:
-        handle = gzip.open(table_tsv_file, "rt")
-    else:
-        handle = open(table_tsv_file, 'r')
-
+def load_table(table_tsv_files, read_id_column_index, group_id_column_index, delim):
     read_map = {}
-    for line in handle:
-        line = line.strip()
-        if line.startswith('#') or not line:
-            continue
+    for table_tsv_file in table_tsv_files:
+        min_columns = max(read_id_column_index, group_id_column_index)
+        _, outer_ext = os.path.splitext(table_tsv_file)
+        if outer_ext.lower() in ['.gz', '.gzip']:
+            handle = gzip.open(table_tsv_file, "rt")
+        else:
+            handle = open(table_tsv_file, 'r')
 
-        column_values = line.split(delim)
-        if len(column_values) <= min_columns:
-            logger.warning("Malformed input read information table, minimum, of %d columns expected, "
-                           "file %s, line: %s" % (min_columns, table_tsv_file, line))
-            continue
+        for line in handle:
+            line = line.strip()
+            if line.startswith('#') or not line:
+                continue
 
-        read_id = column_values[read_id_column_index]
-        if read_id in read_map:
-            logger.warning("Duplicate information for read %s" % read_id)
+            column_values = line.split(delim)
+            if len(column_values) <= min_columns:
+                logger.warning("Malformed input read information table, minimum, of %d columns expected, "
+                               "file %s, line: %s" % (min_columns, table_tsv_file, line))
+                continue
 
-        group_id = column_values[group_id_column_index]
-        read_map[read_id] = group_id
+            read_id = column_values[read_id_column_index]
+            if read_id in read_map:
+                logger.warning("Duplicate information for read %s" % read_id)
+
+            group_id = column_values[group_id_column_index]
+            read_map[read_id] = group_id
     return read_map
 
 
-def split_read_group_table(table_file, sample, read_id_column_index, group_id_column_index, delim):
-    read_groups = load_table(table_file, read_id_column_index, group_id_column_index, delim)
+def split_read_group_table(table_files, sample, read_id_column_index, group_id_column_index, delim):
+    read_groups = load_table(table_files, read_id_column_index, group_id_column_index, delim)
     read_group_files = {}
     processed_reads = defaultdict(set)
     bam_files = list(map(lambda x: x[0], sample.file_list))
