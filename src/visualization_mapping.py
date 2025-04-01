@@ -6,7 +6,6 @@ class GeneMapper:
     def __init__(self):
         self.mg = mygene.MyGeneInfo()
         self.logger = logging.getLogger('IsoQuant.visualization.mapping')
-        self.logger.setLevel(logging.INFO)
 
     def get_gene_info_from_mygene(self, ensembl_ids: List[str]) -> Dict[str, Dict]:
         """
