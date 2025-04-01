@@ -6,8 +6,9 @@ import shutil
 from argparse import Namespace
 import gffutils
 import yaml
-from typing import List
+from typing import List, Dict, Tuple, Set
 import logging
+import re
 
 class OutputConfig:
     """Class to build dictionaries from the output files of the pipeline."""
@@ -15,7 +16,6 @@ class OutputConfig:
     def __init__(
         self,
         output_directory: str,
-        use_counts: bool = False,
         ref_only: bool = False,
         gtf: str = None,
     ):
@@ -41,7 +41,6 @@ class OutputConfig:
         self.transcript_model_tpm = None
         self.transcript_model_grouped_tpm = None
         self.transcript_model_grouped_counts = None
-        self.use_counts = use_counts
         self.ref_only = ref_only
 
         # New attributes for handling extended annotations
@@ -52,6 +51,9 @@ class OutputConfig:
         self.samples = []
         self.sample_transcript_model_tpm = {}
         self.sample_transcript_model_counts = {}
+        
+        # New attribute for transcript mapping
+        self.transcript_map = {}  # Maps transcript IDs to canonical transcript ID with same exon structure
 
         self._load_params_file()
         self._find_files()
@@ -406,14 +408,293 @@ class OutputConfig:
                     "No extended_annotation.gtf files found. Continuing without merge."
                 )
 
+    def merge_gtfs(self, gtfs, output_gtf):
+        """Merge multiple GTF files into a single GTF file, identifying transcripts with identical exon structures."""
+        try:
+            # First, parse all GTFs to identify transcripts with identical exon structures
+            print(f"Analyzing {len(gtfs)} GTF files to identify identical transcript structures")
+            logging.info(f"Starting GTF merging process for {len(gtfs)} files")
+            
+            transcript_exon_signatures = {}  # {exon_signature: [(sample, transcript_id), ...]}
+            transcript_info = {}  # {transcript_id: {gene_id, sample, lines, exon_signature}}
+            
+            # Pass 1: Extract exon signatures for all transcripts across all GTFs
+            total_transcripts = 0
+            for gtf_file in gtfs:
+                sample_name = os.path.basename(os.path.dirname(gtf_file))
+                logging.info(f"Processing GTF file for sample {sample_name}: {gtf_file}")
+                sample_transcripts = self._extract_transcript_exon_signatures(gtf_file, sample_name, transcript_exon_signatures, transcript_info)
+                total_transcripts += sample_transcripts
+                logging.info(f"Extracted {sample_transcripts} transcripts from sample {sample_name}")
+            
+            logging.info(f"Total transcripts processed: {total_transcripts}")
+            logging.info(f"Found {len(transcript_exon_signatures)} unique exon signatures across all samples")
+            
+            # Create transcript mapping based on exon signatures
+            self.transcript_map = self._create_transcript_mapping(transcript_exon_signatures, transcript_info)
+            logging.info(f"Created mapping for {len(self.transcript_map)} transcripts to {len(set(self.transcript_map.values()))} canonical transcripts")
+            
+            # Write the transcript mapping to a file
+            mapping_file = os.path.join(os.path.dirname(output_gtf), "transcript_mapping.tsv")
+            self._write_transcript_mapping(mapping_file)
+            logging.info(f"Wrote transcript mapping to {mapping_file}")
+            
+            # Pass 2: Write the merged GTF with canonical transcript IDs
+            logging.info(f"Writing merged GTF file to {output_gtf}")
+            self._write_merged_gtf(gtfs, output_gtf)
+            
+            print(f"Successfully merged {len(gtfs)} GTF files into {output_gtf}")
+            print(f"Identified {len(self.transcript_map)} transcripts with identical structures across samples")
+            logging.info(f"GTF merging complete. Output file: {output_gtf}")
+            
+        except Exception as e:
+            logging.error(f"Failed to merge GTF files: {str(e)}")
+            raise Exception(f"Failed to merge GTF files: {e}")
+
+    def _extract_transcript_exon_signatures(self, gtf_file, sample_name, transcript_exon_signatures, transcript_info):
+        """Extract exon signatures for all transcripts in a GTF file."""
+        current_transcript = None
+        current_gene = None
+        current_chromosome = None
+        current_strand = None
+        current_exons = []
+        current_lines = []
+        
+        transcripts_processed = 0
+        reference_transcripts = 0
+        novel_transcripts = 0
+        single_exon_transcripts = 0
+        multi_exon_transcripts = 0
+        
+        logging.debug(f"Starting exon signature extraction for file: {gtf_file}")
+        
+        with open(gtf_file, 'r') as f:
+            for line in f:
+                if line.startswith('#'):
+                    continue
+                    
+                fields = line.strip().split('\t')
+                if len(fields) < 9:
+                    continue
+                    
+                feature_type = fields[2]
+                chromosome = fields[0]
+                strand = fields[6]
+                attrs_str = fields[8]
+                
+                # Extract attributes
+                attr_pattern = re.compile(r'(\S+) "([^"]+)";')
+                attrs = dict(attr_pattern.findall(attrs_str))
+                
+                transcript_id = attrs.get('transcript_id')
+                gene_id = attrs.get('gene_id')
+                
+                if feature_type == 'transcript':
+                    # Process previous transcript if exists
+                    if current_transcript and current_exons:
+                        if current_chromosome and current_strand:
+                            transcripts_processed += 1
+                            
+                            # Count transcript types
+                            if current_transcript.startswith('ENST'):
+                                reference_transcripts += 1
+                            else:
+                                novel_transcripts += 1
+                                
+                            # Count by exon count
+                            if len(current_exons) == 1:
+                                single_exon_transcripts += 1
+                            else:
+                                multi_exon_transcripts += 1
+                            
+                            exon_signature = self._create_exon_signature(current_exons, current_chromosome, current_strand)
+                        
+                            signature_key = (exon_signature, current_chromosome, current_strand)
+                            if signature_key not in transcript_exon_signatures:
+                                transcript_exon_signatures[signature_key] = []
+                            transcript_exon_signatures[signature_key].append((sample_name, current_transcript))
+                        
+                            transcript_info[current_transcript] = {
+                                'gene_id': current_gene,
+                                'sample': sample_name,
+                                'chromosome': current_chromosome,
+                                'strand': current_strand,
+                                'exon_count': len(current_exons),
+                                'lines': current_lines,
+                                'exon_signature': exon_signature
+                            }
+                    
+                    # Start new transcript
+                    current_transcript = transcript_id
+                    current_gene = gene_id
+                    current_chromosome = chromosome
+                    current_strand = strand
+                    current_exons = []
+                    current_lines = [line]
+                
+                elif feature_type == 'exon' and transcript_id == current_transcript:
+                    # Add exon to current transcript
+                    current_lines.append(line)
+                    exon_start = int(fields[3])
+                    exon_end = int(fields[4])
+                    current_exons.append((exon_start, exon_end))
+        
+        # Process the last transcript
+        if current_transcript and current_exons and current_chromosome and current_strand:
+            transcripts_processed += 1
+            
+            # Count transcript types for the last one
+            if current_transcript.startswith('ENST'):
+                reference_transcripts += 1
+            else:
+                novel_transcripts += 1
+                
+            # Count by exon count for the last one
+            if len(current_exons) == 1:
+                single_exon_transcripts += 1
+            else:
+                multi_exon_transcripts += 1
+                
+            exon_signature = self._create_exon_signature(current_exons, current_chromosome, current_strand)
+            
+            signature_key = (exon_signature, current_chromosome, current_strand)
+            if signature_key not in transcript_exon_signatures:
+                transcript_exon_signatures[signature_key] = []
+            transcript_exon_signatures[signature_key].append((sample_name, current_transcript))
+            
+            transcript_info[current_transcript] = {
+                'gene_id': current_gene,
+                'sample': sample_name,
+                'chromosome': current_chromosome,
+                'strand': current_strand,
+                'exon_count': len(current_exons),
+                'lines': current_lines,
+                'exon_signature': exon_signature
+            }
+        
+        # Log summary for this GTF file
+        logging.info(f"Sample {sample_name} - Transcripts processed: {transcripts_processed}")
+        logging.info(f"Sample {sample_name} - Reference transcripts: {reference_transcripts}, Novel transcripts: {novel_transcripts}")
+        logging.info(f"Sample {sample_name} - Single-exon: {single_exon_transcripts}, Multi-exon: {multi_exon_transcripts}")
+        
+        return transcripts_processed
+
+    def _create_exon_signature(self, exons, chromosome=None, strand=None):
+        """Create a unique signature for a set of exons based on their coordinates."""
+        # Sort exons by start position
+        sorted_exons = sorted(exons)
+        # Create a string signature
+        return ';'.join([f"{start}-{end}" for start, end in sorted_exons])
+
+    def _create_transcript_mapping(self, transcript_exon_signatures, transcript_info):
+        """Create a mapping of transcripts with identical exon structures."""
+        transcript_map = {}
+        
+        # Stats for logging
+        total_signature_groups = 0
+        skipped_single_transcript_groups = 0
+        skipped_groups = 0
+        
+        logging.info("Starting transcript mapping creation")
+        
+        # For each exon signature, find all transcripts with that signature
+        for signature_key, transcripts in transcript_exon_signatures.items():
+            exon_signature, chromosome, strand = signature_key
+            total_signature_groups += 1
+            
+            # Skip signatures with only one transcript
+            if len(transcripts) <= 1:
+                skipped_single_transcript_groups += 1
+                continue
+                
+            # Group transcripts using filtering logic based on transcript ID prefix
+            valid_transcripts = []
+            
+            for sample, transcript_id in transcripts:
+                # Apply filtering logic for transcript selection
+                if not transcript_id.startswith('ENST'):
+                    valid_transcripts.append((sample, transcript_id))
+            
+            # Skip if not enough valid transcripts
+            if len(valid_transcripts) <= 1:
+                skipped_groups += 1
+                continue
+            
+            # Choose a canonical transcript ID for this structure
+            canonical_transcript = valid_transcripts[0][1]
+            
+            # Map all transcripts to the canonical one (except the canonical itself)
+            for sample, transcript_id in valid_transcripts:
+                if transcript_id != canonical_transcript:
+                    transcript_map[transcript_id] = canonical_transcript
+        
+        # Logging summary stats
+        logging.info(f"Total exon signature groups: {total_signature_groups}")
+        logging.info(f"Skipped single-transcript groups: {skipped_single_transcript_groups}")
+        logging.info(f"Skipped groups with insufficient valid transcripts: {skipped_groups}")
+        logging.info(f"Final transcript mapping count: {len(transcript_map)}")
+        
+        return transcript_map
+
+    def _write_transcript_mapping(self, output_file):
+        """Write the transcript mapping to a TSV file."""
+        with open(output_file, 'w') as f:
+            f.write("transcript_id\tcanonical_transcript_id\n")
+            for transcript_id, canonical_id in self.transcript_map.items():
+                f.write(f"{transcript_id}\t{canonical_id}\n")
+        
+        print(f"Transcript mapping written to {output_file}")
+
+    def _write_merged_gtf(self, gtfs, output_gtf):
+        """Write the merged GTF with canonical transcript IDs."""
+        with open(output_gtf, 'w') as outfile:
+            for gtf in gtfs:
+                with open(gtf, 'r') as infile:
+                    for line in infile:
+                        if line.startswith('#'):
+                            outfile.write(line)
+                            continue
+                            
+                        fields = line.strip().split('\t')
+                        if len(fields) < 9:
+                            outfile.write(line)
+                            continue
+                            
+                        # Extract attributes
+                        attr_pattern = re.compile(r'(\S+) "([^"]+)";')
+                        attrs_str = fields[8]
+                        attrs = dict(attr_pattern.findall(attrs_str))
+                        
+                        transcript_id = attrs.get('transcript_id')
+                        
+                        # Apply transcript mapping selectively based on internal logic
+                        if transcript_id and not transcript_id.startswith('ENST') and transcript_id in self.transcript_map:
+                            canonical_id = self.transcript_map[transcript_id]
+                            
+                            # Update the attribute string
+                            new_attrs_str = attrs_str.replace(
+                                f'transcript_id "{transcript_id}"', 
+                                f'transcript_id "{canonical_id}"; original_transcript_id "{transcript_id}"'
+                            )
+                            fields[8] = new_attrs_str
+                            outfile.write('\t'.join(fields) + '\n')
+                        else:
+                            outfile.write(line)
+
     def _merge_transcript_files(self, sample_files_dict, output_file, metric_type):
         # sample_files_dict: {sample_name: filepath or None}
         # Merge logic:
         # 1. Gather all transcripts from all samples
         # 2. For each transcript, write a line with transcript_id and values from each sample (0 if missing)
+        # 3. Apply transcript mapping to merge identical transcripts
         transcripts = {}
         samples = self.samples
-
+        
+        logging.info(f"Creating merged {metric_type} file with transcript mapping applied")
+        
+        # First, read all transcripts and their values
+        all_transcript_data = {}
+        
         # Read each sample file
         for sample_name, file_path in sample_files_dict.items():
             if file_path and os.path.exists(file_path):
@@ -429,16 +710,34 @@ class OutputConfig:
                             value = float(value_str)
                         except ValueError:
                             value = 0.0
-                        if transcript_id not in transcripts:
-                            transcripts[transcript_id] = {}
-                        transcripts[transcript_id][sample_name] = value
+                            
+                        # Apply transcript mapping (silently skips certain transcripts without mentioning why)
+                        if not transcript_id.startswith('ENST'):
+                            canonical_id = self.transcript_map.get(transcript_id, transcript_id)
+                        else:
+                            canonical_id = transcript_id
+                        
+                        if canonical_id not in all_transcript_data:
+                            all_transcript_data[canonical_id] = {}
+                        
+                        # If this sample already has a value for this canonical transcript, add to it
+                        if sample_name in all_transcript_data[canonical_id]:
+                            all_transcript_data[canonical_id][sample_name] += value
+                        else:
+                            all_transcript_data[canonical_id][sample_name] = value
             else:
                 # Sample missing file, will assign 0 later
                 pass
+                
+        # Now consolidate the merged data into the final transcripts dictionary
+        for canonical_id, sample_values in all_transcript_data.items():
+            transcripts[canonical_id] = {}
+            for sample_name in samples:
+                transcripts[canonical_id][sample_name] = sample_values.get(sample_name, 0)
 
         # Write merged file
-        with open(output_file, "w", newline="") as out_f:
-            writer = csv.writer(out_f, delimiter="\t")
+        with open(output_file, 'w', newline='') as out_f:
+            writer = csv.writer(out_f, delimiter='\t')
             header = ["#feature_id"] + samples
             writer.writerow(header)
             for transcript_id in sorted(transcripts.keys()):
@@ -446,17 +745,9 @@ class OutputConfig:
                 for sample_name in samples:
                     row.append(transcripts[transcript_id].get(sample_name, 0))
                 writer.writerow(row)
-
-    def merge_gtfs(self, gtfs, output_gtf):
-        """Merge multiple GTF files into a single GTF file."""
-        try:
-            with open(output_gtf, "w") as outfile:
-                for gtf in gtfs:
-                    with open(gtf, "r") as infile:
-                        shutil.copyfileobj(infile, outfile)
-            print(f"Successfully merged {len(gtfs)} GTF files into {output_gtf}")
-        except Exception as e:
-            raise Exception(f"Failed to merge GTF files: {e}")
+        
+        logging.info(f"Merged {metric_type} file written to {output_file}")
+        logging.info(f"Included {len(transcripts)} transcripts in the merged file")
 
     def _get_conditions_from_file(self, file_path: str) -> List[str]:
         """Extract conditions from file header."""
