@@ -10,7 +10,6 @@ from rpy2.robjects.conversion import localconverter
 from src.visualization_plotter import ExpressionVisualizer
 from src.visualization_mapping import GeneMapper
 import numpy as np
-from scipy.stats import gmean
 from sklearn.decomposition import PCA
 from rpy2.rinterface_lib import callbacks
 
@@ -24,6 +23,11 @@ class DifferentialAnalysis:
         updated_gene_dict: Dict[str, Dict],
         ref_only: bool = False,
         dictionary_builder: "DictionaryBuilder" = None,
+        filter_min_count: int = 10,
+        pca_n_components: int = 10,
+        top_transcripts_base_mean: int = 500,
+        top_n_genes: int = 100,
+        log_level: int = logging.INFO, # Allow configuring log level
     ):
         """Initialize differential expression analysis."""
         def quiet_cb(x):
@@ -43,8 +47,15 @@ class DifferentialAnalysis:
         self.updated_gene_dict = updated_gene_dict
         self.dictionary_builder = dictionary_builder
         
+        # Configurable parameters
+        self.filter_min_count = filter_min_count
+        self.pca_n_components = pca_n_components
+        self.top_transcripts_base_mean = top_transcripts_base_mean
+        self.top_n_genes = top_n_genes # Used for both gene and transcript top list size
+        
         # Create a single logger for this class
         self.logger = logging.getLogger('IsoQuant.visualization.differential_exp')
+        self.logger.setLevel(log_level) # Set logger level
         
         # Get transcript mapping if available
         self.transcript_map = {}
@@ -114,181 +125,247 @@ class DifferentialAnalysis:
         return transcript_map
 
     def run_complete_analysis(self) -> Tuple[Path, Path, pd.DataFrame, pd.DataFrame]:
-        """Run differential expression analysis for both genes and transcripts.
-        
+        """
+        Run differential expression analysis for both genes and transcripts.
+        Orchestrates loading, filtering, DESeq2 execution, and visualization.
+
         Returns:
             Tuple containing:
                 - Path to gene results file
                 - Path to transcript results file
-                - DataFrame of transcript counts
-                - DataFrame of DESeq2 gene-level results
+                - DataFrame of transcript counts (filtered but not normalized)
+                - DataFrame of DESeq2 gene-level results (unfiltered by significance)
         """
-        self.logger.info("Starting differential expression analysis")
+        self.logger.info("Starting differential expression analysis workflow.")
 
+        # --- 1. Load and Filter Data ---
+        gene_counts_filtered, transcript_counts_filtered = self._load_and_filter_data()
+
+        # Store filtered transcript counts (as required by original return signature)
+        self.transcript_count_data = transcript_counts_filtered
+
+        # --- 2. Run DESeq2 Analysis (Gene Level) ---
+        (deseq2_results_gene_file,
+         deseq2_results_df_gene,
+         gene_normalized_counts) = self._perform_level_analysis("gene", gene_counts_filtered)
+
+        # --- 3. Run DESeq2 Analysis (Transcript Level) ---
+        (deseq2_results_transcript_file,
+         deseq2_results_df_transcript,
+         transcript_normalized_counts) = self._perform_level_analysis("transcript", transcript_counts_filtered)
+
+        # --- 4. Generate Visualizations ---
+        self._generate_visualizations(
+            gene_counts_filtered=gene_counts_filtered, # Pass filtered counts for coldata generation
+            transcript_counts_filtered=transcript_counts_filtered, # Pass filtered counts for coldata generation
+            gene_normalized_counts=gene_normalized_counts,
+            transcript_normalized_counts=transcript_normalized_counts,
+            deseq2_results_df_gene=deseq2_results_df_gene,
+            deseq2_results_df_transcript=deseq2_results_df_transcript
+        )
+
+        self.logger.info("Differential expression analysis workflow complete.")
+        # Return signature matches original: results files, filtered transcript counts, gene results df
+        return deseq2_results_gene_file, deseq2_results_transcript_file, transcript_counts_filtered, deseq2_results_df_gene
+
+    def _load_and_filter_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Loads, filters (novelty, validity, counts), and returns gene and transcript count data."""
+        self.logger.info("Loading and filtering count data...")
+
+        # --- Load Count Data ---
+        gene_counts = self._get_condition_data("gene_grouped_counts.tsv")
+        transcript_counts = self._get_condition_data("transcript_grouped_counts.tsv")
+        self.logger.debug(f"Raw transcript counts shape: {transcript_counts.shape}")
+        self.logger.debug(f"Raw gene counts shape: {gene_counts.shape}")
+
+        # --- Apply Transcript-Specific Filters ---
+        transcript_counts_filtered = self._apply_transcript_filters(transcript_counts)
+
+        # --- Apply Count-based Filtering (Gene Level) ---
+        gene_counts_filtered = self._filter_counts(gene_counts, level="gene")
+
+        if gene_counts_filtered.empty:
+             self.logger.error("No genes remaining after count filtering.")
+             raise ValueError("No genes remaining after count filtering.")
+        if transcript_counts_filtered.empty:
+             self.logger.error("No transcripts remaining after count filtering.")
+             raise ValueError("No transcripts remaining after count filtering.")
+
+        self.logger.info("Data loading and filtering complete.")
+        self.logger.info(f"Final gene counts shape: {gene_counts_filtered.shape}")
+        self.logger.info(f"Final transcript counts shape: {transcript_counts_filtered.shape}")
+
+        return gene_counts_filtered, transcript_counts_filtered
+
+    def _apply_transcript_filters(self, transcript_counts: pd.DataFrame) -> pd.DataFrame:
+        """Applies novel, valid, and count-based filters specifically to transcript data."""
+        self.logger.debug(f"Applying filters to transcript data (initial shape: {transcript_counts.shape})")
+
+        # --- Valid Transcript Set ---
+        # Determine the set of transcripts considered valid based on the updated_gene_dict
         valid_transcripts = set()
         for condition_genes in self.updated_gene_dict.values():
             for gene_info in condition_genes.values():
                 valid_transcripts.update(gene_info.get("transcripts", {}).keys())
+        if not valid_transcripts:
+             self.logger.warning("No valid transcripts found in updated_gene_dict. Skipping validity filter.")
+        self.logger.debug(f"Found {len(valid_transcripts)} valid transcript IDs in updated_gene_dict.")
 
-        # --- 1. Load Count Data ---
-        gene_counts = self._get_condition_data("gene_grouped_counts.tsv")
-        transcript_counts = self._get_condition_data("transcript_grouped_counts.tsv")
-        self.logger.debug(f"Transcript counts shape after loading: {transcript_counts.shape}")
-        self.logger.debug(f"Gene counts shape after loading: {gene_counts.shape}")
-
-        # --- 2. Novel Transcript Filtering (Transcript Level) ---
+        # --- Novel Transcript Filtering ---
         if self.dictionary_builder:
-            novel_transcript_ids = self.dictionary_builder.get_novel_feature_ids()[1]
+            novel_transcript_ids = self.dictionary_builder.get_novel_feature_ids()[1] # Assuming index 1 is transcripts
             self.logger.debug(f"Number of novel transcripts identified: {len(novel_transcript_ids)}")
-
-            original_transcript_count_novel_filter = transcript_counts.shape[0]
-            transcript_counts = transcript_counts[~transcript_counts.index.isin(novel_transcript_ids)] # Filter out novel transcripts
-            novel_filtered_count = transcript_counts.shape[0]
-            removed_novel_count = original_transcript_count_novel_filter - novel_filtered_count
-            self.logger.info(f"Novel transcript filtering: Removed {removed_novel_count} transcripts from novel genes ({removed_novel_count / original_transcript_count_novel_filter * 100:.1f}%)")
-            self.logger.debug(f"Transcript counts shape after novel gene filtering: {transcript_counts.shape}")
+            original_count = transcript_counts.shape[0]
+            transcript_counts = transcript_counts[~transcript_counts.index.isin(novel_transcript_ids)]
+            removed_count = original_count - transcript_counts.shape[0]
+            perc_removed = (removed_count / original_count * 100) if original_count > 0 else 0
+            self.logger.info(f"Novel Gene filtering: Removed {removed_count} transcripts ({perc_removed:.1f}%)")
+            self.logger.debug(f"Shape after novel filtering: {transcript_counts.shape}")
         else:
-            self.logger.info("Novel transcript filtering: Skipped (no dictionary builder)")
+            self.logger.info("Novel transcript filtering: Skipped (no dictionary builder).")
 
-        # --- 3. Valid Transcript Filtering (Transcript Level) ---
-        original_transcript_count_valid_filter = transcript_counts.shape[0]
-        transcript_counts = transcript_counts[transcript_counts.index.isin(valid_transcripts)] # Filter to valid transcripts
-        valid_transcript_filtered_count = transcript_counts.shape[0]
-        removed_valid_transcript_count = original_transcript_count_valid_filter - valid_transcript_filtered_count
-        self.logger.info(f"Valid transcript filtering: Removed {removed_valid_transcript_count} transcripts not in updated_gene_dict ({removed_valid_transcript_count / original_transcript_count_valid_filter * 100:.1f}%)")
-        self.logger.debug(f"Transcript counts shape after valid transcript filtering: {transcript_counts.shape}")
+
 
         if transcript_counts.empty:
-            self.logger.error("No valid transcripts found after filtering.")
-            raise ValueError("No valid transcripts found after filtering.")
+            self.logger.warning("No transcripts remaining after novel gene filtering. Count filtering will be skipped.")
+            return transcript_counts # Return empty dataframe
 
-        # --- 4. Count-based Filtering (Gene and Transcript Levels) ---
-        gene_counts_filtered = self._filter_counts(gene_counts, level="gene")
-        transcript_counts_filtered = self._filter_counts(transcript_counts, level="transcript") # Filter transcript counts AFTER novel and valid transcript filtering
+        # --- Count-based Filtering (Transcript Level) ---
+        transcript_counts_filtered = self._filter_counts(transcript_counts, level="transcript")
 
-        self.transcript_count_data = transcript_counts_filtered # Store filtered transcript counts
+        self.logger.debug(f"Final transcript counts shape after all filters: {transcript_counts_filtered.shape}")
+        return transcript_counts_filtered
 
-        # --- 5. Run DESeq2 Analysis ---
-    
-        deseq2_results_gene_file, gene_normalized_counts = self._run_level_analysis(
-            level="gene",
-            pattern="gene_grouped_counts.tsv",
-            count_data=gene_counts_filtered,
-            coldata=self._build_design_matrix(gene_counts_filtered)
-        )
-        deseq2_results_transcript_file, transcript_normalized_counts = self._run_level_analysis(
-            level="transcript",
-            pattern="transcript_model_grouped_counts.tsv" if not self.ref_only else "transcript_grouped_counts.tsv",
-            count_data=transcript_counts_filtered
-        )
-
-        # Load the gene-level results for GSEA
-        deseq2_results_df = pd.read_csv(deseq2_results_gene_file)
-
-        # Update how we create the labels
-        target_label = "+".join(self.target_conditions)
-        reference_label = "+".join(self.ref_conditions)
-
-        # --- Visualize Gene-Level Results ---
-        self.visualizer.visualize_results(
-            results=deseq2_results_df,
-            target_label=target_label,
-            reference_label=reference_label,
-            min_count=10,
-            feature_type="genes",
-        )
-        self.logger.info(f"Gene-level visualizations saved to {self.deseq_dir}")
-
-        # Run PCA with correct labels
-        normalized_gene_counts = self._median_ratio_normalization(gene_counts_filtered)
-        self._run_pca(
-            normalized_gene_counts, 
-            "gene", 
-            coldata=self._build_design_matrix(gene_counts_filtered),
-            target_label=target_label,
-            reference_label=reference_label
-        )
-
-        # --- Visualize Transcript-Level Results ---
-        self.visualizer.visualize_results(
-            results=pd.read_csv(deseq2_results_transcript_file),
-            target_label=target_label,
-            reference_label=reference_label,
-            min_count=10,
-            feature_type="transcripts",
-        )
-        self.logger.info(f"Transcript-level visualizations saved to {self.deseq_dir}")
-
-        # Run PCA with correct labels for transcript level
-        normalized_transcript_counts = self._median_ratio_normalization(transcript_counts_filtered)
-        self._run_pca(
-            normalized_transcript_counts, 
-            "transcript", 
-            coldata=self._build_design_matrix(transcript_counts_filtered),
-            target_label=target_label,
-            reference_label=reference_label
-        )
-
-        return deseq2_results_gene_file, deseq2_results_transcript_file, transcript_counts_filtered, deseq2_results_df
-
-    def _run_level_analysis(
-        self, level: str, count_data: pd.DataFrame, pattern: Optional[str] = None, coldata=None
-    ) -> Tuple[Path, pd.DataFrame]:
+    def _perform_level_analysis(
+        self, level: str, count_data: pd.DataFrame
+    ) -> Tuple[Path, pd.DataFrame, pd.DataFrame]:
         """
-        Run DESeq2 analysis for a specific level and return results.
+        Runs DESeq2 analysis for a specific level (gene or transcript).
 
         Args:
-            level: Analysis level ("gene" or "transcript")
-            pattern: Optional pattern for output file naming (not used for data loading anymore)
-            count_data: PRE-FILTERED count data DataFrame
+            level: Analysis level ("gene" or "transcript").
+            count_data: PRE-FILTERED count data DataFrame for the level.
 
         Returns:
-            Tuple containing: (results_path, results_df)
+            Tuple containing:
+                - Path to the saved DESeq2 results CSV file.
+                - DataFrame of the DESeq2 results.
+                - DataFrame of the DESeq2 normalized counts.
         """
-        # --- SIMPLIFIED: _run_level_analysis now assumes count_data is already loaded and filtered ---
+        self.logger.info(f"Performing DESeq2 analysis for level: {level}")
 
         if count_data.empty:
             self.logger.error(f"Input count data is empty for level: {level}")
             raise ValueError(f"Input count data is empty for level: {level}")
 
-        filtered_data = count_data.copy() # Work with a copy to avoid modifying original
+        # Create design matrix
+        coldata = self._build_design_matrix(count_data)
 
-        # Create design matrix and run DESeq2
-        coldata = self._build_design_matrix(filtered_data)
-        results, normalized_counts_r = self._run_deseq2(filtered_data, coldata, level)
+        # Run DESeq2 - Now returns results and normalized counts
+        results_df, normalized_counts_df = self._run_deseq2(count_data, coldata, level)
 
-        # Process results
-        results.index.name = "feature_id"
-        results.reset_index(inplace=True)
-        mapping = self._map_gene_symbols(results["feature_id"].unique(), level)
-        
-        # Add transcript_symbol and gene_name columns
-        results["transcript_symbol"] = results["feature_id"].map(lambda x: mapping[x]["transcript_symbol"])
-        results["gene_name"] = results["feature_id"].map(lambda x: mapping[x]["gene_name"])
+        # --- Process DESeq2 Results ---
+        results_df.index.name = "feature_id"
+        results_df.reset_index(inplace=True) # Keep feature_id as a column
+
+        # Map gene symbols/names
+        mapping = self._map_gene_symbols(results_df["feature_id"].unique(), level)
+
+        # Add transcript_symbol and gene_name columns safely using .get
+        results_df["transcript_symbol"] = results_df["feature_id"].map(
+            lambda x: mapping.get(x, {}).get("transcript_symbol", x) # Default to feature_id if not found
+        )
+        results_df["gene_name"] = results_df["feature_id"].map(
+            lambda x: mapping.get(x, {}).get("gene_name", x.split('.')[0] if '.' in x else x) # Default to feature_id logic if not found
+        )
+
 
         # Drop transcript_symbol column for gene-level analysis as it's redundant
         if level == "gene":
-            results = results.drop(columns=["transcript_symbol"])
+            results_df = results_df.drop(columns=["transcript_symbol"], errors='ignore') # Use errors='ignore'
 
-        # Save results
+        # --- Save Results ---
         target_label = "+".join(self.target_conditions)
         reference_label = "+".join(self.ref_conditions)
+        # Use the pattern argument passed to _get_condition_data if needed, or derive filename like this
         outfile = self.deseq_dir / f"DE_{level}_{target_label}_vs_{reference_label}.csv"
-        results.to_csv(outfile, index=False)
-        self.logger.info(f"Saved DESeq2 results to {outfile}")
+        results_df.to_csv(outfile, index=False)
+        self.logger.info(f"Saved DESeq2 results ({results_df.shape[0]} features) to {outfile}")
 
-        # Write top genes
-        self._write_top_genes(results, level)
+        # --- Write Top Genes/Transcripts ---
+        self._write_top_genes(results_df, level)
 
-        # No normalized counts returned from _run_deseq2 anymore
-        return outfile, pd.DataFrame() # Return empty DataFrame for normalized counts
+        self.logger.info(f"DESeq2 analysis complete for level: {level}")
+        return outfile, results_df, normalized_counts_df
+
+    def _generate_visualizations(
+        self,
+        gene_counts_filtered: pd.DataFrame,
+        transcript_counts_filtered: pd.DataFrame,
+        gene_normalized_counts: pd.DataFrame,
+        transcript_normalized_counts: pd.DataFrame,
+        deseq2_results_df_gene: pd.DataFrame,
+        deseq2_results_df_transcript: pd.DataFrame,
+    ):
+        """Generates PCA plots and other visualizations based on DESeq2 results and normalized counts."""
+        self.logger.info("Generating visualizations...")
+        target_label = "+".join(self.target_conditions)
+        reference_label = "+".join(self.ref_conditions)
+
+        # --- Visualize Gene-Level DE Results ---
+        self.visualizer.visualize_results(
+            results=deseq2_results_df_gene, # Use DataFrame directly
+            target_label=target_label,
+            reference_label=reference_label,
+            min_count=self.filter_min_count, # Use configured value
+            feature_type="genes",
+        )
+        self.logger.info(f"Gene-level DE summary visualizations saved to {self.deseq_dir}")
+
+        # --- Run PCA (Gene Level) ---
+        if not gene_normalized_counts.empty:
+            gene_coldata = self._build_design_matrix(gene_counts_filtered) # Need coldata matching the counts used
+            self._run_pca(
+                normalized_counts=gene_normalized_counts,
+                level="gene",
+                coldata=gene_coldata,
+                target_label=target_label,
+                reference_label=reference_label
+            )
+        else:
+            self.logger.warning("Skipping gene-level PCA: Normalized counts are empty.")
+
+        # --- Visualize Transcript-Level DE Results ---
+        self.visualizer.visualize_results(
+            results=deseq2_results_df_transcript, # Use DataFrame directly
+            target_label=target_label,
+            reference_label=reference_label,
+            min_count=self.filter_min_count, # Use configured value
+            feature_type="transcripts",
+        )
+        self.logger.info(f"Transcript-level DE summary visualizations saved to {self.deseq_dir}")
+
+        # --- Run PCA (Transcript Level) ---
+        if not transcript_normalized_counts.empty:
+            transcript_coldata = self._build_design_matrix(transcript_counts_filtered) # Need coldata matching the counts used
+            self._run_pca(
+                normalized_counts=transcript_normalized_counts,
+                level="transcript",
+                coldata=transcript_coldata,
+                target_label=target_label,
+                reference_label=reference_label
+            )
+        else:
+             self.logger.warning("Skipping transcript-level PCA: Normalized counts are empty.")
+
+        self.logger.info("Visualizations generated.")
 
     def _get_merged_transcript_counts(self, pattern: str) -> pd.DataFrame:
         """
         Get transcript count data and apply transcript mapping to create a merged grouped dataframe.
         This preserves the individual sample columns needed for DESeq2, but merges identical transcripts.
         """
-        self.logger.info(f"Creating merged transcript count matrix with pattern: {pattern}")
+        self.logger.debug(f"Creating merged transcript count matrix with pattern: {pattern}")
         
         # Adjust pattern if needed
         adjusted_pattern = pattern
@@ -378,7 +455,7 @@ class DifferentialAnalysis:
                 
                 # Log details of significant merges (more than 2 transcripts or interesting transcripts)
                 if len(transcript_ids) > 2 or any("ENST" in t for t in transcript_ids):
-                    self.logger.info(f"Merged transcript group for {canonical_id}: {transcript_ids}")
+                    self.logger.debug(f"Merged transcript group for {canonical_id}: {transcript_ids}")
         
         # Log merge statistics
         self.logger.info(f"Transcript merging complete: {merged_groups} canonical IDs had multiple transcripts")
@@ -441,21 +518,28 @@ class DifferentialAnalysis:
             self.logger.error(f"Unsupported count pattern: {pattern}")
             raise ValueError(f"Unsupported count pattern: {pattern}")
 
-    def _filter_counts(self, count_data: pd.DataFrame, min_count: int = 10, level: str = "gene") -> pd.DataFrame:
+    def _filter_counts(self, count_data: pd.DataFrame, level: str = "gene") -> pd.DataFrame:
         """
-        Filter features based on counts.
-        
-        For genes: Keep if mean count >= min_count in either condition group
-        For transcripts: Keep if count >= min_count in at least half of all samples
+        Filter features based on counts using the configured threshold.
+
+        For genes: Keep if mean count >= configured min_count in either condition group.
+        For transcripts: Keep if count >= configured min_count in at least half of all samples.
         """
+        if count_data.empty:
+            self.logger.warning(f"Input count data for filtering ({level}) is empty. Returning empty DataFrame.")
+            return count_data
+
+        # Use the configured minimum count threshold
+        min_count_threshold = self.filter_min_count
+
         if level == "transcript":
             total_samples = len(count_data.columns)
-            min_samples_required = total_samples // 2
-            samples_passing = (count_data >= min_count).sum(axis=1)
+            min_samples_required = max(1, total_samples // 2) # Ensure at least 1 sample is required
+            samples_passing = (count_data >= min_count_threshold).sum(axis=1)
             keep_features = samples_passing >= min_samples_required
-            
+
             self.logger.info(
-                f"Transcript filtering: Keeping transcripts with counts >= {min_count} "
+                f"Transcript filtering: Keeping transcripts with counts >= {min_count_threshold} "
                 f"in at least {min_samples_required}/{total_samples} samples"
             )
         else:  # gene level
@@ -468,20 +552,33 @@ class DifferentialAnalysis:
                 if any(col.startswith(f"{cond}_") for cond in self.target_conditions)
             ]
 
-            ref_means = count_data[ref_cols].mean(axis=1)
-            tgt_means = count_data[tgt_cols].mean(axis=1)
-            keep_features = (ref_means >= min_count) | (tgt_means >= min_count)
-            
+            # Handle cases where one condition might have no samples after potential upstream filtering
+            if not ref_cols:
+                self.logger.warning("No reference columns found for gene count filtering.")
+                ref_means = pd.Series(0, index=count_data.index) # Assign 0 mean if no ref samples
+            else:
+                ref_means = count_data[ref_cols].mean(axis=1)
+
+            if not tgt_cols:
+                 self.logger.warning("No target columns found for gene count filtering.")
+                 tgt_means = pd.Series(0, index=count_data.index) # Assign 0 mean if no target samples
+            else:
+                tgt_means = count_data[tgt_cols].mean(axis=1)
+
+            keep_features = (ref_means >= min_count_threshold) | (tgt_means >= min_count_threshold)
+
             self.logger.info(
-                f"Gene filtering: Keeping genes with mean count >= {min_count} "
-                f"in either condition group"
+                f"Gene filtering: Keeping genes with mean count >= {min_count_threshold} "
+                f"in either reference or target condition group"
             )
 
         filtered_data = count_data[keep_features]
+        removed_count = count_data.shape[0] - filtered_data.shape[0]
         self.logger.info(
-            f"After filtering: Retained {filtered_data.shape[0]} features"
+            f"After count filtering ({level}): Retained {filtered_data.shape[0]} / {count_data.shape[0]} features "
+            f"(Removed {removed_count})"
         )
-        
+
         return filtered_data
 
     def _build_design_matrix(self, count_data: pd.DataFrame) -> pd.DataFrame:
@@ -530,34 +627,81 @@ class DifferentialAnalysis:
         }, index=count_data.columns)
         
         # Log the design matrix for debugging
-        self.logger.info(f"Design matrix:\n{design_matrix}")
+        self.logger.debug(f"Design matrix:\n{design_matrix}")
         
         return design_matrix
 
     def _run_deseq2(
         self, count_data: pd.DataFrame, coldata: pd.DataFrame, level: str
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Run DESeq2 analysis."""
+        """
+        Run DESeq2 analysis and return results and normalized counts.
+
+        Args:
+            count_data: Raw count data (filtered).
+            coldata: Design matrix.
+            level: Analysis level (gene/transcript).
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: DESeq2 results, DESeq2 normalized counts.
+        """
+        self.logger.info(f"Running DESeq2 for {level} level...")
         deseq2 = importr("DESeq2")
+        # Ensure counts are integers for DESeq2
         count_data = count_data.fillna(0).round().astype(int)
 
-        with localconverter(robjects.default_converter + pandas2ri.converter):
-            # Convert count_data and coldata to R DataFrames explicitly before creating DESeqDataSet
-            count_data_r = pandas2ri.py2rpy(count_data)
-            coldata_r = pandas2ri.py2rpy(coldata)
+        # Ensure count data has no negative values before passing to R
+        if (count_data < 0).any().any():
+             self.logger.warning(f"Negative values found in count data for {level}. Clamping to 0.")
+             count_data = count_data.clip(lower=0)
 
-            dds = deseq2.DESeqDataSetFromMatrix(
-                countData=count_data_r, colData=coldata_r, design=Formula("~ group")
-            )
-            dds = deseq2.DESeq(dds)
-            res = deseq2.results(
-                dds, contrast=robjects.StrVector(["group", "Target", "Reference"])
-            )
-            # No normalized counts from DESeq2 anymore
+        if count_data.empty:
+            self.logger.error(f"Count data is empty before running DESeq2 for {level}.")
+            # Return empty dataframes if counts are empty
+            return pd.DataFrame(), pd.DataFrame(index=count_data.index, columns=count_data.columns)
 
-            return pd.DataFrame(
-                robjects.conversion.rpy2py(r("data.frame")(res)), index=count_data.index
-            ), pd.DataFrame() # Return empty DataFrame for normalized counts
+        try:
+            with localconverter(robjects.default_converter + pandas2ri.converter):
+                # Convert count_data and coldata to R DataFrames
+                count_data_r = robjects.conversion.py2rpy(count_data)
+                coldata_r = robjects.conversion.py2rpy(coldata)
+
+                # Create DESeqDataSet
+                self.logger.debug("Creating DESeqDataSet...")
+                dds = deseq2.DESeqDataSetFromMatrix(
+                    countData=count_data_r, colData=coldata_r, design=Formula("~ group")
+                )
+
+                # Run DESeq analysis
+                self.logger.debug("Running DESeq()...")
+                dds = deseq2.DESeq(dds)
+
+                # Get results
+                self.logger.debug("Extracting results()...")
+                res = deseq2.results(
+                    dds, contrast=robjects.StrVector(["group", "Target", "Reference"])
+                )
+                res_df = robjects.conversion.rpy2py(r("as.data.frame")(res)) # Convert to R dataframe first for stability
+                res_df.index = count_data.index # Assign original feature IDs as index
+
+
+                # Correct way to call the R 'counts' function on the dds object
+                # Ensure 'r' is imported: from rpy2.robjects import r
+                normalized_counts_r = r['counts'](dds, normalized=True)
+
+                # Convert R matrix to pandas DataFrame
+                normalized_counts_py = robjects.conversion.rpy2py(normalized_counts_r)
+                # Ensure DataFrame structure matches original count_data (features x samples)
+                normalized_counts_df = pd.DataFrame(normalized_counts_py, index=count_data.index, columns=count_data.columns)
+
+
+                self.logger.info(f"DESeq2 run completed for {level}. Results shape: {res_df.shape}, Normalized counts shape: {normalized_counts_df.shape}")
+                return res_df, normalized_counts_df
+
+        except Exception as e:
+            self.logger.error(f"Error running DESeq2 for {level}: {str(e)}")
+            # Return empty DataFrames on error to avoid downstream issues
+            return pd.DataFrame(), pd.DataFrame(index=count_data.index, columns=count_data.columns)
 
     def _map_gene_symbols(self, feature_ids: List[str], level: str) -> Dict[str, Dict[str, Optional[str]]]:
         """
@@ -620,149 +764,154 @@ class DifferentialAnalysis:
         return self.gene_mapper.map_gene_symbols(feature_ids, level, self.updated_gene_dict)
 
     def _write_top_genes(self, results: pd.DataFrame, level: str) -> None:
-        """Write genes associated with top 100 transcripts by absolute fold change to file."""
+        """Write top genes/transcripts based on absolute statistic value to file."""
+        if results.empty or 'stat' not in results.columns:
+             self.logger.warning(f"Cannot write top genes for {level}: Results DataFrame is empty or missing 'stat' column.")
+             return
+
+        # Ensure 'stat' column is numeric, fill NaNs that might cause issues
+        results['stat'] = pd.to_numeric(results['stat'], errors='coerce').fillna(0)
         results["abs_stat"] = abs(results["stat"])
 
+        # Use configured number of top genes/transcripts
+        top_n = self.top_n_genes
+
         if level == "transcript":
-            # where baseMean is greater than 500
-            top_transcripts = results[results["baseMean"] > 500].nlargest(len(results), "abs_stat") 
+            # Use configured base mean threshold
+            base_mean_threshold = self.top_transcripts_base_mean
+             # Ensure 'baseMean' column is numeric, fill NaNs
+            if 'baseMean' not in results.columns:
+                self.logger.warning(f"Cannot apply baseMean filter for {level}: 'baseMean' column missing. Considering all transcripts.")
+                filtered_results = results
+            else:
+                results['baseMean'] = pd.to_numeric(results['baseMean'], errors='coerce').fillna(0)
+                filtered_results = results[results["baseMean"] > base_mean_threshold]
 
-            unique_genes = set()
-            top_unique_gene_transcripts = []
-            transcript_count = 0
-            unique_gene_count = 0
+            if filtered_results.empty:
+                 self.logger.warning(f"No transcripts found with baseMean > {base_mean_threshold}. Top genes file will be empty.")
+                 top_unique_gene_transcripts_df = pd.DataFrame() # Empty dataframe
+            else:
+                # Sort by absolute statistic value
+                top_transcripts = filtered_results.sort_values("abs_stat", ascending=False)
 
-            for _, transcript_row in top_transcripts.iterrows():
-                gene_name = transcript_row["gene_name"]
-                if gene_name not in unique_genes:
-                    unique_genes.add(gene_name)
-                    top_unique_gene_transcripts.append(transcript_row)
-                    unique_gene_count += 1
-                    if unique_gene_count >= 100: # Stop when we reach 500 unique genes
-                        break
-                transcript_count += 1 # Keep track of total transcripts considered
+                # Ensure 'gene_name' column exists
+                if 'gene_name' not in top_transcripts.columns:
+                     self.logger.error(f"Cannot extract top unique genes for {level}: 'gene_name' column missing.")
+                     return
 
-            top_genes = [row["gene_name"] for row in top_unique_gene_transcripts] # Extract gene names from selected transcripts
+                # Get top N unique genes based on the highest ranked transcript for each gene
+                top_unique_gene_transcripts_df = top_transcripts.drop_duplicates(subset=['gene_name'], keep='first').head(top_n)
+                self.logger.info(f"Highest adjusted p-value in top {top_n} unique genes: {top_unique_gene_transcripts_df['padj'].max()}")
+
+            top_genes_list = top_unique_gene_transcripts_df["gene_name"].tolist() if not top_unique_gene_transcripts_df.empty else []
 
             # Write to file
-            top_genes_file = self.deseq_dir / "genes_of_top_100_DE_transcripts.txt"
-            pd.Series(top_genes).to_csv(top_genes_file, index=False, header=False)
-            self.logger.debug(f"Wrote genes of top 100 DE transcripts to {top_genes_file}")
-        else:
-            # For gene-level analysis, keep original behavior
-            # top_genes = results.nlargest(100, "abs_stat")["symbol"] # OLD: was writing symbols (gene IDs)
-            top_genes = results.nlargest(100, "abs_stat")["gene_name"]
-            top_genes_file = self.deseq_dir / "top_100_DE_genes.txt"
-            top_genes.to_csv(top_genes_file, index=False, header=False)
-            self.logger.debug(f"Wrote top 100 DE genes to {top_genes_file}")
+            target_label = "+".join(self.target_conditions)
+            reference_label = "+".join(self.ref_conditions)
+            top_genes_file = self.deseq_dir / f"genes_of_top_{top_n}_DE_transcripts_{target_label}_vs_{reference_label}.txt"
+
+            pd.Series(top_genes_list).to_csv(top_genes_file, index=False, header=False)
+            self.logger.info(f"Wrote {len(top_genes_list)} unique genes (from top {top_n} DE transcripts with baseMean > {base_mean_threshold}) to {top_genes_file}")
+
+        else: # Gene level
+             # Ensure 'gene_name' column exists for gene level as well
+            if 'gene_name' not in results.columns:
+                 self.logger.error(f"Cannot extract top genes for {level}: 'gene_name' column missing.")
+                 return
+
+            # Get top N genes directly by absolute statistic
+            top_genes_df = results.nlargest(top_n, "abs_stat")
+            top_genes_list = top_genes_df["gene_name"].tolist()
+
+            # Write to file
+            target_label = "+".join(self.target_conditions)
+            reference_label = "+".join(self.ref_conditions)
+            top_genes_file = self.deseq_dir / f"top_{top_n}_DE_genes_{target_label}_vs_{reference_label}.txt"
+
+            pd.Series(top_genes_list).to_csv(top_genes_file, index=False, header=False)
+            self.logger.info(f"Wrote top {len(top_genes_list)} DE genes to {top_genes_file}")
 
     def _run_pca(self, normalized_counts, level, coldata, target_label, reference_label):
-        """Run PCA analysis and create visualization."""
-        self.logger.info(f"Running PCA for {level} level...")
+        """Run PCA analysis and create visualization using DESeq2 normalized counts."""
+        self.logger.info(f"Running PCA for {level} level using DESeq2 normalized counts...")
 
-        # Run PCA - Calculate 10 components
-        pca = PCA(n_components=10) # Keep n_components=10 to generate scree plot with 10 components
-        log_normalized_counts = np.log2(normalized_counts + 1)
-        pca_result = pca.fit_transform(log_normalized_counts.transpose())
-        #map the feature names to gene names using the gene_mapper
-        feature_names = normalized_counts.index.tolist()
-        gene_names = self.gene_mapper.map_gene_symbols(feature_names, level, self.updated_gene_dict)
+        if normalized_counts.empty:
+            self.logger.warning(f"Skipping PCA for {level}: Normalized counts data is empty.")
+            return
 
-        # Get explained variance ratio and loadings
-        explained_variance = pca.explained_variance_ratio_
-        loadings = pca.components_  # Loadings are in pca.components_
+        # Basic check for variance - PCA fails if variance is zero
+        if normalized_counts.var().sum() == 0:
+            self.logger.warning(f"Skipping PCA for {level}: Data has zero variance.")
+            return
 
-        # Create DataFrame with columns for all 10 components
-        pc_columns = [f'PC{i+1}' for i in range(10)] # Generate column names: PC1, PC2, ..., PC10
-        pca_df = pd.DataFrame(data=pca_result, columns=pc_columns, index=log_normalized_counts.columns) # Use all 10 column names
-        pca_df['group'] = coldata['group'].values
+        # Use configured number of components
+        n_components = min(self.pca_n_components, normalized_counts.shape[0], normalized_counts.shape[1]) # Cannot exceed number of features or samples
+        if n_components < 2:
+             self.logger.warning(f"Skipping PCA for {level}: Not enough features/samples ({normalized_counts.shape}) for {n_components} components.")
+             return
+        if n_components != self.pca_n_components:
+             self.logger.warning(f"Reducing number of PCA components to {n_components} due to data dimensions.")
 
-        title = f"{level.capitalize()} Level PCA: {target_label} vs {reference_label}\nPC1 ({100*explained_variance[0]:.2f}%) / PC2 ({100*explained_variance[1]:.2f}%)"
 
-        # Use the plotter's PCA method, passing explained variance and loadings
-        self.visualizer.plot_pca(
-            pca_df=pca_df, # pca_df now contains 10 components
-            title=title,
-            output_prefix=f"pca_{level}",
-            explained_variance=explained_variance, # Pass explained variance (for scree plot)
-            loadings=loadings, # Pass loadings (for loadings output)
-            feature_names=gene_names # Pass feature names (gene names)
-        )
+        # Log transform the DESeq2 normalized counts (add 1 to handle zeros)
+        # Ensure data is numeric before transformation
+        log_normalized_counts = np.log2(normalized_counts.apply(pd.to_numeric, errors='coerce').fillna(0) + 1)
 
-    def _median_ratio_normalization(self, count_data: pd.DataFrame) -> pd.DataFrame:
-        """
-        Perform median-by-ratio normalization on count data.
-        This is similar to the normalization used in DESeq2.
-        Handles zeros and potential data type issues safely.
-        """
+
+        # Check for NaNs/Infs after log transform which can happen if counts were negative (though clamped earlier) or exactly -1
+        if np.isinf(log_normalized_counts).any().any() or np.isnan(log_normalized_counts).any().any():
+            self.logger.warning(f"NaNs or Infs found in log-transformed counts for {level}. Replacing with 0. This might indicate issues with count data.")
+            log_normalized_counts = log_normalized_counts.replace([np.inf, -np.inf], 0).fillna(0)
+
+
         try:
-            # Convert to numeric and handle any non-numeric values
-            count_data_numeric = count_data.apply(pd.to_numeric, errors='coerce').fillna(0)
-            
-            # Ensure all values are positive or zero
-            count_data_nonneg = count_data_numeric.clip(lower=0)
-            
-            # Add pseudocount to avoid zeros (1 is a common choice)
-            count_data_safe = count_data_nonneg + 1
-            
-            # Check data types and values
-            self.logger.debug(f"Count data shape: {count_data_safe.shape}")
-            self.logger.debug(f"Count data dtype: {count_data_safe.values.dtype}")
-            self.logger.debug(f"Min value: {count_data_safe.values.min()}, Max value: {count_data_safe.values.max()}")
-            
-            # Convert to numpy array
-            counts_numpy = count_data_safe.values.astype(float)
-            
-            # Alternative geometric mean calculation
-            # Use log1p which is log(1+x) to handle zeros more safely
-            log_counts = np.log(counts_numpy)
-            row_means = np.mean(log_counts, axis=1)
-            geometric_means = np.exp(row_means)
-            
-            # Check for any invalid values in geometric means
-            if np.any(~np.isfinite(geometric_means)):
-                self.logger.warning("Found non-finite values in geometric means, replacing with 1.0")
-                geometric_means[~np.isfinite(geometric_means)] = 1.0
-            
-            # Calculate ratio of each count to the geometric mean
-            # Reshape geometric_means for broadcasting
-            geo_means_col = geometric_means.reshape(-1, 1)
-            ratios = counts_numpy / geo_means_col
-            
-            # Calculate size factor for each sample (median of ratios)
-            size_factors = np.median(ratios, axis=0)
-            
-            # Check for any invalid values in size factors
-            if np.any(size_factors <= 0) or np.any(~np.isfinite(size_factors)):
-                self.logger.warning("Found invalid size factors, replacing with 1.0")
-                size_factors[~np.isfinite(size_factors) | (size_factors <= 0)] = 1.0
-            
-            # Log size factors
-            self.logger.info(f"Size factors: {size_factors}")
-            
-            # Normalize counts by dividing by size factors
-            # Use original count data (without pseudocount) for the final normalization
-            normalized_counts = pd.DataFrame(
-                count_data_nonneg.values / size_factors,
-                index=count_data.index,
-                columns=count_data.columns
+            pca = PCA(n_components=n_components)
+            # Transpose because PCA expects samples as rows, features as columns
+            pca_result = pca.fit_transform(log_normalized_counts.transpose())
+
+            # Map feature IDs (index of normalized_counts) to gene names
+            feature_ids = normalized_counts.index.tolist()
+            # Use the mapping function - ensure it handles potential errors/missing keys
+            gene_mapping_dict = self._map_gene_symbols(feature_ids, level)
+            # Create a list of gene names in the same order as features
+            feature_names_mapped = [gene_mapping_dict.get(fid, {}).get('gene_name', fid) for fid in feature_ids]
+
+
+            # Get explained variance ratio and loadings
+            explained_variance = pca.explained_variance_ratio_
+            loadings = pca.components_  # Loadings are in pca.components_
+
+            # Create DataFrame with columns for all calculated components
+            pc_columns = [f'PC{i+1}' for i in range(n_components)]
+            pca_df = pd.DataFrame(data=pca_result[:, :n_components], columns=pc_columns, index=log_normalized_counts.columns) # Use sample names as index
+
+            # Add group information from coldata, ensuring index alignment
+            # It's safer to reset index on coldata if it uses sample names as index too
+            if coldata.index.equals(pca_df.index):
+                 pca_df['group'] = coldata['group'].values
+            else:
+                 self.logger.warning(f"Index mismatch between PCA results and coldata for {level}. Group information might be incorrect.")
+                 # Attempt to merge or handle, here just assigning potentially misaligned
+                 pca_df['group'] = coldata['group'].values[:len(pca_df)]
+
+
+            # Title focuses on PC1/PC2 for the scatter plot, even if more components were calculated
+            pc1_var = explained_variance[0] * 100 if len(explained_variance) > 0 else 0
+            pc2_var = explained_variance[1] * 100 if len(explained_variance) > 1 else 0
+            title = f"{level.capitalize()} Level PCA: {target_label} vs {reference_label}\nPC1 ({pc1_var:.2f}%) / PC2 ({pc2_var:.2f}%)"
+
+
+            # Use the plotter's PCA method, passing explained variance and loadings
+            self.visualizer.plot_pca(
+                pca_df=pca_df, # pca_df contains n_components columns
+                title=title,
+                output_prefix=f"pca_{level}",
+                explained_variance=explained_variance, # Pass full explained variance for scree plot
+                loadings=loadings, # Pass loadings
+                # Pass the mapped gene names corresponding to the features (rows of normalized_counts)
+                feature_names=feature_names_mapped
             )
-            
-            # Fill any NaN values with 0
-            normalized_counts = normalized_counts.fillna(0)
-            
-            return normalized_counts
-            
+            self.logger.info(f"PCA plots saved for {level} level.")
+
         except Exception as e:
-            self.logger.error(f"Error in median ratio normalization: {str(e)}")
-            self.logger.error("Falling back to simple TPM-like normalization")
-            
-            # Fallback normalization (similar to TPM)
-            # Sum each column and divide counts by the sum
-            col_sums = count_data.sum(axis=0)
-            col_sums = col_sums.replace(0, 1)  # Avoid division by zero
-            
-            # Normalize each column by its sum and multiply by 1e6 (similar to TPM scaling)
-            normalized_counts = count_data.div(col_sums, axis=1) * 1e6
-            
-            return normalized_counts
+            self.logger.error(f"Error during PCA calculation or plotting for {level}: {str(e)}")

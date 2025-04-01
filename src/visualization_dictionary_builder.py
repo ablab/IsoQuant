@@ -35,136 +35,166 @@ class DictionaryBuilder:
         cleanup_cache(self.cache_dir, max_age_days=7)
 
     def build_gene_dict_with_expression_and_filter(
-        self, min_value: float = 1.0
+        self,
+        min_value: float = 1.0,
+        reference_conditions: List[str] = None,
+        target_conditions: List[str] = None,
     ) -> Dict[str, Any]:
         """
-        Optimized build process with early filtering and combined steps.
+        Optimized build process with filtering based on selected conditions.
+        Filters transcripts based on min_value occurring in at least one of the
+        selected reference_conditions or target_conditions.
+        Caches the resulting dictionary based on the specific conditions used.
         """
-        self.logger.debug(f"Starting optimized dictionary build with min_value={min_value}")
+        self.logger.debug(f"Starting dictionary build: min_value={min_value}, ref={reference_conditions}, target={target_conditions}")
 
-        # 1. Check cache first
+        # 1. Load full TPM matrix to determine available conditions first
         tpm_file = self._get_tpm_file()
-        base_cache_file = build_gene_dict_cache_file(
-            self.config.extended_annotation,
-            tpm_file,
-            self.config.ref_only,
-            self.cache_dir,
-        )
-        expr_filter_cache = base_cache_file.parent / (
-            f"{base_cache_file.stem}_with_expr_minval_{min_value}.pkl"
-        )
-
-        if expr_filter_cache.exists():
-            cached_data = load_cache(expr_filter_cache)
-            if cached_data and len(cached_data) == 3:  # Check if load_cache returned a tuple
-                cached_gene_dict, cached_novel_gene_ids, cached_novel_transcript_ids = cached_data  # Unpack tuple
-                if validate_gene_dict(cached_gene_dict):
-                    self.novel_gene_ids = cached_novel_gene_ids  # Restore from cache
-                    self.novel_transcript_ids = cached_novel_transcript_ids  # Restore from cache
-                    return cached_gene_dict
-            else:  # Handle older cache format (just gene_dict)
-                cached_gene_dict = cached_data
-                if validate_gene_dict(cached_gene_dict):
-                    return cached_gene_dict
-
-        # 2. Filter novel genes from the base gene dict (not per-condition)
-        self.logger.info("Parsing GTF and filtering novel genes")
-        parsed_data = self.parse_gtf()
-        self._validate_gene_structure(parsed_data)
-        base_gene_dict = self._filter_novel_genes(parsed_data)
-
-        # Add debug log: Number of genes and transcripts after novel gene filtering
-        gene_count_after_novel_filter = len(base_gene_dict)
-        transcript_count_after_novel_filter = sum(
-            len(gene_info.get("transcripts", {})) for gene_info in base_gene_dict.values()
-        )
-        self.logger.debug(
-            f"After novel gene filtering: {gene_count_after_novel_filter} genes, {transcript_count_after_novel_filter} transcripts"
-        )
-
-        if hasattr(self.config, 'transcript_map') and self.config.transcript_map:
-            self.logger.info(f"Using transcript mapping from OutputConfig with {len(self.config.transcript_map)} entries")
-        else:
-            self.logger.info("No transcript mapping found, proceeding with original transcripts")
-
-        # 3. Load expression data (TPM only) with consistent header handling
-        self.logger.info("Loading TPM matrix for filtering and expression values")
+        self.logger.debug(f"Loading full TPM matrix from {tpm_file}")
         try:
             tpm_df = pd.read_csv(tpm_file, sep='\t', comment=None)
             tpm_df.columns = [col.lstrip('#') for col in tpm_df.columns]  # Clean headers
             tpm_df = tpm_df.set_index('feature_id')  # Use cleaned column name
         except KeyError as e:
-            self.logger.error(f"Missing required column in {tpm_file}: {str(e)}")
+            self.logger.error(f"Missing required column ('feature_id' or condition name) in {tpm_file}: {str(e)}")
             raise
         except Exception as e:
             self.logger.error(f"Failed to load TPM expression matrix: {str(e)}")
             raise
 
-        conditions = tpm_df.columns.tolist()
+        available_conditions = sorted(tpm_df.columns.tolist()) # Sort for consistent cache key
+        self.logger.debug(f"Available conditions in TPM file: {available_conditions}")
 
-        # 4. Vectorized processing using TPM for both filtering and values
-        transcript_max_values = tpm_df.max(axis=1)
+        # 2. Determine the actual conditions to process and create a cache key
+        requested_conditions = set(reference_conditions or []) | set(target_conditions or [])
+        if requested_conditions:
+            conditions_to_process = sorted(list(requested_conditions.intersection(available_conditions)))
+            missing_conditions = requested_conditions.difference(available_conditions)
+            if missing_conditions:
+                self.logger.warning(f"Requested conditions not found in TPM file and will be ignored: {missing_conditions}")
+            if not conditions_to_process:
+                self.logger.error("None of the requested conditions were found in the TPM file. Cannot proceed.")
+                return {}
+            self.logger.info(f"Processing conditions: {conditions_to_process}")
+        else:
+            self.logger.info("No specific conditions requested, processing all available conditions.")
+            conditions_to_process = available_conditions # Already sorted
+
+        # Create a deterministic cache key based on conditions
+        condition_key_part = "_".join(c.replace(" ", "_") for c in conditions_to_process)
+        if len(condition_key_part) > 50: # Avoid excessively long filenames
+             condition_key_part = f"hash_{hash(condition_key_part)}"
+
+        # 3. Check cache specific to these conditions and min_value
+        base_cache_file = build_gene_dict_cache_file( # Keep base name generation consistent
+            self.config.extended_annotation,
+            tpm_file, # Use original TPM file path for base name consistency
+            self.config.ref_only,
+            self.cache_dir,
+        )
+        # Append condition and min_value specifics
+        condition_specific_cache_file = base_cache_file.parent / (
+            f"{base_cache_file.stem}_conditions_{condition_key_part}_minval_{min_value}.pkl"
+        )
+        self.logger.debug(f"Looking for cache file: {condition_specific_cache_file}")
+
+        if condition_specific_cache_file.exists():
+            self.logger.info(f"Loading data from cache: {condition_specific_cache_file}")
+            cached_data = load_cache(condition_specific_cache_file)
+            # Expecting (dict, novel_genes_set, novel_transcripts_set)
+            if cached_data and isinstance(cached_data, tuple) and len(cached_data) == 3:
+                cached_gene_dict, cached_novel_gene_ids, cached_novel_transcript_ids = cached_data
+                # Basic validation - check if it's a dict and has expected top-level keys (conditions)
+                if isinstance(cached_gene_dict, dict) and all(c in cached_gene_dict for c in conditions_to_process):
+                    # Deeper validation might be needed if structure is complex
+                    if validate_gene_dict(cached_gene_dict): # Reuse existing validation if suitable
+                        self.novel_gene_ids = cached_novel_gene_ids
+                        self.novel_transcript_ids = cached_novel_transcript_ids
+                        self.logger.info("Successfully loaded dictionary from cache.")
+                        return cached_gene_dict
+                    else:
+                         self.logger.warning("Cached dictionary failed validation. Rebuilding.")
+                else:
+                    self.logger.warning("Cached data format mismatch or missing conditions. Rebuilding.")
+            else:
+                 self.logger.warning("Cached data is invalid or in old format. Rebuilding.")
+
+        # 4. Cache miss or invalid: Build dictionary from scratch for the specified conditions
+        self.logger.info("Cache miss or invalid. Building dictionary from scratch for selected conditions.")
+
+        # Parse GTF and filter novel genes (only needs to be done once)
+        self.logger.info("Parsing GTF and filtering novel genes")
+        parsed_data = self.parse_gtf()
+        self._validate_gene_structure(parsed_data) # Validate base structure
+        base_gene_dict = self._filter_novel_genes(parsed_data) # Also populates self.novel_gene_ids etc.
+
+        # Subset TPM matrix to *only* the conditions being processed for filtering
+        tpm_df_subset = tpm_df[conditions_to_process]
+
+        # Identify valid transcripts based on max value within the SUBSET conditions
+        transcript_max_values_subset = tpm_df_subset.max(axis=1)
         valid_transcripts = set(
-            transcript_max_values[transcript_max_values >= min_value].index
+            transcript_max_values_subset[transcript_max_values_subset >= min_value].index
+        )
+        self.logger.info(
+            f"Identified {len(valid_transcripts)} transcripts with TPM >= {min_value} "
+            f"in at least one of the conditions: {conditions_to_process}"
         )
 
-        # Add debug log: Number of valid transcripts after min_value filtering
-        valid_transcript_count = len(valid_transcripts)
-        self.logger.debug(
-            f"After TPM min_value ({min_value}) filtering: {valid_transcript_count} valid transcripts"
-        )
-
-        # 5. Single-pass filtering and value updating (using TPMs for both)
-        filtered_dict = {}
-        for condition in conditions:
-            filtered_dict[condition] = {}
-            condition_tpm_values = tpm_df[condition]
+        # Build the final dictionary, iterating only through conditions_to_process
+        final_dict = {}
+        for condition in conditions_to_process:
+            final_dict[condition] = {}
+            condition_tpm_values = tpm_df[condition] # Get expression from the original full df
 
             for gene_id, gene_info in base_gene_dict.items():
+                # Filter transcripts based on valid_transcripts set AND add expression value
                 new_transcripts = {
                     tid: {**tinfo, 'value': condition_tpm_values.get(tid, 0)}
                     for tid, tinfo in gene_info['transcripts'].items()
-                    if tid in valid_transcripts
+                    if tid in valid_transcripts # Apply the filter here
                 }
 
+                # Only add gene if it has at least one valid transcript remaining
                 if new_transcripts:
-                    filtered_dict[condition][gene_id] = {
-                        **gene_info,
-                        'transcripts': new_transcripts
+                    final_dict[condition][gene_id] = {
+                        **gene_info, # Copy base gene info
+                        'transcripts': new_transcripts,
+                        'exons': {} # Initialize exons, will be aggregated next
                     }
-            self._validate_gene_structure(filtered_dict[condition])  # Validate structure for each condition's gene dict
 
-        for condition in conditions:
-            for gene_id, gene_info in filtered_dict[condition].items():
-                # Initialize a dictionary to hold aggregated exon values for the gene.
+            # Validate structure for this condition's dictionary
+            self._validate_gene_structure(final_dict[condition])
+
+        # Aggregate exon values based on the filtered transcripts in the final_dict
+        self.logger.info("Aggregating exon values based on filtered transcript expression.")
+        for condition in conditions_to_process:
+            for gene_id, gene_info in final_dict[condition].items():
                 aggregated_exons = {}
-                # Iterate over each transcript in the gene.
                 for transcript_id, transcript_info in gene_info["transcripts"].items():
-                    transcript_value = transcript_info.get("value", 0) # TPM value
-                    # Loop through each exon in the current transcript.
-                    for exon in transcript_info.get("exons", []):
+                    transcript_value = transcript_info.get("value", 0) # TPM value from the filtered transcript
+                    for exon in transcript_info.get("_original_exons", transcript_info.get("exons", [])): # Use original exon structure if available
                         exon_id = exon.get("exon_id")
-                        if not exon_id:
-                            continue  # Skip if no exon_id is provided.
-                        # If this exon hasn't been seen before, add it.
+                        if not exon_id: continue
                         if exon_id not in aggregated_exons:
                             aggregated_exons[exon_id] = {
                                 "exon_id": exon_id,
                                 "start": exon["start"],
                                 "end": exon["end"],
                                 "number": exon.get("number", "NA"),
-                                "value": 0.0,
+                                "value": 0.0, # Initialize aggregate value
                             }
-                        # Sum the transcript value into the exon value.
-                        aggregated_exons[exon_id]["value"] += transcript_value
-                # Now assign the aggregated exon dictionary to the gene.
-                gene_info["exons"] = aggregated_exons
+                        aggregated_exons[exon_id]["value"] += transcript_value # Sum transcript TPM
+                gene_info["exons"] = aggregated_exons # Assign aggregated exons
 
+        # 5. Save the newly built dictionary to the condition-specific cache
+        self.logger.info(f"Saving filtered dictionary to cache: {condition_specific_cache_file}")
         save_cache(
-            expr_filter_cache, (filtered_dict, self.novel_gene_ids, self.novel_transcript_ids)
+            condition_specific_cache_file,
+            (final_dict, self.novel_gene_ids, self.novel_transcript_ids)
         )
-        self.logger.info(f"Saved dictionary to cache at {expr_filter_cache}")
-        return filtered_dict
+
+        return final_dict
 
     def _get_tpm_file(self) -> str:
         """Get the appropriate TPM file path from config."""
@@ -172,7 +202,7 @@ class DictionaryBuilder:
             # For multi-condition data, prioritize merged files if available
             merged_tpm = self.config.transcript_grouped_tpm
             if merged_tpm and "_merged.tsv" in merged_tpm:
-                self.logger.info("Using merged TPM file with transcript mapping already applied")
+                self.logger.info("Using merged TPM file with transcript deduplication already applied")
                 tpm_file = merged_tpm
             else:
                 tpm_file = self.config.transcript_grouped_tpm
