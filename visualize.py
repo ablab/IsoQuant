@@ -28,7 +28,7 @@ def setup_logging(viz_output_dir: Path) -> None:
 
     # Console handler - less detailed
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO) # Console output at INFO level
+    console_handler.setLevel(logging.DEBUG) # Console output at DEBUG level
     console_handler.setFormatter(console_formatter)
 
     # Configure root logger
@@ -82,9 +82,6 @@ def parse_arguments():
         default=None,
     )
     parser.add_argument(
-        "--counts", action="store_true", help="Use counts instead of TPM files."
-    )
-    parser.add_argument(
         "--ref_only",
         action="store_true",
         help="Use only reference transcript quantification instead of transcript model quantification.",
@@ -119,22 +116,13 @@ def parse_arguments():
     if args.find_genes is not None:
         output = OutputConfig(
             args.output_directory,
-            use_counts=args.counts,
             ref_only=args.ref_only,
             gtf=args.gtf,
         )
         if output.conditions:
-            gene_file = (
-                output.transcript_grouped_tpm
-                if not output.use_counts
-                else output.transcript_grouped_counts
-            )
+            gene_file = output.transcript_grouped_tpm
         else:
-            gene_file = (
-                output.transcript_tpm
-                if not output.use_counts
-                else output.transcript_counts
-            )
+            gene_file = output.transcript_tpm
 
         if not gene_file or not Path(gene_file).is_file():
             print(f"Error: Grouped TPM/Counts file not found at {gene_file}.")
@@ -198,13 +186,29 @@ def select_conditions_interactively(args):
 
 
 def main():
-    # Parse args first without logging
-    args = parse_arguments()
-
-    # Set up visualization directory and logging
-    viz_output_dir = setup_viz_output(args.output_directory, args.viz_output)
+    # First, parse just the output directory argument to set up logging
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("output_directory", type=str, nargs='?')
+    parser.add_argument("--viz_output", type=str, default=None)
+    
+    # Parse just these arguments first
+    first_args, _ = parser.parse_known_args()
+    
+    # Initialize output directory early
+    if not first_args.output_directory:
+        print("Error: Output directory is required.")
+        sys.exit(1)
+        
+    # Set up visualization directory early
+    viz_output_dir = setup_viz_output(first_args.output_directory, first_args.viz_output)
+    
+    # Set up logging immediately to capture all operations
     setup_logging(viz_output_dir)
-
+    logging.info("Starting IsoQuant visualization pipeline")
+    
+    # Now parse the full arguments with the real parser
+    args = parse_arguments()
+    
     # If find_genes is specified, get conditions interactively
     if args.find_genes is not None:
         select_conditions_interactively(args)
@@ -212,13 +216,13 @@ def main():
     logging.info("Reading IsoQuant parameters.")
     output = OutputConfig(
         args.output_directory,
-        use_counts=args.counts,
         ref_only=args.ref_only,
         gtf=args.gtf,
     )
     dictionary_builder = DictionaryBuilder(output)
-    # logging.debug("OutputConfig details:")
-    # logging.debug(vars(output))
+    logging.debug("OutputConfig details:")
+    logging.debug(f"Output directory: {output.output_directory}")
+    logging.debug(f"Reference only: {output.ref_only}")
 
     # Ask user about read assignments (optional)
     use_read_assignments = (
@@ -313,7 +317,9 @@ def main():
         reads_and_class=reads_and_class,
         filter_transcripts=min_val,  # Just pass your chosen threshold for reference
         conditions=output.conditions,
-        use_counts=args.counts,
+        ref_only=args.ref_only,
+        ref_conditions=args.reference_conditions if hasattr(args, "reference_conditions") else None,
+        target_conditions=args.target_conditions if hasattr(args, "target_conditions") else None,
     )
     
     plot_output.plot_transcript_map()

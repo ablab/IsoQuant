@@ -46,9 +46,55 @@ class DifferentialAnalysis:
         # Create a single logger for this class
         self.logger = logging.getLogger('IsoQuant.visualization.differential_exp')
         
+        # Get transcript mapping if available
+        self.transcript_map = {}
+        if hasattr(self.dictionary_builder, 'config') and hasattr(self.dictionary_builder.config, 'transcript_map'):
+            self.transcript_map = self.dictionary_builder.config.transcript_map
+            if self.transcript_map:
+                self.logger.info(f"Using transcript mapping from dictionary_builder with {len(self.transcript_map)} entries for DESeq2 analysis")
+            else:
+                # Try to load transcript mapping directly from file
+                self.logger.info("Transcript mapping from dictionary_builder is empty, trying to load it directly from file")
+                self._load_transcript_mapping_from_file()
+        else:
+            # Try to load transcript mapping directly from file
+            self.logger.info("No transcript mapping available from dictionary_builder, trying to load it directly from file")
+            self._load_transcript_mapping_from_file()
+        
         self.transcript_to_gene = self._create_transcript_to_gene_map()
         self.visualizer = ExpressionVisualizer(self.deseq_dir)
         self.gene_mapper = GeneMapper()
+
+    def _load_transcript_mapping_from_file(self):
+        """Load transcript mapping directly from the transcript_mapping.tsv file."""
+        mapping_file = self.output_dir / "transcript_mapping.tsv"
+        
+        if not mapping_file.exists():
+            self.logger.warning(f"Transcript mapping file not found at {mapping_file}")
+            return
+        
+        try:
+            # Load the transcript mapping file
+            self.logger.info(f"Loading transcript mapping from {mapping_file}")
+            self.transcript_map = {}
+            
+            # Skip header and read the mapping
+            with open(mapping_file, 'r') as f:
+                header = f.readline()  # Skip header
+                for line in f:
+                    parts = line.strip().split('\t')
+                    if len(parts) == 2:
+                        transcript_id, canonical_id = parts
+                        self.transcript_map[transcript_id] = canonical_id
+            
+            self.logger.info(f"Successfully loaded {len(self.transcript_map)} transcript mappings from file")
+            
+            # Log some examples for debugging
+            sample_items = list(self.transcript_map.items())[:5]
+            for orig, canon in sample_items:
+                self.logger.debug(f"Mapping sample: {orig} → {canon}")
+        except Exception as e:
+            self.logger.error(f"Failed to load transcript mapping: {str(e)}")
 
     def _create_transcript_to_gene_map(self) -> Dict[str, str]:
         """
@@ -237,32 +283,163 @@ class DifferentialAnalysis:
         # No normalized counts returned from _run_deseq2 anymore
         return outfile, pd.DataFrame() # Return empty DataFrame for normalized counts
 
-    def _get_condition_data(self, pattern: str) -> pd.DataFrame:
-        """Combine count data from all conditions."""
-        all_counts = []
-
-        # Modify pattern if ref_only is False and pattern is transcript_grouped_counts - CORRECTED LOGIC
-        adjusted_pattern = pattern # Initialize adjusted_pattern to the original pattern
-        if not self.ref_only and pattern == "transcript_grouped_counts.tsv": # Only adjust if ref_only is False AND base pattern is transcript_grouped_counts
+    def _get_merged_transcript_counts(self, pattern: str) -> pd.DataFrame:
+        """
+        Get transcript count data and apply transcript mapping to create a merged grouped dataframe.
+        This preserves the individual sample columns needed for DESeq2, but merges identical transcripts.
+        """
+        self.logger.info(f"Creating merged transcript count matrix with pattern: {pattern}")
+        
+        # Adjust pattern if needed
+        adjusted_pattern = pattern
+        if not self.ref_only and pattern == "transcript_grouped_counts.tsv":
             adjusted_pattern = "transcript_model_grouped_counts.tsv"
-
+        
+        self.logger.info(f"Using file pattern: {adjusted_pattern}")
+        
+        # Store sample dataframes
+        all_sample_dfs = []
+        
+        # Process each condition directory
         for condition in self.ref_conditions + self.target_conditions:
-            condition_dir = self.output_dir / condition
-            count_files = list(condition_dir.glob(f"*{adjusted_pattern}")) # Use adjusted pattern
-
+            condition_dir = Path(self.output_dir) / condition
+            count_files = list(condition_dir.glob(f"*{adjusted_pattern}"))
+            
+            if not count_files:
+                self.logger.error(f"No count files found for condition: {condition}")
+                raise FileNotFoundError(f"No count files matching {adjusted_pattern} found in {condition_dir}")
+            
+            # Load each count file
             for file_path in count_files:
-                self.logger.debug(f"Reading count data from: {file_path}")
-                df = pd.read_csv(file_path, sep="\t", dtype={"#feature_id": str})
+                self.logger.info(f"Reading count data from: {file_path}")
+                
+                # Load the file
+                df = pd.read_csv(file_path, sep="\t")
+                if "#feature_id" not in df.columns and df.columns[0].startswith("#"):
+                    # Rename first column if it's the feature ID column but named differently
+                    df.rename(columns={df.columns[0]: "#feature_id"}, inplace=True)
+                
+                # Set feature_id as index
                 df.set_index("#feature_id", inplace=True)
-
-                # Rename columns to include condition
+                
+                # For multi-condition data (typical in sample files)
+                # We need to prefix each column with the condition name
                 for col in df.columns:
-                    if col.lower() != "count":
-                        df = df.rename(columns={col: f"{condition}_{col}"})
+                    df.rename(columns={col: f"{condition}_{col}"}, inplace=True)
+                
+                all_sample_dfs.append(df)
+        
+        # Concatenate all dataframes to get the full matrix
+        if not all_sample_dfs:
+            self.logger.error("No sample data frames found")
+            raise ValueError("No sample data found")
+        
+        # Combine all sample dataframes
+        combined_df = pd.concat(all_sample_dfs, axis=1)
+        self.logger.info(f"Combined count data shape before mapping: {combined_df.shape}")
+        
+        # Apply transcript mapping if available
+        if not hasattr(self, 'transcript_map') or not self.transcript_map:
+            self.logger.info("No transcript mapping available, using raw counts")
+            return combined_df
+        
+        # Log transcript mapping info
+        self.logger.info(f"Applying transcript mapping with {len(self.transcript_map)} mappings")
+        
+        # Get unique transcript IDs and create mapping dictionary
+        unique_transcripts = combined_df.index.unique()
+        transcript_groups = {}
+        
+        # Group transcripts by their canonical ID
+        for transcript_id in unique_transcripts:
+            canonical_id = self.transcript_map.get(transcript_id, transcript_id)
+            if canonical_id not in transcript_groups:
+                transcript_groups[canonical_id] = []
+            transcript_groups[canonical_id].append(transcript_id)
+        
+        # Create the merged dataframe
+        merged_df = pd.DataFrame(index=list(transcript_groups.keys()), columns=combined_df.columns)
+        
+        # Track merge statistics
+        total_transcripts = len(unique_transcripts)
+        merged_groups = 0
+        merged_transcripts = 0
+        
+        # For each canonical transcript ID, sum the counts from all transcripts that map to it
+        for canonical_id, transcript_ids in transcript_groups.items():
+            if len(transcript_ids) == 1:
+                # Just one transcript, copy the row directly
+                merged_df.loc[canonical_id] = combined_df.loc[transcript_ids[0]]
+            else:
+                # Multiple transcripts map to this canonical ID, sum their counts
+                merged_df.loc[canonical_id] = combined_df.loc[transcript_ids].sum()
+                merged_groups += 1
+                merged_transcripts += len(transcript_ids) - 1  # Count transcripts beyond the first one
+                
+                # Log details of significant merges (more than 2 transcripts or interesting transcripts)
+                if len(transcript_ids) > 2 or any("ENST" in t for t in transcript_ids):
+                    self.logger.info(f"Merged transcript group for {canonical_id}: {transcript_ids}")
+        
+        # Log merge statistics
+        self.logger.info(f"Transcript merging complete: {merged_groups} canonical IDs had multiple transcripts")
+        self.logger.info(f"Merged {merged_transcripts} transcripts into canonical IDs ({merged_transcripts/total_transcripts:.1%} of total)")
+        self.logger.info(f"Final merged count matrix shape: {merged_df.shape}")
+        
+        return merged_df
 
-                all_counts.append(df)
-
-        return pd.concat(all_counts, axis=1)
+    def _get_condition_data(self, pattern: str) -> pd.DataFrame:
+        """Get count data for differential expression analysis."""
+        if pattern == "transcript_grouped_counts.tsv":
+            # For transcript data, use our merged function
+            return self._get_merged_transcript_counts(pattern)
+        elif pattern == "gene_grouped_counts.tsv":
+            # For gene data, use a simpler approach (no merging needed)
+            self.logger.info(f"Loading gene count data with pattern: {pattern}")
+            
+            # Store sample dataframes
+            all_sample_dfs = []
+            
+            # Process each condition directory
+            for condition in self.ref_conditions + self.target_conditions:
+                condition_dir = Path(self.output_dir) / condition
+                count_files = list(condition_dir.glob(f"*{pattern}"))
+                
+                if not count_files:
+                    self.logger.error(f"No gene count files found for condition: {condition}")
+                    raise FileNotFoundError(f"No count files matching {pattern} found in {condition_dir}")
+                
+                # Load each count file
+                for file_path in count_files:
+                    self.logger.info(f"Reading gene count data from: {file_path}")
+                    
+                    # Load the file
+                    df = pd.read_csv(file_path, sep="\t")
+                    if "#feature_id" not in df.columns and df.columns[0].startswith("#"):
+                        # Rename first column if it's the feature ID column but named differently
+                        df.rename(columns={df.columns[0]: "#feature_id"}, inplace=True)
+                    
+                    # Set feature_id as index
+                    df.set_index("#feature_id", inplace=True)
+                    
+                    # For multi-condition data (typical in sample files)
+                    # We need to prefix each column with the condition name
+                    for col in df.columns:
+                        df.rename(columns={col: f"{condition}_{col}"}, inplace=True)
+                    
+                    all_sample_dfs.append(df)
+            
+            # Concatenate all dataframes to get the full matrix
+            if not all_sample_dfs:
+                self.logger.error("No gene sample data frames found")
+                raise ValueError("No gene sample data found")
+            
+            # Combine all sample dataframes
+            combined_df = pd.concat(all_sample_dfs, axis=1)
+            self.logger.info(f"Combined gene count data shape: {combined_df.shape}")
+            return combined_df
+        else:
+            self.logger.error(f"Unsupported count pattern: {pattern}")
+            raise ValueError(f"Unsupported count pattern: {pattern}")
 
     def _filter_counts(self, count_data: pd.DataFrame, min_count: int = 10, level: str = "gene") -> pd.DataFrame:
         """
@@ -308,15 +485,54 @@ class DifferentialAnalysis:
         return filtered_data
 
     def _build_design_matrix(self, count_data: pd.DataFrame) -> pd.DataFrame:
-        """Create experimental design matrix."""
+        """Create experimental design matrix for DESeq2.
+        
+        Each column in the count data (sample) needs to be assigned to either 
+        the reference or target group for differential expression analysis.
+        """
         groups = []
+        condition_assignments = []
+        sample_ids = []
+        
+        self.logger.info("Building experimental design matrix")
+        
         for sample in count_data.columns:
-            if any(sample.startswith(f"{cond}_") for cond in self.ref_conditions):
+            # Extract the condition from the sample name
+            # Matches pattern: conditionname_sampleid
+            # The column name should start with the condition name followed by an underscore
+            condition = None
+            for cond in self.ref_conditions + self.target_conditions:
+                if sample.startswith(f"{cond}_"):
+                    condition = cond
+                    # Extract the sample ID (everything after the condition name and underscore)
+                    sample_id = sample[len(condition)+1:]
+                    break
+            
+            if condition is None:
+                self.logger.error(f"Could not determine condition for sample: {sample}")
+                raise ValueError(f"Sample column '{sample}' does not match any specified condition")
+            
+            # Assign to reference or target group
+            if condition in self.ref_conditions:
                 groups.append("Reference")
             else:
                 groups.append("Target")
-
-        return pd.DataFrame({"group": groups}, index=count_data.columns)
+                
+            # Store the condition and sample ID for additional information
+            condition_assignments.append(condition)
+            sample_ids.append(sample)
+        
+        # Create the design matrix DataFrame
+        design_matrix = pd.DataFrame({
+            "group": groups,
+            "condition": condition_assignments,
+            "sample_id": sample_ids
+        }, index=count_data.columns)
+        
+        # Log the design matrix for debugging
+        self.logger.info(f"Design matrix:\n{design_matrix}")
+        
+        return design_matrix
 
     def _run_deseq2(
         self, count_data: pd.DataFrame, coldata: pd.DataFrame, level: str
@@ -346,6 +562,8 @@ class DifferentialAnalysis:
     def _map_gene_symbols(self, feature_ids: List[str], level: str) -> Dict[str, Dict[str, Optional[str]]]:
         """
         Map feature IDs to gene and transcript names using GeneMapper class.
+        
+        For transcripts that have been mapped to canonical IDs, ensure we properly handle the mapping.
 
         Args:
             feature_ids: List of feature IDs (gene symbols or transcript IDs)
@@ -356,6 +574,49 @@ class DifferentialAnalysis:
                                                   containing 'transcript_symbol' and 'gene_name'.
                                                   'transcript_symbol' is None for gene-level analysis.
         """
+        # Check if we need to handle canonical transcript IDs
+        if level == "transcript" and self.transcript_map:
+            # Create a mapping from canonical IDs to original IDs for reverse lookup
+            canonical_to_original = {}
+            for original, canonical in self.transcript_map.items():
+                if canonical not in canonical_to_original:
+                    canonical_to_original[canonical] = []
+                canonical_to_original[canonical].append(original)
+            
+            # Process feature_ids that may include canonical IDs
+            result = {}
+            for feature_id in feature_ids:
+                # First try to map directly
+                direct_map = self.gene_mapper.map_gene_symbols([feature_id], level, self.updated_gene_dict)
+                
+                # If direct mapping worked, use it
+                if feature_id in direct_map and direct_map[feature_id]["gene_name"]:
+                    result[feature_id] = direct_map[feature_id]
+                    continue
+                
+                # If this is a canonical ID, try to map using one of its original IDs
+                if feature_id in canonical_to_original:
+                    for original_id in canonical_to_original[feature_id]:
+                        original_map = self.gene_mapper.map_gene_symbols([original_id], level, self.updated_gene_dict)
+                        if original_id in original_map and original_map[original_id]["gene_name"]:
+                            # Use the original ID's mapping but keep the canonical ID as the transcript symbol
+                            result[feature_id] = {
+                                "transcript_symbol": feature_id,
+                                "gene_name": original_map[original_id]["gene_name"]
+                            }
+                            self.logger.debug(f"Mapped canonical ID {feature_id} using original ID {original_id}")
+                            break
+                
+                # If still not mapped, use a default mapping
+                if feature_id not in result:
+                    result[feature_id] = {
+                        "transcript_symbol": feature_id,
+                        "gene_name": feature_id.split('.')[0] if '.' in feature_id else feature_id
+                    }
+            
+            return result
+        
+        # For gene level or when no transcript mapping is available, use the original method
         return self.gene_mapper.map_gene_symbols(feature_ids, level, self.updated_gene_dict)
 
     def _write_top_genes(self, results: pd.DataFrame, level: str) -> None:
@@ -363,7 +624,8 @@ class DifferentialAnalysis:
         results["abs_stat"] = abs(results["stat"])
 
         if level == "transcript":
-            top_transcripts = results.nlargest(len(results), "abs_stat") # Get ALL transcripts ranked by abs_stat
+            # where baseMean is greater than 500
+            top_transcripts = results[results["baseMean"] > 500].nlargest(len(results), "abs_stat") 
 
             unique_genes = set()
             top_unique_gene_transcripts = []
@@ -376,7 +638,7 @@ class DifferentialAnalysis:
                     unique_genes.add(gene_name)
                     top_unique_gene_transcripts.append(transcript_row)
                     unique_gene_count += 1
-                    if unique_gene_count >= 100: # Stop when we reach 100 unique genes
+                    if unique_gene_count >= 100: # Stop when we reach 500 unique genes
                         break
                 transcript_count += 1 # Keep track of total transcripts considered
 
@@ -431,23 +693,76 @@ class DifferentialAnalysis:
         """
         Perform median-by-ratio normalization on count data.
         This is similar to the normalization used in DESeq2.
+        Handles zeros and potential data type issues safely.
         """
-        # 1. Calculate geometric mean for each feature (row)
-        geometric_means = count_data.apply(gmean, axis=1)
-
-        # 2. Handle rows with zero geometric mean (replace with NaN to avoid division by zero)
-        geometric_means[geometric_means == 0] = np.nan
-
-        # 3. Calculate ratio of each count to the geometric mean
-        count_ratios = count_data.divide(geometric_means, axis=0)
-
-        # 4. Calculate size factor for each sample (column) as the median of ratios
-        size_factors = count_ratios.median(axis=0)
-
-        # 5. Normalize counts by dividing by size factors
-        normalized_counts = count_data.divide(size_factors, axis=1)
-
-        # 6. Fill NaN values with 0 after normalization
-        normalized_counts = normalized_counts.fillna(0)
-
-        return normalized_counts
+        try:
+            # Convert to numeric and handle any non-numeric values
+            count_data_numeric = count_data.apply(pd.to_numeric, errors='coerce').fillna(0)
+            
+            # Ensure all values are positive or zero
+            count_data_nonneg = count_data_numeric.clip(lower=0)
+            
+            # Add pseudocount to avoid zeros (1 is a common choice)
+            count_data_safe = count_data_nonneg + 1
+            
+            # Check data types and values
+            self.logger.debug(f"Count data shape: {count_data_safe.shape}")
+            self.logger.debug(f"Count data dtype: {count_data_safe.values.dtype}")
+            self.logger.debug(f"Min value: {count_data_safe.values.min()}, Max value: {count_data_safe.values.max()}")
+            
+            # Convert to numpy array
+            counts_numpy = count_data_safe.values.astype(float)
+            
+            # Alternative geometric mean calculation
+            # Use log1p which is log(1+x) to handle zeros more safely
+            log_counts = np.log(counts_numpy)
+            row_means = np.mean(log_counts, axis=1)
+            geometric_means = np.exp(row_means)
+            
+            # Check for any invalid values in geometric means
+            if np.any(~np.isfinite(geometric_means)):
+                self.logger.warning("Found non-finite values in geometric means, replacing with 1.0")
+                geometric_means[~np.isfinite(geometric_means)] = 1.0
+            
+            # Calculate ratio of each count to the geometric mean
+            # Reshape geometric_means for broadcasting
+            geo_means_col = geometric_means.reshape(-1, 1)
+            ratios = counts_numpy / geo_means_col
+            
+            # Calculate size factor for each sample (median of ratios)
+            size_factors = np.median(ratios, axis=0)
+            
+            # Check for any invalid values in size factors
+            if np.any(size_factors <= 0) or np.any(~np.isfinite(size_factors)):
+                self.logger.warning("Found invalid size factors, replacing with 1.0")
+                size_factors[~np.isfinite(size_factors) | (size_factors <= 0)] = 1.0
+            
+            # Log size factors
+            self.logger.info(f"Size factors: {size_factors}")
+            
+            # Normalize counts by dividing by size factors
+            # Use original count data (without pseudocount) for the final normalization
+            normalized_counts = pd.DataFrame(
+                count_data_nonneg.values / size_factors,
+                index=count_data.index,
+                columns=count_data.columns
+            )
+            
+            # Fill any NaN values with 0
+            normalized_counts = normalized_counts.fillna(0)
+            
+            return normalized_counts
+            
+        except Exception as e:
+            self.logger.error(f"Error in median ratio normalization: {str(e)}")
+            self.logger.error("Falling back to simple TPM-like normalization")
+            
+            # Fallback normalization (similar to TPM)
+            # Sum each column and divide counts by the sum
+            col_sums = count_data.sum(axis=0)
+            col_sums = col_sums.replace(0, 1)  # Avoid division by zero
+            
+            # Normalize each column by its sum and multiply by 1e6 (similar to TPM scaling)
+            normalized_counts = count_data.div(col_sums, axis=1) * 1e6
+            
+            return normalized_counts

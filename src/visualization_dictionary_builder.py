@@ -5,7 +5,6 @@ import re
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Union, Tuple
-import random
 
 from src.visualization_cache_utils import (
     build_gene_dict_cache_file,
@@ -44,10 +43,10 @@ class DictionaryBuilder:
         self.logger.debug(f"Starting optimized dictionary build with min_value={min_value}")
 
         # 1. Check cache first
-        expr_file, tpm_file = self._get_expression_files()
+        tpm_file = self._get_tpm_file()
         base_cache_file = build_gene_dict_cache_file(
             self.config.extended_annotation,
-            expr_file,
+            tpm_file,
             self.config.ref_only,
             self.cache_dir,
         )
@@ -70,10 +69,7 @@ class DictionaryBuilder:
 
         # 2. Filter novel genes from the base gene dict (not per-condition)
         self.logger.info("Parsing GTF and filtering novel genes")
-        if self.config.ref_only:
-            parsed_data = self.parse_input_gtf()
-        else:
-            parsed_data = self.parse_extended_annotation()
+        parsed_data = self.parse_gtf()
         self._validate_gene_structure(parsed_data)
         base_gene_dict = self._filter_novel_genes(parsed_data)
 
@@ -86,20 +82,13 @@ class DictionaryBuilder:
             f"After novel gene filtering: {gene_count_after_novel_filter} genes, {transcript_count_after_novel_filter} transcripts"
         )
 
-        # 3. Load expression data with consistent header handling
-        self.logger.info("Loading expression matrix (Counts)")
-        try:
-            expr_df = pd.read_csv(expr_file, sep='\t', comment=None)
-            expr_df.columns = [col.lstrip('#') for col in expr_df.columns]  # Clean headers
-            expr_df = expr_df.set_index('feature_id')  # Use cleaned column name
-        except KeyError as e:
-            self.logger.error(f"Missing required column in {expr_file}: {str(e)}")
-            raise
-        except Exception as e:
-            self.logger.error(f"Failed to load count expression matrix: {str(e)}")
-            raise
+        if hasattr(self.config, 'transcript_map') and self.config.transcript_map:
+            self.logger.info(f"Using transcript mapping from OutputConfig with {len(self.config.transcript_map)} entries")
+        else:
+            self.logger.info("No transcript mapping found, proceeding with original transcripts")
 
-        self.logger.info("Loading TPM matrix")
+        # 3. Load expression data (TPM only) with consistent header handling
+        self.logger.info("Loading TPM matrix for filtering and expression values")
         try:
             tpm_df = pd.read_csv(tpm_file, sep='\t', comment=None)
             tpm_df.columns = [col.lstrip('#') for col in tpm_df.columns]  # Clean headers
@@ -111,10 +100,10 @@ class DictionaryBuilder:
             self.logger.error(f"Failed to load TPM expression matrix: {str(e)}")
             raise
 
-        conditions = expr_df.columns.tolist()
+        conditions = tpm_df.columns.tolist()
 
-        # 4. Vectorized processing instead of row-wise iteration (using counts for filtering)
-        transcript_max_values = expr_df.max(axis=1)
+        # 4. Vectorized processing using TPM for both filtering and values
+        transcript_max_values = tpm_df.max(axis=1)
         valid_transcripts = set(
             transcript_max_values[transcript_max_values >= min_value].index
         )
@@ -122,21 +111,20 @@ class DictionaryBuilder:
         # Add debug log: Number of valid transcripts after min_value filtering
         valid_transcript_count = len(valid_transcripts)
         self.logger.debug(
-            f"After min_value ({min_value}) filtering: {valid_transcript_count} valid transcripts"
+            f"After TPM min_value ({min_value}) filtering: {valid_transcript_count} valid transcripts"
         )
 
-        # 5. Single-pass filtering and value updating (using TPMs for values)
+        # 5. Single-pass filtering and value updating (using TPMs for both)
         filtered_dict = {}
         for condition in conditions:
             filtered_dict[condition] = {}
-            condition_counts = expr_df[condition]  # Still using counts for filtering logic if needed later
-            condition_tpm_values = tpm_df[condition] # Use TPM values for assigning expression
+            condition_tpm_values = tpm_df[condition]
 
             for gene_id, gene_info in base_gene_dict.items():
                 new_transcripts = {
-                    tid: {**tinfo, 'value': condition_tpm_values.get(tid, 0)} # Use TPM values here!
+                    tid: {**tinfo, 'value': condition_tpm_values.get(tid, 0)}
                     for tid, tinfo in gene_info['transcripts'].items()
-                    if tid in valid_transcripts # Filtering is still based on counts implicitly from valid_transcripts
+                    if tid in valid_transcripts
                 }
 
                 if new_transcripts:
@@ -152,7 +140,7 @@ class DictionaryBuilder:
                 aggregated_exons = {}
                 # Iterate over each transcript in the gene.
                 for transcript_id, transcript_info in gene_info["transcripts"].items():
-                    transcript_value = transcript_info.get("value", 0) # Now this is TPM value
+                    transcript_value = transcript_info.get("value", 0) # TPM value
                     # Loop through each exon in the current transcript.
                     for exon in transcript_info.get("exons", []):
                         exon_id = exon.get("exon_id")
@@ -172,24 +160,22 @@ class DictionaryBuilder:
                 # Now assign the aggregated exon dictionary to the gene.
                 gene_info["exons"] = aggregated_exons
 
-        # Write exon expression table with proper Path handling
-        output_file = Path(self.config.output_directory) / "exon_expression_table.tsv"
-        self.write_exon_expression_table(filtered_dict, output_file)
-
         save_cache(
             expr_filter_cache, (filtered_dict, self.novel_gene_ids, self.novel_transcript_ids)
         )
         self.logger.info(f"Saved dictionary to cache at {expr_filter_cache}")
         return filtered_dict
 
-    def _get_expression_files(self) -> Tuple[str, str]:
-        """Get count file for filtering and TPM file for values."""
-        # Get counts file path using existing logic
-        counts_file = self._get_expression_file()
-        
-        # Get corresponding TPM file path
-        if self.config.conditions:
-            tpm_file = self.config.transcript_grouped_tpm
+    def _get_tpm_file(self) -> str:
+        """Get the appropriate TPM file path from config."""
+        if self.config.conditions:  # Check if we have multiple conditions
+            # For multi-condition data, prioritize merged files if available
+            merged_tpm = self.config.transcript_grouped_tpm
+            if merged_tpm and "_merged.tsv" in merged_tpm:
+                self.logger.info("Using merged TPM file with transcript mapping already applied")
+                tpm_file = merged_tpm
+            else:
+                tpm_file = self.config.transcript_grouped_tpm
         else:
             if self.config.ref_only:
                 tpm_file = self.config.transcript_tpm_ref
@@ -201,175 +187,7 @@ class DictionaryBuilder:
         if not tpm_file or not Path(tpm_file).exists():
             raise FileNotFoundError(f"TPM file {tpm_file} not found")
         
-        return counts_file, tpm_file
-
-    def _get_expression_file(self) -> str:
-        """Get the appropriate count file path from config."""
-        if self.config.conditions:  # Check if we have multiple conditions
-            expr_file = self.config.transcript_grouped_counts
-        else:
-            if self.config.ref_only:
-                expr_file = self.config.transcript_counts_ref
-            else:
-                base_file = self.config.transcript_counts.replace('.tsv', '')
-                expr_file = f"{base_file}_merged.tsv"
-        
-        self.logger.debug(f"Selected count file: {expr_file}")
-        if not expr_file or not Path(expr_file).exists():
-            raise FileNotFoundError(f"Count file {expr_file} not found")
-        return expr_file
-
-    def write_exon_expression_table(self, gene_dict: Dict[str, Any], output_path: Path) -> None:
-        """
-        Write a table of exon expressions across conditions.
-        """
-        self.logger.info("Creating exon expression table")
-
-        # Ensure output directory exists.
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Get all conditions (keys in gene_dict).
-        conditions = list(gene_dict.keys())
-        self.logger.debug(f"Processing {len(conditions)} conditions: {conditions}")
-
-        # Prepare header.
-        header = [
-            "Gene Symbol", "Gene Name", "Gene Coordinates", "Ensembl ID",
-            "Exon number", "Chrom", "Exon start", "Exon end", "Strand"
-        ] + conditions
-
-        # Instead of looping condition by condition, create a union of gene IDs.
-        all_gene_ids = set()
-        for cond in conditions:
-            all_gene_ids.update(gene_dict[cond].keys())
-        self.logger.debug(f"Total unique genes to process: {len(all_gene_ids)}")
-
-        rows = []
-        gene_count = 0 # Initialize gene counter for logging
-        processed_exon_count = 0
-        sample_exon_ids = set() # To keep track of sampled exons
-        num_sample_exons = 100
-
-        for gene_id in all_gene_ids:
-            gene_count += 1 # Increment gene counter
-            self.logger.debug(f"Processing gene {gene_count}/{len(all_gene_ids)}: {gene_id}")
-
-            # Get a representative gene_info (static data is the same across conditions).
-            rep_gene_info = None
-            for cond in conditions:
-                if gene_id in gene_dict[cond]:
-                    rep_gene_info = gene_dict[cond][gene_id]
-                    break
-            if rep_gene_info is None:
-                self.logger.warning(f"Gene {gene_id} not found in any condition, skipping.")
-                continue  # Should not happen, but skip if not found.
-
-            # Compute gene coordinates string.
-            gene_coords = f"{rep_gene_info['chromosome']}:{rep_gene_info['start']}-{rep_gene_info['end']}"
-
-            # Collect the union of exon IDs across all conditions for this gene.
-            all_exon_ids = set()
-            for cond in conditions:
-                if gene_id in gene_dict[cond]:
-                    all_exon_ids.update(gene_dict[cond][gene_id].get("exons", {}).keys())
-            self.logger.debug(f"  Gene {gene_id} - Total unique exons across conditions: {len(all_exon_ids)}")
-
-            exon_count = 0 # Initialize exon counter for logging
-            exon_ids_list = list(all_exon_ids) # Convert to list for sampling
-            sampled_exons_for_gene = []
-
-            # Sample exons if we haven't reached the desired number yet
-            if processed_exon_count < num_sample_exons:
-                num_to_sample = min(num_sample_exons - processed_exon_count, len(exon_ids_list))
-                sampled_exons_for_gene = random.sample(exon_ids_list, num_to_sample)
-
-            # For each exon, gather condition-specific expression values.
-            for exon_id in exon_ids_list: # Iterate through all exons, sample only for logging
-                exon_count += 1 # Increment exon counter
-                process_exon_for_log = False
-                if exon_id in sampled_exons_for_gene and processed_exon_count < num_sample_exons and exon_id not in sample_exon_ids:
-                    process_exon_for_log = True
-                    processed_exon_count += 1
-                    sample_exon_ids.add(exon_id) # Mark as processed
-
-                if process_exon_for_log:
-                    self.logger.debug(f"  Gene {gene_id} - Processing exon {exon_count}/{len(all_exon_ids)} (SAMPLE): {exon_id}")
-                else:
-                    self.logger.debug(f"  Gene {gene_id} - Processing exon {exon_count}/{len(all_exon_ids)}: {exon_id}")
-
-                exon_expressions = []
-                aggregated_transcript_values = {} # To store transcript values for logging
-
-                for cond in conditions:
-                    expr = 0.0
-                    # Lookup the gene in the current condition.
-                    gene_info = gene_dict[cond].get(gene_id, {})
-                    exon_info = gene_info.get("exons", {}).get(exon_id, {})
-                    expr = exon_info.get("value", 0.0) # Get condition-specific exon value
-
-                    if process_exon_for_log:
-                        # Find transcripts contributing to this exon and log their values
-                        contributing_transcripts = []
-                        for transcript_id, transcript_info in gene_info.get("transcripts", {}).items():
-                            for exon_data in transcript_info.get("exons", []):
-                                if exon_data.get("exon_id") == exon_id:
-                                    transcript_value = transcript_info.get("value", 0.0)
-                                    contributing_transcripts.append((transcript_id, transcript_value))
-                                    aggregated_transcript_values[cond] = aggregated_transcript_values.get(cond, []) + [(transcript_id, transcript_value)]
-
-                        self.logger.debug(f"    Condition {cond} - Exon {exon_id} expression: {expr:.2f}")
-                        if contributing_transcripts:
-                            transcript_log_str = ", ".join([f"{tid}:{val:.2f}" for tid, val in contributing_transcripts])
-                            self.logger.debug(f"      Contributing transcripts (Condition {cond}): {transcript_log_str}")
-                        else:
-                            self.logger.debug(f"      No transcripts contributing to exon {exon_id} in condition {cond}")
-
-
-                    exon_expressions.append(f"{expr:.2f}")
-
-                if process_exon_for_log:
-                    # Log the aggregation process
-                    for cond in conditions:
-                        transcript_values_for_cond = aggregated_transcript_values.get(cond, [])
-                        if transcript_values_for_cond:
-                            sum_of_transcripts = sum([val for tid, val in transcript_values_for_cond])
-                            self.logger.debug(f"    Condition {cond} - Sum of contributing transcript TPMs for exon {exon_id}: {sum_of_transcripts:.2f} (Exon TPM: {exon_expressions[conditions.index(cond)]})")
-                        else:
-                             self.logger.debug(f"    Condition {cond} - No contributing transcripts found to sum for exon {exon_id}")
-
-
-                # Use the representative gene's exon info for static details.
-                rep_exon_info = rep_gene_info.get("exons", {}).get(exon_id, {})
-                exon_number = rep_exon_info.get("number", "NA")
-                exon_start = str(rep_exon_info.get("start", ""))
-                exon_end = str(rep_exon_info.get("end", ""))
-
-                row = [
-                    gene_id,                            # Gene Symbol
-                    rep_gene_info.get("name", ""),      # Gene Name
-                    gene_coords,                        # Gene Coordinates
-                    exon_id,                            # Ensembl ID (exon_id)
-                    exon_number,                        # Exon number
-                    rep_gene_info["chromosome"],        # Chromosome
-                    exon_start,                         # Exon start
-                    exon_end,                           # Exon end
-                    rep_gene_info["strand"],            # Strand
-                ] + exon_expressions                   # Expression values for each condition
-
-                rows.append(row)
-                self.logger.debug(f"  Gene {gene_id} - Row for exon {exon_id} prepared.")
-                if process_exon_for_log:
-                    self.logger.debug(f"  Gene {gene_id} - Sampled exon {exon_id} processing complete.")
-
-        # Write header and rows to the output file.
-        self.logger.info(f"Writing {len(rows)} exon entries to table")
-        with open(output_path, 'w') as f:
-            f.write('\t'.join(header) + '\n')
-            for row in rows:
-                f.write('\t'.join(str(x) for x in row) + '\n')
-
-        self.logger.info(f"Exon expression table written to {output_path}")
-
+        return tpm_file
 
     # ------------------ READ ASSIGNMENT CACHING ------------------
 
@@ -471,12 +289,22 @@ class DictionaryBuilder:
 
     # -------------------- GTF PARSING --------------------
 
-    def parse_input_gtf(self) -> Dict[str, Any]:
+    def parse_gtf(self) -> Dict[str, Any]:
         """
-        Parse the reference GTF file using gffutils with optimized settings,
-        building a dictionary of genes, transcripts, and exons.
-        Updated to match the structure of parse_extended_annotation.
+        Parse GTF file into a dictionary with genes, transcripts, and exons.
+        Handles both reference GTF (with gffutils) and extended annotation GTF.
         """
+        if self.config.ref_only:
+            # Use gffutils for reference GTF (more robust but slower)
+            self.logger.info("Parsing reference GTF using gffutils")
+            return self._parse_reference_gtf()
+        else:
+            # Use faster custom parser for extended annotation
+            self.logger.info("Parsing extended annotation GTF with custom parser")
+            return self._parse_extended_gtf()
+            
+    def _parse_reference_gtf(self) -> Dict[str, Any]:
+        """Parse reference GTF using gffutils"""
         if not self.config.genedb_filename:
             db_path = self.cache_dir / "gtf.db"
             if not db_path.exists():
@@ -485,7 +313,7 @@ class DictionaryBuilder:
                     self.config.input_gtf,
                     dbfn=str(db_path),
                     force=True,
-                    merge_strategy="create_unique",  # Faster than merge
+                    merge_strategy="create_unique",
                     disable_infer_genes=True,
                     disable_infer_transcripts=True,
                     verbose=False,
@@ -559,13 +387,13 @@ class DictionaryBuilder:
                         }
                     )
 
-        self.logger.info(f"Processed {len(gene_dict)} genes from GTF")
+        self.logger.info(f"Processed {len(gene_dict)} genes from reference GTF")
         return gene_dict
-
-    def parse_extended_annotation(self) -> Dict[str, Any]:
-        """Parse merged GTF into base structure without condition info."""
+        
+    def _parse_extended_gtf(self) -> Dict[str, Any]:
+        """Parse extended annotation GTF with custom parser"""
         base_gene_dict = {}
-        self.logger.info("Parsing extended annotation GTF (non-ref_only)")
+        self.logger.info("Parsing extended annotation GTF")
         
         try:
             with open(self.config.extended_annotation, "r") as file:
@@ -628,11 +456,27 @@ class DictionaryBuilder:
                             }
                             base_gene_dict[gene_id]["transcripts"][transcript_id]["exons"].append(exon_info)
 
-            self.logger.info(f"Parsed base structure: {len(base_gene_dict)} genes")
+            self.logger.info(f"Processed {len(base_gene_dict)} genes from extended annotation GTF")
             return base_gene_dict
         except Exception as e:
             self.logger.error(f"GTF parsing failed: {str(e)}")
             raise
+            
+    # Keep the original functions for backward compatibility, but have them use the new implementation
+    def parse_input_gtf(self) -> Dict[str, Any]:
+        """
+        Parse the reference GTF file using gffutils.
+        This is now a wrapper around _parse_reference_gtf for backward compatibility.
+        """
+        return self._parse_reference_gtf()
+        
+    def parse_extended_annotation(self) -> Dict[str, Any]:
+        """
+        Parse extended annotation GTF.
+        This is now a wrapper around _parse_extended_gtf for backward compatibility.
+        """
+        return self._parse_extended_gtf()
+
     # -------------------- UPDATES & UTILITIES --------------------
 
     def update_gene_names(self, gene_dict: Dict[str, Any]) -> Dict[str, Any]:
