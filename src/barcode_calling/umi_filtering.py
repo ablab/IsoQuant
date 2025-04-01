@@ -471,7 +471,7 @@ class UMIFilter:
                         matching_events = [e.event_type for e in m.match_subclassifications]
 
                         self.total_assignments += 1
-                        assigned = gene_id != "."
+                        assigned = gene_id is not None
                         spliced = len(exon_blocks) > 1
                         barcoded = barcode is not None
                         transcript_type, polya_site = (transcript_type_dict[transcript_id] if transcript_id in transcript_type_dict
