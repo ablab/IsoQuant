@@ -22,7 +22,7 @@ def merge_file_list(fname, label, chr_ids):
 
 def merge_files(file_name, label, chr_ids, merged_file_handler, copy_header=True):
     file_names = merge_file_list(file_name, label, chr_ids)
-    file_names.sort(key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split('(\d+)', s)])
+    file_names.sort(key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)])
     for i, file_name in enumerate(file_names):
         if not os.path.exists(file_name): continue
         header_count = 0
