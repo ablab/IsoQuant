@@ -44,6 +44,7 @@ def parse_args():
     parser.add_argument("--only_unique", action="store_true", help="keep only non-ambiguous reads", default=False)
     parser.add_argument("--disregard_length_diff", action="store_true", help="do not account for length difference "
                                                                              "when comparing UMIs", default=False)
+    parser.add_argument("--downsample_fraction", type=float, help="downsample reads with specified fraction (0, 1)")
     parser.add_argument("--old_barcode_format", action="store_true",
                         help="use previous barcode formate (barcode column = 6)", default=False)
 
@@ -71,7 +72,7 @@ def main():
         logger.info("Results will be saved to %s" % output_prefix)
         umi_filter = UMIFilter(barcode_umi_dict, d, args.disregard_length_diff,
                                args.only_unique, args.only_spliced)
-        umi_filter.process(args.read_assignments, output_prefix, transcript_info_dict)
+        umi_filter.process(args.read_assignments, output_prefix, transcript_info_dict, args.downsample_fraction)
         if args.bam:
             filter_bam(args.bam, output_prefix  + ".UMI_filtered.reads.bam", umi_filter.selected_reads)
         logger.info("== Done filtering by UMIs with edit distance %d ==" % d)

@@ -705,21 +705,23 @@ class DatasetProcessor:
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX: [2, -1],
                        IsoQuantMode.double: [2, -1],
-                       IsoQuantMode.stereo_pc: [4, -1],
-                       IsoQuantMode.stereo_split_pc: [4, -1]}
+                       IsoQuantMode.stereo_pc: [4],
+                       IsoQuantMode.stereo_split_pc: [4]}
         if self.args.barcoded_reads:
             sample.barcoded_reads = self.args.barcoded_reads
 
         barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
-        for i, d in enumerate(umi_ed_dict[self.args.mode]):
-            logger.info("== Filtering by UMIs with edit distance %d ==" % d)
-            output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
-            logger.info("Results will be saved to %s" % output_prefix)
-            umi_filter = UMIFilter(barcode_umi_dict, d)
-            output_filtered_reads = i == 0
-            umi_filter.process_from_raw_assignments(sample.out_raw_file, self.get_chr_list(), self.args, output_prefix,
-                                                    self.transcript_type_dict, output_filtered_reads)
-            logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
+        for downsample_fraction in [0.25, 0.5, 0.75, 1.00]:
+            logger.info("== Filtering by UMIs with downsample fraction %d ==" % downsample_fraction)
+            for i, d in enumerate(umi_ed_dict[self.args.mode]):
+                logger.info("== Filtering by UMIs with edit distance %d ==" % d)
+                output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d) + ".downsample_%.2f" % downsample_fraction
+                logger.info("Results will be saved to %s" % output_prefix)
+                umi_filter = UMIFilter(barcode_umi_dict, d)
+                output_filtered_reads = i == 0
+                umi_filter.process_from_raw_assignments(sample.out_raw_file, self.get_chr_list(), self.args, output_prefix,
+                                                        self.transcript_type_dict, output_filtered_reads, downsample_fraction=downsample_fraction)
+                logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
     def load_read_info(self, dump_filename):
         info_loader = open(dump_filename + "_info", "rb")

@@ -3,6 +3,7 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
+import random
 
 import pysam
 import sys
@@ -339,7 +340,7 @@ class UMIFilter:
             if assigned and barcoded:
                 self.unique_gene_barcode.add((read_infos[0].gene_id, read_infos[0].barcode))
 
-    def process(self, assignment_file, output_prefix, transcript_type_dict):
+    def process(self, assignment_file, output_prefix, transcript_type_dict, downsample_fraction=None):
         outf = open(output_prefix + ".reads_ids.tsv", "w")
         allinfo_outf = open(output_prefix + ".allinfo", "w")
 
@@ -353,6 +354,7 @@ class UMIFilter:
 
         self.unique_gene_barcode = set()
         assignment_files = assignment_file if isinstance(assignment_file, list) else [assignment_file]
+        discarded_read_ids = set()
 
         for af in assignment_files:
             if os.path.exists(af):
@@ -412,7 +414,13 @@ class UMIFilter:
                     current_interval = read_interval
                     gene_barcode_dict.clear()
 
-                gene_barcode_dict[gene_id][barcode].append(assignment_info)
+                if downsample_fraction is not None:
+                    if read_id in discarded_read_ids or random.random() > downsample_fraction:
+                        discarded_read_ids.add(read_id)
+                    else:
+                        gene_barcode_dict[gene_id][barcode].append(assignment_info)
+                else:
+                    gene_barcode_dict[gene_id][barcode].append(assignment_info)
                 current_interval = (current_interval[0], max(current_interval[1], read_interval[1]))
 
         processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, allinfo_outf, outf)
@@ -439,13 +447,14 @@ class UMIFilter:
                 count_hist_file.write("%s\t%d\n" % (k, self.stats[k]))
 
     # TODO: make parallel
-    def process_from_raw_assignments(self, saves_file, chr_ids, args, output_prefix, transcript_type_dict, output_filtered_reads=False):
+    def process_from_raw_assignments(self, saves_file, chr_ids, args, output_prefix, transcript_type_dict, output_filtered_reads=False, downsample_fraction=None):
         allinfo_outf = open(output_prefix + ".allinfo", "w")
 
         read_info_storage = defaultdict(list)
         read_count = 0
         spliced_count = 0
         self.unique_gene_barcode = set()
+        discarded_read_ids = set()
 
         for chr_id in chr_ids:
             outf = open(saves_file + "_filtered_" + chr_id, "w") if output_filtered_reads else None
@@ -486,7 +495,13 @@ class UMIFilter:
                         if not spliced and self.only_spliced_reads:
                             continue
 
-                        gene_barcode_dict[gene_id][barcode].append(assignment_info)
+                        if downsample_fraction is not None:
+                            if read_id in discarded_read_ids or random.random() > downsample_fraction:
+                                discarded_read_ids.add(read_id)
+                            else:
+                                gene_barcode_dict[gene_id][barcode].append(assignment_info)
+                        else:
+                            gene_barcode_dict[gene_id][barcode].append(assignment_info)
 
                 processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, allinfo_outf, outf)
                 read_count += processed_read_count
