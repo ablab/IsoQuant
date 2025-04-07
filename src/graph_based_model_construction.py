@@ -51,7 +51,7 @@ class GraphBasedModelConstructor:
     detected_known_isoforms = set()
     extended_transcript_ids = set()
 
-    def __init__(self, gene_info, chr_record, params, transcript_counter, id_distributor):
+    def __init__(self, gene_info, chr_record, params, transcript_counter, id_distributor, ground_truth_gene_info=None):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
@@ -77,6 +77,9 @@ class GraphBasedModelConstructor:
         self.internal_counter = defaultdict(int)
         self.read_assignment_counts = defaultdict(int)
         self.transcript2transcript = []
+
+        self.ground_truth_gene_info = ground_truth_gene_info
+        self.ground_truth_isoforms = {}
 
     def get_transcript_id(self):
         return self.id_distributor.increment()
@@ -124,6 +127,14 @@ class GraphBasedModelConstructor:
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
         print("Known Isoforms",self.known_isoforms_in_graph)
+
+        if not self.ground_truth_gene_info:
+            self.ground_truth_isoforms = {}
+        else:
+            self.ground_truth_isoforms = self.get_known_spliced_isoforms(self.ground_truth_gene_info, "expressed")
+        # list of list, ground truth paths
+        ground_truth_isoform_list = list(map(lambda x: list(x), self.ground_truth_isoforms.keys()))
+
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
@@ -393,9 +404,9 @@ class GraphBasedModelConstructor:
             isoform_introns = gene_info.all_isoforms_introns[isoform_id]
             intron_path = self.path_processor.thread_introns(isoform_introns)
             if not intron_path:
-                #logger.debug("== No path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
+                logger.debug("== No path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
                 continue
-            #logger.debug("== Path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
+            logger.debug("== Path found for %s isoform %s: %s" % (s, isoform_id, gene_info.all_isoforms_introns[isoform_id]))
             known_isoforms[tuple(intron_path)] = isoform_id
         return known_isoforms
 

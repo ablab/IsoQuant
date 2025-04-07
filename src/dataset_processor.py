@@ -23,6 +23,7 @@ from .common import proper_plural_form
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .stats import EnumStats
+from .gene_info import GeneInfo
 from .file_utils import merge_files, merge_counts
 from .input_data_storage import SampleData
 from .alignment_processor import AlignmentCollector, AlignmentType
@@ -250,6 +251,11 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         gffutils_db = None
     aggregator = ReadAssignmentAggregator(args, sample, read_groups, gffutils_db, chr_id)
 
+    ground_truth_db = None
+    if args.ground_truth_genedb:
+        logger.debug("Loading ground truth genes from %s" % args.ground_truth_genedb)
+        ground_truth_db = gffutils.FeatureDB(args.ground_truth_genedb)
+
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
     transcript_id_distributor = ExcludingIdDistributor(gffutils_db, chr_id)
@@ -274,6 +280,17 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
     while loader.has_next():
         gene_info, assignment_storage = loader.get_next()
+        ground_truth_gene_info = None
+        if ground_truth_db:
+            gene_list = []
+            for g in gene_info.gene_db_list:
+                try:
+                    gene_list.append(ground_truth_db[g.id])
+                except gffutils.exceptions.FeatureNotFoundError:
+                    pass
+            if gene_list:
+                ground_truth_gene_info = GeneInfo(gene_list, ground_truth_db, delta=args.delta)
+
         logger.debug("Processing %d reads" % len(assignment_storage))
         for read_assignment in assignment_storage:
             if read_assignment is None:
@@ -285,7 +302,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         if construct_models:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
                                                            aggregator.transcript_model_global_counter,
-                                                           transcript_id_distributor)
+                                                           transcript_id_distributor,
+                                                           ground_truth_gene_info)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)

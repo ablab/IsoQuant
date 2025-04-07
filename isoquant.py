@@ -98,6 +98,10 @@ def parse_args(cmd_args=None, namespace=None):
                                 help="use this flag if gene annotation contains transcript and gene metafeatures, "
                                      "e.g. with official annotations, such as GENCODE; "
                                      "speeds up gene database conversion")
+    ref_args_group.add_argument("--ground_truth_genedb", help="gene database with ground truth "
+                                                              "in gffutils DB format;"
+                                                              "use src/gtf2db.py [--complete_genedb] for conversion",
+                                type=str)
     add_additional_option_to_group(ref_args_group, "--index", help="genome index for specified aligner (optional)",
                                    type=str)
 
