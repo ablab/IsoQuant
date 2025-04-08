@@ -4,7 +4,7 @@ from collections import defaultdict
 from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
 import logging
 from itertools import chain
-
+import pickle
 logger = logging.getLogger('IsoQuant')
 
 '''
@@ -179,7 +179,7 @@ def transfer_constraints(transcripts_constrints):
     print(pc_transformed)
     return pc_transformed
 
-
+import time
 def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
 
     print(transcripts_constraints)
@@ -189,6 +189,13 @@ def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=3
         #print(key,", ",intron_graph.edge_weights[key])
     # graph = Intron2Nx_old(intron_graph)
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx(intron_graph)
+    nx.write_gml(graph, "graph.gml")
+    add_startsfile = open('add_starts', 'wb')
+    pickle.dump(additional_starts,add_startsfile)
+    add_endsfile = open('add_ends', 'wb')
+    pickle.dump(additional_ends, add_endsfile)
+    edges_ignore=open('edges_ignored','wb')
+    pickle.dump(edges_to_ignore, edges_ignore)
     print(graph.nodes())
     #print(graph.edges(data=True))
     fp.utils.draw_solution(
@@ -214,17 +221,19 @@ def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=3
     min_path_error_model = fp.NumPathsOptimization(
         model_type = fp.kMinPathError,
         stop_on_first_feasible=True,
-        G=graph, 
-        flow_attr="flow",
-        additional_starts=additional_starts,
-        additional_ends=additional_ends,
-        edges_to_ignore=edges_to_ignore,
-        subpath_constraints=constraints,
-        optimization_options=optimization_options,
+        G = graph,
+        flow_attr = "flow",
+        additional_starts = additional_starts,
+        additional_ends = additional_ends,
+        edges_to_ignore = edges_to_ignore,
+        subpath_constraints = constraints,
+        optimization_options = optimization_options,
         )
     #print("Attempting to solve mpe_model with k=",str(this_k))
+    start=time.time()
     min_path_error_model.solve()
-    
+    end=time.time()
+    print("Solution found! in ",end-start, " seconds")
     # this_k = 5
     # mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
     # mpe_model.solve()
@@ -245,20 +254,21 @@ def process_solution(
         print(solution)
         print(model.solve_statistics)
         print("model.is_valid_solution()", model.is_valid_solution())
-        fp.utils.draw_solution_basic(
+        fp.utils.draw_solution(
             graph=graph,
             flow_attr="flow",
-            paths=solution["paths"],
-            weights=solution["weights"],
+            paths = solution["paths"],
+            weights = solution["weights"],
             filename = str(id(graph))+".png", # this will be used as filename
-            draw_options={
+            draw_options = {
             "show_graph_edges": True,
             "show_edge_weights": True,
             "show_path_weights": False,
             "show_path_weight_on_first_edge": True,
             "pathwidth": 2,
         },
-        additional_starts=additional_starts,
-        additional_ends=additional_ends,)
+        additional_starts = additional_starts,
+        additional_ends = additional_ends,)
+        return solution
     else:
         print("Model could not be solved.")
