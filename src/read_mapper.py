@@ -304,33 +304,20 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
 
     if aligner == "starlong":
         star_path = get_aligner('STARlong')
-        zcat_option = " --readFilesCommand zcat " if ext.endswith('gz') else ""
-
-        # Simple
+        zcat_option = ['--readFilesCommand', 'zcat'] if ext.endswith('gz') else []
         # command = '{star} --runThreadN 16 --genomeDir {ref_index_name}  --readFilesIn {transcripts}  --outSAMtype SAM
         #  --outFileNamePrefix {alignment_out}'.format(star=star_path, ref_index_name=star_index, transcripts=short_id_contigs_name, alignment_out=alignment_sam_path)
-        annotation_opts = "" if not annotation_file else " --sjdbGTFfile " + annotation_file + " --sjdbOverhang 140 "
-        command = '{exec_path} {zcat} --runThreadN {threads} --genomeDir {ref_index_name}  --readFilesIn {transcripts}  ' \
-                  '--outSAMtype BAM Unsorted --outSAMattributes NH HI NM MD ' \
-                  + annotation_opts + \
-                  '--outFileNamePrefix {alignment_out}'.format(exec_path=star_path,
-                                                               zcat=zcat_option,
-                                                               threads=str(args.threads),
-                                                               ref_index_name=args.index,
-                                                               transcripts=fastq_path,
-                                                               alignment_out=alignment_prefix)
+        annotation_opts = [] if not annotation_file else ['--sjdbGTFfile', annotation_file, '--sjdbOverhang', '140']
+        command = ([star_path, '--runThreadN', str(args.threads), '--genomeDir', args.index, '--readFilesIn',
+                   fastq_path, '--outSAMtype', 'BAM', 'SortedByCoordinate',
+                   '--outBAMsortingThreadN', str(args.threads), '--outSAMattributes', 'NH', 'HI', 'NM', 'MD'] +
+                   annotation_opts + zcat_option + ['--outFileNamePrefix', alignment_prefix])
         if args.mapping_options:
             command += " " + args.mapping_options
 
         logger.info("Running STAR (takes a while)")
-        if subprocess.call(command.split(), stdout=log_file, stderr=log_file) != 0:
+        if subprocess.call(command, stdout=log_file, stderr=log_file) != 0:
             logger.critical("STAR finished with errors! See " + log_fpath)
-            exit(-1)
-        logger.info("Sorting alignments")
-        try:
-            pysam.sort('-@', str(args.threads), '-o', alignment_bam_path, alignment_prefix + 'Aligned.out.bam')
-        except pysam.SamtoolsError as err:
-            logger.error(err.value)
             exit(-1)
 
     elif aligner == "minimap2":
