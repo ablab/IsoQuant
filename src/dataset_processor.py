@@ -712,7 +712,7 @@ class DatasetProcessor:
 
         barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
         for downsample_fraction in [0.25, 0.5, 0.75, 1.00]:
-            logger.info("== Filtering by UMIs with downsample fraction %d ==" % downsample_fraction)
+            logger.info("== Filtering by UMIs with downsample fraction %.2f ==" % downsample_fraction)
             for i, d in enumerate(umi_ed_dict[self.args.mode]):
                 logger.info("== Filtering by UMIs with edit distance %d ==" % d)
                 output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d) + ".downsample_%.2f" % downsample_fraction

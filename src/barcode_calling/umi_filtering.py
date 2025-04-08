@@ -429,6 +429,8 @@ class UMIFilter:
         outf.close()
         allinfo_outf.close()
 
+        logger.info("Processed %d assignments from %d reads, %d of them were discarded due to downsampling (%.4f)" %
+                    (read_count, len(read_info_storage), len(discarded_read_ids), len(discarded_read_ids)/len(read_info_storage)))
         logger.info("Saved %d reads, of them spliced %d to %s" % (read_count, spliced_count, output_prefix))
         logger.info("Total assignments processed %d (typically much more than read count)" % self.total_assignments)
         # logger.info(", ".join([("%d:%d" % (k, self.ambiguous_polya_dist[k])) for  k in sorted(self.ambiguous_polya_dist.keys())]))
@@ -510,6 +512,9 @@ class UMIFilter:
                 outf.close()
 
         allinfo_outf.close()
+        logger.info("Processed %d assignments from %d reads, %d of them were discarded due to downsampling (%.4f)" %
+                    (read_count, len(read_info_storage), len(discarded_read_ids),
+                     len(discarded_read_ids) / len(read_info_storage)))
         logger.info("Saved %d reads, of them spliced %d to %s" % (read_count, spliced_count, output_prefix))
         logger.info("Total assignments processed %d (typically much more than read count)" % self.total_assignments)
         logger.info("Ambiguous polyAs %d, ambiguous types %d, inconsistent reads %d" %
