@@ -49,11 +49,11 @@ class DataSetReadMapper:
         if args.index and os.path.exists(args.index):
             return args.index
 
-        index = None if args.clean_start else find_stored_index(args)
+        index = None if args.clean_start else find_stored_index(args, self.aligner)
 
         if index is None:
             index = index_reference(self.aligner, args)
-            store_index(index, args)
+            store_index(index, args, self.aligner)
         return index
 
     def map_reads(self, args):
@@ -86,7 +86,7 @@ def get_aligner(aligner):
     return path
 
 
-def find_stored_index(args):
+def find_stored_index(args, aligner):
     reference_filename = os.path.abspath(args.reference)
 
     with open(args.index_config_path, 'r') as f_in:
@@ -98,16 +98,16 @@ def find_stored_index(args):
         return None
     index_mtime = converted_indexes.get(reference_filename, {}).get('index_mtime')
     reference_mtime = converted_indexes.get(reference_filename, {}).get('reference_mtime')
-    kmer_size = converted_indexes.get(reference_filename, {}).get('kmer_size')
+    used_aligner = converted_indexes.get(reference_filename, {}).get('aligner')
     if os.path.exists(reference_filename) and os.path.getmtime(reference_filename) == reference_mtime:
         if os.path.exists(index_filename) and os.path.getmtime(index_filename) == index_mtime:
-            if KMER_SIZE[args.data_type] == kmer_size:
+            if aligner + str(KMER_SIZE[args.data_type]) == used_aligner:
                 logger.info('Index file found. Using {}'.format(index_filename))
                 return index_filename
     return None
 
 
-def store_index(index, args):
+def store_index(index, args, aligner):
     reference_filename = os.path.abspath(args.reference)
     index = os.path.abspath(index)
 
@@ -117,7 +117,7 @@ def store_index(index, args):
         'index_filename': index,
         'reference_mtime': os.path.getmtime(reference_filename),
         'index_mtime': os.path.getmtime(index),
-        'kmer_size': KMER_SIZE[args.data_type]
+        'aligner': aligner + str(KMER_SIZE[args.data_type])
     }
     with open(args.index_config_path, 'w') as f_out:
         json.dump(converted_indexes, f_out)
