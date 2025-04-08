@@ -262,7 +262,10 @@ def find_annotation(aligner, args):
         return None
     if aligner == "starlong":
         if args.genedb.lower().endswith("db"):
-            return os.path.abspath(convert_db_to_gtf(args))
+            if args.original_annotation:
+                return args.original_annotation
+            else:
+                return os.path.abspath(convert_db_to_gtf(args))
         return os.path.abspath(args.genedb)
     elif aligner == "minimap2":
         bed_fname = None

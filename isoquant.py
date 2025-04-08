@@ -753,6 +753,7 @@ def set_additional_params(args):
         args.bam_tags = args.bam_tags.split(",")
     else:
         args.bam_tags = []
+    args.original_annotation = None
 
 
 def run_pipeline(args):
@@ -763,6 +764,7 @@ def run_pipeline(args):
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
+        args.original_annotation = args.genedb
         args.genedb = convert_gtf_to_db(args)
 
     # map reads if fastqs are provided
