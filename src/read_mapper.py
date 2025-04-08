@@ -8,6 +8,7 @@
 
 import logging
 import os
+import shutil
 import subprocess
 import json
 import pysam
@@ -285,7 +286,7 @@ def find_annotation(aligner, args):
 def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
     fastq_path = os.path.abspath(fastq_file)
     fname, ext = os.path.splitext(fastq_path.split('/')[-1])
-    alignment_prefix = os.path.join(out_dir, label)
+    alignment_prefix = str(os.path.join(out_dir, label))
 
     prefix_name = fname
     if prefix_name.endswith(".fq") or prefix_name.endswith(".fastq") or prefix_name.endswith(".fa") or prefix_name.endswith(".fasta"):
@@ -294,7 +295,7 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
     hash_index = ("%x" % hash(args.index))[2:8]
     hash_fastq = ("%x" % hash(fastq_path))[2:8]
 
-    alignment_bam_path = os.path.join(out_dir, label + '_' + prefix_name + '_%s_%s%s.bam' % (hash_fastq, hash_index, hash_annotation))
+    alignment_bam_path = str(os.path.join(out_dir, label + '_' + prefix_name + '_%s_%s%s.bam' % (hash_fastq, hash_index, hash_annotation)))
     logger.info("Aligning %s to the reference, alignments will be saved to %s" % (os.path.abspath(fastq_path),
                                                                                   os.path.abspath(alignment_bam_path)))
     alignment_sam_path = alignment_bam_path[:-4] + '.sam'
@@ -309,16 +310,17 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
         #  --outFileNamePrefix {alignment_out}'.format(star=star_path, ref_index_name=star_index, transcripts=short_id_contigs_name, alignment_out=alignment_sam_path)
         annotation_opts = [] if not annotation_file else ['--sjdbGTFfile', annotation_file, '--sjdbOverhang', '140']
         command = ([star_path, '--runThreadN', str(args.threads), '--genomeDir', args.index, '--readFilesIn',
-                   fastq_path, '--outSAMtype', 'BAM', 'SortedByCoordinate',
+                   fastq_path, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--seedPerReadNmax', '1000000',
                    '--outBAMsortingThreadN', str(args.threads), '--outSAMattributes', 'NH', 'HI', 'NM', 'MD'] +
                    annotation_opts + zcat_option + ['--outFileNamePrefix', alignment_prefix])
         if args.mapping_options:
-            command += " " + args.mapping_options
+            command += args.mapping_options.split()
 
         logger.info("Running STAR (takes a while)")
         if subprocess.call(command, stdout=log_file, stderr=log_file) != 0:
             logger.critical("STAR finished with errors! See " + log_fpath)
             exit(-1)
+        shutil.move(alignment_prefix + "Aligned.sortedByCoord.out.bam", alignment_bam_path)
 
     elif aligner == "minimap2":
         additional_options = []
