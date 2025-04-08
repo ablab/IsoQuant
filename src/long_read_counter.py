@@ -519,9 +519,13 @@ class ProfileFeatureCounter(AbstractCounter):
     @staticmethod
     def is_valid(assignment):
         return assignment is not None and \
-               hasattr(assignment, 'exon_gene_profile') and assignment.exon_gene_profile is not None  and \
+               hasattr(assignment, 'exon_gene_profile') and assignment.exon_gene_profile is not None and \
                hasattr(assignment, 'intron_gene_profile') and assignment.intron_gene_profile is not None and \
                hasattr(assignment, 'gene_info') and assignment.gene_info is not None
+
+    @staticmethod
+    def is_assigned_to_gene(assignment):
+        return not assignment.gene_assignment_type.is_unassigned() and not assignment.gene_assignment_type.is_ambiguous()
 
 
 class ExonCounter(ProfileFeatureCounter):
@@ -529,7 +533,7 @@ class ExonCounter(ProfileFeatureCounter):
         ProfileFeatureCounter.__init__(self, output_prefix, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
-        if not ProfileFeatureCounter.is_valid(read_assignment):
+        if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.exon_gene_profile,
@@ -541,7 +545,7 @@ class IntronCounter(ProfileFeatureCounter):
         ProfileFeatureCounter.__init__(self, output_prefix, ignore_read_groups)
 
     def add_read_info(self, read_assignment):
-        if not ProfileFeatureCounter.is_valid(read_assignment):
+        if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
         self.add_read_info_from_profile(read_assignment.intron_gene_profile,
