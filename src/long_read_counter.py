@@ -480,7 +480,7 @@ class ProfileFeatureCounter(AbstractCounter):
             self.group_numeric_ids = {}
         self.current_group_id = 1
 
-    def add_read_info_from_profile(self, gene_feature_profile, feature_property_map,
+    def add_read_info_from_profile(self, gene_feature_profile, read_assigned_strand, feature_property_map,
                                    read_group = AbstractReadGrouper.default_group_id):
         if read_group not in self.group_numeric_ids:
             self.group_numeric_ids[read_group] = self.current_group_id
@@ -488,6 +488,9 @@ class ProfileFeatureCounter(AbstractCounter):
 
         group_id = self.group_numeric_ids[read_group]
         for i in range(len(gene_feature_profile)):
+            if read_assigned_strand not in feature_property_map[i].strand:
+                # skip features that do not match read's strand
+                continue
             if gene_feature_profile[i] == 1:
                 feature_id = feature_property_map[i].id
                 self.inclusion_feature_counter[feature_id].inc(group_id)
@@ -536,7 +539,7 @@ class ExonCounter(ProfileFeatureCounter):
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
-        self.add_read_info_from_profile(read_assignment.exon_gene_profile,
+        self.add_read_info_from_profile(read_assignment.exon_gene_profile, read_assignment.strand,
                                         read_assignment.gene_info.exon_property_map, group_id)
 
 
@@ -548,6 +551,6 @@ class IntronCounter(ProfileFeatureCounter):
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
-        self.add_read_info_from_profile(read_assignment.intron_gene_profile,
+        self.add_read_info_from_profile(read_assignment.intron_gene_profile, read_assignment.strand,
                                         read_assignment.gene_info.intron_property_map, group_id)
 
