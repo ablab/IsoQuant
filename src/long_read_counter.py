@@ -49,12 +49,6 @@ COUNTING_STRATEGIES = [CountingStrategy.unique_only.name,
                        CountingStrategy.all.name]
 
 
-@unique
-class NormalizationMethod(Enum):
-    simple = 1
-    usable_reads = 2
-
-
 class CountingStrategyFlags:
     def __init__(self, counting_strategy):
         self.use_ambiguous = counting_strategy.ambiguous()
@@ -64,7 +58,7 @@ class CountingStrategyFlags:
 
 @unique
 class GroupedOutputFormat(Enum):
-    only_linear = 0
+    linear = 0
     matrix = 1
     mtx = 2
 
@@ -159,7 +153,12 @@ class ReadWeightCounter:
 class AbstractCounter:
     def __init__(self, output_prefix, ignore_read_groups=False):
         self.ignore_read_groups = ignore_read_groups
-        self.output_counts_file_name = output_prefix + "_counts.linear.tsv"
+        self.output_counts_file_name = output_prefix + "_counts"
+        if ignore_read_groups:
+            self.output_counts_file_name += ".tsv"
+        else:
+            self.output_counts_file_name += ".linear.tsv"
+        self.output_tpm_file_name = output_prefix + "_tpm.tsv"
         self.output_file = self.output_counts_file_name
         open(self.output_file, "w").close()
         self.output_stats_file_name = None
@@ -346,11 +345,19 @@ class AssignedFeatureCounter(AbstractCounter):
                 count = self.feature_counter[feature_id].get(default_group_id)
                 output_file.write("%s\t%.2f\n" % (feature_id, count))
 
+            # FIXME .stats file are not merged and removed
             with open(self.output_stats_file_name, "w") as f:
                 f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
                 f.write("__no_feature\t%d\n" % self.not_assigned_reads)
                 f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
                 f.write("__usable\t%d\n" % self.reads_for_tpm)
+
+    def convert_to_tpm(self, normalization_method):
+        if normalization_method == NormalizationMethod.none:
+            return
+
+        convert_ungrouped_to_tpm(self.get_output_file_handler(), self.output_tpm_file_name,
+                                 normalization_method, self.reads_for_tpm)
 
     def dump_grouped(self, all_features):
         with self.get_output_file_handler() as output_file:
@@ -364,54 +371,6 @@ class AssignedFeatureCounter(AbstractCounter):
                     row_count += count
             output_file.close()
 
-
-def convert_counts_to_tpm(counts_file_name, tpm_file_name, grouped=False, normalization_str=NormalizationMethod.simple.name, reads_for_tpm=-1):
-    normalization = NormalizationMethod[normalization_str]
-    total_counts = defaultdict(float)
-    with open(counts_file_name) as f:
-        for line in f:
-            if line.startswith('_'): break
-            if line.startswith('#'): continue
-            fs = line.rstrip().split('\t')
-            if not grouped:
-                total_counts[AbstractReadGrouper.default_group_id] += float(fs[1])
-            else:
-                for j in range(len(fs) - 1):
-                    total_counts[j] += float(fs[j + 1])
-
-    scale_factors = {}
-    unassigned_tpm = 0.0
-    for group_id in total_counts.keys():
-        if normalization == NormalizationMethod.usable_reads and self.ignore_read_groups and self.reads_for_tpm:
-            total_reads = self.reads_for_tpm
-            unassigned_tpm = 1000000.0 * (1 - total_counts[group_id] / total_reads)
-        else:
-            total_reads = total_counts[group_id] if total_counts[group_id] > 0 else 1.0
-        scale_factors[group_id] = 1000000.0 / total_reads
-        logger.debug("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
-
-    with open(self.output_tpm_file_name, "w") as outf:
-        with open(self.output_counts_file_name) as f:
-            for line in f:
-                if line.startswith('_'): break
-                if line.startswith('#'):
-                    outf.write(line.replace("count", "TPM"))
-                    continue
-                fs = line.rstrip().split('\t')
-                if self.ignore_read_groups:
-                    feature_id, count = fs[0], float(fs[1])
-                    tpm = scale_factors[AbstractReadGrouper.default_group_id] * count
-                    if not self.output_zeroes and tpm == 0:
-                        continue
-                    outf.write("%s\t%.6f\n" % (feature_id, tpm))
-                else:
-                    feature_id, counts = fs[0], list(map(float, fs[1:]))
-                    tpm_values = [scale_factors[i] * counts[i] for i in range(len(scale_factors))]
-                    outf.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
-            if self.ignore_read_groups:
-                outf.write("%s\t%.6f\n" % ("__unassigned", unassigned_tpm))
-
-
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None, read_groups=None):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
@@ -423,6 +382,49 @@ def create_transcript_counter(output_file_name, strategy, complete_feature_list=
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
                                   read_groups, read_weight_counter, complete_feature_list)
+
+
+@unique
+class NormalizationMethod(Enum):
+    none = 0
+    simple = 1
+    usable_reads = 2
+
+
+def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalization_str=NormalizationMethod.simple.name, reads_for_tpm=-1):
+    normalization = NormalizationMethod[normalization_str]
+    total_counts = 0
+
+    with open(counts_file_name) as f:
+        for line in f:
+            if line.startswith('_'): break
+            if line.startswith('#'): continue
+            fs = line.rstrip().split('\t')
+            total_counts += float(fs[1])
+
+    scale_factors = {}
+    unassigned_tpm = 0.0
+    for group_id in total_counts.keys():
+        if normalization == NormalizationMethod.usable_reads and reads_for_tpm > 0:
+            total_reads = reads_for_tpm
+            unassigned_tpm = 1000000.0 * (1 - total_counts[group_id] / total_reads)
+        else:
+            total_reads = total_counts[group_id] if total_counts[group_id] > 0 else 1.0
+        scale_factors[group_id] = 1000000.0 / total_reads
+        logger.debug("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
+
+    with open(output_tpm_file_name, "w") as outf:
+        with open(counts_file_name) as f:
+            for line in f:
+                if line.startswith('_'): break
+                if line.startswith('#'):
+                    outf.write(line.replace("count", "TPM"))
+                    continue
+                fs = line.rstrip().split('\t')
+                feature_id, count = fs[0], float(fs[1])
+                tpm = scale_factors[AbstractReadGrouper.default_group_id] * count
+                outf.write("%s\t%.6f\n" % (feature_id, tpm))
+            outf.write("%s\t%.6f\n" % ("__unassigned", unassigned_tpm))
 
 
 # count simple features inclusion/exclusion (exons / introns)
@@ -474,9 +476,6 @@ class ProfileFeatureCounter(AbstractCounter):
                     excl_count = self.exclusion_feature_counter[feature_id].get(group_id)
                     if incl_count > 0 or excl_count > 0:
                         f.write("%s\t%s\t%d\t%d\n" % (feature_name, group_name, incl_count, excl_count))
-
-    def convert_counts_to_tpm(self, normalization=NormalizationMethod.simple):
-        return
 
     @staticmethod
     def is_valid(assignment):
