@@ -223,9 +223,10 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="TPM normalization method: simple - conventional normalization using all counted reads;"
                                         "usable_reads - includes all assigned reads.",
                                    default=NormalizationMethod.simple.name)
-    add_additional_option_to_group(output_setup_args_group, "--counts_format", type=str, choices=[e.name for e in GroupedOutputFormat],
+    add_additional_option_to_group(output_setup_args_group, "--counts_format", type=str, nargs='+',
+                                   choices=[e.name for e in GroupedOutputFormat],
                                    help="output format for grouped counts",
-                                   default=GroupedOutputFormat.both.name)
+                                   default=GroupedOutputFormat.matrix.name)
 
     add_additional_option_to_group(output_setup_args_group, "--genedb_output", help="output folder for converted gene "
                                                                                     "database, will be created automatically "

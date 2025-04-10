@@ -42,9 +42,6 @@ def merge_counts(counter, label, chr_ids, unaligned_reads=0):
     file_name = counter.output_counts_file_name
     merged_file_handler = counter.get_output_file_handler()
     merge_files(file_name, label, chr_ids, merged_file_handler)
-    merged_linear_handler = counter.get_linear_output_file_handler()
-    if merged_linear_handler:
-        merge_files(counter.linear_output_file, label, chr_ids, merged_linear_handler)
 
     counter.reads_for_tpm = 0
     stat_dict = {"__ambiguous": 0, "__no_feature": 0, "__not_aligned": 0, "__usable": 0}

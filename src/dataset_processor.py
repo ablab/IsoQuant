@@ -347,19 +347,16 @@ class ReadAssignmentAggregator:
         if self.args.genedb:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
                                                     self.args.gene_quantification,
-                                                    complete_feature_list=self.gene_set,
-                                                    output_zeroes=True)
+                                                    complete_feature_list=self.gene_set)
             self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
                                                                 self.args.transcript_quantification,
-                                                                complete_feature_list=self.transcript_set,
-                                                                output_zeroes=True)
+                                                                complete_feature_list=self.transcript_set)
             self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
 
         self.transcript_model_global_counter = CompositeCounter([])
         if not self.args.no_model_construction:
             self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
-                                                                      self.args.transcript_quantification,
-                                                                      output_zeroes=False)
+                                                                      self.args.transcript_quantification)
             self.transcript_model_global_counter.add_counters([self.transcript_model_counter])
 
         if self.args.count_exons and self.args.genedb:
@@ -371,13 +368,11 @@ class ReadAssignmentAggregator:
             self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
                                                             self.args.gene_quantification,
                                                             complete_feature_list=self.gene_set,
-                                                            read_groups=self.read_groups,
-                                                            grouped_format=self.grouped_format)
+                                                            read_groups=self.read_groups)
             self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
                                                                         self.args.transcript_quantification,
                                                                         complete_feature_list=self.transcript_set,
-                                                                        read_groups=self.read_groups,
-                                                                        grouped_format=self.grouped_format)
+                                                                        read_groups=self.read_groups)
             self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
 
             if self.args.count_exons:
@@ -389,17 +384,8 @@ class ReadAssignmentAggregator:
             self.transcript_model_grouped_counter = create_transcript_counter(
                 sample.out_transcript_model_grouped_counts_tsv,
                 self.args.transcript_quantification,
-                read_groups=self.read_groups, output_zeroes=False,
-                grouped_format=self.grouped_format)
+                read_groups=self.read_groups)
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
-
-    def finalize_aggregators(self, sample):
-        if self.args.genedb:
-            logger.info("Gene counts are stored in " + self.gene_counter.output_counts_file_name)
-            logger.info("Transcript counts are stored in " + self.transcript_counter.output_counts_file_name)
-            logger.info("Read assignments are stored in " + self.basic_printer.output_file_name +
-                        (".gz" if self.args.gzipped else ""))
-        self.read_stat_counter.print_start("Read assignment statistics")
 
 
 # Class for processing all samples against gene database
@@ -703,20 +689,39 @@ class DatasetProcessor:
                 for k, v in tsc.stats_dict.items():
                     transcript_stat_counter.stats_dict[k] += v
 
+        self.merge_assignments(sample, aggregator, chr_ids)
+        if self.args.sqanti_output:
+            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, open(sample.out_t2t_tsv, "w"), copy_header=False)
+        self.finalize(aggregator)
+
         if not self.args.no_model_construction:
+            transcript_stat_counter.print_start("Transcript model statistics")
             self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
             if self.args.genedb:
                 merge_files(extended_gff_printer.model_fname, sample.prefix, chr_ids,
                             extended_gff_printer.out_gff, copy_header=False)
                 logger.info("Extended annotation is saved to " + extended_gff_printer.model_fname)
-            transcript_stat_counter.print_start("Transcript model statistics")
+            logger.info("Counts for generated transcript models are saves to: " +
+                        aggregator.transcript_model_counter.output_counts_file_name)
+            if self.args.read_group:
+                logger.info("Grouped counts for generated transcript models are saves to: " +
+                            aggregator.transcript_model_grouped_counter.output_counts_file_name)
 
-        self.merge_assignments(sample, aggregator, chr_ids)
-        if self.args.sqanti_output:
-            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, open(sample.out_t2t_tsv, "w"), copy_header=False)
+    def finalize(self, aggregator):
+        if self.args.genedb:
+            logger.info("Read assignments are stored in " + aggregator.basic_printer.output_file_name +
+                        (".gz" if self.args.gzipped else ""))
+            aggregator.read_stat_counter.print_start("Read assignment statistics")
 
-        aggregator.finalize_aggregators(sample)
+            logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
+            logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
+            if self.args.read_group:
+                logger.info("Grouped gene counts are saves to: " +
+                            aggregator.gene_grouped_counter.output_counts_file_name)
+                logger.info("Grouped transcript counts are saves to: " +
+                            aggregator.transcript_grouped_counter.output_counts_file_name)
+            logger.info("Counts can be converted to other formats using src/covert_counts.py")
 
     def load_read_info(self, dump_filename):
         info_loader = open(dump_filename + "_info", "rb")
@@ -736,7 +741,7 @@ class DatasetProcessor:
         for counter in aggregator.global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, sample.prefix, chr_ids, unaligned)
-            counter.convert_counts_to_tpm(self.args.normalization_method)
+            # counter.convert_counts_to_tpm(self.args.normalization_method)
 
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
         merge_files(gff_printer.model_fname, label, chr_ids, gff_printer.out_gff, copy_header=False)
@@ -744,5 +749,5 @@ class DatasetProcessor:
         for counter in aggregator.transcript_model_global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)
-            counter.convert_counts_to_tpm(self.args.normalization_method)
+            # counter.convert_counts_to_tpm(self.args.normalization_method)
 
