@@ -50,7 +50,7 @@ class GraphBasedModelConstructor:
     detected_known_isoforms = set()
     extended_transcript_ids = set()
 
-    def __init__(self, gene_info, chr_record, params, transcript_counter, id_distributor):
+    def __init__(self, gene_info, chr_record, params, transcript_counter, gene_counter, id_distributor):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
@@ -73,6 +73,7 @@ class GraphBasedModelConstructor:
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(list)
         self.transcript_counter = transcript_counter
+        self.gene_counter = gene_counter
         self.internal_counter = defaultdict(int)
         self.read_assignment_counts = defaultdict(int)
         self.transcript2transcript = []
@@ -143,12 +144,18 @@ class GraphBasedModelConstructor:
             self.compare_models_with_known()
 
     def forward_counts(self, read_assignments):
+        transcript2gene = {}
+        for t in self.transcript_model_storage:
+            transcript2gene[t.transcript_id] = t.gene_id
+
         ambiguous_assignments = {}
         for transcript_id in self.transcript_read_ids.keys():
+            gene_id = transcript2gene[transcript_id]
             for read_assignment in self.transcript_read_ids[transcript_id]:
                 read_id = read_assignment.read_id
                 if self.read_assignment_counts[read_id] == 1:
                     self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
+                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group)
                     continue
 
                 if read_id not in ambiguous_assignments:
@@ -156,13 +163,16 @@ class GraphBasedModelConstructor:
                 ambiguous_assignments[read_id].append(transcript_id)
 
         for read_id in ambiguous_assignments.keys():
-            self.transcript_counter.add_read_info_raw(read_id, ambiguous_assignments[read_id][1:],
-                                                      ambiguous_assignments[read_id][0])
+            transcript_ids = ambiguous_assignments[read_id][1:]
+            gene_ids = [transcript2gene[transcript_id] for transcript_id in transcript_ids]
+            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, ambiguous_assignments[read_id][0])
+            self.gene_counter.add_read_info_raw(read_id, gene_ids, ambiguous_assignments[read_id][0])
 
         for r in read_assignments:
-            if self.read_assignment_counts[r.read_id]: continue
+            if self.read_assignment_counts[r.read_id] > 0: continue
             self.transcript_counter.add_unassigned(r)
         self.transcript_counter.add_confirmed_features([model.transcript_id for model in self.transcript_model_storage])
+        self.gene_counter.add_confirmed_features({transcript2gene[model.transcript_id] for model in self.transcript_model_storage})
 
     def compare_models_with_known(self):
         if not self.gene_info.all_isoforms_exons:

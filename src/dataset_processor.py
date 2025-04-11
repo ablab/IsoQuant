@@ -285,6 +285,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         if construct_models:
             model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
                                                            aggregator.transcript_model_global_counter,
+                                                           aggregator.gene_model_global_counter,
                                                            transcript_id_distributor)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
@@ -308,6 +309,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
                 io_support.add_canonical_info(all_models, gene_info)
             tmp_extended_gff_printer.dump(gene_info, all_models)
         aggregator.transcript_model_global_counter.dump()
+        aggregator.gene_model_global_counter.dump()
         transcript_stat_counter.dump(transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
@@ -353,10 +355,15 @@ class ReadAssignmentAggregator:
             self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
 
         self.transcript_model_global_counter = CompositeCounter([])
+        self.gene_model_global_counter = CompositeCounter([])
         if not self.args.no_model_construction:
             self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
                                                                       self.args.transcript_quantification)
+            self.gene_model_counter = create_gene_counter(sample.out_gene_model_counts_tsv,
+                                                          self.args.gene_quantification)
+
             self.transcript_model_global_counter.add_counters([self.transcript_model_counter])
+            self.gene_model_global_counter.add_counters([self.gene_model_counter])
 
         if self.args.count_exons and self.args.genedb:
             self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
@@ -384,7 +391,12 @@ class ReadAssignmentAggregator:
                 sample.out_transcript_model_grouped_counts_tsv,
                 self.args.transcript_quantification,
                 read_groups=self.read_groups)
+            self.gene_model_grouped_counter = create_gene_counter(
+                sample.out_gene_model_grouped_counts_tsv,
+                self.args.gene_quantification,
+                read_groups=self.read_groups)
             self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
+            self.gene_model_global_counter.add_counters([self.gene_model_grouped_counter])
 
 
 # Class for processing all samples against gene database
@@ -701,11 +713,14 @@ class DatasetProcessor:
                 merge_files(extended_gff_printer.model_fname, sample.prefix, chr_ids,
                             extended_gff_printer.out_gff, copy_header=False)
                 logger.info("Extended annotation is saved to " + extended_gff_printer.model_fname)
+
             logger.info("Counts for generated transcript models are saves to: " +
                         aggregator.transcript_model_counter.output_counts_file_name)
             if self.args.read_group:
                 logger.info("Grouped counts for generated transcript models are saves to: " +
                             aggregator.transcript_model_grouped_counter.output_counts_file_name)
+            aggregator.transcript_model_global_counter.finalize(self.args)
+            aggregator.gene_model_global_counter.finalize(self.args)
 
     def finalize(self, aggregator):
         if self.args.genedb:
@@ -713,7 +728,6 @@ class DatasetProcessor:
                         (".gz" if self.args.gzipped else ""))
             aggregator.read_stat_counter.print_start("Read assignment statistics")
 
-            aggregator.global_counter.finalize(self.args)
             logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
             logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
             if self.args.read_group:
@@ -722,8 +736,10 @@ class DatasetProcessor:
                 logger.info("Grouped transcript counts are saves to: " +
                             aggregator.transcript_grouped_counter.output_counts_file_name)
             logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
+            aggregator.global_counter.finalize(self.args)
 
-    def load_read_info(self, dump_filename):
+    @staticmethod
+    def load_read_info(dump_filename):
         info_loader = open(dump_filename + "_info", "rb")
         total_assignments = read_int(info_loader)
         polya_assignments = read_int(info_loader)
@@ -749,5 +765,5 @@ class DatasetProcessor:
         for counter in aggregator.transcript_model_global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)
-            # counter.convert_counts_to_tpm(self.args.normalization_method)
-
+        for counter in aggregator.gene_model_global_counter.counters:
+            merge_counts(counter, label, chr_ids)

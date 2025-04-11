@@ -39,7 +39,7 @@ If `--read_group` is set or multiple files are provided, the per-group expressio
 
 Note, that grouped counts can be converted to any format using `src/convert_grouped_counts.py`.
 
-#### Other formats 
+#### Other formats
 By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 
 larger matrices (e.g. for single-cell experiments) will be saved to MTX.
 See [options](cmd.md#specific-output-options) for details.
@@ -63,15 +63,19 @@ File names typically contain `transcript_model` in their name.
 
 * `SAMPLE_ID.transcript_models.gtf` - GTF file with discovered expressed transcript (both known and novel transcripts);
 * `SAMPLE_ID.transcript_model_reads.tsv.gz` - TSV file indicating which reads contributed to transcript models (gzipped by default);
-* `SAMPLE_ID.transcript_model_tpm.tsv` - expression of discovered transcripts models in TPM (corresponds to `SAMPLE_ID.transcript_models.gtf`);
-* `SAMPLE_ID.transcript_model_counts.tsv` - raw read counts for discovered transcript models (corresponds to `SAMPLE_ID.transcript_models.gtf`);
+* `SAMPLE_ID.discovered_transcript_counts.tsv` - raw read counts for discovered transcript models (corresponds to `SAMPLE_ID.transcript_models.gtf`);
+* `SAMPLE_ID.discovered_gene_counts.tsv` - raw read counts for discovered genes (corresponds to `SAMPLE_ID.transcript_models.gtf`);
+* `SAMPLE_ID.discovered_transcript_tpm.tsv` - expression of discovered transcripts models in TPM (corresponds to `SAMPLE_ID.transcript_models.gtf`);
+* `SAMPLE_ID.discovered_gene_tpm.tsv` - expression of discovered genes in TPM (corresponds to `SAMPLE_ID.transcript_models.gtf`);
 * `SAMPLE_ID.extended_annotation.gtf` - GTF file with the entire reference annotation plus all discovered novel transcripts;
 
 
 If `--read_group` is set, the per-group counts for discovered transcripts will be also computed:
 
-* `SAMPLE_ID.transcript_model_grouped_counts.tsv`
-* `SAMPLE_ID.transcript_model_grouped_tpm.tsv`
+* `SAMPLE_ID.discovered_transcript_grouped_counts.linear.tsv`
+* `SAMPLE_ID.discovered_gene_grouped_counts.linear.tsv`
+
+Similarly to the reference-based counts, these counts are converted to other formats as described [above](#other-formats).
 
 
 If multiple experiments are provided, aggregated expression matrices will be placed in `<output_dir>`:
