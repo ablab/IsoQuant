@@ -79,3 +79,47 @@ jobs:
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
 
+      - name: 'Default output with 7 groups'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP6.MTX.SIRVs
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Default output with 7 groups'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP6.MTX.SIRVs
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Specific TPM conversion with 7 groups'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP7.MTX_TPM.SIRVs
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Specific TPM conversion with all formats, 7 groups'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP8.MTX_FORMATS.SIRVs
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Default TPM conversion with all formats, 7 groups'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP9.MTX2.SIRVs
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
