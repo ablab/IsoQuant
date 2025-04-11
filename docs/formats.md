@@ -73,19 +73,25 @@ Note, that a single read may occur more than once if assigned ambiguously.
 
 ## Expression table format
 
-Tab-separated values, the columns are:
+Non-grouped counts/TPM values are stored in a simple TSV file, the columns are:
 
 * `feature_id` - genomic feature ID;
 * `TPM` or `count` - expression value (float).
 
-For grouped counts, each column contains expression values of a respective group (matrix representation).
-
-Beside count matrix, transcript and gene grouped counts are also printed in a linear format,
-in which each line contains 3 tab-separated values:
+Grouped counts are stored in linear format by default - a TSV file with 3 columns:
 
 * `feature_id` - genomic feature ID;
 * `group_id` - group name;
 * `count` - read count of the feature in this group. 
+
+By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 
+larger matrices (e.g. for single-cell experiments) will be saved to MTX format, which is compatible with the Seurat package.
+In standard matrix rows represent features, columns represent groups. While being more human-readable, 
+this file make take substantial disk space when the number of groups is large.
+In MTX format, `.matrix.mtx` represents counts, `.features.tsv` contains the feature list and 
+`.barcodes.tsv` contains group list (typically, barcodes are used as groups in single-cell and spatial experiments).
+See [options](cmd.md#specific-output-options) to tune your output.
+
 
 ## Exon and intron count format
 

@@ -14,10 +14,11 @@ _Will be produced only if a reference gene annotation is provided._
 
 * `SAMPLE_ID.read_assignments.tsv.gz` - TSV file with read to isoform assignments (gzipped by default);
 * `SAMPLE_ID.corrected_reads.bed.gz` - BED file with corrected read alignments (gzipped by default);
-* `SAMPLE_ID.transcript_tpm.tsv` - TSV file with reference transcript expression in TPM;
 * `SAMPLE_ID.transcript_counts.tsv` - TSV file with raw read counts for reference transcript;
-* `SAMPLE_ID.gene_tpm.tsv` - TSV file with reference gene expression in TPM;
 * `SAMPLE_ID.gene_counts.tsv` - TSV file with raw read counts for reference genes;
+* `SAMPLE_ID.transcript_tpm.tsv` - TSV file with reference transcript expression in TPM;
+* `SAMPLE_ID.gene_tpm.tsv` - TSV file with reference gene expression in TPM;
+
 
 If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format:
 
@@ -28,14 +29,31 @@ If `--count_exons` is set, exon and intron counts will be produced:
 * `SAMPLE_ID.exon_counts.tsv` - reference exon inclusion/exclusion read counts;
 * `SAMPLE_ID.intron_counts.tsv` - reference intron inclusion/exclusion read counts;
 
-If `--read_group` is set, the per-group expression values for reference features will be also computed:
+If `--read_group` is set or multiple files are provided, the per-group expression values for reference features will be also computed:
 
-* `SAMPLE_ID.gene_grouped_tpm.tsv`
-* `SAMPLE_ID.transcript_grouped_tpm.tsv`
-* `SAMPLE_ID.gene_grouped_counts.tsv`
-* `SAMPLE_ID.transcript_grouped_counts.tsv`
+#### Default grouped counts in linear format
+* `SAMPLE_ID.gene_grouped_counts.linear.tsv`
+* `SAMPLE_ID.transcript_grouped_counts.linear.tsv`
 * `SAMPLE_ID.exon_grouped_counts.tsv`
 * `SAMPLE_ID.intron_grouped_counts.tsv`
+
+Note, that grouped counts can be converted to any format using `src/convert_grouped_counts.py`.
+
+#### Other formats 
+By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 
+larger matrices (e.g. for single-cell experiments) will be saved to MTX.
+See [options](cmd.md#specific-output-options) for details.
+
+* `SAMPLE_ID.gene_grouped_counts.tsv` - grouped gene counts in standard matrix format;
+* `SAMPLE_ID.transcript_grouped_counts.tsv` - grouped transcript counts in standard matrix format;
+* `SAMPLE_ID.gene_grouped_tpm.tsv` - grouped gene TPM values in standard matrix format;
+* `SAMPLE_ID.transcript_grouped_tpm.tsv` - grouped TPM values counts in standard matrix format;
+
+* `SAMPLE_ID.gene_grouped_counts.matrix.mtx`, `SAMPLE_ID.gene_grouped_counts.features.tsv`, `SAMPLE_ID.gene_grouped_counts.barcodes.tsv` - grouped gene counts in Seurat-compatible MTX format;
+* `SAMPLE_ID.transcript_grouped_counts.matrix.mtx`, `SAMPLE_ID.transcript_grouped_counts.features.tsv`, `SAMPLE_ID.transcript_grouped_counts.barcodes.tsv` - grouped transcript counts in Seurat-compatible MTX format;
+* `SAMPLE_ID.gene_grouped_tpm.matrix.mtx`, `SAMPLE_ID.gene_grouped_tpm.features.tsv`, `SAMPLE_ID.gene_grouped_tpm.barcodes.tsv` - grouped gene TPM values in Seurat-compatible MTX format;
+* `SAMPLE_ID.transcript_grouped_tpm.matrix.mtx`, `SAMPLE_ID.transcript_grouped_tpm.features.tsv`, `SAMPLE_ID.transcript_grouped_tpm.barcodes.tsv` - grouped transcript TPM values in Seurat-compatible MTX format;
+
 
 ## Transcript discovery output
 

@@ -11,10 +11,10 @@ from enum import Enum, unique
 
 from .isoform_assignment import (
     ReadAssignmentType,
-    nonintronic_events,
 )
 from .gene_info import FeatureInfo
 from .read_groups import AbstractReadGrouper
+from .convert_grouped_counts import GROUP_COUNT_CUTOFF, convert_to_mtx, convert_to_matrix
 
 logger = logging.getLogger('IsoQuant')
 
@@ -58,9 +58,10 @@ class CountingStrategyFlags:
 
 @unique
 class GroupedOutputFormat(Enum):
-    linear = 0
+    none = 0
     matrix = 1
     mtx = 2
+    default = 3
 
 
 # the difference from defaultdict is that it does not add 0 to the dict when get is called for inexistent key
@@ -153,15 +154,18 @@ class ReadWeightCounter:
 class AbstractCounter:
     def __init__(self, output_prefix, ignore_read_groups=False):
         self.ignore_read_groups = ignore_read_groups
-        self.output_counts_file_name = output_prefix + "_counts"
+        self.output_prefix = output_prefix
+        self.output_counts_prefix = output_prefix + "_counts"
+        self.output_tpm_prefix = output_prefix + "_tpm"
         if ignore_read_groups:
-            self.output_counts_file_name += ".tsv"
+            self.output_counts_file_name = self.output_counts_prefix + ".tsv"
         else:
-            self.output_counts_file_name += ".linear.tsv"
-        self.output_tpm_file_name = output_prefix + "_tpm.tsv"
+            self.output_counts_file_name = self.output_counts_prefix + ".linear.tsv"
+        self.output_tpm_file_name = self.output_tpm_prefix + ".tsv"
         self.output_file = self.output_counts_file_name
         open(self.output_file, "w").close()
         self.output_stats_file_name = None
+        self.usable_file_name = None
 
     def get_output_file_handler(self):
         return open(self.output_file, "a")
@@ -178,7 +182,10 @@ class AbstractCounter:
     def dump(self):
         raise NotImplementedError()
 
-    def add_unassigned(self, n_reads=1):
+    def finalize(self, args=None):
+        raise NotImplementedError()
+
+    def add_unassigned(self, read_assignment):
         raise NotImplementedError()
 
     def add_unaligned(self, n_reads=1):
@@ -208,9 +215,13 @@ class CompositeCounter:
         for p in self.counters:
             p.dump()
 
-    def add_unassigned(self, n_reads=1):
+    def finalize(self, args=None):
         for p in self.counters:
-            p.add_unassigned(n_reads)
+            p.finalize(args)
+
+    def add_unassigned(self, read_assignment):
+        for p in self.counters:
+            p.add_unassigned(read_assignment)
 
     def add_unaligned(self, n_reads=1):
         for p in self.counters:
@@ -237,33 +248,36 @@ class AssignedFeatureCounter(AbstractCounter):
         self.read_counter = read_counter
 
         self.ambiguous_reads = 0
-        self.reads_for_tpm = 0
+        self.reads_for_tpm = defaultdict(int)
         self.not_assigned_reads = 0
         self.not_aligned_reads = 0
         # feature_id -> (group_id -> count)
         self.feature_counter = defaultdict(IncrementalDict)
         self.confirmed_features = set()
         self.output_stats_file_name = self.output_counts_file_name + ".stats"
+        self.usable_file_name = self.output_counts_file_name + ".usable"
 
     def add_read_info(self, read_assignment=None):
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+        group_id = self.group_numeric_ids[group_id]
+
         if not read_assignment:
             self.not_aligned_reads += 1
             return
         elif read_assignment.assignment_type.is_unassigned() or not read_assignment.isoform_matches:
             self.not_assigned_reads += 1
+            self.reads_for_tpm[group_id] += 1
             return
         elif read_assignment.isoform_matches and read_assignment.isoform_matches[0].assigned_transcript is None:
             self.not_assigned_reads += 1
+            self.reads_for_tpm[group_id] += 1
             logger.warning("Assigned feature for read %s is None, will be skipped. "
                            "This message may be reported to the developers." % read_assignment.read_id)
             return
 
         feature_ids = self.assignment_extractor.get_features(read_assignment)
         assignment_type = self.assignment_extractor.get_assignment_type(read_assignment)
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
-        group_id = self.group_numeric_ids[group_id]
-
-        self.reads_for_tpm += 1
+        self.reads_for_tpm[group_id] += 1
         if assignment_type == ReadAssignmentType.ambiguous:
             count_value = self.read_counter.process_ambiguous(len(feature_ids))
             for feature_id in feature_ids:
@@ -294,9 +308,10 @@ class AssignedFeatureCounter(AbstractCounter):
             self.not_aligned_reads += 1
         elif not feature_ids:
             self.not_assigned_reads += 1
+            self.reads_for_tpm[group_id] += 1
         elif len(feature_ids) > 1:
             self.ambiguous_reads += 1
-            self.reads_for_tpm += 1
+            self.reads_for_tpm[group_id] += 1
             for feature_id in feature_ids:
                 count_value = self.read_counter.process_ambiguous(len(feature_ids))
                 self.feature_counter[feature_id].inc(group_id, count_value)
@@ -304,11 +319,13 @@ class AssignedFeatureCounter(AbstractCounter):
         else:
             self.feature_counter[feature_ids[0]].inc(group_id, 1.0)
             self.all_features.add(feature_ids[0])
-            self.reads_for_tpm += 1
+            self.reads_for_tpm[group_id] += 1
 
-    def add_unassigned(self, n_reads=1):
-        self.not_assigned_reads += n_reads
-        self.reads_for_tpm += n_reads
+    def add_unassigned(self, read_assignment):
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+        group_id = self.group_numeric_ids[group_id]
+        self.not_assigned_reads += 1
+        self.reads_for_tpm[group_id] += 1
 
     def add_unaligned(self, n_reads=1):
         self.not_aligned_reads += n_reads
@@ -336,6 +353,7 @@ class AssignedFeatureCounter(AbstractCounter):
             self.dump_ungrouped(all_features)
         else:
             self.dump_grouped(all_features)
+        self.dump_usable()
 
     def dump_ungrouped(self, all_features):
         with self.get_output_file_handler() as output_file:
@@ -345,19 +363,10 @@ class AssignedFeatureCounter(AbstractCounter):
                 count = self.feature_counter[feature_id].get(default_group_id)
                 output_file.write("%s\t%.2f\n" % (feature_id, count))
 
-            # FIXME .stats file are not merged and removed
             with open(self.output_stats_file_name, "w") as f:
                 f.write("__ambiguous\t%d\n" % self.ambiguous_reads)
                 f.write("__no_feature\t%d\n" % self.not_assigned_reads)
                 f.write("__not_aligned\t%d\n" % self.not_aligned_reads)
-                f.write("__usable\t%d\n" % self.reads_for_tpm)
-
-    def convert_to_tpm(self, normalization_method):
-        if normalization_method == NormalizationMethod.none:
-            return
-
-        convert_ungrouped_to_tpm(self.get_output_file_handler(), self.output_tpm_file_name,
-                                 normalization_method, self.reads_for_tpm)
 
     def dump_grouped(self, all_features):
         with self.get_output_file_handler() as output_file:
@@ -370,6 +379,55 @@ class AssignedFeatureCounter(AbstractCounter):
                         output_file.write("%s\t%s\t%.2f\n" % (feature_id, self.ordered_groups[group_id], count))
                     row_count += count
             output_file.close()
+
+    def dump_usable(self):
+        with open(self.usable_file_name, "w") as f:
+            for g in self.group_numeric_ids.keys():
+                f.write("%s\t%d\n" % (g, self.reads_for_tpm[self.group_numeric_ids[g]]))
+
+    def load_usable(self, usable_file_name):
+        for l in open(usable_file_name, "r"):
+            v = l.strip().split('\t')
+            self.reads_for_tpm[self.group_numeric_ids[v[0]]] += int(v[1])
+
+    def finalize(self, args=None):
+        if not args:
+            normalization_method = NormalizationMethod.none
+        elif args.normalization_method not in NormalizationMethod.__dict__:
+            logger.warning("%s in not a valid normalization method, will use simple normalization" % args.normalization_method)
+            normalization_method = NormalizationMethod.simple
+        else:
+            normalization_method = NormalizationMethod[args.normalization_method]
+
+        if self.ignore_read_groups:
+            if normalization_method == NormalizationMethod.none:
+                return
+            convert_ungrouped_to_tpm(self.output_file, self.output_tpm_file_name,
+                                     normalization_method, self.reads_for_tpm[AbstractReadGrouper.default_group_id])
+            return
+
+        counts_format = {GroupedOutputFormat[f] for f in args.counts_format}
+        if (GroupedOutputFormat.matrix in counts_format or
+                (GroupedOutputFormat.default in counts_format and len(self.ordered_groups) <= GROUP_COUNT_CUTOFF)):
+            convert_to_matrix(self.output_file, self.output_counts_prefix)
+            if normalization_method != NormalizationMethod.none:
+                reads_for_tpm = None
+                if normalization_method == NormalizationMethod.usable_reads:
+                    reads_for_tpm = {self.ordered_groups[group_id]: self.reads_for_tpm[group_id] for group_id in
+                                     self.group_numeric_ids.values()}
+                convert_to_matrix(self.output_file, self.output_tpm_prefix,
+                                  convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
+
+        if (GroupedOutputFormat.mtx in counts_format or
+                (GroupedOutputFormat.default in counts_format and len(self.ordered_groups) > GROUP_COUNT_CUTOFF)):
+            convert_to_mtx(self.output_file, self.output_counts_prefix)
+            if normalization_method != NormalizationMethod.none:
+                reads_for_tpm = None
+                if normalization_method == NormalizationMethod.usable_reads:
+                    reads_for_tpm = {self.ordered_groups[group_id]: self.reads_for_tpm[group_id] for group_id in
+                                     self.group_numeric_ids.values()}
+                convert_to_mtx(self.output_file, self.output_tpm_prefix,
+                               convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
 
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None, read_groups=None):
     read_weight_counter = ReadWeightCounter(strategy)
@@ -391,27 +449,26 @@ class NormalizationMethod(Enum):
     usable_reads = 2
 
 
-def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalization_str=NormalizationMethod.simple.name, reads_for_tpm=-1):
-    normalization = NormalizationMethod[normalization_str]
+def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalization=NormalizationMethod.simple, reads_for_tpm=-1):
     total_counts = 0
-
-    with open(counts_file_name) as f:
+    with open(counts_file_name, "r") as f:
         for line in f:
-            if line.startswith('_'): break
+            if line.startswith('_'): continue
             if line.startswith('#'): continue
             fs = line.rstrip().split('\t')
             total_counts += float(fs[1])
 
-    scale_factors = {}
+    if total_counts == 0:
+        logger.error("No counts were detected in %s, cannot convert to TPM" % counts_file_name)
+        return
+
     unassigned_tpm = 0.0
-    for group_id in total_counts.keys():
-        if normalization == NormalizationMethod.usable_reads and reads_for_tpm > 0:
-            total_reads = reads_for_tpm
-            unassigned_tpm = 1000000.0 * (1 - total_counts[group_id] / total_reads)
-        else:
-            total_reads = total_counts[group_id] if total_counts[group_id] > 0 else 1.0
-        scale_factors[group_id] = 1000000.0 / total_reads
-        logger.debug("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
+    if normalization == NormalizationMethod.usable_reads and reads_for_tpm > 0:
+        total_reads = reads_for_tpm
+        unassigned_tpm = 1000000.0 * (1 - total_counts / total_reads)
+    else:
+        total_reads = total_counts
+    scale_factor = 1000000.0 / total_reads
 
     with open(output_tpm_file_name, "w") as outf:
         with open(counts_file_name) as f:
@@ -422,9 +479,10 @@ def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalizati
                     continue
                 fs = line.rstrip().split('\t')
                 feature_id, count = fs[0], float(fs[1])
-                tpm = scale_factors[AbstractReadGrouper.default_group_id] * count
+                tpm = scale_factor * count
                 outf.write("%s\t%.6f\n" % (feature_id, tpm))
-            outf.write("%s\t%.6f\n" % ("__unassigned", unassigned_tpm))
+            if unassigned_tpm > 0:
+                outf.write("%s\t%.6f\n" % ("__unassigned", unassigned_tpm))
 
 
 # count simple features inclusion/exclusion (exons / introns)
@@ -476,6 +534,9 @@ class ProfileFeatureCounter(AbstractCounter):
                     excl_count = self.exclusion_feature_counter[feature_id].get(group_id)
                     if incl_count > 0 or excl_count > 0:
                         f.write("%s\t%s\t%d\t%d\n" % (feature_name, group_name, incl_count, excl_count))
+
+    def finalize(self, args=None):
+        pass
 
     @staticmethod
     def is_valid(assignment):

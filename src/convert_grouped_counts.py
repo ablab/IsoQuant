@@ -17,7 +17,7 @@ import gzip
 import gffutils
 
 
-GPROUP_COUNT_CUTOFF = 100
+GROUP_COUNT_CUTOFF = 100
 
 
 logger = logging.getLogger('IsoQuant')
@@ -33,7 +33,7 @@ def set_logger(logger_instance):
 
 
 def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_dict=None,
-                      gzipped=False, feature_type='gene', convert_to_tpm=False):
+                      gzipped=False, feature_type='gene', convert_to_tpm=False, usable_reads_per_group=None):
     logger.info("Converting %s to full matrix" % input_linear_counts)
     cols = len(open(input_linear_counts).readline().strip().split('\t'))
     if cols != 3:
@@ -45,14 +45,14 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
                          dtype={'gene_id': str, 'group_id': str, 'count': float})
     count_matrix = df.pivot(index='gene_id', columns='group_id', values='count')
     normalization_factors = {g: 1.0 for g in df['group_id'].unique()} if not convert_to_tpm \
-        else get_normalization_factors(df)
+        else get_normalization_factors(df, usable_reads_per_group)
 
     output_file_path += ".tsv"
     output_file_path += ".gz" if gzipped else ""
     with gzip.open(output_file_path, 'wt') if gzipped else open(output_file_path, 'w') as outfile:
         # Write the header with group_ids
         columns = list(sorted(count_matrix.columns))
-        if len(columns) > GPROUP_COUNT_CUTOFF:
+        if len(columns) > GROUP_COUNT_CUTOFF:
             logger.warning("You have %d groups in your matrix, conversion might take a lot of time and the output file can be very large" % len(columns))
         outfile.write(feature_type + '_id\t' + '\t'.join(columns) + '\n')
 
@@ -66,7 +66,7 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
 
 
 def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=None,
-                   gzipped=False, convert_to_tpm=False):
+                   gzipped=False, convert_to_tpm=False, usable_reads_per_group=None):
     logger.info("Converting %s to MTX format" % input_linear_counts)
     cols = len(open(input_linear_counts).readline().strip().split('\t'))
     if cols != 3:
@@ -87,7 +87,7 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
     barcodes_files = output_file_prefix + ".barcodes.tsv"
 
     normalization_factors = {g: 1.0 for g in df['group_id'].unique()} if not convert_to_tpm \
-        else get_normalization_factors(df)
+        else get_normalization_factors(df, usable_reads_per_group)
 
     with open(barcodes_files, 'w') as bc_out:
         for group in unique_groups:
@@ -114,12 +114,15 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
     logger.info("Matrix was saved to 3 files with prefix %s" % output_file_prefix)
 
 
-def get_normalization_factors(counts):
-    total_group_counts = defaultdict(float)
-    for _, row in counts.iterrows():
-        group_id = row['group_id']
-        count = row['count']
-        total_group_counts[group_id] += count
+def get_normalization_factors(counts, usable_reads_per_group=None):
+    if not usable_reads_per_group:
+        total_group_counts = defaultdict(float)
+        for _, row in counts.iterrows():
+            group_id = row['group_id']
+            count = row['count']
+            total_group_counts[group_id] += count
+    else:
+        total_group_counts = usable_reads_per_group
 
     return {group_id: 1000000.0 / total_group_counts[group_id] for group_id in total_group_counts.keys()}
 

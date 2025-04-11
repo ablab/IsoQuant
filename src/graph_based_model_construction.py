@@ -134,7 +134,7 @@ class GraphBasedModelConstructor:
         self.filter_transcripts()
         # reassign reads
         self.assign_reads_to_models(read_assignment_storage)
-        self.forward_counts()
+        self.forward_counts(read_assignment_storage)
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
@@ -142,7 +142,7 @@ class GraphBasedModelConstructor:
         if self.params.sqanti_output:
             self.compare_models_with_known()
 
-    def forward_counts(self):
+    def forward_counts(self, read_assignments):
         ambiguous_assignments = {}
         for transcript_id in self.transcript_read_ids.keys():
             for read_assignment in self.transcript_read_ids[transcript_id]:
@@ -159,7 +159,9 @@ class GraphBasedModelConstructor:
             self.transcript_counter.add_read_info_raw(read_id, ambiguous_assignments[read_id][1:],
                                                       ambiguous_assignments[read_id][0])
 
-        self.transcript_counter.add_unassigned(sum(value == 0 for value in self.read_assignment_counts.values()))
+        for r in read_assignments:
+            if self.read_assignment_counts[r.read_id]: continue
+            self.transcript_counter.add_unassigned(r)
         self.transcript_counter.add_confirmed_features([model.transcript_id for model in self.transcript_model_storage])
 
     def compare_models_with_known(self):

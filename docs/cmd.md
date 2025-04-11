@@ -298,10 +298,11 @@ We recommend _not_ to modify these options unless you are clearly aware of their
     Filers out alignments with 1 or 2 exons and MAPQ less than this value (works only in annotation-free mode, default is 1).
 
 
-#### Output options
+#### Specific output options
 
 `--normalization_method`
     Method for normalizing non-grouped counts into TPMs:
+* `none` - do not perform TPM normalization;
 * `simple` - standard method, scale factor equals to 1 million divided by the counts sum (default);
 * `usable_reads` - includes all reads assigned to a feature including the ones that were filtered out
 during quantification (i.e. inconsistent or ambiguous);
@@ -311,8 +312,13 @@ Experiments with simulated data show that this method could give more accurate e
 However, normalization method does not affect correlation/relative proportions.
 
 `--counts_format`
-    Output format for grouped counts:
+    By default, IsoQuant outputs counts in internal linear format (see [formats](formats.md#expression-table-format) and [output](output.md#default-feature-counts-in-linear-format)).
+    Use this option to convert grouped counts to other format(s). You can provide a list with the following values:
 
-* `matrix` - usual format with genes as rows and groups as columns;
-* `linear` - linear format, each line contains gene/transcript id, group name and respective count value (no TPM output); 
-* `both` - output counts in both formats (default).
+* `matrix` - standard matrix format with genes as rows and groups as columns;
+* `mtx` - MTX format compatible with Seurat;
+* `default` - with small number of groups/samples (<=100), counts will be converted to standard matrix; 
+larger matrices (e.g. for single-cell experiments) will be saved to MTX (default).
+* `none` - no convertion.
+
+Note, that grouped counts can be converted to any format using `src/convert_grouped_counts.py`.

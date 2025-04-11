@@ -321,7 +321,6 @@ class ReadAssignmentAggregator:
         self.read_groups = read_groups
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
-        self.grouped_format = GroupedOutputFormat[self.args.counts_format]
 
         self.gene_set = set()
         self.transcript_set = set()
@@ -714,6 +713,7 @@ class DatasetProcessor:
                         (".gz" if self.args.gzipped else ""))
             aggregator.read_stat_counter.print_start("Read assignment statistics")
 
+            aggregator.global_counter.finalize(self.args)
             logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
             logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
             if self.args.read_group:
@@ -721,7 +721,7 @@ class DatasetProcessor:
                             aggregator.gene_grouped_counter.output_counts_file_name)
                 logger.info("Grouped transcript counts are saves to: " +
                             aggregator.transcript_grouped_counter.output_counts_file_name)
-            logger.info("Counts can be converted to other formats using src/covert_counts.py")
+            logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
 
     def load_read_info(self, dump_filename):
         info_loader = open(dump_filename + "_info", "rb")

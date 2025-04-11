@@ -227,7 +227,7 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(output_setup_args_group, "--counts_format", type=str, nargs='+',
                                    choices=[e.name for e in GroupedOutputFormat],
                                    help="output format for grouped counts",
-                                   default=GroupedOutputFormat.matrix.name)
+                                   default=[GroupedOutputFormat.default.name])
 
     add_additional_option_to_group(output_setup_args_group, "--genedb_output", help="output folder for converted gene "
                                                                                     "database, will be created automatically "

@@ -9,7 +9,7 @@ import logging
 import os
 import re
 import shutil
-import gzip
+from collections import defaultdict
 
 from .common import  rreplace
 
@@ -43,9 +43,12 @@ def merge_counts(counter, label, chr_ids, unaligned_reads=0):
     merged_file_handler = counter.get_output_file_handler()
     merge_files(file_name, label, chr_ids, merged_file_handler)
 
-    counter.reads_for_tpm = 0
-    stat_dict = {"__ambiguous": 0, "__no_feature": 0, "__not_aligned": 0, "__usable": 0}
+    if counter.usable_file_name:
+        for f in merge_file_list(counter.usable_file_name, label, chr_ids):
+            counter.load_usable(f)
+            os.remove(f)
 
+    stat_dict = defaultdict(int)
     if counter.output_stats_file_name and counter.ignore_read_groups:
         stats_file_names = merge_file_list(counter.output_stats_file_name, label, chr_ids)
         for file_name in stats_file_names:
@@ -56,9 +59,8 @@ def merge_counts(counter, label, chr_ids, unaligned_reads=0):
 
         if unaligned_reads > 0:
             stat_dict["__not_aligned"] = unaligned_reads
-        for v in ["__ambiguous", "__no_feature", "__not_aligned"]:
+        for v in stat_dict.keys():
             merged_file_handler.write("%s\t%d\n" % (v, stat_dict[v]))
-        counter.reads_for_tpm = stat_dict[ "__usable"]
 
 
 def normalize_path(config_path, file_path):
