@@ -7,10 +7,10 @@
 
 import logging
 
-import pybedtools as pbt
-from Bio import Seq
-
 logger = logging.getLogger('IsoQuant')
+
+
+from .common import reverse_complement
 
 
 # given a cigar string of an alignment, move shift bases along the alignment from the start
@@ -178,7 +178,7 @@ class PolyAFinder:
         read_mapped_region_start = soft_clipped_head_len
         to_check_start = max(0, read_mapped_region_start - to_pos)
         to_check_end = min(len(seq), read_mapped_region_start + from_pos + 1)
-        sequence_to_check = str(Seq.Seq(alignment.seq[to_check_start:to_check_end]).reverse_complement()).upper()
+        sequence_to_check = reverse_complement(str(alignment.seq[to_check_start:to_check_end])).upper()
 
         pos = self.find_polya(sequence_to_check)
         #logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_start, to_check_start, to_check_end, pos))
@@ -229,40 +229,3 @@ class PolyAFinder:
             return -1
 
         return i + max(0, seq[i:].find('AA'))
-
-
-class CagePeakFinder:
-    def __init__(self, cage_file, shift_size=50, window_size=5):
-        self.cage_peaks = self._load_cage_peaks(cage_file)
-        self.shift_size = shift_size
-        self.window_size = window_size
-
-    def _load_cage_peaks(self, cage_file):
-        return pbt.BedTool(cage_file)
-
-    def _get_search_region(self, alignment, extended=False):
-        contig = alignment.reference_name
-        search_size = self.shift_size if extended else self.window_size
-        if alignment.is_reverse:
-            strand = '-'
-            start = max(alignment.reference_end - self.window_size, 0)
-            end = alignment.reference_end + search_size
-        else:
-            strand = '.'
-            start = max(alignment.reference_start - search_size, 0)
-            end = alignment.reference_start + self.window_size
-        return contig, start, end, strand
-
-    def find_cage_peak(self, alignment):
-        logger.debug("Searching for cage peak for %s " % alignment.query_name)
-
-        contig, start, end, strand = self._get_search_region(alignment, extended=True)
-        alignment_interval = pbt.Interval(chrom=contig, start=start, end=end, strand=strand)
-        cage_intersections = self.cage_peaks.all_hits(alignment_interval)
-
-        if len(cage_intersections) > 0:
-            logger.debug('CAGE peaks found: {}'.format(cage_intersections))
-        else:
-            logger.debug('No CAGE peaks found')
-
-        return cage_intersections

@@ -21,7 +21,7 @@ from .isoform_assignment import (
     ReadAssignmentType,
 )
 from .read_groups import DefaultReadGrouper
-from .polya_finder import PolyAFinder, CagePeakFinder
+from .polya_finder import PolyAFinder
 from .polya_verification import PolyAFixer
 from .exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
@@ -243,7 +243,7 @@ class AlignmentCollector:
         self.read_groupper = read_groupper
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
         self.polya_fixer = PolyAFixer(self.params)
-        self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
+        # self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.alignment_stat_counter = EnumStats()
 
     def process(self):
@@ -318,8 +318,8 @@ class AlignmentCollector:
                 continue
 
             alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
-            if self.params.cage:
-                alignment_info.add_cage_info(self.cage_finder)
+            # if self.params.cage:
+            #    alignment_info.add_cage_info(self.cage_finder)
 
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic,
                                              IsoformMatch(MatchClassification.intergenic))
@@ -370,8 +370,8 @@ class AlignmentCollector:
                 continue
 
             alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
-            if self.params.cage:
-                alignment_info.add_cage_info(self.cage_finder)
+            # if self.params.cage:
+            #    alignment_info.add_cage_info(self.cage_finder)
             alignment_info.construct_profiles(profile_constructor)
             read_assignment = assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
 

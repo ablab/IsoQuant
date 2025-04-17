@@ -5,8 +5,6 @@ You will also need
 
 -   [gffutils](https://pythonhosted.org/gffutils/installation.html)
 -   [pysam](https://pysam.readthedocs.io/en/latest/index.html)
--   [biopython](https://biopython.org/)
--   [pybedtools](https://daler.github.io/pybedtools/)
 -   [pyfaidx](https://pypi.org/project/pyfaidx/)
 -   [pandas](https://pandas.pydata.org/)
 -   [pyyaml](https://pypi.org/project/PyYAML/)
