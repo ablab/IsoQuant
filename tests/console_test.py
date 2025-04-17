@@ -50,13 +50,13 @@ def test_clean_start():
     assert result.returncode == 0
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
-    resulting_files = ["exon_counts.tsv", "exon_grouped_counts.tsv", "gene_counts.tsv", "gene_grouped_counts.tsv",
-                       "intron_counts.tsv", "intron_grouped_counts.tsv",
+    resulting_files = ["exon_counts.tsv", "exon_grouped_counts.linear.tsv", "gene_counts.tsv", "gene_grouped_counts.tsv",
+                       "intron_counts.tsv", "intron_grouped_counts.linear.tsv",
                        "corrected_reads.bed.gz", "read_assignments.tsv.gz",
                        "novel_vs_known.SQANTI-like.tsv",
                        "transcript_counts.tsv", "transcript_grouped_counts.tsv",
-                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz",
-                       "transcript_model_tpm.tsv"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz",
+                       "discovered_transcript_tpm.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
@@ -82,7 +82,7 @@ def test_usual_start():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["gene_counts.tsv", "read_assignments.tsv.gz", "transcript_counts.tsv",
-                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
@@ -112,7 +112,7 @@ def test_with_bam_and_polya():
                        "intron_counts.tsv", "corrected_reads.bed.gz", "read_assignments.tsv.gz",
                        "novel_vs_known.SQANTI-like.tsv",
                        "transcript_counts.tsv",
-                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
         
@@ -141,7 +141,7 @@ def test_with_illumina():
     resulting_files = ["gene_counts.tsv",
                        "corrected_reads.bed.gz", "read_assignments.tsv.gz",
                        "transcript_counts.tsv",
-                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
         
@@ -167,7 +167,7 @@ def test_with_yaml():
     resulting_files = ["gene_counts.tsv",
                        "corrected_reads.bed.gz", "read_assignments.tsv.gz",
                        "transcript_counts.tsv",
-                       "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
