@@ -40,10 +40,11 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
         logger.error("Unexpected number of columns in %s: %d" % (input_linear_counts, cols))
         return
 
-    df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1,
+    df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1, keep_default_na=False,
                          names=['gene_id', 'group_id', 'count'],
                          dtype={'gene_id': str, 'group_id': str, 'count': float})
     count_matrix = df.pivot(index='gene_id', columns='group_id', values='count')
+
     normalization_factors = {g: 1.0 for g in df['group_id'].unique()} if not convert_to_tpm \
         else get_normalization_factors(df, usable_reads_per_group)
 
