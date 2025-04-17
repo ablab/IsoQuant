@@ -119,4 +119,3 @@ You can leave your comments and bug reports at our [GitHub repository tracker](h
         --data_type (assembly|pacbio|nanopore) -o OUTPUT_FOLDER
 
 * If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
-
