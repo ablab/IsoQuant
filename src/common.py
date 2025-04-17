@@ -880,7 +880,7 @@ def interval_bin_search_rev(ordered_intervals, pos):
     return ind
 
 
-base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', " ": " "}
+base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', 'a': 't', 'c': 'g', 'g': 'c', 't': 'a', 'n': 'n'}
 
 
 def reverse_complement(seq):
