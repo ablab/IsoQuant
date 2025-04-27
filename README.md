@@ -54,6 +54,13 @@ It can be provided in GFF/GTF format (can be gzipped).
 Pre-constructed `minimap2` index can also be provided to increase mapping time.
 
 
+## Visualization
+
+IsoQuant also has a visualization module `visualize.py`.
+
+See more in [the user manual](https://ablab.github.io/IsoQuant/visualization.html).
+
+
 ## Citation
 The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
 
