@@ -311,12 +311,12 @@ def main():
 
     # 6. Plotting with PlotOutput
     plot_output = PlotOutput(
-        updated_gene_dict,
-        gene_list,
-        str(gene_visualizations_dir),
-        read_assignments_dir=str(read_assignments_dir), # Pass None if not used
+        updated_gene_dict=updated_gene_dict,
+        gene_names=gene_list,
+        gene_visualizations_dir=str(gene_visualizations_dir),
+        read_assignments_dir=str(read_assignments_dir) if read_assignments_dir else None,
         reads_and_class=reads_and_class,
-        filter_transcripts=min_val,  # Just pass your chosen threshold for reference
+        filter_transcripts=min_val,
         conditions=output.conditions,
         ref_only=args.ref_only,
         ref_conditions=args.reference_conditions if hasattr(args, "reference_conditions") else None,

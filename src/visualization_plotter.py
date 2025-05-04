@@ -92,11 +92,17 @@ class PlotOutput:
             start = gene_data.get("start", 0)
             end = gene_data.get("end", 0)
             
-            # Calculate buffer (5% of total width)
-            width = end - start
-            buffer = width * 0.05
-            plot_start = start - buffer
-            plot_end = end + buffer
+            # Find the actual min/max coordinates of all exons
+            min_exon_start = min(exon["start"] for transcript in gene_data["transcripts"].values() 
+                               for exon in transcript["exons"])
+            max_exon_end = max(exon["end"] for transcript in gene_data["transcripts"].values() 
+                             for exon in transcript["exons"])
+            
+            # Calculate buffer (10% of total width)
+            width = max(end, max_exon_end) - min(start, min_exon_start)
+            buffer = width * 0.10  # Increased from 5% to 10%
+            plot_start = min(start, min_exon_start) - buffer
+            plot_end = max(end, max_exon_end) + buffer
 
             # REMOVED FILTERING LOGIC - Directly use transcripts from gene_data
             filtered_transcripts = gene_data["transcripts"]
@@ -144,8 +150,12 @@ class PlotOutput:
                     linewidth=2,
                 )
 
+                # Sort exons based on strand direction
+                exons = sorted(transcript_info["exons"], 
+                             key=lambda x: x["start"] if gene_data["strand"] == "+" else -x["start"])
+
                 # Exon blocks with color based on reference status
-                for exon in transcript_info["exons"]:
+                for exon_idx, exon in enumerate(exons, 1):
                     exon_length = exon["end"] - exon["start"]
                     if self.ref_only: # Check ref_only flag
                         exon_color = "skyblue" # If ref_only, always treat as reference
@@ -155,25 +165,16 @@ class PlotOutput:
                         exon_color = "skyblue" if is_reference_exon else "red"
                         exon_alpha = 1.0 if is_reference_exon else 0.6
                     
-                    ax.add_patch(
-                        plt.Rectangle(
-                            (exon["start"], i - 0.4),
-                            exon_length,
-                            0.8,
-                            color=exon_color,
-                            alpha=exon_alpha
-                        )
+                    # Add exon rectangle
+                    rect = plt.Rectangle(
+                        (exon["start"], i - 0.4),
+                        exon_length,
+                        0.8,
+                        color=exon_color,
+                        alpha=exon_alpha
                     )
-
-
-                if not any(exon["exon_id"].startswith("ENSE") for exon in transcript_info["exons"]):
-                    logging.debug(f"Transcript {transcript_id} in gene {gene_name_or_id} contains NO reference exons (based on ENSEMBL IDs)")
-                    #log the exon_ids
-                    #logging.debug(f"Exon IDs: {[exon['exon_id'] for exon in transcript_info['exons']]}")
-                else:
-                    #logging.debug(f"Transcript {transcript_id} in gene {gene_name_or_id} contains at least one reference exon (based on ENSEMBL IDs)")
-                    pass  # Added explicit pass statement for the empty block
-                
+                    ax.add_patch(rect)
+                    
                 # Store y-axis label information
                 y_ticks.append(i)
                 # Get transcript name with fallback options
@@ -725,7 +726,7 @@ class ExpressionVisualizer:
         reference_label: str,
         padj_threshold: float = 0.05,
         lfc_threshold: float = 1,
-        top_n: int = 10,
+        top_n: int = 60,  # Increased from 10 to 20
         feature_type: str = "genes",
     ) -> None:
         """Create volcano plot from differential expression results."""
@@ -797,7 +798,7 @@ class ExpressionVisualizer:
 
         plt.tight_layout()
         plot_path = (
-            self.output_path / f"volcano_plot_{feature_type}.pdf"  # Changed from .png to .pdf
+            self.output_path / f"volcano_plot_{feature_type}.pdf"
         )
         plt.savefig(str(plot_path))
         plt.close()
