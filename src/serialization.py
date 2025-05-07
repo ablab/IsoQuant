@@ -7,8 +7,8 @@
 # serialization stuff
 ENCODING = 'utf-8'
 BYTE_ORDER = "big"
-STR_LEN_BYTES = 2
-NONE_STR_LEN = (1 << 16) - 1
+STR_LEN_BYTES = 4
+NONE_STR_LEN = (1 << (8 * STR_LEN_BYTES)) - 1
 SHORT_INT_BYTES = 2
 LONG_INT_BYTES = 4
 TERMINATION_INT = (1 << 32) - 1
