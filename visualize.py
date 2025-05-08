@@ -208,7 +208,7 @@ def main():
     
     # Now parse the full arguments with the real parser
     args = parse_arguments()
-    
+
     # If find_genes is specified, get conditions interactively
     if args.find_genes is not None:
         select_conditions_interactively(args)

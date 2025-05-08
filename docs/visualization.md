@@ -2,13 +2,35 @@
 
 IsoQuant provides a visualization tool to help interpret and explore the output data. The goal of this visualization is to create informative plots that represent transcript usage and splicing patterns for genes of interest. Additionally, we provide global transcript and read assignment statistics from the IsoQuant analysis.
 
+## Installing supplementary R packages
+
+Visualization now includes various differential expression analysis that relies on the following R packages via `rpy2` library.
+
+- DESeq2
+- ggplot2
+- ggrepel
+- RColorBrewer
+- BiocManager
+- clusterProfiler
+- org.Hs.eg.db
+
+The last two are only available only via Bioconductor.
+
+To install these packages simply run the following Python script:
+
+```
+intsall_r_packages.py
+```
+
+Or install them directly via R.
+
 ## Running the visualization tool
 
 To run the visualization tool, use the following command:
 
 ```bash
 
-python visualize.py <output_directory> --gene_list <gene_list> [options]
+visualize.py <output_directory> --gene_list <gene_list> [options]
 
 ```
 
