@@ -2,6 +2,8 @@
 
 import argparse
 import sys
+from traceback import print_exc
+from io import StringIO
 import logging
 from src.visualization_output_config import OutputConfig
 from src.visualization_dictionary_builder import DictionaryBuilder
@@ -32,12 +34,11 @@ def setup_logging(viz_output_dir: Path) -> None:
     console_handler.setFormatter(console_formatter)
 
     # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG) # Root logger at DEBUG level
-    root_logger.handlers = []  # Clear existing handlers
-    root_logger.addHandler(file_handler)
-    root_logger.addHandler(console_handler)
-
+    logger = logging.getLogger("IsoQuantVis")
+    logger.setLevel(logging.DEBUG) # Root logger at DEBUG level
+    logger.handlers = []  # Clear existing handlers
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
 
     logging.info("Initialized centralized logging system")
     logging.debug(f"Log file location: {log_file}")
@@ -60,7 +61,7 @@ class FindGenesAction(argparse.Action):
         setattr(namespace, self.dest, values)
 
 
-def parse_arguments():
+def parse_arguments(cmd_args):
     parser = argparse.ArgumentParser(description="Visualize your IsoQuant output.")
 
     # Positional Argument
@@ -111,7 +112,7 @@ def parse_arguments():
         help="Find top genes with highest combined rank (default 100).",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(cmd_args)
 
     if args.find_genes is not None:
         output = OutputConfig(
@@ -185,29 +186,13 @@ def select_conditions_interactively(args):
     print("Selected Target Conditions:", ", ".join(args.target_conditions), "\n")
 
 
-def main():
-    # First, parse just the output directory argument to set up logging
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("output_directory", type=str, nargs='?')
-    parser.add_argument("--viz_output", type=str, default=None)
-    
-    # Parse just these arguments first
-    first_args, _ = parser.parse_known_args()
-    
-    # Initialize output directory early
-    if not first_args.output_directory:
-        print("Error: Output directory is required.")
-        sys.exit(1)
-        
-    # Set up visualization directory early
-    viz_output_dir = setup_viz_output(first_args.output_directory, first_args.viz_output)
-    
-    # Set up logging immediately to capture all operations
-    setup_logging(viz_output_dir)
+def main(cmd_args):
+    args = parse_arguments(cmd_args)
+
+    viz_output_dir = setup_viz_output(args.output_directory, args.viz_output)
+
+    setup_logging(args.viz_output)
     logging.info("Starting IsoQuant visualization pipeline")
-    
-    # Now parse the full arguments with the real parser
-    args = parse_arguments()
 
     # If find_genes is specified, get conditions interactively
     if args.find_genes is not None:
@@ -331,4 +316,26 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # stuff only to run when not called via 'import' here
+    try:
+        main(sys.argv[1:])
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:
+        raise
+    except:
+        logger = logging.getLogger("IsoQuantVis")
+        if logger.handlers:
+            strout = StringIO()
+            print_exc(file=strout)
+            s = strout.getvalue()
+            if s:
+                logger.critical("IsoQuant failed with the following error, please, submit this issue to "
+                                "https://github.com/ablab/IsoQuant/issues" + s)
+            else:
+                print_exc()
+        else:
+            sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
+                             "https://github.com/ablab/IsoQuant/issues")
+            print_exc()
+        sys.exit(-1)
