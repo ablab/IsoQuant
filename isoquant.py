@@ -760,6 +760,7 @@ def set_additional_params(args):
 
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
+    logger.info("Python version: %s" % sys.version)
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
