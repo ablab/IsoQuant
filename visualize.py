@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import os.path
 import sys
 from traceback import print_exc
 from io import StringIO
@@ -15,7 +16,7 @@ from pathlib import Path
 
 def setup_logging(viz_output_dir: Path) -> None:
     """Configure centralized logging for all visualization processes."""
-    log_file = viz_output_dir / "visualize.log"
+    log_file = os.path.join(viz_output_dir, "visualize.log")
 
     # Create formatters
     file_formatter = logging.Formatter(
