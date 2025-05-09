@@ -137,11 +137,10 @@ def gtf2db(gtf, db, complete_db=False, check_gtf=True):
     logger.info("Provide this database next time to avoid excessive conversion")
 
 
-def convert_gtf_to_db(args):
+def convert_gtf_to_db(args, target_filename):
     gtf_filename = args.genedb
     gtf_filename = os.path.abspath(gtf_filename)
-    genedb_filename = args.genedb_filename
-    gtf_filename, genedb_filename = convert_db(gtf_filename, genedb_filename, gtf2db, args)
+    gtf_filename, genedb_filename = convert_db(gtf_filename, target_filename, gtf2db, args)
     return genedb_filename
 
 

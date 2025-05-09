@@ -341,12 +341,10 @@ def check_and_load_args(args, parser):
         args.genedb_output = args.output
     elif not os.path.exists(args.genedb_output):
         os.makedirs(args.genedb_output)
-    if not args.genedb:
-        args.genedb_filename = None
-    elif args.genedb.lower().endswith("db"):
+
+    args.genedb_filename = None
+    if args.genedb.lower().endswith("db"):
         args.genedb_filename = args.genedb
-    else:
-        args.genedb_filename = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".db")
 
     if not check_input_params(args):
         parser.print_usage()
@@ -388,7 +386,6 @@ def save_params(args):
 
     pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
     pickler.dump(args)
-    pass
 
 
 # Check user's params
@@ -768,7 +765,9 @@ def run_pipeline(args):
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
         args.original_annotation = args.genedb
-        args.genedb = convert_gtf_to_db(args)
+        args.genedb_filename = convert_gtf_to_db(args, os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".db"))
+        save_params(args)
+        args.genedb = args.genedb_filename
 
     # map reads if fastqs are provided
     if args.input_data.input_type == "fastq":

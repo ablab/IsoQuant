@@ -189,7 +189,7 @@ def run_pipeline(args):
     logger.info(" === Counting gene annotation statistics === ")
 
     if not args.genedb.endswith('db'):
-        args.genedb = convert_gtf_to_db(args, output_is_dir=False)
+        args.genedb = convert_gtf_to_db(args, os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".db"))
 
     logger.info("Loading gene database from " + args.genedb)
     gffutils_db = gffutils.FeatureDB(args.genedb, keep_order=True)
