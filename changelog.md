@@ -1,6 +1,26 @@
 # IsoQuant changelog
 
-## IsoQuant 3.6.3, 13 January 2026
+## IsoQuant 3.7.0, 16 May 2025
+
+- Optimized grouped counts output. By default, all counts are stored in linear format, which saves time and disk space.
+Matrices with small number of columns are automatically converted to usual matrix in TSV format, 
+larger matrices typical for single-cell and spatial data are converted to MTX format.
+See `--counts_format` paramter for options. It is also possible to convert counts after IsoQuant is finished using `src/convert_grouped_counts.py`.
+Fixes issues mentioned in [#248](https://github.com/ablab/IsoQuant/issues/248).
+
+- New options `--indexing_options` and `--mapping_options` that allow to pass options to the indexing and mapping commands.
+Fixes [#284](https://github.com/ablab/IsoQuant/issues/284) and [#259](https://github.com/ablab/IsoQuant/issues/259).
+
+- STARlong is now an alternative options for aligning, can be set via `--aligner starlong` (not recommended for ONT reads).
+Fixes [#284](https://github.com/ablab/IsoQuant/issues/284)
+
+- Exon/splice junction counts now only come from reads assigned to the same strand, fixes [#253](https://github.com/ablab/IsoQuant/issues/253).
+
+- Use only gene-assigned reads for exon counting, fixes [#283](https://github.com/ablab/IsoQuant/issues/283).
+
+- Fixed rare serialization bug [#304](https://github.com/ablab/IsoQuant/issues/304).
+
+## IsoQuant 3.6.3, 13 January 2025
 
 - Fix penalty score for terminal exon elongation when selecting similar isoforms for inconsistent reads [#270](https://github.com/ablab/IsoQuant/issues/270).
 
