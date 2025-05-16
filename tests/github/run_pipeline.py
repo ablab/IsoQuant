@@ -325,7 +325,7 @@ def run_quantification(args, config_dict, mode):
     output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
 
     if mode == "novel":
-        out_tpm = os.path.join(output_folder, "%s/%s.transcript_model_tpm.tsv" % (label, label))
+        out_tpm = os.path.join(output_folder, "%s/%s.discovered_transcript_tpm.tsv" % (label, label))
     elif mode == "ref":
         out_tpm = os.path.join(output_folder, "%s/%s.transcript_tpm.tsv" % (label, label))
     else:
