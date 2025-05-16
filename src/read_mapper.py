@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import json
 import pysam
-from io import StringIO
+import gzip
 
 from .common import get_path_to_program
 from .gtf2db import convert_db_to_gtf, db2bed
@@ -260,13 +260,27 @@ def index_reference(aligner, args):
 def find_annotation(aligner, args):
     if args.no_junc_bed:
         return None
+
     if aligner == "starlong":
-        if args.genedb.lower().endswith("db"):
+        gene_annotation = args.genedb
+        if gene_annotation.lower().endswith("db"):
             if args.original_annotation:
-                return args.original_annotation
+                gene_annotation = args.original_annotation
             else:
-                return os.path.abspath(convert_db_to_gtf(args))
-        return os.path.abspath(args.genedb)
+                gene_annotation = os.path.abspath(convert_db_to_gtf(args))
+
+        if gene_annotation.lower().endswith("gz") or gene_annotation.lower().endswith("gzip"):
+            genedb_file_name = os.path.basename(gene_annotation)
+            genedb_name, _ = os.path.splitext(genedb_file_name)
+            gunzipped_genedb = os.path.join(args.output, genedb_name)
+            if not os.path.exists(gunzipped_genedb) or not args.resume:
+                logger.info("Decompressing genome annotation to " + str(gunzipped_genedb))
+                with open(gunzipped_genedb, "w") as outf:
+                    shutil.copyfileobj(gzip.open(gene_annotation, "rt"), outf)
+            gene_annotation = os.path.abspath(gunzipped_genedb)
+
+        return os.path.abspath(gene_annotation)
+
     elif aligner == "minimap2":
         bed_fname = None
         if args.junc_bed_file:

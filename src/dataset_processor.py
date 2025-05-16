@@ -417,28 +417,7 @@ class DatasetProcessor:
 
         if self.args.needs_reference:
             logger.info("Loading reference genome from %s" % self.args.reference)
-            ref_dir = os.path.dirname(self.args.reference)
-            ref_file_name = os.path.basename(self.args.reference)
-            ref_name, outer_ext = os.path.splitext(ref_file_name)
-
-            # make symlink for pyfaidx index
-            args.fai_file_name = self.args.reference + ".fai"
-            if not os.path.exists(args.fai_file_name) and not os.access(ref_dir, os.W_OK):
-                # index does not exist near the reference and reference folder is not writable
-                # store index in the output folder in this case
-                args.fai_file_name = os.path.join(args.output, ref_file_name  + ".fai")
-
-            low_ext = outer_ext.lower()
-            if low_ext in ['.gz', '.gzip', '.bgz']:
-                gunzipped_reference = os.path.join(args.output, ref_name)
-                if not os.path.exists(gunzipped_reference) or not self.args.resume:
-                    with open(gunzipped_reference, "w") as outf:
-                        shutil.copyfileobj(gzip.open(self.args.reference, "rt"), outf)
-                    logger.info("Loading uncompressed reference from " + str(gunzipped_reference))
-                self.args.reference = gunzipped_reference
-                self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
-            else:
-                self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
+            self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
         else:
             self.reference_record_dict = None
 

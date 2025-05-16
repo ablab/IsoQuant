@@ -15,6 +15,7 @@ import pickle
 import shutil
 import sys
 import time
+import gzip
 from collections import namedtuple
 from io import StringIO
 from traceback import print_exc
@@ -758,12 +759,40 @@ def set_additional_params(args):
     args.original_annotation = None
 
 
+def prepare_reference_genome(args):
+    if not args.needs_reference:
+        return
+    logger.info("Reading reference genome from %s" % args.reference)
+    ref_dir = os.path.dirname(args.reference)
+    ref_file_name = os.path.basename(args.reference)
+    ref_name, outer_ext = os.path.splitext(ref_file_name)
+
+    # make symlink for pyfaidx index
+    args.fai_file_name = args.reference + ".fai"
+    if not os.path.exists(args.fai_file_name) and not os.access(ref_dir, os.W_OK):
+        # index does not exist near the reference and reference folder is not writable
+        # store index in the output folder in this case
+        args.fai_file_name = os.path.join(args.output, ref_file_name + ".fai")
+
+    low_ext = outer_ext.lower()
+    if low_ext in ['.gz', '.gzip', '.bgz']:
+        gunzipped_reference = os.path.join(args.output, ref_name)
+        if not os.path.exists(gunzipped_reference) or not args.resume:
+            logger.info("Decompressing reference to " + str(gunzipped_reference))
+            with open(gunzipped_reference, "w") as outf:
+                shutil.copyfileobj(gzip.open(args.reference, "rt"), outf)
+        args.reference = gunzipped_reference
+
+
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
     logger.info("Python version: %s" % sys.version)
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
+
+    # gunzip refernece genome if needed
+    prepare_reference_genome(args)
 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
