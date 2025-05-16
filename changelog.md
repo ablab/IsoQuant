@@ -8,6 +8,8 @@ larger matrices typical for single-cell and spatial data are converted to MTX fo
 See `--counts_format` paramter for options. It is also possible to convert counts after IsoQuant is finished using `src/convert_grouped_counts.py`.
 Fixes issues mentioned in [#248](https://github.com/ablab/IsoQuant/issues/248).
 
+- Renamed counts related to discovered transcripts and genes to avoid confusion.
+
 - New options `--indexing_options` and `--mapping_options` that allow to pass options to the indexing and mapping commands.
 Fixes [#284](https://github.com/ablab/IsoQuant/issues/284) and [#259](https://github.com/ablab/IsoQuant/issues/259).
 
