@@ -879,11 +879,11 @@ if __name__ == "__main__":
             s = strout.getvalue()
             if s:
                 logger.critical("IsoQuant failed with the following error, please, submit this issue to "
-                                "https://github.com/ablab/IsoQuant/issues" + s)
+                                "https://github.com/ablab/IsoQuant/issues\n" + s)
             else:
                 print_exc()
         else:
             sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
-                             "https://github.com/ablab/IsoQuant/issues")
+                             "https://github.com/ablab/IsoQuant/issues\n")
             print_exc()
         sys.exit(-1)
