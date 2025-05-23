@@ -499,6 +499,7 @@ class GeneInfo:
     # assigns an ordered list of all known exons and introns to self.exons and self.introns
     # returns 2 maps, isoform id -> intron / exon list
     def set_introns_and_exons(self):
+        used_cds = False
         # dictionary: isoform id -> ordered list of intron coordinates
         all_isoforms_introns = {}
         # dictionary: isoform id -> ordered list of exon coordinates
@@ -507,17 +508,34 @@ class GeneInfo:
         for gene_db in self.gene_db_list:
             for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
                 exons = []
-                for e in self.db.children(t, order_by='start'):
-                    if e.featuretype == 'exon':
-                        exons.append((e.start, e.end))
+                all_features = []
+                for e in self.db.children(t, featuretype=('exon', 'CDS'), order_by='start'):
+                    all_features.append((e.featuretype, e.start, e.end))
+
+                for i, e in enumerate(all_features):
+                    if e[0] == 'exon':
+                        exons.append((e[1], e[2]))
+                        continue
+
+                    cds = (e[1], e[2])
+                    prev_exon = None if i == 0 else (all_features[i-1][1], all_features[i-1][2])
+                    next_exon = None if i == len(all_features)-1 else (all_features[i+1][1], all_features[i+1][2])
+                    if (prev_exon and overlaps(cds, prev_exon)) or (next_exon and overlaps(cds, next_exon)):
+                        continue
+                    exons.append(cds)
+                    used_cds = True
+
                 if not exons:
-                    logger.warning("Malformed transcript %s has no exons" % t.id)
+                    logger.warning("Malformed transcript %s has no exons or CDS" % t.id)
                     continue
                 all_isoforms_exons[t.id] = exons
                 all_isoforms_introns[t.id] = junctions_from_blocks(all_isoforms_exons[t.id])
 
         if self.db and not all_isoforms_exons:
             logger.warning("Gene %s has no exons / transcripts, check your input annotation" % self.gene_db_list[0].id)
+
+        if used_cds:
+            logger.warning("Gene %s has only CDS features for some transcripts, will be treating those as exons" % self.gene_db_list[0].id)
 
         introns = set()
         exons = set()
