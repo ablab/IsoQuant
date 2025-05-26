@@ -54,10 +54,22 @@ class PrintOnlyFunctor:
 
 
 class AbstractAssignmentPrinter:
-    def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor(), gzipped=False):
+    def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor()):
         self.assignment_checker = assignment_checker
         self.params = params
         self.output_file_name = output_file_name
+
+    def add_read_info(self, read_assignment):
+        raise NotImplementedError()
+
+    def flush(self):
+        raise NotImplementedError()
+
+
+class TextFileAssignmentPrinter(AbstractAssignmentPrinter):
+    def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor(), gzipped=False):
+        AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker)
+        self.dumper = open(self.output_file_name, "wb")
         self.gzipped = gzipped
         if gzipped:
             self.output_file = gzip.open(output_file_name + ".gz", "wt")
@@ -66,9 +78,6 @@ class AbstractAssignmentPrinter:
 
     def __del__(self):
         self.output_file.close()
-
-    def add_read_info(self, read_assignment):
-        raise NotImplementedError()
 
     def flush(self):
         if not self.gzipped:
@@ -97,10 +106,10 @@ class VoidPrinter:
 
 
 # write mapped reads to bed file
-class BEDPrinter(AbstractAssignmentPrinter):
+class BEDPrinter(TextFileAssignmentPrinter):
     def __init__(self, output_file_name, params, print_corrected=False, assignment_checker=PrintAllFunctor(),
                  gzipped=False):
-        AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker, gzipped=gzipped)
+        TextFileAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker, gzipped=gzipped)
         self.print_corrected = print_corrected
         self.output_file.write("#chrom\tchromStart\tchromEnd\tname\tscore\tstrand\tthickStart\tthickEnd\titemRgb\tblockCount\tblockSizes\tblockStarts\n")
 
@@ -127,6 +136,7 @@ class BEDPrinter(AbstractAssignmentPrinter):
 class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
     GENE_INFO = 255
     READ_ASSIGNMENT = 255 << 8
+
     def __init__(self, output_file_name, params):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.dumper = open(self.output_file_name, "wb")
@@ -145,6 +155,8 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
         write_short_int(self.READ_ASSIGNMENT, self.dumper)
         read_assignment.serialize(self.dumper)
 
+    def flush(self):
+        pass
 
 class BaseTmpFileAssignmentLoader:
     def __init__(self, input_file_name):
@@ -210,9 +222,9 @@ class QuickTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
             return None
 
 
-class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
+class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support, additional_header = "", gzipped=False):
-        AbstractAssignmentPrinter.__init__(self, output_file_name, params, gzipped=gzipped)
+        TextFileAssignmentPrinter.__init__(self, output_file_name, params, gzipped=gzipped)
         self.header = "#read_id\tchr\tstrand\tisoform_id\tgene_id" \
                       "\tassignment_type\tassignment_events\texons\tadditional_info\tgroups\n"
         self.output_file.write(additional_header)
@@ -349,9 +361,9 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     """
 
 
-class SqantiTSVPrinter(AbstractAssignmentPrinter):
+class SqantiTSVPrinter(TextFileAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support):
-        AbstractAssignmentPrinter.__init__(self, output_file_name, params)
+        TextFileAssignmentPrinter.__init__(self, output_file_name, params)
         self.header = '#isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
                       '\tassociated_gene\tassociated_transcript\tref_length\tref_exons\tdiff_to_TSS\tdiff_to_TTS' \
                       '\tdiff_to_gene_TSS\tdiff_to_gene_TTS\tsubcategory\tRTS_stage\tall_canonical' \
