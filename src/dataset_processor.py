@@ -503,12 +503,12 @@ class DatasetProcessor:
 
         if not genome_chromosomes.issubset(bam_chromosomes):
             if len(genome_chromosomes.intersection(bam_chromosomes)) == 0:
-                logger.critical("Chromosomes in you BAM file(s) have different names than chromosomes in your reference"
+                logger.critical("Chromosomes in the BAM file(s) have different names than chromosomes in the reference"
                                 " genome. Make sure that the same genome was used to generate your BAM file(s).")
                 exit(-1)
             else:
-                logger.error("Some chromosomes from your reference genome cannot be found in your BAM file(s)."
-                             "Make sure that the same genome was used to generate your BAM file(s).")
+                logger.error("Some chromosomes from the reference genome cannot be found in the BAM file(s)."
+                             "Make sure that the same genome was used to generate the BAM file(s).")
 
         if not self.args.genedb:
             return
@@ -519,12 +519,12 @@ class DatasetProcessor:
             gene_annotation_chromosomes.add(feature.seqid)
         if not genome_chromosomes.issubset(gene_annotation_chromosomes):
             if len(genome_chromosomes.intersection(gene_annotation_chromosomes)) == 0:
-                logger.critical("Chromosomes in you gene annotation have different names than chromosomes in your "
-                                "reference genome. Please, check your input data.")
+                logger.critical("Chromosomes in the gene annotation have different names than chromosomes in the "
+                                "reference genome. Please, check the input data.")
                 exit(-1)
             else:
-                logger.error("Some chromosomes from your reference genome cannot be found in your gene."
-                             "annotation. Please, check your input data..")
+                logger.error("Some chromosomes from the reference genome cannot be found in the gene."
+                             "annotation. Please, check the input data.")
 
     def get_chr_list(self):
         chr_ids = sorted(
