@@ -423,6 +423,7 @@ class DatasetProcessor:
             self.reference_record_dict = Fasta(self.args.reference, indexname=args.fai_file_name)
         else:
             self.reference_record_dict = None
+        self.chr_ids = []
 
     def __del__(self):
         if not self.args.keep_tmp and self.args.gunzipped_reference:
@@ -440,7 +441,7 @@ class DatasetProcessor:
         logger.info("Processing experiment " + sample.prefix)
         logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
-        self.check_chromosome_consistency(sample)
+        self.chr_ids = self.get_chromosome_ids(sample)
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
 
         self.all_read_groups = set()
@@ -494,45 +495,54 @@ class DatasetProcessor:
                 os.remove(f)
         logger.info("Processed experiment " + sample.prefix)
 
-    def check_chromosome_consistency(self, sample):
-        genome_chromosomes = set(self.get_chr_list())
+    def get_chromosome_ids(self, sample):
+        genome_chromosomes = set(self.reference_record_dict.keys())
         bam_chromosomes = set()
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             bam_chromosomes.update(bam.references)
 
-        if not genome_chromosomes.issubset(bam_chromosomes):
-            if len(genome_chromosomes.intersection(bam_chromosomes)) == 0:
+        bam_genome_overlap = genome_chromosomes.intersection(bam_chromosomes)
+        if len(bam_genome_overlap) != len(genome_chromosomes) or len(bam_genome_overlap) != len(bam_chromosomes):
+            if len(bam_genome_overlap) == 0:
                 logger.critical("Chromosomes in the BAM file(s) have different names than chromosomes in the reference"
                                 " genome. Make sure that the same genome was used to generate your BAM file(s).")
                 exit(-1)
             else:
-                logger.error("Some chromosomes from the reference genome cannot be found in the BAM file(s)."
-                             "Make sure that the same genome was used to generate the BAM file(s).")
+                logger.warning("Chromosome list from the reference genome is not the same as the chromosome list from"
+                               " the BAM file(s). Make sure that the same genome was used to generate the BAM file(s).")
+                logger.warning("Only %d overlapping chromosomes will be processed." % len(bam_genome_overlap))
 
         if not self.args.genedb:
-            return
+            return list(sorted(
+                bam_genome_overlap,
+                key=lambda x: len(self.reference_record_dict[x]),
+                reverse=True,
+            ))
 
         gene_annotation_chromosomes = set()
         gffutils_db = gffutils.FeatureDB(self.args.genedb)
         for feature in gffutils_db.all_features():
             gene_annotation_chromosomes.add(feature.seqid)
-        if not genome_chromosomes.issubset(gene_annotation_chromosomes):
-            if len(genome_chromosomes.intersection(gene_annotation_chromosomes)) == 0:
+
+        common_overlap = gene_annotation_chromosomes.intersection(bam_genome_overlap)
+        if len(common_overlap) != len(gene_annotation_chromosomes):
+            if len(common_overlap) == 0:
                 logger.critical("Chromosomes in the gene annotation have different names than chromosomes in the "
-                                "reference genome. Please, check the input data.")
+                                "reference genome or BAM file(s). Please, check the input data.")
                 exit(-1)
             else:
-                logger.error("Some chromosomes from the reference genome cannot be found in the gene."
-                             "annotation. Please, check the input data.")
-
-    def get_chr_list(self):
-        chr_ids = sorted(
-            self.reference_record_dict.keys(),
+                logger.warning("Chromosome list from the gene annotation is not the same as the chromosome list from"
+                               " the reference genomes or BAM file(s). Please, check you input data.")
+                logger.warning("Only %d overlapping chromosomes will be processed." % len(common_overlap))
+        return list(sorted(
+            common_overlap,
             key=lambda x: len(self.reference_record_dict[x]),
             reverse=True,
-        )
-        return chr_ids
+        ))
+
+    def get_chr_list(self):
+        return self.chr_ids
 
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
