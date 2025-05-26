@@ -440,6 +440,7 @@ class DatasetProcessor:
         logger.info("Processing experiment " + sample.prefix)
         logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
+        self.check_chromosome_consistency(sample)
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
 
         self.all_read_groups = set()
@@ -492,6 +493,38 @@ class DatasetProcessor:
             for f in glob.glob(sample.read_group_file + "*"):
                 os.remove(f)
         logger.info("Processed experiment " + sample.prefix)
+
+    def check_chromosome_consistency(self, sample):
+        genome_chromosomes = set(self.get_chr_list())
+        bam_chromosomes = set()
+        for bam_file in list(map(lambda x: x[0], sample.file_list)):
+            bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
+            bam_chromosomes.update(bam.references)
+
+        if not genome_chromosomes.issubset(bam_chromosomes):
+            if len(genome_chromosomes.intersection(bam_chromosomes)) == 0:
+                logger.critical("Chromosomes in you BAM file(s) have different names than chromosomes in your reference"
+                                " genome. Make sure that the same genome was used to generate your BAM file(s).")
+                exit(-1)
+            else:
+                logger.error("Some chromosomes from your reference genome cannot be found in your BAM file(s)."
+                             "Make sure that the same genome was used to generate your BAM file(s).")
+
+        if not self.args.genedb:
+            return
+
+        gene_annotation_chromosomes = set()
+        gffutils_db = gffutils.FeatureDB(self.args.genedb)
+        for feature in gffutils_db.all_features():
+            gene_annotation_chromosomes.add(feature.seqid)
+        if not genome_chromosomes.issubset(gene_annotation_chromosomes):
+            if len(genome_chromosomes.intersection(gene_annotation_chromosomes)) == 0:
+                logger.critical("Chromosomes in you gene annotation have different names than chromosomes in your "
+                                "reference genome. Please, check your input data.")
+                exit(-1)
+            else:
+                logger.error("Some chromosomes from your reference genome cannot be found in your gene."
+                             "annotation. Please, check your input data..")
 
     def get_chr_list(self):
         chr_ids = sorted(
