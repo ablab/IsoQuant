@@ -97,16 +97,15 @@ def set_polya_requirement_strategy(flag, polya_requirement_strategy):
         return True
 
 
-
 def collect_reads_in_parallel(sample, chr_id, args):
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
         current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
     lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
-    save_file = "{}_{}".format(sample.out_raw_file, chr_id)
-    group_file = "{}_{}_groups".format(sample.out_raw_file, chr_id)
-    bamstat_file = "{}_{}_bamstat".format(sample.out_raw_file, chr_id)
+    save_file = "{}_{}".format(sample.out_raw_file, convert_chr_id_to_file_name_str(chr_id))
+    group_file = save_file + "_groups"
+    bamstat_file = save_file + "_bamstat"
     processed_reads = []
     if args.high_memory:
         def collect_assignment_info(ra): return BasicReadAssignment(ra)
