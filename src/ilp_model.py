@@ -90,144 +90,6 @@ def Intron2Nx_Node(
     return G, additional_starts, additional_ends, edges_to_ignore
 
 
-def Intron2Nx(
-        intron_graph,
-        skip_isolated_nodes=True,
-        skip_terminal_nodes=True,
-    ):
-
-    G = nx.DiGraph()
-
-    # We create the full networkx graph
-
-    if not skip_isolated_nodes:
-        # We add all the nodes
-        for intron in intron_graph.intron_collector.clustered_introns.keys(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
-            G.add_node(str(intron))
-        for intron in chain.from_iterable(chain(intron_graph.outgoing_edges.values(), intron_graph.incoming_edges.values())):
-            if intron not in G:
-                G.add_node(str(intron))
-
-    # We add all the edges
-    additional_starts = []
-    additional_ends = []
-    edges_to_ignore = []
-
-    for intron in intron_graph.incoming_edges.keys():
-        for preceding_intron in intron_graph.incoming_edges[intron]:
-            edge_weight = intron_graph.edge_weights[(preceding_intron, intron)]
-            if skip_terminal_nodes:
-                if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
-                    additional_starts.append(str(intron))
-                else:
-                    G.add_edge(str(preceding_intron), str(intron), flow=edge_weight)
-            else:
-                G.add_edge(str(preceding_intron), str(intron), flow=edge_weight)
-                if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
-                    additional_starts.append(str(preceding_intron))
-                    edges_to_ignore.append((str(preceding_intron), str(intron)))
-
-    for intron in intron_graph.outgoing_edges.keys():
-        for subsequent_intron in intron_graph.outgoing_edges[intron]:
-            edge_weight = intron_graph.edge_weights[(intron, subsequent_intron)]
-            if skip_terminal_nodes:
-                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                    additional_ends.append(str(intron))
-                else:
-                    G.add_edge(str(intron), str(subsequent_intron), flow=edge_weight)
-            else:
-                G.add_edge(str(intron), str(subsequent_intron), flow=edge_weight)
-                if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                    additional_ends.append(str(subsequent_intron))
-                    edges_to_ignore.append((str(intron), str(subsequent_intron)))
-    
-    logger.debug(G.edges(data=True))
-
-    return G, additional_starts, additional_ends, edges_to_ignore
-
-def Intron2Nx_old(intron_graph):
-    intron2vertex = dict()
-    vertex2intron = dict()
-    vertex_id = 1
-    G = nx.DiGraph()
-
-    #TODO add id to nxGraph
-    #graph.graph["id"] = "simple_graph"
-    # add all intron vertices
-    for intron in intron_graph.intron_collector.clustered_introns.keys(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
-        intron2vertex[intron] = vertex_id
-        vertex2intron[vertex_id] = intron
-        vertex_id += 1
-    #we add the introns that edges lead to
-    for intron_set in intron_graph.outgoing_edges.values():
-        for intron in intron_set:
-            if intron in intron2vertex: continue
-            intron2vertex[intron] = vertex_id
-            vertex2intron[vertex_id] = intron
-            vertex_id += 1
-    #we add the edges that edges come from
-    for intron_set in intron_graph.incoming_edges.values():
-        for intron in intron_set:
-            if intron in intron2vertex: continue
-            intron2vertex[intron] = vertex_id
-            vertex2intron[vertex_id] = intron
-            vertex_id += 1
-
-    source = "s"
-    target = "t"
-
-    nodes = set()
-    #print("incoming",intron_graph.incoming_edges)
-    # create edges
-    edge_list = []
-    starting_introns = defaultdict(int)
-    for intron in intron_graph.incoming_edges.keys():
-        for preceding_intron in intron_graph.incoming_edges[intron]:
-            if intron_graph.edge_weights[(preceding_intron, intron)] > 0:
-                edge_list.append((str(intron2vertex[preceding_intron]), str(intron2vertex[intron])))
-                if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
-                    starting_introns[preceding_intron] += intron_graph.edge_weights[(preceding_intron, intron)]
-
-    terminal_introns = defaultdict(int)
-    for intron in intron_graph.outgoing_edges.keys():
-        for subsequent_intron in intron_graph.outgoing_edges[intron]:
-            if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
-                terminal_introns[subsequent_intron] += intron_graph.edge_weights[(intron, subsequent_intron)]
-
-    flow_dict = dict()
-    for intron in intron_graph.incoming_edges.keys():
-        for preceding_intron in intron_graph.incoming_edges[intron]:
-            if intron_graph.edge_weights[(preceding_intron, intron)]>0:
-                u = str(intron2vertex[preceding_intron])
-                v = str(intron2vertex[intron])
-                nodes.add(u)
-                nodes.add(v)
-                flow_dict[(u, v)] = intron_graph.edge_weights[(preceding_intron, intron)]
-
-    # add connection to super source and total weight
-    for starting_intron in starting_introns.keys():
-        starting_vertex = intron2vertex[starting_intron]
-        edge_list.append((str(source), str(starting_vertex)))
-        flow_dict[(str(source), str(starting_vertex))] = starting_introns[starting_intron]
-
-    for terminal_intron in terminal_introns.keys():
-        terminal_vertex = intron2vertex[terminal_intron]
-        edge_list.append((str(terminal_vertex), str(target)))
-        flow_dict[(str(terminal_vertex), str(target))] = terminal_introns[terminal_intron]
-    #TODO: there seems to be a bug in how the weights are calculated. We should get weights>0
-    assert len(edge_list) == len(flow_dict)
-
-    # add nodes and edges to networkx graph
-    for node in nodes:
-        #print("Adding ", node, ", ",type(node))
-        G.add_node(node)
-    for (u,v) in edge_list:
-        G.add_edge(u,v,flow=flow_dict[(u,v)])
-    #print(G.nodes)
-    vertex_id += 1 #vertex_id equals the number of nods in G.nx
-    logger.debug(vertex2intron)
-    logger.debug(flow_dict)
-    return G
 def transfer_constraints(transcripts_constrints):
     pc_transformed=[]
     for constraint in transcripts_constrints:
@@ -241,6 +103,21 @@ def transfer_constraints(transcripts_constrints):
 
 import time
 
+def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints):
+    nx.write_gml(graph, "graph.gml")
+    add_startsfile = open('add_starts', 'wb')
+    pickle.dump(additional_starts, add_startsfile)
+    add_startsfile.close()
+    add_endsfile = open('add_ends', 'wb')
+    pickle.dump(additional_ends, add_endsfile)
+    add_endsfile.close()
+    edges_ignore = open('edges_ignored', 'wb')
+    pickle.dump(edges_to_ignore, edges_ignore)
+    edges_ignore.close()
+    add_constraintsfile = open('constraints','wb')
+    pickle.dump(constraints,add_constraintsfile)
+    add_constraintsfile.close()
+
 def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
     print(transcripts_constraints)
     print("Running ILP part")
@@ -251,22 +128,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[], epsilon=0.25, tim
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
     print("Edges with data")
     print(graph.edges(data=True))
-    neGraph =fp.NodeExpandedDiGraph(graph,node_flow_attr="flow")
-    print("NEGraphInitial")
-    print(neGraph.edges(data=True))
-    ne_subpath_constraints_edges = neGraph.get_expanded_subpath_constraints(constraints)
-    print(neGraph.edges(data=True))
-    nx.write_gml(graph, "graph.gml")
-    add_startsfile = open('add_starts', 'wb')
-    pickle.dump(additional_starts, add_startsfile)
-    add_endsfile = open('add_ends', 'wb')
-    pickle.dump(additional_ends, add_endsfile)
-    edges_ignore = open('edges_ignored', 'wb')
-    pickle.dump(edges_to_ignore, edges_ignore)
-
-
-    #print(graph.nodes())
-    # print(graph.edges(data=True))
+    export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
     fp.utils.draw(
         G=graph,
         flow_attr="flow",
@@ -304,7 +166,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[], epsilon=0.25, tim
     min_path_error_model.solve()
     end = time.time()
     print("Solution found! in ", end - start, " seconds")
-    process_solution(neGraph, min_path_error_model,additional_starts,additional_ends)
+    process_solution(graph, min_path_error_model,additional_starts,additional_ends)
     # this_k = 5
     # mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
     # mpe_model.solve()
@@ -314,71 +176,6 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[], epsilon=0.25, tim
     #    additional_starts=additional_starts,
     #    additional_ends=additional_ends)
 
-
-
-
-def ILP_Solver(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
-
-    print(transcripts_constraints)
-    print("Running ILP part")
-    constraints = transfer_constraints(transcripts_constraints)
-    #for key in intron_graph.edge_weights.keys():
-        #print(key,", ",intron_graph.edge_weights[key])
-    # graph = Intron2Nx_old(intron_graph)
-    graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx(intron_graph)
-    nx.write_gml(graph, "graph.gml")
-    add_startsfile = open('add_starts', 'wb')
-    pickle.dump(additional_starts,add_startsfile)
-    add_endsfile = open('add_ends', 'wb')
-    pickle.dump(additional_ends, add_endsfile)
-    edges_ignore=open('edges_ignored','wb')
-    pickle.dump(edges_to_ignore, edges_ignore)
-    print(graph.nodes())
-    #print(graph.edges(data=True))
-    fp.utils.draw(
-        G=graph,
-        flow_attr="flow",
-        filename=str(id(graph))+"before.png",  # this will be used as filename
-        draw_options={
-            "show_graph_edges": True,
-            "show_edge_weights": True,
-            "show_path_weights": False,
-            "show_path_weight_on_first_edge": True,
-            "pathwidth": 2,
-
-        },
-        additional_starts=additional_starts,
-        additional_ends=additional_ends,
-        subpath_constraints=constraints,)
-    #graph.graph["id"] = "graph" + str(id(graph))
-    optimization_options = {
-        "optimize_with_safe_paths": False,
-        "optimize_with_safe_sequences": True
-    }
-    min_path_error_model = fp.NumPathsOptimization(
-        model_type = fp.kMinPathError,
-        stop_on_first_feasible=True,
-        G = graph,
-        flow_attr = "flow",
-        additional_starts = additional_starts,
-        additional_ends = additional_ends,
-        edges_to_ignore = edges_to_ignore,
-        subpath_constraints = constraints,
-        optimization_options = optimization_options,
-        )
-    #print("Attempting to solve mpe_model with k=",str(this_k))
-    start=time.time()
-    min_path_error_model.solve()
-    end=time.time()
-    print("Solution found! in ",end-start, " seconds")
-    # this_k = 5
-    # mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
-    # mpe_model.solve()
-    #process_solution(
-    #    graph=graph,
-    #    model=min_path_error_model,
-    #    additional_starts=additional_starts,
-    #    additional_ends=additional_ends)
 
 
 def process_solution(
