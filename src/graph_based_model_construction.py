@@ -33,7 +33,7 @@ from .isoform_assignment import (
 from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
-from .ilp_model import ILP_Solver
+from .ilp_model import ILP_Solver_Nodes
 
 
 logger = logging.getLogger('IsoQuant')
@@ -609,7 +609,7 @@ class GraphBasedModelConstructor:
         print("PC",path_constraints)
         print("PCI",self.known_isoforms_in_graph_ids)
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
-        fl_transcript_paths = ILP_Solver(self.intron_graph, path_constraints)
+        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, path_constraints)
         for res in fl_transcript_paths:
             path = tuple(res[0])
             weight = res[1]
