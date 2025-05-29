@@ -69,7 +69,6 @@ class AbstractAssignmentPrinter:
 class TextFileAssignmentPrinter(AbstractAssignmentPrinter):
     def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor(), gzipped=False):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker)
-        self.dumper = open(self.output_file_name, "wb")
         self.gzipped = gzipped
         if gzipped:
             self.output_file = gzip.open(output_file_name + ".gz", "wt")
