@@ -275,8 +275,14 @@ class IntronGraph:
         to_remove = [intron for intron, count in self.intron_collector.clustered_introns.items() if count <= 1]
         for intron in to_remove:
             del self.intron_collector.clustered_introns[intron]
-            del self.outgoing_edges[intron]
-            del self.incoming_edges[intron]
+            if intron in self.outgoing_edges:
+                for i in self.outgoing_edges[intron]:
+                    self.incoming_edges[i].remove(intron)
+                del self.outgoing_edges[intron]
+            if intron in self.incoming_edges:
+                for i in self.incoming_edges[intron]:
+                    self.outgoing_edges[i].remove(intron)
+                del self.incoming_edges[intron]
 
     def clean_tips_and_bulges(self):
         # check all outgoing edges
