@@ -283,11 +283,15 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         ground_truth_gene_info = None
         if ground_truth_db:
             gene_list = []
-            for g in gene_info.gene_db_list:
-                try:
-                    gene_list.append(ground_truth_db[g.id])
-                except gffutils.exceptions.FeatureNotFoundError:
-                    pass
+            if gene_info.gene_db_list:
+                for g in gene_info.gene_db_list:
+                    try:
+                        gene_list.append(ground_truth_db[g.id])
+                    except gffutils.exceptions.FeatureNotFoundError:
+                        pass
+            else:
+                gene_list = list(ground_truth_db.region(seqid=chr_id, start=gene_info.start,
+                                                        end=gene_info.end, featuretype="gene"))
             if gene_list:
                 ground_truth_gene_info = GeneInfo(gene_list, ground_truth_db, delta=args.delta)
 
