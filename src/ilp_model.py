@@ -95,7 +95,7 @@ def transfer_constraints(transcripts_constrints):
     for constraint in transcripts_constrints:
         this_constraint=[]
         for first, second in zip(constraint, constraint[1:]):
-            print("elem",first)
+            #print("elem",first)
             this_constraint.append((str(first),str(second)))
         pc_transformed.append(this_constraint)
     print(pc_transformed)
@@ -119,54 +119,78 @@ def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constra
     add_constraintsfile.close()
 
 def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
-    print(transcripts_constraints)
+    print("constraints", transcripts_constraints)
     print("Running ILP part")
+    export = False
     constraints = transfer_constraints(transcripts_constraints)
     # for key in intron_graph.edge_weights.keys():
     # print(key,", ",intron_graph.edge_weights[key])
     # graph = Intron2Nx_old(intron_graph)
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
-    print("Edges with data")
-    print(graph.edges(data=True))
-    export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
-    fp.utils.draw(
-        G=graph,
-        flow_attr="flow",
-        filename=str(id(graph)) + "graph.png",  # this will be used as filename
-        draw_options={
-            "show_graph_edges": True,
-            "show_edge_weights": True,
-            "show_path_weights": False,
-            "show_node_weights": True,
-            "show_path_weight_on_first_edge": True,
-            "pathwidth": 2,
+    if not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
+        #print("Edges with data")
+        #print(graph.edges(data=True))
+        if export:
+            export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
+        fp.utils.draw(
+            G=graph,
+            flow_attr="flow",
+            filename=str(id(graph)) + "graph.png",  # this will be used as filename
+            draw_options={
+                "show_graph_edges": True,
+                "show_edge_weights": True,
+                "show_path_weights": False,
+                "show_node_weights": True,
+                "show_path_weight_on_first_edge": True,
+                "pathwidth": 2,
 
-        },
-        additional_starts=additional_starts,
-        additional_ends=additional_ends,
-        subpath_constraints=constraints,)
-    # graph.graph["id"] = "graph" + str(id(graph))
-    optimization_options = {
-        "optimize_with_safe_paths": False,
-        "optimize_with_safe_sequences": True
-    }
-    min_path_error_model = fp.NumPathsOptimization(
-        model_type=fp.kMinPathError,
-        stop_on_first_feasible=True,
-        G=graph,
-        flow_attr="flow",
-        flow_attr_origin="node",
-        additional_starts=additional_starts,
-        additional_ends=additional_ends,
-        subpath_constraints=constraints,
-        optimization_options=optimization_options,
-    )
-    # print("Attempting to solve mpe_model with k=",str(this_k))
-    start = time.time()
-    min_path_error_model.solve()
-    end = time.time()
-    print("Solution found! in ", end - start, " seconds")
-    process_solution(graph, min_path_error_model,additional_starts,additional_ends)
+            },
+            additional_starts=additional_starts,
+            additional_ends=additional_ends,
+            subpath_constraints=constraints,)
+        print(graph.nodes())
+        print("Running MinErrorFlow")
+        correction_model = fp.MinErrorFlow(
+            G=graph,
+            flow_attr="flow",
+            flow_attr_origin="node",
+            weight_type=int,
+            additional_starts=additional_starts,
+            additional_ends=additional_ends,
+        )
+        correction_model.solve()
+        corrected_graph = correction_model.get_corrected_graph()
+        optimization_options = {
+            "optimize_with_safe_paths": False,
+            "optimize_with_safe_sequences": True,
+            "optimize_with_safety_from_largest_antichain": True,
+        }
+        print("Running MinFlowDecomp")
+        mfd_model = fp.MinFlowDecomp(
+            G=corrected_graph,
+            flow_attr="flow",
+            flow_attr_origin="node",
+            additional_starts=additional_starts,
+            additional_ends=additional_ends,
+            subpath_constraints=constraints,
+            optimization_options=optimization_options,
+        )
+        start = time.time()
+        mfd_model.solve()
+        end = time.time()
+        print("Solution found! in ", end - start, " seconds")
+        solution = process_solution(graph, mfd_model,additional_starts,additional_ends)
+        print("solution",solution)
+        # Condensing the paths in the expanded graph to paths in the the original graph
+        original_paths = solution["paths"]
+        weights = solution["weights"]
+        print("original paths",original_paths)
+        if len(original_paths) != len(weights):
+            raise ValueError("The number of paths and weights must be the same.")
+
+        res = list(zip(original_paths, weights))
+    else:
+        res=[]
     # this_k = 5
     # mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
     # mpe_model.solve()
@@ -175,7 +199,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[], epsilon=0.25, tim
     #    model=min_path_error_model,
     #    additional_starts=additional_starts,
     #    additional_ends=additional_ends)
-
+    return res
 
 
 def process_solution(

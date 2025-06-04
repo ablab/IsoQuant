@@ -127,14 +127,17 @@ class GraphBasedModelConstructor:
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
         print("Known Isoforms",self.known_isoforms_in_graph)
-
+        print("ground truth", self.ground_truth_gene_info)
         if not self.ground_truth_gene_info:
             self.ground_truth_isoforms = {}
         else:
             self.ground_truth_isoforms = self.get_known_spliced_isoforms(self.ground_truth_gene_info, "expressed")
+        logger.info("Ground truth isoforms %d" % len(self.ground_truth_isoforms))
+
         # list of list, ground truth paths
         ground_truth_isoform_list = list(map(lambda x: list(x), self.ground_truth_isoforms.keys()))
-
+        print("GTILIST", ground_truth_isoform_list)
+        print("GTIsoforms",self.ground_truth_isoforms)
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
@@ -425,7 +428,7 @@ class GraphBasedModelConstructor:
             # logger.debug(">>> Considering path " + str(path))
             intron_path = path[1:-1]
             if not intron_path: continue
-            transcript_range = (path[0][1], path[-1][1])
+            transcript_range = (int(path[0][1]), int(path[-1][1]))
             novel_exons = get_exons(transcript_range, list(intron_path))
             count = self.path_storage.paths[path]
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
@@ -597,6 +600,20 @@ class GraphBasedModelConstructor:
             self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
         if self.params.report_novel_unspliced:
             self.construct_monoexon_novel(novel_mono_exon_reads)
+    def transfer_paths(self, res):
+        res_transferred = []
+        for node in res[0]:
+            # print("node",node)
+            node_entries = node.split(",")
+            first = int(node_entries[0].replace("(", ""))
+            second = int(node_entries[1].replace(")", ""))
+            n_tup = (first, second)
+            # print("Node after",first,",",second)
+            res_transferred.append(n_tup)
+            # print("res_tf",res_transferred)
+            # path = tuple(res[0])
+        path = tuple(res_transferred)
+        return path
 
     def construct_ilp_isoforms(self):
         logger.info("Using ILP to discover transcripts")
@@ -608,13 +625,16 @@ class GraphBasedModelConstructor:
             path_constraints.append(list(p))
         print("PC",path_constraints)
         print("PCI",self.known_isoforms_in_graph_ids)
+        print("PCI_other",self.ground_truth_isoforms)
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
         fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, path_constraints)
+
         for res in fl_transcript_paths:
-            path = tuple(res[0])
+            path= self.transfer_paths(res)
+            #print("path_other",path_other)
             weight = res[1]
             if path in self.known_isoforms_in_graph:
-                logger.info("Detected know isoform %s with weight %.2f" % (self.known_isoforms_in_graph[path], weight))
+                logger.info("Detected known isoform %s with weight %.2f" % (self.known_isoforms_in_graph[path], weight))
             else:
                 logger.info("Detected novel isoform %s with weight %.2f" % (str(path), weight))
             intron_path = path[1:-1]
