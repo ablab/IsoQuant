@@ -290,7 +290,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
                     pass
             if gene_list:
                 ground_truth_gene_info = GeneInfo(gene_list, ground_truth_db, delta=args.delta)
-
+            print("GL",gene_list,", ",ground_truth_gene_info)
         logger.debug("Processing %d reads" % len(assignment_storage))
         for read_assignment in assignment_storage:
             if read_assignment is None:
