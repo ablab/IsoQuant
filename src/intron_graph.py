@@ -264,10 +264,25 @@ class IntronGraph:
 
     def simplify(self):
         logger.debug("Simplifying graph")
+        self.presimplification()
         self.clean_tips_and_bulges()
         self.remove_singleton_dead_ends()
         self.remove_isolates()
         self.intron_collector.simplify_correction_map()
+
+    def presimplification(self):
+        # unconditional removal of vertices
+        to_remove = [intron for intron, count in self.intron_collector.clustered_introns.items() if count <= 1]
+        for intron in to_remove:
+            del self.intron_collector.clustered_introns[intron]
+            if intron in self.outgoing_edges:
+                for i in self.outgoing_edges[intron]:
+                    self.incoming_edges[i].remove(intron)
+                del self.outgoing_edges[intron]
+            if intron in self.incoming_edges:
+                for i in self.incoming_edges[intron]:
+                    self.outgoing_edges[i].remove(intron)
+                del self.incoming_edges[intron]
 
     def clean_tips_and_bulges(self):
         # check all outgoing edges
