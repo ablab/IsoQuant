@@ -878,3 +878,11 @@ def interval_bin_search_rev(ordered_intervals, pos):
         else:
             ind -= current_step
     return ind
+
+
+base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', 'a': 't', 'c': 'g', 'g': 'c', 't': 'a', 'n': 'n'}
+
+
+def reverse_complement(seq):
+    lms = list(map(lambda x: base_comp[x], seq))[::-1]
+    return ''.join(lms)

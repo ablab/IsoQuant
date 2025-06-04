@@ -624,10 +624,10 @@ class GraphBasedModelConstructor:
             if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
             path_constraints.append(list(p))
         print("PC",path_constraints)
-        print("PCI",self.known_isoforms_in_graph_ids)
-        print("PCI_other",self.ground_truth_isoforms)
+        print("KnownIsoforms_Ids",self.known_isoforms_in_graph_ids)
+        print("GroundTruthIsoforms",self.ground_truth_isoforms)
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
-        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, path_constraints)
+        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, path_constraints,self.ground_truth_isoforms)
 
         for res in fl_transcript_paths:
             path= self.transfer_paths(res)

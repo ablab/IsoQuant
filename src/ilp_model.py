@@ -118,7 +118,7 @@ def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constra
     pickle.dump(constraints,add_constraintsfile)
     add_constraintsfile.close()
 
-def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[], epsilon=0.25, timeout=300, threads=5):
+def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
     print("constraints", transcripts_constraints)
     print("Running ILP part")
     export = False
@@ -175,6 +175,24 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[], epsilon=0.25, tim
             subpath_constraints=constraints,
             optimization_options=optimization_options,
         )
+
+        # draw the ground truth isoforms , might yield bugs (if partaking nodes are not part of the current graph)!!
+        gtweights = [1] * len(ground_truth_isoforms)
+        fp.utils.draw(
+            G=graph,
+            flow_attr="flow",
+            paths=ground_truth_isoforms,
+            weights=gtweights,
+            filename=str(id(graph)) + "groundtruth.png",  # this will be used as filename
+            draw_options={
+                "show_graph_edges": True,
+                "show_edge_weights": False,
+                "show_path_weights": False,
+                "show_path_weight_on_first_edge": True,
+                "pathwidth": 2,
+            },
+            additional_starts=additional_starts,
+            additional_ends=additional_ends, )
         start = time.time()
         mfd_model.solve()
         end = time.time()
@@ -227,6 +245,7 @@ def process_solution(
         },
         additional_starts = additional_starts,
         additional_ends = additional_ends,)
+
         return solution
     else:
         print("Model could not be solved.")
