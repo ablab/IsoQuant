@@ -28,7 +28,7 @@ def is_starting_vertex(v):
 
 
 class IntronCollector:
-    def __init__(self, gene_info, delta=0):
+    def __init__(self, gene_info, delta: float = 0):
         self.gene_info = gene_info
         self.known_introns = set(self.gene_info.intron_profiles.features)
         self.delta = delta
@@ -40,12 +40,15 @@ class IntronCollector:
         self.discarded_introns = set()
 
     def collect_introns(self, read_assignments):
-        all_introns = defaultdict(int)
+        all_introns = defaultdict(int) #defaultdict(defaultdict)
         for assignment in read_assignments:
             if not assignment.corrected_introns or assignment.multimapper:
                 continue
             for intron in assignment.corrected_introns:
+                read_group = assignment.read_group
+                #if intron not in all_introns: all_introns[intron] = defaultdict(int)
                 all_introns[intron] += 1
+        #print(all_introns)
         return all_introns
 
     def construct_similar_intron_map(self, all_introns):
@@ -144,7 +147,7 @@ class IntronGraph:
         self.outgoing_edges = defaultdict(set)
         self.intron_collector = IntronCollector(gene_info, params.delta)
         self.max_coverage = 0
-        self.edge_weights = defaultdict(int)
+        self.edge_weights = defaultdict(defaultdict)
 
         self.starting_known_positions = defaultdict(list)
         self.terminal_known_positions = defaultdict(list)
@@ -164,14 +167,18 @@ class IntronGraph:
         if self.params.debug:
             self.print_graph()
 
-    def add_edge(self, v1, v2):
+
+    def add_edge(self, v1, v2, read_group: str) -> None:
         if v1 in self.intron_collector.intron_correction_map:
             v1 = self.intron_collector.intron_correction_map[v1]
         if v2 in self.intron_collector.intron_correction_map:
             v2 = self.intron_collector.intron_correction_map[v2]
         self.outgoing_edges[v1].add(v2)
         self.incoming_edges[v2].add(v1)
-        self.edge_weights[(v1, v2)] += 1
+        # This also need to take into account he cell type
+        if (v1, v2) not in self.edge_weights:
+            self.edge_weights[(v1, v2)] = defaultdict(int)
+        self.edge_weights[(v1, v2)][read_group] += 1
 
     def is_isolated(self, v):
         return not self.outgoing_edges[v] and not self.incoming_edges[v]
@@ -258,7 +265,8 @@ class IntronGraph:
             for i in range(len(assignment.corrected_introns) - 1):
                 intron1 = assignment.corrected_introns[i]
                 intron2 = assignment.corrected_introns[i + 1]
-                self.add_edge(intron1, intron2)
+                read_id = assignment.read_group 
+                self.add_edge(intron1, intron2, read_id) # This needs to have the cell type listed
 
         self.max_coverage =  max(self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
 
