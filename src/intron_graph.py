@@ -28,25 +28,32 @@ def is_starting_vertex(v):
 
 
 class IntronCollector:
-    def __init__(self, gene_info, delta=0):
+    def __init__(self, gene_info, delta: float = 0):
         self.gene_info = gene_info
         self.known_introns = set(self.gene_info.intron_profiles.features)
         self.delta = delta
         # all intron counts
         # clustered intron counts
         self.clustered_introns = defaultdict(int)
+        self.clustered_introns_by_cell_type = defaultdict(defaultdict)
         # how introns were corrected after clustering
         self.intron_correction_map = {}
         self.discarded_introns = set()
 
+
     def collect_introns(self, read_assignments):
         all_introns = defaultdict(int)
+        introns_with_cell_types = defaultdict(defaultdict)
         for assignment in read_assignments:
             if not assignment.corrected_introns or assignment.multimapper:
                 continue
             for intron in assignment.corrected_introns:
+                read_group = assignment.read_group
+                if intron not in introns_with_cell_types: introns_with_cell_types[intron] = defaultdict(int)
+                introns_with_cell_types[intron][read_group] += 1
                 all_introns[intron] += 1
-        return all_introns
+        #print("\nALLINTRONS\n", all_introns, "\n")
+        return all_introns, introns_with_cell_types
 
     def construct_similar_intron_map(self, all_introns):
         ordered_introns = sorted(all_introns.keys())
@@ -61,13 +68,14 @@ class IntronCollector:
                 j += 1
         return similar_intron_map
 
-    def cluster_introns(self, all_introns, min_count):
+    def cluster_introns(self, all_introns, intron_by_cell_types, min_count):
         similar_intron_map = self.construct_similar_intron_map(all_introns)
         introns_sorted_by_counts = sorted([(v, k) for k, v in all_introns.items()], reverse=True)
         for count, intron in introns_sorted_by_counts:
             if intron in self.known_introns:
                 # known intron is always added as trustworthy
                 self.clustered_introns[intron] = count
+                self.clustered_introns_by_cell_type[intron] = intron_by_cell_types[intron]
             elif intron in similar_intron_map:
                 # intron has a similar intron
                 similar_introns = []
@@ -80,32 +88,40 @@ class IntronCollector:
                     # take the best one as a substitute
                     substitute_intron = sorted(similar_introns, reverse=True)[0]
                     self.clustered_introns[substitute_intron[1]] += substitute_intron[0]
+                    for cell_type, value in intron_by_cell_types[intron].items():
+                        self.clustered_introns_by_cell_type[substitute_intron[1]][cell_type] += value
                     self.intron_correction_map[intron] = substitute_intron[1]
                 else:
                     # no introns were found
                     self.clustered_introns[intron] = count
+                    self.clustered_introns_by_cell_type[intron] = intron_by_cell_types[intron]
             elif count < min_count:
                 self.discarded_introns.add(intron)
                 continue
             else:
                 self.clustered_introns[intron] = count
+                self.clustered_introns_by_cell_type[intron] = intron_by_cell_types[intron]
 
     def process(self, read_assignments, min_count):
         logger.debug("Processing introns")
-        all_introns = self.collect_introns(read_assignments)
+        all_introns, intron_cell_types = self.collect_introns(read_assignments)
         logger.debug(all_introns)
-        self.cluster_introns(all_introns, min_count)
+        self.cluster_introns(all_introns, intron_cell_types, min_count)
         logger.debug(self.clustered_introns)
 
     def add_substitute(self, original_intron, substitute_intron):
         self.clustered_introns[substitute_intron] += self.clustered_introns[original_intron]
+        for cell_type, value in self.clustered_introns_by_cell_type[original_intron].items():
+            self.clustered_introns_by_cell_type[substitute_intron][cell_type] += value
         del self.clustered_introns[original_intron]
+        del self.clustered_introns_by_cell_type[original_intron]
         self.intron_correction_map[original_intron] = substitute_intron
 
     def discard(self, intron):
         self.discarded_introns.add(intron)
         if intron in self.clustered_introns:
             del self.clustered_introns[intron]
+            del self.clustered_introns_by_cell_type[intron]
 
     def substitute(self, v):
         if v in self.intron_correction_map:
@@ -144,7 +160,7 @@ class IntronGraph:
         self.outgoing_edges = defaultdict(set)
         self.intron_collector = IntronCollector(gene_info, params.delta)
         self.max_coverage = 0
-        self.edge_weights = defaultdict(int)
+        self.edge_weights = defaultdict(defaultdict)
 
         self.starting_known_positions = defaultdict(list)
         self.terminal_known_positions = defaultdict(list)
@@ -164,14 +180,20 @@ class IntronGraph:
         if self.params.debug:
             self.print_graph()
 
-    def add_edge(self, v1, v2):
+        #print("\n", self.edge_weights, "\n")
+
+
+    def add_edge(self, v1, v2, read_group: str) -> None:
         if v1 in self.intron_collector.intron_correction_map:
             v1 = self.intron_collector.intron_correction_map[v1]
         if v2 in self.intron_collector.intron_correction_map:
             v2 = self.intron_collector.intron_correction_map[v2]
         self.outgoing_edges[v1].add(v2)
         self.incoming_edges[v2].add(v1)
-        self.edge_weights[(v1, v2)] += 1
+        # This also need to take into account the cell type?
+        if (v1, v2) not in self.edge_weights:
+            self.edge_weights[(v1, v2)] = defaultdict(int)
+        self.edge_weights[(v1, v2)][read_group] += 1
 
     def is_isolated(self, v):
         return not self.outgoing_edges[v] and not self.incoming_edges[v]
@@ -258,31 +280,17 @@ class IntronGraph:
             for i in range(len(assignment.corrected_introns) - 1):
                 intron1 = assignment.corrected_introns[i]
                 intron2 = assignment.corrected_introns[i + 1]
-                self.add_edge(intron1, intron2)
+                read_id = assignment.read_group 
+                self.add_edge(intron1, intron2, read_id) # This needs to have the cell type listed
 
         self.max_coverage =  max(self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
 
     def simplify(self):
         logger.debug("Simplifying graph")
-        self.presimplification()
         self.clean_tips_and_bulges()
         self.remove_singleton_dead_ends()
         self.remove_isolates()
         self.intron_collector.simplify_correction_map()
-
-    def presimplification(self):
-        # unconditional removal of vertices
-        to_remove = [intron for intron, count in self.intron_collector.clustered_introns.items() if count <= 1]
-        for intron in to_remove:
-            del self.intron_collector.clustered_introns[intron]
-            if intron in self.outgoing_edges:
-                for i in self.outgoing_edges[intron]:
-                    self.incoming_edges[i].remove(intron)
-                del self.outgoing_edges[intron]
-            if intron in self.incoming_edges:
-                for i in self.incoming_edges[intron]:
-                    self.outgoing_edges[i].remove(intron)
-                del self.incoming_edges[intron]
 
     def clean_tips_and_bulges(self):
         # check all outgoing edges
