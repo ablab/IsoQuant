@@ -165,6 +165,14 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             "optimize_with_safe_sequences": True,
             "optimize_with_safety_from_largest_antichain": True,
         }
+        solver_options = {
+            "threads": 1,
+            "time_limit": 600,
+        }
+
+
+
+
         print("Running MinFlowDecomp")
         mfd_model = fp.MinFlowDecomp(
             G=corrected_graph,
@@ -174,6 +182,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             additional_ends=additional_ends,
             subpath_constraints=constraints,
             optimization_options=optimization_options,
+            solver_options=solver_options,
         )
 
         # draw the ground truth isoforms , might yield bugs (if partaking nodes are not part of the current graph)!!
