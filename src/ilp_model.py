@@ -118,7 +118,7 @@ def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constra
     pickle.dump(constraints,add_constraintsfile)
     add_constraintsfile.close()
 
-def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
+def ILP_Solver_Nodes(intron_graph,chr_id, transcripts_constraints=[],ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
     print("constraints", transcripts_constraints)
     print("Running ILP part")
     export = False
@@ -135,7 +135,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
         fp.utils.draw(
             G=graph,
             flow_attr="flow",
-            filename=str(id(graph)) + "graph.png",  # this will be used as filename
+            filename=chr_id+"_"+str(id(graph)) + "graph.png",  # this will be used as filename
             draw_options={
                 "show_graph_edges": True,
                 "show_edge_weights": True,
@@ -165,10 +165,10 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             "optimize_with_safe_sequences": True,
             "optimize_with_safety_from_largest_antichain": True,
         }
-        solver_options = {
-            "threads": 1,
-            "time_limit": 600,
-        }
+        #solver_options = {
+        #    "threads": 1,
+        #    "time_limit": 600,
+        #}
 
 
 
@@ -182,7 +182,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             additional_ends=additional_ends,
             subpath_constraints=constraints,
             optimization_options=optimization_options,
-            solver_options=solver_options,
+            #solver_options=solver_options,
         )
 
         # draw the ground truth isoforms , might yield bugs (if partaking nodes are not part of the current graph)!!
@@ -192,7 +192,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             flow_attr="flow",
             paths=ground_truth_isoforms,
             weights=gtweights,
-            filename=str(id(graph)) + "groundtruth.png",  # this will be used as filename
+            filename=chr_id+"_"+str(id(graph)) + "groundtruth.png",  # this will be used as filename
             draw_options={
                 "show_graph_edges": True,
                 "show_edge_weights": False,
@@ -232,6 +232,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
 def process_solution(
         graph: nx.DiGraph, 
         model: fp.kMinPathError,
+
         additional_starts: list = [],
         additional_ends: list = []):
     if model.is_solved():
