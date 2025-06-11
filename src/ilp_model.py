@@ -46,7 +46,11 @@ def Intron2Nx_Node(
     # We create the full networkx graph
         # We add all the nodes
     for intron, this_flow in intron_graph.intron_collector.clustered_introns.items(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
-         G.add_node(str(intron),flow=this_flow)
+        cell_type_weights = [(cell_type, weight) for cell_type, weight in intron_graph.intron_collector.clustered_introns_by_cell_type[intron].items()]
+        G.add_node(str(intron),
+                    flow=this_flow,
+                    cell_types=cell_type_weights
+                    )
 
     for intron in chain.from_iterable(chain(intron_graph.outgoing_edges.values(), intron_graph.incoming_edges.values())):
         if intron not in G:
@@ -135,7 +139,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
         fp.utils.draw(
             G=graph,
             flow_attr="flow",
-            filename=str(id(graph)) + "graph.png",  # this will be used as filename
+            filename="blue0.graph.png", #str(id(graph)) + "graph.png",  # this will be used as filename
             draw_options={
                 "show_graph_edges": True,
                 "show_edge_weights": True,
@@ -143,12 +147,29 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
                 "show_node_weights": True,
                 "show_path_weight_on_first_edge": True,
                 "pathwidth": 2,
-
             },
             additional_starts=additional_starts,
             additional_ends=additional_ends,
-            subpath_constraints=constraints,)
-        print(graph.nodes())
+            subpath_constraints=constraints,
+            )
+
+        fp.utils.draw(
+            G=graph,
+            flow_attr="cell_types",
+            filename="blue1.graph.png", #str(id(graph)) + "graph.png",  # this will be used as filename
+            draw_options={
+                "show_graph_edges": True,
+                "show_edge_weights": True,
+                "show_path_weights": False,
+                "show_node_weights": True,
+                "show_path_weight_on_first_edge": True,
+                "pathwidth": 2,
+            },
+            additional_starts=additional_starts,
+            additional_ends=additional_ends,
+            subpath_constraints=constraints,
+            )
+        #print(graph.nodes())
         print("Running MinErrorFlow")
         correction_model = fp.MinErrorFlow(
             G=graph,
@@ -193,6 +214,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             },
             additional_starts=additional_starts,
             additional_ends=additional_ends, )
+        
         start = time.time()
         mfd_model.solve()
         end = time.time()
