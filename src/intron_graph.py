@@ -49,7 +49,6 @@ class IntronCollector:
                 continue
             for intron in assignment.corrected_introns:
                 read_group = assignment.read_group
-                print(read_group)
                 if intron not in introns_with_cell_types: introns_with_cell_types[intron] = defaultdict(int)
                 introns_with_cell_types[intron][read_group] += 1
                 all_introns[intron] += 1
