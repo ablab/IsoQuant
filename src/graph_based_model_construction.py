@@ -628,8 +628,12 @@ class GraphBasedModelConstructor:
         print("GroundTruthIsoforms",self.ground_truth_isoforms)
         print("chromosome",self.gene_info.chr_id)
         print("gene_db_list",self.gene_info.gene_db_list)
+        if len(self.gene_info.gene_db_list) > 0:
+            gene_id=self.gene_info.gene_db_list[0].id
+        else:
+            gene_id=""
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
-        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph,self.gene_info.chr_id, path_constraints,self.ground_truth_isoforms)
+        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph,self.gene_info.chr_id,gene_id, path_constraints,self.ground_truth_isoforms)
 
         for res in fl_transcript_paths:
             path= self.transfer_paths(res)

@@ -118,7 +118,7 @@ def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constra
     pickle.dump(constraints,add_constraintsfile)
     add_constraintsfile.close()
 
-def ILP_Solver_Nodes(intron_graph,chr_id, transcripts_constraints=[],ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
+def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
     print("constraints", transcripts_constraints)
     print("Running ILP part")
     export = False
@@ -135,7 +135,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, transcripts_constraints=[],ground_trut
         fp.utils.draw(
             G=graph,
             flow_attr="flow",
-            filename=chr_id+"_"+str(id(graph)) + "graph.png",  # this will be used as filename
+            filename=chr_id+"_"+gene_id+"_"+str(id(graph)) + "graph.png",  # this will be used as filename
             draw_options={
                 "show_graph_edges": True,
                 "show_edge_weights": True,
@@ -192,7 +192,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, transcripts_constraints=[],ground_trut
             flow_attr="flow",
             paths=ground_truth_isoforms,
             weights=gtweights,
-            filename=chr_id+"_"+str(id(graph)) + "groundtruth.png",  # this will be used as filename
+            filename=chr_id+"_"+gene_id+"_"+str(id(graph)) + "groundtruth.png",  # this will be used as filename
             draw_options={
                 "show_graph_edges": True,
                 "show_edge_weights": False,
