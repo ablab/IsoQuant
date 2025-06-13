@@ -91,13 +91,13 @@ def Intron2Nx_Node(
 
 
 def transfer_constraints(transcripts_constrints):
-    pc_transformed=[]
+    pc_transformed = []
     for constraint in transcripts_constrints:
         this_constraint=[]
         for first, second in zip(constraint, constraint[1:]):
-            #print("elem",first)
             this_constraint.append((str(first),str(second)))
-        pc_transformed.append(this_constraint)
+        if len(this_constraint)>0:
+            pc_transformed.append(this_constraint)
     print(pc_transformed)
     return pc_transformed
 
@@ -123,6 +123,8 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     print("Running ILP part")
     export = False
     constraints = transfer_constraints(transcripts_constraints)
+    if len(constraints)==0:
+        constraints=None
     # for key in intron_graph.edge_weights.keys():
     # print(key,", ",intron_graph.edge_weights[key])
     # graph = Intron2Nx_old(intron_graph)
