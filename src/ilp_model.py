@@ -122,6 +122,24 @@ def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constra
     pickle.dump(constraints,add_constraintsfile)
     add_constraintsfile.close()
 
+def remove_nodes(nodes_to_remove, datastructure):
+    for node in nodes_to_remove:
+        datastructure.remove(node)
+        
+def filter_constraints(graph, additional_starts,additional_ends):
+    startnodes_missing=[]
+    endnodes_missing=[]
+    for startnode in additional_starts:
+        if not( startnode in graph.nodes()):
+            startnodes_missing.append(startnode)
+    for endnode in additional_ends:
+        if not(endnode in graph.nodes()):
+            endnodes_missing.append(endnode)
+    remove_nodes(startnodes_missing,additional_starts)
+    remove_nodes(endnodes_missing,additional_ends)
+
+
+
 def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
     print("constraints", transcripts_constraints)
     print("Running ILP part")
@@ -131,6 +149,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     constraints = transfer_constraints(transcripts_constraints, graph)
     if len(constraints) == 0:
         constraints = None
+    filter_constraints(graph, additional_starts,additional_ends)
     # for key in intron_graph.edge_weights.keys():
     # print(key,", ",intron_graph.edge_weights[key])
     # graph = Intron2Nx_old(intron_graph)
@@ -154,9 +173,9 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
                 "pathwidth": 2,
 
             },
-            additional_starts=additional_starts,
-            additional_ends=additional_ends,
-            subpath_constraints=constraints,)
+            additional_starts = additional_starts,
+            additional_ends = additional_ends,
+            subpath_constraints = constraints,)
         print(graph.nodes())
         print("Running MinErrorFlow")
         correction_model = fp.MinErrorFlow(
