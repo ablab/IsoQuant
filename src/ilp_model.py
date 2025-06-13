@@ -90,13 +90,17 @@ def Intron2Nx_Node(
     return G, additional_starts, additional_ends, edges_to_ignore
 
 
-def transfer_constraints(transcripts_constrints):
+def transfer_constraints(transcripts_constrints,graph):
     pc_transformed = []
     for constraint in transcripts_constrints:
         this_constraint=[]
+        all_edges_in_graph = True
         for first, second in zip(constraint, constraint[1:]):
             this_constraint.append((str(first),str(second)))
-        if len(this_constraint)>0:
+            for edge in this_constraint:
+                if not (edge in graph.edges()):
+                    all_edges_in_graph = False
+        if len(this_constraint) > 0 and all_edges_in_graph:
             pc_transformed.append(this_constraint)
     print(pc_transformed)
     return pc_transformed
@@ -122,15 +126,16 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     print("constraints", transcripts_constraints)
     print("Running ILP part")
     export = False
-    constraints = transfer_constraints(transcripts_constraints)
-    if len(constraints)==0:
-        constraints=None
+
+    graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
+    constraints = transfer_constraints(transcripts_constraints, graph)
+    if len(constraints) == 0:
+        constraints = None
     # for key in intron_graph.edge_weights.keys():
     # print(key,", ",intron_graph.edge_weights[key])
     # graph = Intron2Nx_old(intron_graph)
-    print(chr_id," ",gene_id)
-    print("constraints",constraints)
-    graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
+    print(chr_id, " ", gene_id)
+    print("constraints", constraints)
     if not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
         #print("Edges with data")
         #print(graph.edges(data=True))
