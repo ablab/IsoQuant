@@ -7,6 +7,7 @@ from itertools import chain
 import pickle
 logger = logging.getLogger('IsoQuant')
 
+from .cell_type_tree import CellTypeTree
 '''
 # Create a simple graph
 graph = nx.DiGraph()
@@ -45,11 +46,19 @@ def Intron2Nx_Node(
     G = nx.DiGraph()
     # We create the full networkx graph
         # We add all the nodes
+    cell_types = set()
+    # First construct the tree to allow right cell type array assignement
     for intron, this_flow in intron_graph.intron_collector.clustered_introns.items(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
-        cell_type_weights = [(cell_type, weight) for cell_type, weight in intron_graph.intron_collector.clustered_introns_by_cell_type[intron].items()]
+        introns_cell_types = [cell_type for cell_type in intron_graph.intron_collector.clustered_introns_by_cell_type[intron]]
+        cell_types.update(introns_cell_types)
+
+    cell_type_tree = CellTypeTree(cell_types)
+
+    for intron, this_flow in intron_graph.intron_collector.clustered_introns.items(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
+        print(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])
         G.add_node(str(intron),
-                    flow=this_flow,
-                    cell_types=cell_type_weights
+                    flow = this_flow,
+                    cell_types = cell_type_tree.transform_counts(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])
                     )
 
     for intron in chain.from_iterable(chain(intron_graph.outgoing_edges.values(), intron_graph.incoming_edges.values())):

@@ -3,7 +3,7 @@ from collections import defaultdict, deque
 
 class CellTypeTree:
 
-    def __init__(self, cell_types: list):
+    def __init__(self, cell_types: set):
 
         self.children = defaultdict(set)
         self.parents = defaultdict(str)
@@ -13,7 +13,7 @@ class CellTypeTree:
         self._construct_tree(cell_types)
         self._construct_cell_types()
 
-    def _construct_tree(self, cell_types: list):
+    def _construct_tree(self, cell_types: set) -> None:
         for cell_type in cell_types:
             self._add_cell_type(cell_type)
         print(self.children)
@@ -47,7 +47,7 @@ class CellTypeTree:
     def transform_counts(self, counts: defaultdict) -> list:
         full_cell_type_counts = np.zeros(shape = self.n_of_cell_types, dtype = int)
         for cell_type in self.cell_types:
-            self._add_cell_count(cell_type, counts[cell_type], full_cell_type_counts)
+            if cell_type in counts: self._add_cell_count(cell_type, counts[cell_type], full_cell_type_counts)
         return full_cell_type_counts
 
 
