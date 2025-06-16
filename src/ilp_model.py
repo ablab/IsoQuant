@@ -52,14 +52,16 @@ def Intron2Nx_Node(
         introns_cell_types = [cell_type for cell_type in intron_graph.intron_collector.clustered_introns_by_cell_type[intron]]
         cell_types.update(introns_cell_types)
 
+    #print(cell_types)
     cell_type_tree = CellTypeTree(cell_types)
 
     for intron, this_flow in intron_graph.intron_collector.clustered_introns.items(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
-        print(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])
+        #print(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])
         G.add_node(str(intron),
                     flow = this_flow,
                     cell_types = cell_type_tree.transform_counts(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])
                     )
+        
 
     for intron in chain.from_iterable(chain(intron_graph.outgoing_edges.values(), intron_graph.incoming_edges.values())):
         if intron not in G:
@@ -132,7 +134,7 @@ def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constra
     add_constraintsfile.close()
 
 def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
-    print("constraints", transcripts_constraints)
+    #print("constraints", transcripts_constraints)
     print("Running ILP part")
     export = False
     constraints = transfer_constraints(transcripts_constraints)
@@ -165,7 +167,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
         fp.utils.draw(
             G=graph,
             flow_attr="cell_types",
-            filename="blue1.graph.png", #str(id(graph)) + "graph.png",  # this will be used as filename
+            filename=str(id(graph)) + "graph.png",  # this will be used as filename
             draw_options={
                 "show_graph_edges": True,
                 "show_edge_weights": True,
@@ -180,6 +182,9 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             )
         #print(graph.nodes())
         print("Running MinErrorFlow")
+        
+        exit()
+        
         correction_model = fp.MinErrorFlow(
             G=graph,
             flow_attr="flow",

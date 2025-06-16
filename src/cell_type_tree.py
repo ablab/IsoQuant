@@ -16,8 +16,8 @@ class CellTypeTree:
     def _construct_tree(self, cell_types: set) -> None:
         for cell_type in cell_types:
             self._add_cell_type(cell_type)
-        print(self.children)
-        print(self.parents)
+        #print(self.children)
+        #print(self.parents)
 
     def _add_cell_type(self, cell_type: str) -> None:
         current = "ROOT"
@@ -37,7 +37,7 @@ class CellTypeTree:
             self.cell_types[current] = index
             index += 1
         self.n_of_cell_types = index
-        print(self.cell_types)
+        #print(self.cell_types)
 
     def _add_cell_count(self, cell_type: str, count: int, cell_type_counts: np.array) -> None:
         while cell_type != "":
@@ -77,7 +77,10 @@ if __name__ == "__main__":
         if random() > 0.4: cc3[ct] = randint(1, 50)
 
     c_tree = CellTypeTree(cell_types)
-    print(c_tree.transform_counts(cc1))
+    results = c_tree.transform_counts(cc1)
     print(c_tree.transform_counts(cc2))
     print(c_tree.transform_counts(cc3))
     print(c_tree.parents["ROOT"])
+
+    for i, ct in enumerate(c_tree.cell_types.keys()):
+        print(ct, results[i])
