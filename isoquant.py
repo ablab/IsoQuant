@@ -787,6 +787,7 @@ class TestMode(argparse.Action):
                    '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
                    '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
                    '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
+                   '--read_group', 'file:' + os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.read_groups.tsv'),
                    '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force', '-p', 'TEST_DATA']
         print('=== Running in test mode === ')
         print('Any other option is ignored ')
