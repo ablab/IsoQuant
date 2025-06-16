@@ -542,6 +542,7 @@ class DatasetProcessor:
             key=lambda x: len(self.reference_record_dict[x]),
             reverse=True,
         )
+        chr_ids = ['chr1']
         return chr_ids
 
     def collect_reads(self, sample):
