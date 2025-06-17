@@ -60,6 +60,7 @@ def Intron2Nx_Node(
 
     for intron in intron_graph.incoming_edges.keys():
         for preceding_intron in intron_graph.incoming_edges[intron]:
+            print("Prec_introns",preceding_intron)
             if skip_terminal_nodes:
                 if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
                     additional_starts.append(str(intron))
@@ -72,6 +73,7 @@ def Intron2Nx_Node(
                     edges_to_ignore.append((str(preceding_intron), str(intron)))
     for intron in intron_graph.outgoing_edges.keys():
         for subsequent_intron in intron_graph.outgoing_edges[intron]:
+            print("Subs_introns", subsequent_intron)
             if skip_terminal_nodes:
                 if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
                     additional_ends.append(str(intron))
