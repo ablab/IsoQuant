@@ -66,8 +66,10 @@ def Intron2Nx_Node(
                     additional_starts.append(str(intron))
                 else:
                     G.add_edge(str(preceding_intron), str(intron))
+                    print("Prec_introns", str(preceding_intron), ",", str(intron))
             else:
                 G.add_edge(str(preceding_intron), str(intron))
+                print("Prec_introns", str(preceding_intron), ",", str(intron))
                 if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
                     additional_starts.append(str(preceding_intron))
                     edges_to_ignore.append((str(preceding_intron), str(intron)))
@@ -79,8 +81,10 @@ def Intron2Nx_Node(
                     additional_ends.append(str(intron))
                 else:
                     G.add_edge(str(intron), str(subsequent_intron))
+                    print("Subs_introns", str(intron),",", str(subsequent_intron))
             else:
                 G.add_edge(str(intron), str(subsequent_intron))
+                print("Subs_introns", str(intron), ",", str(subsequent_intron))
                 if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
                     additional_ends.append(str(subsequent_intron))
                     edges_to_ignore.append((str(intron), str(subsequent_intron)))
