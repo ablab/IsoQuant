@@ -41,19 +41,19 @@ def Constraints_Transfer_Format(input_constraints,skip_isolated_nodes=True,
         skip_terminal_nodes=True,):
     transferred_constraints = []
     for pc_entry in input_constraints:
-        for nodes_tup in pc_entry:
-            constraint_list = []
-            for node in nodes_tup:
-                if skip_terminal_nodes:
-                    if not node[0] in [VERTEX_polyt, VERTEX_read_start] and not node[0] in [VERTEX_polya, VERTEX_read_end]:
-                        constraint_list.append(node)
-                else:
+        #print("pcent",pc_entry)
+        constraint_list = []
+        for node in pc_entry:
+            if skip_terminal_nodes:
+                if not node[0] in [VERTEX_polyt, VERTEX_read_start] and not node[0] in [VERTEX_polya, VERTEX_read_end]:
                     constraint_list.append(node)
-            if len(constraint_list) > 0:
-                this_constraint = []
-                for first, second in zip(constraint_list, constraint_list[1:]):
-                    this_constraint.append((str(first), str(second)))
-                transferred_constraints.append(this_constraint)
+            else:
+                constraint_list.append(node)
+        if len(constraint_list) > 0:
+            this_constraint = []
+            for first, second in zip(constraint_list, constraint_list[1:]):
+                this_constraint.append((str(first), str(second)))
+            transferred_constraints.append(this_constraint)
     return transferred_constraints
 
 def Intron2Nx_Node(
