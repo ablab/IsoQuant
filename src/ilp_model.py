@@ -155,6 +155,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     # graph = Intron2Nx_old(intron_graph)
     print(chr_id, " ", gene_id)
     print("constraints", constraints)
+    print("Nodes",graph.nodes())
     if not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
         #print("Edges with data")
         #print(graph.edges(data=True))
