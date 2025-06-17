@@ -150,8 +150,8 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     if len(constraints) == 0:
         constraints = None
     #filter_constraints(graph, additional_starts,additional_ends)
-    # for key in intron_graph.edge_weights.keys():
-    # print(key,", ",intron_graph.edge_weights[key])
+    for key in intron_graph.edge_weights.keys():
+        print(key,", ",intron_graph.edge_weights[key])
     # graph = Intron2Nx_old(intron_graph)
     print(chr_id, " ", gene_id)
     print("constraints", constraints)
