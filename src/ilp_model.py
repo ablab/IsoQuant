@@ -54,6 +54,7 @@ def Constraints_Transfer_Format(input_constraints,skip_isolated_nodes=True,
                 for first, second in zip(constraint_list, constraint_list[1:]):
                     this_constraint.append((str(first), str(second)))
                 transferred_constraints.append(this_constraint)
+    return transferred_constraints
 
 def Intron2Nx_Node(
         intron_graph,
