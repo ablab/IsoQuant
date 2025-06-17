@@ -49,11 +49,15 @@ def Constraints_Transfer_Format(input_constraints,skip_isolated_nodes=True,
                     constraint_list.append(node)
             else:
                 constraint_list.append(node)
+        print("c_list",constraint_list)
         if len(constraint_list) > 0:
             this_constraint = []
             for first, second in zip(constraint_list, constraint_list[1:]):
                 this_constraint.append((str(first), str(second)))
             transferred_constraints.append(this_constraint)
+    #for constraint in transferred_constraints:
+        #if len(constraint)==0:
+
     return transferred_constraints
 
 def Intron2Nx_Node(
@@ -174,6 +178,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     constraints=Constraints_Transfer_Format(transcripts_constraints)
     print(constraints)
     #constraints = transfer_constraints(transcripts_constraints, graph)
+
     if len(constraints) == 0:
         constraints = None
     #filter_constraints(graph, additional_starts,additional_ends)
