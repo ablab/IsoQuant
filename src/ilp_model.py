@@ -50,7 +50,7 @@ def Constraints_Transfer_Format(input_constraints,skip_isolated_nodes=True,
             else:
                 constraint_list.append(node)
         print("c_list",constraint_list)
-        if len(constraint_list) > 0:
+        if len(constraint_list) > 1:
             this_constraint = []
             for first, second in zip(constraint_list, constraint_list[1:]):
                 this_constraint.append((str(first), str(second)))
