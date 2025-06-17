@@ -111,8 +111,8 @@ class IntronCollector:
         i = v
         if v in self.intron_correction_map:
             v = self.intron_correction_map[v]
-        if v not in self.clustered_introns or self.clustered_introns[v] == 0:
-            logger.error("Substituted intron %s (from %s) is not clustered introns " % (str(v), str(i)))
+            if v not in self.clustered_introns or self.clustered_introns[v] == 0:
+                logger.error("Substituted intron %s (from %s) is not clustered introns " % (str(v), str(i)))
         return v
 
     def simplify_correction_map(self):
