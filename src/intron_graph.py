@@ -108,8 +108,11 @@ class IntronCollector:
             del self.clustered_introns[intron]
 
     def substitute(self, v):
+        i = v
         if v in self.intron_correction_map:
             v = self.intron_correction_map[v]
+        if v not in self.clustered_introns or self.clustered_introns[v] == 0:
+            logger.error("Substituted intron %s (from %s) is not clustered introns " % (str(v), str(i)))
         return v
 
     def simplify_correction_map(self):
@@ -132,6 +135,10 @@ class IntronCollector:
         for intron in to_remove:
             self.discard(intron)
             del self.intron_correction_map[intron]
+
+        for v in self.intron_correction_map.values():
+            if v not in self.clustered_introns or self.clustered_introns[v] == 0:
+                logger.error("Substitution dict maps to non-existing intron %s " % str(v))
 
 
 class IntronGraph:
