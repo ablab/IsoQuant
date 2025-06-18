@@ -10,6 +10,8 @@ class CellTypeTree:
         self.cell_types = None
         self.n_of_cell_types = 0
 
+        self.primary_cell_types = {}
+
         self._construct_tree(cell_types)
         self._construct_cell_types()
 
@@ -26,7 +28,7 @@ class CellTypeTree:
             self.parents[sub_cell_type] = current
             current = sub_cell_type
     
-    def _construct_cell_types(self):
+    def _construct_cell_types(self) -> None:
         self.cell_types = {}
         index = 0
         queue = deque(["ROOT"])
@@ -44,12 +46,17 @@ class CellTypeTree:
             cell_type_counts[self.cell_types[cell_type]] += count
             cell_type = self.parents[cell_type]
 
+    def get_leaf_types(self):
+        return [cell_type for cell_type in self.cell_types if len(self.children[cell_type]) == 0]
+
     def transform_counts(self, counts: defaultdict) -> list:
         full_cell_type_counts = np.zeros(shape = self.n_of_cell_types, dtype = int)
         for cell_type in self.cell_types:
             if cell_type in counts: self._add_cell_count(cell_type, counts[cell_type], full_cell_type_counts)
         return full_cell_type_counts
-
+    
+    def get_cell_type_index(self, cell_type: str) -> int:
+        return self.cell_types[cell_type]
 
 if __name__ == "__main__":
     
