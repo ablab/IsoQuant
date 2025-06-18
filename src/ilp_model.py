@@ -29,12 +29,16 @@ def node2string(nodetup):
     (x,y)=nodetup
     return ""+x+","+y
 
-def clean_graph(G,skip_isolated_nodes):
+def clean_graph(G,skip_isolated_nodes,additional_starts,additional_ends):
     if skip_isolated_nodes:
         nodes_to_remove = []
         for node in G.nodes():
             if G.in_degree(node) == 0 and G.out_degree(node) == 0:
                 nodes_to_remove.append(node)
+                if node in additional_starts:
+                    additional_starts.remove(node)
+                if node in additional_ends:
+                    additional_ends.remove(node)
         G.remove_nodes_from(nodes_to_remove)
 
 def Constraints_Transfer_Format(input_constraints,skip_isolated_nodes=True,
@@ -111,7 +115,7 @@ def Intron2Nx_Node(
                 if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
                     additional_ends.append(str(subsequent_intron))
                     edges_to_ignore.append((str(intron), str(subsequent_intron)))
-    clean_graph(G, skip_isolated_nodes)
+    clean_graph(G, skip_isolated_nodes,additional_ends,additional_starts)
 
 
     logger.debug(G.edges(data=True))
