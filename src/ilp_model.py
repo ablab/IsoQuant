@@ -187,7 +187,8 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     print("Nodes",graph.nodes())
     print("Edges with data")
     print(graph.edges(data=True))
-
+    print("add_starts",additional_starts)
+    print("add_ends",additional_ends)
     if not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
         if export:
             export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
