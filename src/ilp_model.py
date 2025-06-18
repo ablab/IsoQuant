@@ -176,20 +176,18 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
 
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
     constraints = Constraints_Transfer_Format(transcripts_constraints)
-    print(constraints)
+    #print(constraints)
     #constraints = transfer_constraints(transcripts_constraints, graph)
 
     if len(constraints) == 0:
         constraints = None
     #filter_constraints(graph, additional_starts,additional_ends)
-    for key in intron_graph.edge_weights.keys():
-        print(key,", ",intron_graph.edge_weights[key])
-    # graph = Intron2Nx_old(intron_graph)
     print(chr_id, " ", gene_id)
     print("constraints", constraints)
     print("Nodes",graph.nodes())
     print("Edges with data")
     print(graph.edges(data=True))
+
     if not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
         if export:
             export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
