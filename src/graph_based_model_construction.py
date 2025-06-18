@@ -121,6 +121,12 @@ class GraphBasedModelConstructor:
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         self.path_storage = IntronPathStorage(self.params, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
+        for intron_path in self.path_storage.fl_paths:
+            for i in range(1, len(intron_path) - 2):
+                if intron_path[i + 1] not in self.intron_graph.outgoing_edges[intron_path[i]]:
+                    logger.warning(
+                        "Intron path %s is not connected, edge (%s, %s) is absent" % (str(intron_path), str(intron_path[i]),
+                                                                                      str(intron_path[i + 1])))
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
 
@@ -861,9 +867,7 @@ class IntronPathStorage:
                 if not self.params.requires_polya_for_construction or\
                         (terminal_vertex[0] == VERTEX_polya or starting_vertex[0] == VERTEX_polyt):
                     self.fl_paths.add(path_tuple)
-                    for i in range(len(intron_path) - 1):
-                        if intron_path[i + 1] not in self.intron_graph.outgoing_edges[intron_path[i]]:
-                            logger.warning("Intron path %s is not connected, edge (%s, %s) is absent" % (str(path_tuple), str(intron_path[i]), str(intron_path[i + 1])))
+
             self.paths_to_reads[path_tuple].append(a)
 
 
