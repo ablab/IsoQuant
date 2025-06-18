@@ -55,7 +55,7 @@ def Constraints_Transfer_Format(input_constraints,skip_isolated_nodes=True,
                     constraint_list.append(node)
             else:
                 constraint_list.append(node)
-        print("c_list",constraint_list)
+        #print("c_list",constraint_list)
         if len(constraint_list) > 1:
             this_constraint = []
             for first, second in zip(constraint_list, constraint_list[1:]):
@@ -133,7 +133,7 @@ def Intron2Nx_Node(
 
 
 
-def transfer_constraints(transcripts_constrints,graph):
+def transfer_constraints(transcripts_constrints, graph):
     pc_transformed = []
     for constraint in transcripts_constrints:
         this_constraint=[]
@@ -182,14 +182,14 @@ def filter_constraints(graph, additional_starts,additional_ends):
     remove_nodes(endnodes_missing,additional_ends)
 
 
-def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
-    print("constraints", transcripts_constraints)
+def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5):
+    #print("constraints", transcripts_constraints)
     print("Running ILP part")
     export = False
 
     graph, cell_type_tree, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
     constraints = Constraints_Transfer_Format(transcripts_constraints)
-    print(constraints)
+    #print(constraints)
     #constraints = transfer_constraints(transcripts_constraints, graph)
     
     if not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
@@ -201,7 +201,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
         fp.utils.draw(
             G = graph,
             flow_attr = "flow",
-            filename = str(id(graph)) + "graph.FL.png",
+            filename = "graphs/" + str(id(graph)) + "graph.FL.png",
             draw_options = {
                 "show_graph_edges": True,
                 "show_edge_weights": True,
@@ -219,7 +219,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
         fp.utils.draw(
             G=graph,
             flow_attr = "cell_types",
-            filename = str(id(graph)) + "graph.CT.png",  # this will be used as filename
+            filename = "graphs/" + str(id(graph)) + "graph.CT.png",  # this will be used as filename
             draw_options = {
                 "show_graph_edges": True,
                 "show_edge_weights": True,
@@ -232,6 +232,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             additional_ends = additional_ends,
             subpath_constraints = constraints,
             )
+        
         #print(graph.nodes())
         print("Running MinErrorFlowCT")
         if False:
@@ -245,24 +246,40 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
             )
             correction_model.solve()
             corrected_graph = correction_model.get_corrected_graph()
-        optimization_options = {
         
+        optimization_options = {
             "optimize_with_safe_paths": False,
             "optimize_with_safe_sequences": True,
             "optimize_with_safety_from_largest_antichain": True,
         }
     
         print("Running MinFlowDecomp")
+        additional_starts_pruned = []
+        additional_ends_pruned = []
+        subpath_constaints_pruned = []
+        for node in additional_starts:
+            if node in graph.nodes:
+                additional_starts_pruned.append(node)
+        for node in additional_ends:
+            if node in graph.nodes:
+                additional_ends_pruned.append(node)
+        for path in constraints:
+            include = True
+            for edge in path:
+                if edge not in graph.edges:
+                    include = False; break
+            if include: subpath_constaints_pruned.append(path)
         
-        mfd_model = MinFlowCellDecomp(
+        
+        mcd_model = MinFlowCellDecomp(
             G = graph,
             flow_attr = "flow",
             cell_flow_attr = "cell_types",
             cell_tree = cell_type_tree,
             flow_attr_origin = "node",
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-            subpath_constraints = constraints,
+            additional_starts = additional_starts_pruned,
+            additional_ends = additional_ends_pruned,
+            subpath_constraints = subpath_constaints_pruned,
             optimization_options = optimization_options,
         )
 
@@ -286,17 +303,17 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
                 additional_starts = additional_starts,
                 additional_ends = additional_ends,
                 )
-            
+        
         start = time.time()
-        mfd_model.solve()
+        mcd_model.solve()
         end = time.time()
         print("Solution found! in ", end - start, " seconds")
-        solution = process_solution(graph, mfd_model,additional_starts,additional_ends)
+        solution = process_solution(graph, mcd_model, additional_starts,additional_ends)
         print("solution",solution)
         # Condensing the paths in the expanded graph to paths in the the original graph
         original_paths = solution["paths"]
         weights = solution["weights"]
-        print("original paths",original_paths)
+        #print("original paths",original_paths)
         if len(original_paths) != len(weights):
             raise ValueError("The number of paths and weights must be the same.")
 
@@ -305,21 +322,17 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints=[],ground_truth_isofo
     return []
 
 
-def process_solution(
-        graph: nx.DiGraph, 
-        model: fp.kMinPathError,
-        additional_starts: list = [],
-        additional_ends: list = []):
+def process_solution(graph: nx.DiGraph, model: MinFlowCellDecomp, additional_starts: list = [], additional_ends: list = []):
+    
     if model.is_solved():
+    
         solution = model.get_solution()
-        print(solution)
-        print(model.solve_statistics)
-        print("model.is_valid_solution()", model.is_valid_solution())
+    
         fp.utils.draw(
             G=graph,
-            flow_attr="flow",
+            flow_attr="cell_type",
             paths = solution["paths"],
-            weights = solution["weights"],
+            weights = solution["ct_weights"],
             filename = str(id(graph))+"solution.png", # this will be used as filename
             draw_options = {
             "show_graph_edges": True,

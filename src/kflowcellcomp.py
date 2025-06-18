@@ -51,39 +51,19 @@ class kFlowCellTypeDecomp(fp.kFlowDecomp):
 
         cell_types = self.cell_tree.get_leaf_types()
         normal = False
-        #print(self.edge_indexes)
-        #print(self.path_indexes)
-
+        
         if self.is_solved():
             return
 
-        if normal:
-            self.pi_vars = self.solver.add_variables(
-                self.edge_indexes,
-                name_prefix="pi",
-                lb = 0,
-                ub = self.w_max,
-                var_type="integer" if self.weight_type == int else "continuous",
-            )
-
-        self.pi_ct_vars = self.solver.add_variables(
-            [(u, v, w, ct) for u, v, w in self.edge_indexes for ct in cell_types],
+        self.pi_vars = self.solver.add_variables(
+            [(u, v, i, ct) for u, v, i in self.edge_indexes for ct in cell_types],
             name_prefix = "pc",
             lb = 0,
             ub = self.w_max,
             var_type="integer" if self.weight_type == int else "continuous",
         )
 
-        if normal:
-            self.path_weights_vars = self.solver.add_variables(
-                self.path_indexes,
-                name_prefix="w",
-                lb=0,
-                ub=self.w_max,
-                var_type="integer" if self.weight_type == int else "continuous",
-            )
-
-        self.path_weights_ct_vars = self.solver.add_variables(
+        self.path_weights_vars = self.solver.add_variables(
             [(i, ct) for i in self.path_indexes for ct in cell_types],
             name_prefix="v",
             lb=0,
@@ -97,52 +77,28 @@ class kFlowCellTypeDecomp(fp.kFlowDecomp):
             if (u, v) in self.edges_to_ignore:
                 continue
             
-            f_u_v = data[self.flow_attr]
+            #f_u_v = data[self.flow_attr]
             ct_u_v = data[self.cell_flow_attr]
 
             # We encode that edge_vars[(u,v,i)] * self.path_weights_vars[(i)] = self.pi_vars[(u,v,i)],
             # assuming self.w_max is a bound for self.path_weights_vars[(i)]
             for i in range(self.k):
                 
-                if normal:
-                    self.solver.add_binary_continuous_product_constraint(
-                        binary_var=self.edge_vars[(u, v, i)],
-                        continuous_var=self.path_weights_vars[(i)],
-                        product_var=self.pi_vars[(u, v, i)],
-                        lb=0,
-                        ub=self.w_max,
-                        name=f"10_u={u}_v={v}_i={i}",
-                    )
-
                 # ct specific variables
                 for ct in cell_types:
                     self.solver.add_binary_continuous_product_constraint(
                         binary_var = self.edge_vars[(u, v, i)],
-                        continuous_var = self.path_weights_ct_vars[(i, ct)],
-                        product_var = self.pi_ct_vars[(u, v, i, ct)],
+                        continuous_var = self.path_weights_vars[(i, ct)],
+                        product_var = self.pi_vars[(u, v, i, ct)],
                         lb = 0,
                         ub = self.w_max,
                         name=f"10ct_u={u}_v={v}_i={i}_ct={ct}",
                     )
 
-            if normal:
-                self.solver.add_constraint(
-                    self.solver.quicksum(self.pi_vars[(u, v, i)] for i in range(self.k)) == f_u_v,
-                    name=f"10d_u={u}_v={v}_i={i}",
-                )
-
-            # Sum of subflows equal to flow
-            if normal:
-                for i in range(self.k):
-                    self.solver.add_constraint(
-                        self.solver.quicksum(self.pi_ct_vars[(u, v, i, cell_type)] for cell_type in cell_types) == self.pi_vars[(u, v, i)],
-                        name=f""
-                )
-
             # Total flow of cell in a edge
             for cell_type in cell_types:
                 self.solver.add_constraint(
-                    self.solver.quicksum(self.pi_ct_vars[(u, v, i, cell_type)] for i in range(self.k)) == ct_u_v[self.cell_tree.get_cell_type_index(cell_type)],
+                    self.solver.quicksum(self.pi_vars[(u, v, i, cell_type)] for i in range(self.k)) == int(ct_u_v[self.cell_tree.get_cell_type_index(cell_type)]),
                     name=f"tcf_u={u}_v={v}_ct={cell_type}"
             )
             
