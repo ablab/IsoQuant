@@ -861,6 +861,9 @@ class IntronPathStorage:
                 if not self.params.requires_polya_for_construction or\
                         (terminal_vertex[0] == VERTEX_polya or starting_vertex[0] == VERTEX_polyt):
                     self.fl_paths.add(path_tuple)
+                    for i in range(len(intron_path) - 1):
+                        if intron_path[i + 1] not in self.intron_graph.outgoing_edges(intron_path[i]):
+                            logger.warning("Intron path %s is not connected, edge %s is absend" % (str(path_tuple), str(intron_path[i] + intron_path[i + 1])))
             self.paths_to_reads[path_tuple].append(a)
 
 
