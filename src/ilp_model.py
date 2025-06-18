@@ -83,31 +83,31 @@ def Intron2Nx_Node(
 
     for intron in intron_graph.incoming_edges.keys():
         for preceding_intron in intron_graph.incoming_edges[intron]:
-            print("Prec_introns",preceding_intron)
+            #print("Prec_introns",preceding_intron)
             if skip_terminal_nodes:
                 if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
                     additional_starts.append(str(intron))
                 else:
                     G.add_edge(str(preceding_intron), str(intron))
-                    print("Prec_introns", str(preceding_intron), ",", str(intron))
+                    #print("Prec_introns", str(preceding_intron), ",", str(intron))
             else:
                 G.add_edge(str(preceding_intron), str(intron))
-                print("Prec_introns", str(preceding_intron), ",", str(intron))
+                #print("Prec_introns", str(preceding_intron), ",", str(intron))
                 if preceding_intron[0] in [VERTEX_polyt, VERTEX_read_start]:
                     additional_starts.append(str(preceding_intron))
                     edges_to_ignore.append((str(preceding_intron), str(intron)))
     for intron in intron_graph.outgoing_edges.keys():
         for subsequent_intron in intron_graph.outgoing_edges[intron]:
-            print("Subs_introns", subsequent_intron)
+            #print("Subs_introns", subsequent_intron)
             if skip_terminal_nodes:
                 if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
                     additional_ends.append(str(intron))
                 else:
                     G.add_edge(str(intron), str(subsequent_intron))
-                    print("Subs_introns", str(intron),",", str(subsequent_intron))
+                    #print("Subs_introns", str(intron),",", str(subsequent_intron))
             else:
                 G.add_edge(str(intron), str(subsequent_intron))
-                print("Subs_introns", str(intron), ",", str(subsequent_intron))
+                #print("Subs_introns", str(intron), ",", str(subsequent_intron))
                 if subsequent_intron[0] in [VERTEX_polya, VERTEX_read_end]:
                     additional_ends.append(str(subsequent_intron))
                     edges_to_ignore.append((str(intron), str(subsequent_intron)))
@@ -175,7 +175,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     export = False
 
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
-    constraints=Constraints_Transfer_Format(transcripts_constraints)
+    constraints = Constraints_Transfer_Format(transcripts_constraints)
     print(constraints)
     #constraints = transfer_constraints(transcripts_constraints, graph)
 
@@ -188,9 +188,9 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
     print(chr_id, " ", gene_id)
     print("constraints", constraints)
     print("Nodes",graph.nodes())
+    print("Edges with data")
+    print(graph.edges(data=True))
     if not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
-        #print("Edges with data")
-        #print(graph.edges(data=True))
         if export:
             export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
         fp.utils.draw(
@@ -209,7 +209,6 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[],gro
             additional_starts = additional_starts,
             additional_ends = additional_ends,
             subpath_constraints = constraints,)
-        print(graph.nodes())
         print("Running MinErrorFlow")
         correction_model = fp.MinErrorFlow(
             G=graph,
