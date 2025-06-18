@@ -620,7 +620,10 @@ class GraphBasedModelConstructor:
         path_constraints = []
 
         #Now we add path constraints in the ILP world based on transcript constraints
-        for p in self.known_isoforms_in_graph.keys():
+        #for p in self.known_isoforms_in_graph.keys():
+        #    if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
+        #    path_constraints.append(list(p))
+        for p in self.path_storage.fl_paths:
             if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
             path_constraints.append(list(p))
         print("NewPathConstraints",self.path_storage.fl_paths)
@@ -634,7 +637,7 @@ class GraphBasedModelConstructor:
         else:
             gene_id=""
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
-        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph,self.gene_info.chr_id,gene_id, self.path_storage.fl_paths,self.ground_truth_isoforms)
+        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph,self.gene_info.chr_id,gene_id, path_constraints,self.ground_truth_isoforms)
 
         for res in fl_transcript_paths:
             path= self.transfer_paths(res)
