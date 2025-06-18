@@ -623,9 +623,9 @@ class GraphBasedModelConstructor:
         #for p in self.known_isoforms_in_graph.keys():
         #    if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
         #    path_constraints.append(list(p))
-        for p in self.path_storage.fl_paths:
-            print("FL_Path",self.intron_graph.intron_collector.clustered_introns[p])
-            if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
+        for p in self.known_isoforms_in_graph.keys():
+            if any(self.intron_graph.intron_collector.clustered_introns[intron] == 0 for intron in p):
+                continue
             path_constraints.append(list(p))
         print("NewPathConstraints",self.path_storage.fl_paths)
         print("PC",path_constraints)
