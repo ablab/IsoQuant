@@ -235,26 +235,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
             )
         
         #print(graph.nodes())
-        print("Running MinErrorFlowDecompCT")
-        if False:
-            correction_model = fp.MinErrorFlow(
-                G = graph,
-                flow_attr = "flow",
-                flow_attr_origin = "node",
-                weight_type = int,
-                additional_starts = additional_starts,
-                additional_ends = additional_ends,
-            )
-            correction_model.solve()
-            corrected_graph = correction_model.get_corrected_graph()
-        
-        optimization_options = {
-            "optimize_with_safe_paths": False,
-            "optimize_with_safe_sequences": True,
-            "optimize_with_safety_from_largest_antichain": True,
-        }
-    
-        print("Running MinFlowDecomp")
+        print("Running MinErrorCellTypeFlow")
         
         additional_starts_pruned = []
         additional_ends_pruned = []
@@ -271,10 +252,66 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
                 if edge not in graph.edges:
                     include = False; break
             if include: subpath_constaints_pruned.append(path)
+
+        correction_model = MinErrorCellTypeFlow(
+            G = graph,
+            cell_tree = cell_type_tree,
+            flow_attr = "flow",
+            cell_flow_attr = "cell_types",
+            flow_attr_origin = "node",
+            weight_type = int,
+            additional_starts = additional_starts_pruned,
+            additional_ends = additional_ends_pruned,
+        )
+
+        correction_model.solve()
+        corrected_graph = correction_model.get_corrected_graph()
+
+         # Draw the graph with cell type flows
+        fp.utils.draw(
+            G =corrected_graph,
+            flow_attr = "cell_types",
+            filename = "graphs/" + str(id(graph)) + "graph.corrected.CT.png",  # this will be used as filename
+            draw_options = {
+                "show_graph_edges": True,
+                "show_edge_weights": True,
+                "show_path_weights": False,
+                "show_node_weights": True,
+                "show_path_weight_on_first_edge": True,
+                "pathwidth": 2,
+            },
+            additional_starts = additional_starts,
+            additional_ends = additional_ends,
+            subpath_constraints = constraints,
+            )
         
+        fp.utils.draw(
+            G =corrected_graph,
+            flow_attr = "cell_types",
+            filename = "graphs/" + str(id(graph)) + "graph.corrected.CT.png",  # this will be used as filename
+            draw_options = {
+                "show_graph_edges": True,
+                "show_edge_weights": True,
+                "show_path_weights": False,
+                "show_node_weights": True,
+                "show_path_weight_on_first_edge": True,
+                "pathwidth": 2,
+            },
+            additional_starts = additional_starts,
+            additional_ends = additional_ends,
+            subpath_constraints = constraints,
+            )
+
+        optimization_options = {
+            "optimize_with_safe_paths": False,
+            "optimize_with_safe_sequences": True,
+            "optimize_with_safety_from_largest_antichain": True,
+        }
+    
+        print("Running MinFlowDecomp")
         
         mcd_model = MinFlowCellDecomp(
-            G = graph,
+            G = corrected_graph,
             flow_attr = "flow",
             cell_flow_attr = "cell_types",
             cell_tree = cell_type_tree,
@@ -285,27 +322,6 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
             optimization_options = optimization_options,
         )
 
-        # draw the ground truth isoforms , might yield bugs (if partaking nodes are not part of the current graph)!!
-        #gtweights = [1] * len(ground_truth_isoforms)
-        
-        if False:
-            fp.utils.draw(
-                G = graph,
-                flow_attr = "flow",
-                paths = ground_truth_isoforms,
-                weights = gtweights,
-                filename = str(id(graph)) + "groundtruth.png",  # this will be used as filename
-                draw_options = {
-                    "show_graph_edges": True,
-                    "show_edge_weights": False,
-                    "show_path_weights": False,
-                    "show_path_weight_on_first_edge": True,
-                    "pathwidth": 2,
-                },
-                additional_starts = additional_starts,
-                additional_ends = additional_ends,
-                )
-        
         start = time.time()
         mcd_model.solve()
         end = time.time()

@@ -2,7 +2,7 @@ import numpy as np
 import flowpaths as fp
 import networkx as nx
 
-from ..cell_type_tree import CellTypeTree
+from src.cell_type_tree import CellTypeTree
 
 class kFlowCellTypeDecomp(fp.kFlowDecomp):
 
