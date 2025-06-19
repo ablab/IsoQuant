@@ -311,11 +311,33 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         end = time.time()
         print("Solution found! in ", end - start, " seconds")
         solution = process_solution(graph, mcd_model, additional_starts,additional_ends)
-        print("solution",solution)
+        #print("solution",solution)
         # Condensing the paths in the expanded graph to paths in the the original graph
         original_paths = solution["paths"]
         weights = solution["weights"]
         #print("original paths",original_paths)
+
+        solution = mcd_model.get_solution()
+        paths = solution["paths"]
+        weights = solution["weights"]
+        ct_weights = solution["ct_weights"]
+
+        fp.utils.draw(
+            G = graph,
+            flow_attr = "flow",
+            paths = paths,
+            weights = ct_weights,
+            filename = "graphs/" + str(id(graph))  + "graph.solution.CT.png",
+            draw_options= {
+                    "show_graph_edges": True,
+                    "show_edge_weights": False,
+                    "show_path_weights": False,
+                    "show_path_weight_on_first_edge": True,
+                    "pathwidth": 2,
+                },
+        )
+
+
         if len(original_paths) != len(weights):
             raise ValueError("The number of paths and weights must be the same.")
 
