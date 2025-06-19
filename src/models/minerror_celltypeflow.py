@@ -4,7 +4,7 @@ import networkx as nx
 
 import flowpaths.utils as utils
 
-from cell_type_tree import CellTypeTree
+from src.cell_type_tree import CellTypeTree
 
 class MinErrorCellTypeFlow(fp.MinErrorFlow):
 

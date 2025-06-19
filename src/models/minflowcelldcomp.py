@@ -8,9 +8,8 @@ import networkx as nx
 import flowpaths.utils.solverwrapper as sw
 import flowpaths.utils as utils
 
-from .cell_type_tree import CellTypeTree
+from src.cell_type_tree import CellTypeTree
 from .kflowcellcomp import kFlowCellTypeDecomp
-
 
 
 class MinFlowCellDecomp(fp.MinFlowDecomp):
