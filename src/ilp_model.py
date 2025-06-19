@@ -10,7 +10,8 @@ import pickle
 logger = logging.getLogger('IsoQuant')
 
 from .cell_type_tree import CellTypeTree
-from .minflowcelldcomp import MinFlowCellDecomp
+from .models.minflowcelldcomp import MinFlowCellDecomp
+from .models.minerror_celltypeflow import MinErrorCellTypeFlow
 
 '''
 # Create a simple graph
@@ -178,8 +179,8 @@ def filter_constraints(graph, additional_starts,additional_ends):
     for endnode in additional_ends:
         if not(endnode in graph.nodes()):
             endnodes_missing.append(endnode)
-    remove_nodes(startnodes_missing,additional_starts)
-    remove_nodes(endnodes_missing,additional_ends)
+    remove_nodes(startnodes_missing, additional_starts)
+    remove_nodes(endnodes_missing, additional_ends)
 
 
 def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5):
@@ -217,7 +218,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
 
         # Draw the graph with cell type flows
         fp.utils.draw(
-            G=graph,
+            G = graph,
             flow_attr = "cell_types",
             filename = "graphs/" + str(id(graph)) + "graph.CT.png",  # this will be used as filename
             draw_options = {
@@ -234,7 +235,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
             )
         
         #print(graph.nodes())
-        print("Running MinErrorFlowCT")
+        print("Running MinErrorFlowDecompCT")
         if False:
             correction_model = fp.MinErrorFlow(
                 G = graph,
@@ -254,6 +255,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         }
     
         print("Running MinFlowDecomp")
+        
         additional_starts_pruned = []
         additional_ends_pruned = []
         subpath_constaints_pruned = []
