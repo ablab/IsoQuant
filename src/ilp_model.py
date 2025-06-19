@@ -287,7 +287,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
 
         optimization_options = {
             "optimize_with_safe_paths": True,
-            "optimize_with_safe_sequences": True,
+            "optimize_with_safe_sequences": False,
             "optimize_with_safety_from_largest_antichain": True,
         }
     
