@@ -284,26 +284,9 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
             additional_ends = additional_ends,
             subpath_constraints = constraints,
             )
-        
-        fp.utils.draw(
-            G =corrected_graph,
-            flow_attr = "cell_types",
-            filename = "graphs/" + str(id(graph)) + "graph.corrected.CT.png",  # this will be used as filename
-            draw_options = {
-                "show_graph_edges": True,
-                "show_edge_weights": True,
-                "show_path_weights": False,
-                "show_node_weights": True,
-                "show_path_weight_on_first_edge": True,
-                "pathwidth": 2,
-            },
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-            subpath_constraints = constraints,
-            )
 
         optimization_options = {
-            "optimize_with_safe_paths": False,
+            "optimize_with_safe_paths": True,
             "optimize_with_safe_sequences": True,
             "optimize_with_safety_from_largest_antichain": True,
         }
