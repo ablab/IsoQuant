@@ -330,11 +330,17 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         solution = process_solution(graph, mcd_model, additional_starts,additional_ends)
         #print("solution",solution)
         # Condensing the paths in the expanded graph to paths in the the original graph
+        
+        if solution is None: return []
+        
         original_paths = solution["paths"]
         weights = solution["weights"]
         #print("original paths",original_paths)
 
         solution = mcd_model.get_solution()
+
+        if solution is None: return []
+
         paths = solution["paths"]
         weights = solution["weights"]
         ct_weights = solution["ct_weights"]
