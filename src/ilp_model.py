@@ -161,8 +161,8 @@ def remove_nodes(nodes_to_remove, datastructure):
         datastructure.remove(node)
         
 def filter_constraints(graph, additional_starts,additional_ends):
-    startnodes_missing=[]
-    endnodes_missing=[]
+    startnodes_missing= []
+    endnodes_missing = []
     for startnode in additional_starts:
         if not( startnode in graph.nodes()):
             startnodes_missing.append(startnode)
@@ -173,7 +173,7 @@ def filter_constraints(graph, additional_starts,additional_ends):
     remove_nodes(endnodes_missing,additional_ends)
 
 def filter_constraints(constraints,graph):
-    constraints_to_delete=[]
+    constraints_to_delete = []
     for constraint in constraints:
         #print("constraint",constraint)
         for c_edge in constraint:
@@ -183,7 +183,10 @@ def filter_constraints(constraints,graph):
                 break
     for constraint in constraints_to_delete:
         constraints.remove(constraint)
-    return constraints
+    if len(constraints)>0:
+        return constraints
+    else:
+        return []
 def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[] ,ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
     print("constraints", transcripts_constraints)
 
