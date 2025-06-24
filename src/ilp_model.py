@@ -172,15 +172,30 @@ def filter_constraints(graph, additional_starts,additional_ends):
     remove_nodes(startnodes_missing,additional_starts)
     remove_nodes(endnodes_missing,additional_ends)
 
-
-
+def filter_constraints(constraints,graph):
+    constraints_to_delete=[]
+    for constraint in constraints:
+        print("constraint",constraint)
+        for c_edge in constraint:
+            print("c_edge",c_edge)
+            if c_edge not in graph.edges():
+                constraints_to_delete.append(constraint)
+                break
+    for constraint in constraints_to_delete:
+        constraints.remove(constraint)
+    return constraints
 def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[] ,ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
     print("constraints", transcripts_constraints)
+
+
     print("Running ILP part")
     export = False
 
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
     constraints = Constraints_Transfer_Format(transcripts_constraints)
+    filter_constraints(constraints,graph)
+
+
     #print(constraints)
     #constraints = transfer_constraints(transcripts_constraints, graph)
 
@@ -188,7 +203,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[] ,gr
         constraints = None
     #filter_constraints(graph, additional_starts,additional_ends)
     print(chr_id, " ", gene_id)
-    print("constraints", constraints)
+    print("constraints filtered", constraints)
     print("Nodes",graph.nodes())
     print("Edges with data")
     print(graph.edges(data=True))
