@@ -624,6 +624,7 @@ class GraphBasedModelConstructor:
         #    if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
         #    path_constraints.append(list(p))
         for p in self.known_isoforms_in_graph.keys():
+            print("p",p)
             if any(self.intron_graph.intron_collector.clustered_introns[intron] == 0 for intron in p):
                 continue
             path_constraints.append(list(p))
