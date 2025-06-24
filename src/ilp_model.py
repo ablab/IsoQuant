@@ -183,7 +183,7 @@ def filter_constraints(constraints,graph):
                 break
     for constraint in constraints_to_delete:
         constraints.remove(constraint)
-    if len(constraints)>0:
+    if constraints:
         return constraints
     else:
         return []
