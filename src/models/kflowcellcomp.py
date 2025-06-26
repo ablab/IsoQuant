@@ -110,6 +110,7 @@ class kFlowCellTypeDecomp(fp.kFlowDecomp):
             #weights_sol_dict = self.solver.get_variable_values("w", [int])
             weights_sol_ct_dict = self.solver.get_variable_values("v", [int, str])
             #print(weights_sol_ct_dict)
+            #print(weights_sol_ct_dict)
             #self.path_weights_sol = [
             #    (
             #        round(weights_sol_dict[i])
@@ -118,11 +119,12 @@ class kFlowCellTypeDecomp(fp.kFlowDecomp):
             #    )
             #    for i in range(self.k)
             #]
-            self.path_weights_ct_sol = np.zeros(shape = (self.k, len(self.cell_types) + 1), dtype=float)
+            self.path_weights_ct_sol = self.cell_tree.transform_count_to_arrays(weights_sol_ct_dict)
+            #print(self.path_weights_ct_sol)
+            #for i, ct in weights_sol_ct_dict:
+            #    pass #"self.path_weights_ct_sol[i][self.cell_tree.get_cell_type_index(ct)] = weights_sol_ct_dict[(i, ct)]
+    
             
-            for i, ct in weights_sol_ct_dict:
-                self.path_weights_ct_sol[i][self.cell_tree.get_cell_type_index(ct)] = weights_sol_ct_dict[(i, ct)]
-
             self.path_weights_sol = self.path_weights_ct_sol.sum(axis = 1)
 
             if self.flow_attr_origin == "edge":

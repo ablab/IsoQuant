@@ -12,6 +12,7 @@ logger = logging.getLogger('IsoQuant')
 from .cell_type_tree import CellTypeTree
 from .models.minflowcelldcomp import MinFlowCellDecomp
 from .models.minerror_celltypeflow import MinErrorCellTypeFlow
+from .models.cellflowcorrection import ExtendedMinErrorCellTypeFlow
 
 '''
 # Create a simple graph
@@ -68,11 +69,7 @@ def Constraints_Transfer_Format(input_constraints,skip_isolated_nodes=True,
     return transferred_constraints
 
 
-def Intron2Nx_Node(
-        intron_graph,
-        skip_isolated_nodes=True,
-        skip_terminal_nodes=True,
-):
+def Intron2Nx_Node(intron_graph, skip_isolated_nodes = True, skip_terminal_nodes = True,):
     G = nx.DiGraph()
     # We create the full networkx graph
         # We add all the nodes
@@ -89,7 +86,7 @@ def Intron2Nx_Node(
         #print(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])
         G.add_node(str(intron),
                     flow = this_flow,
-                    cell_types = cell_type_tree.transform_counts(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])
+                    cell_flow = cell_type_tree.transform_counts(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])
                     )
         
 
@@ -219,7 +216,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         # Draw the graph with cell type flows
         fp.utils.draw(
             G = graph,
-            flow_attr = "cell_types",
+            flow_attr = "cell_flow",
             filename = "graphs/" + str(id(graph)) + "graph.CT.png",  # this will be used as filename
             draw_options = {
                 "show_graph_edges": True,
@@ -257,7 +254,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
             G = graph,
             cell_tree = cell_type_tree,
             flow_attr = "flow",
-            cell_flow_attr = "cell_types",
+            cell_flow_attr = "cell_flow",
             flow_attr_origin = "node",
             weight_type = int,
             additional_starts = additional_starts_pruned,
@@ -266,11 +263,11 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
 
         correction_model.solve()
         corrected_graph = correction_model.get_corrected_graph()
-
+        
          # Draw the graph with cell type flows
         fp.utils.draw(
             G =corrected_graph,
-            flow_attr = "cell_types",
+            flow_attr = "cell_flow",
             filename = "graphs/" + str(id(graph)) + "graph.corrected.CT.png",  # this will be used as filename
             draw_options = {
                 "show_graph_edges": True,
@@ -314,7 +311,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         mcd_model = MinFlowCellDecomp(
             G = corrected_graph,
             flow_attr = "flow",
-            cell_flow_attr = "cell_types",
+            cell_flow_attr = "cell_flow",
             cell_tree = cell_type_tree,
             flow_attr_origin = "node",
             additional_starts = additional_starts_pruned,

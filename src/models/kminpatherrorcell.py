@@ -8,7 +8,7 @@ import flowpaths.abstractpathmodeldag as pathmodel
 
 import copy
 
-class kMinPathCellTypeErrork(pathmodel.AbstractPathModelDAG):
+class kMinPathCellTypeError(pathmodel.AbstractPathModelDAG):
     def __init__(
         self,
         G: nx.DiGraph,
