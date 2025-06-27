@@ -66,7 +66,7 @@ class CellTypeTree:
         return cell_type not in self.parents 
     
     def get_child_leafs(self, cell_type: str):
-        if self.children[cell_type] == []:
+        if len(self.children[cell_type]) == 0:
             return [cell_type]
         leafs = []
         for child in self.children[cell_type]:

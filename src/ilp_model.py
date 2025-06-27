@@ -12,7 +12,7 @@ logger = logging.getLogger('IsoQuant')
 from .cell_type_tree import CellTypeTree
 from .models.minflowcelldcomp import MinFlowCellDecomp
 from .models.minerror_celltypeflow import MinErrorCellTypeFlow
-from .models.cellflowcorrection import ExtendedMinErrorCellTypeFlow
+from .models.cellflowcorrection import MinErrorCellTypeFlowCorrection
 
 '''
 # Create a simple graph
@@ -250,7 +250,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
                     include = False; break
             if include: subpath_constaints_pruned.append(path)
 
-        correction_model = MinErrorCellTypeFlow(
+        correction_model = MinErrorCellTypeFlowCorrection(
             G = graph,
             cell_tree = cell_type_tree,
             flow_attr = "flow",
