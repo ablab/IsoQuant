@@ -160,7 +160,7 @@ def remove_nodes(nodes_to_remove, datastructure):
     for node in nodes_to_remove:
         datastructure.remove(node)
         
-def filter_constraints(graph, additional_starts,additional_ends):
+def filter_nodes(graph, additional_starts,additional_ends):
     startnodes_missing= []
     endnodes_missing = []
     for startnode in additional_starts:
@@ -208,7 +208,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[] ,gr
 
     if len(constraints) == 0:
         constraints = []
-    #filter_constraints(graph, additional_starts,additional_ends)
+    filter_nodes(graph, additional_starts,additional_ends)
     print(chr_id, " ", gene_id)
     print("constraints filtered", constraints)
     print("Nodes",graph.nodes())
