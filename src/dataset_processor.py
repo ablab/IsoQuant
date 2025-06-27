@@ -343,6 +343,7 @@ class ReadAssignmentAggregator:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                            additional_header=self.common_header, gzipped=gzipped)
             printer_list.append(self.basic_printer)
+        self.t2t_sqanti_printer = VoidTranscriptPrinter()
         if self.args.sqanti_output:
             self.t2t_sqanti_printer = SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
@@ -727,7 +728,7 @@ class DatasetProcessor:
 
         self.merge_assignments(sample, aggregator, chr_ids)
         if self.args.sqanti_output:
-            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, open(sample.out_t2t_tsv, "w"), copy_header=False)
+            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, aggregator.t2t_sqanti_printer.output_file, copy_header=False)
         self.finalize(aggregator)
 
         if not self.args.no_model_construction:
