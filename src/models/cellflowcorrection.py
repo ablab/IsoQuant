@@ -229,8 +229,7 @@ class MinErrorCellTypeFlowCorrection(fp.MinErrorFlow):
                     continue
                 
                 f_u_v_ct = int(f_u_v[self.cell_tree.get_cell_type_index(cg)])
-                #print(cg, self.cell_tree.get_child_leafs(cg), self.cell_tree.children[cg])
-
+                
                 self.solver.add_constraint(
                     self.solver.quicksum(
                         self.edge_error_vars[(u, v, ct)] + self.edge_vars[(u, v, ct)]
@@ -246,9 +245,11 @@ class MinErrorCellTypeFlowCorrection(fp.MinErrorFlow):
                 self.solver.quicksum(
                     self.edge_error_vars[(u, v, ct)] + self.edge_vars[(u, v, ct)]
                     for ct in self.cell_types
-                ) == f_u_v_ct, #f_u_v_ct,
+                ) == f_u_v_ct,
                 name=f"edge_error_u={u}_v={v}",
             )
+
+            #print("Done")
 
 
 
