@@ -126,8 +126,8 @@ class GraphBasedModelConstructor:
         self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
-        print("Known Isoforms",self.known_isoforms_in_graph)
-        print("ground truth", self.ground_truth_gene_info)
+        #print("Known Isoforms",self.known_isoforms_in_graph)
+        #print("ground truth", self.ground_truth_gene_info)
         if not self.ground_truth_gene_info:
             self.ground_truth_isoforms = {}
         else:
@@ -136,8 +136,8 @@ class GraphBasedModelConstructor:
 
         # list of list, ground truth paths
         ground_truth_isoform_list = list(map(lambda x: list(x), self.ground_truth_isoforms.keys()))
-        print("GTILIST", ground_truth_isoform_list)
-        print("GTIsoforms",self.ground_truth_isoforms)
+        #print("GTILIST", ground_truth_isoform_list)
+        #print("GTIsoforms",self.ground_truth_isoforms)
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
@@ -623,9 +623,9 @@ class GraphBasedModelConstructor:
         for p in self.known_isoforms_in_graph.keys():
             if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
             path_constraints.append(list(p))
-        print("PC",path_constraints)
-        print("KnownIsoforms_Ids",self.known_isoforms_in_graph_ids)
-        print("GroundTruthIsoforms",self.ground_truth_isoforms)
+        #print("PC",path_constraints)
+        #print("KnownIsoforms_Ids",self.known_isoforms_in_graph_ids)
+        #print("GroundTruthIsoforms",self.ground_truth_isoforms)
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
         fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, path_constraints,self.ground_truth_isoforms)
 

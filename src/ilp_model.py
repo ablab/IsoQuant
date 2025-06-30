@@ -45,8 +45,7 @@ def clean_graph(G,skip_isolated_nodes):
         G.remove_nodes_from(nodes_to_remove)
 
 
-def Constraints_Transfer_Format(input_constraints,skip_isolated_nodes=True,
-        skip_terminal_nodes=True,):
+def Constraints_Transfer_Format(input_constraints, skip_isolated_nodes = True, skip_terminal_nodes = True,):
     transferred_constraints = []
     for pc_entry in input_constraints:
         #print("pcent",pc_entry)
@@ -180,9 +179,9 @@ def filter_constraints(graph, additional_starts,additional_ends):
     remove_nodes(endnodes_missing, additional_ends)
 
 
-def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5):
+def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5, draw_graphs: bool = False):
     #print("constraints", transcripts_constraints)
-    print("Running ILP part")
+    #print("Running ILP part")
     export = False
 
     graph, cell_type_tree, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
@@ -195,44 +194,45 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         if export:
             export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
 
-        # Draw the graph with normal flows
-        fp.utils.draw(
-            G = graph,
-            flow_attr = "flow",
-            filename = "graphs/" + str(id(graph)) + "graph.FL.png",
-            draw_options = {
-                "show_graph_edges": True,
-                "show_edge_weights": True,
-                "show_path_weights": False,
-                "show_node_weights": True,
-                "show_path_weight_on_first_edge": True,
-                "pathwidth": 2,
-            },
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-            subpath_constraints = constraints,
-            )
+        if draw_graphs:
+            # Draw the graph with normal flows    
+            fp.utils.draw(
+                G = graph,
+                flow_attr = "flow",
+                filename = "graphs/" + str(id(graph)) + "graph.FL.png",
+                draw_options = {
+                    "show_graph_edges": True,
+                    "show_edge_weights": True,
+                    "show_path_weights": False,
+                    "show_node_weights": True,
+                    "show_path_weight_on_first_edge": True,
+                    "pathwidth": 2,
+                },
+                additional_starts = additional_starts,
+                additional_ends = additional_ends,
+                subpath_constraints = constraints,
+                )
 
-        # Draw the graph with cell type flows
-        fp.utils.draw(
-            G = graph,
-            flow_attr = "cell_flow",
-            filename = "graphs/" + str(id(graph)) + "graph.CT.png",  # this will be used as filename
-            draw_options = {
-                "show_graph_edges": True,
-                "show_edge_weights": True,
-                "show_path_weights": False,
-                "show_node_weights": True,
-                "show_path_weight_on_first_edge": True,
-                "pathwidth": 2,
-            },
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-            subpath_constraints = constraints,
-            )
-        
+            # Draw the graph with cell type flows
+            fp.utils.draw(
+                G = graph,
+                flow_attr = "cell_flow",
+                filename = "graphs/" + str(id(graph)) + "graph.CT.png",  # this will be used as filename
+                draw_options = {
+                    "show_graph_edges": True,
+                    "show_edge_weights": True,
+                    "show_path_weights": False,
+                    "show_node_weights": True,
+                    "show_path_weight_on_first_edge": True,
+                    "pathwidth": 2,
+                },
+                additional_starts = additional_starts,
+                additional_ends = additional_ends,
+                subpath_constraints = constraints,
+                )
+            
         #print(graph.nodes())
-        print("Running MinErrorCellTypeFlow")
+        logger.info("Running MinErrorCellTypeFlow")
         
         additional_starts_pruned = []
         additional_ends_pruned = []
@@ -265,39 +265,40 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         corrected_graph = correction_model.get_corrected_graph()
         
          # Draw the graph with cell type flows
-        fp.utils.draw(
-            G =corrected_graph,
-            flow_attr = "cell_flow",
-            filename = "graphs/" + str(id(graph)) + "graph.corrected.CT.png",  # this will be used as filename
-            draw_options = {
-                "show_graph_edges": True,
-                "show_edge_weights": True,
-                "show_path_weights": False,
-                "show_node_weights": True,
-                "show_path_weight_on_first_edge": True,
-                "pathwidth": 2,
-            },
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-            subpath_constraints = constraints,
-            )
-        
-        fp.utils.draw(
-            G =corrected_graph,
-            flow_attr = "flow",
-            filename = "graphs/" + str(id(graph)) + "graph.corrected.FL.png",  # this will be used as filename
-            draw_options = {
-                "show_graph_edges": True,
-                "show_edge_weights": True,
-                "show_path_weights": False,
-                "show_node_weights": True,
-                "show_path_weight_on_first_edge": True,
-                "pathwidth": 2,
-            },
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-            subpath_constraints = constraints,
-            )
+        if draw_graphs:
+            fp.utils.draw(
+                G =corrected_graph,
+                flow_attr = "cell_flow",
+                filename = "graphs/" + str(id(graph)) + "graph.corrected.CT.png",  # this will be used as filename
+                draw_options = {
+                    "show_graph_edges": True,
+                    "show_edge_weights": True,
+                    "show_path_weights": False,
+                    "show_node_weights": True,
+                    "show_path_weight_on_first_edge": True,
+                    "pathwidth": 2,
+                },
+                additional_starts = additional_starts,
+                additional_ends = additional_ends,
+                subpath_constraints = constraints,
+                )
+            
+            fp.utils.draw(
+                G =corrected_graph,
+                flow_attr = "flow",
+                filename = "graphs/" + str(id(graph)) + "graph.corrected.FL.png",  # this will be used as filename
+                draw_options = {
+                    "show_graph_edges": True,
+                    "show_edge_weights": True,
+                    "show_path_weights": False,
+                    "show_node_weights": True,
+                    "show_path_weight_on_first_edge": True,
+                    "pathwidth": 2,
+                },
+                additional_starts = additional_starts,
+                additional_ends = additional_ends,
+                subpath_constraints = constraints,
+                )
 
 
         optimization_options = {
@@ -306,8 +307,9 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
             "optimize_with_safety_from_largest_antichain": True,
         }
     
-        print("Running MinFlowDecomp")
+        logger.info("Running MinFlowDecomp")
         
+    
         mcd_model = MinFlowCellDecomp(
             G = corrected_graph,
             flow_attr = "flow",
@@ -323,7 +325,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         start = time.time()
         mcd_model.solve()
         end = time.time()
-        print("Solution found! in ", end - start, " seconds")
+        logger.info("Solution found! in %d seconds", end - start)
         solution = process_solution(graph, mcd_model, additional_starts,additional_ends)
         #print("solution",solution)
         # Condensing the paths in the expanded graph to paths in the the original graph
@@ -342,20 +344,21 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         weights = solution["weights"]
         ct_weights = solution["ct_weights"]
 
-        fp.utils.draw(
-            G = graph,
-            flow_attr = "flow",
-            paths = paths,
-            weights = ct_weights,
-            filename = "graphs/" + str(id(graph))  + "graph.solution.CT.png",
-            draw_options= {
-                    "show_graph_edges": True,
-                    "show_edge_weights": False,
-                    "show_path_weights": False,
-                    "show_path_weight_on_first_edge": True,
-                    "pathwidth": 2,
-                },
-        )
+        if draw_graphs:
+            fp.utils.draw(
+                G = graph,
+                flow_attr = "flow",
+                paths = paths,
+                weights = ct_weights,
+                filename = "graphs/" + str(id(graph))  + "graph.solution.CT.png",
+                draw_options= {
+                        "show_graph_edges": True,
+                        "show_edge_weights": False,
+                        "show_path_weights": False,
+                        "show_path_weight_on_first_edge": True,
+                        "pathwidth": 2,
+                    },
+            )
 
 
         if len(original_paths) != len(weights):
@@ -372,21 +375,21 @@ def process_solution(graph: nx.DiGraph, model: MinFlowCellDecomp, additional_sta
     
         solution = model.get_solution()
     
-        fp.utils.draw(
-            G=graph,
-            flow_attr="cell_type",
-            paths = solution["paths"],
-            weights = solution["ct_weights"],
-            filename = str(id(graph))+"solution.png", # this will be used as filename
-            draw_options = {
-            "show_graph_edges": True,
-            "show_edge_weights": True,
-            "show_path_weights": False,
-            "show_path_weight_on_first_edge": True,
-            "pathwidth": 2,
-        },
-        additional_starts = additional_starts,
-        additional_ends = additional_ends,)
+        #fp.utils.draw(
+        #    G=graph,
+        #    flow_attr="cell_type",
+        #    paths = solution["paths"],
+        #    weights = solution["ct_weights"],
+        #    filename = str(id(graph))+"solution.png", # this will be used as filename
+        #   draw_options = {
+        #   "show_graph_edges": True,
+        #    "show_edge_weights": True,
+        #    "show_path_weights": False,
+        #    "show_path_weight_on_first_edge": True,
+        #    "pathwidth": 2,
+        #},
+        #additional_starts = additional_starts,
+        #additional_ends = additional_ends,)
 
         return solution
     else:
