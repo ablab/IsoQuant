@@ -191,16 +191,16 @@ def filter_constraints(constraints,graph):
     else:
         return []
 
-def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[] ,ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
-    print("constraints", transcripts_constraints)
+def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
+    print("constraints", constraints)
 
 
     print("Running ILP part")
     export = False
 
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
-    constraints = Constraints_Transfer_Format(transcripts_constraints)
-    filter_constraints(constraints,graph)
+    #constraints = Constraints_Transfer_Format(transcripts_constraints)
+    #filter_constraints(constraints,graph)
 
 
     #print(constraints)
@@ -212,6 +212,8 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,transcripts_constraints=[] ,gr
     print(chr_id, " ", gene_id)
     print("constraints filtered", constraints)
     print("Nodes",graph.nodes())
+    print("Number of Edges",len(graph.edges()))
+    print("Number of Nodes",len(graph.nodes()))
     print("Edges with data")
     print(graph.edges(data=True))
     print("add_starts",additional_starts)

@@ -47,6 +47,8 @@ class StrandnessReportingLevel(Enum):
     auto = 10
 
 
+
+
 class GraphBasedModelConstructor:
     detected_known_isoforms = set()
     extended_transcript_ids = set()
@@ -615,19 +617,38 @@ class GraphBasedModelConstructor:
         path = tuple(res_transferred)
         return path
 
+    def transfer_fl_path(self,path_constraints):
+        for tup in self.path_storage.fl_paths:
+            print("tup",tup)
+            this_constraint = []
+            # all_edges_in_graph = True
+            print([VERTEX_polya,VERTEX_read_end])
+            for first, second in zip(tup, tup[1:]):
+                if not (first[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] or second[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] ):
+                    this_constraint.append((str(first), str(second)))
+            if len(this_constraint)>0:
+                path_constraints.append(this_constraint)
+
+
     def construct_ilp_isoforms(self):
         logger.info("Using ILP to discover transcripts")
         path_constraints = []
+        print("FL_Paths",self.path_storage.fl_paths)
+        self.transfer_fl_path( path_constraints)
 
         #Now we add path constraints in the ILP world based on transcript constraints
         #for p in self.known_isoforms_in_graph.keys():
         #    if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
         #    path_constraints.append(list(p))
-        for p in self.known_isoforms_in_graph.keys():
-            print("p",p)
-            if any(self.intron_graph.intron_collector.clustered_introns[intron] == 0 for intron in p):
-                continue
-            path_constraints.append(list(p))
+        #for p in self.path_storage.fl_paths():
+        #    print("p",p)
+        #    if any(self.intron_graph.intron_collector.clustered_introns[intron] == 0 for intron in p):
+        #        continue
+        #    path_constraints.append(list(p))
+        #for p in self.path_storage.fl_paths():
+        #    if any(self.intron_graph.intron_collector.clustered_introns[intron] == 0 for intron in p):
+        #        continue
+        #    path_constraints.append(list(p))
         print("NewPathConstraints",self.path_storage.fl_paths)
         print("PC",path_constraints)
         print("KnownIsoforms_Ids",self.known_isoforms_in_graph_ids)
