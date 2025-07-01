@@ -200,7 +200,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
 
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
     #constraints = Constraints_Transfer_Format(transcripts_constraints)
-    #filter_constraints(constraints,graph)
+    filter_constraints(constraints,graph)
 
 
     #print(constraints)
