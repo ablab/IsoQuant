@@ -48,15 +48,12 @@ class kFlowCellTypeDecomp(fp.kFlowDecomp):
 
         
     def _encode_flow_decomposition(self):
-
-        cell_types = self.cell_tree.get_leaf_types()
-        normal = False
         
         if self.is_solved():
             return
 
         self.pi_vars = self.solver.add_variables(
-            [(u, v, i, ct) for u, v, i in self.edge_indexes for ct in cell_types],
+            [(u, v, i, ct) for u, v, i in self.edge_indexes for ct in self.cell_types],
             name_prefix = "pc",
             lb = 0,
             ub = self.w_max,
@@ -64,49 +61,12 @@ class kFlowCellTypeDecomp(fp.kFlowDecomp):
         )
 
         self.path_weights_vars = self.solver.add_variables(
-            [(i, ct) for i in self.path_indexes for ct in cell_types],
+            [(i, ct) for i in self.path_indexes for ct in self.cell_types],
             name_prefix="v",
             lb=0,
             ub=self.w_max,
             var_type="integer"# if self.weight_type == int else "continuous",
         )
-        self.symmetry_vars = self.solver.add_variables(
-            self.path_indexes,
-            name_prefix = "u",
-            lb = 0,
-            ub = 1,
-            var_type = "integer",
-        )
-
-        # Symmetry breaking constraints by Reima Kuosmanen
-        for i in range(len(self.safe_lists), self.k):
-
-            edge_list = [e for e in self.G.edges() if e not in self.edges_to_ignore] 
-            m = len(edge_list)
-
-            u, v = edge_list[0]
-
-            self.solver.add_constraint(
-                self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] == self.symmetry_vars[(u, v, i)]
-            )
-
-            for p in range(1, m):
-                
-                u, v = edge_list[p]
-
-                # Has increased
-                self.solver.add_constraint(
-                    self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] >= self.symmetry_vars[(u, v, i)]
-                )
-
-                # increase means the index can lower
-                self.solver.add_constraint(
-                    self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] >= 
-                    self.solver.quicksum(
-                        -self.symmetry_vars[(u0, v0, i)]
-                        for u0, v0 in edge_list[0:p]
-                    )
-                )
 
         # We encode that for each edge (u,v), the sum of the weights of the paths going through the edge is equal to the flow value of the edge.
         for u, v, data in self.G.edges(data=True):
@@ -122,7 +82,7 @@ class kFlowCellTypeDecomp(fp.kFlowDecomp):
             for i in range(self.k):
                 
                 # ct specific variables
-                for ct in cell_types:
+                for ct in self.cell_types:
                     self.solver.add_binary_continuous_product_constraint(
                         binary_var = self.edge_vars[(u, v, i)],
                         continuous_var = self.path_weights_vars[(i, ct)],
@@ -133,7 +93,7 @@ class kFlowCellTypeDecomp(fp.kFlowDecomp):
                     )
 
             # Total flow of cell in a edge
-            for cell_type in cell_types:
+            for cell_type in self.cell_types:
                 self.solver.add_constraint(
                     self.solver.quicksum(self.pi_vars[(u, v, i, cell_type)] for i in range(self.k)) == int(ct_u_v[self.cell_tree.get_cell_type_index(cell_type)]),
                     name=f"tcf_u={u}_v={v}_ct={cell_type}"
