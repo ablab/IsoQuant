@@ -179,7 +179,7 @@ def filter_constraints(graph, additional_starts,additional_ends):
     remove_nodes(endnodes_missing, additional_ends)
 
 
-def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5, draw_graphs: bool = False):
+def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5, draw_graphs: bool = True):
     #print("constraints", transcripts_constraints)
     #print("Running ILP part")
     export = False
@@ -299,7 +299,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
                 additional_ends = additional_ends,
                 subpath_constraints = constraints,
                 )
-
+            
 
         optimization_options = {
             "optimize_with_safe_paths": True,

@@ -5,7 +5,6 @@ import networkx as nx
 import flowpaths.utils.solverwrapper as sw
 import flowpaths.stdigraph as stdigraph
 import flowpaths.utils as utils
-import flowpaths.nodeexpandeddigraph as nedg
 import networkx as nx
 from copy import deepcopy
 
@@ -13,6 +12,7 @@ import flowpaths.utils as utils
 
 from copy import deepcopy
 from src.cell_type_tree import CellTypeTree
+from .nodeexpandeddigraph import NodeExpandedDiGraph
 
 class MinErrorCellTypeFlowCorrection(fp.MinErrorFlow):
 
@@ -45,7 +45,7 @@ class MinErrorCellTypeFlowCorrection(fp.MinErrorFlow):
                 utils.logger.error(f"{__name__}: The input graph G has no nodes. Please provide a graph with at least one node.")
                 raise ValueError(f"The input graph G has no nodes. Please provide a graph with at least one node.")
             
-            self.G_internal = nedg.NodeExpandedDiGraph(G, node_flow_attr=flow_attr, node_cell_flow_attr=cell_flow_attr)
+            self.G_internal = NodeExpandedDiGraph(G, node_flow_attr=flow_attr, node_cell_flow_attr=cell_flow_attr)
             additional_starts_internal = self.G_internal.get_expanded_additional_starts(additional_starts)
             additional_ends_internal = self.G_internal.get_expanded_additional_ends(additional_ends)
 
