@@ -182,9 +182,11 @@ class AbstractCounter:
         return None
 
     def add_read_info(self, read_assignment):
+        return
         raise NotImplementedError()
 
     def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+        return
         raise NotImplementedError()
 
     def add_confirmed_features(self, features):
