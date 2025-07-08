@@ -81,6 +81,9 @@ class GraphBasedModelConstructor:
         self.ground_truth_gene_info = ground_truth_gene_info
         self.ground_truth_isoforms = {}
 
+        self.ilp_solution_assignement = None
+
+
     def get_transcript_id(self):
         return self.id_distributor.increment()
 
@@ -156,13 +159,22 @@ class GraphBasedModelConstructor:
 
         # reassign reads. why is it like this?
         self.assign_reads_to_models(read_assignment_storage)
-        self.forward_counts()
+        if self.params.no_ilp:
+            self.forward_counts()
+        else:
+            self.ilp_counts()
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
 
         if self.params.sqanti_output:
             self.compare_models_with_known()
+
+
+    def ilp_counts(self):
+        
+        self.transcript_counter.add_ilp_data(self.ilp_solution_assignement)
+        self.transcript_counter.add_confirmed_features([model.transcript_id for model in self.transcript_model_storage])
 
 
     def forward_counts(self):
@@ -622,6 +634,8 @@ class GraphBasedModelConstructor:
         logger.info("Using ILP to discover transcripts")
         path_constraints = []
 
+        self.ilp_solution_assignement = []
+
         #Now we add path constraints in the ILP world based on transcript constraints
         for p in self.known_isoforms_in_graph.keys():
             if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
@@ -710,6 +724,7 @@ class GraphBasedModelConstructor:
                                                 transcript_gene, novel_exons, transcript_type)
             if new_model:
                 self.transcript_model_storage.append(new_model)
+                self.ilp_solution_assignement.append((new_model.transcript_id, weight, ct_weights))
 
 
     def collect_terminal_exons_from_graph(self):
