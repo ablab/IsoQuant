@@ -16,6 +16,9 @@ from .isoform_assignment import (
 from .gene_info import FeatureInfo
 from .read_groups import AbstractReadGrouper
 
+import pandas as pd
+import numpy as np
+
 logger = logging.getLogger('IsoQuant')
 
 
@@ -197,12 +200,159 @@ class AbstractCounter:
         raise NotImplementedError()
 
 
+class ILPCounter(AbstractCounter):
+
+    def __init__(self, output_prefix, read_groups, read_counter,
+                 all_features=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
+        #print( "\n\n", output_prefix, read_groups, read_counter,
+        #         all_features, output_zeroes, grouped_format, "\n\n")
+        super().__init__( output_prefix, read_groups is None, output_zeroes)
+        self.transcript_total_counts = {}
+        self.transcript_grouped_counts = {}
+        self.total_count = 0
+        self.grouped_counts = defaultdict(int)
+        self.read_groups = sorted(read_groups) if read_groups is not None else None
+
+        self.output_stats_file_name = None #self.output_counts_file_name + ".stats"
+        self.linear_output_file = output_prefix + "_counts_linear.tsv"
+
+    def add_ilp_weights(self, solution_weights: list):
+
+        for transcript, weight, group_weights in solution_weights:
+            self.transcript_total_counts[transcript.transcript_id] = weight
+            self.total_count += weight
+            if not self.ignore_read_groups:
+                weight_array = np.zeros(len(self.read_groups), dtype = int)
+                for i, read_group in enumerate(self.read_groups):
+                    if read_group in group_weights:
+                        #print(read_group)
+                        weight_array[i] = group_weights[read_group]
+                self.grouped_counts[read_group] = weight_array
+                self.transcript_grouped_counts[transcript.transcript_id] = weight_array
+
+
+    def dump(self):
+
+        if self.ignore_read_groups:
+            self.dump_ungrouped()
+        else:
+            self.dump_grouped()
+
+    def dump_grouped(self):
+
+        output_file = self.get_output_file_handler()
+        linear_output_file = self.get_linear_output_file_handler()
+
+        #if self.output_grouped_matrix:
+        output_file.write(self.format_header(self.read_groups))
+        #if self.output_grouped_linear:
+        linear_output_file.write("#feature_id\tgroup_id\tcount\n")
+        
+        for feature_id in sorted(self.transcript_grouped_counts.keys()):
+
+            row_count = 0
+
+            for i, group_id in enumerate(self.read_groups):
+                count = self.transcript_grouped_counts[feature_id][i]
+                if count < 1 and not self.output_zeroes:
+                    continue
+                linear_output_file.write("%s\t%s\t%.2f\n" % (feature_id, group_id, count))
+                row_count += count
+
+            count_values = self.transcript_grouped_counts[feature_id]
+            output_file.write("%s\t%s\n" % (feature_id, "\t".join(["%.2f" % c for c in count_values])))
+
+        output_file.close()
+        linear_output_file.close()
+
+
+    def dump_ungrouped(self):
+
+        output_file = self.get_output_file_handler()
+        output_file.write("#feature_id\tcount\n")
+        
+        for feature_id in sorted(self.transcript_total_counts.keys()):
+
+            count = self.transcript_total_counts[feature_id]
+            output_file.write("%s\t%i\n" % (feature_id, count))
+
+        output_file.close()
+
+
+
+    def format_header(self, all_groups, value_name="count"):
+        if self.ignore_read_groups:
+            return "#feature_id\t%s\n" % value_name
+        else:
+            return "#feature_id\t" + "\t".join(all_groups) + "\n"
+
+    def get_linear_output_file_handler(self):
+        open(self.linear_output_file, "w").close()
+        if not self.ignore_read_groups:
+            return open(self.linear_output_file, "a")
+        else:
+            return None
+
+    def convert_counts_to_tpm(self, normalization_str=NormalizationMethod.simple.name):
+
+        normalization = NormalizationMethod[normalization_str]
+        
+        total_counts = defaultdict(float)
+        
+        with open(self.output_counts_file_name) as f:
+            for line in f:
+                if line.startswith('_'): break
+                if line.startswith('#'): continue
+                fs = line.rstrip().split('\t')
+                if self.ignore_read_groups:
+                    total_counts[AbstractReadGrouper.default_group_id] += float(fs[1])
+                else:
+                    for j in range(len(fs) - 1):
+                        total_counts[j] += float(fs[j + 1])
+
+        scale_factors = {}
+        unassigned_tpm = 0.0
+        for group_id in total_counts.keys():
+            if normalization == NormalizationMethod.usable_reads and self.ignore_read_groups and self.reads_for_tpm:
+                total_reads = self.reads_for_tpm
+                unassigned_tpm = 1000000.0 * (1 - total_counts[group_id] / total_reads)
+            else:
+                total_reads = total_counts[group_id] if total_counts[group_id] > 0 else 1.0
+            scale_factors[group_id] = 1000000.0 / total_reads
+            logger.debug("Scale factor for group %s = %.2f" % (group_id, scale_factors[group_id]))
+
+        with open(self.output_tpm_file_name, "w") as outf:
+            with open(self.output_counts_file_name) as f:
+                for line in f:
+                    if line.startswith('_'): break
+                    if line.startswith('#'):
+                        outf.write(line.replace("count", "TPM"))
+                        continue
+                    fs = line.rstrip().split('\t')
+                    if self.ignore_read_groups:
+                        feature_id, count = fs[0], float(fs[1])
+                        tpm = scale_factors[AbstractReadGrouper.default_group_id] * count
+                        if not self.output_zeroes and tpm == 0:
+                            continue
+                        outf.write("%s\t%.6f\n" % (feature_id, tpm))
+                    else:
+                        feature_id, counts = fs[0], list(map(float, fs[1:]))
+                        tpm_values = [scale_factors[i] * counts[i] for i in range(len(scale_factors))]
+                        outf.write("%s\t%s\n" % (feature_id, "\t".join(["%.6f" % c for c in tpm_values])))
+                if self.ignore_read_groups:
+                    outf.write("%s\t%.6f\n" % ("__unassigned", unassigned_tpm))
+
 class CompositeCounter:
     def __init__(self, counters):
         self.counters = counters
 
     def add_counters(self, counters):
         self.counters += counters
+
+    def add_ilp_weights(self, solution_paths):
+        for p in self.counters:
+            if isinstance(p, ILPCounter):
+                p.add_ilp_weights(solution_paths)
 
     def add_read_info(self, read_assignment):
         for p in self.counters:
@@ -461,6 +611,11 @@ def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
 def create_transcript_counter(output_file_name, strategy, complete_feature_list=None,
                               read_groups=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
     read_weight_counter = ReadWeightCounter(strategy)
+
+    return ILPCounter(output_file_name,
+                                  read_groups, read_weight_counter,
+                                  complete_feature_list, output_zeroes, grouped_format)
+
     return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, output_zeroes, grouped_format)

@@ -121,6 +121,13 @@ class CellTypeTree:
         return results
         
 
+    def tranform_count_array_to_dict(self, counts: np.array) -> dict:
+        count_dict = {}
+        for cell_type in self.get_leaf_types():
+            count_dict[cell_type] = int(counts[self.get_cell_type_index(cell_type)])
+        return count_dict
+
+
 
 if __name__ == "__main__":
     

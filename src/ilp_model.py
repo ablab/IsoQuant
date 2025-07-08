@@ -342,7 +342,9 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
 
         paths = solution["paths"]
         weights = solution["weights"]
-        ct_weights = solution["ct_weights"]
+        #print(solution["ct_weights"])
+        ct_weights = [cell_type_tree.tranform_count_array_to_dict(sol) for sol in solution["ct_weights"]]
+        #print(ct_weights)
 
         if draw_graphs:
             fp.utils.draw(
@@ -364,7 +366,7 @@ def ILP_Solver_Nodes(intron_graph, transcripts_constraints: list = [], ground_tr
         if len(original_paths) != len(weights):
             raise ValueError("The number of paths and weights must be the same.")
 
-        return list(zip(original_paths, weights))
+        return list(zip(original_paths, weights, ct_weights))
     
     return []
 

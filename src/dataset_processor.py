@@ -374,7 +374,8 @@ class ReadAssignmentAggregator:
             self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
                                                                 self.args.transcript_quantification,
                                                                 complete_feature_list=self.transcript_set,
-                                                                output_zeroes=True)
+                                                                output_zeroes=True,
+                                                                read_groups=self.read_groups)
             self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
 
         self.transcript_model_global_counter = CompositeCounter([])

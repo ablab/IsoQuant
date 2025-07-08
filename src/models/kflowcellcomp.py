@@ -273,9 +273,7 @@ class kFlowCellTypeDecomp(pathmodel.AbstractPathModelDAG):
             #print(self.path_weights_ct_sol)
             #for i, ct in weights_sol_ct_dict:
             #    pass #"self.path_weights_ct_sol[i][self.cell_tree.get_cell_type_index(ct)] = weights_sol_ct_dict[(i, ct)]
-    
-            
-            self.path_weights_sol = self.path_weights_ct_sol.sum(axis = 1)
+            self.path_weights_sol = self.path_weights_ct_sol[:,0]
 
             if self.flow_attr_origin == "edge":
                 self._solution = {
