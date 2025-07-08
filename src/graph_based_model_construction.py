@@ -612,57 +612,68 @@ class GraphBasedModelConstructor:
             self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
         if self.params.report_novel_unspliced:
             self.construct_monoexon_novel(novel_mono_exon_reads)
-    
-    
-    def transfer_paths(self, solution_path: list) -> list:
-        results_transferred = []
-        
-        for node in solution_path:
-        
+
+    def transfer_paths(self, res):
+        res_transferred = []
+        for node in res[0]:
+            # print("node",node)
             node_entries = node.split(",")
             first = int(node_entries[0].replace("(", ""))
             second = int(node_entries[1].replace(")", ""))
-            intron = (first, second)
-            results_transferred.append(intron)
-        
-        tranfer_path = tuple(results_transferred)
-        return tranfer_path
-
+            n_tup = (first, second)
+            # print("Node after",first,",",second)
+            res_transferred.append(n_tup)
+            # print("res_tf",res_transferred)
+            # path = tuple(res[0])
+        path = tuple(res_transferred)
+        return path
+   
+    def transfer_fl_path(self,path_constraints):
+        for tup in self.path_storage.fl_paths:
+            print("tup",tup)
+            this_constraint = []
+            # all_edges_in_graph = True
+            print([VERTEX_polya,VERTEX_read_end])
+            for first, second in zip(tup, tup[1:]):
+                if not (first[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] or second[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] ):
+                    this_constraint.append((str(first), str(second)))
+            if len(this_constraint) > 0:
+                path_constraints.append(this_constraint)
     
     def construct_ilp_isoforms(self):
         
         logger.info("Using ILP to discover transcripts")
         path_constraints = []
-
+        
+        self.transfer_fl_path( path_constraints)
         self.ilp_solution_assignement = []
-
-        #Now we add path constraints in the ILP world based on transcript constraints
-        for p in self.known_isoforms_in_graph.keys():
-            if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
-            path_constraints.append(list(p))
-       
-        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, path_constraints, self.ground_truth_isoforms)
+        
+        if len(self.gene_info.gene_db_list) > 0:
+            gene_id=self.gene_info.gene_db_list[0].id
+        else:
+            gene_id=""
+        # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
+        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph,self.gene_info.chr_id,gene_id, path_constraints,self.ground_truth_isoforms)
 
         for res in fl_transcript_paths:
+            path = self.transfer_paths(res)
+            #print("path_other",path_other)
             
-            path = self.transfer_paths(res[0])
             weight = res[1]
             ct_weights = res[2]
-            
+
             if path in self.known_isoforms_in_graph:
-                logger.info("Detected known isoform %s with weight %.2f - %s" % (self.known_isoforms_in_graph[path], weight, str(ct_weights)))
+                logger.info("Detected known isoform %s with weight %.2f" % (self.known_isoforms_in_graph[path], weight))
             else:
-                logger.info("Detected novel isoform %s with weight %.2f - %s" % (str(path), weight, str(ct_weights)))
-            
+                logger.info("Detected novel isoform %s with weight %.2f" % (str(path), weight))
             intron_path = path[1:-1]
             if not intron_path: continue
-            
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
 
             reference_isoform = None
-            
+            # check if new transcript matches a reference one
             if intron_path[0][0] == VERTEX_polyt:
                 polya_info = PolyAInfo(-1, intron_path[0][1], -1, -1)
             elif intron_path[-1][0] == VERTEX_polya:
@@ -672,7 +683,10 @@ class GraphBasedModelConstructor:
 
             combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
             assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
-            
+            # check that no serious contradiction occurs
+            # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
+            #             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
+
             if is_matching_assignment(assignment):
                 reference_isoform = assignment.isoform_matches[0].assigned_transcript
                 # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
