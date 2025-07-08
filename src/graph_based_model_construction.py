@@ -630,10 +630,10 @@ class GraphBasedModelConstructor:
    
     def transfer_fl_path(self,path_constraints):
         for tup in self.path_storage.fl_paths:
-            print("tup",tup)
+            #print("tup",tup)
             this_constraint = []
             # all_edges_in_graph = True
-            print([VERTEX_polya,VERTEX_read_end])
+            #print([VERTEX_polya,VERTEX_read_end])
             for first, second in zip(tup, tup[1:]):
                 if not (first[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] or second[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] ):
                     this_constraint.append((str(first), str(second)))
