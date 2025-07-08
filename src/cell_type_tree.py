@@ -119,6 +119,13 @@ class CellTypeTree:
                 group = self.parents[group]
             results[i][self.get_cell_type_index(group)] += k
         return results
+    
+    def transfrom_count_array_to_dict(self, counts: np.array) -> dict:
+        results = {}
+        for read_group in sorted(self.get_leaf_types()):
+            i = self.get_cell_type_index(read_group)
+            results[read_group] = int(counts[i])
+        return results
         
 
 
