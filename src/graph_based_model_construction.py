@@ -649,11 +649,12 @@ class GraphBasedModelConstructor:
         self.ilp_solution_assignement = []
         
         if len(self.gene_info.gene_db_list) > 0:
-            gene_id=self.gene_info.gene_db_list[0].id
+            gene_id = self.gene_info.gene_db_list[0].id
         else:
-            gene_id=""
+            gene_id = "None"
+
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
-        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph,self.gene_info.chr_id,gene_id, path_constraints,self.ground_truth_isoforms)
+        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, self.gene_info.chr_id, gene_id, path_constraints, self.ground_truth_isoforms)
 
         for res in fl_transcript_paths:
             path = self.transfer_paths(res)
@@ -738,7 +739,7 @@ class GraphBasedModelConstructor:
                                                 transcript_gene, novel_exons, transcript_type)
             if new_model:
                 self.transcript_model_storage.append(new_model)
-                self.ilp_solution_assignement.append((new_model.transcript_id, weight, ct_weights))
+                self.ilp_solution_assignement.append((new_model.transcript_id, gene_id, weight, ct_weights))
 
 
     def collect_terminal_exons_from_graph(self):

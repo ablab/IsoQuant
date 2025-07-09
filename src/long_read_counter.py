@@ -283,7 +283,7 @@ class ILPFlowCounter(AbstractCounter):
         
     def add_ilp_data(self, ilp_data: dict):
             
-        for feature_id, weight, rg_weights in ilp_data:
+        for feature_id, gene_id, weight, rg_weights in ilp_data:
                 
             self.reads_for_tpm += weight
 
@@ -296,6 +296,7 @@ class ILPFlowCounter(AbstractCounter):
                 self.reads_for_tpm += weight
                 self.all_features.add(feature_id)
                 self.feature_counter[feature_id].inc(group_id, count)
+                self.feature_counter[gene_id].inc(group_id, count)
                 #print(self.feature_counter[feature_id].data)
 
                 continue
@@ -308,6 +309,7 @@ class ILPFlowCounter(AbstractCounter):
                 self.reads_for_tpm += weight
                 self.all_features.add(feature_id)
                 self.feature_counter[feature_id].inc(group_id, count)
+                self.feature_counter[gene_id].inc(group_id, count)
 
         #print(self.reads_for_tpm)
 
@@ -662,11 +664,11 @@ class AssignedFeatureCounter(AbstractCounter):
                     outf.write("%s\t%.6f\n" % ("__unassigned", unassigned_tpm))
 
 
-def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
-                        read_groups=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
-    #print("SCREAM")
+def create_gene_counter(output_file_name, strategy, complete_feature_list = None,
+                        read_groups = None, output_zeroes = True, grouped_format = GroupedOutputFormat.both):
+    #print("SCREAM\n\n")
     read_weight_counter = ReadWeightCounter(strategy)
-    return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
+    return ILPFlowCounter(output_file_name, GeneAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, output_zeroes, grouped_format)
 
@@ -674,7 +676,7 @@ def create_gene_counter(output_file_name, strategy, complete_feature_list=None,
 def create_transcript_counter(output_file_name, strategy, complete_feature_list=None,
                               read_groups=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
     read_weight_counter = ReadWeightCounter(strategy)
-    #print("Hello")
+    #print("SCREAM\n\n")
     return ILPFlowCounter(output_file_name, TranscriptAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, output_zeroes, grouped_format)
