@@ -178,7 +178,7 @@ class AbstractCounter:
     def get_linear_output_file_handler(self):
         return None
 
-    def add_ilp_data(self):
+    def add_ilp_data(self, ilp_solution):
         return
         raise NotImplementedError()
 
@@ -246,7 +246,7 @@ class ILPFlowCounter(AbstractCounter):
 
         self.output_grouped_matrix = grouped_format.output_matrix()
         self.output_grouped_linear = grouped_format.output_linear()
-
+        
         self.assignment_extractor = assignment_extractor
         self.all_features = set(all_features) if all_features is not None else set()
         
@@ -282,21 +282,24 @@ class ILPFlowCounter(AbstractCounter):
             return None
         
     def add_ilp_data(self, ilp_data: dict):
+
+        #print(ilp_data)
+        #print(self.assignment_extractor)
             
-        for feature_id, gene_id, weight, rg_weights in ilp_data:
-                
+        for transcript_id, gene_id, weight, rg_weights in ilp_data:
+            
             self.reads_for_tpm += weight
+            feature_id = gene_id if type(self.assignment_extractor) == GeneAssignmentExtractor else transcript_id
 
             if self.ignore_read_groups:
                 
-                group_id = 0
+                group_id = 0 #AbstractReadGrouper.default_group_id
                 count = weight
                 #print("HERE", group_id, count)
 
                 self.reads_for_tpm += weight
                 self.all_features.add(feature_id)
                 self.feature_counter[feature_id].inc(group_id, count)
-                self.feature_counter[gene_id].inc(group_id, count)
                 #print(self.feature_counter[feature_id].data)
 
                 continue
@@ -309,9 +312,7 @@ class ILPFlowCounter(AbstractCounter):
                 self.reads_for_tpm += weight
                 self.all_features.add(feature_id)
                 self.feature_counter[feature_id].inc(group_id, count)
-                self.feature_counter[gene_id].inc(group_id, count)
 
-        #print(self.reads_for_tpm)
 
     def add_read_info(self, read_assignment = None):
         pass
@@ -336,17 +337,19 @@ class ILPFlowCounter(AbstractCounter):
 
     def dump(self):
         all_features = sorted(filter(lambda x: x is not None, self.all_features))
+        #print(all_features)
 
         for feature_id in all_features:
             if feature_id in self.confirmed_features:
                 continue
             # ignoring unconfirmed features
-            for g in self.feature_counter[feature_id].data.keys():
-                self.feature_counter[feature_id].data[g] = 0.0
+            #for g in self.feature_counter[feature_id].data.keys():
+            #    self.feature_counter[feature_id].data[g] = 0.0
         #print("ALLSONG\n\n")
         if self.ignore_read_groups:
             self.dump_ungrouped(all_features)
         else:
+           # print("HERE")
             self.dump_grouped(all_features,  self.ordered_groups)
 
     def dump_ungrouped(self, all_features):
@@ -561,7 +564,7 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def dump(self):
         all_features = sorted(filter(lambda x: x is not None, self.all_features))
-        print("\n", self.confirmed_features, "\n")
+        
 
         for feature_id in all_features:
             if feature_id in self.confirmed_features:
@@ -668,7 +671,7 @@ def create_gene_counter(output_file_name, strategy, complete_feature_list = None
                         read_groups = None, output_zeroes = True, grouped_format = GroupedOutputFormat.both):
     #print("SCREAM\n\n")
     read_weight_counter = ReadWeightCounter(strategy)
-    return ILPFlowCounter(output_file_name, GeneAssignmentExtractor,
+    return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, output_zeroes, grouped_format)
 
@@ -677,13 +680,20 @@ def create_transcript_counter(output_file_name, strategy, complete_feature_list=
                               read_groups=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
     read_weight_counter = ReadWeightCounter(strategy)
     #print("SCREAM\n\n")
-    return ILPFlowCounter(output_file_name, TranscriptAssignmentExtractor,
+    return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
                                   read_groups, read_weight_counter,
                                   complete_feature_list, output_zeroes, grouped_format)
     #return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
     #                              read_groups, read_weight_counter,
     #                              complete_feature_list, output_zeroes, grouped_format)
 
+def create_ilp_transcript_counter(output_file_name, strategy, complete_feature_list=None,
+                              read_groups=None, output_zeroes=True, grouped_format=GroupedOutputFormat.both):
+    read_weight_counter = ReadWeightCounter(strategy)
+    #print("SCREAM\n\n")
+    return ILPFlowCounter(output_file_name, TranscriptAssignmentExtractor,
+                                  read_groups, read_weight_counter,
+                                  complete_feature_list, output_zeroes, grouped_format)
 
 # count simple features inclusion/exclusion (exons / introns)
 class ProfileFeatureCounter(AbstractCounter):

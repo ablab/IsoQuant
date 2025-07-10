@@ -25,7 +25,7 @@ class EnumStats:
             self.load(inf)
 
     # element must be Enum
-    def add(self, element, count=1):
+    def add(self, element, count = 1):
         self.stats_dict[element] += count
 
     def print_start(self, header_string=""):

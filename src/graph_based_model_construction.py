@@ -158,11 +158,9 @@ class GraphBasedModelConstructor:
             # self.filter_transcripts() #this filters out some predictions based on Andrey's heuristic
 
         # reassign reads. why is it like this?
-        self.assign_reads_to_models(read_assignment_storage)
-        if self.params.no_ilp:
-            self.forward_counts()
-        else:
-            self.ilp_counts()
+        #self.assign_reads_to_models(read_assignment_storage)
+        self.forward_counts()
+        self.ilp_counts()
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
@@ -204,6 +202,8 @@ class GraphBasedModelConstructor:
                 assignment = ReadAssignment(model.transcript_id,
                                             ReadAssignmentType.intergenic,
                                             IsoformMatch(MatchClassification.intergenic))
+                
+                print("Compare", model.transcript_id)
                 if model.strand == "-":
                     polya_info = PolyAInfo(-1, model.exon_blocks[0][0], -1, -1)
                 else:
@@ -628,7 +628,7 @@ class GraphBasedModelConstructor:
         path = tuple(res_transferred)
         return path
    
-    def transfer_fl_path(self,path_constraints):
+    def transfer_fl_path(self, path_constraints):
         for tup in self.path_storage.fl_paths:
             #print("tup",tup)
             this_constraint = []
@@ -645,7 +645,7 @@ class GraphBasedModelConstructor:
         logger.info("Using ILP to discover transcripts")
         path_constraints = []
         
-        self.transfer_fl_path( path_constraints)
+        self.transfer_fl_path(path_constraints)
         self.ilp_solution_assignement = []
         
         if len(self.gene_info.gene_db_list) > 0:
@@ -657,20 +657,22 @@ class GraphBasedModelConstructor:
         fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, self.gene_info.chr_id, gene_id, path_constraints, self.ground_truth_isoforms)
 
         for res in fl_transcript_paths:
-            path = self.transfer_paths(res)
-            #print("path_other",path_other)
             
-            weight = res[1]
+            path = self.transfer_paths(res)
+            
+            count = res[1]
             ct_weights = res[2]
 
             if path in self.known_isoforms_in_graph:
-                logger.info("Detected known isoform %s with weight %.2f" % (self.known_isoforms_in_graph[path], weight))
+                logger.info("Detected known isoform %s with weight %.2f - %s" % (self.known_isoforms_in_graph[path], count, str(ct_weights)))
             else:
-                logger.info("Detected novel isoform %s with weight %.2f" % (str(path), weight))
+                logger.info("Detected novel isoform %s with weight %.2f - %s" % (str(path), count, str(ct_weights)))
+            
             intron_path = path[1:-1]
             if not intron_path: continue
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
+            
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
 
             reference_isoform = None
@@ -694,11 +696,16 @@ class GraphBasedModelConstructor:
             elif intron_path in self.known_isoforms_in_graph:
                 # path was not assigned to any known isoform but intron chain still matches
                 continue
-
+            
+            print(new_transcript_id, gene_id)
             new_model = None
             if reference_isoform:
+
+                print(reference_isoform)
                 # adding FL reference isoform
                 if reference_isoform in GraphBasedModelConstructor.detected_known_isoforms:
+                    pass
+                elif count < self.params.min_known_count:
                     pass
                 else:
                     new_model = self.transcript_from_reference(reference_isoform)
@@ -739,7 +746,7 @@ class GraphBasedModelConstructor:
                                                 transcript_gene, novel_exons, transcript_type)
             if new_model:
                 self.transcript_model_storage.append(new_model)
-                self.ilp_solution_assignement.append((new_model.transcript_id, gene_id, weight, ct_weights))
+                self.ilp_solution_assignement.append((new_model.transcript_id, gene_id, count, ct_weights))
 
 
     def collect_terminal_exons_from_graph(self):

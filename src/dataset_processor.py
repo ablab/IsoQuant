@@ -33,6 +33,7 @@ from .long_read_counter import (
     CompositeCounter,
     create_gene_counter,
     create_transcript_counter,
+    create_ilp_transcript_counter,
     GroupedOutputFormat,
 )
 from .multimap_resolver import MultimapResolver
@@ -314,6 +315,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             tmp_gff_printer.dump(model_constructor.gene_info, model_constructor.transcript_model_storage)
             tmp_gff_printer.dump_read_assignments(model_constructor)
             for m in model_constructor.transcript_model_storage:
+                #print(m.transcript_id)
                 if m.transcript_type != TranscriptModelType.known:
                     novel_model_storage.append(m)
             for a in model_constructor.transcript2transcript:
@@ -379,9 +381,14 @@ class ReadAssignmentAggregator:
 
         self.transcript_model_global_counter = CompositeCounter([])
         if not self.args.no_model_construction:
-            self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
-                                                                      self.args.transcript_quantification,
-                                                                      output_zeroes=False)
+            if self.args.no_ilp:
+                self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
+                                                                        self.args.transcript_quantification,
+                                                                        output_zeroes=False)
+            else:
+                self.transcript_model_counter = create_ilp_transcript_counter(sample.out_transcript_model_counts_tsv,
+                                                                        self.args.transcript_quantification,
+                                                                        output_zeroes=False)
             self.transcript_model_global_counter.add_counters([self.transcript_model_counter])
 
         if self.args.count_exons and self.args.genedb:
@@ -764,6 +771,7 @@ class DatasetProcessor:
         merge_files(gff_printer.model_fname, label, chr_ids, gff_printer.out_gff, copy_header=False)
         merge_files(gff_printer.r2t_fname, label, chr_ids, gff_printer.out_r2t, copy_header=False)
         for counter in aggregator.transcript_model_global_counter.counters:
+            print("Hello")
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)
             counter.convert_counts_to_tpm(self.args.normalization_method)
