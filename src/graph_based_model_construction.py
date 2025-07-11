@@ -454,6 +454,7 @@ class GraphBasedModelConstructor:
                 polya_info = PolyAInfo(intron_path[-1][1], -1, -1, -1)
             else:
                 polya_info = PolyAInfo(-1, -1, -1, -1)
+
             combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
             assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
             # check that no serious contradiction occurs
@@ -668,9 +669,11 @@ class GraphBasedModelConstructor:
             else:
                 logger.info("Detected novel isoform %s with weight %.2f - %s" % (str(path), count, str(ct_weights)))
             
-            intron_path = path[1:-1]
+            print(path)
+            intron_path = path#[1:-1]
+            print(intron_path, "\n")
             if not intron_path: continue
-            transcript_range = (path[0][1], path[-1][1])
+            transcript_range = (path[0][0], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
             
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
@@ -745,6 +748,7 @@ class GraphBasedModelConstructor:
                                                 new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
                                                 transcript_gene, novel_exons, transcript_type)
             if new_model:
+                print(new_model.transcript_id)
                 self.transcript_model_storage.append(new_model)
                 self.ilp_solution_assignement.append((new_model.transcript_id, gene_id, count, ct_weights))
 
