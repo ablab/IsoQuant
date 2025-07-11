@@ -1,6 +1,7 @@
 import flowpaths as fp
 import networkx as nx
 from collections import defaultdict
+from src.AdditionalModels.minflowdecompSB import MinFlowDecompSB
 from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
 import logging
 from itertools import chain
@@ -136,7 +137,7 @@ def transfer_constraints(transcripts_constrints,graph):
             #        all_edges_in_graph = False
         if len(this_constraint) > 0:  # and all_edges_in_graph:
             pc_transformed.append(this_constraint)
-    print(pc_transformed)
+    #print(pc_transformed)
     return pc_transformed
 
 import time
@@ -176,9 +177,9 @@ def filter_constraints(constraints,graph):
     if constraints:
         constraints_to_delete = []
         for constraint in constraints:
-            print("constraint",constraint)
+            #print("constraint",constraint)
             for c_edge in constraint:
-                print("c_edge",c_edge)
+                #print("c_edge",c_edge)
                 if c_edge not in graph.edges():
                     constraints_to_delete.append(constraint)
                     break
@@ -192,7 +193,7 @@ def filter_constraints(constraints,graph):
         return []
 
 def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_isoforms=[], epsilon=0.25, timeout=300, threads=5):
-    print("constraints", constraints)
+    #print("constraints", constraints)
 
 
     print("Running ILP part")
@@ -210,14 +211,14 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
         constraints = []
     filter_nodes(graph, additional_starts,additional_ends)
     print(chr_id, " ", gene_id)
-    print("constraints filtered", constraints)
-    print("Nodes",graph.nodes())
-    print("Number of Edges",len(graph.edges()))
-    print("Number of Nodes",len(graph.nodes()))
-    print("Edges with data")
-    print(graph.edges(data=True))
-    print("add_starts",additional_starts)
-    print("add_ends",additional_ends)
+    #print("constraints filtered", constraints)
+    #print("Nodes",graph.nodes())
+    #print("Number of Edges",len(graph.edges()))
+    #print("Number of Nodes",len(graph.nodes()))
+    #print("Edges with data")
+    #print(graph.edges(data=True))
+    #print("add_starts",additional_starts)
+    #print("add_ends",additional_ends)
     if not(len(graph.nodes()) == 0 or len(graph.edges())== 0) and len(graph.edges()) < 500:
         if export:
             export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
@@ -257,12 +258,8 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
         #    "threads": 1,
         #    "time_limit": 600,
         #}
-
-
-
-
         print("Running MinFlowDecomp")
-        mfd_model = fp.MinFlowDecomp(
+        mfd_model = MinFlowDecompSB(
             G=corrected_graph,
             flow_attr="flow",
             flow_attr_origin="node",
@@ -295,15 +292,51 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
         end = time.time()
         print("Solution found! in ", end - start, " seconds")
         solution = process_solution(graph, mfd_model,additional_starts,additional_ends)
-        print("solution",solution)
+        #print("solution",solution)
         # Condensing the paths in the expanded graph to paths in the the original graph
         original_paths = solution["paths"]
         weights = solution["weights"]
-        print("original paths",original_paths)
+        #print("original paths",original_paths)
         if len(original_paths) != len(weights):
             raise ValueError("The number of paths and weights must be the same.")
 
         res = list(zip(original_paths, weights))
+    elif not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
+        if export:
+            export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
+        fp.utils.draw(
+            G=graph,
+            flow_attr="flow",
+            filename=chr_id+"_"+gene_id+"_"+str(id(graph)) + "graph.png",  # this will be used as filename
+            draw_options={
+                "show_graph_edges": True,
+                "show_edge_weights": True,
+                "show_path_weights": False,
+                "show_node_weights": True,
+                "show_path_weight_on_first_edge": True,
+                "pathwidth": 2,
+
+            },
+            additional_starts = additional_starts,
+            additional_ends = additional_ends,
+            subpath_constraints = constraints,)
+        print("Running MinErrorFlow")
+        correction_model = fp.MinErrorFlow(
+            G=graph,
+            flow_attr="flow",
+            flow_attr_origin="node",
+            weight_type=int,
+            additional_starts=additional_starts,
+            additional_ends=additional_ends,
+        )
+        correction_model.solve()
+        corrected_graph = correction_model.get_corrected_graph()
+        optimization_options = {
+            "optimize_with_safe_paths": False,
+            "optimize_with_safe_sequences": True,
+            "optimize_with_safety_from_largest_antichain": True,
+        }
+
     else:
         res=[]
     # this_k = 5
@@ -325,8 +358,8 @@ def process_solution(
         additional_ends: list = []):
     if model.is_solved():
         solution = model.get_solution()
-        print(solution)
-        print(model.solve_statistics)
+        #print(solution)
+        #print(model.solve_statistics)
         print("model.is_valid_solution()", model.is_valid_solution())
         fp.utils.draw(
             G=graph,

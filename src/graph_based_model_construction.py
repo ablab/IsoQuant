@@ -128,8 +128,8 @@ class GraphBasedModelConstructor:
         self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
-        print("Known Isoforms",self.known_isoforms_in_graph)
-        print("ground truth", self.ground_truth_gene_info)
+        #print("Known Isoforms",self.known_isoforms_in_graph)
+        #print("ground truth", self.ground_truth_gene_info)
         if not self.ground_truth_gene_info:
             self.ground_truth_isoforms = {}
         else:
@@ -138,8 +138,8 @@ class GraphBasedModelConstructor:
 
         # list of list, ground truth paths
         ground_truth_isoform_list = list(map(lambda x: list(x), self.ground_truth_isoforms.keys()))
-        print("GTILIST", ground_truth_isoform_list)
-        print("GTIsoforms",self.ground_truth_isoforms)
+        #print("GTILIST", ground_truth_isoform_list)
+        #print("GTIsoforms",self.ground_truth_isoforms)
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
@@ -619,10 +619,10 @@ class GraphBasedModelConstructor:
 
     def transfer_fl_path(self,path_constraints):
         for tup in self.path_storage.fl_paths:
-            print("tup",tup)
+            #print("tup",tup)
             this_constraint = []
             # all_edges_in_graph = True
-            print([VERTEX_polya,VERTEX_read_end])
+            #print([VERTEX_polya,VERTEX_read_end])
             for first, second in zip(tup, tup[1:]):
                 if not (first[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] or second[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] ):
                     this_constraint.append((str(first), str(second)))
@@ -633,8 +633,8 @@ class GraphBasedModelConstructor:
     def construct_ilp_isoforms(self):
         logger.info("Using ILP to discover transcripts")
         path_constraints = []
-        print("FL_Paths",self.path_storage.fl_paths)
-        self.transfer_fl_path( path_constraints)
+        #print("FL_Paths",self.path_storage.fl_paths)
+        self.transfer_fl_path(path_constraints)
 
         #Now we add path constraints in the ILP world based on transcript constraints
         #for p in self.known_isoforms_in_graph.keys():
@@ -649,19 +649,19 @@ class GraphBasedModelConstructor:
         #    if any(self.intron_graph.intron_collector.clustered_introns[intron] == 0 for intron in p):
         #        continue
         #    path_constraints.append(list(p))
-        print("NewPathConstraints",self.path_storage.fl_paths)
-        print("PC",path_constraints)
-        print("KnownIsoforms_Ids",self.known_isoforms_in_graph_ids)
-        print("GroundTruthIsoforms",self.ground_truth_isoforms)
-        print("chromosome",self.gene_info.chr_id)
-        print("gene_db_list",self.gene_info.gene_db_list)
+        #print("NewPathConstraints",self.path_storage.fl_paths)
+        #print("PC",path_constraints)
+        #print("KnownIsoforms_Ids",self.known_isoforms_in_graph_ids)
+        #print("GroundTruthIsoforms",self.ground_truth_isoforms)
+        #print("chromosome",self.gene_info.chr_id)
+        #print("gene_db_list",self.gene_info.gene_db_list)
         if len(self.gene_info.gene_db_list) > 0:
             gene_id=self.gene_info.gene_db_list[0].id
         else:
             gene_id=""
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
         fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph,self.gene_info.chr_id,gene_id, path_constraints,self.ground_truth_isoforms)
-
+        print("Number of transcript paths:", len(fl_transcript_paths))
         for res in fl_transcript_paths:
             path= self.transfer_paths(res)
             #print("path_other",path_other)
