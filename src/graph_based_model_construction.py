@@ -123,16 +123,19 @@ class GraphBasedModelConstructor:
         return None
 
     def process(self, read_assignment_storage):
+
         self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         self.path_storage = IntronPathStorage(self.params, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
+        
         if not self.ground_truth_gene_info:
             self.ground_truth_isoforms = {}
         else:
             self.ground_truth_isoforms = self.get_known_spliced_isoforms(self.ground_truth_gene_info, "expressed")
+        
         logger.info("Ground truth isoforms %d" % len(self.ground_truth_isoforms))
 
         # list of list, ground truth paths
@@ -151,10 +154,11 @@ class GraphBasedModelConstructor:
             # self.pre_filter_transcripts()
             self.construct_ilp_isoforms()
             self.assign_reads_to_models(read_assignment_storage)
-            # self.filter_transcripts() #this filters out some predictions based on Andrey's heuristic
+            self.filter_transcripts() #this filters out some predictions based on Andrey's heuristic
 
         # reassign reads. why is it like this?
-        #self.assign_reads_to_models(read_assignment_storage)
+        
+        self.assign_reads_to_models(read_assignment_storage)
         self.forward_counts()
         self.ilp_counts()
 
