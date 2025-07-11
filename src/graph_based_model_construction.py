@@ -129,8 +129,6 @@ class GraphBasedModelConstructor:
         self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
-        #print("Known Isoforms",self.known_isoforms_in_graph)
-        #print("ground truth", self.ground_truth_gene_info)
         if not self.ground_truth_gene_info:
             self.ground_truth_isoforms = {}
         else:
@@ -139,8 +137,6 @@ class GraphBasedModelConstructor:
 
         # list of list, ground truth paths
         ground_truth_isoform_list = list(map(lambda x: list(x), self.ground_truth_isoforms.keys()))
-        #print("GTILIST", ground_truth_isoform_list)
-        #print("GTIsoforms",self.ground_truth_isoforms)
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
@@ -203,7 +199,6 @@ class GraphBasedModelConstructor:
                                             ReadAssignmentType.intergenic,
                                             IsoformMatch(MatchClassification.intergenic))
                 
-                print("Compare", model.transcript_id)
                 if model.strand == "-":
                     polya_info = PolyAInfo(-1, model.exon_blocks[0][0], -1, -1)
                 else:
@@ -617,24 +612,17 @@ class GraphBasedModelConstructor:
     def transfer_paths(self, res):
         res_transferred = []
         for node in res[0]:
-            # print("node",node)
             node_entries = node.split(",")
             first = int(node_entries[0].replace("(", ""))
             second = int(node_entries[1].replace(")", ""))
             n_tup = (first, second)
-            # print("Node after",first,",",second)
             res_transferred.append(n_tup)
-            # print("res_tf",res_transferred)
-            # path = tuple(res[0])
         path = tuple(res_transferred)
         return path
    
     def transfer_fl_path(self, path_constraints):
         for tup in self.path_storage.fl_paths:
-            #print("tup",tup)
             this_constraint = []
-            # all_edges_in_graph = True
-            #print([VERTEX_polya,VERTEX_read_end])
             for first, second in zip(tup, tup[1:]):
                 if not (first[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] or second[0] in [VERTEX_polya, VERTEX_read_end,VERTEX_polyt,VERTEX_read_start] ):
                     this_constraint.append((str(first), str(second)))
@@ -669,11 +657,9 @@ class GraphBasedModelConstructor:
             else:
                 logger.info("Detected novel isoform %s with weight %.2f - %s" % (str(path), count, str(ct_weights)))
             
-            print(path)
             intron_path = path#[1:-1]
-            print(intron_path, "\n")
             if not intron_path: continue
-            transcript_range = (path[0][0], path[-1][1])
+            transcript_range = (int(path[0][1]), int(path[-1][1]))
             novel_exons = get_exons(transcript_range, list(intron_path))
             
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
@@ -700,11 +686,9 @@ class GraphBasedModelConstructor:
                 # path was not assigned to any known isoform but intron chain still matches
                 continue
             
-            print(new_transcript_id, gene_id)
             new_model = None
             if reference_isoform:
 
-                print(reference_isoform)
                 # adding FL reference isoform
                 if reference_isoform in GraphBasedModelConstructor.detected_known_isoforms:
                     pass
@@ -748,7 +732,6 @@ class GraphBasedModelConstructor:
                                                 new_transcript_id + ".%s" % self.gene_info.chr_id + id_suffix,
                                                 transcript_gene, novel_exons, transcript_type)
             if new_model:
-                print(new_model.transcript_id)
                 self.transcript_model_storage.append(new_model)
                 self.ilp_solution_assignement.append((new_model.transcript_id, gene_id, count, ct_weights))
 
