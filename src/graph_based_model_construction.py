@@ -670,7 +670,7 @@ class GraphBasedModelConstructor:
                 logger.info("Detected known isoform %s with weight %.2f" % (self.known_isoforms_in_graph[path], weight))
             else:
                 logger.info("Detected novel isoform %s with weight %.2f" % (str(path), weight))
-            #intron_path = path[1:-1]
+            intron_path = path
             if not intron_path: continue
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
