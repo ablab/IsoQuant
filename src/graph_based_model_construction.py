@@ -157,8 +157,8 @@ class GraphBasedModelConstructor:
             # self.filter_transcripts() #this filters out some predictions based on Andrey's heuristic
 
         # reassign reads. why is it like this?
-        self.assign_reads_to_models(read_assignment_storage)
-        self.forward_counts()
+        #self.assign_reads_to_models(read_assignment_storage)
+        #self.forward_counts()
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
@@ -656,21 +656,25 @@ class GraphBasedModelConstructor:
         #print("chromosome",self.gene_info.chr_id)
         #print("gene_db_list",self.gene_info.gene_db_list)
         if len(self.gene_info.gene_db_list) > 0:
-            gene_id=self.gene_info.gene_db_list[0].id
+            gene_id = self.gene_info.gene_db_list[0].id
         else:
-            gene_id=""
+            gene_id = ""
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
         fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph,self.gene_info.chr_id,gene_id, path_constraints,self.ground_truth_isoforms)
         print("Number of transcript paths:", len(fl_transcript_paths))
         for res in fl_transcript_paths:
-            path= self.transfer_paths(res)
+            path = self.transfer_paths(res)
+            print("Path", path)
             #print("path_other",path_other)
             weight = res[1]
             if path in self.known_isoforms_in_graph:
                 logger.info("Detected known isoform %s with weight %.2f" % (self.known_isoforms_in_graph[path], weight))
             else:
                 logger.info("Detected novel isoform %s with weight %.2f" % (str(path), weight))
+            #if skip_terminal_nodes==True:  #just to make sure this is explained. skip_terminal_nodes is only set in ilp_model->Intron2Nx_Node
             intron_path = path
+            #else:
+            #intron_path = path[1:-1]
             if not intron_path: continue
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
