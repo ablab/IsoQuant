@@ -173,7 +173,7 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="read alignment correction strategy to use", type=str, default=None)
     add_additional_option_to_group(algo_args_group, "--model_construction_strategy",
                                    choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
-                                            "default_ont", "sensitive_ont", "all", "assembly"],
+                                            "default_ont", "sensitive_ont", "all", "assembly", "ilp_model"],
                                    help="transcript model construction strategy to use", type=str, default=None)
 
     # OUTPUT PROPERTIES
