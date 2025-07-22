@@ -158,7 +158,7 @@ class GraphBasedModelConstructor:
 
         # reassign reads. why is it like this?
         #self.assign_reads_to_models(read_assignment_storage)
-        #self.forward_counts()
+        self.forward_counts()
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
@@ -678,8 +678,9 @@ class GraphBasedModelConstructor:
             if not intron_path: continue
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
+            if not novel_exons:continue
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
-
+            print("NE",novel_exons)
             reference_isoform = None
             # check if new transcript matches a reference one
             if intron_path[0][0] == VERTEX_polyt:
@@ -688,7 +689,6 @@ class GraphBasedModelConstructor:
                 polya_info = PolyAInfo(intron_path[-1][1], -1, -1, -1)
             else:
                 polya_info = PolyAInfo(-1, -1, -1, -1)
-
             combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
             assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
             # check that no serious contradiction occurs
@@ -697,7 +697,7 @@ class GraphBasedModelConstructor:
 
             if is_matching_assignment(assignment):
                 reference_isoform = assignment.isoform_matches[0].assigned_transcript
-                # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
+            # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
             elif intron_path in self.known_isoforms_in_graph:
                 # path was not assigned to any known isoform but intron chain still matches
                 continue
