@@ -635,7 +635,7 @@ class GraphBasedModelConstructor:
         path_constraints = []
         #print("FL_Paths",self.path_storage.fl_paths)
         self.transfer_fl_path(path_constraints)
-
+        self.params.report_unstranded=False
         #Now we add path constraints in the ILP world based on transcript constraints
         #for p in self.known_isoforms_in_graph.keys():
         #    if any(self.intron_graph.intron_collector.clustered_introns[i] == 0 for i in p): continue
@@ -678,7 +678,7 @@ class GraphBasedModelConstructor:
             if not intron_path: continue
             transcript_range = (path[0][1], path[-1][1])
             novel_exons = get_exons(transcript_range, list(intron_path))
-            if not novel_exons:continue
+            if not novel_exons: continue
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
             print("NE",novel_exons)
             reference_isoform = None
