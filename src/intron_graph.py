@@ -298,19 +298,23 @@ class IntronGraph:
         
         to_remove = set()
         logger.debug("Removing less expressd exons")
-        for current_intron in sorted(self.outgoing_edges.keys()):
-            for i in self.outgoing_edges[current_intron]:
-                weight = sum(weight for weight in self.edge_weights[i].values())
-                if weight >= 4: continue
-                to_remove.add(i)
-            for i in self.incoming_edges_edges[current_intron]:
-                weight = sum(weight for weight in self.edge_weights[i].values())
-                if weight >= 4: continue
-                to_remove.add(i)
 
-        for i in to_remove:
-            del self.outgoing_edges[i]
-            del self.incoming_edges[i]
+        for current_intron in sorted(self.outgoing_edges.keys()):
+            for out_intron in sorted(self.outgoing_edges[current_intron]):
+                weight = sum(w for w in self.edge_weights[(current_intron, out_intron)].values())
+                if weight >= 3 or weight == 0: continue
+                to_remove.add((current_intron, out_intron))
+
+        for current_intron in sorted(self.incoming_edges.keys()):
+            for in_intron in sorted(self.incoming_edges[current_intron]):
+                weight = sum(w for w in self.edge_weights[(in_intron, current_intron)].values())
+                if weight >= 3 or weight == 0: continue
+                to_remove.add((in_intron, current_intron))
+
+        for u, v in to_remove:
+            self.outgoing_edges[u].remove(v)
+            self.incoming_edges[v].remove(u)
+
 
 
     def clean_tips_and_bulges(self):
