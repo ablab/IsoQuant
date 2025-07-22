@@ -61,6 +61,7 @@ class CellTypeTree:
 
     def _add_cell_count(self, cell_type: str, count: int, cell_type_counts: np.array) -> None:
         # A helper method for transforming cell type dictionary inot a np.array of weights
+        cell_type = cell_type.split(":")[-1]
         while cell_type != "":
             cell_type_counts[self.cell_types[cell_type]] += count
             cell_type = self.parents[cell_type]
