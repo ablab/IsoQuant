@@ -290,7 +290,28 @@ class IntronGraph:
         self.clean_tips_and_bulges()
         self.remove_singleton_dead_ends()
         self.remove_isolates()
+        self.error_correction()
         self.intron_collector.simplify_correction_map()
+
+
+    def error_correction(self):
+        
+        to_remove = set()
+        logger.debug("Removing less expressd exons")
+        for current_intron in sorted(self.outgoing_edges.keys()):
+            for i in self.outgoing_edges[current_intron]:
+                weight = sum(weight for weight in self.edge_weights[i].values())
+                if weight >= 4: continue
+                to_remove.add(i)
+            for i in self.incoming_edges_edges[current_intron]:
+                weight = sum(weight for weight in self.edge_weights[i].values())
+                if weight >= 4: continue
+                to_remove.add(i)
+
+        for i in to_remove:
+            del self.outgoing_edges[i]
+            del self.incoming_edges[i]
+
 
     def clean_tips_and_bulges(self):
         # check all outgoing edges
@@ -652,6 +673,7 @@ class IntronGraph:
         if not processed_introns:
             return 0
         return max(self.intron_collector.clustered_introns[i] for i in processed_introns)
+        
 
     def print_graph(self):
         logger.debug("Printing graph")
