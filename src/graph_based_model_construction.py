@@ -659,9 +659,9 @@ class GraphBasedModelConstructor:
             intron_path = path[1:-1]
             
             if intron_path in self.known_isoforms_in_graph:
-                logger.info("Detected known isoform %s with weight %.2f - %s" % (self.known_isoforms_in_graph[intron_path], count, str(ct_weights)))
+                logger.info("Detected known isoform %s with weight %.2f" % (self.known_isoforms_in_graph[intron_path], count))
             else:
-                logger.info("Detected novel isoform %s with weight %.2f - %s" % (str(path), count, str(ct_weights)))            
+                logger.info("Detected novel isoform %s with weight %.2f" % (str(path), count))            
 
             if not intron_path: continue
             transcript_range = (int(path[0][1]), int(path[-1][1]))

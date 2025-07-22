@@ -350,7 +350,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: lis
                 G = graph,
                 flow_attr = "flow",
                 paths = paths,
-                weights = ct_weights,
+                weights = weights,
                 filename = "graphs/" + chr_id + "_" + gene_id + "_" + str(id(graph))  + "graph.solution.CT.png",
                 draw_options= {
                         "show_graph_edges": True,
