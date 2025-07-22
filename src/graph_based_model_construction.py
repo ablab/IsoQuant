@@ -655,13 +655,14 @@ class GraphBasedModelConstructor:
             
             count = res[1]
             ct_weights = res[2]
-
-            if path in self.known_isoforms_in_graph:
-                logger.info("Detected known isoform %s with weight %.2f - %s" % (self.known_isoforms_in_graph[path], count, str(ct_weights)))
-            else:
-                logger.info("Detected novel isoform %s with weight %.2f - %s" % (str(path), count, str(ct_weights)))
             
-            intron_path = path#[1:-1]
+            intron_path = path[1:-1]
+            
+            if intron_path in self.known_isoforms_in_graph:
+                logger.info("Detected known isoform %s with weight %.2f - %s" % (self.known_isoforms_in_graph[intron_path], count, str(ct_weights)))
+            else:
+                logger.info("Detected novel isoform %s with weight %.2f - %s" % (str(path), count, str(ct_weights)))            
+
             if not intron_path: continue
             transcript_range = (int(path[0][1]), int(path[-1][1]))
             novel_exons = get_exons(transcript_range, list(intron_path))
