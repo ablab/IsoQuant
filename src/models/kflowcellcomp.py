@@ -185,6 +185,44 @@ class kFlowCellTypeDecomp(pathmodel.AbstractPathModelDAG):
             var_type="integer"# if self.weight_type == int else "continuous",
         )
 
+        self.symmetry_vars = self.solver.add_variables(
+            self.path_indexes,
+            name_prefix = "u",
+            lb = 0,
+            ub = 1,
+            var_type = "integer",
+        )
+
+        # Symmetry breaking constraints by Reima Kuosmanen
+        for i in range(len(self.safe_lists), self.k):
+
+            edge_list = self.G.edges()
+            m = len(edge_list)
+
+            u, v = edge_list[0]
+
+            self.solver.add_constraint(
+                self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] == self.symmetry_vars[(u, v, i)]
+            )
+
+            for p in range(1, m):
+                
+                u, v = edge_list[p]
+
+                # Has increased
+                self.solver.add_constraint(
+                    self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] >= self.symmetry_vars[(u, v, i)]
+                )
+
+                # increase means the index can lower
+                self.solver.add_constraint(
+                    self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] >= 
+                    self.solver.quicksum(
+                        -self.symmetry_vars[(u0, v0, i)]
+                        for u0, v0 in edge_list[0:p]
+                    )
+                )
+
         # We encode that for each edge (u,v), the sum of the weights of the paths going through the edge is equal to the flow value of the edge.
         for u, v, data in self.G.edges(data=True):
             
