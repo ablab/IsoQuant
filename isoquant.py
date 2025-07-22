@@ -642,6 +642,8 @@ def set_model_construction_options(args):
                                             'require_monointronic_polya', 'require_monoexonic_polya',
                                             'report_canonical'))
     strategies = {
+        'ilp_model':       ModelConstructionStrategy(4, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  4, 6, 8, 0.05, 0.05, 50,
+                                                     True, False, True, True, StrandnessReportingLevel.only_canonical),
         'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50,
                                                      True, False, True, True, StrandnessReportingLevel.only_canonical),
         'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100,
