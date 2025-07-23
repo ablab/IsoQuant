@@ -336,9 +336,22 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
             "optimize_with_safe_sequences": True,
             "optimize_with_safety_from_largest_antichain": True,
         }
+        solution = process_solution(graph, correction_model, additional_starts, additional_ends)
+        # print("solution",solution)
+        # Condensing the paths in the expanded graph to paths in the the original graph
+        original_paths = solution["paths"]
+        weights = solution["weights"]
+        # print("original paths",original_paths)
+        if len(original_paths) != len(weights):
+            raise ValueError("The number of paths and weights must be the same.")
+
+        res = list(zip(original_paths, weights))
+        # print("solution",solution)
+        # Condensing the paths in the expanded graph to paths in the the original graph
+        original_paths = solution["paths"]
 
     else:
-        res=[]
+        res = []
     # this_k = 5
     # mpe_model = fp.kMinPathError(graph, flow_attr="flow", k=this_k, weight_type=float)
     # mpe_model.solve()
