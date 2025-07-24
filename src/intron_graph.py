@@ -698,12 +698,15 @@ class IntronGraph:
             )
 
         for vertex in graph:
-
-            subgraph.incoming_edges[vertex] = self.incoming_edges[vertex].copy()
-            subgraph.outgoing_edges[vertex] = self.outgoing_edges[vertex].copy()
-
-            subgraph.intron_collector.clustered_introns[vertex] = self.intron_collector.clustered_introns[vertex]
-            subgraph.intron_collector.clustered_introns_by_cell_type[vertex] = self.intron_collector.clustered_introns_by_cell_type[vertex].copy()
+            
+            if vertex in self.incoming_edges:
+                subgraph.incoming_edges[vertex] = self.incoming_edges[vertex].copy()
+            if vertex in self.outgoing_edges:
+                subgraph.outgoing_edges[vertex] = self.outgoing_edges[vertex].copy()
+            if vertex in self.intron_collector.clustered_introns:
+                subgraph.intron_collector.clustered_introns[vertex] = self.intron_collector.clustered_introns[vertex]
+            if vertex in self.intron_collector.clustered_introns_by_cell_type:    
+                subgraph.intron_collector.clustered_introns_by_cell_type[vertex] = self.intron_collector.clustered_introns_by_cell_type[vertex].copy()
 
         return subgraph
 

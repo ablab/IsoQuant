@@ -45,7 +45,7 @@ def clean_graph(G,skip_isolated_nodes):
         G.remove_nodes_from(nodes_to_remove)
 
 
-def Constraints_Transfer_Format(input_constraints, skip_isolated_nodes = True, skip_terminal_nodes = True,):
+def Constraints_Transfer_Format(input_constraints, skip_isolated_nodes = True, skip_terminal_nodes = False,):
     transferred_constraints = []
     for pc_entry in input_constraints:
         #print("pcent",pc_entry)
@@ -68,7 +68,7 @@ def Constraints_Transfer_Format(input_constraints, skip_isolated_nodes = True, s
     return transferred_constraints
 
 
-def Intron2Nx_Node(intron_graph, skip_isolated_nodes = True, skip_terminal_nodes = True,):
+def Intron2Nx_Node(intron_graph, skip_isolated_nodes = True, skip_terminal_nodes = False,):
 
     G = nx.DiGraph()
     # We create the full networkx graph
