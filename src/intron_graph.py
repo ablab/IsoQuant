@@ -121,6 +121,7 @@ class IntronCollector:
         self.discarded_introns.add(intron)
         if intron in self.clustered_introns:
             del self.clustered_introns[intron]
+        if intron in self.clustered_introns_by_cell_type:
             del self.clustered_introns_by_cell_type[intron]
 
     def substitute(self, v):
