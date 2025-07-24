@@ -303,11 +303,11 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
         res = list(zip(original_paths, weights))
     elif not(len(graph.nodes()) == 0 or len(graph.edges())== 0):
         if export:
-            export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints)
+            export_data(graph, additional_starts, additional_ends, edges_to_ignore, constraints)
         fp.utils.draw(
             G=graph,
             flow_attr="flow",
-            filename=chr_id+"_"+gene_id+"_"+str(id(graph)) + "graph.png",  # this will be used as filename
+            filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "graph.png",  # this will be used as filename
             draw_options={
                 "show_graph_edges": True,
                 "show_edge_weights": True,
@@ -317,9 +317,9 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
                 "pathwidth": 2,
 
             },
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-            subpath_constraints = constraints,)
+            additional_starts=additional_starts,
+            additional_ends=additional_ends,
+            subpath_constraints=constraints, )
         print("Running MinErrorFlow")
         correction_model = fp.MinErrorFlow(
             G=graph,
@@ -336,19 +336,54 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
             "optimize_with_safe_sequences": True,
             "optimize_with_safety_from_largest_antichain": True,
         }
-        solution = process_solution(graph, correction_model, additional_starts, additional_ends)
-        # print("solution",solution)
+        # solver_options = {
+        #    "threads": 1,
+        #    "time_limit": 600,
+        # }
+
+        print("Running MinFlowDecomp")
+        mfd_model = fp.MinFlowDecomp(
+            G=corrected_graph,
+            flow_attr="flow",
+            flow_attr_origin="node",
+            additional_starts=additional_starts,
+            additional_ends=additional_ends,
+            subpath_constraints=constraints,
+            optimization_options=optimization_options,
+            # solver_options=solver_options,
+        )
+
+        # draw the ground truth isoforms , might yield bugs (if partaking nodes are not part of the current graph)!!
+        gtweights = [1] * len(ground_truth_isoforms)
+        fp.utils.draw(
+            G=graph,
+            flow_attr="flow",
+            paths=ground_truth_isoforms,
+            weights=gtweights,
+            filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "groundtruth.png",  # this will be used as filename
+            draw_options={
+                "show_graph_edges": True,
+                "show_edge_weights": False,
+                "show_path_weights": False,
+                "show_path_weight_on_first_edge": True,
+                "pathwidth": 2,
+            },
+            additional_starts=additional_starts,
+            additional_ends=additional_ends, )
+        start = time.time()
+        mfd_model.solve()
+        end = time.time()
+        print("Solution found! in ", end - start, " seconds")
+        solution = process_solution(graph, mfd_model, additional_starts, additional_ends)
+        print("solution", solution)
         # Condensing the paths in the expanded graph to paths in the the original graph
         original_paths = solution["paths"]
         weights = solution["weights"]
-        # print("original paths",original_paths)
+        print("original paths", original_paths)
         if len(original_paths) != len(weights):
             raise ValueError("The number of paths and weights must be the same.")
 
         res = list(zip(original_paths, weights))
-        # print("solution",solution)
-        # Condensing the paths in the expanded graph to paths in the the original graph
-        original_paths = solution["paths"]
 
     else:
         res = []
