@@ -28,7 +28,7 @@ mfd_solver = fp.MinFlowDecomp(graph, flow_attr="flow")
 
 mfd_solver.solve() # We solve it
 
-if mfd_solver.is_solved(): # We get the solution
+if mfd_solver.is_solved(): # We get the solutionFalse
     print(mfd_solver.get_solution())
     # {'paths': [['s', 'b', 't'], ['s', 'a', 't']], 'weights': [5, 2]}
 '''
@@ -45,7 +45,7 @@ def clean_graph(G,skip_isolated_nodes):
         G.remove_nodes_from(nodes_to_remove)
 
 
-def Constraints_Transfer_Format(input_constraints, skip_isolated_nodes = True, skip_terminal_nodes = False,):
+def Constraints_Transfer_Format(input_constraints, skip_isolated_nodes = True, skip_terminal_nodes = True,):
     transferred_constraints = []
     for pc_entry in input_constraints:
         #print("pcent",pc_entry)
@@ -68,7 +68,7 @@ def Constraints_Transfer_Format(input_constraints, skip_isolated_nodes = True, s
     return transferred_constraints
 
 
-def Intron2Nx_Node(intron_graph, skip_isolated_nodes = True, skip_terminal_nodes = False,):
+def Intron2Nx_Node(intron_graph, skip_isolated_nodes = True, skip_terminal_nodes = True,):
 
     G = nx.DiGraph()
     # We create the full networkx graph
@@ -180,7 +180,7 @@ def filter_constraints(graph, additional_starts,additional_ends):
     remove_nodes(endnodes_missing, additional_ends)
 
 
-def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5, draw_graphs: bool = True):
+def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5, draw_graphs: bool = True):
     #print("constraints", transcripts_constraints)
     #print("Running ILP part")
     export = False
@@ -200,7 +200,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: lis
             fp.utils.draw(
                 G = graph,
                 flow_attr = "flow",
-                filename = "graphs/" + chr_id + "_" + gene_id + "_" + str(id(graph))+ "graph.FL.png",
+                filename = "graphs/" + chr_id + "_" + gene_id + "_" + str(index) + "_" + str(id(graph))+ "graph.FL.png",
                 draw_options = {
                     "show_graph_edges": True,
                     "show_edge_weights": True,
@@ -211,14 +211,14 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: lis
                 },
                 additional_starts = additional_starts,
                 additional_ends = additional_ends,
-                subpath_constraints = constraints,
+                subpath_constraints = [], #constraints,
                 )
 
             # Draw the graph with cell type flows
             fp.utils.draw(
                 G = graph,
                 flow_attr = "cell_flow",
-                filename = "graphs/" + chr_id + "_" + gene_id + "_" + str(id(graph)) + "graph.CT.png",  # this will be used as filename
+                filename = "graphs/" + chr_id + "_" + gene_id + "_" + str(index) + "_" + str(id(graph)) + "graph.CT.png",  # this will be used as filename
                 draw_options = {
                     "show_graph_edges": True,
                     "show_edge_weights": True,
@@ -229,7 +229,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: lis
                 },
                 additional_starts = additional_starts,
                 additional_ends = additional_ends,
-                subpath_constraints = constraints,
+                subpath_constraints = [], #constraints,
                 )
             
         #print(graph.nodes())
@@ -270,7 +270,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: lis
             fp.utils.draw(
                 G =corrected_graph,
                 flow_attr = "cell_flow",
-                filename = "graphs/" + chr_id + "_" + gene_id + "_" + str(id(graph))+ "graph.corrected.CT.png",  # this will be used as filename
+                filename = "graphs/" + chr_id + "_" + gene_id + "_" +  str(index) + "_" + str(id(graph))+ "graph.corrected.CT.png",  # this will be used as filename
                 draw_options = {
                     "show_graph_edges": True,
                     "show_edge_weights": True,
@@ -281,13 +281,13 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: lis
                 },
                 additional_starts = additional_starts,
                 additional_ends = additional_ends,
-                subpath_constraints = constraints,
+                #subpath_constraints = constraints,
                 )
             
             fp.utils.draw(
                 G =corrected_graph,
                 flow_attr = "flow",
-                filename = "graphs/" + chr_id + "_" + gene_id + "_" + str(id(graph)) + "graph.corrected.FL.png",  # this will be used as filename
+                filename = "graphs/" + chr_id + "_" + gene_id + "_" +  str(index) + "_" + str(id(graph)) + "graph.corrected.FL.png",  # this will be used as filename
                 draw_options = {
                     "show_graph_edges": True,
                     "show_edge_weights": True,
@@ -298,7 +298,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: lis
                 },
                 additional_starts = additional_starts,
                 additional_ends = additional_ends,
-                subpath_constraints = constraints,
+                #subpath_constraints = constraints,
                 )
             
 
@@ -351,7 +351,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, transcripts_constraints: lis
                 flow_attr = "flow",
                 paths = paths,
                 weights = weights,
-                filename = "graphs/" + chr_id + "_" + gene_id + "_" + str(id(graph))  + "graph.solution.CT.png",
+                filename = "graphs/" + chr_id + "_" + gene_id + "_" +  str(index) + "_" + str(id(graph))  + "graph.solution.CT.png",
                 draw_options= {
                         "show_graph_edges": True,
                         "show_edge_weights": False,

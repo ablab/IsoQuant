@@ -646,6 +646,66 @@ class IntronGraph:
                     processed_set.add(i)
                     intron_queue.put_nowait(i)
         return processed_set
+    
+    def split_to_connected_subgraphs(self):
+
+        visited_positions = set()
+        subgraphs = []
+
+        all_vertexes = set()
+        all_vertexes.update(self.outgoing_edges.keys())
+        all_vertexes.update(self.incoming_edges.keys())
+
+        for node in sorted(all_vertexes):
+            
+            if node in visited_positions:
+                continue
+            
+            visited_positions.add(node)
+            stack = [node]
+            subgraph = set([node])
+            
+            while len(stack) > 0:
+            
+                current = stack.pop()
+            
+                for node in sorted(self.outgoing_edges[current]):
+            
+                    if node not in subgraph:
+                        stack.append(node)
+                        subgraph.add(node)
+                        visited_positions.add(node)
+            
+                for node in sorted(self.incoming_edges[current]):
+            
+                    if node not in subgraph:
+                        stack.append(node)
+                        subgraph.add(node)
+                        visited_positions.add(node)
+            
+            subgraphs.append(subgraph)
+
+        return [self._create_subgraph(graph) for graph in subgraphs]
+    
+
+    def _create_subgraph(self, graph: set):
+
+        subgraph = IntronSubGraph(
+            params = self.params,
+            gene_info = self.gene_info,
+            read_assignments = self.read_assignments,
+            )
+
+        for vertex in graph:
+
+            subgraph.incoming_edges[vertex] = self.incoming_edges[vertex].copy()
+            subgraph.outgoing_edges[vertex] = self.outgoing_edges[vertex].copy()
+
+            subgraph.intron_collector.clustered_introns[vertex] = self.intron_collector.clustered_introns[vertex]
+            subgraph.intron_collector.clustered_introns_by_cell_type[vertex] = self.intron_collector.clustered_introns_by_cell_type[vertex].copy()
+
+        return subgraph
+
 
     def get_max_component_coverage(self, path):
         component = self.get_connected_component(path)
@@ -706,3 +766,36 @@ class IntronGraph:
             logger.debug("Intron %s -> %s" % (str(intron),
                                               ",".join([str(x) + ":" + str(pos_dict[intron][x])
                                                         for x in sorted(pos_dict[intron].keys())])))
+
+
+class IntronSubGraph(IntronGraph):
+    
+    def __init__(self, params, gene_info, read_assignments):
+    
+        self.params = params
+        self.gene_info = gene_info
+        self.read_assignments = read_assignments
+
+        self.incoming_edges = defaultdict(set)
+        self.outgoing_edges = defaultdict(set)
+        self.intron_collector = IntronCollector(gene_info, params.delta)
+        self.max_coverage = 0
+        self.edge_weights = defaultdict(defaultdict)
+
+        self.starting_known_positions = defaultdict(list)
+        self.terminal_known_positions = defaultdict(list)
+        #for t, introns in self.gene_info.all_isoforms_introns.items():
+        #    if not introns:
+        #        continue
+        #    self.starting_known_positions[introns[0]].append(self.gene_info.all_isoforms_exons[t][0][0])
+        #    self.terminal_known_positions[introns[-1]].append(self.gene_info.all_isoforms_exons[t][-1][1])
+
+        # logger.debug("Collecting introns for %s" % self.gene_info.gene_db_list[0].id)
+        #self.intron_collector.process(read_assignments, self.params.min_novel_intron_count)
+        #self.construct()
+        #if self.params.debug:
+        #    self.print_graph()
+        #self.simplify()
+        #self.attach_terminal_positions()
+        #if self.params.debug:
+        #    self.print_graph()

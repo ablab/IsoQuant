@@ -412,7 +412,7 @@ class GraphBasedModelConstructor:
 
         return to_substitute
 
-    def get_known_spliced_isoforms(self, gene_info, s="known"):
+    def get_known_spliced_isoforms(self, gene_info, s = "known"):
         known_isoforms = {}
         for isoform_id in gene_info.all_isoforms_introns:
             isoform_introns = gene_info.all_isoforms_introns[isoform_id]
@@ -637,6 +637,8 @@ class GraphBasedModelConstructor:
         
         logger.info("Using ILP to discover transcripts")
         path_constraints = []
+
+        subgraphs = self.intron_graph.split_to_connected_subgraphs()
         
         self.transfer_fl_path(path_constraints)
         self.ilp_solution_assignement = []
@@ -647,7 +649,11 @@ class GraphBasedModelConstructor:
             gene_id = "None"
 
         # Encode_ILP(self.intron_graph, path_constraints, epsilon, timeout, threads), epsilon time and threads should be parameters given as input
-        fl_transcript_paths = ILP_Solver_Nodes(self.intron_graph, self.gene_info.chr_id, gene_id, path_constraints, self.ground_truth_isoforms)
+        
+        fl_transcript_paths = []
+
+        for index, subgraph in enumerate(subgraphs):
+            fl_transcript_paths += ILP_Solver_Nodes(subgraph, self.gene_info.chr_id, gene_id, index, path_constraints, self.ground_truth_isoforms)
 
         for res in fl_transcript_paths:
             
