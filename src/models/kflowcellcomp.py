@@ -198,7 +198,7 @@ class kFlowCellTypeDecomp(pathmodel.AbstractPathModelDAG):
         if True:
             self.symmetry_vars = self.solver.add_variables(
                 [edge_var for edge_var in self.edge_indexes if edge_var[2] > len(self.safe_lists)],
-                name_prefix = "u",
+                name_prefix = "z",
                 lb = 0,
                 ub = 1,
                 var_type = "integer",
