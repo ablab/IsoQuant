@@ -284,9 +284,14 @@ class kFlowCellTypeDecomp(pathmodel.AbstractPathModelDAG):
                 name=f"given_weight_{i}",
             )
 
+        #self.solver.set_objective(
+        #    self.solver.quicksum(self.edge_vars[(u, v, i)] for u, v in self.G.edges() for i in range(self.k)),
+        #    sense="minimize",
+        #)
+        
         self.solver.set_objective(
-            self.solver.quicksum(self.edge_vars[(u, v, i)] for u, v in self.G.edges() for i in range(self.k)),
-            sense="minimize",
+            self.solver.quicksum(i * self.path_weights_vars[(i, ct)] for i in self.path_indexes for ct in self.cell_types),
+            sense = "minimize",
         )
 
             
