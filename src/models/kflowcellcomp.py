@@ -194,34 +194,36 @@ class kFlowCellTypeDecomp(pathmodel.AbstractPathModelDAG):
         )
 
         # Symmetry breaking constraints by Reima Kuosmanen
-        for i in range(len(self.safe_lists), self.k):
-
-            edge_list = self.G.edges()
-            m = len(edge_list)
-
-            u, v = edge_list[0]
-
-            self.solver.add_constraint(
-                self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] == self.symmetry_vars[(u, v, i)]
+        
+        if True:
+            self.symmetry_vars = self.solver.add_variables(
+                [edge_var for edge_var in self.edge_indexes if edge_var[2] > len(self.safe_lists)],
+                name_prefix = "u",
+                lb = 0,
+                ub = 1,
+                var_type = "integer",
             )
-
-            for p in range(1, m):
-                
-                u, v = edge_list[p]
-
-                # Has increased
+            edge_list = sorted(self.G.edges())
+            m = len(edge_list)
+            for i in range(len(self.safe_lists) + 1, self.k):
+                u, v = edge_list[0]
                 self.solver.add_constraint(
-                    self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] >= self.symmetry_vars[(u, v, i)]
+                    self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] == self.symmetry_vars[(u, v, i)]
                 )
-
-                # increase means the index can lower
-                self.solver.add_constraint(
-                    self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] >= 
-                    self.solver.quicksum(
-                        -self.symmetry_vars[(u0, v0, i)]
-                        for u0, v0 in edge_list[0:p]
+                for p in range(1, m):
+                    u, v = edge_list[p]
+                    # Has increased
+                    self.solver.add_constraint(
+                        self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] >= 2 * self.symmetry_vars[(u, v, i)] - 1
                     )
-                )
+                    # increase means the index can lower
+                    self.solver.add_constraint(
+                        self.edge_vars[(u, v, i)] - self.edge_vars[(u, v, i - 1)] >=
+                        self.solver.quicksum(
+                            -self.symmetry_vars[(u0, v0, i)]
+                            for u0, v0 in edge_list[0:p]
+                        )
+                    )
 
         # We encode that for each edge (u,v), the sum of the weights of the paths going through the edge is equal to the flow value of the edge.
         for u, v, data in self.G.edges(data=True):
