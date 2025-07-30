@@ -281,7 +281,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
                 },
                 additional_starts = additional_starts,
                 additional_ends = additional_ends,
-                #subpath_constraints = constraints,
+                subpath_constraints = subpath_constaints_pruned,
                 )
             
             fp.utils.draw(
@@ -298,7 +298,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
                 },
                 additional_starts = additional_starts,
                 additional_ends = additional_ends,
-                #subpath_constraints = constraints,
+                subpath_constraints = subpath_constaints_pruned,
                 )
             
 
