@@ -80,7 +80,7 @@ def Intron2Nx_Node(intron_graph, skip_isolated_nodes = True, skip_terminal_nodes
         cell_types.update(introns_cell_types)
 
     #print(cell_types)
-    cell_type_tree = CellTypeTree(cell_types, ignore_missing = False)
+    cell_type_tree = CellTypeTree(cell_types, ignore_missing = True, remove_missing = True)
 
     for intron, this_flow in intron_graph.intron_collector.clustered_introns.items(): #this only adds the internal vertices, we still need to add the start vertices and end vertices
         #print(intron_graph.intron_collector.clustered_introns_by_cell_type[intron])

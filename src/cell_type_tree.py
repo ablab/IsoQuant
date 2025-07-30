@@ -5,7 +5,7 @@ from collections import defaultdict, deque
 # based on a given cell type hierarchy
 class CellTypeTree:
 
-    def __init__(self, cell_types: set, ignore_missing: bool):
+    def __init__(self, cell_types: set, ignore_missing: bool = False, remove_missing: bool = False):
         
         self.children = defaultdict(set)
         self.parents = defaultdict(str)
@@ -14,6 +14,7 @@ class CellTypeTree:
         self.primary_cell_types = {}
 
         self.ignore_missing = ignore_missing
+        self.remove_missing = remove_missing
 
         self._construct_tree_from_celltypes(cell_types)
         self._construct_cell_types()
@@ -22,7 +23,7 @@ class CellTypeTree:
     def _construct_tree_from_celltypes(self, cell_types: set) -> None:
         # Method for constructiong a tree from a set of cell types
         for cell_type in cell_types:
-            if cell_type == 'NA' and self.ignore_missing:
+            if cell_type == 'NA' and (self.ignore_missing or self.remove_missing):
                 continue
             self._add_cell_type(cell_type)
 
@@ -54,9 +55,9 @@ class CellTypeTree:
         # A method of transforming a list of cell type cpounts into a standrad format array
         full_cell_type_counts = np.zeros(shape = self.n_of_cell_types, dtype = int)
         for cell_type in counts:
-            if cell_type != 'NA' or not self.ignore_missing:
+            if cell_type != 'NA' or (not self.ignore_missing):
                 self._add_cell_count(cell_type, counts[cell_type], full_cell_type_counts)
-            else:
+            elif not self.remove_missing:
                 self._add_cell_count("ROOT", counts[cell_type], full_cell_type_counts)
         return full_cell_type_counts
     
