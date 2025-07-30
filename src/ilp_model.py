@@ -319,7 +319,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
             flow_attr_origin = "node",
             additional_starts = additional_starts,
             additional_ends = additional_ends,
-            subpath_constraints = [] #subpath_constaints_pruned,
+            subpath_constraints = [], #subpath_constaints_pruned,
             optimization_options = optimization_options,
         )
 
