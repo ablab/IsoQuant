@@ -309,7 +309,6 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
         }
     
         logger.info("Running MinFlowDecomp")
-        
     
         mcd_model = MinFlowCellDecomp(
             G = corrected_graph,
