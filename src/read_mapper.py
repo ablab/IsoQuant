@@ -378,6 +378,18 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
     logger.info("Indexing alignments")
     try:
         pysam.index(alignment_bam_path)
+    except pysam.SamtoolsError as err:
+        if "failed to create index" in err.value:
+            logger.info(f"Samtools failed to generate default .bai index; with error: {err.value}")
+            logger.info("Trying to build a CSI index instead")
+            try:
+                pysam.index('-@', str(args.threads), '-c', alignment_bam_path)
+            except pysam.SamtoolsError as err:
+                logger.error(f"Failed to create CSI index: {err.value}")
+                exit(-1)
+        else:
+            logger.error(err.value)
+            exit(-1) 
     except OSError as err:
         logger.error(err)
         exit(-1)
