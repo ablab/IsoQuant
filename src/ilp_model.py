@@ -305,6 +305,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
         optimization_options = {
             "optimize_with_safe_paths": True,
             "optimize_with_safe_sequences": False,
+            "optimize_with_flow_safe_paths": False,
             "optimize_with_safety_from_largest_antichain": True,
         }
     
@@ -318,7 +319,7 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
             flow_attr_origin = "node",
             additional_starts = additional_starts,
             additional_ends = additional_ends,
-            subpath_constraints = [], #subpath_constaints_pruned,
+            subpath_constraints = subpath_constaints_pruned,
             optimization_options = optimization_options,
         )
 
