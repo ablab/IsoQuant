@@ -51,7 +51,7 @@ Reference genome is mandatory and should be provided in multi-FASTA format (can 
 Reference gene annotation is not mandatory, but is likely to increase precision and recall.
 It can be provided in GFF/GTF format (can be gzipped).
 
-Pre-constructed `minimap2` index can also be provided to increase mapping time.
+Pre-constructed `minimap2` index can also be provided to reduce mapping time.
 
 
 ## Citation
