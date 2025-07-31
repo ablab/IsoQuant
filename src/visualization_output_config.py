@@ -4,11 +4,11 @@ import pickle
 import gzip
 import shutil
 from argparse import Namespace
-import gffutils
 import yaml
-from typing import List, Dict, Tuple, Set
+from typing import List
 import logging
 import re
+from pathlib import Path
 
 class OutputConfig:
     """Class to build dictionaries from the output files of the pipeline."""
@@ -18,17 +18,18 @@ class OutputConfig:
         output_directory: str,
         ref_only: bool = False,
         gtf: str = None,
+        technical_replicates: str = None,
     ):
         self.output_directory = output_directory
         self.log_details = {}
         self.extended_annotation = None
         self.read_assignments = None
-        self.input_gtf = gtf  # Initialize with the provided gtf flag
+        self.input_gtf = gtf
         self.genedb_filename = None
         self.yaml_input = True
         self.yaml_input_path = None
-        self.gtf_flag_needed = False  # Initialize flag to check if "--gtf" is needed.
-        self._conditions = None  # Changed from self.conditions = False
+        self.gtf_flag_needed = False
+        self._conditions = None
         self.gene_grouped_counts = None
         self.transcript_grouped_counts = None
         self.transcript_grouped_tpm = None
@@ -43,7 +44,7 @@ class OutputConfig:
         self.transcript_model_grouped_counts = None
         self.ref_only = ref_only
 
-        # New attributes for handling extended annotations
+        # Extended annotation handling
         self.sample_extended_gtfs = []
         self.merged_extended_gtf = None
 
@@ -52,12 +53,23 @@ class OutputConfig:
         self.sample_transcript_model_tpm = {}
         self.sample_transcript_model_counts = {}
         
-        # New attribute for transcript mapping
+        # Transcript mapping
         self.transcript_map = {}  # Maps transcript IDs to canonical transcript ID with same exon structure
+        
+        # Technical replicates
+        self.technical_replicates_spec = technical_replicates
+        self.technical_replicates_dict = {}
+        self._has_technical_replicates = False
+        self._has_biological_replicates = None  # Will be computed when needed
 
         self._load_params_file()
         self._find_files()
         self._conditional_unzip()
+        
+        # Parse technical replicates after initialization
+        if self.technical_replicates_spec:
+            self.technical_replicates_dict = self._parse_technical_replicates(self.technical_replicates_spec)
+            self._has_technical_replicates = bool(self.technical_replicates_dict)
 
         # Ensure input_gtf is provided if ref_only is set and input_gtf is not found in the log
         if self.ref_only and not self.input_gtf:
@@ -75,7 +87,7 @@ class OutputConfig:
                 if isinstance(params, Namespace):
                     self._process_params(vars(params))
                 else:
-                    print("Unexpected params format.")
+                    logging.warning("Unexpected params format.")
         except Exception as e:
             raise ValueError(f"An error occurred while loading params: {e}")
 
@@ -127,7 +139,7 @@ class OutputConfig:
         with gzip.open(file_path, "rb") as f_in:
             with open(new_path, "wb") as f_out:
                 shutil.copyfileobj(f_in, f_out)
-                print(f"File {file_path} was decompressed to {new_path}.")
+                logging.info(f"File {file_path} was decompressed to {new_path}.")
 
         return new_path
 
@@ -139,7 +151,7 @@ class OutputConfig:
             return  # Exit the method after processing YAML input
 
         if not os.path.exists(self.output_directory):
-            print(f"Directory not found: {self.output_directory}")  # Debugging output
+            logging.error(f"Directory not found: {self.output_directory}")
             raise FileNotFoundError(
                 f"Specified sample subdirectory does not exist: {self.output_directory}"
             )
@@ -215,7 +227,7 @@ class OutputConfig:
     def _find_files_from_yaml(self):
         """Locate files and samples from YAML, apply filters to ensure only valid samples are processed."""
         if not os.path.exists(self.yaml_input_path):
-            print(f"YAML file not found: {self.yaml_input_path}")
+            logging.error(f"YAML file not found: {self.yaml_input_path}")
             raise FileNotFoundError(
                 f"Specified YAML file does not exist: {self.yaml_input_path}"
             )
@@ -243,10 +255,9 @@ class OutputConfig:
         ]:
             file_path = getattr(self, attr)
             if not os.path.exists(file_path):
-                print(f"Warning: {attr} file not found at {file_path}")
+                logging.warning(f"{attr} file not found at {file_path}")
                 setattr(self, attr, None)
 
-        # Initialize read_assignments list
         self.read_assignments = []
 
         # Read and process the YAML file
@@ -281,8 +292,8 @@ class OutputConfig:
                 if os.path.exists(extended_gtf):
                     self.sample_extended_gtfs.append(extended_gtf)
                 else:
-                    print(
-                        f"Warning: extended_annotation.gtf not found for sample {name}"
+                    logging.warning(
+                        f"extended_annotation.gtf not found for sample {name}"
                     )
 
                 # Check for .read_assignments.tsv.gz
@@ -292,7 +303,7 @@ class OutputConfig:
                     if unzipped_file:
                         self.read_assignments.append((name, unzipped_file))
                     else:
-                        print(f"Warning: Failed to unzip {gz_file}")
+                        logging.warning(f"Failed to unzip {gz_file}")
                 else:
                     # Check for .read_assignments.tsv
                     non_gz_file = os.path.join(
@@ -301,7 +312,7 @@ class OutputConfig:
                     if os.path.exists(non_gz_file):
                         self.read_assignments.append((name, non_gz_file))
                     else:
-                        print(f"Warning: No read assignments file found for {name}")
+                        logging.warning(f"No read assignments file found for {name}")
 
                 # Load transcript_model_tpm and transcript_model_counts for merging
                 tpm_path = os.path.join(sample_dir, f"{name}.transcript_model_tpm.tsv")
@@ -317,7 +328,7 @@ class OutputConfig:
                 )
 
         if not self.read_assignments:
-            print("Warning: No read assignment files found for any samples")
+            logging.warning("No read assignment files found for any samples")
 
         # Handle extended annotations only if ref_only is not True
         if self.ref_only is not True:
@@ -412,7 +423,7 @@ class OutputConfig:
         """Merge multiple GTF files into a single GTF file, identifying transcripts with identical exon structures."""
         try:
             # First, parse all GTFs to identify transcripts with identical exon structures
-            print(f"Analyzing {len(gtfs)} GTF files to identify identical transcript structures")
+            logging.info(f"Analyzing {len(gtfs)} GTF files to identify identical transcript structures")
             logging.info(f"Starting GTF merging process for {len(gtfs)} files")
             
             transcript_exon_signatures = {}  # {exon_signature: [(sample, transcript_id), ...]}
@@ -443,8 +454,8 @@ class OutputConfig:
             logging.info(f"Writing merged GTF file to {output_gtf}")
             self._write_merged_gtf(gtfs, output_gtf)
             
-            print(f"Successfully merged {len(gtfs)} GTF files into {output_gtf}")
-            print(f"Identified {len(self.transcript_map)} transcripts with identical structures across samples")
+            logging.info(f"Successfully merged {len(gtfs)} GTF files into {output_gtf}")
+            logging.info(f"Identified {len(self.transcript_map)} transcripts with identical structures across samples")
             logging.info(f"GTF merging complete. Output file: {output_gtf}")
             
         except Exception as e:
@@ -643,7 +654,7 @@ class OutputConfig:
             for transcript_id, canonical_id in self.transcript_map.items():
                 f.write(f"{transcript_id}\t{canonical_id}\n")
         
-        print(f"Transcript mapping written to {output_file}")
+        logging.info(f"Transcript mapping written to {output_file}")
 
     def _write_merged_gtf(self, gtfs, output_gtf):
         """Write the merged GTF with canonical transcript IDs."""
@@ -682,11 +693,7 @@ class OutputConfig:
                             outfile.write(line)
 
     def _merge_transcript_files(self, sample_files_dict, output_file, metric_type):
-        # sample_files_dict: {sample_name: filepath or None}
-        # Merge logic:
-        # 1. Gather all transcripts from all samples
-        # 2. For each transcript, write a line with transcript_id and values from each sample (0 if missing)
-        # 3. Apply transcript mapping to merge identical transcripts
+
         transcripts = {}
         samples = self.samples
         
@@ -766,3 +773,235 @@ class OutputConfig:
     @conditions.setter
     def conditions(self, value):
         self._conditions = value
+
+    @property
+    def has_technical_replicates(self):
+        """Return True if technical replicates were successfully parsed."""
+        return self._has_technical_replicates
+
+    @property 
+    def has_biological_replicates(self):
+        """Return True if every condition has at least two biological replicate files."""
+        if self._has_biological_replicates is None:
+            self._has_biological_replicates = self._check_biological_replicates()
+        return self._has_biological_replicates
+
+    def _parse_technical_replicates(self, tech_rep_spec):
+        """
+        Parse technical replicate specification from command line argument.
+        
+        Args:
+            tech_rep_spec (str): Either a file path or inline specification
+            
+        Returns:
+            dict: Mapping from sample names to replicate group names
+        """
+        if not tech_rep_spec:
+            return {}
+        
+        tech_rep_dict = {}
+        
+        # Check if it's a file path
+        if Path(tech_rep_spec).exists():
+            logging.info(f"Reading technical replicates from file: {tech_rep_spec}")
+            try:
+                with open(tech_rep_spec, 'r') as f:
+                    first_line = True
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+                        if not line or line.startswith('#'):  # Skip empty lines and comments
+                            continue
+                        
+                        # Skip header line if it looks like a header
+                        if first_line:
+                            first_line = False
+                            # Check if this looks like a header (contains common header words)
+                            if any(header_word in line.lower() for header_word in ['sample', 'replicate', 'group', 'name']):
+                                logging.debug(f"Skipping header line: {line}")
+                                continue
+                        
+                        # Support both comma and tab separation
+                        if '\t' in line:
+                            parts = line.split('\t')
+                        elif ',' in line:
+                            parts = line.split(',')
+                        else:
+                            logging.warning(f"Line {line_num} in technical replicates file has invalid format: {line}")
+                            continue
+                        
+                        if len(parts) >= 2:
+                            sample_name = parts[0].strip()
+                            group_name = parts[1].strip()
+                            tech_rep_dict[sample_name] = group_name
+                        else:
+                            logging.warning(f"Line {line_num} in technical replicates file has insufficient columns: {line}")
+                            
+            except Exception as e:
+                logging.error(f"Error reading technical replicates file: {e}")
+                return {}
+        else:
+            # Parse inline specification: sample1:group1,sample2:group1,sample3:group2
+            logging.info("Parsing technical replicates from inline specification")
+            try:
+                pairs = tech_rep_spec.split(',')
+                for pair in pairs:
+                    if ':' in pair:
+                        sample_name, group_name = pair.split(':', 1)
+                        tech_rep_dict[sample_name.strip()] = group_name.strip()
+                    else:
+                        logging.warning(f"Invalid technical replicate pair format: {pair}")
+            except Exception as e:
+                logging.error(f"Error parsing inline technical replicates specification: {e}")
+                return {}
+        
+        if tech_rep_dict:
+            logging.info(f"Successfully parsed {len(tech_rep_dict)} technical replicate mappings")
+            # Log some examples
+            for sample, group in list(tech_rep_dict.items())[:3]:
+                logging.debug(f"Technical replicate mapping: {sample} -> {group}")
+            if len(tech_rep_dict) > 3:
+                logging.debug(f"... and {len(tech_rep_dict) - 3} more mappings")
+        else:
+            logging.warning("No technical replicate mappings found")
+        
+        return tech_rep_dict
+
+    def _check_biological_replicates(self, ref_conditions=None, target_conditions=None):
+        """Return True if biological replicates are detected.
+
+        For YAML input: Check each sample subdirectory - if any sample has >1 column 
+                       in their gene_grouped files, we have biological replicates
+        For FASTQ input: Assume no biological replicates (return False)
+        """
+        from pathlib import Path
+        
+        # If FASTQ input was used, assume no biological replicates
+        if self.log_details.get("fastq_used", False):
+            logging.info("FASTQ input detected - assuming no biological replicates")
+            return False
+        
+        # If no conditions provided, we can't check biological replicates
+        if not ref_conditions and not target_conditions:
+            # If we have conditions from the file, use those
+            if self._conditions:
+                all_conditions = self._conditions
+            else:
+                logging.warning("No conditions available to check for biological replicates")
+                return False
+        else:
+            all_conditions = list(ref_conditions or []) + list(target_conditions or [])
+
+        # For YAML input, check each sample subdirectory
+        if self.yaml_input:
+            return self._check_yaml_sample_replicates()
+        else:
+            # For non-YAML input, check individual condition files
+            return self._check_replicates_from_condition_files(all_conditions)
+
+    def _check_yaml_sample_replicates(self):
+        """Check biological replicates from YAML sample subdirectories.
+        
+        For each sample subdirectory, check if its gene_grouped_counts.tsv or 
+        gene_grouped_tpm.tsv files have more than 1 column (excluding gene ID column).
+        If any sample has >1 column, we have biological replicates.
+        """
+        from pathlib import Path
+        
+        logging.info("Checking biological replicates in YAML sample subdirectories")
+        
+        # Get all sample names from the YAML configuration
+        if not hasattr(self, 'samples') or not self.samples:
+            logging.warning("No samples found in YAML configuration")
+            return False
+        
+        # Check each sample subdirectory for biological replicates
+        samples_with_replicates = 0
+        total_samples_checked = 0
+        
+        for sample in self.samples:
+            sample_dir = Path(self.output_directory) / sample
+            if not sample_dir.exists():
+                logging.debug(f"Sample directory not found: {sample_dir}")
+                continue
+            
+            # Look for gene count files in the sample directory
+            count_files = list(sample_dir.glob("*gene_grouped_counts.tsv"))
+            if not count_files:
+                logging.debug(f"No gene_grouped_counts.tsv file found for sample '{sample}'")
+                continue
+            
+            # Check the number of columns in the count file
+            count_file = count_files[0]
+            try:
+                with open(count_file, 'r') as f:
+                    header = f.readline().strip().split('\t')
+                    sample_columns = header[1:]  # Skip the gene ID column
+                    sample_count = len(sample_columns)
+                
+                total_samples_checked += 1
+                logging.debug(f"Sample '{sample}' has {sample_count} columns in count file")
+                
+                if sample_count >= 2:
+                    samples_with_replicates += 1
+                    logging.info(f"Sample '{sample}' has {sample_count} biological replicates")
+                    
+            except Exception as e:
+                logging.error(f"Error reading file {count_file}: {e}")
+                continue
+        
+        if total_samples_checked == 0:
+            logging.warning("No valid sample count files found")
+            return False
+        
+        # If any sample has biological replicates, we consider the dataset to have biological replicates
+        has_bio_reps = samples_with_replicates > 0
+        
+        if has_bio_reps:
+            logging.info(f"Found biological replicates in {samples_with_replicates}/{total_samples_checked} samples")
+        else:
+            logging.info("No biological replicates found in any sample - each sample has only 1 column")
+        
+        return has_bio_reps
+
+    def _check_replicates_from_condition_files(self, all_conditions):
+        """Check biological replicates from individual condition files."""
+        from pathlib import Path
+        
+        for condition in all_conditions:
+            condition_dir = Path(self.output_directory) / condition
+            if not condition_dir.exists():
+                logging.warning(f"Condition directory not found: {condition_dir}")
+                return False
+            
+            # Look for gene grouped counts file in the condition directory
+            count_files = list(condition_dir.glob("*gene_grouped_counts.tsv"))
+            if not count_files:
+                logging.warning(f"No gene_grouped_counts.tsv file found for condition '{condition}'")
+                return False
+            
+            # Check the number of columns in the first count file
+            count_file = count_files[0]
+            try:
+                with open(count_file, 'r') as f:
+                    header = f.readline().strip().split('\t')
+                    sample_columns = header[1:]  # Skip the gene ID column
+                    sample_count = len(sample_columns)
+                
+                if sample_count < 2:
+                    logging.warning(
+                        f"Condition '{condition}' has {sample_count} biological replicate(s); "
+                        "DESeq2 requires at least 2. Falling back to simple ranking."
+                    )
+                    return False
+                else:
+                    logging.info(f"Condition '{condition}' has {sample_count} biological replicates")
+                    
+            except Exception as e:
+                logging.error(f"Error reading file {count_file}: {e}")
+                return False
+        
+        return True
+
+    def check_biological_replicates_for_conditions(self, ref_conditions, target_conditions):
+        """Check biological replicates for specific conditions."""
+        return self._check_biological_replicates(ref_conditions, target_conditions)

@@ -75,8 +75,8 @@ class PlotOutput:
             # Iterate through conditions until the gene is found.
             for condition, genes in self.updated_gene_dict.items():
                 for gene_id, gene_info in genes.items():
-                    # Compare gene names (case-insensitive, using upper())
-                    if "name" in gene_info and gene_info["name"] == gene_name_or_id.upper():
+                    # Compare gene names (case-insensitive matching)
+                    if "name" in gene_info and gene_info["name"].upper() == gene_name_or_id.upper():
                         gene_data = gene_info
                         # No need to log which condition it came from, as it's pre-filtered.
                         break # Found gene info 
@@ -84,7 +84,7 @@ class PlotOutput:
                     break  # Found gene, stop searching conditions
 
             if not gene_data:
-                logging.warning(f"Gene {gene_name_or_id} not found in the provided (pre-filtered) updated_gene_dict.")
+                logging.warning(f"Gene '{gene_name_or_id}' not found in the provided gene dictionary.")
                 continue  # Skip to the next gene if not found
 
             # Get chromosome info and calculate buffer
@@ -236,8 +236,8 @@ class PlotOutput:
             for condition, genes in self.updated_gene_dict.items():
                 condition_gene_data = None
                 for gene_id, gene_info in genes.items():
-                    # Compare gene names (case-insensitive)
-                    if "name" in gene_info and gene_info["name"] == gene_name_or_id.upper():
+                    # Compare gene names (case-insensitive matching)
+                    if "name" in gene_info and gene_info["name"].upper() == gene_name_or_id.upper():
                         condition_gene_data = gene_info.get("transcripts", {}) # Get transcripts, default to empty dict
                         found_gene_any_condition = True
                         #logging.debug(f"Found gene {gene_name_or_id} data for condition {condition}")

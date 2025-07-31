@@ -28,6 +28,7 @@ class DifferentialAnalysis:
         top_transcripts_base_mean: int = 500,
         top_n_genes: int = 100,
         log_level: int = logging.INFO, # Allow configuring log level
+        tech_rep_dict: Dict[str, str] = None,
     ):
         """Initialize differential expression analysis."""
         def quiet_cb(x):
@@ -75,6 +76,7 @@ class DifferentialAnalysis:
         self.transcript_to_gene = self._create_transcript_to_gene_map()
         self.visualizer = ExpressionVisualizer(self.deseq_dir)
         self.gene_mapper = GeneMapper()
+        self.tech_rep_dict = tech_rep_dict
 
     def _load_transcript_mapping_from_file(self):
         """Load transcript mapping directly from the transcript_mapping.tsv file."""
@@ -415,6 +417,9 @@ class DifferentialAnalysis:
         combined_df = pd.concat(all_sample_dfs, axis=1)
         self.logger.info(f"Combined count data shape before mapping: {combined_df.shape}")
         
+        # Apply technical replicate merging before transcript mapping
+        combined_df = self._merge_technical_replicates(combined_df)
+        
         # Apply transcript mapping if available
         if not hasattr(self, 'transcript_map') or not self.transcript_map:
             self.logger.info("No transcript mapping available, using raw counts")
@@ -513,6 +518,10 @@ class DifferentialAnalysis:
             # Combine all sample dataframes
             combined_df = pd.concat(all_sample_dfs, axis=1)
             self.logger.info(f"Combined gene count data shape: {combined_df.shape}")
+            
+            # Apply technical replicate merging
+            combined_df = self._merge_technical_replicates(combined_df)
+            
             return combined_df
         else:
             self.logger.error(f"Unsupported count pattern: {pattern}")
@@ -684,6 +693,31 @@ class DifferentialAnalysis:
                 res_df = robjects.conversion.rpy2py(r("as.data.frame")(res)) # Convert to R dataframe first for stability
                 res_df.index = count_data.index # Assign original feature IDs as index
 
+                # Extract dispersion estimates
+                self.logger.debug("Extracting dispersion estimates...")
+                dispersions_r = r['dispersions'](dds)
+                dispersions_py = robjects.conversion.rpy2py(dispersions_r)
+                
+                # Add dispersion estimates to results DataFrame
+                res_df['dispersion'] = dispersions_py
+
+                # Extract size factors
+                self.logger.debug("Extracting size factors...")
+                size_factors_r = r['sizeFactors'](dds)
+                size_factors_py = robjects.conversion.rpy2py(size_factors_r)
+                
+                # Create size factors DataFrame with sample names
+                size_factors_df = pd.DataFrame({
+                    'sample': count_data.columns,
+                    'size_factor': size_factors_py
+                })
+                
+                # Save size factors to file
+                target_label = "+".join(self.target_conditions)
+                reference_label = "+".join(self.ref_conditions)
+                size_factors_file = self.deseq_dir / f"size_factors_{level}_{target_label}_vs_{reference_label}.csv"
+                size_factors_df.to_csv(size_factors_file, index=False)
+                self.logger.info(f"Size factors saved to {size_factors_file}")
 
                 # Correct way to call the R 'counts' function on the dds object
                 # Ensure 'r' is imported: from rpy2.robjects import r
@@ -694,6 +728,8 @@ class DifferentialAnalysis:
                 # Ensure DataFrame structure matches original count_data (features x samples)
                 normalized_counts_df = pd.DataFrame(normalized_counts_py, index=count_data.index, columns=count_data.columns)
 
+                # Generate dispersion and count summaries
+                self._generate_dispersion_summary(res_df, level)
 
                 self.logger.info(f"DESeq2 run completed for {level}. Results shape: {res_df.shape}, Normalized counts shape: {normalized_counts_df.shape}")
                 return res_df, normalized_counts_df
@@ -702,6 +738,135 @@ class DifferentialAnalysis:
             self.logger.error(f"Error running DESeq2 for {level}: {str(e)}")
             # Return empty DataFrames on error to avoid downstream issues
             return pd.DataFrame(), pd.DataFrame(index=count_data.index, columns=count_data.columns)
+
+    def _generate_dispersion_summary(self, results_df: pd.DataFrame, level: str) -> None:
+        """
+        Generate summary statistics for average read counts and dispersion estimates.
+        Saves summary to a file and logs key statistics.
+
+        Args:
+            results_df: DESeq2 results DataFrame with baseMean and dispersion columns
+            level: Analysis level (gene/transcript)
+        """
+        if results_df.empty:
+            self.logger.warning(f"Cannot generate dispersion summary for {level}: Results DataFrame is empty.")
+            return
+
+        self.logger.info(f"Generating dispersion and count summary for {level} level...")
+
+        # Check if required columns exist
+        required_cols = ['baseMean', 'dispersion']
+        missing_cols = [col for col in required_cols if col not in results_df.columns]
+        if missing_cols:
+            self.logger.warning(f"Cannot generate complete summary for {level}: Missing columns {missing_cols}")
+            return
+
+        # Remove NaN values for summary statistics
+        clean_data = results_df[['baseMean', 'dispersion']].dropna()
+        
+        if clean_data.empty:
+            self.logger.warning(f"No valid data for dispersion summary for {level} after removing NaN values.")
+            return
+
+        # Calculate summary statistics
+        summary_stats = {
+            'level': level,
+            'total_features': len(results_df),
+            'features_with_valid_data': len(clean_data),
+            
+            # Average read count (baseMean) statistics
+            'baseMean_mean': clean_data['baseMean'].mean(),
+            'baseMean_median': clean_data['baseMean'].median(),
+            'baseMean_std': clean_data['baseMean'].std(),
+            'baseMean_min': clean_data['baseMean'].min(),
+            'baseMean_max': clean_data['baseMean'].max(),
+            'baseMean_q25': clean_data['baseMean'].quantile(0.25),
+            'baseMean_q75': clean_data['baseMean'].quantile(0.75),
+            
+            # Dispersion statistics
+            'dispersion_mean': clean_data['dispersion'].mean(),
+            'dispersion_median': clean_data['dispersion'].median(),
+            'dispersion_std': clean_data['dispersion'].std(),
+            'dispersion_min': clean_data['dispersion'].min(),
+            'dispersion_max': clean_data['dispersion'].max(),
+            'dispersion_q25': clean_data['dispersion'].quantile(0.25),
+            'dispersion_q75': clean_data['dispersion'].quantile(0.75),
+        }
+
+        # Add size factor statistics if available
+        target_label = "+".join(self.target_conditions)
+        reference_label = "+".join(self.ref_conditions)
+        size_factors_file = self.deseq_dir / f"size_factors_{level}_{target_label}_vs_{reference_label}.csv"
+        
+        if size_factors_file.exists():
+            try:
+                size_factors_df = pd.read_csv(size_factors_file)
+                if 'size_factor' in size_factors_df.columns:
+                    sf_data = size_factors_df['size_factor'].dropna()
+                    summary_stats.update({
+                        'size_factor_mean': sf_data.mean(),
+                        'size_factor_median': sf_data.median(),
+                        'size_factor_std': sf_data.std(),
+                        'size_factor_min': sf_data.min(),
+                        'size_factor_max': sf_data.max(),
+                        'size_factor_q25': sf_data.quantile(0.25),
+                        'size_factor_q75': sf_data.quantile(0.75),
+                    })
+                    self.logger.info(f"  Size factors: mean={summary_stats['size_factor_mean']:.4f}, median={summary_stats['size_factor_median']:.4f}, range={summary_stats['size_factor_min']:.4f}-{summary_stats['size_factor_max']:.4f}")
+            except Exception as e:
+                self.logger.warning(f"Could not read size factors file: {e}")
+
+        # Log key statistics
+        self.logger.info(f"{level.capitalize()} level summary:")
+        self.logger.info(f"  Total features: {summary_stats['total_features']}")
+        self.logger.info(f"  Features with valid data: {summary_stats['features_with_valid_data']}")
+        self.logger.info(f"  Average read count (baseMean): mean={summary_stats['baseMean_mean']:.2f}, median={summary_stats['baseMean_median']:.2f}")
+        self.logger.info(f"  Dispersion: mean={summary_stats['dispersion_mean']:.4f}, median={summary_stats['dispersion_median']:.4f}")
+
+        # Create a more detailed summary for significant DE genes/transcripts
+        if 'padj' in results_df.columns:
+            significant_features = results_df[results_df['padj'] < 0.05].dropna(subset=['baseMean', 'dispersion'])
+            if not significant_features.empty:
+                summary_stats.update({
+                    'significant_features_count': len(significant_features),
+                    'significant_baseMean_mean': significant_features['baseMean'].mean(),
+                    'significant_baseMean_median': significant_features['baseMean'].median(),
+                    'significant_dispersion_mean': significant_features['dispersion'].mean(),
+                    'significant_dispersion_median': significant_features['dispersion'].median(),
+                })
+                
+                self.logger.info(f"  Significant DE features (padj < 0.05): {summary_stats['significant_features_count']}")
+                self.logger.info(f"  Significant features - Average read count: mean={summary_stats['significant_baseMean_mean']:.2f}, median={summary_stats['significant_baseMean_median']:.2f}")
+                self.logger.info(f"  Significant features - Dispersion: mean={summary_stats['significant_dispersion_mean']:.4f}, median={summary_stats['significant_dispersion_median']:.4f}")
+
+        # Save summary to file
+        summary_file = self.deseq_dir / f"dispersion_count_summary_{level}_{target_label}_vs_{reference_label}.txt"
+        
+        with open(summary_file, 'w') as f:
+            f.write(f"Dispersion and Count Summary for {level.capitalize()} Level Analysis\n")
+            f.write(f"Comparison: {target_label} vs {reference_label}\n")
+            f.write("=" * 60 + "\n\n")
+            
+            for key, value in summary_stats.items():
+                if isinstance(value, float):
+                    f.write(f"{key}: {value:.6f}\n")
+                else:
+                    f.write(f"{key}: {value}\n")
+
+        self.logger.info(f"Dispersion and count summary saved to {summary_file}")
+
+        # Also save detailed data for further analysis
+        detailed_file = self.deseq_dir / f"detailed_dispersion_data_{level}_{target_label}_vs_{reference_label}.csv"
+        
+        # Include feature mapping information if available
+        detailed_data = results_df[['baseMean', 'dispersion', 'log2FoldChange', 'pvalue', 'padj']].copy()
+        if 'gene_name' in results_df.columns:
+            detailed_data['gene_name'] = results_df['gene_name']
+        if 'transcript_symbol' in results_df.columns:
+            detailed_data['transcript_symbol'] = results_df['transcript_symbol']
+        
+        detailed_data.to_csv(detailed_file)
+        self.logger.info(f"Detailed dispersion data saved to {detailed_file}")
 
     def _map_gene_symbols(self, feature_ids: List[str], level: str) -> Dict[str, Dict[str, Optional[str]]]:
         """
@@ -915,3 +1080,74 @@ class DifferentialAnalysis:
 
         except Exception as e:
             self.logger.error(f"Error during PCA calculation or plotting for {level}: {str(e)}")
+
+    def _merge_technical_replicates(self, count_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Merge technical replicates by summing counts for samples in the same replicate group.
+        
+        Args:
+            count_data: DataFrame with samples as columns and features as rows
+            
+        Returns:
+            DataFrame with technical replicates merged
+        """
+        if not self.tech_rep_dict:
+            self.logger.info("No technical replicates specified, returning original data")
+            return count_data
+        
+        self.logger.info(f"Merging technical replicates using {len(self.tech_rep_dict)} mappings")
+        
+        # Create a mapping from sample columns to replicate groups
+        sample_to_group = {}
+        for col in count_data.columns:
+            # Extract the base sample name (remove condition prefix if present)
+            base_sample = col
+            for condition in self.ref_conditions + self.target_conditions:
+                if col.startswith(f"{condition}_"):
+                    base_sample = col[len(condition)+1:]
+                    break
+            
+            # Check if this sample is in the technical replicates mapping
+            if base_sample in self.tech_rep_dict:
+                group_name = self.tech_rep_dict[base_sample]
+                # Reconstruct the group name with condition prefix
+                condition_prefix = col.replace(base_sample, "").rstrip("_")
+                if condition_prefix:
+                    full_group_name = f"{condition_prefix}_{group_name}"
+                else:
+                    full_group_name = group_name
+                sample_to_group[col] = full_group_name
+            else:
+                # Keep original sample name if not in technical replicates
+                sample_to_group[col] = col
+        
+        # Group samples by their replicate groups
+        group_to_samples = {}
+        for sample, group in sample_to_group.items():
+            if group not in group_to_samples:
+                group_to_samples[group] = []
+            group_to_samples[group].append(sample)
+        
+        # Create merged DataFrame
+        merged_data = pd.DataFrame(index=count_data.index)
+        
+        merge_stats = {"merged_groups": 0, "original_samples": len(count_data.columns)}
+        
+        for group_name, samples in group_to_samples.items():
+            if len(samples) == 1:
+                # No merging needed, just rename
+                merged_data[group_name] = count_data[samples[0]]
+            else:
+                # Sum technical replicates
+                merged_data[group_name] = count_data[samples].sum(axis=1)
+                merge_stats["merged_groups"] += 1
+                self.logger.debug(f"Merged technical replicates for group {group_name}: {samples}")
+        
+        merge_stats["final_samples"] = len(merged_data.columns)
+        self.logger.info(
+            f"Technical replicate merging complete: "
+            f"{merge_stats['original_samples']} samples -> {merge_stats['final_samples']} samples "
+            f"({merge_stats['merged_groups']} groups had multiple replicates)"
+        )
+        
+        return merged_data

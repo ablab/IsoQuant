@@ -87,84 +87,132 @@ class GSEAAnalysis:
         with localconverter(robjects.default_converter + pandas2ri.converter):
             r_ranked_genes = pandas2ri.py2rpy(ranked_genes.sort_values(ascending=False))
 
-        def plot_pathways(df: pd.DataFrame, direction: str, ont: str):
-            if df.empty:
-                logging.info(f"No {direction} pathways to plot.")
+        def plot_pathways(up_df: pd.DataFrame, down_df: pd.DataFrame, ont: str):
+            if up_df.empty and down_df.empty:
+                logging.info(f"No pathways to plot for {ont}.")
                 return
-
-            df["label"] = df["ID"] + ": " + df["Description"]
-            df["-log10(p.adjust)"] = -np.log10(df["p.adjust"])
+                
+            # Process DataFrame if not empty
+            if not up_df.empty:
+                # Remove GO IDs from labels, keeping only the description
+                up_df["label"] = up_df["Description"]
+                up_df["-log10(p.adjust)"] = -np.log10(up_df["p.adjust"])
+                up_df = up_df.sort_values(by="NES", ascending=False)
             
-            # Sort by NES value - for up-regulated, highest NES first; for down-regulated, lowest NES first
-            if direction == "up":
-                df = df.sort_values(by="NES", ascending=False)
-                plot_values = df["NES"]  # Use NES directly for up-regulated
-            else:  # down
-                df = df.sort_values(by="NES", ascending=True)
-                plot_values = df["NES"].abs()  # Use absolute NES for down-regulated
+            if not down_df.empty:
+                # Remove GO IDs from labels, keeping only the description
+                down_df["label"] = down_df["Description"]
+                down_df["-log10(p.adjust)"] = -np.log10(down_df["p.adjust"])
+                down_df = down_df.sort_values(by="NES", ascending=True)
             
-            # Use NES for bar length but -log10(p.adjust) for color
-            values = df["-log10(p.adjust)"]
+            # Find the global min and max for -log10(p.adjust) for consistent coloring
+            all_pvals = []
+            if not up_df.empty:
+                all_pvals.extend(up_df["-log10(p.adjust)"].tolist())
+            if not down_df.empty:
+                all_pvals.extend(down_df["-log10(p.adjust)"].tolist())
+                
+            if not all_pvals:
+                return  # Skip if no values
+                
+            # Get global min and max p-values
+            global_vmin = min(all_pvals)
+            global_vmax = max(all_pvals)
             
-            # Use the data's own range for each direction
-            vmin = values.min()
-            vmax = values.max()
+            # Adjust the maximum value to prevent saturation of highly significant pathways
+            # Use either actual max or a higher percentile value, whichever is higher
+            # This prevents all highly significant pathways from appearing with the same color
+            if len(all_pvals) > 1:
+                # Calculate 90th percentile of p-values
+                percentile_90 = np.percentile(all_pvals, 90)
+                
+                # If max is much larger than 90th percentile, use an intermediate value
+                if global_vmax > 2 * percentile_90:
+                    adjusted_vmax = percentile_90 + (global_vmax - percentile_90) / 3
+                    # But ensure we don't lower the max too much
+                    global_vmax = max(adjusted_vmax, global_vmax * 0.7)
+                    
+                # Log the adjustment for debugging
+                logging.debug(f"P-value color scale: original max={max(all_pvals):.2f}, adjusted max={global_vmax:.2f}")
             
-            norm = plt.Normalize(vmin=vmin, vmax=vmax)
+            # Create a consistent color normalization across both plots
+            norm = plt.Normalize(vmin=global_vmin, vmax=global_vmax)
             cmap = plt.cm.get_cmap("viridis")
-            colors_for_bars = [cmap(norm(v)) for v in values]
-
-            plt.figure(figsize=(14, 8))  # Wider figure to accommodate legend
             
-            # Use NES for bar length (absolute value for down-regulated)
-            plt.barh(
-                df["label"].iloc[::-1],
-                plot_values.iloc[::-1],  # Use appropriate values based on direction
-                color=colors_for_bars[::-1],  # Still color by significance
-            )
-            
-            # Add a colorbar to show the significance scale
-            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-            sm.set_array([])
-            cbar = plt.colorbar(sm)
-            cbar.set_label("-log10(adjusted p-value)")
-            
-            # Add legend explaining the visualization
-            legend_elements = [
-                Patch(facecolor='gray', alpha=0.5, 
-                      label='Bar length: Normalized Enrichment Score (NES)'),
-                Patch(facecolor=cmap(0.25), alpha=0.8, 
-                      label='Bar color: Statistical significance'),
-            ]
-            # Move legend much further to the right
-            plt.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.25, 1))
-            
-            # Set x-axis label based on direction
-            if direction == "up":
-                plt.xlabel("Normalized Enrichment Score (NES)")
-            else:
-                plt.xlabel("Absolute Normalized Enrichment Score (|NES|)")
-
             # Split target label into reference and target parts
             target_parts = target_label.split("_vs_")
             target_condition = target_parts[0]
             ref_condition = target_parts[1]
-
-            # Create title based on direction
-            if direction == "up":
-                condition_str = f"Pathways enriched in {target_condition}\nvs {ref_condition} - {ont}"
-            else:
-                condition_str = f"Pathways enriched in {ref_condition}\nvs {target_condition} - {ont}"
-
-            plt.title(condition_str, fontsize=10)
             
-            # Adjust layout to make room for legend
-            plt.tight_layout()
-            # Save with extra space for the legend
-            plot_path = self.output_path / f"GSEA_top_pathways_{direction}_{ont}.pdf"
-            plt.savefig(plot_path, format="pdf", bbox_inches="tight", dpi=300)
-            plt.close()
-            logging.info(f"GSEA {direction} pathways plot saved to {plot_path}")
+            # Plot UP-regulated pathways
+            if not up_df.empty:
+                up_values = up_df["-log10(p.adjust)"]
+                up_colors = [cmap(norm(v)) for v in up_values]
+                
+                # Adjust figure size - no need for extra space for legend
+                plt.figure(figsize=(12, 10))
+                
+                # Create horizontal bar plot
+                bars = plt.barh(
+                    up_df["label"].iloc[::-1],
+                    up_df["NES"].iloc[::-1],
+                    color=up_colors[::-1],
+                )
+                
+                # Remove the p-value text labels
+                
+                # Add colorbar with the global scale
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+                sm.set_array([])
+                cbar = plt.colorbar(sm)
+                cbar.set_label("-log10(adjusted p-value)", fontsize=12)
+                
+                plt.xlabel("Normalized Enrichment Score (NES)", fontsize=12)
+                condition_str = f"Pathways enriched in {target_condition}\nvs {ref_condition} - {ont}"
+                plt.title(condition_str, fontsize=14)
+                
+                # Ensure y-axis labels are fully visible
+                plt.tight_layout()
+                plt.subplots_adjust(left=0.3)  # Add more space on the left for labels
+                
+                plot_path = self.output_path / f"GSEA_top_pathways_up_{ont}.pdf"
+                plt.savefig(plot_path, format="pdf", bbox_inches="tight", dpi=600)
+                plt.close()
+                logging.info(f"GSEA up-regulated pathways plot saved to {plot_path} with high resolution")
+            
+            # Plot DOWN-regulated pathways
+            if not down_df.empty:
+                down_values = down_df["-log10(p.adjust)"]
+                down_colors = [cmap(norm(v)) for v in down_values]
+                
+                # Adjust figure size - no need for extra space for legend
+                plt.figure(figsize=(12, 10))
+                
+                # Create horizontal bar plot
+                bars = plt.barh(
+                    down_df["label"].iloc[::-1],
+                    down_df["NES"].abs().iloc[::-1],  # Use absolute NES for down-regulated
+                    color=down_colors[::-1],
+                )
+                
+                # Add colorbar with the global scale
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+                sm.set_array([])
+                cbar = plt.colorbar(sm)
+                cbar.set_label("-log10(adjusted p-value)", fontsize=12)
+                
+                plt.xlabel("Absolute Normalized Enrichment Score (|NES|)", fontsize=12)
+                condition_str = f"Pathways enriched in {ref_condition}\nvs {target_condition} - {ont}"
+                plt.title(condition_str, fontsize=14)
+                
+                # Ensure y-axis labels are fully visible
+                plt.tight_layout()
+                plt.subplots_adjust(left=0.3)  # Add more space on the left for labels
+                
+                plot_path = self.output_path / f"GSEA_top_pathways_down_{ont}.pdf"
+                plt.savefig(plot_path, format="pdf", bbox_inches="tight", dpi=600)
+                plt.close()
+                logging.info(f"GSEA down-regulated pathways plot saved to {plot_path} with high resolution")
 
         # Run GO analysis for each ontology
         ontologies = ["BP", "MF", "CC"]
@@ -212,10 +260,11 @@ class GSEAAnalysis:
                 gsea_df.to_csv(gsea_outfile, index=False)
                 logging.info(f"Complete GSEA results for {ont} saved to {gsea_outfile}")
 
-                # Plot significant pathways
+                # Process significant pathways
                 sig_gsea_df = gsea_df[
                     gsea_df["p.adjust"] < 0.05
                 ].copy()  # Using 0.05 threshold
+                
                 if not sig_gsea_df.empty:
                     up_pathways = sig_gsea_df[sig_gsea_df["NES"] > 0].nsmallest(
                         15, "p.adjust"
@@ -224,11 +273,8 @@ class GSEAAnalysis:
                         15, "p.adjust"
                     )
 
-                    # Use separate color scales for each direction
-                    if not up_pathways.empty:
-                        plot_pathways(up_pathways, "up", ont)
-                    if not down_pathways.empty:
-                        plot_pathways(down_pathways, "down", ont)
+                    # Use consistent color scales across both plots
+                    plot_pathways(up_pathways, down_pathways, ont)
                 else:
                     logging.info(f"No pathways with adj.P<0.05 found for {ont}")
 
