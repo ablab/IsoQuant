@@ -27,4 +27,4 @@ In this case it will be converted to [gffutils](https://pythonhosted.org/gffutil
 Note, that gffutils databases may not work correctly on NFS shares. It is possible to set a designated folder for 
 the database with `--genedb_output` (different from the output directory).
 
-Pre-constructed aligner index can also be provided to increase mapping time.
+Pre-constructed aligner index can also be provided to reduce mapping time.
