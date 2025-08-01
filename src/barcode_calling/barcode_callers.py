@@ -958,7 +958,7 @@ class TenXBarcodeDetector:
             logger.debug("Loaded %d UMIs" % len(umi_list))
             self.umi_indexer = KmerIndexer(umi_list, kmer_size=5)
         self.min_score = 14
-        if len(barcode_list) > 100000:
+        if len(self.barcode_indexer.seq_list) > 100000:
             self.min_score = 16
         logger.debug("Min score set to %d" % self.min_score)
 
