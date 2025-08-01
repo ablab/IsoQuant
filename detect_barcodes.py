@@ -448,7 +448,7 @@ def parse_args(sys_argv):
     parser.add_argument("--threads", "-t", type=int, help="threads to use (16)", default=16)
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
     parser.add_argument("--min_score", type=int, help="minimal barcode score "
-                                                      "(scoring system is +1, -1, -1, -1)", default=22)
+                                                      "(scoring system is +1, -1, -1, -1)")
     parser.add_argument('--out_fasta', type=str, help='Print deconcatenated reads into a FASTA file')
     add_hidden_option('--debug', action='store_true', default=False, help='Debug log output.')
 
