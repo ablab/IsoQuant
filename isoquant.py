@@ -113,7 +113,7 @@ def parse_args(cmd_args=None, namespace=None):
     input_args.add_argument('--bam', nargs='+', type=str,
                             help='sorted and indexed BAM file(s), each file will be treated as a separate sample')
     input_args.add_argument('--fastq', nargs='+', type=str,
-                            help='input FASTQ file(s), each file will be treated as a separate sample; '
+                            help='input FASTQ/FASTA file(s) with reads, each file will be treated as a separate sample; '
                                  'reference genome should be provided when using reads as input')
     add_additional_option_to_group(input_args,'--bam_list', type=str,
                                    help='text file with list of BAM files, one file per line, '
