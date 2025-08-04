@@ -12,6 +12,7 @@ from collections import defaultdict
 import logging
 import editdistance
 import gffutils
+
 from src.assignment_loader import create_assignment_loader
 from src.isoform_assignment import MatchEventSubtype
 

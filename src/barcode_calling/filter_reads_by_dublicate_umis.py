@@ -10,6 +10,11 @@ import sys
 import argparse
 from traceback import print_exc
 import logging
+from os.path import abspath, dirname, realpath, join, isfile
+
+script_home = abspath(dirname(realpath(__file__)))
+isoquant_root = abspath(join(script_home, "../../"))
+sys.path.append(join(isoquant_root))
 
 from umi_filtering import UMIFilter, filter_bam, load_barcodes, create_transcript_info_dict
 
