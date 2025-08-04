@@ -205,7 +205,8 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
     print("Running ILP part")
     export = False#we want to export any graph object together with all infos
     export_large = True #we only would like to export the really large graph objects
-
+    plot_graphs = False #We do not want to plot all the graphs
+    plot_large = True
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
     #constraints = Constraints_Transfer_Format(transcripts_constraints)
     filter_constraints(constraints,graph)
@@ -230,23 +231,24 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
         if len(graph.edges()) < 500: #we have a reasonably sized graph (not too big for the model)
             if export:
                 export_data(graph, additional_starts, additional_ends, edges_to_ignore, constraints)
-            fp.utils.draw(
-                G=graph,
-                flow_attr="flow",
-                filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "graph.png",
-                # this will be used as filename
-                draw_options={
-                    "show_graph_edges": True,
-                    "show_edge_weights": True,
-                    "show_path_weights": False,
-                    "show_node_weights": True,
-                    "show_path_weight_on_first_edge": True,
-                    "pathwidth": 2,
+            if plot_graphs:
+                fp.utils.draw(
+                    G=graph,
+                    flow_attr="flow",
+                    filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "graph.png",
+                    # this will be used as filename
+                    draw_options={
+                        "show_graph_edges": True,
+                        "show_edge_weights": True,
+                        "show_path_weights": False,
+                        "show_node_weights": True,
+                        "show_path_weight_on_first_edge": True,
+                        "pathwidth": 2,
 
-                },
-                additional_starts=additional_starts,
-                additional_ends=additional_ends,
-                subpath_constraints=constraints, )
+                    },
+                    additional_starts=additional_starts,
+                    additional_ends=additional_ends,
+                    subpath_constraints=constraints, )
             print("Running MinErrorFlow")
             correction_model = fp.MinErrorFlow(
                 G=graph,
@@ -282,22 +284,23 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
 
             # draw the ground truth isoforms , might yield bugs (if partaking nodes are not part of the current graph)!!
             gtweights = [1] * len(ground_truth_isoforms)
-            fp.utils.draw(
-                G=graph,
-                flow_attr="flow",
-                paths=ground_truth_isoforms,
-                weights=gtweights,
-                filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "groundtruth.png",
-                # this will be used as filename
-                draw_options={
-                    "show_graph_edges": True,
-                    "show_edge_weights": False,
-                    "show_path_weights": False,
-                    "show_path_weight_on_first_edge": True,
-                    "pathwidth": 2,
-                },
-                additional_starts=additional_starts,
-                additional_ends=additional_ends, )
+            if plot_graphs:
+                fp.utils.draw(
+                    G=graph,
+                    flow_attr="flow",
+                    paths=ground_truth_isoforms,
+                    weights=gtweights,
+                    filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "groundtruth.png",
+                    # this will be used as filename
+                    draw_options={
+                        "show_graph_edges": True,
+                        "show_edge_weights": False,
+                        "show_path_weights": False,
+                        "show_path_weight_on_first_edge": True,
+                        "pathwidth": 2,
+                    },
+                    additional_starts=additional_starts,
+                    additional_ends=additional_ends, )
             start = time.time()
             mfd_model.solve()
             end = time.time()
@@ -315,23 +318,24 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
         else: #the graph we want to get solved contains a high number of edges, we, therefore, use symmetry breaking models to solve the graph and save time
             if export_large or export:
                 export_data(graph, additional_starts, additional_ends, edges_to_ignore, constraints)
-            fp.utils.draw(
-                G=graph,
-                flow_attr="flow",
-                filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "graph.png",
-                # this will be used as filename
-                draw_options={
-                    "show_graph_edges": True,
-                    "show_edge_weights": True,
-                    "show_path_weights": False,
-                    "show_node_weights": True,
-                    "show_path_weight_on_first_edge": True,
-                    "pathwidth": 2,
+            if plot_large:
+                fp.utils.draw(
+                    G=graph,
+                    flow_attr="flow",
+                    filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "graph.png",
+                    # this will be used as filename
+                    draw_options={
+                        "show_graph_edges": True,
+                        "show_edge_weights": True,
+                        "show_path_weights": False,
+                        "show_node_weights": True,
+                        "show_path_weight_on_first_edge": True,
+                        "pathwidth": 2,
 
-                },
-                additional_starts=additional_starts,
-                additional_ends=additional_ends,
-                subpath_constraints=constraints, )
+                    },
+                    additional_starts=additional_starts,
+                    additional_ends=additional_ends,
+                    subpath_constraints=constraints, )
             print("Running MinErrorFlow")
             correction_model = fp.MinErrorFlow(
                 G=graph,
@@ -366,22 +370,23 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
 
             # draw the ground truth isoforms , might yield bugs (if partaking nodes are not part of the current graph)!!
             gtweights = [1] * len(ground_truth_isoforms)
-            fp.utils.draw(
-                G=graph,
-                flow_attr="flow",
-                paths=ground_truth_isoforms,
-                weights=gtweights,
-                filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "groundtruth.png",
-                # this will be used as filename
-                draw_options={
-                    "show_graph_edges": True,
-                    "show_edge_weights": False,
-                    "show_path_weights": False,
-                    "show_path_weight_on_first_edge": True,
-                    "pathwidth": 2,
-                },
-                additional_starts=additional_starts,
-                additional_ends=additional_ends, )
+            if plot_large:
+                fp.utils.draw(
+                    G=graph,
+                    flow_attr="flow",
+                    paths=ground_truth_isoforms,
+                    weights=gtweights,
+                    filename=chr_id + "_" + gene_id + "_" + str(id(graph)) + "groundtruth.png",
+                    # this will be used as filename
+                    draw_options={
+                        "show_graph_edges": True,
+                        "show_edge_weights": False,
+                        "show_path_weights": False,
+                        "show_path_weight_on_first_edge": True,
+                        "pathwidth": 2,
+                    },
+                    additional_starts=additional_starts,
+                    additional_ends=additional_ends, )
             start = time.time()
             mfd_model.solve()
             end = time.time()
@@ -410,22 +415,23 @@ def process_solution(
         additional_ends: list = []):
     if model.is_solved():
         solution = model.get_solution()
-        #print(solution)
+        plot_graphs = False #dedicated variable set to plot or not plot solutions to graphs
         #print(model.solve_statistics)
         print("model.is_valid_solution()", model.is_valid_solution())
-        fp.utils.draw(
-            G=graph,
-            flow_attr="flow",
-            paths = solution["paths"],
-            weights = solution["weights"],
-            filename = str(id(graph))+"solution.png", # this will be used as filename
-            draw_options = {
-            "show_graph_edges": True,
-            "show_edge_weights": True,
-            "show_path_weights": False,
-            "show_path_weight_on_first_edge": True,
-            "pathwidth": 2,
-        },
+        if plot_graphs
+            fp.utils.draw(
+                G=graph,
+                flow_attr="flow",
+                paths = solution["paths"],
+                weights = solution["weights"],
+                filename = str(id(graph))+"solution.png", # this will be used as filename
+                draw_options = {
+                "show_graph_edges": True,
+                "show_edge_weights": True,
+                "show_path_weights": False,
+                "show_path_weight_on_first_edge": True,
+                "pathwidth": 2,
+            },
         additional_starts = additional_starts,
         additional_ends = additional_ends,)
 
