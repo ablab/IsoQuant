@@ -142,18 +142,24 @@ def transfer_constraints(transcripts_constrints,graph):
 
 import time
 
-def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints):
-    nx.write_gml(graph, "graph.gml")
-    add_startsfile = open('add_starts', 'wb')
+def export_data(graph, additional_starts,additional_ends,edges_to_ignore,constraints,chr_id,gene_id):
+    this_name="_"+chr_id+"_"+gene_id
+    graphname="graph"+this_name+".gml"
+    nx.write_gml(graph, graphname)
+    add_starts_name="add_starts"+this_name
+    add_startsfile = open(add_starts_name, 'wb')
     pickle.dump(additional_starts, add_startsfile)
     add_startsfile.close()
-    add_endsfile = open('add_ends', 'wb')
+    add_ends_name='add_ends'+this_name
+    add_endsfile = open(add_ends_name, 'wb')
     pickle.dump(additional_ends, add_endsfile)
     add_endsfile.close()
-    edges_ignore = open('edges_ignored', 'wb')
+    edges_ignored_name='edges_ignored'+this_name
+    edges_ignore = open(edges_ignored_name, 'wb')
     pickle.dump(edges_to_ignore, edges_ignore)
     edges_ignore.close()
-    add_constraintsfile = open('constraints','wb')
+    constraints_name='constraints'+this_name
+    add_constraintsfile = open(constraints_name,'wb')
     pickle.dump(constraints,add_constraintsfile)
     add_constraintsfile.close()
 
@@ -197,7 +203,8 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
 
 
     print("Running ILP part")
-    export = False
+    export = False#we want to export any graph object together with all infos
+    export_large = True #we only would like to export the really large graph objects
 
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
     #constraints = Constraints_Transfer_Format(transcripts_constraints)
@@ -306,7 +313,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
 
             res = list(zip(original_paths, weights))
         else: #the graph we want to get solved contains a high number of edges, we, therefore, use symmetry breaking models to solve the graph and save time
-            if export:
+            if export_large or export:
                 export_data(graph, additional_starts, additional_ends, edges_to_ignore, constraints)
             fp.utils.draw(
                 G=graph,

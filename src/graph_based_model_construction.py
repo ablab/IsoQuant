@@ -676,7 +676,7 @@ class GraphBasedModelConstructor:
             #else:
             #intron_path = path[1:-1]
             if not intron_path: continue
-            transcript_range = (path[0][1], path[-1][1])
+            transcript_range = (int(path[0][1]), int(path[-1][1]))
             novel_exons = get_exons(transcript_range, list(intron_path))
             if not novel_exons: continue
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.get_transcript_id())
