@@ -418,7 +418,7 @@ def process_solution(
         plot_graphs = False #dedicated variable set to plot or not plot solutions to graphs
         #print(model.solve_statistics)
         print("model.is_valid_solution()", model.is_valid_solution())
-        if plot_graphs
+        if plot_graphs:
             fp.utils.draw(
                 G=graph,
                 flow_attr="flow",
