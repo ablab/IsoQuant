@@ -1,5 +1,19 @@
 # IsoQuant changelog
 
+
+## IsoQuant 3.7.1, 5 August 2025
+
+- Support for indexing BAMs with large chromosomes, fixes [#327](https://github.com/ablab/IsoQuant/issues/327). Thanks to @maol-corteva.
+
+- `CDS` features are now used when `exon` features are absent, fixes [#309](https://github.com/ablab/IsoQuant/issues/309).
+ 
+- Chromosome names are now checked for consistency between reference genome, annotation and BAM file provided. 
+Only overlapping chromosome names are used if inconsistent.
+
+- Fixed SQANTI-like output headers, fixes [#318](https://github.com/ablab/IsoQuant/issues/318).
+
+- Some minor cosmetics.
+
 ## IsoQuant 3.7.0, 16 May 2025
 
 - Optimized grouped counts output. By default, all counts are stored in linear format, which saves time and disk space.
