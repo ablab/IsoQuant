@@ -165,30 +165,32 @@ class Array2BitKmerIndexer:
     def __init__(self, known_bin_seq, kmer_size=12, seq_len=25):
         self.k = kmer_size
         total_kmers = int(math.pow(4, kmer_size))
-        self.index = []
+        tmp_index = []
         for i in range(total_kmers):
-            self.index.append([])
+            tmp_index.append([])
         self.mask = (1 << (2 * self.k)) - 1
         self.seq_len = seq_len
         self.seq_mask = (1 << (2 * self.seq_len)) - 1
         self.total_sequences = 0
-        self._index(known_bin_seq)
+        self._index(known_bin_seq, tmp_index)
+        self.index = []
+        self.index_ranges = [0]
+        for l in tmp_index:
+            self.index += l
+            self.index_ranges.append(len(self.index))
+
+
 
     def _get_kmer_bin_indexes(self, bin_seq):
         kmer_idx = 0
         for i in range(self.seq_len - self.k + 1):
             yield (bin_seq >> ((self.seq_len - self.k - i) * 2)) & self.mask
 
-    def _index(self, known_bin_seq):
+    def _index(self, known_bin_seq, tmp_index):
         for bin_seq in known_bin_seq:
             self.total_sequences += 1
             for kmer_idx in self._get_kmer_bin_indexes(bin_seq):
-                self.index[kmer_idx].append(bin_seq)
-
-    def append(self, bin_seq):
-        self.total_sequences += 1
-        for kmer_idx in self._get_kmer_bin_indexes(bin_seq):
-            self.index[kmer_idx].append(bin_seq)
+                tmp_index[kmer_idx].append(bin_seq)
 
     def empty(self):
         return self.total_sequences == 0
@@ -206,7 +208,10 @@ class Array2BitKmerIndexer:
 
         seq = str_to_2bit(sequence)
         for pos, kmer_idx in enumerate(self._get_kmer_bin_indexes(seq)):
-            for barcode in self.index[kmer_idx]:
+            start_index = self.index_ranges[kmer_idx]
+            end_index = self.index_ranges[kmer_idx + 1]
+            for barcode_index in range(start_index, end_index):
+                barcode = self.index[barcode_index]
                 barcode_counts[barcode] += 1
                 barcode_positions[barcode].append(pos)
 
