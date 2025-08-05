@@ -250,7 +250,7 @@ def parse_args(cmd_args=None, namespace=None):
 
     # READ FILTERING
     add_additional_option_to_group(filer_args_group, "--no_secondary", help="ignore secondary alignments (not recommended)",
-                                   action='store_true', default=False)
+                                   action='store_true', default=True)
     add_additional_option_to_group(filer_args_group, "--min_mapq", help="ignore alignments with MAPQ < this"
                                                                         "(also filters out secondary alignments, default: None)", type=int)
     add_additional_option_to_group(filer_args_group, "--inconsistent_mapq_cutoff", help="ignore inconsistent alignments with MAPQ < this "
@@ -819,7 +819,6 @@ def run_pipeline(args):
             combine_counts(args.input_data, args.output)
 
     logger.info(" === IsoQuant pipeline finished === ")
-
 
 
 # Test mode is triggered by --test option
