@@ -7,7 +7,7 @@
 import logging
 from collections import defaultdict
 
-from .kmer_indexer import KmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
+from .kmer_indexer import KmerIndexer, ArrayKmerIndexer, SharedMemoryArray2BitKmerIndexer, SharedMemoryIndexInfo
 from .common import find_polyt_start, reverese_complement, find_candidate_with_max_score_ssw, detect_exact_positions, \
     detect_first_exact_positions, str_to_2bit
 
@@ -254,7 +254,7 @@ class StereoBarcodeDetector:
         self.pcr_primer_indexer = ArrayKmerIndexer([self.MAIN_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=5)
         self.strict_linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=6)
-        bit_barcodes = map(str_to_2bit, barcodes)
+        bit_barcodes = list(map(str_to_2bit, barcodes))
         self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
         self.umi_set = None
@@ -423,7 +423,7 @@ class StereoSplttingBarcodeDetector:
     TERMINAL_MATCH_DELTA = 3
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcodes, min_score=21, primer=1):
+    def __init__(self, barcodes, min_score=21, primer=1, shared_memory_info=None):
         if primer == 1:
             self.MAIN_PRIMER = self.TSO_PRIMER
         else:
@@ -434,9 +434,12 @@ class StereoSplttingBarcodeDetector:
         self.strict_linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=7)
         #self.barcode_indexer = KmerIndexer(barcodes, kmer_size=14)
         #logger.info("Indexed %d barcodes" % len(self.barcode_indexer.seq_list))
-        bit_barcodes = map(str_to_2bit, barcodes)
-        self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
-        logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
+        if not shared_memory_info:
+            bit_barcodes = list(map(str_to_2bit, barcodes))
+            self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+            logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
+        else:
+            self.barcode_indexer = SharedMemoryArray2BitKmerIndexer.from_sharable_info(shared_memory_info)
         self.umi_set = None
         self.min_score = min_score
 
@@ -643,8 +646,8 @@ class StereoSplitBarcodeDetectorTSO(StereoSplttingBarcodeDetector):
 
 
 class StereoSplitBarcodeDetectorPC(StereoSplttingBarcodeDetector):
-    def __init__(self, barcode_list, min_score=21):
-        StereoSplttingBarcodeDetector.__init__(self, barcode_list, min_score, primer=2)
+    def __init__(self, barcode_list, min_score=21, shared_mem=None):
+        StereoSplttingBarcodeDetector.__init__(self, barcode_list, min_score, primer=2, shared_memory_info=shared_mem)
 
 
 class DoubleBarcodeDetector:

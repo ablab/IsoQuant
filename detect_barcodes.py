@@ -36,11 +36,12 @@ from src.barcode_calling.barcode_callers import (
     SplittingBarcodeDetectionResult,
     ReadStats, DoubleBarcodeDetectionResult
 )
+from src.barcode_calling.kmer_indexer import SharedMemoryArray2BitKmerIndexer
 
 logger = logging.getLogger('IsoQuant')
 
 
-READ_CHUNK_SIZE = 100000
+READ_CHUNK_SIZE = 100
 BARCODE_CALLING_MODES = {'tenX': TenXBarcodeDetector,
                          'double': DoubleBarcodeDetector,
                          'double_illumina': IlluminaDoubleBarcodeDetector,
@@ -238,8 +239,9 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-def process_chunk(barcode_detector, read_chunk, output_file, num, min_score=None):
+def process_chunk(shared_mem_info, read_chunk, output_file, num, min_score=None):
     output_file += "_" + str(num)
+    barcode_detector = StereoSplitBarcodeDetectorPC([], shared_mem=shared_mem_info)
     if min_score:
         barcode_detector.min_score = min_score
     barcode_caller = BarcodeCaller(output_file, barcode_detector)
@@ -332,6 +334,7 @@ def process_in_parallel(args):
     barcodes = load_barcodes_iter(args.barcodes)
     # logger.info("Loaded %d barcodes" % len(barcodes))
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    shared_mem_info = barcode_detector.barcode_indexer.get_sharable_info()
     logger.info("Barcode caller created")
 
     min_score = None
@@ -340,7 +343,7 @@ def process_in_parallel(args):
 
     with ProcessPoolExecutor(max_workers=args.threads) as proc:
         for chunk in read_chunk_gen:
-            future_results.append(proc.submit(process_chunk, barcode_detector, chunk, tmp_barcode_file, count, min_score))
+            future_results.append(proc.submit(process_chunk, shared_mem_info, chunk, tmp_barcode_file, count, min_score))
             count += 1
             if count >= args.threads:
                 break
@@ -356,7 +359,7 @@ def process_in_parallel(args):
                 if reads_left:
                     try:
                         chunk = next(read_chunk_gen)
-                        future_results.append(proc.submit(process_chunk, barcode_detector, chunk, tmp_barcode_file, count, args.min_score))
+                        future_results.append(proc.submit(process_chunk, shared_mem_info, chunk, tmp_barcode_file, count, args.min_score))
                         count += 1
                     except StopIteration:
                         reads_left = False
@@ -459,7 +462,7 @@ def parse_args(sys_argv):
 def main(sys_argv):
     args = parse_args(sys_argv)
     set_logger(logger, args)
-    if args.threads == 1 or args.mode.startswith('stereo'):
+    if args.threads == 1: # or args.mode.startswith('stereo'):
         process_single_thread(args)
     else:
         process_in_parallel(args)
