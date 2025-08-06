@@ -41,7 +41,7 @@ from src.barcode_calling.kmer_indexer import SharedMemoryArray2BitKmerIndexer
 logger = logging.getLogger('IsoQuant')
 
 
-READ_CHUNK_SIZE = 100
+READ_CHUNK_SIZE = 100000
 BARCODE_CALLING_MODES = {'tenX': TenXBarcodeDetector,
                          'double': DoubleBarcodeDetector,
                          'double_illumina': IlluminaDoubleBarcodeDetector,
