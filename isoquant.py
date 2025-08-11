@@ -152,7 +152,7 @@ def parse_args(cmd_args=None, namespace=None):
                                    choices=[e.name for e in StrandnessReportingLevel],
                                    help="reporting level for novel transcripts based on canonical splice sites;"
                                         " default: " + StrandnessReportingLevel.auto.name,
-                                   default=StrandnessReportingLevel.only_stranded.name)
+                                   default=StrandnessReportingLevel.auto.name)
     add_additional_option_to_group(algo_args_group, "--polya_requirement", type=str,
                                    choices=[e.name for e in PolyAUsageStrategies],
                                    help="require polyA tails to be present when reporting transcripts; "
