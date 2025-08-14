@@ -180,7 +180,7 @@ def filter_constraints(graph, additional_starts,additional_ends):
     remove_nodes(endnodes_missing, additional_ends)
 
 
-def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5, draw_graphs: bool = True):
+def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5, draw_graphs: bool = False):
     #print("constraints", transcripts_constraints)
     #print("Running ILP part")
     export = False
@@ -308,6 +308,9 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
             "optimize_with_flow_safe_paths": False,
             "optimize_with_safety_from_largest_antichain": True,
         }
+
+        if timeout is not None:
+            optimization_options["time_limit"] = timeout
     
         logger.info("Running MinFlowDecomp")
     
@@ -331,7 +334,24 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
         #print("solution",solution)
         # Condensing the paths in the expanded graph to paths in the the original graph
         
-        if solution is None: return []
+        if solution is None:
+            fp.utils.draw(
+                G =corrected_graph,
+                flow_attr = "flow",
+                filename = "graphs/" + chr_id + "_" + gene_id + "_" +  str(index) + "_" + str(id(graph)) + "graph.corrected.failed.FL.png",  # this will be used as filename
+                draw_options = {
+                    "show_graph_edges": True,
+                    "show_edge_weights": True,
+                    "show_path_weights": False,
+                    "show_node_weights": True,
+                    "show_path_weight_on_first_edge": True,
+                    "pathwidth": 2,
+                },
+                additional_starts = additional_starts,
+                additional_ends = additional_ends,
+                subpath_constraints = subpath_constaints_pruned,
+                )
+            return []
         
         original_paths = solution["paths"]
         weights = solution["weights"]
