@@ -96,7 +96,10 @@ class OutputConfig:
         self.log_details["gene_db"] = params.get("genedb")
         self.log_details["fastq_used"] = bool(params.get("fastq"))
         self.input_gtf = self.input_gtf or params.get("genedb")
-        self.genedb_filename = params.get("genedb_filename")
+        
+        # Handle genedb_filename with fallback mechanism
+        original_genedb_filename = params.get("genedb_filename")
+        self.genedb_filename = self._find_genedb_file(original_genedb_filename)
 
         if params.get("yaml"):
             # YAML input case
@@ -115,6 +118,56 @@ class OutputConfig:
                 raise ValueError(
                     "Processing sample directory not found in params for non-YAML input."
                 )
+
+    def _find_genedb_file(self, original_path):
+        """Find genedb file with fallback mechanism."""
+        from pathlib import Path
+        
+        # If no original path provided, skip to fallback
+        if original_path:
+            original_path_obj = Path(original_path)
+            if original_path_obj.exists():
+                logging.info(f"Using original genedb file: {original_path}")
+                return original_path
+            else:
+                logging.warning(f"Original genedb file not found: {original_path}")
+        
+        # Fallback: Look for .db files in the output directory
+        output_path = Path(self.output_directory)
+        
+        # Look for .db files in the output directory
+        db_files = list(output_path.glob("*.db"))
+        
+        if db_files:
+            # Prefer files with common GTF database names
+            preferred_patterns = ["gtf.db", "gene.db", "genedb.db", "annotation.db"]
+            
+            # First, try to find files matching preferred patterns
+            for pattern in preferred_patterns:
+                for db_file in db_files:
+                    if pattern in db_file.name.lower():
+                        logging.info(f"Found fallback genedb file (preferred pattern): {db_file}")
+                        return str(db_file)
+            
+            # If no preferred pattern found, use the first .db file
+            fallback_db = db_files[0]
+            logging.info(f"Found fallback genedb file: {fallback_db}")
+            return str(fallback_db)
+        
+        # Last resort: check if we're in a subdirectory and look one level up
+        parent_db_files = list(output_path.parent.glob("*.db"))
+        if parent_db_files:
+            fallback_db = parent_db_files[0]
+            logging.info(f"Found fallback genedb file in parent directory: {fallback_db}")
+            return str(fallback_db)
+        
+        # No .db file found anywhere
+        if original_path:
+            logging.error(f"No genedb file found. Original path '{original_path}' doesn't exist, and no .db files found in '{output_path}' or parent directory.")
+        else:
+            logging.error(f"No genedb file found in '{output_path}' or parent directory, and no original path provided.")
+        
+        return original_path  # Return original even if it doesn't exist, let the caller handle the error
 
     def _conditional_unzip(self):
         """Check if unzip is needed and perform it conditionally based on the model use."""
@@ -164,9 +217,8 @@ class OutputConfig:
             elif file_name.endswith(".read_assignments.tsv"):
                 self.read_assignments = os.path.join(self.output_directory, file_name)
             elif file_name.endswith(".read_assignments.tsv.gz"):
-                self.read_assignments = self._unzip_file(
-                    os.path.join(self.output_directory, file_name)
-                )
+                # Prefer streaming gzip rather than unzipping
+                self.read_assignments = os.path.join(self.output_directory, file_name)
             elif file_name.endswith(".gene_grouped_counts.tsv"):
                 self._conditions = self._get_conditions_from_file(
                     os.path.join(self.output_directory, file_name)
@@ -299,11 +351,8 @@ class OutputConfig:
                 # Check for .read_assignments.tsv.gz
                 gz_file = os.path.join(sample_dir, f"{name}.read_assignments.tsv.gz")
                 if os.path.exists(gz_file):
-                    unzipped_file = self._unzip_file(gz_file)
-                    if unzipped_file:
-                        self.read_assignments.append((name, unzipped_file))
-                    else:
-                        logging.warning(f"Failed to unzip {gz_file}")
+                    # Prefer streaming gzip rather than unzipping
+                    self.read_assignments.append((name, gz_file))
                 else:
                     # Check for .read_assignments.tsv
                     non_gz_file = os.path.join(

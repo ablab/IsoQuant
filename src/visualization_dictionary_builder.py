@@ -5,15 +5,19 @@ import re
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Union, Tuple
+import numpy as np
 
 from src.visualization_cache_utils import (
     build_gene_dict_cache_file,
-    build_read_assignment_cache_file,
     save_cache,
     load_cache,
     validate_gene_dict,
-    validate_read_assignment_data,
     cleanup_cache,
+)
+from src.visualization_read_assignment_io import (
+    get_read_assignment_counts,
+    get_read_length_effects,
+    get_read_length_histogram,
 )
 
 
@@ -46,7 +50,13 @@ class DictionaryBuilder:
         selected reference_conditions or target_conditions.
         Caches the resulting dictionary based on the specific conditions used.
         """
-        self.logger.debug(f"Starting dictionary build: min_value={min_value}, ref={reference_conditions}, target={target_conditions}")
+        self.logger.debug("=== DICTIONARY BUILD PROCESS DEBUG ===")
+        self.logger.debug(f"Starting dictionary build:")
+        self.logger.debug(f"  min_value: {min_value}")
+        self.logger.debug(f"  reference_conditions: {reference_conditions}")
+        self.logger.debug(f"  target_conditions: {target_conditions}")
+        self.logger.debug(f"  config.ref_only: {self.config.ref_only}")
+        self.logger.debug(f"  config.extended_annotation: {getattr(self.config, 'extended_annotation', 'NOT_SET')}")
 
         # 1. Load full TPM matrix to determine available conditions first
         tpm_file = self._get_tpm_file()
@@ -75,9 +85,9 @@ class DictionaryBuilder:
             if not conditions_to_process:
                 self.logger.error("None of the requested conditions were found in the TPM file. Cannot proceed.")
                 return {}
-            self.logger.info(f"Processing conditions: {conditions_to_process}")
+            self.logger.debug(f"Processing conditions: {conditions_to_process}")
         else:
-            self.logger.info("No specific conditions requested, processing all available conditions.")
+            self.logger.debug("No specific conditions requested, processing all available conditions.")
             conditions_to_process = available_conditions # Already sorted
 
         # Create a deterministic cache key based on conditions
@@ -110,7 +120,7 @@ class DictionaryBuilder:
                     if validate_gene_dict(cached_gene_dict): # Reuse existing validation if suitable
                         self.novel_gene_ids = cached_novel_gene_ids
                         self.novel_transcript_ids = cached_novel_transcript_ids
-                        self.logger.info("Successfully loaded dictionary from cache.")
+                        self.logger.debug("Successfully loaded dictionary from cache.")
                         return cached_gene_dict
                     else:
                          self.logger.warning("Cached dictionary failed validation. Rebuilding.")
@@ -120,7 +130,7 @@ class DictionaryBuilder:
                  self.logger.warning("Cached data is invalid or in old format. Rebuilding.")
 
         # 4. Cache miss or invalid: Build dictionary from scratch for the specified conditions
-        self.logger.info("Cache miss or invalid. Building dictionary from scratch for selected conditions.")
+            self.logger.info("Building dictionary from scratch for selected conditions.")
 
         # Parse GTF and filter novel genes (only needs to be done once)
         self.logger.info("Parsing GTF and filtering novel genes")
@@ -136,10 +146,49 @@ class DictionaryBuilder:
         valid_transcripts = set(
             transcript_max_values_subset[transcript_max_values_subset >= min_value].index
         )
-        self.logger.info(
+        
+        # Debug: Analyze what transcripts passed the expression filter
+        total_transcripts_in_tpm = len(transcript_max_values_subset)
+        novel_transcripts_in_tpm = sum(1 for tx_id in transcript_max_values_subset.index if tx_id.startswith("transcript"))
+        ensembl_transcripts_in_tpm = sum(1 for tx_id in transcript_max_values_subset.index if tx_id.startswith("ENSMUST"))
+        
+        novel_transcripts_passed = sum(1 for tx_id in valid_transcripts if tx_id.startswith("transcript"))
+        ensembl_transcripts_passed = sum(1 for tx_id in valid_transcripts if tx_id.startswith("ENSMUST"))
+        
+        # Show sample transcripts that passed/failed
+        sample_novel_passed = [tx_id for tx_id in valid_transcripts if tx_id.startswith("transcript")][:5]
+        sample_novel_failed = [tx_id for tx_id in transcript_max_values_subset.index 
+                              if tx_id.startswith("transcript") and tx_id not in valid_transcripts][:5]
+        
+        self.logger.debug("=== EXPRESSION FILTERING DEBUG ===")
+        self.logger.debug(f"Total transcripts before expression filtering: {total_transcripts_in_tpm}")
+        self.logger.debug(f"Novel transcripts in TPM file: {novel_transcripts_in_tpm}")
+        self.logger.debug(f"Ensembl transcripts in TPM file: {ensembl_transcripts_in_tpm}")
+        self.logger.debug(
             f"Identified {len(valid_transcripts)} transcripts with TPM >= {min_value} "
             f"in at least one of the conditions: {conditions_to_process}"
         )
+        self.logger.debug(f"Novel transcripts passed: {novel_transcripts_passed} / {novel_transcripts_in_tpm}")
+        self.logger.debug(f"Ensembl transcripts passed: {ensembl_transcripts_passed} / {ensembl_transcripts_in_tpm}")
+        
+        if sample_novel_passed:
+            self.logger.debug(f"Sample novel transcripts that PASSED: {sample_novel_passed}")
+        if sample_novel_failed:
+            self.logger.debug(f"Sample novel transcripts that FAILED: {sample_novel_failed}")
+            # Show TPM values for failed novel transcripts
+            for tx_id in sample_novel_failed[:3]:
+                max_tpm = transcript_max_values_subset.get(tx_id, 0)
+                self.logger.debug(f"  {tx_id}: max TPM = {max_tpm:.2f}")
+        
+        if novel_transcripts_passed == 0 and novel_transcripts_in_tpm > 0:
+            self.logger.warning(f"NO NOVEL TRANSCRIPTS PASSED expression filter! Consider lowering min_value from {min_value}")
+            # Show the highest TPM values for novel transcripts
+            novel_tpm_values = [(tx_id, transcript_max_values_subset.get(tx_id, 0)) 
+                               for tx_id in transcript_max_values_subset.index if tx_id.startswith("transcript")]
+            novel_tpm_values.sort(key=lambda x: x[1], reverse=True)
+            self.logger.debug("Top 5 novel transcript TPM values:")
+            for tx_id, tpm in novel_tpm_values[:5]:
+                self.logger.debug(f"  {tx_id}: {tpm:.2f} TPM")
 
         # Build the final dictionary, iterating only through conditions_to_process
         final_dict = {}
@@ -167,7 +216,7 @@ class DictionaryBuilder:
             self._validate_gene_structure(final_dict[condition])
 
         # Aggregate exon values based on the filtered transcripts in the final_dict
-        self.logger.info("Aggregating exon values based on filtered transcript expression.")
+        self.logger.debug("Aggregating exon values based on filtered transcript expression.")
         for condition in conditions_to_process:
             for gene_id, gene_info in final_dict[condition].items():
                 aggregated_exons = {}
@@ -187,8 +236,40 @@ class DictionaryBuilder:
                         aggregated_exons[exon_id]["value"] += transcript_value # Sum transcript TPM
                 gene_info["exons"] = aggregated_exons # Assign aggregated exons
 
-        # 5. Save the newly built dictionary to the condition-specific cache
-        self.logger.info(f"Saving filtered dictionary to cache: {condition_specific_cache_file}")
+        # 5. Debug final results before saving
+        self.logger.debug("=== FINAL DICTIONARY RESULTS ===")
+        total_final_genes = sum(len(genes) for genes in final_dict.values())
+        total_final_transcripts = 0
+        final_novel_transcripts = 0
+        final_ensembl_transcripts = 0
+        
+        for condition, genes in final_dict.items():
+            condition_transcripts = 0
+            condition_novel_transcripts = 0
+            
+            for gene_id, gene_info in genes.items():
+                transcripts = gene_info.get("transcripts", {})
+                condition_transcripts += len(transcripts)
+                
+                for tx_id in transcripts.keys():
+                    if tx_id.startswith("transcript"):
+                        condition_novel_transcripts += 1
+                        final_novel_transcripts += 1
+                    elif tx_id.startswith("ENSMUST"):
+                        final_ensembl_transcripts += 1
+            
+            total_final_transcripts += condition_transcripts
+            self.logger.debug(f"Condition '{condition}': {len(genes)} genes, {condition_transcripts} transcripts ({condition_novel_transcripts} novel)")
+        
+        self.logger.info(f"Totals across conditions: genes={total_final_genes}, transcripts={total_final_transcripts}, novel={final_novel_transcripts}, ensembl={final_ensembl_transcripts}")
+        
+        if final_novel_transcripts == 0:
+            self.logger.warning("FINAL RESULT: NO NOVEL TRANSCRIPTS in final dictionary!")
+        else:
+            self.logger.info(f"Novel transcripts passing filters: {final_novel_transcripts}")
+
+        # 6. Save the newly built dictionary to the condition-specific cache
+        self.logger.debug(f"Saving filtered dictionary to cache: {condition_specific_cache_file}")
         save_cache(
             condition_specific_cache_file,
             (final_dict, self.novel_gene_ids, self.novel_transcript_ids)
@@ -198,124 +279,224 @@ class DictionaryBuilder:
 
     def _get_tpm_file(self) -> str:
         """Get the appropriate TPM file path from config."""
+        self.logger.debug("=== TPM FILE SELECTION DEBUG ===")
+        self.logger.debug(f"config.conditions: {self.config.conditions}")
+        self.logger.debug(f"config.ref_only: {self.config.ref_only}")
+        self.logger.debug(f"config.transcript_grouped_tpm: {getattr(self.config, 'transcript_grouped_tpm', 'NOT_SET')}")
+        self.logger.debug(f"config.transcript_model_grouped_tpm: {getattr(self.config, 'transcript_model_grouped_tpm', 'NOT_SET')}")
+        self.logger.debug(f"config.transcript_tpm_ref: {getattr(self.config, 'transcript_tpm_ref', 'NOT_SET')}")
+        self.logger.debug(f"config.transcript_tpm: {getattr(self.config, 'transcript_tpm', 'NOT_SET')}")
+        self.logger.debug(f"config.transcript_model_tpm: {getattr(self.config, 'transcript_model_tpm', 'NOT_SET')}")
+        
         if self.config.conditions:  # Check if we have multiple conditions
-            # For multi-condition data, prioritize merged files if available
-            merged_tpm = self.config.transcript_grouped_tpm
-            if merged_tpm and "_merged.tsv" in merged_tpm:
-                self.logger.info("Using merged TPM file with transcript deduplication already applied")
-                tpm_file = merged_tpm
+            if self.config.ref_only:
+                # Reference-only mode: use regular transcript files
+                merged_tpm = self.config.transcript_grouped_tpm
+                if merged_tpm and "_merged.tsv" in merged_tpm:
+                    self.logger.debug("REF-ONLY: Using merged TPM file with transcript deduplication already applied")
+                    tpm_file = merged_tpm
+                else:
+                    tpm_file = self.config.transcript_grouped_tpm
+                self.logger.debug("REF-ONLY mode: Using transcript_grouped_tpm (reference transcripts only)")
             else:
-                tpm_file = self.config.transcript_grouped_tpm
+                # Extended annotation mode: use transcript_model files that include novel transcripts
+                merged_tpm = getattr(self.config, 'transcript_model_grouped_tpm', None)
+                if merged_tpm and "_merged.tsv" in merged_tpm:
+                    self.logger.debug("EXTENDED: Using merged transcript_model TPM file with deduplication")
+                    tpm_file = merged_tpm
+                elif merged_tpm:
+                    tpm_file = merged_tpm
+                    self.logger.debug("EXTENDED: Using transcript_model_grouped_tpm (includes novel transcripts)")
+                else:
+                    # Fallback to regular transcript file if transcript_model file not found
+                    self.logger.warning("transcript_model_grouped_tpm not found, falling back to transcript_grouped_tpm")
+                    tpm_file = self.config.transcript_grouped_tpm
         else:
             if self.config.ref_only:
                 tpm_file = self.config.transcript_tpm_ref
             else:
-                base_file = self.config.transcript_tpm.replace('.tsv', '')
-                tpm_file = f"{base_file}_merged.tsv"
+                # For single condition, use transcript_model files
+                transcript_model_tpm = getattr(self.config, 'transcript_model_tpm', None)
+                if transcript_model_tpm:
+                    base_file = transcript_model_tpm.replace('.tsv', '')
+                    tpm_file = f"{base_file}_merged.tsv"
+                    self.logger.debug("EXTENDED: Using transcript_model TPM for single condition")
+                else:
+                    base_file = self.config.transcript_tpm.replace('.tsv', '')
+                    tpm_file = f"{base_file}_merged.tsv"
+                    self.logger.warning("transcript_model_tpm not found, falling back to transcript_tpm")
         
-        self.logger.debug(f"Selected TPM file: {tpm_file}")
+        self.logger.info(f"Selected TPM file: {tpm_file}")
         if not tpm_file or not Path(tpm_file).exists():
+            self.logger.error(f"TPM file does not exist: {tpm_file}")
             raise FileNotFoundError(f"TPM file {tpm_file} not found")
+        
+        # Check file size and sample content
+        tpm_path = Path(tpm_file)
+        self.logger.debug(f"TPM file size: {tpm_path.stat().st_size / (1024*1024):.2f} MB")
+        
+        # Sample a few lines from the TPM file to see what transcript IDs are present
+        with open(tpm_file, 'r') as f:
+            lines = f.readlines()
+            self.logger.debug(f"TPM file has {len(lines)} total lines")
+            if len(lines) > 1:
+                header = lines[0].strip()
+                self.logger.debug(f"TPM header: {header}")
+                
+                # Show sample transcript IDs
+                novel_count = 0
+                ensembl_count = 0 
+                sample_novel = []
+                sample_ensembl = []
+                
+                for i in range(1, min(21, len(lines))):  # Check first 20 data lines
+                    transcript_id = lines[i].split('\t')[0]
+                    if transcript_id.startswith('transcript'):
+                        novel_count += 1
+                        if len(sample_novel) < 5:
+                            sample_novel.append(transcript_id)
+                    elif transcript_id.startswith('ENSMUST'):
+                        ensembl_count += 1
+                        if len(sample_ensembl) < 5:
+                            sample_ensembl.append(transcript_id)
+                
+                self.logger.debug(f"TPM file sample (first 20 lines): {novel_count} novel, {ensembl_count} Ensembl")
+                if sample_novel:
+                    self.logger.debug(f"Sample novel transcript IDs: {sample_novel}")
+                if sample_ensembl:
+                    self.logger.debug(f"Sample Ensembl transcript IDs: {sample_ensembl}")
         
         return tpm_file
 
     # ------------------ READ ASSIGNMENT CACHING ------------------
 
     def build_read_assignment_and_classification_dictionaries(self):
+        """Delegate to read-assignment I/O module with caching."""
+        return get_read_assignment_counts(self.config, self.cache_dir)
+
+    def _post_process_cached_data(self, cached_data):
+        # Backwards-compat wrapper no longer used; kept for compatibility
+        if isinstance(self.config.read_assignments, list):
+            return (
+                cached_data.get("classification_counts", {}),
+                cached_data.get("assignment_type_counts", {}),
+            )
+        return cached_data
+
+    def _process_read_assignment_file(self, file_path):
+        """Deprecated; maintained for compatibility. Use get_read_assignment_counts instead."""
+        return {}, {}
+
+    # ------------------ READ LENGTH VS ASSIGNMENT ------------------
+    def build_length_vs_assignment(self):
         """
-        Index classifications and assignment types from read_assignments.tsv file(s).
-        Returns either:
-          - (classification_counts, assignment_type_counts) for single-file input, or
-          - (classification_counts_dict, assignment_type_counts_dict) for multi-file (YAML) input.
+        Stream read_assignment TSV file(s) and aggregate counts by read-length bins
+        versus (a) assignment_type (unique/ambiguous/inconsistent_*) and
+        (b) classification (full_splice_match/incomplete_splice_match/NIC/NNIC/etc.).
+
+        Returns a dictionary:
+            {
+              'bins': [bin_labels...],
+              'assignment': { (bin, assignment_type) -> count },
+              'classification': { (bin, classification) -> count }
+            }
         """
         if not self.config.read_assignments:
             raise FileNotFoundError("No read assignments file(s) found.")
 
-        # 1. Determine cache file
-        cache_file = build_read_assignment_cache_file(
-            self.config.read_assignments, self.config.ref_only, self.cache_dir
-        )
+        # Define length bins
+        bin_defs = [
+            (0, 1000, '<1kb'),
+            (1000, 2000, '1-2kb'),
+            (2000, 5000, '2-5kb'),
+            (5000, 8000, '5-8kb'),
+            (8000, 12000, '8-12kb'),
+            (12000, 20000, '12-20kb'),
+            (20000, 50000, '20-50kb'),
+            (50000, float('inf'), '>50kb'),
+        ]
 
-        # 2. Attempt to load from cache
-        if cache_file.exists():
-            cached_data = load_cache(cache_file)
-            if cached_data and validate_read_assignment_data(
-                cached_data, self.config.read_assignments
-            ):
-                self.logger.info("Using cached read assignment data.")
-                return self._post_process_cached_data(cached_data)
+        def bin_length(length_bp: int) -> str:
+            for lo, hi, name in bin_defs:
+                if lo <= length_bp < hi:
+                    return name
+            return 'unknown'
 
-        # 3. Otherwise, build from scratch
-        self.logger.info("Building read assignment data from scratch.")
-        if isinstance(self.config.read_assignments, list):
-            classification_counts_dict = {}
-            assignment_type_counts_dict = {}
-            for sample_name, read_assignment_file in self.config.read_assignments:
-                c_counts, a_counts = self._process_read_assignment_file(
-                    read_assignment_file
-                )
-                classification_counts_dict[sample_name] = c_counts
-                assignment_type_counts_dict[sample_name] = a_counts
-
-            data_to_cache = {
-                "classification_counts": classification_counts_dict,
-                "assignment_type_counts": assignment_type_counts_dict,
-            }
-            save_cache(cache_file, data_to_cache)
-            return classification_counts_dict, assignment_type_counts_dict
-        else:
-            classification_counts, assignment_type_counts = (
-                self._process_read_assignment_file(self.config.read_assignments)
-            )
-            data_to_cache = (classification_counts, assignment_type_counts)
-            save_cache(cache_file, data_to_cache)
-            return classification_counts, assignment_type_counts
-
-    def _post_process_cached_data(self, cached_data):
-        """
-        Convert cached_data back to the return format
-        for build_read_assignment_and_classification_dictionaries().
-        """
-        if isinstance(self.config.read_assignments, list):
-            return (
-                cached_data["classification_counts"],
-                cached_data["assignment_type_counts"],
-            )
-        return cached_data  # (classification_counts, assignment_type_counts)
-
-    def _process_read_assignment_file(self, file_path):
-        """
-        Parse a read_assignment TSV file, returning:
-         - classification_counts: dict(classification -> count)
-         - assignment_type_counts: dict(assignment type -> count)
-        """
-        classification_counts = {}
-        assignment_type_counts = {}
-
-        with open(file_path, "r") as file:
-            # Skip header lines
-            for _ in range(3):
-                next(file, None)
-
-            for line in file:
-                parts = line.strip().split("\t")
-                if len(parts) < 6:
+        def calc_length(exons_str: str) -> int:
+            if not exons_str:
+                return 0
+            total = 0
+            for part in exons_str.split(','):
+                if '-' not in part:
                     continue
+                try:
+                    s, e = part.split('-')
+                    total += int(e) - int(s) + 1
+                except Exception:
+                    continue
+            return total
 
-                additional_info = parts[-1]
-                classification = (
-                    additional_info.split("Classification=")[-1].split(";")[0].strip()
-                )
-                assignment_type = parts[5]
+        assign_counts = {}
+        class_counts = {}
 
-                classification_counts[classification] = (
-                    classification_counts.get(classification, 0) + 1
-                )
-                assignment_type_counts[assignment_type] = (
-                    assignment_type_counts.get(assignment_type, 0) + 1
-                )
+        # Helper to process a single file (plain or gz)
+        import gzip
+        def process_file(fp: str):
+            def smart_open(path_str):
+                try:
+                    with open(path_str, 'rb') as bf:
+                        if bf.read(2) == b'\x1f\x8b':
+                            return gzip.open(path_str, 'rt')
+                except Exception:
+                    pass
+                return open(path_str, 'rt')
+            with smart_open(fp) as file:
+                # Skip header lines starting with '#'
+                # Read line by line to avoid loading entire file
+                for line in file:
+                    if not line or line.startswith('#'):
+                        continue
+                    parts = line.rstrip('\n').split('\t')
+                    if len(parts) < 9:
+                        continue
+                    assignment_type = parts[5]
+                    exons = parts[7]
+                    additional = parts[8]
+                    # Classification=VALUE; in additional_info
+                    classification = additional.split('Classification=')[-1].split(';')[0].strip() if 'Classification=' in additional else 'Unknown'
 
-        return classification_counts, assignment_type_counts
+                    length_bp = calc_length(exons)
+                    b = bin_length(length_bp)
+
+                    # Update assignment_type bin counts
+                    key_a = (b, assignment_type)
+                    assign_counts[key_a] = assign_counts.get(key_a, 0) + 1
+
+                    # Update classification bin counts
+                    key_c = (b, classification)
+                    class_counts[key_c] = class_counts.get(key_c, 0) + 1
+
+        # Process single or multiple files
+        if isinstance(self.config.read_assignments, list):
+            for _sample, path in self.config.read_assignments:
+                process_file(path)
+        else:
+            process_file(self.config.read_assignments)
+
+        return {
+            'bins': [name for _, _, name in bin_defs],
+            'assignment': assign_counts,
+            'classification': class_counts,
+        }
+
+    # ------------------ READ LENGTH EFFECTS ------------------
+    def build_read_length_effects(self):
+        """Delegate to read-assignment I/O module with caching."""
+        return get_read_length_effects(self.config, self.cache_dir)
+
+    def build_read_length_histogram(self, bin_edges: List[int] = None):
+        """Delegate to read-assignment I/O module with caching."""
+        return get_read_length_histogram(self.config, self.cache_dir, bin_edges)
 
     # -------------------- GTF PARSING --------------------
 
@@ -324,6 +505,12 @@ class DictionaryBuilder:
         Parse GTF file into a dictionary with genes, transcripts, and exons.
         Handles both reference GTF (with gffutils) and extended annotation GTF.
         """
+        self.logger.info("=== GTF PARSING DEBUG ===")
+        self.logger.info(f"config.ref_only: {self.config.ref_only}")
+        self.logger.info(f"config.extended_annotation: {getattr(self.config, 'extended_annotation', 'NOT_SET')}")
+        self.logger.info(f"config.input_gtf: {getattr(self.config, 'input_gtf', 'NOT_SET')}")
+        self.logger.info(f"config.genedb_filename: {getattr(self.config, 'genedb_filename', 'NOT_SET')}")
+        
         if self.config.ref_only:
             # Use gffutils for reference GTF (more robust but slower)
             self.logger.info("Parsing reference GTF using gffutils")
@@ -335,10 +522,17 @@ class DictionaryBuilder:
             
     def _parse_reference_gtf(self) -> Dict[str, Any]:
         """Parse reference GTF using gffutils"""
-        if not self.config.genedb_filename:
+        # Check if genedb_filename exists, if not create one
+        if not self.config.genedb_filename or not Path(self.config.genedb_filename).exists():
+            if self.config.genedb_filename:
+                self.logger.warning(f"Configured genedb file does not exist: {self.config.genedb_filename}")
+            
             db_path = self.cache_dir / "gtf.db"
             if not db_path.exists():
                 self.logger.info(f"Creating GTF database at {db_path}")
+                if not self.config.input_gtf or not Path(self.config.input_gtf).exists():
+                    raise FileNotFoundError(f"Input GTF file required for database creation but not found: {self.config.input_gtf}")
+                
                 gffutils.create_db(
                     self.config.input_gtf,
                     dbfn=str(db_path),
@@ -349,8 +543,9 @@ class DictionaryBuilder:
                     verbose=False,
                 )
             self.config.genedb_filename = str(db_path)
+            self.logger.info(f"Using fallback GTF database: {self.config.genedb_filename}")
 
-        self.logger.info("Opening GTF database")
+        self.logger.info(f"Opening GTF database: {self.config.genedb_filename}")
         db = gffutils.FeatureDB(self.config.genedb_filename)
 
         # Pre-fetch all features
@@ -423,10 +618,21 @@ class DictionaryBuilder:
     def _parse_extended_gtf(self) -> Dict[str, Any]:
         """Parse extended annotation GTF with custom parser"""
         base_gene_dict = {}
-        self.logger.info("Parsing extended annotation GTF")
+        gtf_file = self.config.extended_annotation
+        self.logger.info(f"=== EXTENDED GTF PARSING DEBUG ===")
+        self.logger.info(f"Parsing extended annotation GTF: {gtf_file}")
+        
+        # Check file existence and size
+        gtf_path = Path(gtf_file)
+        if not gtf_path.exists():
+            self.logger.error(f"Extended annotation GTF file does not exist: {gtf_file}")
+            raise FileNotFoundError(f"Extended annotation GTF file not found: {gtf_file}")
+        
+        file_size_mb = gtf_path.stat().st_size / (1024*1024)
+        self.logger.info(f"Extended GTF file size: {file_size_mb:.2f} MB")
         
         try:
-            with open(self.config.extended_annotation, "r") as file:
+            with open(gtf_file, "r") as file:
                 attr_pattern = re.compile(r'(\S+) "([^"]+)";')
                 
                 # First pass: genes and transcripts
@@ -473,6 +679,7 @@ class DictionaryBuilder:
                             "exons": [],
                             "tags": attrs.get("tags", "").split(","),
                             "name": attrs.get("transcript_name", transcript_id),
+                            "biotype": attrs.get("transcript_biotype", "unknown"),
                         }
                     
                     elif feature_type == "exon" and transcript_id and gene_id:
@@ -486,7 +693,42 @@ class DictionaryBuilder:
                             }
                             base_gene_dict[gene_id]["transcripts"][transcript_id]["exons"].append(exon_info)
 
-            self.logger.info(f"Processed {len(base_gene_dict)} genes from extended annotation GTF")
+            # Debug: Analyze what we found
+            total_genes = len(base_gene_dict)
+            novel_genes = sum(1 for gene_id in base_gene_dict.keys() if "novel_gene" in gene_id)
+            ensembl_genes = sum(1 for gene_id in base_gene_dict.keys() if gene_id.startswith("ENSMUSG"))
+            
+            total_transcripts = 0
+            novel_transcripts = 0
+            ensembl_transcripts = 0
+            sample_novel_transcripts = []
+            sample_ensembl_transcripts = []
+            
+            for gene_id, gene_info in base_gene_dict.items():
+                transcripts = gene_info.get("transcripts", {})
+                total_transcripts += len(transcripts)
+                
+                for tx_id in transcripts.keys():
+                    if tx_id.startswith("transcript"):
+                        novel_transcripts += 1
+                        if len(sample_novel_transcripts) < 5:
+                            sample_novel_transcripts.append(f"{gene_id}:{tx_id}")
+                    elif tx_id.startswith("ENSMUST"):
+                        ensembl_transcripts += 1
+                        if len(sample_ensembl_transcripts) < 5:
+                            sample_ensembl_transcripts.append(f"{gene_id}:{tx_id}")
+            
+            self.logger.info(f"=== EXTENDED GTF PARSING RESULTS ===")
+            self.logger.info(f"Total genes parsed: {total_genes}")
+            self.logger.info(f"Novel genes: {novel_genes}, Ensembl genes: {ensembl_genes}")
+            self.logger.info(f"Total transcripts: {total_transcripts}")
+            self.logger.info(f"Novel transcripts: {novel_transcripts}, Ensembl transcripts: {ensembl_transcripts}")
+            
+            if sample_novel_transcripts:
+                self.logger.info(f"Sample novel transcripts: {sample_novel_transcripts}")
+            if sample_ensembl_transcripts:
+                self.logger.info(f"Sample Ensembl transcripts: {sample_ensembl_transcripts}")
+            
             return base_gene_dict
         except Exception as e:
             self.logger.error(f"GTF parsing failed: {str(e)}")
@@ -572,14 +814,18 @@ class DictionaryBuilder:
 
     def _filter_novel_genes(self, gene_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Filter out novel genes based on gene ID pattern."""
-        self.logger.debug("Starting novel gene filtering")
+        self.logger.info("=== NOVEL GENE FILTERING DEBUG ===")
+        self.logger.info(f"Starting novel gene filtering on {len(gene_dict)} genes")
+        
         filtered_dict = {}
         total_removed_genes = 0
         total_removed_transcripts = 0
         checked_gene_count = 0
         sample_removed = [] # For debug logging
+        sample_kept_novel_transcripts = [] # For novel transcripts in kept genes
 
         novel_gene_pattern = r"novel_gene" # Make sure this pattern is correct for your novel gene IDs
+        self.logger.info(f"Using novel gene pattern: '{novel_gene_pattern}'")
 
         for gene_id, gene_info in gene_dict.items():
             checked_gene_count += 1
@@ -593,32 +839,46 @@ class DictionaryBuilder:
                 # Add novel gene ID to the set
                 self.novel_gene_ids.add(gene_id)
                 # Add novel transcript IDs to the set
-                self.novel_transcript_ids.update(gene_info.get("transcripts", {}).keys())
-
+                transcripts = gene_info.get("transcripts", {})
+                self.novel_transcript_ids.update(transcripts.keys())
 
                 if len(sample_removed) < 5: # Sample log of removed genes
+                    sample_transcripts = list(transcripts.keys())[:3]  # Show first 3 transcripts
                     sample_removed.append({
                         'gene_id': gene_id,
-                        'transcript_count': removed_transcript_count
+                        'transcript_count': removed_transcript_count,
+                        'sample_transcripts': sample_transcripts
                     })
                 continue # Skip adding novel genes to filtered_dict
+            else:
+                # Check if this kept gene has any novel transcripts
+                transcripts = gene_info.get("transcripts", {})
+                for tx_id in transcripts.keys():
+                    if tx_id.startswith("transcript") and len(sample_kept_novel_transcripts) < 10:
+                        sample_kept_novel_transcripts.append(f"{gene_id}:{tx_id}")
 
             filtered_dict[gene_id] = gene_info # Keep known genes
 
+        self.logger.info(f"=== NOVEL GENE FILTERING RESULTS ===")
+        self.logger.info(f"Checked {checked_gene_count} total genes")
         self.logger.info(
-            f"Filtered {total_removed_genes} novel genes "
+            f"Removed {total_removed_genes} novel genes "
             f"({total_removed_genes/checked_gene_count:.2%} of total) "
             f"and {total_removed_transcripts} associated transcripts"
         )
+        self.logger.info(f"Kept {len(filtered_dict)} genes after novel gene filtering")
 
         if sample_removed:
-            sample_output = "\n".join(
-                f"- {g['gene_id']}: {g['transcript_count']} transcripts"
-                for g in sample_removed
-            )
-            self.logger.debug(f"Sample removed novel genes:\n{sample_output}")
+            self.logger.info("Sample removed novel genes:")
+            for g in sample_removed:
+                self.logger.info(f"- {g['gene_id']}: {g['transcript_count']} transcripts {g['sample_transcripts']}")
         else:
             self.logger.warning("No novel genes detected with current filtering pattern")
+
+        if sample_kept_novel_transcripts:
+            self.logger.info(f"Sample novel transcripts in KEPT genes: {sample_kept_novel_transcripts}")
+        else:
+            self.logger.warning("No novel transcripts found in kept genes!")
 
         return filtered_dict
 

@@ -161,7 +161,7 @@ class PlotOutput:
                         exon_color = "skyblue" # If ref_only, always treat as reference
                         exon_alpha = 1.0
                     else:
-                        is_reference_exon = exon["exon_id"].startswith("ENSE") # Original logic
+                        is_reference_exon = exon["exon_id"].startswith("E") # Original logic
                         exon_color = "skyblue" if is_reference_exon else "red"
                         exon_alpha = 1.0 if is_reference_exon else 0.6
                     
@@ -433,6 +433,135 @@ class PlotOutput:
         )
         plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         plt.close()
+
+    def plot_read_length_effects(self, length_effects):
+        """
+        Plot how read length relates to (a) assignment uniqueness and (b) FSM/ISM/mono classification.
+        Saves two bar charts into read_assignments_dir.
+        """
+        if not self.read_assignments_dir:
+            logging.warning("No read_assignments_dir provided. Skipping length effects plotting.")
+            return
+
+        bins = length_effects['bins']
+        totals = length_effects['totals']
+
+        # Assignment uniqueness plot
+        df_a_rows = []
+        for b in bins:
+            row = {'bin': b, **length_effects['by_bin_assignment'][b], 'TOTAL': totals[b]}
+            df_a_rows.append(row)
+        df_a = pd.DataFrame(df_a_rows)
+        if df_a.empty:
+            logging.warning("No data available for assignment uniqueness plot; skipping.")
+            return
+        df_a.set_index('bin', inplace=True)
+
+        # Determine assignment categories dynamically and ensure columns exist
+        assignment_keys = length_effects.get('assignment_keys', [])
+        if not assignment_keys:
+            assignment_keys = [c for c in df_a.columns if c != 'TOTAL']
+        for key in assignment_keys:
+            if key not in df_a.columns:
+                df_a[key] = 0
+
+        # Normalize to percentages per bin
+        for col in assignment_keys:
+            df_a[col] = np.where(df_a['TOTAL'] > 0, df_a[col] / df_a['TOTAL'] * 100.0, 0.0)
+
+        # Preferred column order if present
+        preferred_order = ['UNIQUE', 'AMBIGUOUS', 'OTHER', 'INCONSISTENT', 'UNASSIGNED']
+        ordered_cols = [c for c in preferred_order if c in assignment_keys] + [c for c in assignment_keys if c not in preferred_order]
+        if not ordered_cols:
+            logging.warning("No assignment columns to plot after normalization; skipping.")
+            return
+
+        ax = df_a[ordered_cols].plot(kind='bar', stacked=True, figsize=(12,6), colormap='tab20')
+        ax.set_ylabel('Percentage of reads')
+        ax.set_title('Read assignment uniqueness by read length')
+        ax.legend(title='Assignment')
+        plt.tight_layout()
+        out1 = os.path.join(self.read_assignments_dir, 'read_length_vs_assignment_uniqueness.pdf')
+        plt.savefig(out1, bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_read_length_histogram(self, hist_data):
+        """
+        Plot a histogram of read lengths using precomputed bin edges/counts.
+        """
+        if not self.read_assignments_dir:
+            logging.warning("No read_assignments_dir provided. Skipping length histogram plot.")
+            return
+
+        edges = hist_data.get('edges', [])
+        counts = hist_data.get('counts', [])
+        total = hist_data.get('total', 0)
+        if not edges or not counts:
+            logging.warning("Empty histogram data; skipping.")
+            return
+
+        # Build midpoints for bar plotting
+        mids = [(edges[i] + edges[i+1]) / 2.0 for i in range(len(counts))]
+        widths = [edges[i+1] - edges[i] for i in range(len(counts))]
+
+        plt.figure(figsize=(12,6))
+        plt.bar(mids, counts, width=widths, align='center', color='steelblue', edgecolor='black')
+        plt.xlabel('Read length (bp)')
+        plt.ylabel('Read count')
+        plt.title(f'Read length histogram (total n={total:,})')
+        plt.tight_layout()
+        outp = os.path.join(self.read_assignments_dir, 'read_length_histogram.pdf')
+        plt.savefig(outp, bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_read_length_vs_assignment(self, length_vs_assignment):
+        """
+        Plot read-length bins vs assignment_type and vs classification as stacked bar charts.
+        Saves two PDFs into read_assignments_dir.
+        """
+        if not self.read_assignments_dir:
+            logging.warning("read_assignments_dir not set; skipping length vs assignment plots")
+            return
+
+        import pandas as pd
+        import matplotlib.pyplot as plt
+
+        bins = length_vs_assignment.get('bins', [])
+        a_counts = length_vs_assignment.get('assignment', {})
+        c_counts = length_vs_assignment.get('classification', {})
+
+        # Build DataFrames
+        def to_df(counts_dict):
+            rows = []
+            for (b, key), val in counts_dict.items():
+                rows.append({'bin': b, 'key': key, 'count': val})
+            df = pd.DataFrame(rows)
+            if df.empty:
+                return df
+            pivot = df.pivot_table(index='bin', columns='key', values='count', aggfunc='sum', fill_value=0)
+            # Ensure bin order
+            pivot = pivot.reindex(bins, axis=0).fillna(0)
+            return pivot
+
+        df_a = to_df(a_counts)
+        df_c = to_df(c_counts)
+
+        def plot_stacked(pivot_df, title, filename):
+            if pivot_df.empty:
+                logging.warning(f"No data for plot: {title}")
+                return
+            ax = pivot_df.plot(kind='bar', stacked=True, figsize=(12, 6))
+            ax.set_xlabel('Read length bin')
+            ax.set_ylabel('Read count')
+            ax.set_title(title)
+            plt.tight_layout()
+            out = os.path.join(self.read_assignments_dir, filename)
+            plt.savefig(out)
+            plt.close()
+            logging.info(f"Saved plot: {out}")
+
+        plot_stacked(df_a, 'Read length vs assignment_type', 'length_vs_assignment_type.pdf')
+        plot_stacked(df_c, 'Read length vs classification', 'length_vs_classification.pdf')
 
     def plot_novel_transcript_contribution(self):
         """

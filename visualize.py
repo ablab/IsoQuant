@@ -254,10 +254,10 @@ def main():
         update_names = True
 
     min_val = args.filter_transcripts if args.filter_transcripts is not None else 1.0
-    logging.info(f"FLOW_DEBUG: Building updated_gene_dict with:")
-    logging.info(f"  min_value: {min_val}")
-    logging.info(f"  reference_conditions: {getattr(args, 'reference_conditions', None)}")
-    logging.info(f"  target_conditions: {getattr(args, 'target_conditions', None)}")
+    logging.debug(f"Building updated_gene_dict with:")
+    logging.debug(f"  min_value: {min_val}")
+    logging.debug(f"  reference_conditions: {getattr(args, 'reference_conditions', None)}")
+    logging.debug(f"  target_conditions: {getattr(args, 'target_conditions', None)}")
     
     updated_gene_dict = dictionary_builder.build_gene_dict_with_expression_and_filter(
         min_value=min_val,
@@ -265,9 +265,9 @@ def main():
         target_conditions=getattr(args, 'target_conditions', None)
     )
     
-    logging.info(f"FLOW_DEBUG: updated_gene_dict created:")
-    logging.info(f"  type: {type(updated_gene_dict)}")
-    logging.info(f"  keys (conditions): {list(updated_gene_dict.keys()) if updated_gene_dict else 'None'}")
+    logging.debug(f"updated_gene_dict created:")
+    logging.debug(f"  type: {type(updated_gene_dict)}")
+    logging.debug(f"  keys (conditions): {list(updated_gene_dict.keys()) if updated_gene_dict else 'None'}")
     if updated_gene_dict:
         for condition, genes in updated_gene_dict.items():
             logging.info(f"  condition '{condition}': {len(genes)} genes")
@@ -275,16 +275,16 @@ def main():
             if sample_genes:
                 for gene_id in sample_genes:
                     gene_info = genes[gene_id]
-                    logging.info(f"    gene '{gene_id}': name='{gene_info.get('name', 'MISSING')}', keys={list(gene_info.keys())}")
+                    logging.debug(f"    gene '{gene_id}': name='{gene_info.get('name', 'MISSING')}', keys={list(gene_info.keys())}")
                     if 'transcripts' in gene_info:
-                        logging.info(f"      transcripts: {len(gene_info['transcripts'])} items")
+                        logging.debug(f"      transcripts: {len(gene_info['transcripts'])} items")
             break  # Only show details for first condition
 
     # Debug: log whether gene_dict keys are Ensembl IDs or gene names
     if updated_gene_dict:
         sample_condition = next(iter(updated_gene_dict))
         sample_keys = list(updated_gene_dict[sample_condition].keys())[:5]
-        logging.info(
+        logging.debug(
             "Sample gene_dict keys for condition '%s': %s", sample_condition, sample_keys
         )
 
@@ -294,8 +294,23 @@ def main():
         reads_and_class = (
             dictionary_builder.build_read_assignment_and_classification_dictionaries()
         )
+        # New: build read length effects aggregates
+        logging.debug("Building read length effects aggregates.")
+        try:
+            length_effects = dictionary_builder.build_read_length_effects()
+        except Exception as e:
+            logging.error(f"Failed to compute read length effects: {e}")
+            length_effects = None
+        # New: build read length histogram
+        try:
+            length_hist = dictionary_builder.build_read_length_histogram()
+        except Exception as e:
+            logging.error(f"Failed to compute read length histogram: {e}")
+            length_hist = None
     else:
         reads_and_class = None
+        length_effects = None
+        length_hist = None
 
     # 3. If user wants to find top genes (--find_genes), choose method based on replicate availability
     if args.find_genes is not None:
@@ -400,14 +415,14 @@ def main():
         read_assignments_dir = None # Set to None if not used
 
     # 6. Plotting with PlotOutput
-    logging.info(f"FLOW_DEBUG: Creating PlotOutput with:")
-    logging.info(f"  gene_names type: {type(gene_list)}")
-    logging.info(f"  gene_names length: {len(gene_list) if gene_list else 'None'}")
-    logging.info(f"  gene_names content (first 10): {gene_list[:10] if gene_list else 'None'}")
-    logging.info(f"  updated_gene_dict keys: {list(updated_gene_dict.keys()) if updated_gene_dict else 'None'}")
-    logging.info(f"  conditions: {output.conditions}")
-    logging.info(f"  filter_transcripts: {min_val}")
-    logging.info(f"  ref_only: {args.ref_only}")
+    logging.debug(f"Creating PlotOutput with:")
+    logging.debug(f"  gene_names type: {type(gene_list)}")
+    logging.debug(f"  gene_names length: {len(gene_list) if gene_list else 'None'}")
+    logging.debug(f"  gene_names content (first 10): {gene_list[:10] if gene_list else 'None'}")
+    logging.debug(f"  updated_gene_dict keys: {list(updated_gene_dict.keys()) if updated_gene_dict else 'None'}")
+    logging.debug(f"  conditions: {output.conditions}")
+    logging.debug(f"  filter_transcripts: {min_val}")
+    logging.debug(f"  ref_only: {args.ref_only}")
     
     plot_output = PlotOutput(
         updated_gene_dict=updated_gene_dict,
@@ -430,6 +445,18 @@ def main():
 
     if use_read_assignments:
         plot_output.make_pie_charts()
+        # New: plot read length effects (assignment uniqueness and FSM/ISM/Mono)
+        if length_effects:
+            plot_output.plot_read_length_effects(length_effects)
+            # Also dynamic stacked charts for assignment/classification
+            plot_output.plot_read_length_vs_assignment({
+                'bins': length_effects['bins'],
+                'assignment': { (b, k): v for b in length_effects['bins'] for k, v in length_effects['by_bin_assignment'][b].items() },
+                'classification': { (b, k): v for b in length_effects['bins'] for k, v in length_effects['by_bin_classification'][b].items() },
+            })
+        # New: plot histogram
+        if length_hist:
+            plot_output.plot_read_length_histogram(length_hist)
 
 
 if __name__ == "__main__":

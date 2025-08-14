@@ -1,6 +1,7 @@
+from __future__ import annotations
 import logging
 import pandas as pd
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Dict, List, Tuple, Optional, Union, Any
 from pathlib import Path
 from rpy2 import robjects
 from rpy2.robjects import r, Formula
@@ -22,13 +23,20 @@ class DifferentialAnalysis:
         target_conditions: List[str],
         updated_gene_dict: Dict[str, Dict],
         ref_only: bool = False,
-        dictionary_builder: "DictionaryBuilder" = None,
+        dictionary_builder: Optional[Any] = None,
         filter_min_count: int = 10,
         pca_n_components: int = 10,
         top_transcripts_base_mean: int = 500,
         top_n_genes: int = 100,
         log_level: int = logging.INFO, # Allow configuring log level
         tech_rep_dict: Dict[str, str] = None,
+        # New options
+        use_shrunk_lfc_for_visuals: bool = True,
+        transcript_filter_mode: str = "per_group_min", # or "half_samples"
+        transcript_min_per_group: int = 2,
+        transcript_min_total_fraction: float = 0.5,
+        covariate_df: Optional[pd.DataFrame] = None, # index: base sample_id (without condition prefix)
+        size_factor_type: str = "poscounts", # DESeq2 sfType, recommended for zero-heavy data
     ):
         """Initialize differential expression analysis."""
         def quiet_cb(x):
@@ -77,6 +85,92 @@ class DifferentialAnalysis:
         self.visualizer = ExpressionVisualizer(self.deseq_dir)
         self.gene_mapper = GeneMapper()
         self.tech_rep_dict = tech_rep_dict
+        self.use_shrunk_lfc_for_visuals = use_shrunk_lfc_for_visuals
+        self.transcript_filter_mode = transcript_filter_mode
+        self.transcript_min_per_group = transcript_min_per_group
+        self.transcript_min_total_fraction = transcript_min_total_fraction
+        self.covariate_df = covariate_df
+        self.size_factor_type = size_factor_type
+
+    # -------------------------
+    # Small helpers to reduce duplication
+    # -------------------------
+    def _get_labels(self) -> Tuple[str, str]:
+        target_label = "+".join(self.target_conditions)
+        reference_label = "+".join(self.ref_conditions)
+        return target_label, reference_label
+
+    def _annotate_results(self, level: str, results_df: pd.DataFrame) -> pd.DataFrame:
+        if results_df is None or results_df.empty:
+            return results_df
+        results_df = results_df.copy()
+        results_df.index.name = "feature_id"
+        results_df.reset_index(inplace=True)
+        mapping = self._map_gene_symbols(results_df["feature_id"].unique(), level)
+        results_df["transcript_symbol"] = results_df["feature_id"].map(
+            lambda x: mapping.get(x, {}).get("transcript_symbol", x)
+        )
+        results_df["gene_name"] = results_df["feature_id"].map(
+            lambda x: mapping.get(x, {}).get("gene_name", x.split('.')[0] if '.' in x else x)
+        )
+        if level == "gene":
+            results_df = results_df.drop(columns=["transcript_symbol"], errors='ignore')
+        return results_df
+
+    def _save_results(self, level: str, results_df: pd.DataFrame, results_shrunk_df: Optional[pd.DataFrame]) -> Tuple[Path, Optional[Path]]:
+        target_label, reference_label = self._get_labels()
+        outfile = self.deseq_dir / f"DE_{level}_{target_label}_vs_{reference_label}.csv"
+        results_df.to_csv(outfile, index=False)
+        shrunk_path = None
+        if results_shrunk_df is not None and not results_shrunk_df.empty:
+            # Annotate shrunk for convenience
+            annotated_shrunk = self._annotate_results(level, results_shrunk_df)
+            shrunk_path = self.deseq_dir / f"DE_{level}_{target_label}_vs_{reference_label}_shrunk_annotated.csv"
+            annotated_shrunk.to_csv(shrunk_path, index=False)
+        return outfile, shrunk_path
+
+    def _lfc_for_visuals(self, base_df: pd.DataFrame, shrunk_df: Optional[pd.DataFrame]) -> pd.DataFrame:
+        df = base_df.copy()
+        if not self.use_shrunk_lfc_for_visuals or shrunk_df is None or shrunk_df.empty:
+            return df
+        try:
+            merged = pd.merge(
+                df[["feature_id", "log2FoldChange"]],
+                shrunk_df[["feature_id", "log2FoldChange"]],
+                on="feature_id",
+                how="left",
+                suffixes=("", "_shrunk"),
+            )
+            lfc_map = merged.set_index("feature_id")["log2FoldChange_shrunk"]
+            replacement = df["feature_id"].map(lfc_map)
+            df["log2FoldChange"] = replacement.fillna(df["log2FoldChange"]).values
+            # Optionally retain a column for reference
+            df = pd.merge(df, merged[["feature_id", "log2FoldChange_shrunk"]], on="feature_id", how="left")
+        except Exception as e:
+            self.logger.warning(f"Could not merge shrunk LFCs for visuals: {e}")
+        return df
+
+    def _load_prefixed_counts(self, pattern: str) -> pd.DataFrame:
+        """Load count tsvs for all conditions, prefix columns with condition, and concat."""
+        all_sample_dfs: List[pd.DataFrame] = []
+        for condition in self.ref_conditions + self.target_conditions:
+            condition_dir = Path(self.output_dir) / condition
+            count_files = list(condition_dir.glob(f"*{pattern}"))
+            if not count_files:
+                self.logger.error(f"No count files found for condition: {condition}")
+                raise FileNotFoundError(f"No count files matching {pattern} found in {condition_dir}")
+            for file_path in count_files:
+                self.logger.debug(f"Reading count data from: {file_path}")
+                df = pd.read_csv(file_path, sep="\t")
+                if "#feature_id" not in df.columns and df.columns[0].startswith("#"):
+                    df.rename(columns={df.columns[0]: "#feature_id"}, inplace=True)
+                df.set_index("#feature_id", inplace=True)
+                # Prefix columns
+                df.rename(columns={col: f"{condition}_{col}" for col in df.columns}, inplace=True)
+                all_sample_dfs.append(df)
+        if not all_sample_dfs:
+            raise ValueError("No sample data found")
+        return pd.concat(all_sample_dfs, axis=1)
 
     def _load_transcript_mapping_from_file(self):
         """Load transcript mapping directly from the transcript_mapping.tsv file."""
@@ -88,7 +182,7 @@ class DifferentialAnalysis:
         
         try:
             # Load the transcript mapping file
-            self.logger.info(f"Loading transcript mapping from {mapping_file}")
+            self.logger.debug(f"Loading transcript mapping from {mapping_file}")
             self.transcript_map = {}
             
             # Skip header and read the mapping
@@ -149,12 +243,16 @@ class DifferentialAnalysis:
         # --- 2. Run DESeq2 Analysis (Gene Level) ---
         (deseq2_results_gene_file,
          deseq2_results_df_gene,
-         gene_normalized_counts) = self._perform_level_analysis("gene", gene_counts_filtered)
+         deseq2_results_df_gene_shrunk,
+         gene_normalized_counts,
+         gene_vst_counts) = self._perform_level_analysis("gene", gene_counts_filtered)
 
         # --- 3. Run DESeq2 Analysis (Transcript Level) ---
         (deseq2_results_transcript_file,
          deseq2_results_df_transcript,
-         transcript_normalized_counts) = self._perform_level_analysis("transcript", transcript_counts_filtered)
+         deseq2_results_df_transcript_shrunk,
+         transcript_normalized_counts,
+         transcript_vst_counts) = self._perform_level_analysis("transcript", transcript_counts_filtered)
 
         # --- 4. Generate Visualizations ---
         self._generate_visualizations(
@@ -162,8 +260,12 @@ class DifferentialAnalysis:
             transcript_counts_filtered=transcript_counts_filtered, # Pass filtered counts for coldata generation
             gene_normalized_counts=gene_normalized_counts,
             transcript_normalized_counts=transcript_normalized_counts,
+            gene_vst_counts=gene_vst_counts,
+            transcript_vst_counts=transcript_vst_counts,
             deseq2_results_df_gene=deseq2_results_df_gene,
-            deseq2_results_df_transcript=deseq2_results_df_transcript
+            deseq2_results_df_transcript=deseq2_results_df_transcript,
+            deseq2_results_df_gene_shrunk=deseq2_results_df_gene_shrunk,
+            deseq2_results_df_transcript_shrunk=deseq2_results_df_transcript_shrunk
         )
 
         self.logger.info("Differential expression analysis workflow complete.")
@@ -212,6 +314,11 @@ class DifferentialAnalysis:
         if not valid_transcripts:
              self.logger.warning("No valid transcripts found in updated_gene_dict. Skipping validity filter.")
         self.logger.debug(f"Found {len(valid_transcripts)} valid transcript IDs in updated_gene_dict.")
+        # Apply validity filter if available
+        if valid_transcripts:
+            before_valid = transcript_counts.shape[0]
+            transcript_counts = transcript_counts[transcript_counts.index.isin(valid_transcripts)]
+            self.logger.info(f"Validity filtering: Retained {transcript_counts.shape[0]} / {before_valid} transcripts present in updated_gene_dict")
 
         # --- Novel Transcript Filtering ---
         if self.dictionary_builder:
@@ -240,7 +347,7 @@ class DifferentialAnalysis:
 
     def _perform_level_analysis(
         self, level: str, count_data: pd.DataFrame
-    ) -> Tuple[Path, pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[Path, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Runs DESeq2 analysis for a specific level (gene or transcript).
 
@@ -263,42 +370,22 @@ class DifferentialAnalysis:
         # Create design matrix
         coldata = self._build_design_matrix(count_data)
 
-        # Run DESeq2 - Now returns results and normalized counts
-        results_df, normalized_counts_df = self._run_deseq2(count_data, coldata, level)
+        # Run DESeq2 - returns results, shrunk results, normalized counts, and VST counts
+        results_df, results_shrunk_df, normalized_counts_df, vst_counts_df = self._run_deseq2(count_data, coldata, level)
 
-        # --- Process DESeq2 Results ---
-        results_df.index.name = "feature_id"
-        results_df.reset_index(inplace=True) # Keep feature_id as a column
-
-        # Map gene symbols/names
-        mapping = self._map_gene_symbols(results_df["feature_id"].unique(), level)
-
-        # Add transcript_symbol and gene_name columns safely using .get
-        results_df["transcript_symbol"] = results_df["feature_id"].map(
-            lambda x: mapping.get(x, {}).get("transcript_symbol", x) # Default to feature_id if not found
-        )
-        results_df["gene_name"] = results_df["feature_id"].map(
-            lambda x: mapping.get(x, {}).get("gene_name", x.split('.')[0] if '.' in x else x) # Default to feature_id logic if not found
-        )
-
-
-        # Drop transcript_symbol column for gene-level analysis as it's redundant
-        if level == "gene":
-            results_df = results_df.drop(columns=["transcript_symbol"], errors='ignore') # Use errors='ignore'
+        # --- Process and annotate DESeq2 Results ---
+        results_df = self._annotate_results(level, results_df)
 
         # --- Save Results ---
-        target_label = "+".join(self.target_conditions)
-        reference_label = "+".join(self.ref_conditions)
-        # Use the pattern argument passed to _get_condition_data if needed, or derive filename like this
-        outfile = self.deseq_dir / f"DE_{level}_{target_label}_vs_{reference_label}.csv"
-        results_df.to_csv(outfile, index=False)
+        # Save both standard and annotated shrunk results
+        outfile, _ = self._save_results(level, results_df, results_shrunk_df)
         self.logger.info(f"Saved DESeq2 results ({results_df.shape[0]} features) to {outfile}")
 
         # --- Write Top Genes/Transcripts ---
         self._write_top_genes(results_df, level)
 
         self.logger.info(f"DESeq2 analysis complete for level: {level}")
-        return outfile, results_df, normalized_counts_df
+        return outfile, results_df, results_shrunk_df, normalized_counts_df, vst_counts_df
 
     def _generate_visualizations(
         self,
@@ -306,8 +393,12 @@ class DifferentialAnalysis:
         transcript_counts_filtered: pd.DataFrame,
         gene_normalized_counts: pd.DataFrame,
         transcript_normalized_counts: pd.DataFrame,
+        gene_vst_counts: pd.DataFrame,
+        transcript_vst_counts: pd.DataFrame,
         deseq2_results_df_gene: pd.DataFrame,
         deseq2_results_df_transcript: pd.DataFrame,
+        deseq2_results_df_gene_shrunk: Optional[pd.DataFrame] = None,
+        deseq2_results_df_transcript_shrunk: Optional[pd.DataFrame] = None,
     ):
         """Generates PCA plots and other visualizations based on DESeq2 results and normalized counts."""
         self.logger.info("Generating visualizations...")
@@ -315,8 +406,9 @@ class DifferentialAnalysis:
         reference_label = "+".join(self.ref_conditions)
 
         # --- Visualize Gene-Level DE Results ---
+        gene_results_for_plot = self._lfc_for_visuals(deseq2_results_df_gene, deseq2_results_df_gene_shrunk)
         self.visualizer.visualize_results(
-            results=deseq2_results_df_gene, # Use DataFrame directly
+            results=gene_results_for_plot,
             target_label=target_label,
             reference_label=reference_label,
             min_count=self.filter_min_count, # Use configured value
@@ -325,21 +417,24 @@ class DifferentialAnalysis:
         self.logger.info(f"Gene-level DE summary visualizations saved to {self.deseq_dir}")
 
         # --- Run PCA (Gene Level) ---
-        if not gene_normalized_counts.empty:
+        gene_counts_for_pca = gene_vst_counts if gene_vst_counts is not None and not gene_vst_counts.empty else gene_normalized_counts
+        if not gene_counts_for_pca.empty:
             gene_coldata = self._build_design_matrix(gene_counts_filtered) # Need coldata matching the counts used
             self._run_pca(
-                normalized_counts=gene_normalized_counts,
+                normalized_counts=gene_counts_for_pca,
                 level="gene",
                 coldata=gene_coldata,
                 target_label=target_label,
-                reference_label=reference_label
+                reference_label=reference_label,
+                is_vst=(gene_vst_counts is not None and not gene_vst_counts.empty)
             )
         else:
             self.logger.warning("Skipping gene-level PCA: Normalized counts are empty.")
 
         # --- Visualize Transcript-Level DE Results ---
+        tx_results_for_plot = self._lfc_for_visuals(deseq2_results_df_transcript, deseq2_results_df_transcript_shrunk)
         self.visualizer.visualize_results(
-            results=deseq2_results_df_transcript, # Use DataFrame directly
+            results=tx_results_for_plot,
             target_label=target_label,
             reference_label=reference_label,
             min_count=self.filter_min_count, # Use configured value
@@ -348,14 +443,16 @@ class DifferentialAnalysis:
         self.logger.info(f"Transcript-level DE summary visualizations saved to {self.deseq_dir}")
 
         # --- Run PCA (Transcript Level) ---
-        if not transcript_normalized_counts.empty:
+        tx_counts_for_pca = transcript_vst_counts if transcript_vst_counts is not None and not transcript_vst_counts.empty else transcript_normalized_counts
+        if not tx_counts_for_pca.empty:
             transcript_coldata = self._build_design_matrix(transcript_counts_filtered) # Need coldata matching the counts used
             self._run_pca(
-                normalized_counts=transcript_normalized_counts,
+                normalized_counts=tx_counts_for_pca,
                 level="transcript",
                 coldata=transcript_coldata,
                 target_label=target_label,
-                reference_label=reference_label
+                reference_label=reference_label,
+                is_vst=(transcript_vst_counts is not None and not transcript_vst_counts.empty)
             )
         else:
              self.logger.warning("Skipping transcript-level PCA: Normalized counts are empty.")
@@ -374,47 +471,10 @@ class DifferentialAnalysis:
         if not self.ref_only and pattern == "transcript_grouped_counts.tsv":
             adjusted_pattern = "transcript_model_grouped_counts.tsv"
         
-        self.logger.info(f"Using file pattern: {adjusted_pattern}")
+        self.logger.debug(f"Using file pattern: {adjusted_pattern}")
         
-        # Store sample dataframes
-        all_sample_dfs = []
-        
-        # Process each condition directory
-        for condition in self.ref_conditions + self.target_conditions:
-            condition_dir = Path(self.output_dir) / condition
-            count_files = list(condition_dir.glob(f"*{adjusted_pattern}"))
-            
-            if not count_files:
-                self.logger.error(f"No count files found for condition: {condition}")
-                raise FileNotFoundError(f"No count files matching {adjusted_pattern} found in {condition_dir}")
-            
-            # Load each count file
-            for file_path in count_files:
-                self.logger.info(f"Reading count data from: {file_path}")
-                
-                # Load the file
-                df = pd.read_csv(file_path, sep="\t")
-                if "#feature_id" not in df.columns and df.columns[0].startswith("#"):
-                    # Rename first column if it's the feature ID column but named differently
-                    df.rename(columns={df.columns[0]: "#feature_id"}, inplace=True)
-                
-                # Set feature_id as index
-                df.set_index("#feature_id", inplace=True)
-                
-                # For multi-condition data (typical in sample files)
-                # We need to prefix each column with the condition name
-                for col in df.columns:
-                    df.rename(columns={col: f"{condition}_{col}"}, inplace=True)
-                
-                all_sample_dfs.append(df)
-        
-        # Concatenate all dataframes to get the full matrix
-        if not all_sample_dfs:
-            self.logger.error("No sample data frames found")
-            raise ValueError("No sample data found")
-        
-        # Combine all sample dataframes
-        combined_df = pd.concat(all_sample_dfs, axis=1)
+        # Load and prefix columns consistently
+        combined_df = self._load_prefixed_counts(adjusted_pattern)
         self.logger.info(f"Combined count data shape before mapping: {combined_df.shape}")
         
         # Apply technical replicate merging before transcript mapping
@@ -477,46 +537,7 @@ class DifferentialAnalysis:
         elif pattern == "gene_grouped_counts.tsv":
             # For gene data, use a simpler approach (no merging needed)
             self.logger.info(f"Loading gene count data with pattern: {pattern}")
-            
-            # Store sample dataframes
-            all_sample_dfs = []
-            
-            # Process each condition directory
-            for condition in self.ref_conditions + self.target_conditions:
-                condition_dir = Path(self.output_dir) / condition
-                count_files = list(condition_dir.glob(f"*{pattern}"))
-                
-                if not count_files:
-                    self.logger.error(f"No gene count files found for condition: {condition}")
-                    raise FileNotFoundError(f"No count files matching {pattern} found in {condition_dir}")
-                
-                # Load each count file
-                for file_path in count_files:
-                    self.logger.info(f"Reading gene count data from: {file_path}")
-                    
-                    # Load the file
-                    df = pd.read_csv(file_path, sep="\t")
-                    if "#feature_id" not in df.columns and df.columns[0].startswith("#"):
-                        # Rename first column if it's the feature ID column but named differently
-                        df.rename(columns={df.columns[0]: "#feature_id"}, inplace=True)
-                    
-                    # Set feature_id as index
-                    df.set_index("#feature_id", inplace=True)
-                    
-                    # For multi-condition data (typical in sample files)
-                    # We need to prefix each column with the condition name
-                    for col in df.columns:
-                        df.rename(columns={col: f"{condition}_{col}"}, inplace=True)
-                    
-                    all_sample_dfs.append(df)
-            
-            # Concatenate all dataframes to get the full matrix
-            if not all_sample_dfs:
-                self.logger.error("No gene sample data frames found")
-                raise ValueError("No gene sample data found")
-            
-            # Combine all sample dataframes
-            combined_df = pd.concat(all_sample_dfs, axis=1)
+            combined_df = self._load_prefixed_counts(pattern)
             self.logger.info(f"Combined gene count data shape: {combined_df.shape}")
             
             # Apply technical replicate merging
@@ -532,7 +553,9 @@ class DifferentialAnalysis:
         Filter features based on counts using the configured threshold.
 
         For genes: Keep if mean count >= configured min_count in either condition group.
-        For transcripts: Keep if count >= configured min_count in at least half of all samples.
+        For transcripts: Behavior is configurable.
+          - per_group_min (default): require counts >= threshold in at least K samples per group
+          - half_samples: require counts >= threshold in >= fraction of all samples
         """
         if count_data.empty:
             self.logger.warning(f"Input count data for filtering ({level}) is empty. Returning empty DataFrame.")
@@ -542,15 +565,51 @@ class DifferentialAnalysis:
         min_count_threshold = self.filter_min_count
 
         if level == "transcript":
-            total_samples = len(count_data.columns)
-            min_samples_required = max(1, total_samples // 2) # Ensure at least 1 sample is required
-            samples_passing = (count_data >= min_count_threshold).sum(axis=1)
-            keep_features = samples_passing >= min_samples_required
+            # Determine columns by condition name prefix
+            ref_cols = [
+                col for col in count_data.columns
+                if any(col.startswith(f"{cond}_") for cond in self.ref_conditions)
+            ]
+            tgt_cols = [
+                col for col in count_data.columns
+                if any(col.startswith(f"{cond}_") for cond in self.target_conditions)
+            ]
 
-            self.logger.info(
-                f"Transcript filtering: Keeping transcripts with counts >= {min_count_threshold} "
-                f"in at least {min_samples_required}/{total_samples} samples"
-            )
+            if self.transcript_filter_mode == "half_samples":
+                total_cols = len(count_data.columns)
+                required = int(np.ceil(total_cols * float(self.transcript_min_total_fraction)))
+                passing_total = (count_data >= min_count_threshold).sum(axis=1)
+                keep_features = passing_total >= required
+                self.logger.info(
+                    "Transcript filtering (half_samples): Keeping transcripts present in "+
+                    ">= %d/%d samples with counts >= %d",
+                    required, total_cols, min_count_threshold
+                )
+            else:
+                # Default: per-group minimum requirement
+                min_ref_required = (
+                    min(self.transcript_min_per_group, len(ref_cols)) if len(ref_cols) >= 1 else 0
+                )
+                min_tgt_required = (
+                    min(self.transcript_min_per_group, len(tgt_cols)) if len(tgt_cols) >= 1 else 0
+                )
+
+                passing_ref = (count_data[ref_cols] >= min_count_threshold).sum(axis=1) if ref_cols else 0
+                passing_tgt = (count_data[tgt_cols] >= min_count_threshold).sum(axis=1) if tgt_cols else 0
+
+                if isinstance(passing_ref, int):
+                    self.logger.warning("No reference columns found for transcript filtering; no transcripts will pass.")
+                    keep_features = count_data.index == "__none__"
+                elif isinstance(passing_tgt, int):
+                    self.logger.warning("No target columns found for transcript filtering; no transcripts will pass.")
+                    keep_features = count_data.index == "__none__"
+                else:
+                    keep_features = (passing_ref >= min_ref_required) & (passing_tgt >= min_tgt_required)
+
+                self.logger.info(
+                    "Transcript filtering (per_group_min): Keeping transcripts with counts >= %d in at least %d/%d ref and %d/%d target samples",
+                    min_count_threshold, min_ref_required, len(ref_cols), min_tgt_required, len(tgt_cols)
+                )
         else:  # gene level
             ref_cols = [
                 col for col in count_data.columns
@@ -599,8 +658,13 @@ class DifferentialAnalysis:
         groups = []
         condition_assignments = []
         sample_ids = []
+        # Optional covariates
+        covariate_values: Dict[str, List[Optional[Union[str, float]]]] = {}
+        covariate_columns: List[str] = list(self.covariate_df.columns) if isinstance(self.covariate_df, pd.DataFrame) else []
+        for cov_col in covariate_columns:
+            covariate_values[cov_col] = []
         
-        self.logger.info("Building experimental design matrix")
+        self.logger.debug("Building experimental design matrix")
         
         for sample in count_data.columns:
             # Extract the condition from the sample name
@@ -627,6 +691,15 @@ class DifferentialAnalysis:
             # Store the condition and sample ID for additional information
             condition_assignments.append(condition)
             sample_ids.append(sample)
+
+            # Attach covariate values if provided
+            if covariate_columns:
+                for cov_col in covariate_columns:
+                    try:
+                        value = self.covariate_df.loc[sample_id, cov_col]
+                    except Exception:
+                        value = np.nan
+                    covariate_values[cov_col].append(value)
         
         # Create the design matrix DataFrame
         design_matrix = pd.DataFrame({
@@ -634,6 +707,10 @@ class DifferentialAnalysis:
             "condition": condition_assignments,
             "sample_id": sample_ids
         }, index=count_data.columns)
+        # Append covariates into design matrix
+        if covariate_columns:
+            for cov_col in covariate_columns:
+                design_matrix[cov_col] = covariate_values[cov_col]
         
         # Log the design matrix for debugging
         self.logger.debug(f"Design matrix:\n{design_matrix}")
@@ -642,7 +719,7 @@ class DifferentialAnalysis:
 
     def _run_deseq2(
         self, count_data: pd.DataFrame, coldata: pd.DataFrame, level: str
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame], pd.DataFrame, pd.DataFrame]:
         """
         Run DESeq2 analysis and return results and normalized counts.
 
@@ -656,13 +733,13 @@ class DifferentialAnalysis:
         """
         self.logger.info(f"Running DESeq2 for {level} level...")
         deseq2 = importr("DESeq2")
-        # Ensure counts are integers for DESeq2
-        count_data = count_data.fillna(0).round().astype(int)
-
-        # Ensure count data has no negative values before passing to R
+        # Ensure counts are integers for DESeq2 (fail fast; do not silently coerce)
+        count_data = count_data.fillna(0)
         if (count_data < 0).any().any():
-             self.logger.warning(f"Negative values found in count data for {level}. Clamping to 0.")
-             count_data = count_data.clip(lower=0)
+            raise ValueError(f"Negative counts detected for {level}.")
+        if not np.all(np.equal(count_data.values, np.floor(count_data.values))):
+            raise ValueError(f"Non-integer counts detected for {level}. Please supply raw integer counts.")
+        count_data = count_data.astype(int)
 
         if count_data.empty:
             self.logger.error(f"Count data is empty before running DESeq2 for {level}.")
@@ -677,13 +754,29 @@ class DifferentialAnalysis:
 
                 # Create DESeqDataSet
                 self.logger.debug("Creating DESeqDataSet...")
+                # Build design formula dynamically: ~ covariates + group
+                covariate_cols = [c for c in coldata.columns if c not in ["group", "condition", "sample_id"]]
+                formula_terms = (covariate_cols + ["group"]) if covariate_cols else ["group"]
+                design_formula = "~ " + " + ".join(formula_terms)
+                self.logger.info(f"Using design formula for {level}: {design_formula}")
+                # Ensure group and categorical covariates are factors with correct baseline
+                r('library(methods)')
+                r.assign("coldata_tmp", coldata_r)
+                r('coldata_tmp$group <- relevel(factor(coldata_tmp$group), "Reference")')
+                # Coerce non-numeric covariates to factors
+                for cov in covariate_cols:
+                    if not pd.api.types.is_numeric_dtype(coldata[cov]):
+                        r(f'coldata_tmp${cov} <- factor(coldata_tmp${cov})')
+                coldata_r = r('coldata_tmp')
+
                 dds = deseq2.DESeqDataSetFromMatrix(
-                    countData=count_data_r, colData=coldata_r, design=Formula("~ group")
+                    countData=count_data_r, colData=coldata_r, design=Formula(design_formula)
                 )
 
                 # Run DESeq analysis
                 self.logger.debug("Running DESeq()...")
-                dds = deseq2.DESeq(dds)
+                # Use sfType configured; 'poscounts' is recommended for zero-heavy counts
+                dds = deseq2.DESeq(dds, sfType=self.size_factor_type)
 
                 # Get results
                 self.logger.debug("Extracting results()...")
@@ -728,16 +821,61 @@ class DifferentialAnalysis:
                 # Ensure DataFrame structure matches original count_data (features x samples)
                 normalized_counts_df = pd.DataFrame(normalized_counts_py, index=count_data.index, columns=count_data.columns)
 
+                # VST-transformed counts for PCA visualization stability
+                try:
+                    vst_obj = deseq2.vst(dds, blind=True)
+                    vst_mat_r = r['assay'](vst_obj)
+                    vst_counts_py = robjects.conversion.rpy2py(vst_mat_r)
+                    vst_counts_df = pd.DataFrame(vst_counts_py, index=count_data.index, columns=count_data.columns)
+                except Exception as e:
+                    self.logger.warning(f"VST transformation failed or unavailable: {e}")
+                    vst_counts_df = pd.DataFrame()
+
                 # Generate dispersion and count summaries
                 self._generate_dispersion_summary(res_df, level)
 
-                self.logger.info(f"DESeq2 run completed for {level}. Results shape: {res_df.shape}, Normalized counts shape: {normalized_counts_df.shape}")
-                return res_df, normalized_counts_df
+                # LFC shrinkage (apeglm) for interpretability; keep Wald stats for GSEA
+                res_shrunk_df: Optional[pd.DataFrame] = None
+                try:
+                    # Ensure apeglm is available
+                    importr("apeglm")
+                    # Find appropriate coefficient name
+                    coef_names = robjects.conversion.rpy2py(r['resultsNames'](dds))
+                    # Prefer the standard group coefficient; fallback to first matching 'group'
+                    coef_name = None
+                    for name in coef_names:
+                        if isinstance(name, str) and "group_Target_vs_Reference" in name:
+                            coef_name = name
+                            break
+                    if coef_name is None:
+                        for name in coef_names:
+                            if isinstance(name, str) and name.startswith("group_"):
+                                coef_name = name
+                                break
+                    if coef_name is None and len(coef_names) > 0:
+                        coef_name = coef_names[0]
+
+                    self.logger.info(f"Applying LFC shrinkage with apeglm (coef={coef_name}) for {level} level...")
+                    res_shrunk = deseq2.lfcShrink(dds, coef=coef_name, type="apeglm")
+                    res_shrunk_df = robjects.conversion.rpy2py(r("as.data.frame")(res_shrunk))
+                    res_shrunk_df.index = count_data.index
+
+                    # Save shrunk results to file
+                    target_label = "+".join(self.target_conditions)
+                    reference_label = "+".join(self.ref_conditions)
+                    outfile_shrunk = self.deseq_dir / f"DE_{level}_{target_label}_vs_{reference_label}_shrunk.csv"
+                    res_shrunk_df.to_csv(outfile_shrunk)
+                    self.logger.info(f"Saved shrunk DESeq2 results to {outfile_shrunk}")
+                except Exception as e:
+                    self.logger.warning(f"LFC shrinkage (apeglm) failed or unavailable: {e}")
+
+                self.logger.info(f"DESeq2 run completed for {level}. Results shape: {res_df.shape}, Normalized counts shape: {normalized_counts_df.shape}, VST shape: {vst_counts_df.shape}")
+                return res_df, res_shrunk_df, normalized_counts_df, vst_counts_df
 
         except Exception as e:
             self.logger.error(f"Error running DESeq2 for {level}: {str(e)}")
             # Return empty DataFrames on error to avoid downstream issues
-            return pd.DataFrame(), pd.DataFrame(index=count_data.index, columns=count_data.columns)
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(index=count_data.index, columns=count_data.columns), pd.DataFrame(index=count_data.index, columns=count_data.columns)
 
     def _generate_dispersion_summary(self, results_df: pd.DataFrame, level: str) -> None:
         """
@@ -996,7 +1134,7 @@ class DifferentialAnalysis:
             pd.Series(top_genes_list).to_csv(top_genes_file, index=False, header=False)
             self.logger.info(f"Wrote top {len(top_genes_list)} DE genes to {top_genes_file}")
 
-    def _run_pca(self, normalized_counts, level, coldata, target_label, reference_label):
+    def _run_pca(self, normalized_counts, level, coldata, target_label, reference_label, is_vst: bool = False):
         """Run PCA analysis and create visualization using DESeq2 normalized counts."""
         self.logger.info(f"Running PCA for {level} level using DESeq2 normalized counts...")
 
@@ -1018,21 +1156,26 @@ class DifferentialAnalysis:
              self.logger.warning(f"Reducing number of PCA components to {n_components} due to data dimensions.")
 
 
-        # Log transform the DESeq2 normalized counts (add 1 to handle zeros)
-        # Ensure data is numeric before transformation
-        log_normalized_counts = np.log2(normalized_counts.apply(pd.to_numeric, errors='coerce').fillna(0) + 1)
+        # Prepare matrix for PCA
+        # If using VST counts, do not log-transform again
+        if is_vst:
+            matrix_for_pca = normalized_counts.apply(pd.to_numeric, errors='coerce').fillna(0)
+        else:
+            # Log transform the DESeq2 normalized counts (add 1 to handle zeros)
+            # Ensure data is numeric before transformation
+            matrix_for_pca = np.log2(normalized_counts.apply(pd.to_numeric, errors='coerce').fillna(0) + 1)
 
 
         # Check for NaNs/Infs after log transform which can happen if counts were negative (though clamped earlier) or exactly -1
-        if np.isinf(log_normalized_counts).any().any() or np.isnan(log_normalized_counts).any().any():
-            self.logger.warning(f"NaNs or Infs found in log-transformed counts for {level}. Replacing with 0. This might indicate issues with count data.")
-            log_normalized_counts = log_normalized_counts.replace([np.inf, -np.inf], 0).fillna(0)
+        if np.isinf(matrix_for_pca).any().any() or np.isnan(matrix_for_pca).any().any():
+            self.logger.warning(f"NaNs or Infs found in matrix for PCA for {level}. Replacing with 0. This might indicate issues with count data.")
+            matrix_for_pca = matrix_for_pca.replace([np.inf, -np.inf], 0).fillna(0)
 
 
         try:
             pca = PCA(n_components=n_components)
             # Transpose because PCA expects samples as rows, features as columns
-            pca_result = pca.fit_transform(log_normalized_counts.transpose())
+            pca_result = pca.fit_transform(matrix_for_pca.transpose())
 
             # Map feature IDs (index of normalized_counts) to gene names
             feature_ids = normalized_counts.index.tolist()
@@ -1048,7 +1191,7 @@ class DifferentialAnalysis:
 
             # Create DataFrame with columns for all calculated components
             pc_columns = [f'PC{i+1}' for i in range(n_components)]
-            pca_df = pd.DataFrame(data=pca_result[:, :n_components], columns=pc_columns, index=log_normalized_counts.columns) # Use sample names as index
+            pca_df = pd.DataFrame(data=pca_result[:, :n_components], columns=pc_columns, index=matrix_for_pca.columns) # Use sample names as index
 
             # Add group information from coldata, ensuring index alignment
             # It's safer to reset index on coldata if it uses sample names as index too

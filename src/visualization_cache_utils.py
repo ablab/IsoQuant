@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Union
 import random
 import re
+import hashlib
 
 
 def build_gene_dict_cache_file(
@@ -58,6 +59,73 @@ def build_read_assignment_cache_file(
         return cache_dir / cache_name
     else:
         return cache_dir / "read_assignment_cache_default.pkl"
+
+
+def _hash_list(values: list) -> str:
+    try:
+        s = ",".join(map(str, values))
+        m = hashlib.md5()
+        m.update(s.encode('utf-8'))
+        return m.hexdigest()[:12]
+    except Exception:
+        # Fallback to length-based signature
+        return f"len{len(values)}"
+
+
+def build_length_effects_cache_file(
+    read_assignments: Union[str, list], ref_only: bool, cache_dir: Path, bin_labels: list
+) -> Path:
+    """
+    Cache name for read-length effects aggregates. Includes input files, mtimes, ref_only, and bin label signature.
+    """
+    bins_sig = _hash_list(bin_labels)
+    if isinstance(read_assignments, str):
+        source_file = Path(read_assignments)
+        mtime = source_file.stat().st_mtime
+        cache_name = (
+            f"length_effects_cache_{source_file.name}_{mtime}_bins_{bins_sig}_ref_only_{ref_only}.pkl"
+        )
+        return cache_dir / cache_name
+    elif isinstance(read_assignments, list):
+        file_info = []
+        for sample_name, path_str in read_assignments:
+            path_obj = Path(path_str)
+            file_info.append(f"{sample_name}-{path_obj.name}-{path_obj.stat().st_mtime}")
+        composite = "_".join(file_info).replace(" ", "_")[:100]
+        cache_name = (
+            f"length_effects_cache_multi_{composite}_bins_{bins_sig}_ref_only_{ref_only}.pkl"
+        )
+        return cache_dir / cache_name
+    else:
+        return cache_dir / "length_effects_cache_default.pkl"
+
+
+def build_length_hist_cache_file(
+    read_assignments: Union[str, list], ref_only: bool, cache_dir: Path, bin_edges: list
+) -> Path:
+    """
+    Cache name for read-length histogram. Includes input files, mtimes, ref_only, and bin edges signature.
+    """
+    edges_sig = _hash_list(bin_edges)
+    if isinstance(read_assignments, str):
+        source_file = Path(read_assignments)
+        mtime = source_file.stat().st_mtime
+        cache_name = (
+            f"length_hist_cache_{source_file.name}_{mtime}_edges_{edges_sig}_ref_only_{ref_only}.pkl"
+        )
+        return cache_dir / cache_name
+    elif isinstance(read_assignments, list):
+        file_info = []
+        for sample_name, path_str in read_assignments:
+            path_obj = Path(path_str)
+            file_info.append(f"{sample_name}-{path_obj.name}-{path_obj.stat().st_mtime}")
+        composite = "_".join(file_info).replace(" ", "_")[:100]
+        cache_name = (
+            f"length_hist_cache_multi_{composite}_edges_{edges_sig}_ref_only_{ref_only}.pkl"
+        )
+        return cache_dir / cache_name
+    else:
+        return cache_dir / "length_hist_cache_default.pkl"
 
 
 def save_cache(cache_file: Path, data_to_cache: Any) -> None:
@@ -140,6 +208,42 @@ def validate_read_assignment_data(
             return True
     except Exception as e:
         logging.error(f"Read-assignment validation error: {e}")
+        return False
+
+
+def validate_length_effects_data(data: Any, expected_bins: Optional[list] = None) -> bool:
+    try:
+        required = [
+            'bins', 'by_bin_assignment', 'by_bin_classification',
+            'assignment_keys', 'classification_keys', 'totals'
+        ]
+        if not isinstance(data, dict):
+            return False
+        if any(k not in data for k in required):
+            return False
+        if expected_bins and data.get('bins') != expected_bins:
+            return False
+        # Basic shape checks
+        if not isinstance(data['by_bin_assignment'], dict): return False
+        if not isinstance(data['by_bin_classification'], dict): return False
+        if not isinstance(data['totals'], dict): return False
+        return True
+    except Exception as e:
+        logging.error(f"Length-effects validation error: {e}")
+        return False
+
+
+def validate_length_hist_data(data: Any, expected_edges: Optional[list] = None) -> bool:
+    try:
+        if not isinstance(data, dict):
+            return False
+        if any(k not in data for k in ['edges', 'counts', 'total']):
+            return False
+        if expected_edges and list(map(int, data.get('edges', []))) != list(map(int, expected_edges)):
+            return False
+        return True
+    except Exception as e:
+        logging.error(f"Length-hist validation error: {e}")
         return False
 
 
