@@ -1068,3 +1068,130 @@ class TenXBarcodeDetector:
     @staticmethod
     def result_type():
         return TenXBarcodeDetectionResult
+
+
+class VisiumHDBarcodeDetector:
+    R1 = "ACACGACGCTCTTCCGATCT" # 10x 3'
+    BARCODE_LEN_VIS = 30
+    UMI_LEN_VIS= 10
+
+    UMI_LEN_DELTA = 2
+    TERMINAL_MATCH_DELTA = 2
+    STRICT_TERMINAL_MATCH_DELTA = 1
+
+    def __init__(self, barcode_list):
+        self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
+        self.barcode_indexer = KmerIndexer(barcode_list, kmer_size=14)
+        self.umi_set = None
+        self.min_score = 25
+        logger.debug("Min score set to %d" % self.min_score)
+
+    def find_barcode_umi(self, read_id, sequence):
+        read_result = self._find_barcode_umi_fwd(read_id, sequence)
+        if read_result.polyT != -1:
+            read_result.set_strand("+")
+        if read_result.is_valid():
+            return read_result
+
+        rev_seq = reverese_complement(sequence)
+        read_rev_result = self._find_barcode_umi_fwd(read_id, rev_seq)
+        if read_rev_result.polyT != -1:
+            read_rev_result.set_strand("-")
+        if read_rev_result.is_valid():
+            return read_rev_result
+
+        return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
+
+    def _find_barcode_umi_fwd(self, read_id, sequence):
+        polyt_start = find_polyt_start(sequence)
+
+        r1_start, r1_end = None, None
+        if polyt_start != -1:
+            # use relaxed parameters is polyA is found
+            r1_occurrences = self.r1_indexer.get_occurrences(sequence[0:polyt_start + 1])
+            r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
+                                                      self.r1_indexer.k, self.R1,
+                                                      r1_occurrences, min_score=11,
+                                                      end_delta=self.TERMINAL_MATCH_DELTA)
+
+        if r1_start is None:
+            # if polyT was not found, or linker was not found to the left of polyT, look for linker in the entire read
+            r1_occurrences = self.r1_indexer.get_occurrences(sequence)
+            r1_start, r1_end = detect_exact_positions(sequence, 0, len(sequence),
+                                                      self.r1_indexer.k, self.R1,
+                                                      r1_occurrences, min_score=18,
+                                                      start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
+                                                      end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
+
+        if r1_start is None:
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
+        logger.debug("LINKER: %d-%d" % (r1_start, r1_end))
+
+        if polyt_start == -1 or polyt_start - r1_end > self.BARCODE_LEN_VIS + self.UMI_LEN_VIS + 10:
+            # if polyT was not detected earlier, use relaxed parameters once the linker is found
+            presumable_polyt_start = r1_end + self.BARCODE_LEN_VIS + self.UMI_LEN_VIS
+            search_start = presumable_polyt_start - 4
+            search_end = min(len(sequence), presumable_polyt_start + 10)
+            polyt_start = find_polyt_start(sequence[search_start:search_end], window_size=5, polya_fraction=1.0)
+            if polyt_start != -1:
+                polyt_start += search_start
+
+        barcode_start = r1_end + self.UMI_LEN_VIS + 1
+        barcode_end = polyt_start - 1
+        if barcode_end - barcode_start <= :
+            potential_umi_end = potential_umi_start + self.UMI_LEN_10X - 1
+        barcode_end = r1_end + self.BARCODE_LEN_VIS + 1
+        potential_barcode = sequence[barcode_start:barcode_end + 1]
+        logger.debug("Barcode: %s" % (potential_barcode))
+        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode)
+        barcode, bc_score, bc_start, bc_end = \
+            find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode, min_score=self.min_score)
+
+        if barcode is None:
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
+        logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
+        # position of barcode end in the reference: end of potential barcode minus bases to the alignment end
+        read_barcode_end = r1_end + self.BARCODE_LEN_10X + 1 - (len(potential_barcode) - bc_end - 1)
+        potential_umi_start = read_barcode_end + 1
+        potential_umi_end = polyt_start - 1
+        if potential_umi_end - potential_umi_start <= 5:
+            potential_umi_end = potential_umi_start + self.UMI_LEN_10X - 1
+        potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
+        logger.debug("Potential UMI: %s" % potential_umi)
+
+        umi = None
+        good_umi = False
+        if self.umi_set:
+            matching_umis = self.umi_indexer.get_occurrences(potential_umi)
+            umi, umi_score, umi_start, umi_end = \
+                find_candidate_with_max_score_ssw(matching_umis, potential_umi, min_score=7)
+            logger.debug("Found UMI %s %d-%d" % (umi, umi_start, umi_end))
+
+        if not umi :
+            umi = potential_umi
+            if self.UMI_LEN_10X - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN_10X + self.UMI_LEN_DELTA:
+                good_umi = True
+
+        if not umi:
+            return TenXBarcodeDetectionResult(read_id, barcode, BC_score=bc_score, polyT=polyt_start, r1=r1_end)
+        return TenXBarcodeDetectionResult(read_id, barcode, umi, bc_score, good_umi, polyT=polyt_start, r1=r1_end)
+
+    def find_barcode_umi_no_polya(self, read_id, sequence):
+        read_result = self._find_barcode_umi_fwd(read_id, sequence)
+        if read_result.polyT != -1:
+            read_result.set_strand("+")
+        if read_result.is_valid():
+            return read_result
+
+        rev_seq = reverese_complement(sequence)
+        read_rev_result = self._find_barcode_umi_fwd(read_id, rev_seq)
+        if read_rev_result.polyT != -1:
+            read_rev_result.set_strand("-")
+        if read_rev_result.is_valid():
+            return read_rev_result
+
+        return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
+
+    @staticmethod
+    def result_type():
+        return TenXBarcodeDetectionResult
