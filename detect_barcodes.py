@@ -34,7 +34,8 @@ from src.barcode_calling.barcode_callers import (
     StereoSplitBarcodeDetectorPC,
     BarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
-    ReadStats, DoubleBarcodeDetectionResult
+    ReadStats, DoubleBarcodeDetectionResult,
+    VisiumHDBarcodeDetector
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -49,6 +50,7 @@ BARCODE_CALLING_MODES = {'tenX': TenXBarcodeDetector,
                          'stereo_pc': StereoBarcodeDetectorPC,
                          'stereo_split_tso': StereoSplitBarcodeDetectorTSO,
                          'stereo_split_pc': StereoSplitBarcodeDetectorPC,
+                         'visium_hd': VisiumHDBarcodeDetector
 }
 
 
@@ -250,7 +252,13 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, min_score=None
 
 def process_single_thread(args):
     logger.info("Loading barcodes from %s" % args.barcodes)
-    barcodes = load_barcodes_iter(args.barcodes)
+    barcodes = []
+    for bc in args.barcodes:
+        barcodes.append(load_barcodes_iter(bc))
+    if len(barcodes) == 1:
+        barcodes = barcodes[0]
+    else:
+        barcodes = tuple(barcodes)
     # logger.info("Loaded %d barcodes" % len(barcodes))
     logger.info("Preparing barcodes")
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
@@ -329,7 +337,13 @@ def process_in_parallel(args):
     #                 pass
 
     logger.info("Loading barcodes from %s" % args.barcodes)
-    barcodes = load_barcodes_iter(args.barcodes)
+    barcodes = []
+    for bc in args.barcodes:
+        barcodes.append(load_barcodes_iter(bc))
+    if len(barcodes) == 1:
+        barcodes = barcodes[0]
+    else:
+        barcodes = tuple(barcodes)
     # logger.info("Loaded %d barcodes" % len(barcodes))
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     logger.info("Barcode caller created")
@@ -439,7 +453,7 @@ def parse_args(sys_argv):
 
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
-    parser.add_argument("--barcodes", "-b", type=str, help="barcode whitelist", required=False)
+    parser.add_argument("--barcodes", "-b", nargs='+', type=str, help="barcode whitelist", required=False)
     # parser.add_argument("--umi", "-u", type=str, help="potential UMIs, detected de novo if not set")
     parser.add_argument("--mode", type=str, help="mode to be used", choices=BARCODE_CALLING_MODES.keys(),
                         default='double')
