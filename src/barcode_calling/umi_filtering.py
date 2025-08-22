@@ -286,17 +286,14 @@ class UMIFilter:
         return [x[0] for x in filter(lambda x: x[1] != "None", resulting_reads)]
 
     def _process_gene(self, gene_dict):
-        resulting_reads = []
         for barcode in gene_dict:
-            resulting_reads += self._process_duplicates(gene_dict[barcode])
-        return resulting_reads
+           yield self._process_duplicates(gene_dict[barcode])
 
     def _process_chunk(self, gene_barcode_dict, allinfo_outf, read_ids_outf=None):
         read_count = 0
         spliced_count = 0
         for gene_id in gene_barcode_dict:
-            assignment_list = self._process_gene(gene_barcode_dict[gene_id])
-            for read_assignment in assignment_list:
+            for read_assignment in self._process_gene(gene_barcode_dict[gene_id]):
                 if (not read_assignment.assignment_type.startswith("unique") and
                         read_assignment.read_id in self.selected_reads):
                     continue
