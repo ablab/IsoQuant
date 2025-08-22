@@ -159,6 +159,11 @@ def collect_reads_in_parallel(sample, chr_id, args):
             return read_grouper.read_groups, alignment_stat_counter, processed_reads
         else:
             logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
+            if not os.path.exists(group_file):
+                logger.warning("%s does not exist" % group_file)
+            if not os.path.exists(save_file):
+                logger.warning("%s does not exist" % save_file)
+            os.remove(lock_file)
 
     tmp_printer = TmpFileAssignmentPrinter(save_file, args)
     bam_files = list(map(lambda x: x[0], sample.file_list))
@@ -384,7 +389,7 @@ class DatasetProcessor:
         self.chr_ids = []
 
     def __del__(self):
-        self.clean_up()
+        pass
 
     def clean_up(self):
         if not self.args.keep_tmp and self.args.gunzipped_reference:
@@ -402,6 +407,7 @@ class DatasetProcessor:
         logger.info("Processing " + proper_plural_form("experiment", len(self.input_data.samples)))
         for sample in self.input_data.samples:
             self.process_sample(sample)
+        self.clean_up()
         logger.info("Processed " + proper_plural_form("experiment", len(self.input_data.samples)))
 
     # Run through all genes in db and count stats according to alignments given in bamfile_name
@@ -511,6 +517,7 @@ class DatasetProcessor:
                 logger.warning("Chromosome list from the gene annotation is not the same as the chromosome list from"
                                " the reference genomes or BAM file(s). Please, check you input data.")
                 logger.warning("Only %d overlapping chromosomes will be processed." % len(common_overlap))
+
         return list(sorted(
             common_overlap,
             key=lambda x: len(self.reference_record_dict[x]),
@@ -745,21 +752,61 @@ class DatasetProcessor:
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX: [2, -1],
                        IsoQuantMode.double: [2, -1],
-                       IsoQuantMode.stereo_pc: [4, -1],
-                       IsoQuantMode.stereo_split_pc: [4, -1]}
+                       IsoQuantMode.stereo_pc: [4],
+                       IsoQuantMode.stereo_split_pc: [4]}
         if self.args.barcoded_reads:
             sample.barcoded_reads = self.args.barcoded_reads
 
-        barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
+        split_barcodes_dict = {}
+        for chr_id in self.chr_ids:
+            split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
+        fname = split_barcodes_lock_filename(sample)
+        if self.args.resume and os.path.exists(fname):
+            logger.info("Barcode table was split during the previous run, existing files will be used")
+        else:
+            if os.path.exists(fname):
+                os.remove(fname)
+            self.split_read_barcode_table(sample, split_barcodes_dict)
+            open(fname, "w").close()
+
         for i, d in enumerate(umi_ed_dict[self.args.mode]):
             logger.info("== Filtering by UMIs with edit distance %d ==" % d)
             output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
             logger.info("Results will be saved to %s" % output_prefix)
-            umi_filter = UMIFilter(barcode_umi_dict, d)
+
+            umi_filter = UMIFilter(split_barcodes_dict, d)
             output_filtered_reads = i == 0
             umi_filter.process_from_raw_assignments(sample.out_raw_file, self.get_chr_list(), self.args, output_prefix,
                                                     self.transcript_type_dict, output_filtered_reads)
             logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
+
+    @staticmethod
+    def split_read_barcode_table(sample, read_group_file_names):
+        logger.info("Loading barcodes from " + str(sample.barcoded_reads))
+        barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
+        read_group_files = {}
+        processed_reads = defaultdict(set)
+        bam_files = list(map(lambda x: x[0], sample.file_list))
+
+        logger.info("Splitting barcodes into " + sample.barcodes_split_reads)
+        for bam_file in bam_files:
+            bam = pysam.AlignmentFile(bam_file, "rb")
+            for chr_id in bam.references:
+                if chr_id not in read_group_files and chr_id in read_group_file_names:
+                    read_group_files[chr_id] = open(read_group_file_names[chr_id], "w")
+            for read_alignment in bam:
+                chr_id = read_alignment.reference_name
+                if not chr_id or chr_id not in read_group_file_names:
+                    continue
+
+                read_id = read_alignment.query_name
+                if read_id in barcode_umi_dict and read_id not in processed_reads[chr_id]:
+                    read_group_files[chr_id].write("%s\t%s\t%s\n" % (read_id, barcode_umi_dict[read_id][0], barcode_umi_dict[read_id][1]))
+                    processed_reads[chr_id].add(read_id)
+
+        for f in read_group_files.values():
+            f.close()
+        barcode_umi_dict.clear()
 
     @staticmethod
     def load_read_info(dump_filename):
