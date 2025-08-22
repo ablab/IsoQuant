@@ -1089,7 +1089,7 @@ class VisiumHDBarcodeDetector:
         self.part1_barcode_indexer = KmerIndexer( self.part1_list, kmer_size=7)
         self.part2_barcode_indexer = KmerIndexer(self.part2_list, kmer_size=7)
         self.umi_set = None
-        self.min_score = 12
+        self.min_score = 13
         logger.debug("Min score set to %d" % self.min_score)
 
     def find_barcode_umi(self, read_id, sequence):
@@ -1172,7 +1172,7 @@ class VisiumHDBarcodeDetector:
             if barcode1 is None or barcode2 is None:
                 return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
 
-            return TenXBarcodeDetectionResult(read_id, barcode1+barcode2, potential_umi, bc1_score+bc2_score,
+            return TenXBarcodeDetectionResult(read_id, barcode1 + "|" + barcode2, potential_umi, bc1_score+bc2_score,
                                               UMI_good=True, polyT=polyt_start, r1=r1_end)
 
         barcode2_end = polyt_start - 1
@@ -1205,7 +1205,7 @@ class VisiumHDBarcodeDetector:
         if barcode1 is None or barcode2 is None:
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end if r1_end is not None else -1)
 
-        return TenXBarcodeDetectionResult(read_id, barcode1 + barcode2, potential_umi, bc1_score + bc2_score,
+        return TenXBarcodeDetectionResult(read_id, barcode1 + "|" + barcode2, potential_umi, bc1_score + bc2_score,
                                           UMI_good=umi_good, polyT=polyt_start, r1=r1_end if r1_end is not None else -1)
 
 
