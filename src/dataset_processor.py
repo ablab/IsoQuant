@@ -750,16 +750,47 @@ class DatasetProcessor:
         if self.args.barcoded_reads:
             sample.barcoded_reads = self.args.barcoded_reads
 
-        barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
+        split_barcodes_dict = self.split_read_group_table(sample)
         for i, d in enumerate(umi_ed_dict[self.args.mode]):
             logger.info("== Filtering by UMIs with edit distance %d ==" % d)
             output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
             logger.info("Results will be saved to %s" % output_prefix)
-            umi_filter = UMIFilter(barcode_umi_dict, d)
+
+            umi_filter = UMIFilter(split_barcodes_dict, d)
             output_filtered_reads = i == 0
             umi_filter.process_from_raw_assignments(sample.out_raw_file, self.get_chr_list(), self.args, output_prefix,
                                                     self.transcript_type_dict, output_filtered_reads)
             logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
+
+    @staticmethod
+    def split_read_group_table(sample):
+        logger.info("Loading barcodes from " + sample.barcoded_reads)
+        barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
+        read_group_files = {}
+        processed_reads = defaultdict(set)
+        bam_files = list(map(lambda x: x[0], sample.file_list))
+
+        logger.info("Splitting barcodes into " + sample.barcodes_split_reads)
+        for bam_file in bam_files:
+            bam = pysam.AlignmentFile(bam_file, "rb")
+            for chr_id in bam.references:
+                if chr_id not in read_group_files:
+                    read_group_files[chr_id] = open(sample.barcodes_split_reads + "_" + chr_id, "w")
+            for read_alignment in bam:
+                chr_id = read_alignment.reference_name
+                if not chr_id:
+                    continue
+
+                read_id = read_alignment.query_name
+                if read_id in barcode_umi_dict and read_id not in processed_reads[chr_id]:
+                    read_group_files[chr_id].write("%s\t%s\t%s\n" % (read_id, barcode_umi_dict[read_id][0], barcode_umi_dict[read_id][0]))
+                    processed_reads[chr_id].add(read_id)
+
+        for f in read_group_files.values():
+            f.close()
+
+        barcode_umi_dict.clear()
+        return read_group_files
 
     @staticmethod
     def load_read_info(dump_filename):
