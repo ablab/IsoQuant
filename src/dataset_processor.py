@@ -764,7 +764,7 @@ class DatasetProcessor:
 
     @staticmethod
     def split_read_group_table(sample):
-        logger.info("Loading barcodes from " + sample.barcoded_reads)
+        logger.info("Loading barcodes from " + str(sample.barcoded_reads))
         barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
         read_group_files = {}
         processed_reads = defaultdict(set)
