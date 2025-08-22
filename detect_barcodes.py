@@ -339,7 +339,7 @@ def process_in_parallel(args):
     logger.info("Loading barcodes from %s" % args.barcodes)
     barcodes = []
     for bc in args.barcodes:
-        barcodes.append(load_barcodes_iter(bc))
+        barcodes.append(load_barcodes(bc))
     if len(barcodes) == 1:
         barcodes = barcodes[0]
     else:
