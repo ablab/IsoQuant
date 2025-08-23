@@ -1172,7 +1172,7 @@ class VisiumHDBarcodeDetector:
             if barcode1 is None or barcode2 is None:
                 return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
 
-            return TenXBarcodeDetectionResult(read_id, barcode1+barcode2, potential_umi, bc1_score+bc2_score,
+            return TenXBarcodeDetectionResult(read_id, barcode1 + "|" + barcode2, potential_umi, bc1_score+bc2_score,
                                               UMI_good=True, polyT=polyt_start, r1=r1_end)
 
         barcode2_end = polyt_start - 1
@@ -1205,7 +1205,7 @@ class VisiumHDBarcodeDetector:
         if barcode1 is None or barcode2 is None:
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end if r1_end is not None else -1)
 
-        return TenXBarcodeDetectionResult(read_id, barcode1 + barcode2, potential_umi, bc1_score + bc2_score,
+        return TenXBarcodeDetectionResult(read_id, barcode1 + "|" + barcode2, potential_umi, bc1_score + bc2_score,
                                           UMI_good=umi_good, polyT=polyt_start, r1=r1_end if r1_end is not None else -1)
 
 
