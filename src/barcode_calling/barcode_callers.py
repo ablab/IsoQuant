@@ -1134,7 +1134,7 @@ class VisiumHDBarcodeDetector:
             # return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
             logger.debug("PRIMER: %d-%d" % (r1_start, r1_end))
 
-        if polyt_start == -1 or (r1_start is not None and polyt_start - r1_end > self.TOTAL_BARCODE_LEN_VIS + self.UMI_LEN_VIS + 10):
+        if r1_end is not None and (polyt_start == -1 or polyt_start - r1_end > self.TOTAL_BARCODE_LEN_VIS + self.UMI_LEN_VIS + 10):
             # if polyT was not detected earlier, use relaxed parameters once the linker is found
             presumable_polyt_start = r1_end + self.TOTAL_BARCODE_LEN_VIS + self.UMI_LEN_VIS
             search_start = presumable_polyt_start - 4
