@@ -527,8 +527,8 @@ class UMIFilter:
                             continue
 
                         gene_barcode_dict[gene_id][barcode].append(assignment_info)
-
-                    self.add_stats_for_read(read_infos)
+                    if read_infos:
+                        self.add_stats_for_read(read_infos)
 
                 processed_read_count, processed_spliced_count = self._process_chunk(gene_barcode_dict, allinfo_outf, outf)
                 read_count += processed_read_count
