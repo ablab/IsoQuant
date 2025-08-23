@@ -28,7 +28,7 @@ def find_polyt_start(seq, window_size = 16, polya_fraction = 0.75):
     if i >= len(seq) - window_size:
         return -1
 
-    return i + max(0, seq[i:].find('TTT'))
+    return i + max(0, seq[i:].find('TTTT'))
 
 
 base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', " ": " "}
