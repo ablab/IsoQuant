@@ -287,7 +287,8 @@ class UMIFilter:
 
     def _process_gene(self, gene_dict):
         for barcode in gene_dict:
-           yield self._process_duplicates(gene_dict[barcode])
+           for r in self._process_duplicates(gene_dict[barcode]):
+               yield r
 
     def _process_chunk(self, gene_barcode_dict, allinfo_outf, read_ids_outf=None):
         read_count = 0
