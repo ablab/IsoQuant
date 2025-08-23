@@ -384,7 +384,7 @@ class DatasetProcessor:
         self.chr_ids = []
 
     def __del__(self):
-        self.clean_up()
+        pass
 
     def clean_up(self):
         if not self.args.keep_tmp and self.args.gunzipped_reference:
@@ -402,6 +402,7 @@ class DatasetProcessor:
         logger.info("Processing " + proper_plural_form("experiment", len(self.input_data.samples)))
         for sample in self.input_data.samples:
             self.process_sample(sample)
+        self.clean_up()
         logger.info("Processed " + proper_plural_form("experiment", len(self.input_data.samples)))
 
     # Run through all genes in db and count stats according to alignments given in bamfile_name
