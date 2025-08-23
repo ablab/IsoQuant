@@ -767,6 +767,7 @@ class DatasetProcessor:
         logger.info("Loading barcodes from " + str(sample.barcoded_reads))
         barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
         read_group_files = {}
+        read_group_file_names = {}
         processed_reads = defaultdict(set)
         bam_files = list(map(lambda x: x[0], sample.file_list))
 
@@ -775,7 +776,9 @@ class DatasetProcessor:
             bam = pysam.AlignmentFile(bam_file, "rb")
             for chr_id in bam.references:
                 if chr_id not in read_group_files:
-                    read_group_files[chr_id] = open(sample.barcodes_split_reads + "_" + chr_id, "w")
+                    chr_file_name = sample.barcodes_split_reads + "_" + chr_id
+                    read_group_file_names[chr_id] = chr_file_name
+                    read_group_files[chr_id] = open(chr_file_name, "w")
             for read_alignment in bam:
                 chr_id = read_alignment.reference_name
                 if not chr_id:
@@ -790,7 +793,7 @@ class DatasetProcessor:
             f.close()
 
         barcode_umi_dict.clear()
-        return read_group_files
+        return read_group_file_names
 
     @staticmethod
     def load_read_info(dump_filename):
