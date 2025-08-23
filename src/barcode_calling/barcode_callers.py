@@ -1071,6 +1071,7 @@ class TenXBarcodeDetector:
 
 
 class VisiumHDBarcodeDetector:
+
     R1 = "ACACGACGCTCTTCCGATCT" # 10x 3'
     BARCODE1_LEN_VIS = 16
     BARCODE2_LEN_VIS = 15
@@ -1082,7 +1083,7 @@ class VisiumHDBarcodeDetector:
     STRICT_TERMINAL_MATCH_DELTA = 1
 
     def __init__(self, barcode_pair_list):
-        self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
+        self.r1_indexer = KmerIndexer([VisiumHDBarcodeDetector.R1], kmer_size=7)
         self.part1_list = barcode_pair_list[0]
         self.part2_list = barcode_pair_list[1]
         self.part1_barcode_indexer = KmerIndexer( self.part1_list, kmer_size=7)
@@ -1108,6 +1109,7 @@ class VisiumHDBarcodeDetector:
         return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
 
     def _find_barcode_umi_fwd(self, read_id, sequence):
+        logger.debug("===== " + read_id)
         polyt_start = find_polyt_start(sequence)
 
         r1_start, r1_end = None, None
@@ -1116,7 +1118,7 @@ class VisiumHDBarcodeDetector:
             r1_occurrences = self.r1_indexer.get_occurrences(sequence[0:polyt_start + 1])
             r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
                                                       self.r1_indexer.k, self.R1,
-                                                      r1_occurrences, min_score=11,
+                                                      r1_occurrences, min_score=10,
                                                       end_delta=self.TERMINAL_MATCH_DELTA)
 
         if r1_start is None:
@@ -1124,15 +1126,15 @@ class VisiumHDBarcodeDetector:
             r1_occurrences = self.r1_indexer.get_occurrences(sequence)
             r1_start, r1_end = detect_exact_positions(sequence, 0, len(sequence),
                                                       self.r1_indexer.k, self.R1,
-                                                      r1_occurrences, min_score=18,
+                                                      r1_occurrences, min_score=17,
                                                       start_delta=self.STRICT_TERMINAL_MATCH_DELTA,
                                                       end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
-        if r1_start is None:
-            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
-        logger.debug("LINKER: %d-%d" % (r1_start, r1_end))
+        if r1_start is not None:
+            # return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
+            logger.debug("PRIMER: %d-%d" % (r1_start, r1_end))
 
-        if polyt_start == -1 or polyt_start - r1_end > self.TOTAL_BARCODE_LEN_VIS + self.UMI_LEN_VIS + 10:
+        if polyt_start == -1 or (r1_start is not None and polyt_start - r1_end > self.TOTAL_BARCODE_LEN_VIS + self.UMI_LEN_VIS + 10):
             # if polyT was not detected earlier, use relaxed parameters once the linker is found
             presumable_polyt_start = r1_end + self.TOTAL_BARCODE_LEN_VIS + self.UMI_LEN_VIS
             search_start = presumable_polyt_start - 4
@@ -1142,6 +1144,8 @@ class VisiumHDBarcodeDetector:
                 polyt_start += search_start
 
         if polyt_start == -1:
+            if r1_start is None:
+                return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
             # no polyT, start from the left
             potential_umi_start = r1_end + 1
             potential_umi_end = potential_umi_start + self.UMI_LEN_VIS - 1
@@ -1189,17 +1193,20 @@ class VisiumHDBarcodeDetector:
         logger.debug("Barcode 1: %s, %s" % (potential_barcode1, barcode1))
         real_bc1_start = barcode1_start + bc1_start
 
-        potential_umi_start = r1_end + 1
         potential_umi_end = real_bc1_start - 1
+        if r1_end is not None:
+            potential_umi_start = r1_end + 1
+        else:
+            potential_umi_start = max(0, potential_umi_end - self.UMI_LEN_VIS)
         umi_good = abs(potential_umi_end - potential_umi_start + 1 - self.UMI_LEN_VIS) <= self.UMI_LEN_DELTA
         potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
         logger.debug("Potential UMI: %s" % potential_umi)
 
         if barcode1 is None or barcode2 is None:
-            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end if r1_end is not None else -1)
 
         return TenXBarcodeDetectionResult(read_id, barcode1 + barcode2, potential_umi, bc1_score + bc2_score,
-                                          UMI_good=True, polyT=polyt_start, r1=r1_end)
+                                          UMI_good=umi_good, polyT=polyt_start, r1=r1_end if r1_end is not None else -1)
 
 
     def find_barcode_umi_no_polya(self, read_id, sequence):
