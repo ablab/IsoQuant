@@ -751,8 +751,8 @@ class DatasetProcessor:
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX: [2, -1],
                        IsoQuantMode.double: [2, -1],
-                       IsoQuantMode.stereo_pc: [4, -1],
-                       IsoQuantMode.stereo_split_pc: [4, -1]}
+                       IsoQuantMode.stereo_pc: [4],
+                       IsoQuantMode.stereo_split_pc: [4]}
         if self.args.barcoded_reads:
             sample.barcoded_reads = self.args.barcoded_reads
 
