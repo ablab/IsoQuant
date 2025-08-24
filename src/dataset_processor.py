@@ -159,6 +159,10 @@ def collect_reads_in_parallel(sample, chr_id, args):
             return read_grouper.read_groups, alignment_stat_counter, processed_reads
         else:
             logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
+            if not os.path.exists(group_file):
+                logger.warning("%s does not exist" % group_file)
+            if not os.path.exists(save_file):
+                logger.warning("%s does not exist" % save_file)
 
     tmp_printer = TmpFileAssignmentPrinter(save_file, args)
     bam_files = list(map(lambda x: x[0], sample.file_list))
