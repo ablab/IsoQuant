@@ -444,7 +444,7 @@ class DatasetProcessor:
         for sample in input_data.samples:
             self.process_sample(sample)
         self.clean_up()
-        logger.info("Processed " + proper_plural_form("experiment", len(self.input_data.samples)))
+        logger.info("Processed " + proper_plural_form("experiment", len(input_data.samples)))
 
     # Run through all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
