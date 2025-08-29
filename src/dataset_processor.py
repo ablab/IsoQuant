@@ -542,7 +542,7 @@ class DatasetProcessor:
             key=lambda x: len(self.reference_record_dict[x]),
             reverse=True,
         )
-        chr_ids = ['chr1']
+        chr_ids = ['chr18'] # we limit the chromosomes to be processed to be only chromosome 18 ( overwriting all chromosomes)
         return chr_ids
 
     def collect_reads(self, sample):

@@ -203,10 +203,10 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
 
 
     print("Running ILP part")
-    export = False#we want to export any graph object together with all infos
-    export_large = True #we only would like to export the really large graph objects
+    export = False #if true: we want to export any graph object together with all infos
+    export_large = True #If true and export is false: we only would like to export the really large graph objects
     plot_graphs = False #We do not want to plot all the graphs
-    plot_large = True
+    plot_large = True #if true and plot_graphs is false: we only plot large graphs
     graph, additional_starts, additional_ends, edges_to_ignore = Intron2Nx_Node(intron_graph)
     #constraints = Constraints_Transfer_Format(transcripts_constraints)
     filter_constraints(constraints,graph)
@@ -315,10 +315,10 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
                 raise ValueError("The number of paths and weights must be the same.")
 
             res = list(zip(original_paths, weights))
-        else: #the graph we want to get solved contains a high number of edges, we, therefore, use symmetry breaking models to solve the graph and save time
+        else: #the graph we want to get solved contains a high number of edges, we, therefore, use symmetry breaking models instead
             if export_large or export:
                 export_data(graph, additional_starts, additional_ends, edges_to_ignore, constraints)
-            if plot_large:
+            if plot_large or plot_graphs:
                 fp.utils.draw(
                     G=graph,
                     flow_attr="flow",
@@ -393,7 +393,7 @@ def ILP_Solver_Nodes(intron_graph,chr_id, gene_id,constraints=[] ,ground_truth_i
             print("Solution found! in ", end - start, " seconds")
             solution = process_solution(graph, mfd_model, additional_starts, additional_ends)
             # print("solution",solution)
-            # Condensing the paths in the expanded graph to paths in the the original graph
+            # Condensing the paths in the expanded graph to paths in the original graph
             original_paths = solution["paths"]
             weights = solution["weights"]
             # print("original paths",original_paths)
