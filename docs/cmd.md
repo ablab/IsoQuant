@@ -285,8 +285,9 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 
 #### Read filtering
 
-`--no_secondary`
-    Ignore secondary alignments.
+`--use_secondary`
+    Use secondary alignments. This will result in longer processing time, but might recover some reads, whose primary 
+alignments are located on an incorrect gene.
 
 `--min_mapq`
     Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).

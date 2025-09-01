@@ -249,8 +249,8 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="additional options that will be passed to the aligner")
 
     # READ FILTERING
-    add_additional_option_to_group(filer_args_group, "--no_secondary", help="ignore secondary alignments (not recommended)",
-                                   action='store_true', default=True)
+    add_additional_option_to_group(filer_args_group, "--use_secondary", help="use secondary alignments (slower processing)",
+                                   action='store_true', default=False)
     add_additional_option_to_group(filer_args_group, "--min_mapq", help="ignore alignments with MAPQ < this"
                                                                         "(also filters out secondary alignments, default: None)", type=int)
     add_additional_option_to_group(filer_args_group, "--inconsistent_mapq_cutoff", help="ignore inconsistent alignments with MAPQ < this "
