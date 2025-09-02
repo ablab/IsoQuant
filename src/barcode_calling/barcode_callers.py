@@ -1089,7 +1089,7 @@ class VisiumHDBarcodeDetector:
         self.part1_barcode_indexer = KmerIndexer( self.part1_list, kmer_size=7)
         self.part2_barcode_indexer = KmerIndexer(self.part2_list, kmer_size=7)
         self.umi_set = None
-        self.min_score = 12
+        self.min_score = 13
         logger.debug("Min score set to %d" % self.min_score)
 
     def find_barcode_umi(self, read_id, sequence):
