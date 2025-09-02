@@ -517,6 +517,7 @@ class DatasetProcessor:
                 logger.warning("Chromosome list from the gene annotation is not the same as the chromosome list from"
                                " the reference genomes or BAM file(s). Please, check you input data.")
                 logger.warning("Only %d overlapping chromosomes will be processed." % len(common_overlap))
+
         return list(sorted(
             common_overlap,
             key=lambda x: len(self.reference_record_dict[x]),
@@ -791,11 +792,11 @@ class DatasetProcessor:
         for bam_file in bam_files:
             bam = pysam.AlignmentFile(bam_file, "rb")
             for chr_id in bam.references:
-                if chr_id not in read_group_files:
+                if chr_id not in read_group_files and chr_id in read_group_file_names:
                     read_group_files[chr_id] = open(read_group_file_names[chr_id], "w")
             for read_alignment in bam:
                 chr_id = read_alignment.reference_name
-                if not chr_id:
+                if not chr_id or chr_id not in read_group_file_names:
                     continue
 
                 read_id = read_alignment.query_name
