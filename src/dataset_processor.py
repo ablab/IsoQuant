@@ -479,10 +479,15 @@ class DatasetProcessor:
 
     def get_chromosome_ids(self, sample):
         genome_chromosomes = set(self.reference_record_dict.keys())
+        for chr_id in self.args.discard_chr:
+            genome_chromosomes.discard(chr_id)
+
         bam_chromosomes = set()
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             bam_chromosomes.update(bam.references)
+        for chr_id in self.args.discard_chr:
+            bam_chromosomes.discard(chr_id)
 
         bam_genome_overlap = genome_chromosomes.intersection(bam_chromosomes)
         if len(bam_genome_overlap) != len(genome_chromosomes) or len(bam_genome_overlap) != len(bam_chromosomes):
@@ -506,6 +511,8 @@ class DatasetProcessor:
         gffutils_db = gffutils.FeatureDB(self.args.genedb)
         for feature in gffutils_db.all_features():
             gene_annotation_chromosomes.add(feature.seqid)
+        for chr_id in self.args.discard_chr:
+            gene_annotation_chromosomes.discard(chr_id)
 
         common_overlap = gene_annotation_chromosomes.intersection(bam_genome_overlap)
         if len(common_overlap) != len(gene_annotation_chromosomes):
