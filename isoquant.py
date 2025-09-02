@@ -347,7 +347,7 @@ def check_and_load_args(args, parser):
     elif args.genedb.lower().endswith("db"):
         args.genedb_filename = args.genedb
     else:
-        args.genedb_filename = os.path.join(args.output, os.path.splitext(os.path.basename(args.genedb))[0] + ".db")
+        args.genedb_filename = os.path.join(args.genedb_output, os.path.splitext(os.path.basename(args.genedb))[0] + ".db")
 
     if not check_input_params(args):
         parser.print_usage()
