@@ -800,7 +800,7 @@ class DatasetProcessor:
 
                 read_id = read_alignment.query_name
                 if read_id in barcode_umi_dict and read_id not in processed_reads[chr_id]:
-                    read_group_files[chr_id].write("%s\t%s\t%s\n" % (read_id, barcode_umi_dict[read_id][0], barcode_umi_dict[read_id][0]))
+                    read_group_files[chr_id].write("%s\t%s\t%s\n" % (read_id, barcode_umi_dict[read_id][0], barcode_umi_dict[read_id][1]))
                     processed_reads[chr_id].add(read_id)
 
         for f in read_group_files.values():
