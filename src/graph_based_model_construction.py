@@ -135,10 +135,10 @@ class GraphBasedModelConstructor:
         self.filter_transcripts()
         # reassign reads
         self.assign_reads_to_models(read_assignment_storage)
-        self.forward_counts(read_assignment_storage)
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
+        self.forward_counts(read_assignment_storage)
 
         if self.params.sqanti_output:
             self.compare_models_with_known()
