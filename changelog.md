@@ -1,5 +1,13 @@
 # IsoQuant changelog
 
+## IsoQuant 3.8.0, 8 September 2025
+
+- Fixed `--report_canonical` preset ([#332](https://github.com/ablab/IsoQuant/issues/332), thanks to @wwliao).
+
+- Fixed counts for novel genes in `discovered_gene_counts.tsv` and `discovered_gene_tpm.tsv`
+([#337](https://github.com/ablab/IsoQuant/issues/337), thanks to @yjliuhub).
+
+- Fixed `--genedb_output` option ([#335](https://github.com/ablab/IsoQuant/issues/335), thanks to @YalanBi).
 
 ## IsoQuant 3.7.1, 5 August 2025
 
