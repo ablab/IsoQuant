@@ -43,12 +43,9 @@ logger = logging.getLogger('IsoQuant')
 
 READ_CHUNK_SIZE = 100000
 BARCODE_CALLING_MODES = {'tenX': TenXBarcodeDetector,
-                         'double': DoubleBarcodeDetector,
-                         'double_illumina': IlluminaDoubleBarcodeDetector,
-                         'double_slow': BruteForceDoubleBarcodeDetector,
-                         'stereo_tso': StereoBarcodeDetectorTSO,
+                         'curio': DoubleBarcodeDetector,
+                         'curio_illumina': IlluminaDoubleBarcodeDetector,
                          'stereo_pc': StereoBarcodeDetectorPC,
-                         'stereo_split_tso': StereoSplitBarcodeDetectorTSO,
                          'stereo_split_pc': StereoSplitBarcodeDetectorPC,
                          'visium_hd': VisiumHDBarcodeDetector
 }
