@@ -61,15 +61,16 @@ logger = logging.getLogger('IsoQuant')
 class IsoQuantMode(Enum):
     bulk = 1
     tenX = 2
-    double = 3
+    curio = 3
     stereo_pc = 4
     stereo_split_pc = 5
+    visium_hd = 6
 
     def needs_barcode_calling(self):
-        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
+        return self in [IsoQuantMode.tenX, IsoQuantMode.curio, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc, IsoQuantMode.visium_hd]
 
     def needs_pcr_deduplication(self):
-        return self in [IsoQuantMode.tenX, IsoQuantMode.double, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
+        return self in [IsoQuantMode.tenX, IsoQuantMode.curio, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc, IsoQuantMode.visium_hd]
 
     def produces_new_fasta(self):
         return self in [IsoQuantMode.stereo_split_pc]
@@ -78,7 +79,7 @@ class IsoQuantMode(Enum):
         return self in [IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
 
 
-ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.double.name,
+ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.curio.name,
                   IsoQuantMode.stereo_pc.name, IsoQuantMode.stereo_split_pc.name]
 
 
@@ -759,7 +760,7 @@ class DatasetProcessor:
         # edit distances for UMI filtering, first one will be used for counts
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX: [2, -1],
-                       IsoQuantMode.double: [2, -1],
+                       IsoQuantMode.curio: [2, -1],
                        IsoQuantMode.stereo_pc: [4],
                        IsoQuantMode.stereo_split_pc: [4]}
         if self.args.barcoded_reads:
