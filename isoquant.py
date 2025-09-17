@@ -26,6 +26,7 @@ import pysam
 import gffutils
 import pyfaidx
 
+from src.modes import IsoQuantMode, ISOQUANT_MODES
 from src.gtf2db import convert_gtf_to_db
 from src.read_mapper import (
     DATA_TYPE_ALIASES,
@@ -36,7 +37,7 @@ from src.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies,  ISOQUANT_MODES, IsoQuantMode
+from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
@@ -44,7 +45,6 @@ from src.input_data_storage import InputDataStorage
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
 from detect_barcodes import process_single_thread, process_in_parallel
-from src.barcode_calling.umi_filtering import UMIFilter, create_transcript_info_dict, load_barcodes
 
 
 logger = logging.getLogger('IsoQuant')
@@ -155,7 +155,7 @@ def parse_args(cmd_args=None, namespace=None):
     sc_args_group.add_argument("--mode", "-m", type=str, choices=ISOQUANT_MODES,
                                help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
                                     "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
-    sc_args_group.add_argument('--barcode_whitelist', type=str,
+    sc_args_group.add_argument('--barcode_whitelist', type=str, nargs='+',
                                help='file with barcode whitelist for barcode calling')
     sc_args_group.add_argument("--barcoded_reads", type=str, nargs='+',
                                help='file with barcoded reads; barcodes will be called automatically if not provided')
@@ -830,20 +830,17 @@ def call_barcodes(args):
             new_reads = []
             for i, files in enumerate(sample.file_list):
                 output_barcodes = sample.barcodes_tsv + "_%d.tsv" % i
+                barcodes_done = sample.barcodes_done + "_%d.tsv" % i
+
                 output_fasta = None
-                if args.mode.produces_new_fasta:
-                    if args.input_data.input_type == 'bam':
-                        logger.critical("%s mode splits reads and produces new FASTA file, but BAM files are provided. "
-                                        "Provide original FASTQ/FASTA or ")
-                        exit(-1)
+                if args.mode.produces_new_fasta():
                     output_fasta = sample.split_reads_fasta + "_%d.fa" % i
                     new_reads.append([output_fasta])
-                bc_threads = 1 if args.mode.enforces_single_thread else args.threads
-                if args.resume and os.path.exists(output_barcodes):
-                    # FIXME could be incomplete barcode calling run
+                bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
+                if args.resume and os.path.exists(barcodes_done):
                     logger.info("Barcodes were called during the previous run, skipping")
                 else:
-                    bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode.name,
+                    bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode,
                                                  output_barcodes, output_fasta, sample.aux_dir, bc_threads)
                     # Launching barcode calling in a separate process has the following reason:
                     # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
@@ -861,9 +858,10 @@ def call_barcodes(args):
                         raise future_res.exception()
 
                 sample.barcoded_reads.append(output_barcodes)
+                open(barcodes_done, "w").close()
                 logger.info("Processed %s, barcodes are stored in %s" % (files[0], output_barcodes))
 
-            if args.mode.produces_new_fasta:
+            if args.mode.produces_new_fasta():
                 logger.info("Reads were split during barcode calling")
                 logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
                 sample.file_list = new_reads

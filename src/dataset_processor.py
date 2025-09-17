@@ -6,11 +6,9 @@
 ############################################################################
 
 import glob
-import gzip
 import itertools
 import logging
 import os
-import shutil
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
@@ -19,6 +17,7 @@ import gffutils
 import pysam
 from pyfaidx import Fasta, UnsupportedCompressionFormat
 
+from .modes import IsoQuantMode, ISOQUANT_MODES
 from .common import proper_plural_form
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
@@ -32,7 +31,6 @@ from .long_read_counter import (
     CompositeCounter,
     create_gene_counter,
     create_transcript_counter,
-    GroupedOutputFormat,
 )
 from .multimap_resolver import MultimapResolver
 from .read_groups import (
@@ -55,32 +53,6 @@ from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoad
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter, load_barcodes
 
 logger = logging.getLogger('IsoQuant')
-
-
-@unique
-class IsoQuantMode(Enum):
-    bulk = 1
-    tenX = 2
-    curio = 3
-    stereo_pc = 4
-    stereo_split_pc = 5
-    visium_hd = 6
-
-    def needs_barcode_calling(self):
-        return self in [IsoQuantMode.tenX, IsoQuantMode.curio, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc, IsoQuantMode.visium_hd]
-
-    def needs_pcr_deduplication(self):
-        return self in [IsoQuantMode.tenX, IsoQuantMode.curio, IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc, IsoQuantMode.visium_hd]
-
-    def produces_new_fasta(self):
-        return self in [IsoQuantMode.stereo_split_pc]
-
-    def enforces_single_thread(self):
-        return self in [IsoQuantMode.stereo_pc, IsoQuantMode.stereo_split_pc]
-
-
-ISOQUANT_MODES = [IsoQuantMode.bulk.name, IsoQuantMode.tenX.name, IsoQuantMode.curio.name,
-                  IsoQuantMode.stereo_pc.name, IsoQuantMode.stereo_split_pc.name]
 
 
 def convert_chr_id_to_file_name_str(chr_id: str):
@@ -430,16 +402,6 @@ class DatasetProcessor:
             prepare_read_groups(self.args, sample)
             open(fname, "w").close()
 
-        # if self.args.mode in [IsoQuantMode.double, IsoQuantMode.tenX]:
-        #     fname = split_barcodes_lock_filename(sample)
-        #     if self.args.resume and os.path.exists(fname):
-        #         logger.info("Barcode table was split during the previous run, existing files will be used")
-        #     else:
-        #         if os.path.exists(fname):
-        #             os.remove(fname)
-        #         prepare_read_groups(self.args, sample)
-        #         open(fname, "w").close()
-
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
             logger.info('Using read assignments from {}*'.format(saves_file))
@@ -759,24 +721,26 @@ class DatasetProcessor:
     def filter_umis(self, sample):
         # edit distances for UMI filtering, first one will be used for counts
         umi_ed_dict = {IsoQuantMode.bulk: [],
-                       IsoQuantMode.tenX: [2, -1],
-                       IsoQuantMode.curio: [2, -1],
-                       IsoQuantMode.stereo_pc: [4],
-                       IsoQuantMode.stereo_split_pc: [4]}
+                       IsoQuantMode.tenX_v3: [3],
+                       IsoQuantMode.visium_5prime: [3],
+                       IsoQuantMode.curio: [3],
+                       IsoQuantMode.visium_hd: [4],
+                       IsoQuantMode.stereoseq: [4],
+                       IsoQuantMode.stereoseq_nosplit: [4]}
         if self.args.barcoded_reads:
             sample.barcoded_reads = self.args.barcoded_reads
 
         split_barcodes_dict = {}
-        for chr_id in self.chr_ids:
+        for chr_id in self.get_chr_list():
             split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
-        fname = split_barcodes_lock_filename(sample)
-        if self.args.resume and os.path.exists(fname):
+        barcode_split_done = split_barcodes_lock_filename(sample)
+        if self.args.resume and os.path.exists(barcode_split_done):
             logger.info("Barcode table was split during the previous run, existing files will be used")
         else:
-            if os.path.exists(fname):
-                os.remove(fname)
+            if os.path.exists(barcode_split_done):
+                os.remove(barcode_split_done)
             self.split_read_barcode_table(sample, split_barcodes_dict)
-            open(fname, "w").close()
+            open(barcode_split_done, "w").close()
 
         for i, d in enumerate(umi_ed_dict[self.args.mode]):
             logger.info("== Filtering by UMIs with edit distance %d ==" % d)
@@ -790,7 +754,7 @@ class DatasetProcessor:
             logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
 
     @staticmethod
-    def split_read_barcode_table(sample, read_group_file_names):
+    def split_read_barcode_table(sample, split_barcodes_file_names):
         logger.info("Loading barcodes from " + str(sample.barcoded_reads))
         barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
         read_group_files = {}
@@ -801,11 +765,11 @@ class DatasetProcessor:
         for bam_file in bam_files:
             bam = pysam.AlignmentFile(bam_file, "rb")
             for chr_id in bam.references:
-                if chr_id not in read_group_files and chr_id in read_group_file_names:
-                    read_group_files[chr_id] = open(read_group_file_names[chr_id], "w")
+                if chr_id not in read_group_files and chr_id in split_barcodes_file_names:
+                    read_group_files[chr_id] = open(split_barcodes_file_names[chr_id], "w")
             for read_alignment in bam:
                 chr_id = read_alignment.reference_name
-                if not chr_id or chr_id not in read_group_file_names:
+                if not chr_id or chr_id not in split_barcodes_file_names:
                     continue
 
                 read_id = read_alignment.query_name
