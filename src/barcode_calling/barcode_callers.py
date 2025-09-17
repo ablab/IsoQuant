@@ -753,7 +753,7 @@ class DoubleBarcodeDetector:
                                                 linker_start=linker_start, linker_end=linker_end)
         logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
         # position of barcode end in the reference: end of potential barcode minus bases to the alignment end
-        read_barcode_end = barcode_start + bc_end
+        read_barcode_end = barcode_start + bc_end - 1 + (linker_end - linker_start + 1)
 
         potential_umi_start = read_barcode_end + 1
         potential_umi_end = polyt_start - 1
@@ -910,7 +910,7 @@ class IlluminaDoubleBarcodeDetector:
                                                 linker_start=linker_start, linker_end=linker_end)
         logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
         # position of barcode end in the reference: end of potential barcode minus bases to the alignment end
-        read_barcode_end = barcode_start + bc_end
+        read_barcode_end = barcode_start + bc_end - 1 + (linker_end - linker_start + 1)
 
         potential_umi_start = read_barcode_end + 1
         potential_umi_end = polyt_start - 1
@@ -1032,7 +1032,7 @@ class TenXBarcodeDetector:
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
         logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
         # position of barcode end in the reference: end of potential barcode minus bases to the alignment end
-        read_barcode_end = barcode_start + bc_end
+        read_barcode_end = barcode_start + bc_end - 1
         potential_umi_start = read_barcode_end + 1
         potential_umi_end = polyt_start - 1
         if potential_umi_end - potential_umi_start <= 5:
