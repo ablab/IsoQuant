@@ -71,6 +71,7 @@ class SampleData:
         self.out_intron_grouped_counts_tsv = self._make_path(self.prefix + ".intron_grouped")
         self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
         self.barcodes_tsv = self._make_path(self.prefix + ".barcoded_reads")
+        self.barcodes_done = self._make_aux_path(self.prefix + ".barcodes_done")
         self.barcodes_split_reads = self._make_aux_path(self.prefix + ".split_barcodes")
         self.out_umi_filtered = self._make_path(self.prefix + ".UMI_filtered")
         self.split_reads_fasta = self._make_path(self.prefix + ".split_reads")
