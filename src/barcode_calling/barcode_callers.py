@@ -659,9 +659,17 @@ class DoubleBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, joint_barcode_list, umi_list=None, min_score=13):
+    def __init__(self, barcode_list, umi_list=None, min_score=13):
         self.pcr_primer_indexer = ArrayKmerIndexer([DoubleBarcodeDetector.PCR_PRIMER], kmer_size=6)
         self.linker_indexer = ArrayKmerIndexer([DoubleBarcodeDetector.LINKER], kmer_size=5)
+        joint_barcode_list = []
+        if isinstance(barcode_list, tuple):
+            # barcode provided separately
+            for b1 in barcode_list[0]:
+                for b2 in barcode_list[1]:
+                    joint_barcode_list.append(b1 + b2)
+        else:
+            joint_barcode_list = barcode_list
         self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=6)
         self.umi_set = None
         if umi_list:
@@ -1071,7 +1079,6 @@ class TenXBarcodeDetector:
 
 
 class VisiumHDBarcodeDetector:
-
     R1 = "ACACGACGCTCTTCCGATCT" # 10x 3'
     BARCODE1_LEN_VIS = 16
     BARCODE2_LEN_VIS = 15
@@ -1083,6 +1090,7 @@ class VisiumHDBarcodeDetector:
     STRICT_TERMINAL_MATCH_DELTA = 1
 
     def __init__(self, barcode_pair_list):
+        assert len(barcode_pair_list) == 2
         self.r1_indexer = KmerIndexer([VisiumHDBarcodeDetector.R1], kmer_size=7)
         self.part1_list = barcode_pair_list[0]
         self.part2_list = barcode_pair_list[1]
