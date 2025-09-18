@@ -26,7 +26,7 @@ from src.barcode_calling.barcode_callers import (
     TenXBarcodeDetector,
     DoubleBarcodeDetector,
     StereoBarcodeDetectorPC,
-    StereoSplitBarcodeDetectorPC,
+    SharedMemoryStereoSplttingBarcodeDetector,
     SplittingBarcodeDetectionResult,
     ReadStats, DoubleBarcodeDetectionResult,
     VisiumHDBarcodeDetector
@@ -39,7 +39,7 @@ READ_CHUNK_SIZE = 100000
 BARCODE_CALLING_MODES = {IsoQuantMode.tenX_v3: TenXBarcodeDetector,
                          IsoQuantMode.curio: DoubleBarcodeDetector,
                          IsoQuantMode.stereoseq_nosplit: StereoBarcodeDetectorPC,
-                         IsoQuantMode.stereoseq: StereoSplitBarcodeDetectorPC,
+                         IsoQuantMode.stereoseq: SharedMemoryStereoSplttingBarcodeDetector,
                          IsoQuantMode.visium_5prime: TenXBarcodeDetector,
                          IsoQuantMode.visium_hd: VisiumHDBarcodeDetector
 }
@@ -192,8 +192,11 @@ class BarcodeCaller:
         self.read_stat.add_read(barcode_result)
 
     def process_chunk(self, read_chunk):
+        counter = 0
         for read_id, seq in read_chunk:
             self._process_read_split(read_id, seq)
+            counter += 1
+        return counter
 
 
 def fastx_file_chunk_reader(handler):
@@ -220,12 +223,13 @@ def bam_file_chunk_reader(handler):
 
 def process_chunk(barcode_detector, read_chunk, output_file, num, min_score=None):
     output_file += "_" + str(num)
+    counter = 0
     if min_score:
         barcode_detector.min_score = min_score
     barcode_caller = BarcodeCaller(output_file, barcode_detector)
-    barcode_caller.process_chunk(read_chunk)
+    counter += barcode_caller.process_chunk(read_chunk)
     read_chunk.clear()
-    return output_file
+    return output_file, counter
 
 
 def process_single_thread(args):
@@ -337,10 +341,12 @@ def process_in_parallel(args):
 
     if len(barcodes) == 1:
         barcodes = barcodes[0]
-        logger.info("Loaded %d barcodes" % len(barcodes))
+        if not args.mode.needs_barcode_iterator():
+            logger.info("Loaded %d barcodes" % len(barcodes))
     else:
-        for i, bc in enumerate(barcodes):
-            logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
+        if not args.mode.needs_barcode_iterator():
+            for i, bc in enumerate(barcodes):
+                logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
 
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
@@ -358,13 +364,17 @@ def process_in_parallel(args):
                 break
 
         reads_left = True
+        read_counter = 0
         while reads_left:
             completed_features, _ = concurrent.futures.wait(future_results, return_when=concurrent.futures.FIRST_COMPLETED)
             for c in completed_features:
                 if c.exception() is not None:
                     raise c.exception()
                 future_results.remove(c)
-                output_files.append(c.result())
+                res = c.result()
+                read_counter += res[1]
+                sys.stdout.write("Processed %d reads\r" % read_counter)
+                output_files.append(res[0])
                 if reads_left:
                     try:
                         chunk = next(read_chunk_gen)
@@ -377,7 +387,10 @@ def process_in_parallel(args):
         for c in completed_features:
             if c.exception() is not None:
                 raise c.exception()
-            output_files.append(c.result())
+            res = c.result()
+            read_counter += res[1]
+            sys.stdout.write("Processed %d reads\r" % read_counter)
+            output_files.append(res[0])
 
     outf = open(args.output, "w")
     header = BARCODE_CALLING_MODES[args.mode].result_type().header()
