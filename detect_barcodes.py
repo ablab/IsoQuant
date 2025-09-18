@@ -466,11 +466,11 @@ def parse_args(sys_argv):
 
 
 def check_args(args):
-    if args.out_fasta and not IsoQuantMode.produces_new_fasta():
+    if args.out_fasta and not args.mode.produces_new_fasta():
         logger.warning("--out_fasta has no effect when mode is set to %s" % args.mode.name)
         args.out_fasta = None
 
-    if IsoQuantMode.produces_new_fasta() and args.out_fasta is None:
+    if args.mode.produces_new_fasta() and args.out_fasta is None:
         logger.critical("Please provide --out_fasta, %s mode performs reads splitting and requires an output path" % args.mode.name)
         exit(-2)
 
