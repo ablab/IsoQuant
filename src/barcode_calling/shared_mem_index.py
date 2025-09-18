@@ -20,6 +20,24 @@ class SharedMemoryIndexInfo:
         self.index_sm_name = index_sm_name
         self.index_range_sm_name = index_range_sm_name
 
+    def __getstate__(self):
+        return (self.barcode_count,
+                self.kmer_size,
+                self.seq_len,
+                self.index_size,
+                self.barcodes_sm_name,
+                self.index_sm_name,
+                self.index_range_sm_name)
+
+    def __setstate__(self, state):
+        self.barcode_count = state[0]
+        self.kmer_size = state[1]
+        self.seq_len = state[2]
+        self.index_size = state[3]
+        self.barcodes_sm_name = state[4]
+        self.index_sm_name = state[5]
+        self.index_range_sm_name = state[6]
+
 
 class SharedMemoryArray2BitKmerIndexer:
     # @params:
