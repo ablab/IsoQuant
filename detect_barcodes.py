@@ -241,10 +241,12 @@ def process_single_thread(args):
 
     if len(barcodes) == 1:
         barcodes = barcodes[0]
-        logger.info("Loaded %d barcodes" % len(barcodes))
+        if not args.mode.needs_barcode_iterator():
+            logger.info("Loaded %d barcodes" % len(barcodes))
     else:
-        for i, bc in enumerate(barcodes):
-            logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
+        if not args.mode.needs_barcode_iterator():
+            for i, bc in enumerate(barcodes):
+                logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
 
     logger.info("Preparing barcodes indices")
