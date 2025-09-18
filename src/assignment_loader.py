@@ -13,6 +13,7 @@ import gffutils
 from pyfaidx import Fasta, UnsupportedCompressionFormat
 
 from .serialization import *
+from .file_naming import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .assignment_io import (
     NormalTmpFileAssignmentLoader,
@@ -94,11 +95,10 @@ class BasicReadAssignmentLoader:
             yield self.unpickler.get_object()
 
 
-def create_assignment_loader(chr_id, dump_filename, genedb, reference_fasta, reference_fai, use_filtered_reads=False):
+def create_assignment_loader(chr_id, saves_prefix, genedb, reference_fasta, reference_fai, use_filtered_reads=False):
     current_chr_record = Fasta(reference_fasta, indexname=reference_fai)[chr_id]
     multimapped_reads = defaultdict(list)
-    # FIXME use proper file name construction
-    multimap_loader = open(dump_filename + "_multimappers_" + convert_chr_id_to_file_name_str(chr_id), "rb")
+    multimap_loader = open(multimappers_file_name(saves_prefix ,chr_id), "rb")
     list_size = read_int(multimap_loader)
     while list_size != TERMINATION_INT:
         for i in range(list_size):
@@ -109,10 +109,9 @@ def create_assignment_loader(chr_id, dump_filename, genedb, reference_fasta, ref
 
     filtered_reads = set()
     if use_filtered_reads:
-        # FIXME use proper file name construction
-        for l in open(dump_filename + "_filtered_" + chr_id, "r"):
+        for l in open(filtered_reads_file_name(saves_prefix, chr_id), "r"):
             filtered_reads.add(l.rstrip())
-    chr_dump_file = dump_filename + "_" + convert_chr_id_to_file_name_str(chr_id)
+    chr_dump_file = saves_file_name(saves_prefix, chr_id)
 
     if genedb:
         gffutils_db = gffutils.FeatureDB(genedb)

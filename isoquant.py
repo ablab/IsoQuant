@@ -843,8 +843,11 @@ def call_barcodes(args):
                     output_fasta = sample.split_reads_fasta + "_%d.fa" % i
                     new_reads.append([output_fasta])
                 bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
-                if args.resume and os.path.exists(barcodes_done):
-                    logger.info("Barcodes were called during the previous run, skipping")
+                if os.path.exists(barcodes_done):
+                    if args.resume:
+                        logger.info("Barcodes were called during the previous run, skipping")
+                    else:
+                        os.remove(barcodes_done)
                 else:
                     bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode,
                                                  output_barcodes, output_fasta, sample.aux_dir, bc_threads)
