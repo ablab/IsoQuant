@@ -138,6 +138,9 @@ def collect_reads_in_parallel(sample, chr_id, args):
                 logger.warning("%s does not exist" % save_file)
             os.remove(lock_file)
 
+    if os.path.exists(lock_file):
+        os.remove(lock_file)
+
     tmp_printer = TmpFileAssignmentPrinter(save_file, args)
     bam_files = list(map(lambda x: x[0], sample.file_list))
     bam_file_pairs = [(pysam.AlignmentFile(bam, "rb", require_index=True), bam) for bam in bam_files]
@@ -177,11 +180,13 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
     construct_models = not args.no_model_construction
 
-    if os.path.exists(lock_file) and args.resume:
-        logger.info("Processed assignments from chromosome " + chr_id + " detected")
-        read_stat = EnumStats(read_stat_file)
-        transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
-        return read_stat, transcript_stat
+    if os.path.exists(lock_file):
+        if args.resume:
+            logger.info("Processed assignments from chromosome " + chr_id + " detected")
+            read_stat = EnumStats(read_stat_file)
+            transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
+            return read_stat, transcript_stat
+        os.remove(lock_file)
 
     aggregator = ReadAssignmentAggregator(args, sample, read_groups, loader.genedb, chr_id)
 
@@ -250,6 +255,21 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
 
     return aggregator.read_stat_counter, transcript_stat_counter
 
+
+def filter_umis_in_parallel(sample, chr_id, split_barcodes_dict, args, edit_distance, output_filtered_reads=False):
+    transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
+    out_umi_filtered = sample.out_umi_filtered_tmp + ("_%s_ED%d" % (chr_id, edit_distance))
+
+    umi_filtered_done = sample.out_umi_filtered_done + ("_%s_ED%d" % (chr_id, edit_distance))
+    if os.path.exists(umi_filtered_done):
+        if args.resume:
+            return
+        os.remove(umi_filtered_done)
+
+    umi_filter = UMIFilter(split_barcodes_dict, edit_distance)
+    umi_filter.process_from_raw_assignments(sample.out_raw_file, [chr_id], args, out_umi_filtered,
+                                            transcript_type_dict, output_filtered_reads)
+    open(umi_filtered_done, "w").close()
 
 class ReadAssignmentAggregator:
     def __init__(self, args, sample, read_groups, gffutils_db=None, chr_id=None, gzipped=False):
@@ -350,6 +370,7 @@ class DatasetProcessor:
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
             self.gffutils_db = gffutils.FeatureDB(self.args.genedb)
+            # TODO remove
             if self.args.mode.needs_pcr_deduplication():
                 self.transcript_type_dict = create_transcript_info_dict(self.args.genedb)
         else:
@@ -742,16 +763,32 @@ class DatasetProcessor:
             self.split_read_barcode_table(sample, split_barcodes_dict)
             open(barcode_split_done, "w").close()
 
-        for i, d in enumerate(umi_ed_dict[self.args.mode]):
-            logger.info("== Filtering by UMIs with edit distance %d ==" % d)
-            output_prefix = sample.out_umi_filtered + (".ALL" if d < 0 else ".ED%d" % d)
+        for i, edit_distance in enumerate(umi_ed_dict[self.args.mode]):
+            logger.info("== Filtering by UMIs with edit distance %d ==" % edit_distance)
+            output_prefix = sample.out_umi_filtered + (".ALL" if edit_distance < 0 else ".ED%d" % edit_distance)
             logger.info("Results will be saved to %s" % output_prefix)
-
-            umi_filter = UMIFilter(split_barcodes_dict, d)
             output_filtered_reads = i == 0
-            umi_filter.process_from_raw_assignments(sample.out_raw_file, self.get_chr_list(), self.args, output_prefix,
-                                                    self.transcript_type_dict, output_filtered_reads)
-            logger.info("== Done filtering by UMIs with edit distance %d ==" % d)
+
+            umi_gen = (
+                filter_umis_in_parallel,
+                sample,
+                self.get_chr_list(),
+                itertools.repeat(split_barcodes_dict),
+                itertools.repeat(self.args),
+                itertools.repeat(self.all_read_groups),
+                itertools.repeat(edit_distance),
+                itertools.repeat(output_filtered_reads),
+            )
+
+            if self.args.threads > 1:
+                with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+                    results = proc.map(*umi_gen, chunksize=1)
+            else:
+                results = map(*umi_gen)
+
+            # TODO: merge files
+
+            logger.info("== Done filtering by UMIs with edit distance %d ==" % edit_distance)
 
     @staticmethod
     def split_read_barcode_table(sample, split_barcodes_file_names):

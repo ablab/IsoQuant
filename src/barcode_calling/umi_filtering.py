@@ -612,10 +612,12 @@ def filter_bam(in_file_name, out_file_name, read_set):
     pysam.index(out_file_name)
 
 
-def create_transcript_info_dict(genedb):
+def create_transcript_info_dict(genedb, chr_ids=None):
     gffutils_db = gffutils.FeatureDB(genedb)
     transcript_type_dict = {}
     for t in gffutils_db.features_of_type(('transcript', 'mRNA')):
+        if chr_ids and t.seqid not in chr_ids:
+            continue
         polya_site = t.start - 1 if t.strand == '-' else t.end + 1
         if "transcript_type" in t.attributes.keys():
             transcript_type_dict[t.id] = (t.attributes["transcript_type"][0], polya_site)
