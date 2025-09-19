@@ -644,7 +644,7 @@ class SharedMemoryStereoSplttingBarcodeDetector(StereoSplttingBarcodeDetector):
     def __init__(self, barcodes, min_score=21):
         super().__init__([], min_score=min_score)
         bit_barcodes = list(map(str_to_2bit, barcodes))
-        self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=14,
+        self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=10,
                                                                 seq_len=super().BC_LENGTH)
 
         logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
