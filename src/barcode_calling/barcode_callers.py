@@ -235,6 +235,13 @@ class ReadStats:
             human_readable_str += "%s\t%d\n" % (a, self.additional_attributes_counts[a])
         return human_readable_str
 
+    def __iter__(self):
+        yield "Total reads: %d" % self.read_count
+        yield "Barcode detected: %d" % self.bc_count
+        yield "Reliable UMI: %d" % self.umi_count
+        for a in self.additional_attributes_counts:
+            yield "%s: %d" % (a, self.additional_attributes_counts[a])
+
 
 class StereoBarcodeDetector:
     LINKER = "TTGTCTTCCTAAGAC"
