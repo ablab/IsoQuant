@@ -16,7 +16,7 @@ from .isoform_assignment import (
     ReadAssignment,
     IsoformMatch
 )
-from .gene_info import FeatureInfo
+from .gene_info import FeatureInfo, GeneInfo
 from .read_groups import AbstractReadGrouper
 from .convert_grouped_counts import GROUP_COUNT_CUTOFF, convert_to_mtx, convert_to_matrix
 
@@ -30,11 +30,14 @@ class PolyACounter(AbstractCounter):
     def __init__(self, output_prefix, ignore_read_groups=False):
         super().__init__(output_prefix, ignore_read_groups=False)
         self.transcripts = {}    
+        self.gene_info = None
         with open('src/model.pkl', 'rb') as file:
             self.model = pickle.load(file)
         
     
     def add_read_info(self, read_assignment: ReadAssignment):
+        if self.gene_info is None:
+            self.gene_info: GeneInfo = read_assignment.gene_info
         # add a single read_assignment to features dataframe
         if read_assignment.polyA_found == True and read_assignment.assignment_type in [ReadAssignmentType.inconsistent_non_intronic, ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference, ReadAssignmentType.inconsistent]:
             ok = False
@@ -85,6 +88,8 @@ class PolyACounter(AbstractCounter):
         self.dfResult = self.dfResult.drop('max', axis = 1)
         self.df = self.df.drop(self.df[self.df.peak_count==0].index, axis = 0).reset_index(drop=True)
 
+        self.dfResult['peak_heights'] = self.dfResult.apply(lambda x: np.histogram(self.transcripts[x['transcript_id']]['data'], bins = 1+np.max(self.transcripts[x['transcript_id']]['data']) - np.min(self.transcripts[x['transcript_id']]['data']))[0][x.prediction], axis = 1)
+
         
 
 
@@ -109,19 +114,24 @@ class PolyACounter(AbstractCounter):
             'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence', 'rank']].astype(float, errors='ignore') 
 
-
     
         peaks['prediction'] = self.model.predict(peaks.drop(['rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
         peaks = peaks[peaks.prediction ==True].reset_index(drop=True)
         peaks['prediction'] = peaks['peak_location']
         self.dfResult = pd.concat([self.dfResult, peaks], axis=0).reset_index(drop=True)
-        self.dfResult = self.dfResult.drop(['mean', 'var', 'range', 'skew', 'peak_prominence', 'entropy', 'peak_count', 'peak_info'], axis = 1)
         self.dfResult['counts'] = self.dfResult.apply(lambda x: self.test(x), axis = 1)
+        self.dfResult = self.dfResult.drop(['median', 'mean', 'var', 'range', 'skew', 'peak_prominence', 'entropy', 'peak_count', 'peak_info', 'peak_width', 'peak_location', 'rank'], axis = 1)
     
         self.dfResult['prediction'] += self.dfResult['start']
         self.dfResult = self.dfResult.drop('start', axis = 1)
-        self.transcripts = {}
 
+
+        # self.gene_info.all_isoforms_exons[transcript_id][-1][1] + 1
+
+        self.transcripts = {}
+        self.gene_info = None
+        self.dfResult['prediction'] = self.dfResult['prediction'].astype(int)
+        self.dfResult['peak_heights'] = self.dfResult['peak_heights'].astype(int)
         self.dfResult.to_csv(
         self.output_prefix,
         sep="\t",
@@ -137,11 +147,13 @@ class PolyACounter(AbstractCounter):
     def test(self, x):
         low = int(x['peak_location']-5)
         high = int(x['peak_location']+6)
+        data = np.histogram(self.transcripts[x['transcript_id']]['data'], bins = 1+np.max(self.transcripts[x['transcript_id']]['data']) - np.min(self.transcripts[x['transcript_id']]['data']))[0]
         if low < 0:
             low = 0
-        if high > len(self.transcripts[x['transcript_id']]['data']):
-            high = len(self.transcripts[x['transcript_id']]['data'])
-        return np.histogram(self.transcripts[x['transcript_id']]['data'], bins = 1+np.max(self.transcripts[x['transcript_id']]['data']) - np.min(self.transcripts[x['transcript_id']]['data']))[0][low:high].sum()
+        if high > len(data):
+            high = len(data)
+            
+        return data[low:high].sum()
     
 
     def sort_peaks(self, x):
@@ -149,6 +161,8 @@ class PolyACounter(AbstractCounter):
             sorted_indices = np.argsort(-x['peak_prominence'])  
             x['peak_location'] = x['peak_location'][sorted_indices]
             x['peak_prominence'] = x['peak_prominence'][sorted_indices]
+            x['peak_width'] = x['peak_width'][sorted_indices]
+            x['peak_heights'] = x['peak_heights'][sorted_indices]
             x['rank'] = list(range(1, len(sorted_indices)+1))
         else:
             x['rank'] = 0
