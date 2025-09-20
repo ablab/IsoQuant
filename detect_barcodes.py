@@ -273,7 +273,7 @@ def process_single_thread(args):
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
         barcode_detector.min_score = args.min_score
-    barcode_caller = BarcodeCaller(args.output, barcode_detector, header=True, output_sequences=args.out_fasta)
+    barcode_caller = BarcodeCaller(args.output_tsv, barcode_detector, header=True, output_sequences=args.out_fasta)
     barcode_caller.process(args.input)
     barcode_caller.dump_stats()
     for stat_line in barcode_caller.get_stats():
@@ -386,8 +386,8 @@ def process_in_parallel(args):
                     except StopIteration:
                         reads_left = False
 
-    with (open(args.output, "w") as final_output_tsv,
-          open(args.out_fasta, "w") if args.out_fasta else None as final_output_fasta):
+    with open(args.output_tsv, "w") as final_output_tsv:
+        final_output_fasta = open(args.out_fasta, "w") if args.out_fasta else None
         header = BARCODE_CALLING_MODES[args.mode].result_type().header()
         final_output_tsv.write(header + "\n")
         stat_dict = defaultdict(int)
@@ -401,7 +401,10 @@ def process_in_parallel(args):
                     continue
                 stat_dict[v[0]] += int(v[1])
 
-    with open(stats_file_name(args.output), "w") as out_stats:
+        if final_output_fasta is not None:
+            final_output_fasta.close()
+
+    with open(stats_file_name(args.output_tsv), "w") as out_stats:
         for k, v in stat_dict.items():
             logger.info("%s: %d" % (k, v))
             out_stats.write("%s\t%d\n" % (k, v))
@@ -468,29 +471,28 @@ def parse_args(sys_argv):
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
     parser.add_argument("--min_score", type=int, help="minimal barcode score "
                                                       "(scoring system is +1, -1, -1, -1)")
-    parser.add_argument('--out_fasta', type=str, help='Print deconcatenated reads into a FASTA file (only for StereoSeq mode)')
     add_hidden_option('--debug', action='store_true', default=False, help='Debug log output.')
 
     args = parser.parse_args(sys_argv)
     args.mode = IsoQuantMode[args.mode]
-
+    args.out_fasta = None
+    args.output_tsv = None
     return args
 
 
 def check_args(args):
-    if args.out_fasta and not args.mode.produces_new_fasta():
-        logger.warning("--out_fasta has no effect when mode is set to %s" % args.mode.name)
-        args.out_fasta = None
-
-    if args.mode.produces_new_fasta() and args.out_fasta is None:
-        logger.critical("Please provide --out_fasta, %s mode performs reads splitting and requires an output path" % args.mode.name)
-        exit(-2)
+    if args.out_fasta is None and args.mode.produces_new_fasta():
+        args.out_fasta = args.output + ".split_reads.fasta"
+    if args.output_tsv is None:
+        args.output_tsv = args.output + ".barcoded_reads.tsv"
 
 
 def main(sys_argv):
     args = parse_args(sys_argv)
     set_logger(logger, args)
     check_args(args)
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+
     if args.threads == 1 or args.mode.enforces_single_thread():
         process_single_thread(args)
     else:
