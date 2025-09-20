@@ -835,7 +835,7 @@ class BarcodeCallingArgs:
         self.input = input
         self.barcodes = barcode_whitelist
         self.mode = mode
-        self.output = output
+        self.output_tsv = output
         self.out_fasta = out_fasta
         self.tmp_dir = tmp_dir
         self.threads = threads
