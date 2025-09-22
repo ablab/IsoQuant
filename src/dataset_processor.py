@@ -727,7 +727,7 @@ class DatasetProcessor:
             logger.info("PCR duplicates filtered with edit distance %d, filtering stats:" % edit_distance)
             with open(output_prefix + ".allinfo", "w") as outf:
                 for k, v in stat_dict.items():
-                    logger.info("%s: %d" % (k, v))
+                    logger.info("  %s: %d" % (k, v))
                     outf.write("%s\t%d\n" % (k, v))
 
     @staticmethod
