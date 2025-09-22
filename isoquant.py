@@ -840,25 +840,26 @@ def call_barcodes(args):
                 if os.path.exists(barcodes_done):
                     if args.resume:
                         logger.info("Barcodes were called during the previous run, skipping")
-                    else:
-                        os.remove(barcodes_done)
-                else:
-                    bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode,
-                                                 output_barcodes, output_fasta, sample.aux_dir, bc_threads)
-                    # Launching barcode calling in a separate process has the following reason:
-                    # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
-                    # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
-                    # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
-                    with ProcessPoolExecutor(max_workers=1) as proc:
-                        logger.info("Detecting barcodes")
-                        if bc_threads == 1:
-                            future_res = proc.submit(process_single_thread, bc_args)
-                        else:
-                            future_res = proc.submit(process_in_parallel, bc_args)
+                        sample.barcoded_reads.append(output_barcodes)
+                        return
+                    os.remove(barcodes_done)
 
-                    concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
-                    if future_res.exception() is not None:
-                        raise future_res.exception()
+                bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode,
+                                             output_barcodes, output_fasta, sample.aux_dir, bc_threads)
+                # Launching barcode calling in a separate process has the following reason:
+                # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
+                # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
+                # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
+                with ProcessPoolExecutor(max_workers=1) as proc:
+                    logger.info("Detecting barcodes")
+                    if bc_threads == 1:
+                        future_res = proc.submit(process_single_thread, bc_args)
+                    else:
+                        future_res = proc.submit(process_in_parallel, bc_args)
+
+                concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
+                if future_res.exception() is not None:
+                    raise future_res.exception()
 
                 sample.barcoded_reads.append(output_barcodes)
                 open(barcodes_done, "w").close()
