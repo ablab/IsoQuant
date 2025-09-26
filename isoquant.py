@@ -252,6 +252,9 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(filer_args_group, "--use_secondary",
                                    help="use secondary alignments (slower processing)",
                                    action='store_true', default=False)
+    add_additional_option_to_group(filer_args_group, "--no_secondary",
+                                   help="deprecated, secondary alignments are not used by default (kept for user convenience)",
+                                   action='store_true', default=False)
     add_additional_option_to_group(filer_args_group, "--min_mapq",
                                    help="ignore alignments with MAPQ < this (also filters out secondary alignments, default: None)", type=int)
     add_additional_option_to_group(filer_args_group, "--inconsistent_mapq_cutoff",
@@ -453,6 +456,9 @@ def check_input_params(args):
     if args.no_model_construction and args.sqanti_output:
         args.sqanti_output = False
         logger.warning("--sqanti_output option has no effect without model construction")
+
+    if args.no_secondary:
+        logger.info("--no_secondary option has no effect and will be deprecated, secondary alignments are not used by default")
         
     check_input_files(args)
     return True
