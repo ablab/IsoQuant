@@ -104,6 +104,9 @@ class ProcessedReads:
     def load_read(self, read_assignment: ReadAssignment):
         raise NotImplementedError()
 
+    def finalize(self):
+        pass
+
 
 class ProcessedReadsHighMemory(ProcessedReads):
     def __init__(self):
@@ -131,18 +134,20 @@ class ProcessedReadsNormalMemory(ProcessedReads):
 
 class ProcessedReadsNoSecondary:
     def __init__(self):
-        self.total_reads = 0
-        self.polya_reads = 0
+        self.processed_reads = defaultdict(int)
 
     def add_read(self, read_assignment):
-        self.total_reads += 1
-        self.polya_reads += 1 if read_assignment.polyA_found else 0
+        self.processed_reads[read_assignment.read_id] += 1
 
     def load_read(self, read_assignment):
         self.add_read(read_assignment)
 
+    def finalize(self):
+        multi_gene_reads = [read_id for read_id in self.processed_reads.keys() if self.processed_reads[read_id] > 1]
+        self.processed_reads = multi_gene_reads
 
-def collect_reads_in_parallel(sample, chr_id, args):
+
+def collect_reads_in_parallel(sample, chr_id, args, processed_read_collector_type):
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
         current_chr_record = str(current_chr_record)
@@ -151,13 +156,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
     save_file = "{}_{}".format(sample.out_raw_file, convert_chr_id_to_file_name_str(chr_id))
     group_file = save_file + "_groups"
     bamstat_file = save_file + "_bamstat"
-
-    if not args.use_secondary:
-        processed_reads = ProcessedReadsNoSecondary()
-    elif args.high_memory:
-        processed_reads = ProcessedReadsHighMemory()
-    else:
-        processed_reads = ProcessedReadsNormalMemory()
+    processed_reads = processed_read_collector_type()
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
@@ -172,7 +171,7 @@ def collect_reads_in_parallel(sample, chr_id, args):
                     if read_assignment is None: continue
                     processed_reads.load_read(read_assignment)
             logger.info("Loaded data for " + chr_id)
-            return read_grouper.read_groups, alignment_stat_counter, processed_reads
+            return chr_id, read_grouper.read_groups, alignment_stat_counter, processed_reads
         else:
             logger.warning("Something is wrong with save files for %s, will process from scratch " % chr_id)
             if not os.path.exists(group_file):
@@ -209,8 +208,9 @@ def collect_reads_in_parallel(sample, chr_id, args):
     open(lock_file, "w").close()
     for bam in bam_file_pairs:
         bam[0].close()
+    processed_reads.finalize()
 
-    return read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads
+    return chr_id, read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads
 
 
 class ReadAssignmentLoader:
@@ -280,17 +280,16 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     logger.info("Processing chromosome " + chr_id)
     construct_models = not args.no_model_construction
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
-    multimapped_reads = None
-    if args.use_secondary:
-        multimapped_reads = defaultdict(list)
-        multimap_loader = open(dump_filename + "_multimappers_" + convert_chr_id_to_file_name_str(chr_id), "rb")
+
+    multimapped_reads = defaultdict(list)
+    multimap_loader = open(dump_filename + "_multimappers_" + convert_chr_id_to_file_name_str(chr_id), "rb")
+    list_size = read_int(multimap_loader)
+    while list_size != TERMINATION_INT:
+        for i in range(list_size):
+            a = BasicReadAssignment.deserialize(multimap_loader)
+            if a.chr_id == chr_id:
+                multimapped_reads[a.read_id].append(a)
         list_size = read_int(multimap_loader)
-        while list_size != TERMINATION_INT:
-            for i in range(list_size):
-                a = BasicReadAssignment.deserialize(multimap_loader)
-                if a.chr_id == chr_id:
-                    multimapped_reads[a.read_id].append(a)
-            list_size = read_int(multimap_loader)
 
     chr_dump_file = dump_filename + "_" + convert_chr_id_to_file_name_str(chr_id)
     lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
@@ -630,11 +629,19 @@ class DatasetProcessor:
             clean_locks(chr_ids, sample.out_raw_file, reads_collected_lock_file_name)
             clean_locks(chr_ids, sample.out_raw_file, reads_processed_lock_file_name)
 
+        if not self.args.use_secondary:
+            processed_read_collector_type = ProcessedReadsNoSecondary
+        elif self.args.high_memory:
+            processed_read_collector_type = ProcessedReadsHighMemory
+        else:
+            processed_read_collector_type = ProcessedReadsNormalMemory
+
         read_gen = (
             collect_reads_in_parallel,
             itertools.repeat(sample),
             chr_ids,
             itertools.repeat(self.args),
+            itertools.repeat(processed_read_collector_type)
         )
 
         all_read_groups = set()
@@ -648,13 +655,21 @@ class DatasetProcessor:
         multimappers_counts = defaultdict(int)
         total_assignments = 0
         polya_assignments = 0
-        for read_groups, alignment_stats, processed_reads in results:
+        for chr_id, read_groups, alignment_stats, processed_reads in results:
             all_read_groups.update(read_groups)
             self.alignment_stat_counter.merge(alignment_stats)
 
             if not self.args.use_secondary:
-                total_assignments += processed_reads.total_reads
-                polya_assignments += processed_reads.polya_reads
+                multimappers_counts_dict = {}
+                for r in processed_reads.processed_reads:
+                    multimappers_counts_dict[r] = 2
+                multimapped_reads_dict,unique_assignments, polya_unique_assignments \
+                    = self.prepare_multimapper_dict([chr_id], sample, multimappers_counts_dict)
+                total_assignments += unique_assignments
+                polya_assignments += polya_unique_assignments
+                total_assignments_chr, polya_assignments_chr = self.resolve_multimappers([chr_id], sample, multimapped_reads_dict, self.args.multimap_strategy)
+                total_assignments += total_assignments_chr
+                polya_assignments += polya_assignments_chr
             elif self.args.high_memory:
                 for basic_read_assignment in processed_reads:
                     multimapped_reads[basic_read_assignment.read_id].append(basic_read_assignment)
@@ -666,7 +681,7 @@ class DatasetProcessor:
             if not self.args.high_memory:
                 multimapped_reads, unique_assignments, polya_unique_assignments \
                     = self.prepare_multimapper_dict(chr_ids, sample, multimappers_counts)
-            total_assignments, polya_assignments = self.resolve_multimappers(chr_ids, sample, multimapped_reads)
+            total_assignments, polya_assignments = self.resolve_multimappers(chr_ids, sample, multimapped_reads, self.args.multimap_strategy)
             total_assignments += unique_assignments
             polya_assignments += polya_unique_assignments
 
@@ -688,7 +703,8 @@ class DatasetProcessor:
             logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
                         (total_assignments, 100 * polya_assignments / total_assignments))
 
-    def prepare_multimapper_dict(self, chr_ids, sample, multimappers_counts):
+    @staticmethod
+    def prepare_multimapper_dict(chr_ids, sample, multimappers_counts):
         logger.info("Counting multimapped reads")
         multimapped_reads = defaultdict(list)
         unique_assignments = 0
@@ -701,7 +717,7 @@ class DatasetProcessor:
                 for read_assignment in loader.get_next():
                     if read_assignment is None:
                         continue
-                    if (read_assignment.read_id in multimappers_counts and
+                    if (read_assignment.read_id not in multimappers_counts or
                             multimappers_counts[read_assignment.read_id] == 1):
                         unique_assignments += 1
                         polya_unique_assignments += 1 if read_assignment.polyA_found else 0
@@ -709,9 +725,10 @@ class DatasetProcessor:
                     multimapped_reads[read_assignment.read_id].append(read_assignment)
         return multimapped_reads, unique_assignments, polya_unique_assignments
 
-    def resolve_multimappers(self, chr_ids, sample, multimapped_reads):
+    @staticmethod
+    def resolve_multimappers(chr_ids, sample, multimapped_reads, strategy):
         logger.info("Resolving multimappers")
-        multimap_resolver = MultimapResolver(self.args.multimap_strategy)
+        multimap_resolver = MultimapResolver(strategy)
         multimap_dumper = {}
         for chr_id in chr_ids:
             multimap_dumper[chr_id] = open(sample.out_raw_file + "_multimappers_" + convert_chr_id_to_file_name_str(chr_id), "wb")
