@@ -141,8 +141,12 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
         self.dumper = open(self.output_file_name, "wb")
 
     def __del__(self):
-        write_short_int(SHORT_TERMINATION_INT, self.dumper)
-        self.dumper.close()
+        self.close()
+
+    def close(self):
+        if not self.dumper.closed:
+            write_short_int(SHORT_TERMINATION_INT, self.dumper)
+            self.dumper.close()
 
     def add_gene_info(self, gene_info):
         write_short_int(self.GENE_INFO, self.dumper)
