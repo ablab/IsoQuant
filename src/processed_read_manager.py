@@ -67,7 +67,6 @@ def resolve_multimappers(chr_ids, sample, multimapped_reads, strategy):
         write_int(TERMINATION_INT, multimap_dumper[chr_id])
         multimap_dumper[chr_id].close()
 
-    logger.info("Multimappers resolved")
     return total_assignments, polya_assignments
 
 

@@ -19,7 +19,6 @@ logger = logging.getLogger('IsoQuant')
 
 class BasicReadAssignmentLoader:
     def __init__(self, save_file_name):
-        logger.info("Loading read assignments from " + save_file_name)
         assert os.path.exists(save_file_name)
         self.save_file_name = save_file_name
         self.unpickler = QuickTmpFileAssignmentLoader(save_file_name)
@@ -40,7 +39,6 @@ class BasicReadAssignmentLoader:
 
 class ReadAssignmentLoader:
     def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict):
-        logger.info("Loading read assignments from " + save_file_name)
         assert os.path.exists(save_file_name)
         self.save_file_name = save_file_name
         self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)

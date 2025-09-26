@@ -213,6 +213,7 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         if args.sqanti_output else VoidTranscriptPrinter()
     novel_model_storage = []
 
+
     loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
     while loader.has_next():
         gene_info, assignment_storage = loader.get_next()
@@ -538,10 +539,14 @@ class DatasetProcessor:
         sample_procesed_read_manager = processed_read_manager_type(sample, self.args.multimap_strategy)
         logger.info("Counting multimapped reads")
         for chr_id, read_groups, alignment_stats, processed_reads in results:
+            logger.info("Counting reads from %s" % chr_id)
+            all_read_groups.update(read_groups)
+            self.alignment_stat_counter.merge(alignment_stats)
             sample_procesed_read_manager.merge(processed_reads, chr_id)
 
         logger.info("Resolving multimappers")
         total_assignments, polya_assignments = sample_procesed_read_manager.resolve()
+        logger.info("Multimappers resolved")
 
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
