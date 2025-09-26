@@ -289,7 +289,6 @@ class AlignmentCollector:
         return gene_info, assignment_storage
 
     def process_intergenic(self, alignment_storage, region):
-        assignment_storage = []
         if self.illumina_bam is not None:
             corrector = IlluminaExonCorrector(self.chr_id, region[0], region[1], self.illumina_bam)
         else:
@@ -344,14 +343,12 @@ class AlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
-            assignment_storage.append(read_assignment)
-        return assignment_storage
+            yield read_assignment
 
     def process_genic(self, alignment_storage, gene_info, region):
         assigner = LongReadAssigner(gene_info, self.params)
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
-        assignment_storage = []
 
         for bam_index, alignment in alignment_storage:
             if alignment.reference_id == -1 or alignment.is_supplementary or \
@@ -409,9 +406,8 @@ class AlignmentCollector:
                 read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
                 read_assignment.intron_gene_profile = alignment_info.combined_profile.read_intron_profile.gene_profile
 
-            assignment_storage.append(read_assignment)
             logger.debug("=== Finished read " + read_id + " ===")
-        return assignment_storage
+            yield read_assignment
 
     def get_assignment_strand(self, read_assignment):
         if read_assignment.isoform_matches and read_assignment.assignment_type in \

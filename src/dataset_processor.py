@@ -135,13 +135,9 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     alignment_collector = \
         AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper)
 
-    total_assignments = 0
-    polya_assignments = 0
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)
-        total_assignments += len(assignment_storage)
         for read_assignment in assignment_storage:
-            polya_assignments += 1 if read_assignment.polyA_found else 0
             tmp_printer.add_read_info(read_assignment)
             processed_reads_manager.add_read(read_assignment)
     with open(group_file, "w") as group_dump:
