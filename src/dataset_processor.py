@@ -133,7 +133,8 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
 
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
-        AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper)
+        AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper,
+                           args.max_coverage_small_chr, args.max_coverage_normal_chr)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)

@@ -244,21 +244,30 @@ def parse_args(cmd_args=None, namespace=None):
                           help="annotation in BED format produced by minimap's paftools.js gff2bed "
                                "(will be created automatically if not given)")
     add_additional_option_to_group(align_args_group, "--indexing_options", type=str,
-                                   help="additional options that will be passed to the aligindexerner indexer")
+                                   help="additional options that will be passed to the aligner indexer")
     add_additional_option_to_group(align_args_group, "--mapping_options", type=str,
                                    help="additional options that will be passed to the aligner")
 
     # READ FILTERING
-    add_additional_option_to_group(filer_args_group, "--use_secondary", help="use secondary alignments (slower processing)",
+    add_additional_option_to_group(filer_args_group, "--use_secondary",
+                                   help="use secondary alignments (slower processing)",
                                    action='store_true', default=False)
-    add_additional_option_to_group(filer_args_group, "--min_mapq", help="ignore alignments with MAPQ < this"
-                                                                        "(also filters out secondary alignments, default: None)", type=int)
-    add_additional_option_to_group(filer_args_group, "--inconsistent_mapq_cutoff", help="ignore inconsistent alignments with MAPQ < this "
-                                                                                        "(works only with the reference annotation, default=5)",
+    add_additional_option_to_group(filer_args_group, "--min_mapq",
+                                   help="ignore alignments with MAPQ < this (also filters out secondary alignments, default: None)", type=int)
+    add_additional_option_to_group(filer_args_group, "--inconsistent_mapq_cutoff",
+                                   help="ignore inconsistent alignments with MAPQ < this (works only with the reference annotation, default=5)",
                                    type=int, default=5)
-    add_additional_option_to_group(filer_args_group, "--simple_alignments_mapq_cutoff", help="ignore alignments with 1 or 2 exons and "
-                                                                                             "MAPQ < this (works only in annotation-free mode, "
-                                                                                             "default=1)", type=int, default=1)
+    add_additional_option_to_group(filer_args_group, "--simple_alignments_mapq_cutoff",
+                                   help="ignore alignments with 1 or 2 exons and MAPQ < this "
+                                        "(works only in annotation-free mode, default=1)", type=int, default=1)
+    add_additional_option_to_group(filer_args_group, "--max_coverage_small_chr",
+                                   help="process only a fraction of reads for high-coverage loci on small chromosomes, "
+                                        "e.g. mitochondrial (default 1000000); significantly improves running time and RAM",
+                                   type=int, default=1000000)
+    add_additional_option_to_group(filer_args_group, "--max_coverage_normal_chr",
+                                   help="process only a fraction of reads for high-coverage loci on usual chromosomes"
+                                        " (default -1 = infinity);  improves running time and RAM",
+                                   type=int, default=-1)
 
     # REST
     add_hidden_option("--graph_clustering_distance", type=int, default=None,
