@@ -476,7 +476,9 @@ def main(sys_argv):
     args = parse_args(sys_argv)
     set_logger(logger, args)
     check_args(args)
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    out_dir = os.path.dirname(args.output)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
 
     if args.threads == 1 or args.mode.enforces_single_thread():
         process_single_thread(args)
