@@ -225,13 +225,14 @@ class AlignmentCollector:
     """
 
     MIN_REGION_LEN = 32768
+    MAX_REGION_LEN = 1048576
     MIN_READS_TO_SPLIT = 1024
     ABS_COV_VALLEY = 1
     REL_COV_VALLEY = 0.01
 
     SMALL_CHR_IDS = ['MT', 'chrM', 'chrMT']
     SMALL_CHR_LEN = 500000
-    WARN_COVERAGE = 1000000
+    WARN_COVERAGE = 2000000
 
     def __init__(self, chr_id, bam_pairs, params, illumina_bam,
                  genedb=None, chr_record=None, read_groupper=DefaultReadGrouper(),
@@ -305,18 +306,21 @@ class AlignmentCollector:
 
         if max_coverage > coverage_cutoff > 0:
             skip_read_fraction = math.ceil(max_coverage / coverage_cutoff)
-            logger.warning("Genomic region %d-%d on %schromosome %s (length %d) has coverage %d, which exceed coverage cutoff %d" %
-                           (current_region[0], current_region[1], chromosome_description, self.chr_id, chr_len, max_coverage, coverage_cutoff))
+            logger.warning("Genomic region %d-%d on %schromosome %s (region length %d, chromosome length %d) "
+                           "has coverage %d, which exceed coverage cutoff %d" %
+                           (current_region[0], current_region[1], chromosome_description, self.chr_id,
+                            current_region[1] - current_region[0], chr_len, max_coverage, coverage_cutoff))
             logger.warning("Large number of reads mapped to a single loci may significantly "
                            "increase running time and RAM consumption")
             logger.warning("IsoQuant will process only 1 read out of every %d, "
                            "use --%s to change the coverage limit for small chromosomes" % (skip_read_fraction, option_string))
         elif max_coverage > self.WARN_COVERAGE:
-            logger.warning("Genomic region %d-%d on %schromosome %s (length %d) has high coverage %d" %
-                           (current_region[0], current_region[1], chromosome_description, self.chr_id, chr_len, max_coverage))
-            logger.warning("Large number of reads mapped to a single loci may significantly "
-                           "increase running time and RAM consumption, maximum coverage threshold "
-                           "can be set via --%s" % option_string)
+            logger.info("Genomic region %d-%d on %schromosome %s (region length %d) has high coverage %d" %
+                        (current_region[0], current_region[1], chromosome_description, self.chr_id,
+                         current_region[1] - current_region[0], max_coverage))
+            logger.info("Large number of reads mapped to a single loci may significantly "
+                        "increase running time and RAM consumption, maximum coverage threshold "
+                        "can be set via --%s" % option_string)
 
         gene_info = self.get_gene_info_for_region(current_region)
         if gene_info.empty():
@@ -527,19 +531,34 @@ class AlignmentCollector:
         coverage_positions = sorted(coverage_dict.keys())
         current_start = coverage_positions[0]
         min_bins = int(AlignmentCollector.MIN_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
+        max_bins = int(AlignmentCollector.MAX_REGION_LEN / AbstractAlignmentStorage.COVERAGE_BIN)
         pos = current_start + 1
         max_cov = coverage_dict[current_start]
+        abs_cov_valley = AlignmentCollector.ABS_COV_VALLEY
+        rel_cov_valley = AlignmentCollector.REL_COV_VALLEY
+        prev_upd_pos = pos
+
         while pos <= coverage_positions[-1]:
             while (pos <= coverage_positions[-1] and
                    (pos - current_start < min_bins or
-                    coverage_dict[pos] > max(AlignmentCollector.ABS_COV_VALLEY,
-                                             max_cov * AlignmentCollector.REL_COV_VALLEY))):
+                    coverage_dict[pos] > max(abs_cov_valley,
+                                             max_cov * rel_cov_valley))):
+                if pos - prev_upd_pos > max_bins:
+                    # increase valley cut-offs every MAX_REGION_LEN bases to avoid extra long regions
+                    prev_upd_pos = pos
+                    abs_cov_valley += AlignmentCollector.ABS_COV_VALLEY
+                    rel_cov_valley += AlignmentCollector.REL_COV_VALLEY
+
                 max_cov = max(max_cov, coverage_dict[pos])
                 pos += 1
+
             split_regions.append(((max(current_start * AbstractAlignmentStorage.COVERAGE_BIN + 1, genomic_region[0]),
                                    min(pos * AbstractAlignmentStorage.COVERAGE_BIN, genomic_region[1])),
                                   max_cov))
             current_start = pos
+            prev_upd_pos = pos
+            abs_cov_valley = AlignmentCollector.ABS_COV_VALLEY
+            rel_cov_valley = AlignmentCollector.REL_COV_VALLEY
             max_cov = coverage_dict[current_start]
             pos = min(current_start + 1, coverage_positions[-1] + 1)
 
