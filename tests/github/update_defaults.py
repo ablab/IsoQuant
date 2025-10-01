@@ -74,7 +74,10 @@ def main():
             new_etalon = os.path.join(output_folder, etalon_dict[et])
             old_etalon = fix_path(config_file, config_dict[et])
             print("Updating %s from %s" % (new_etalon, old_etalon))
-            shutil.copy2(new_etalon, old_etalon)
+            try:
+                shutil.copy2(new_etalon, old_etalon)
+            except FileNotFoundError:
+                print("Warning! %s does not exist, skipping!" % new_etalon)
 
 
 if __name__ == "__main__":
