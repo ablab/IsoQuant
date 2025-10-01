@@ -146,13 +146,13 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
             group_dump.write("%s\n" % g)
     alignment_collector.alignment_stat_counter.dump(bamstat_file)
 
-    open(lock_file, "w").close()
     for bam in bam_file_pairs:
         bam[0].close()
 
     tmp_printer.close()
     processed_reads_manager.finalize(chr_id)
     logger.info("Finished processing chromosome " + chr_id)
+    open(lock_file, "w").close()
 
     return chr_id, read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads_manager
 
