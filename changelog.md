@@ -1,5 +1,24 @@
 # IsoQuant changelog
 
+## IsoQuant 3.9.0, 1 October 2025
+
+- Secondary alignments are not used by default from now on. It significantly improves running time and RAM consumption, but barely affects the results' quality.
+Use `--use_secondary` to process secondary alignments.
+
+- New options that force IsoQuant to use only a faction of reads in high-coverage loci.
+Significantly improves running time and RAM consumption, but affects gene/isoform counts. 
+New default behaviour only affects small chromosomes and scaffolds (<500kbp).
+
+    In some cases, high-coverage regions take too much time to process due to extreme number of mapped reads,
+especially `chrM` (up to 10x longer compared to normal chromosomes). However, using only a fraction of these
+reads is enough to obtain reliable results.
+
+    These options allow to process only up to given number of reads mapping to a hich-coverage loci on short and normal chromosomes:
+  - `--max_coverage_small_chr` (default value is 1 million);
+  - `--max_coverage_normal_chr` (default value is infinity, so usual chromosomes are not affected by default even if some genes have extreme coverage).
+
+- New option `--discard_chr` to discard a list chromosomes from the analysis.
+
 ## IsoQuant 3.8.0, 8 September 2025
 
 - Fixed `--report_canonical` preset ([#332](https://github.com/ablab/IsoQuant/issues/332), thanks to @wwliao).

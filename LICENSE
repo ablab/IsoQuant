@@ -1,5 +1,5 @@
 IsoQuant: A tool for isoform assignment and quantification for long and barcoded reads
-Copyright (c) 2022-2024 University of Helsinki
+Copyright (c) 2022-2025 University of Helsinki
 Copyright (c) 2020-2022 Saint Petersburg State University
 
 
@@ -32,20 +32,23 @@ Center for Algorithmic Biotechnology, Institute of Translational Biomedicine, St
 Current contributors:
 
     Andrey Prjibelski,
-    Maria Burunducova,
     Jack Freeman,
+    Arina Coroliuc,
+    Lieke Michielsen,
+    Careen Foord,
     Alla Mikheenko,
     Rebecca Pfeil,
-    James Webber,
     Alexandru Tomescu
     and
     Hagen Tilgner
 
 Also contributed:
 
+    Maria Burunducova,
+    Anoushka Joglekar,
     Alexander Smetanin,
     Artyom Kaltovich,
-    Anoushka Joglekar
+    James Webber
 
 
 Installation instructions and manual can be found on the website:

@@ -253,6 +253,9 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 `--no_gtf_check`
     Do not perform input GTF checks.
 
+`--discard_chr`
+    A list of chromosomes to skip during the analysis.
+
 `--delta`
     Delta for inexact splice junction comparison, chosen automatically based on data type (e.g. 4bp for PacBio, 6pb for ONT).
 
@@ -289,6 +292,9 @@ We recommend _not_ to modify these options unless you are clearly aware of their
     Use secondary alignments. This will result in longer processing time, but might recover some reads, whose primary 
 alignments are located on an incorrect gene.
 
+`--no_secondary`
+    Deprecated, secondary alignments are not used by default (option is kept for user convenience).
+
 `--min_mapq`
     Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
 
@@ -298,6 +304,15 @@ alignments are located on an incorrect gene.
 `--simple_alignments_mapq_cutoff`
     Filers out alignments with 1 or 2 exons and MAPQ less than this value (works only in annotation-free mode, default is 1).
 
+`--max_coverage_small_chr`
+    Process only a fraction of reads for high-coverage loci on small chromosomes, e.g. mitochondrial (default value is 1000000).
+    Using this cut-off may significantly improve running time and RAM. Set to -1 to turn the off this filtering.
+    The fraction of reads is defined as `1 / ceil(max_coverage_small_chr / max_coverage)`.
+
+`--max_coverage_normal_chr`
+    Process only a fraction of reads for high-coverage loci on usual chromosomes (default value is -1 = infinity).
+    Using this cut-off may improve running time and RAM.
+    The fraction of reads is defined as `1 / ceil(max_coverage_normal_chr / max_coverage)`.
 
 #### Specific output options
 
