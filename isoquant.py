@@ -104,7 +104,7 @@ def parse_args(cmd_args=None, namespace=None):
                                 help="use this flag if gene annotation contains transcript and gene metafeatures, "
                                      "e.g. with official annotations, such as GENCODE; "
                                      "speeds up gene database conversion")
-    ref_args_group.add_argument("--discard_chr", nargs="+", help="chromosome IDs to ignore", type=str, default=[])
+    add_additional_option_to_group(ref_args_group, "--discard_chr", nargs="+", help="chromosome IDs to ignore", type=str, default=[])
     add_additional_option_to_group(ref_args_group, "--index", help="genome index for specified aligner (optional)",
                                    type=str)
 
@@ -116,12 +116,6 @@ def parse_args(cmd_args=None, namespace=None):
     input_args.add_argument('--fastq', nargs='+', type=str,
                             help='input FASTQ/FASTA file(s) with reads, each file will be treated as a separate sample; '
                                  'reference genome should be provided when using reads as input')
-    add_additional_option_to_group(input_args,'--bam_list', type=str,
-                                   help='text file with list of BAM files, one file per line, '
-                                        'leave empty line between samples')
-    add_additional_option_to_group(input_args,'--fastq_list', type=str,
-                                   help='text file with list of FASTQ files, one file per line, '
-                                        'leave empty line between samples')
     input_args.add_argument('--yaml', type=str, help='yaml file containing all input files, one entry per sample'
                                                      ', check readme for format info')
 
@@ -386,7 +380,7 @@ def load_previous_run(args):
 
 
 def save_params(args):
-    for file_opt in ["genedb", "reference", "index", "bam", "fastq", "bam_list", "fastq_list", "junc_bed_file",
+    for file_opt in ["genedb", "reference", "index", "bam", "fastq", "junc_bed_file",
                      "cage", "genedb_output", "read_assignments"]:
         if file_opt in args.__dict__ and args.__dict__[file_opt]:
             if isinstance(args.__dict__[file_opt], list):
@@ -418,17 +412,12 @@ def check_input_params(args):
         return False
     args.data_type = DATA_TYPE_ALIASES[args.data_type]
 
-    if not args.fastq and not args.fastq_list and not args.bam and not args.bam_list and not args.read_assignments and not args.yaml:
+    if not args.fastq and not args.bam and not args.read_assignments and not args.yaml:
         logger.error("No input data was provided")
         return False
         
     if args.yaml and args.illumina_bam:
         logger.error("When providing a yaml file it should include all input files, including the illumina bam file.")
-        return False
-        
-    if args.illumina_bam and (args.fastq_list or args.bam_list):
-        logger.error("Unsupported combination of list of input files and Illumina bam file."
-                     "To combine multiple experiments with short read correction please use yaml input.")
         return False
 
     args.input_data = InputDataStorage(args)
