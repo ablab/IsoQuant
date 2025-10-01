@@ -191,7 +191,7 @@ def find_bam(output_folder, label):
     return None
 
 
-def run_assignment_quality(args, config_dict):
+def     run_assignment_quality(args, config_dict):
     log.info('== Running quality assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
@@ -231,11 +231,11 @@ def run_assignment_quality(args, config_dict):
         log.error("QA exited with non-zero status: %d" % result.returncode)
         return -11
 
-    if "etalon" not in config_dict:
+    if "etalon_assignment" not in config_dict:
         return 0
 
     log.info('== Checking quality metrics ==')
-    etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
+    etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon_assignment"]))
     quality_report_dict = load_tsv_config(quality_report)
     exit_code = 0
     new_etalon_outf = open(os.path.join(output_folder, "new_assignment_etalon.tsv"), "w")

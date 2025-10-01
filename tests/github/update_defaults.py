@@ -49,7 +49,8 @@ def parse_args():
 etalon_dict = {"etalon": "gffcompare/new_gtf_etalon.tsv",
                "etalon_quantification_ref": "ref.quantification.tsv",
                "etalon_quantification_novel": "novel.quantification.tsv",
-               "etalon_quantification_gene": "gene.quantification.tsv"}
+               "etalon_quantification_gene": "gene.quantification.tsv",
+               "etalon_assignment": "new_assignment_etalon.tsv"}
 
 
 def main():
