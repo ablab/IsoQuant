@@ -4,6 +4,7 @@ from scipy.signal import find_peaks, peak_prominences, peak_widths
 from scipy import stats
 from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score, precision_recall_curve
 from xgboost import XGBClassifier
+import xgboost
 import pickle
 import matplotlib.pyplot as plt
 import logging
@@ -33,8 +34,6 @@ class PolyACounter(AbstractCounter):
         self.read_groups = read_groups
         self.transcripts = {}    
         self.gene_info = None
-        with open('src/model.pkl', 'rb') as file:
-            self.model = pickle.load(file)
 
         # get read groups
 
@@ -84,6 +83,9 @@ class PolyACounter(AbstractCounter):
 
     def dump(self):
         # compute polyA peaks, filtering etc, save to self.output_file and clean features dataframe 
+        
+        self.model = XGBClassifier()
+        self.model.load_model('src/model.json')
 
         self.df = pd.DataFrame({
             'transcript_id': self.transcripts.keys()     
@@ -95,11 +97,11 @@ class PolyACounter(AbstractCounter):
         self.df['start'] = self.df['transcript_id'].apply(lambda x: np.min(self.transcripts[x]['data']))
         self.df['max'] = self.df['transcript_id'].apply(lambda x: stats.mode(self.transcripts[x]['data'])[0])-self.df.start
         self.df['mean'] = self.df['transcript_id'].apply(lambda x: np.mean(self.transcripts[x]['data']))-self.df.start
-        self.df['median'] = self.df['transcript_id'].apply(lambda x: np.median(self.transcripts[x]['data']))-self.df.start
+        self.df['histogram'] = self.df['transcript_id'].apply(lambda x: [0]*10 + list(np.histogram(self.transcripts[x]['data'], bins = 1+max(self.transcripts[x]['data']) - min(self.transcripts[x]['data']))[0])+[0]*10)
+        self.df['mean_height'] = self.df['histogram'].apply(lambda x: np.mean(x))
         self.df['var'] = self.df['transcript_id'].apply(lambda x: np.var(self.transcripts[x]['data']))
         self.df['range'] = self.df['transcript_id'].apply(lambda x: np.max(self.transcripts[x]['data']) - np.min(self.transcripts[x]['data'])) + 1
         self.df['skew'] = self.df['transcript_id'].apply(lambda x: stats.skew(self.transcripts[x]['data']))
-        self.df['histogram'] = self.df['transcript_id'].apply(lambda x: [0]*10 + list(np.histogram(self.transcripts[x]['data'], bins = 1+max(self.transcripts[x]['data']) - min(self.transcripts[x]['data']))[0])+[0]*10)
         self.df['peak_count'] = self.df['histogram'].apply(lambda x: len(find_peaks(x, distance=10)[0]))
         self.df['peak_info'] = self.df['histogram'].apply(lambda x: find_peaks(x, distance=10, threshold=(None, None), height=(None, None))[1])
         self.df['peak_location'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in find_peaks(x, distance=10)[0]])
@@ -154,6 +156,7 @@ class PolyACounter(AbstractCounter):
 
     
         peaks['prediction'] = self.model.predict(peaks.drop(['peak_left', 'peak_right', 'histogram', 'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
+       
         peaks = peaks[peaks.prediction ==True].reset_index(drop=True)
         peaks['prediction'] = peaks['peak_location']
         self.dfResult = pd.concat([self.dfResult, peaks], axis=0).reset_index(drop=True)
@@ -176,7 +179,7 @@ class PolyACounter(AbstractCounter):
         self.dfResult['peak_heights'] = self.dfResult['peak_heights'].astype(int)
         if 'peak_info' in self.dfResult:
             self.dfResult = self.dfResult.drop('peak_info', axis = 1)
-        self.dfResult = self.dfResult.drop(['histogram', 'start', 'median', 'mean', 'var', 'range', 'skew', 'peak_prominence', 'entropy', 'peak_count', 'peak_width', 'peak_location', 'rank', 'annotated'], axis = 1)
+        self.dfResult = self.dfResult.drop(['histogram', 'start', 'mean_height', 'mean', 'var', 'range', 'skew', 'peak_prominence', 'entropy', 'peak_count', 'peak_width', 'peak_location', 'rank', 'annotated'], axis = 1)
     
     
         if not self.ignore_read_groups:
@@ -188,6 +191,7 @@ class PolyACounter(AbstractCounter):
             self.dfResult = self.dfResult[['chromosome', 'transcript_id', 'gene_id', 'peak_left', 'peak_right', 'prediction', 'peak_heights', 'counts', 'flag']]
 
         self.transcripts = {}
+        
         if self.first:
             self.dfResult.to_csv(
             self.output_prefix,
