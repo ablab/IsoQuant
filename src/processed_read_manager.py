@@ -8,7 +8,7 @@
 import logging
 from collections import defaultdict
 
-from .common import convert_chr_id_to_file_name_str
+from .file_naming import saves_file_name, multimappers_file_name
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
 from .multimap_resolver import MultimapResolver
@@ -23,7 +23,7 @@ def prepare_multimapper_dict(chr_ids, sample, multimappers_counts):
     polya_unique_assignments = 0
 
     for chr_id in chr_ids:
-        chr_dump_file = sample.out_raw_file + "_" + convert_chr_id_to_file_name_str(chr_id)
+        chr_dump_file = saves_file_name(sample.out_raw_file, chr_id)
         loader = BasicReadAssignmentLoader(chr_dump_file)
         while loader.has_next():
             for read_assignment in loader.get_next():
@@ -43,8 +43,7 @@ def resolve_multimappers(chr_ids, sample, multimapped_reads, strategy):
     multimap_resolver = MultimapResolver(strategy)
     multimap_dumper = {}
     for chr_id in chr_ids:
-        multimap_dumper[chr_id] = open(sample.out_raw_file + "_multimappers_" + convert_chr_id_to_file_name_str(chr_id),
-                                       "wb")
+        multimap_dumper[chr_id] = open(multimappers_file_name(sample.out_raw_file, chr_id), 'wb')
     total_assignments = 0
     polya_assignments = 0
 

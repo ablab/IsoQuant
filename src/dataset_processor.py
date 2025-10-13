@@ -8,7 +8,6 @@
 import glob
 import itertools
 import logging
-import os
 import shutil
 from enum import Enum, unique
 from collections import defaultdict
@@ -18,10 +17,9 @@ import gffutils
 import pysam
 from pyfaidx import Fasta
 
-from .modes import IsoQuantMode, ISOQUANT_MODES
-from .common import proper_plural_form, convert_chr_id_to_file_name_str
+from .modes import IsoQuantMode
+from .common import proper_plural_form
 from .serialization import *
-from .isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
 from .stats import EnumStats
 from .file_utils import merge_files, merge_counts
 from .input_data_storage import SampleData
@@ -33,7 +31,6 @@ from .long_read_counter import (
     create_gene_counter,
     create_transcript_counter,
 )
-from .multimap_resolver import MultimapResolver
 from .read_groups import (
     create_read_grouper,
     prepare_read_groups
@@ -46,7 +43,7 @@ from .assignment_io import (
     BasicTSVAssignmentPrinter,
     TmpFileAssignmentPrinter,
 )
-from .read_assignment_loader import BasicReadAssignmentLoader, ReadAssignmentLoader
+from .read_assignment_loader import BasicReadAssignmentLoader
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
 from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
 from .file_naming import *

@@ -113,10 +113,6 @@ def proper_plural_form(name, count):
     return str(count) + " " + name + ("" if count == 1 else "s")
 
 
-def convert_chr_id_to_file_name_str(chr_id: str):
-    return chr_id.replace('/', '_')
-
-
 # check whether genes overlap and should be processed together
 def genes_overlap(gene_db1, gene_db2):
     if gene_db1.seqid != gene_db2.seqid:
