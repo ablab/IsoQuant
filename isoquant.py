@@ -911,7 +911,7 @@ def run_pipeline(args):
 
     # run isoform assignment
     dataset_processor = DatasetProcessor(args)
-    dataset_processor.process_all_samples()
+    dataset_processor.process_all_samples(args.input_data)
 
     # aggregate counts for all samples
     if len(args.input_data.samples) > 1 and args.genedb:

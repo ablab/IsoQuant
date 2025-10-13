@@ -23,10 +23,6 @@ from .assignment_io import (
 logger = logging.getLogger('IsoQuant')
 
 
-def convert_chr_id_to_file_name_str(chr_id: str):
-    return chr_id.replace('/', '_')
-
-
 class ReadAssignmentLoader:
     def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict, filtered_read_set=None):
         logger.info("Loading read assignments from " + save_file_name)
