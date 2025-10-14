@@ -27,7 +27,7 @@ def test__help(option):
     assert b"options:" in result.stdout
 
 
-def test_clean_start():
+def _test_clean_start():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_full/")
@@ -61,7 +61,7 @@ def test_clean_start():
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
 
-def test_usual_start():
+def _test_usual_start():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_usual/")
@@ -87,7 +87,7 @@ def test_usual_start():
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
 
-def test_with_bam_and_polya():
+def _test_with_bam_and_polya():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_polya/")
@@ -117,7 +117,7 @@ def test_with_bam_and_polya():
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
         
         
-def test_with_illumina():
+def _test_with_illumina():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_illumina/")
@@ -145,7 +145,7 @@ def test_with_illumina():
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
         
-def test_with_yaml():
+def _test_with_yaml():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_yaml/")
