@@ -5,6 +5,7 @@
 ############################################################################
 
 import pytest
+import unittest
 
 import src.common as c
 
@@ -279,3 +280,96 @@ class TestListToStr:
     @pytest.mark.parametrize("element_list, sep, expected", [([1], ",", "1"), ([1, 0, 2], ":", "1:0:2")])
     def test_not_empty(self, element_list, sep, expected):
         assert c.list_to_str(element_list, sep) == expected
+
+
+class TestRangeOperations(unittest.TestCase):
+    def test_overlaps(self):
+        self.assertTrue(c.overlaps((100, 200), (150, 250)))
+        self.assertFalse(c.overlaps((100, 200), (201, 300)))
+        self.assertTrue(c.overlaps((100, 200), (200, 300)))
+
+    def test_contains(self):
+        self.assertTrue(c.contains((100, 300), (150, 250)))
+        self.assertFalse(c.contains((150, 250), (100, 300)))
+        self.assertTrue(c.contains((100, 300), (100, 300)))
+
+    def test_left_of(self):
+        self.assertTrue(c.left_of((100, 200), (201, 300)))
+        self.assertFalse(c.left_of((100, 200), (200, 300)))
+
+    def test_interval_len(self):
+        self.assertEqual(c.interval_len((100, 200)), 101)
+        self.assertEqual(c.interval_len((100, 100)), 1)
+
+    def test_intervals_total_length(self):
+        ranges = [(100, 200), (300, 400), (500, 600)]
+        expected = 101 + 101 + 101
+        self.assertEqual(c.intervals_total_length(ranges), expected)
+
+    def test_max_range(self):
+        range1 = (100, 200)
+        range2 = (150, 250)
+        result = c.max_range(range1, range2)
+        self.assertEqual(result, (100, 250))
+
+    def test_intersection_len(self):
+        self.assertEqual(c.intersection_len((100, 200), (150, 250)), 51)
+        self.assertEqual(c.intersection_len((100, 200), (300, 400)), 0)
+
+
+class TestJunctions(unittest.TestCase):
+    def test_junctions_from_blocks(self):
+        blocks = [(100, 200), (300, 400), (500, 600)]
+        junctions = c.junctions_from_blocks(blocks)
+        expected = [(201, 299), (401, 499)]
+        self.assertEqual(junctions, expected)
+
+    def test_junctions_from_single_exon(self):
+        blocks = [(100, 200)]
+        junctions = c.junctions_from_blocks(blocks)
+        self.assertEqual(junctions, [])
+
+    def test_get_exons_from_junctions(self):
+        region = (100, 600)
+        introns = [(201, 299), (401, 499)]
+        exons = c.get_exons(region, introns)
+        expected = [(100, 200), (300, 400), (500, 600)]
+        self.assertEqual(exons, expected)
+
+
+class TestProfileFunctions(unittest.TestCase):
+    def test_difference_in_present_features(self):
+        profile1 = [1, 1, 0, 1, -1]
+        profile2 = [1, -1, 0, 1, -1]
+        diff = c.difference_in_present_features(profile1, profile2)
+        self.assertEqual(diff, 1)  # Only position 1 differs
+
+    def test_has_overlapping_features(self):
+        profile1 = [1, 0, 1, 0]
+        profile2 = [0, 1, 1, 0]
+        self.assertTrue(c.has_overlapping_features(profile1, profile2))
+
+        profile3 = [1, 0, 0, 0]
+        profile4 = [0, 1, 1, 0]
+        self.assertFalse(c.has_overlapping_features(profile3, profile4))
+
+
+class TestUtilityFunctions(unittest.TestCase):
+    def test_get_first_best_empty_list(self):
+        result = c.get_first_best_from_sorted([])
+        self.assertEqual(result, [])
+
+    def test_rindex(self):
+        lst = [1, 2, 3, 2, 1]
+        self.assertEqual(c.rindex(lst, 2), 3)
+        self.assertEqual(c.rindex(lst, 1), 4)
+
+    def test_argmin(self):
+        lst = [5, 2, 8, 1, 9]
+        self.assertEqual(c.argmin(lst), 3)
+
+    def test_reverse_complement(self):
+        seq = "ATCG"
+        self.assertEqual(c.reverse_complement(seq), "CGAT")
+        seq = "AAAA"
+        self.assertEqual(c.reverse_complement(seq), "TTTT")
