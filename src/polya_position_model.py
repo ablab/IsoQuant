@@ -82,16 +82,9 @@ class PolyACounter(AbstractCounter):
       
 
     def dump(self):
-        # compute polyA peaks, filtering etc, save to self.output_file and clean features dataframe 
-        
         self.model = XGBClassifier()
         self.model.load_model('src/model.json')
-
-        self.df = pd.DataFrame({
-            'transcript_id': self.transcripts.keys()     
-        })
-
-        
+        self.df = pd.DataFrame({'transcript_id': self.transcripts.keys()})
         self.df['chromosome'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['chr'])
         self.df['gene_id'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['gene_id'])
         self.df['start'] = self.df['transcript_id'].apply(lambda x: np.min(self.transcripts[x]['data']))
@@ -109,12 +102,9 @@ class PolyACounter(AbstractCounter):
         self.df['peak_width'] = self.df['histogram'].apply(lambda x: peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.2)[0])
         self.df['peak_left'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.2)[2]])
         self.df['peak_right'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.2)[3]])
-        
         self.df['entropy'] = self.df['histogram'].apply(lambda x: stats.entropy(x))
-
         self.df['annotated'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['annotated'])
 
-        #print(self.transcripts['ENSMUST00000104060.1'])
         self.dfResult = pd.DataFrame()
         if 0 in list(self.df['peak_count']):
             self.dfResult = self.df.loc[self.df['peak_count'] == 0].copy()
@@ -122,33 +112,19 @@ class PolyACounter(AbstractCounter):
             self.dfResult['peak_location'] = self.dfResult['max']
             self.dfResult = self.dfResult.drop('max', axis = 1)
             self.df = self.df.drop(self.df[self.df.peak_count==0].index, axis = 0).reset_index(drop=True)
-            self.dfResult['peak_heights'] = self.dfResult.apply(lambda x: x.histogram[x.prediction+10], axis = 1)
-
-        
+            self.dfResult['peak_heights'] = self.dfResult.apply(lambda x: x.histogram[x.prediction+10], axis = 1)        
 
 
         keys = list(self.df.peak_info[0].keys())
-
-
         peaks = self.df.drop('max', axis = 1).copy()
         for i in keys:
             peaks[i] = peaks.peak_info.apply(lambda x: x[i])
-
         peaks = peaks.drop(['left_thresholds', 'right_thresholds'], axis = 1)
         peaks = peaks.apply(lambda x: self.sort_peaks(x), axis = 1)
         keys.remove('left_thresholds')
         keys.remove('right_thresholds')
-        
         peaks = peaks.explode(keys+['peak_location', 'rank', 'peak_prominence', 'peak_width', 'peak_left', 'peak_right']).drop(['peak_info'], axis = 1).reset_index(drop=True)
-        
-        peaks[list(peaks.drop('histogram', axis = 1).columns) + ['histogram']].to_csv(
-            "test.tsv",
-            sep="\t",
-            index=False,
-            mode="w",
-            header=True)
-        peaks[['mean', 'var', 'range', 'skew',
-            'peak_count', 'peak_location', 'entropy', 
+        peaks[['mean', 'var', 'range', 'skew', 'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence',
             'rank']] = peaks[['mean', 'var', 'range', 'skew',
             'peak_count', 'peak_location', 'entropy', 
@@ -156,56 +132,42 @@ class PolyACounter(AbstractCounter):
 
     
         peaks['prediction'] = self.model.predict(peaks.drop(['peak_left', 'peak_right', 'histogram', 'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
-       
+    
         peaks = peaks[peaks.prediction ==True].reset_index(drop=True)
         peaks['prediction'] = peaks['peak_location']
         self.dfResult = pd.concat([self.dfResult, peaks], axis=0).reset_index(drop=True)
         self.dfResult['counts'] = self.dfResult.apply(lambda x: self.counts(x), axis = 1)
-        if not self.ignore_read_groups:
 
-            self.dfResult['counts_groups'] = self.dfResult.apply(lambda x: self.counts_byGroup(x), axis = 1)
-            self.dfResult['counts_byGroup'] = self.dfResult['counts_groups'].apply(lambda x: x[0])
-            self.dfResult['peak_heights_byGroup'] = self.dfResult['counts_groups'].apply(lambda x: x[1])
-            self.dfResult.drop('counts_groups', inplace=True, axis = 1)
-
-
+        
         self.dfResult['prediction'] += self.dfResult['start']
         self.dfResult['peak_left'] += self.dfResult['start']
         self.dfResult['peak_right'] += self.dfResult['start']
-        
-
         self.dfResult['prediction'] = self.dfResult['prediction'].astype(int)
         self.dfResult['flag'] = self.dfResult.apply(lambda x: self.flag(x), axis = 1)
         self.dfResult['peak_heights'] = self.dfResult['peak_heights'].astype(int)
         if 'peak_info' in self.dfResult:
             self.dfResult = self.dfResult.drop('peak_info', axis = 1)
-        self.dfResult = self.dfResult.drop(['histogram', 'start', 'mean_height', 'mean', 'var', 'range', 'skew', 'peak_prominence', 'entropy', 'peak_count', 'peak_width', 'peak_location', 'rank', 'annotated'], axis = 1)
-    
-    
+
+
         if not self.ignore_read_groups:
+            self.dfResult['counts_groups'] = self.dfResult.apply(lambda x: self.counts_byGroup(x), axis = 1)
+            self.dfResult['counts_byGroup'] = self.dfResult['counts_groups'].apply(lambda x: x[0])
+            self.dfResult['peak_heights_byGroup'] = self.dfResult['counts_groups'].apply(lambda x: x[1])
+            self.dfResult.drop('counts_groups', inplace=True, axis = 1)
             self.dfResult = self.dfResult[['chromosome', 'transcript_id', 'gene_id', 'peak_left', 'peak_right', 'prediction', 'peak_heights', 'peak_heights_byGroup', 'counts', 'counts_byGroup', 'flag']]
             self.dfResult['group_id'] = [self.ordered_groups for _ in range(len(self.dfResult))]
             self.dfResult = self.dfResult.explode(['peak_heights_byGroup', 'counts_byGroup', 'group_id']).reset_index(drop=True)
-
         else:
             self.dfResult = self.dfResult[['chromosome', 'transcript_id', 'gene_id', 'peak_left', 'peak_right', 'prediction', 'peak_heights', 'counts', 'flag']]
 
+        
         self.transcripts = {}
         
         if self.first:
-            self.dfResult.to_csv(
-            self.output_prefix,
-            sep="\t",
-            index=False,
-            mode="w",
-            header=True)
+            self.dfResult.to_csv(self.output_prefix, sep="\t", index=False, mode="w", header=True)
         else:
-            self.dfResult.to_csv(
-            self.output_prefix,
-            sep="\t",
-            index=False,
-            mode="a",
-            header=False)
+            self.dfResult.to_csv(self.output_prefix, sep="\t", index=False, mode="a", header=False)
+        
         self.first = False
     
     def finalize(self, args=None):
