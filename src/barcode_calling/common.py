@@ -87,6 +87,35 @@ def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_
     return best_barcode, best_match[0], best_match[1], best_match[2]
 
 
+def find_candidate_with_max_score_ssw_var_len(barcode_matches: list, read_sequence, min_score=14):
+    best_match = [0, 0, 0, 0]
+    best_barcode = None
+
+    align_mgr = AlignmentMgr(match_score=1, mismatch_penalty=1)
+    align_mgr.set_reference(read_sequence)
+    for barcode_match in barcode_matches:
+        barcode = barcode_match[0]
+        align_mgr.set_read(barcode)
+        alignment = align_mgr.align(gap_open=1, gap_extension=1)
+        if alignment.optimal_score < min_score:
+            continue
+
+        ed = len(barcode) - alignment.optimal_score
+        if alignment.optimal_score > best_match[0]:
+            best_barcode = barcode
+            best_match[0] = alignment.optimal_score
+            best_match[1] = alignment.reference_start - alignment.read_start
+            best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
+            best_match[3] = ed
+        elif alignment.optimal_score == best_match[0] and ed < best_match[3]:
+            best_barcode = barcode
+            best_match[1] = alignment.reference_start - alignment.read_start
+            best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
+            best_match[3] = ed
+
+    return best_barcode, best_match[0], best_match[1], best_match[2]
+
+
 def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences: list,
                            min_score=0, start_delta=-1, end_delta=-1):
     pattern_index = None
