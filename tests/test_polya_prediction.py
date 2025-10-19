@@ -46,8 +46,11 @@ class testPolyACounter(unittest.TestCase):
         x = pd.Series({
             "transcript_id": "id1",
             "peak_location": 6,
-            "histogram": [0]*10 + [0, 1, 2, 3, 10, 20, 30, 5, 1, 0] + [0]*10
+            "histogram": [0]*10 + [0, 1, 2, 3, 10, 20, 30, 5, 1, 0] + [0]*10,
+            "peak_left": 1,
+            "peak_right": 8
         })
+        
         counter = self.counter()
         result = counter.counts(x)
 
@@ -64,14 +67,16 @@ class testPolyACounter(unittest.TestCase):
             1: [7, 7, 8, 5, 7, 6]
         }
 
-        x = pd.Series({"transcript_id": "id1", "peak_location": 6})
+        x = pd.Series({"transcript_id": "id1", "peak_location": 6,
+            "peak_left": 0,
+            "peak_right": 7})
         counts, heights = counter.counts_byGroup(x)
 
         assert isinstance(counts, list)
         assert isinstance(heights, list)
         assert all(isinstance(c, int) for c in counts)
         assert all(isinstance(h, int) for h in heights)
-        assert counts == [8, 6]
+        assert counts == [9, 6]
         assert heights == [2, 3]
 
     def test_sort_peaks(self):
@@ -126,22 +131,22 @@ class testPolyACounter(unittest.TestCase):
 
     def test_dump(self):
         counter = self.counter()
-        transcripts = {'ENSMUST00000001712.7':  {'chr': "chr10", 'gene_id': "ENSMUSG00000020196.10", 'data': [10, 12, 12, 15, 15 ,15, 15, 15, 16, 19, 20, 21, 21, 21, 21, 21], 0: [10, 12, 15, 15 ,15, 16, 21], 1:[ 12, 15, 15, 19, 20, 21, 21, 21, 21], 'annotated': 21}}
+        transcripts = {'ENSMUST00000001712.7':  {'chr': "chr10", 'gene_id': "ENSMUSG00000020196.10", 'data': [10, 12, 12, 15, 15 ,15, 15, 15, 16, 19, 20, 21, 21, 21, 21, 21, 21, 21, 21, 21], 0: [10, 12, 15, 15 ,15, 16, 21], 1:[ 12, 15, 15, 19, 20, 21, 21, 21, 21, 21, 21, 21, 21], 'annotated': 21}}
 
-        counter.transcripts = transcripts        
+        counter.transcripts = transcripts   
+    
         counter.dump()
         df = counter.dfResult 
 
         pd.set_option('display.max_columns', None)
-        print(df)
         assert df.loc[0]['chromosome'] == 'chr10'
         assert df.loc[0]['transcript_id'] == 'ENSMUST00000001712.7'
         assert df.loc[0]['gene_id'] == 'ENSMUSG00000020196.10'
         for i in df['prediction']:
             assert (i <= np.max(transcripts['ENSMUST00000001712.7']['data']) and i >= np.min(transcripts['ENSMUST00000001712.7']['data']))
-        assert df.loc[0]['counts'] == 8
-        assert df.loc[0]['counts_byGroup'] == 2
-        assert df.loc[1]['counts_byGroup'] == 6
+        assert df.loc[0]['counts'] == 11
+        assert df.loc[0]['counts_byGroup'] == 1
+        assert df.loc[1]['counts_byGroup'] == 10
         assert df.loc[0]['flag'] == 'Known'
         assert df.loc[0]['group_id'] == 'RG1'
         assert df.loc[1]['group_id'] == 'RG2'
