@@ -105,6 +105,8 @@ def parse_args(cmd_args=None, namespace=None):
                                      "e.g. with official annotations, such as GENCODE; "
                                      "speeds up gene database conversion")
     add_additional_option_to_group(ref_args_group, "--discard_chr", nargs="+", help="chromosome IDs to ignore", type=str, default=[])
+    add_additional_option_to_group(ref_args_group, "--process_only_chr", nargs="+", help="chromosome IDs to process",
+                                   type=str, default=None)
     add_additional_option_to_group(ref_args_group, "--index", help="genome index for specified aligner (optional)",
                                    type=str)
 
@@ -448,6 +450,10 @@ def check_input_params(args):
 
     if args.no_secondary:
         logger.info("--no_secondary option has no effect and will be deprecated, secondary alignments are not used by default")
+
+    if args.process_only_chr and args.discard_chr:
+        args.discard_chr = []
+        logger.warning("--discard_chr has not effect when --process_only_chr is set and will be ignored")
         
     check_input_files(args)
     return True

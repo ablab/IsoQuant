@@ -385,6 +385,8 @@ class DatasetProcessor:
         logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
         self.chr_ids = self.get_chromosome_ids(sample)
+        logger.info("Total number of chromosomes to be processed %d: %s " %
+                    (len(self.chr_ids), ", ".join(map(lambda x: str(x), sorted(self.chr_ids)))))
         self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
 
         self.all_read_groups = set()
@@ -438,17 +440,23 @@ class DatasetProcessor:
                 os.remove(f)
         logger.info("Processed experiment " + sample.prefix)
 
+    def keep_only_defined_chromosomes(self, chr_set: set):
+        if self.args.process_only_chr:
+            chr_set.intersection_update(self.args.process_only_chr)
+        elif self.args.discard_chr:
+            chr_set.difference_update(self.args.discard_chr)
+
+        return chr_set
+
     def get_chromosome_ids(self, sample):
         genome_chromosomes = set(self.reference_record_dict.keys())
-        for chr_id in self.args.discard_chr:
-            genome_chromosomes.discard(chr_id)
+        genome_chromosomes = self.keep_only_defined_chromosomes(genome_chromosomes)
 
         bam_chromosomes = set()
         for bam_file in list(map(lambda x: x[0], sample.file_list)):
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             bam_chromosomes.update(bam.references)
-        for chr_id in self.args.discard_chr:
-            bam_chromosomes.discard(chr_id)
+        bam_chromosomes = self.keep_only_defined_chromosomes(bam_chromosomes)
 
         bam_genome_overlap = genome_chromosomes.intersection(bam_chromosomes)
         if len(bam_genome_overlap) != len(genome_chromosomes) or len(bam_genome_overlap) != len(bam_chromosomes):
@@ -472,8 +480,7 @@ class DatasetProcessor:
         gffutils_db = gffutils.FeatureDB(self.args.genedb)
         for feature in gffutils_db.all_features():
             gene_annotation_chromosomes.add(feature.seqid)
-        for chr_id in self.args.discard_chr:
-            gene_annotation_chromosomes.discard(chr_id)
+        gene_annotation_chromosomes = self.keep_only_defined_chromosomes(gene_annotation_chromosomes)
 
         common_overlap = gene_annotation_chromosomes.intersection(bam_genome_overlap)
         if len(common_overlap) != len(gene_annotation_chromosomes):
