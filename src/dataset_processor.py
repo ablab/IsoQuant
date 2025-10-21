@@ -418,7 +418,7 @@ class DatasetProcessor:
         if (polya_fraction < self.args.low_polya_percentage_threshold and
                 self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
-                           "If you aim to construct transcript models, consider using --polya_requirement option.")
+                           "If you aim to construct transcript models, consider using --polya_trimmed and --polya_requirement options.")
 
         self.args.requires_polya_for_construction = set_polya_requirement_strategy(
             polya_fraction >= self.args.polya_percentage_threshold,

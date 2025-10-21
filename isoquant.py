@@ -139,7 +139,7 @@ def parse_args(cmd_args=None, namespace=None):
                         help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
     input_args_group.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
-    input_args_group.add_argument('--polya_trimmed', default=None, type=str,
+    input_args_group.add_argument('--polya_trimmed', default=PolyATrimmed.none.name, type=str,
                                   choices=[e.name for e in PolyATrimmed],
                                   help="define reads which had polyA tail trimmed")
     input_args_group.add_argument('--fl_data', action='store_true', default=False,
@@ -722,6 +722,7 @@ def set_model_construction_options(args):
     args.require_monointronic_polya = strategy.require_monointronic_polya
     args.require_monoexonic_polya = strategy.require_monoexonic_polya
     args.polya_requirement_strategy = PolyAUsageStrategies[args.polya_requirement]
+    args.polya_trimmed = PolyATrimmed[args.polya_trimmed]
     args.report_canonical_strategy = StrandnessReportingLevel[args.report_canonical]
     if args.report_canonical_strategy == StrandnessReportingLevel.auto:
         args.report_canonical_strategy = strategy.report_canonical
