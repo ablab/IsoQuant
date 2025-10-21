@@ -48,7 +48,10 @@ class TestAlignmentInfo:
         assert alignment_info.aligned_pairs is None
         assert alignment_info.aligned_pairs_start_index is None
         assert alignment_info.aligned_pairs_end_index is None
-        assert alignment_info.polya_info is None
+        assert alignment_info.polya_info.external_polyt_pos == -1
+        assert alignment_info.polya_info.external_polya_pos == -1
+        assert alignment_info.polya_info.internal_polya_pos == -1
+        assert alignment_info.polya_info.internal_polyt_pos == -1
         assert alignment_info.combined_profile is None
         assert alignment_info.exons_changed is False
         assert len(alignment_info.cage_hits) == 0
