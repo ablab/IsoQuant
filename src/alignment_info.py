@@ -8,6 +8,7 @@
 import logging
 
 from .common import get_read_blocks
+from .polya_finder import PolyAInfo
 from .polya_verification import shift_polya, shift_polyt
 
 logger = logging.getLogger('IsoQuant')
@@ -28,7 +29,7 @@ class AlignmentInfo:
             return
         self.read_start = self.read_exons[0][0]
         self.read_end = self.read_exons[-1][1]
-        self.polya_info = None
+        self.polya_info = PolyAInfo(-1, -1, -1, -1)
         self.exons_changed = False
         self.cage_hits = []
         self.combined_profile = None

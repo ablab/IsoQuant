@@ -35,6 +35,7 @@ from src.read_mapper import (
     DataSetReadMapper
 )
 from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
+from src.alignment_processor import PolyATrimmed
 from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
@@ -138,6 +139,9 @@ def parse_args(cmd_args=None, namespace=None):
                         help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
     input_args_group.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
                         ", ".join(SUPPORTED_STRANDEDNESS), default="none")
+    input_args_group.add_argument('--polya_trimmed', default=None, type=str,
+                                  choices=[e.name for e in PolyATrimmed],
+                                  help="define reads which had polyA tail trimmed")
     input_args_group.add_argument('--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 

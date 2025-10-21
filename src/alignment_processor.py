@@ -34,6 +34,14 @@ logger = logging.getLogger('IsoQuant')
 
 
 @unique
+class PolyATrimmed(Enum):
+    none = 1
+    all = 2
+    stranded = 3
+    # file = 3
+
+
+@unique
 class AlignmentType(Enum):
     primary = 1
     secondary = 2
@@ -360,32 +368,34 @@ class AlignmentCollector:
             if skip_read_fraction > 1 and counter % skip_read_fraction != 0:
                 continue
 
-            alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
-            # if self.params.cage:
-            #    alignment_info.add_cage_info(self.cage_finder)
+            if self.params.polya_trimmed == PolyATrimmed.none:
+                alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
 
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic,
                                              IsoformMatch(MatchClassification.intergenic))
 
             if alignment_info.exons_changed:
                 read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
-            read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
-                                           alignment_info.polya_info.external_polyt_pos != -1 or
-                                           alignment_info.polya_info.internal_polya_pos != -1 or
-                                           alignment_info.polya_info.internal_polyt_pos != -1)
+
             read_assignment.polya_info = alignment_info.polya_info
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.genomic_region = region
             read_assignment.exons = alignment_info.read_exons
             read_assignment.corrected_exons = corrector.correct_read(alignment_info)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
-
             read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             read_assignment.chr_id = self.chr_id
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
+
+            self.add_artificial_polya(read_assignment)
+            read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
+                                           alignment_info.polya_info.external_polyt_pos != -1 or
+                                           alignment_info.polya_info.internal_polya_pos != -1 or
+                                           alignment_info.polya_info.internal_polyt_pos != -1)
+
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
             yield read_assignment
 
@@ -429,10 +439,7 @@ class AlignmentCollector:
 
             if alignment_info.exons_changed:
                 read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
-            read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
-                                           alignment_info.polya_info.external_polyt_pos != -1 or
-                                           alignment_info.polya_info.internal_polya_pos != -1 or
-                                           alignment_info.polya_info.internal_polyt_pos != -1)
+
             read_assignment.polya_info = alignment_info.polya_info
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.genomic_region = region
@@ -446,10 +453,15 @@ class AlignmentCollector:
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             AlignmentCollector.check_antisense(read_assignment)
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
-
             read_assignment.chr_id = gene_info.chr_id
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
+
+            self.add_artificial_polya(read_assignment)
+            read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
+                                           alignment_info.polya_info.external_polyt_pos != -1 or
+                                           alignment_info.polya_info.internal_polya_pos != -1 or
+                                           alignment_info.polya_info.internal_polyt_pos != -1)
 
             if self.params.count_exons:
                 read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
@@ -518,6 +530,18 @@ class AlignmentCollector:
         if self.params.needs_reference:
             gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
         return gene_info
+
+    def add_artificial_polya(self, read_assignment):
+        if self.params.polya_trimmed == PolyATrimmed.stranded:
+            if read_assignment.strand == '+':
+                read_assignment.polya_info.external_polya_pos = read_assignment.corrected_exons[-1][1] + 1
+            elif read_assignment.strand == '-':
+                read_assignment.polya_info.external_polyt_pos = read_assignment.corrected_exons[0][0] - 1
+        elif self.params.polya_trimmed == PolyATrimmed.all:
+            if read_assignment.mapped_strand == '+':
+                read_assignment.polya_info.external_polya_pos = read_assignment.corrected_exons[-1][1] + 1
+            elif read_assignment.mapped_strand == '-':
+                read_assignment.polya_info.external_polyt_pos = read_assignment.corrected_exons[0][0] - 1
 
     @staticmethod
     def split_coverage_regions(genomic_region, alignment_storage):
