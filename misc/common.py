@@ -32,6 +32,18 @@ class IsoQuantSeparator:
         return TranscriptType.undefined
 
 
+class IsaToolsSeparator:
+    def __init__(self, _):
+        pass
+
+    def separate(self, l):
+        if l.find("_Gene") != -1 or l.find("_Tr") != -1:
+            return TranscriptType.novel
+        elif l.find('transcript_id "SIRV') != -1 or l.find('transcript_id "ENS') != -1:
+            return TranscriptType.known
+        return TranscriptType.undefine
+
+
 class StringTieSeparator:
     def __init__(self, _):
         pass
@@ -102,7 +114,8 @@ SEPARATE_FUNCTORS = {'isoquant':IsoQuantSeparator,
                      'flair':TranscriptIdSeparator,
                      'talon':TranscriptIdSeparator,
                      'bambu':CountTranscriptIdSeparator,
-                     'flames':FlamesSeparator}
+                     'flames':FlamesSeparator,
+                     'isatools':IsaToolsSeparator}
 
 
 def split_gtf(ingtf_path, seaprator, out_full_path, out_known_path, out_novel_path):
