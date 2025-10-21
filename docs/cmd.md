@@ -68,26 +68,21 @@ Each experiment is represented as set of parameters (e.g. in curly brackets):
 All paths should be either absolute or relative to the YAML file.
 See more in [examples](examples.md).
 
-### Providing input reads via dataset description file (deprecated since 3.4)
-
-`--bam_list` (_deprecated since 3.4_)
-    Text file with list of BAM files, one file per line. Each file must be sorted and indexed.
-Leave empty line or experiment name starting with # between the experiments.
-For each experiment IsoQuant will generate a individual GTF and count tables.
-You may also give a label for each file specifying it after a colon (e.g. `/PATH/TO/file.bam:replicate1`).
-
-`--fastq_list` (_deprecated since 3.4_)
-    Text file with list of FASTQ/FASTA files (can be gzipped),  one file per line.
-Leave empty line or experiment name starting with # between the experiments.
-For each experiment IsoQuant will generate a individual GTF and count tables.
-You may also give a label for each file specifying it after a colon (e.g. `/PATH/TO/file.fastq:replicate1`).
-
 ### Other input options:
 `--stranded`
     Reads strandness type, supported values are: `forward`, `reverse`, `none`.
 
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
+
+`--polya_trimmed`
+    Indicate that reads were poly-A trimmed. Possible values are:
+- `none`: poly-A tails were not trimmed and will be detected automatically based on reads sequences (default);
+- `stranded`: reads that have an assigned strand (based on splice sites and assigned gene) will be marked 
+as having a poly-A tail on the 3' end;
+- `all`: all reads will be considered to be poly-A-trimmed and will be marked as 
+having a poly-A tail on the 3'; read direction will be based on the alignment strand flag. 
+Thus, when using this options, make sure read sequences are properly oriented, i.e. match the original mRNA strand.
 
 `--prefix` or `-p`
     Prefix for all output files and sub-folder name. `OUT` if not set.
@@ -253,8 +248,11 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 `--no_gtf_check`
     Do not perform input GTF checks.
 
+`--process_only_chr`
+    A list of chromosomes to process during the analysis. All other chromosomes will be ignored.
+
 `--discard_chr`
-    A list of chromosomes to skip during the analysis.
+    A list of chromosomes to skip during the analysis. Has no effect when `--process_only_chr` is used.
 
 `--delta`
     Delta for inexact splice junction comparison, chosen automatically based on data type (e.g. 4bp for PacBio, 6pb for ONT).
