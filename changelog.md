@@ -2,9 +2,11 @@
 
 ## IsoQuant 3.10.0, 21 October 2025
 
-- New option `--polya_trimmed` to indicate polyA-trimmed reads (thanks @hmutpw for the suggestion [#342](https://github.com/ablab/IsoQuant/issues/342)).
-- 
-- New option `--process_only_chr` to process a specific list of chromosomes.
+- New `--unmapped_bam` option for providing unmapped BAM files typical for PacBio CSS data.
+
+- New `--polya_trimmed` option to indicate polyA-trimmed reads (thanks @hmutpw for the suggestion [#342](https://github.com/ablab/IsoQuant/issues/342)).
+
+- New `--process_only_chr` option to process a specific list of chromosomes.
 
 
 ## IsoQuant 3.9.0, 1 October 2025
