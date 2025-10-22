@@ -83,6 +83,7 @@ as having a poly-A tail on the 3' end;
 - `all`: all reads will be considered to be poly-A-trimmed and will be marked as 
 having a poly-A tail on the 3'; read direction will be based on the alignment strand flag. 
 Thus, when using this options, make sure read sequences are properly oriented, i.e. match the original mRNA strand.
+Use this option at your own risk.
 
 `--prefix` or `-p`
     Prefix for all output files and sub-folder name. `OUT` if not set.
