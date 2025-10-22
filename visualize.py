@@ -1,3 +1,10 @@
+
+############################################################################
+# Copyright (c) 2024-2025 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 #!/usr/bin/env python3
 
 from src.post_process import OutputConfig, DictionaryBuilder

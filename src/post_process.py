@@ -1,3 +1,10 @@
+
+############################################################################
+# Copyright (c) 2022-2025 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 import csv
 import os
 import pickle
