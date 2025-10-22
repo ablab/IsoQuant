@@ -4,6 +4,7 @@ To run IsoQuant, you should provide:
 
 * Long RNA reads (PacBio or Oxford Nanopore) in one of the following formats:
   * FASTA/FASTQ (can be gzipped);
+  * Unmapped BAM files (typical for PacBio CCS reads);
   * Sorted and indexed BAM;
 * Reference sequence in FASTA format (can be gzipped);
 * _Optionally_, you may provide a reference gene annotation in gffutils database or GTF/GFF format (can be gzipped).
@@ -23,7 +24,8 @@ The ways of providing input files are described below.
 
 ## Specifying input data via command line
 
-Two main options are `--fastq` and `--bam` (see description below). Both options accept one or multiple files separated by space.
+The main options are `--fastq`, `--unmapped_bam` and `--bam` (see description below). 
+These options accept one or multiple files separated by space.
 All provided files are treated as a single experiment, which means a single combined GTF will
 be generated. If multiple files are provided, IsoQuant will compute tables with each column
 corresponding to an individual file (per-sample counts).
@@ -48,7 +50,7 @@ In this option, BAM files with short reads for correction can be provided for ea
 
 The YAML file contains a list of experiments (e.g. in square brackets).
 The first entry in the list should be the type of files the experiments contain, written as `data format: `
-followed by the type in quotation marks. The type can be either `fastq` or `bam`.
+followed by the type in quotation marks. The type can be either `fastq`, `bam` or `unmapped_bam`.
 
 Each experiment is represented as set of parameters (e.g. in curly brackets).
 Each experiment must have a name and a list of long-read files in the specified format.
@@ -93,6 +95,6 @@ Output sub-folders will be named `Experiment1` and `Experiment2`.
 Both sub-folders will contain predicted transcript models and abundance tables.
 Abundance table for `Experiment2` with have columns "Sample1" and "Sample2".
 
-Note, that  `--bam`, `--fastq` and `--label` options are not compatible with `--yaml`.
+Note, that  `--bam`, `--unmapped_bam`, `--fastq` and `--label` options are not compatible with `--yaml`.
 See more in [examples](examples.md).
 

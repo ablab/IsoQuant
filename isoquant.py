@@ -41,7 +41,7 @@ from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
-from src.input_data_storage import InputDataStorage
+from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
 from detect_barcodes import process_single_thread, process_in_parallel
@@ -122,6 +122,8 @@ def parse_args(cmd_args=None, namespace=None):
     input_args.add_argument('--fastq', nargs='+', type=str,
                             help='input FASTQ/FASTA file(s) with reads, each file will be treated as a separate sample; '
                                  'reference genome should be provided when using reads as input')
+    input_args.add_argument('--unmapped_bam', nargs='+', type=str,
+                            help='unmapped BAM file(s), each file will be treated as a separate sample')
     input_args.add_argument('--yaml', type=str, help='yaml file containing all input files, one entry per sample'
                                                      ', check readme for format info')
 
@@ -431,7 +433,7 @@ def check_input_params(args):
         return False
     args.data_type = DATA_TYPE_ALIASES[args.data_type]
 
-    if not args.fastq and not args.bam and not args.read_assignments and not args.yaml:
+    if not args.fastq and not args.bam and not args.unmapped_bam and not args.read_assignments and not args.yaml:
         logger.error("No input data was provided")
         return False
 
@@ -444,8 +446,8 @@ def check_input_params(args):
         logger.error(" Unsupported aligner " + args.aligner + ", choose one of: " + " ".join(SUPPORTED_ALIGNERS))
         return False
 
-    if args.run_aligner_only and args.input_data.input_type == "bam":
-        logger.error("Do not use BAM files with --run_aligner_only option.")
+    if args.run_aligner_only and not args.input_data.input_type.needs_mapping():
+        logger.error("Data type %s cannot be mapped and thus incompatible with --run_aligner_only option." % args.input_data.input_type.name)
         return False
     if args.stranded not in SUPPORTED_STRANDEDNESS:
         logger.error("Unsupported strandness " + args.stranded + ", choose one of: " + " ".join(SUPPORTED_STRANDEDNESS))
@@ -486,7 +488,7 @@ def check_input_files(args):
     for sample in args.input_data.samples:
         for lib in sample.file_list:
             for in_file in lib:
-                if args.input_data.input_type == "save":
+                if args.input_data.input_type == InputDataType.save:
                     saves = glob.glob(in_file + "*")
                     if not saves:
                         logger.critical("Input files " + in_file + "* do not exist")
@@ -494,7 +496,7 @@ def check_input_files(args):
                 if not os.path.isfile(in_file):
                     logger.critical("Input file " + in_file + " does not exist")
                     exit(-1)
-                if args.input_data.input_type == "bam":
+                if args.input_data.input_type == InputDataType.bam:
                     bamfile_in = pysam.AlignmentFile(in_file, "rb")
                     if not bamfile_in.has_index():
                         logger.critical("BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
@@ -899,7 +901,7 @@ def run_pipeline(args):
         args.genedb = convert_gtf_to_db(args)
 
     # map reads if fastqs are provided
-    if args.input_data.input_type == "fastq":
+    if args.input_data.input_type.needs_mapping():
         # substitute input reads with bams
         dataset_mapper = DataSetReadMapper(args)
         args.index = dataset_mapper.index_fname

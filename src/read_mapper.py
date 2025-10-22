@@ -16,7 +16,7 @@ import gzip
 
 from .common import get_path_to_program
 from .gtf2db import convert_db_to_gtf, db2bed
-from .input_data_storage import SampleData
+from .input_data_storage import SampleData, InputDataType
 
 logger = logging.getLogger('IsoQuant')
 
@@ -66,7 +66,7 @@ class DataSetReadMapper:
                 for fastq_file in fastq_files:
                     bam_file = None if args.clean_start else find_stored_alignment(fastq_file, annotation_file, args)
                     if bam_file is None:
-                        bam_file = align_fasta(self.aligner, fastq_file, annotation_file, args, sample.prefix, sample.aux_dir)
+                        bam_file = align_reads(self.aligner, fastq_file, annotation_file, args, sample.prefix, sample.aux_dir, args.input_data.input_type)
                         store_alignment(bam_file, fastq_file, annotation_file, args)
                     bam_files.append([bam_file])
                     if fastq_file in sample.readable_names_dict:
@@ -74,7 +74,7 @@ class DataSetReadMapper:
             samples.append(SampleData(bam_files, sample.prefix, sample.out_dir, readable_names_dict, sample.illumina_bam, sample.barcoded_reads))
 
         args.input_data.samples = samples
-        args.input_data.input_type = "bam"
+        args.input_data.input_type = InputDataType.bam
         return args.input_data
 
 
@@ -300,20 +300,20 @@ def find_annotation(aligner, args):
         return os.path.abspath(bed_fname)
 
 
-def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
-    fastq_path = os.path.abspath(fastq_file)
-    fname, ext = os.path.splitext(fastq_path.split('/')[-1])
+def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data_type=InputDataType.fastq):
+    reads_path = os.path.abspath(reads_file)
+    fname, ext = os.path.splitext(reads_path.split('/')[-1])
     alignment_prefix = str(os.path.join(out_dir, label))
 
     prefix_name = fname
-    if prefix_name.endswith(".fq") or prefix_name.endswith(".fastq") or prefix_name.endswith(".fa") or prefix_name.endswith(".fasta"):
+    if prefix_name.endswith(".fq") or prefix_name.endswith(".fastq") or prefix_name.endswith(".fa") or prefix_name.endswith(".fasta") or prefix_name.endswith(".bam"):
         prefix_name, _ = os.path.splitext(prefix_name)
     hash_annotation = "_" + ("%x" % hash(annotation_file))[2:8] if annotation_file else ""
     hash_index = ("%x" % hash(args.index))[2:8]
-    hash_fastq = ("%x" % hash(fastq_path))[2:8]
+    hash_fastq = ("%x" % hash(reads_path))[2:8]
 
     alignment_bam_path = str(os.path.join(out_dir, label + '_' + prefix_name + '_%s_%s%s.bam' % (hash_fastq, hash_index, hash_annotation)))
-    logger.info("Aligning %s to the reference, alignments will be saved to %s" % (os.path.abspath(fastq_path),
+    logger.info("Aligning %s to the reference, alignments will be saved to %s" % (os.path.abspath(reads_path),
                                                                                   os.path.abspath(alignment_bam_path)))
     alignment_sam_path = alignment_bam_path[:-4] + '.sam'
 
@@ -321,13 +321,16 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
     log_file = open(log_fpath, "a")
 
     if aligner == "starlong":
+        if data_type != InputDataType.fastq:
+            logger.critical("Input data type must be FASTA/FASTQ when using star aligner, unmapped BAM is not supported yet")
+            exit(-1)
         star_path = get_aligner('STARlong')
-        zcat_option = ['--readFilesCommand', 'zcat'] if ext.endswith('gz') else []
+        zcat_option = ['--readFilesCommand', 'zcat'] if (ext.endswith('gz') or ext.endswith('gzip')) else []
         # command = '{star} --runThreadN 16 --genomeDir {ref_index_name}  --readFilesIn {transcripts}  --outSAMtype SAM
         #  --outFileNamePrefix {alignment_out}'.format(star=star_path, ref_index_name=star_index, transcripts=short_id_contigs_name, alignment_out=alignment_sam_path)
         annotation_opts = [] if not annotation_file else ['--sjdbGTFfile', annotation_file, '--sjdbOverhang', '140']
         command = ([star_path, '--runThreadN', str(args.threads), '--genomeDir', args.index, '--readFilesIn',
-                   fastq_path, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--seedPerReadNmax', '1000000',
+                   reads_path, '--outSAMtype', 'BAM', 'SortedByCoordinate', '--seedPerReadNmax', '1000000',
                    '--outBAMsortingThreadN', str(args.threads), '--outSAMattributes', 'NH', 'HI', 'NM', 'MD'] +
                    annotation_opts + zcat_option + ['--outFileNamePrefix', alignment_prefix])
         if args.mapping_options:
@@ -349,8 +352,15 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
             additional_options.append("--junc-bed")
             additional_options.append(annotation_file)
 
-        command = [minimap2_path, args.index, fastq_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
-                   '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
+        if data_type == InputDataType.fastq:
+            command = [minimap2_path, args.index, reads_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
+                       '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
+        elif data_type == InputDataType.unmapped_bam:
+            command = [minimap2_path, args.index, '-', '-a', '-x', MINIMAP_PRESET[args.data_type],
+                       '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
+        else:
+            logger.critical("Data type %s is not compatible with minimap2" % data_type.name)
+            exit(-1)
 
         if args.mapping_options:
             command += args.mapping_options.split()
@@ -361,9 +371,18 @@ def align_fasta(aligner, fastq_file, annotation_file, args, label, out_dir):
             minimap_version = version_run.stdout.decode('UTF-8').strip()
 
         logger.info("Running minimap2 version %s (takes a while)" % minimap_version)
-        if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
-            logger.critical("Minimap2 finished with errors! See " + log_fpath)
-            exit(-1)
+        if data_type == InputDataType.fastq:
+            if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
+                logger.critical("Minimap2 finished with errors! See " + log_fpath)
+                exit(-1)
+        elif data_type == InputDataType.unmapped_bam:
+            bam_open = subprocess.Popen(['samtools', 'fastq', reads_path], stdout=subprocess.PIPE, stderr=log_file)
+            minimap_run = subprocess.run(command, stdin=bam_open.stdout, stdout=open(alignment_sam_path, "w"), stderr=log_file)
+
+            if minimap_run.returncode != 0:
+                logger.critical("Minimap2 finished with errors! See " + log_fpath)
+                exit(-1)
+
         logger.info("Sorting alignments")
         try:
             pysam.sort('-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path)

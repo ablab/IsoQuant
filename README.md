@@ -39,7 +39,8 @@ IsoQuant support all kinds of long RNA data:
 * ONT dRNA / ONT cDNA
 * Assembled / corrected transcript sequences
 
-Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
+Reads must be provided in FASTQ/FASTA format (can be gzipped) or unmapped BAM format. 
+If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
 IsoQuant expect reads to contain polyA tails. For more reliable transcript model construction do not trim polyA tails.
 
 IsoQuant can also take aligned Illumina reads to correct long-read spliced alignments. However, short reads are _not_
