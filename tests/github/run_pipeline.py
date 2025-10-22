@@ -119,6 +119,10 @@ def run_isoquant(args, config_dict):
             isoquant_command_list.append("--bam")
             bam = fix_path(config_file, config_dict["bam"])
             isoquant_command_list.append(bam)
+        elif "ubam" in config_dict:
+            reads = fix_path(config_file, config_dict["ubam"])
+            isoquant_command_list.append("--unmapped_bam")
+            isoquant_command_list.append(reads)
         elif "reads" in config_dict:
             reads = fix_path(config_file, config_dict["reads"])
             isoquant_command_list.append("--fastq")
