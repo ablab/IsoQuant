@@ -138,7 +138,7 @@ class BarcodeCaller:
         elif low_ext in ['.fa', '.fasta']:
             self._process_fastx(SeqIO.parse(handle, "fasta"))
         elif low_ext in ['.bam', '.sam']:
-            self._process_bam(pysam.AlignmentFile(input_file, "rb"))
+            self._process_bam(pysam.AlignmentFile(input_file, "rb", check_sq=False))
         else:
             logger.error("Unknown file format " + input_file)
 
@@ -304,7 +304,7 @@ def process_in_parallel(args):
     elif low_ext in ['.fa', '.fasta']:
         read_chunk_gen = fastx_file_chunk_reader(SeqIO.parse(handle, "fasta"))
     elif low_ext in ['.bam', '.sam']:
-        read_chunk_gen = bam_file_chunk_reader(pysam.AlignmentFile(input_file, "rb"))
+        read_chunk_gen = bam_file_chunk_reader(pysam.AlignmentFile(input_file, "rb", check_sq=False))
     else:
         logger.error("Unknown file format " + input_file)
         exit(-1)
