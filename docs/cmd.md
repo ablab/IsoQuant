@@ -48,6 +48,9 @@ which dramatically speeds up gene database conversion (see more [here](https://d
     Input FASTQ/FASTA file(s), can be gzipped;  a single GTF will be generated for all files. If multiple files are provided,
 expression tables with "per-file" columns will be computed. See more about [input data](input.md).
 
+`--unmapped_bam`
+    Unmapped BAM file(s); a single GTF will be generated for all files. If multiple files are provided,
+expression tables with "per-file" columns will be computed. See more about [input data](input.md).
 
 `--bam`
     Sorted and indexed BAM file(s); a single GTF will be generated for all files. If multiple files are provided,

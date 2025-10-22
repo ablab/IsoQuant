@@ -9,11 +9,24 @@ import os
 import logging
 import yaml
 from collections import defaultdict
+from enum import Enum, unique
 
 from .file_utils import normalize_path
 
 
 logger = logging.getLogger('IsoQuant')
+
+
+@unique
+class InputDataType(Enum):
+    undefined = 0
+    fastq = 1
+    bam = 2
+    unmapped_bam = 3
+    save = 10
+
+    def needs_mapping(self):
+        return self in [InputDataType.fastq, InputDataType.unmapped_bam]
 
 
 class SampleData:
@@ -58,7 +71,7 @@ class InputDataStorage:
     def __init__(self, args):
         # list of SampleData
         self.samples = []
-        self.input_type = ""
+        self.input_type = InputDataType.undefined
         readable_names_dict = defaultdict(lambda: defaultdict(str))
         sample_files = []
         experiment_names = []
@@ -66,7 +79,7 @@ class InputDataStorage:
         illumina_bam = []
 
         if args.fastq is not None:
-            self.input_type = "fastq"
+            self.input_type = InputDataType.fastq
             sample_files.append([])
             experiment_name = args.prefix
             experiment_names.append(experiment_name)
@@ -88,7 +101,7 @@ class InputDataStorage:
             illumina_bam.append(args.illumina_bam)
 
         elif args.bam is not None:
-            self.input_type = "bam"
+            self.input_type = InputDataType.bam
             sample_files.append([])
             experiment_name = args.prefix
             experiment_names.append(experiment_name)
@@ -105,8 +118,26 @@ class InputDataStorage:
                     os.path.splitext(os.path.basename(bam))[0]
             illumina_bam.append(args.illumina_bam)
 
+        elif args.unmapped_bam is not None:
+            self.input_type = InputDataType.unmapped_bam
+            sample_files.append([])
+            experiment_name = args.prefix
+            experiment_names.append(experiment_name)
+            if args.labels and len(args.labels) != len(args.unmapped_bam):
+                logger.critical("Number of labels is not equal to the number of files")
+                exit(-1)
+            for i, bam in enumerate(args.unmapped_bam):
+                check_input_type(bam, self.input_type)
+                if bam in readable_names_dict[experiment_name]:
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
+                    exit(-2)
+                sample_files[0].append([bam])
+                readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
+                    os.path.splitext(os.path.basename(bam))[0]
+            illumina_bam.append(args.illumina_bam)
+
         elif args.read_assignments is not None:
-            self.input_type = "save"
+            self.input_type = InputDataType.save
             illumina_bam = [[]]
             for i, save_file in enumerate(args.read_assignments):
                 sample_files.append([[save_file]])
@@ -201,10 +232,11 @@ class InputDataStorage:
             if len(t.keys()) > 1:
                 logger.warning("The first entry should only specify the input data format. Any additional info will be ignored")
             if  t['data format'] == "bam":
-                self.input_type = "bam"
-                print(self.input_type)
+                self.input_type = InputDataType.bam
+            elif t['data format'] == "unmapped_bam":
+                self.input_type = InputDataType.unmapped_bam
             elif t['data format'] == "fastq" or t['data format'] == "fasta":
-                self.input_type = "fastq"
+                self.input_type = InputDataType.fastq
             else:
                 logger.critical("The input data format can only be either fastq, fasta or bam.")
                 exit(-1)
@@ -282,10 +314,10 @@ def check_input_type(fname, input_type):
 
     basename, fasta_ext = os.path.splitext(basename_plus_inner_ext)
     if fasta_ext in ['.fastq', '.fasta', '.fa', '.fq', '.fna']:
-        if input_type != 'fastq':
+        if input_type != InputDataType.fastq:
             raise Exception("Wrong file extension was detected %s. Use only FASTQ/FASTA files with --fastq option." % fname)
     elif fasta_ext == '.bam':
-        if input_type != 'bam':
+        if input_type not in [InputDataType.bam, InputDataType.unmapped_bam]:
             raise Exception("Wrong file extension was detected for file %s. Use only BAM files with --bam option." % fname)
     else:
         raise Exception("File format " + fasta_ext + " is not supported! Supported formats: FASTQ, FASTA, BAM")
