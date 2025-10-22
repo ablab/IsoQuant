@@ -1,4 +1,4 @@
-name: SIRVs real ONT reduced annotation
+name: SIRVs real ONT unmapped BAM reduced annotation
 
 on:
   workflow_dispatch:
