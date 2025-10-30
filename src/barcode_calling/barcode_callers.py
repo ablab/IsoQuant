@@ -1175,11 +1175,12 @@ class TenXBarcodeDetector:
 
 
 class VisiumHDBarcodeDetector:
-    R1 = "ACACGACGCTCTTCCGATCT" # 10x 3'
+    R1 = "CTACACGACGCTCTTCCGATCT" # 10x 3'
     BARCODE1_LEN_VIS = 16
     BARCODE2_LEN_VIS = 15
+    SEPARATOR_BASES = 2
     TOTAL_BARCODE_LEN_VIS = BARCODE1_LEN_VIS + BARCODE2_LEN_VIS
-    UMI_LEN_VIS= 10
+    UMI_LEN_VIS=9
 
     UMI_LEN_DELTA = 2
     TERMINAL_MATCH_DELTA = 2
@@ -1279,7 +1280,7 @@ class VisiumHDBarcodeDetector:
             return TenXBarcodeDetectionResult(read_id, barcode1 + "|" + barcode2, potential_umi, bc1_score+bc2_score,
                                               UMI_good=True, polyT=polyt_start, r1=r1_end)
 
-        barcode2_end = polyt_start - 1
+        barcode2_end = polyt_start - 1 - self.SEPARATOR_BASES
         barcode2_start = barcode2_end - self.BARCODE2_LEN_VIS + 1
         potential_barcode2 = sequence[barcode2_start:barcode2_end + 1]
         matching_barcodes2 = self.part2_barcode_indexer.get_occurrences(potential_barcode2)
