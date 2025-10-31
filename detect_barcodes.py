@@ -197,6 +197,7 @@ class BarcodeCaller:
 
     def _process_read_normal(self, read_id, read_sequence):
         logger.debug("==== %s ====" % read_id)
+        if read_sequence is None: return
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
 
         self.output_file.write("%s\n" % str(barcode_result))
