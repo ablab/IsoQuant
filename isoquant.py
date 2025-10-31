@@ -480,7 +480,6 @@ def check_input_params(args):
         args.discard_chr = []
         logger.warning("--discard_chr has not effect when --process_only_chr is set and will be ignored")
 
-    args.mode = IsoQuantMode[args.mode]
     if not isinstance(args.mode, IsoQuantMode):
         args.mode = IsoQuantMode[args.mode]
     if args.mode.needs_barcode_calling():
@@ -859,7 +858,7 @@ def call_barcodes(args):
                     if args.resume:
                         logger.info("Barcodes were called during the previous run, skipping")
                         sample.barcoded_reads.append(output_barcodes)
-                        return
+                        continue
                     os.remove(barcodes_done)
 
                 bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode,
