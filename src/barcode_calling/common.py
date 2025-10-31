@@ -87,8 +87,9 @@ def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_
     return best_barcode, best_match[0], best_match[1], best_match[2]
 
 
-def find_candidate_with_max_score_ssw_var_len(barcode_matches: list, read_sequence, min_score=14):
+def find_candidate_with_max_score_ssw_var_len(barcode_matches: list, read_sequence, min_score=14, score_diff=1):
     best_match = [0, 0, 0, 0]
+    second_best_match = [0, 0, 0, 0]
     best_barcode = None
 
     align_mgr = AlignmentMgr(match_score=1, mismatch_penalty=1)
@@ -102,16 +103,21 @@ def find_candidate_with_max_score_ssw_var_len(barcode_matches: list, read_sequen
 
         ed = len(barcode) - alignment.optimal_score
         if alignment.optimal_score > best_match[0]:
+            second_best_match = best_match
             best_barcode = barcode
             best_match[0] = alignment.optimal_score
             best_match[1] = alignment.reference_start - alignment.read_start
             best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
             best_match[3] = ed
-        elif alignment.optimal_score == best_match[0] and ed < best_match[3]:
+        elif alignment.optimal_score == best_match[0] and ed <= best_match[3]:
+            second_best_match = best_match
             best_barcode = barcode
             best_match[1] = alignment.reference_start - alignment.read_start
             best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
             best_match[3] = ed
+
+    if best_match[0] < len(best_barcode) and best_match[0] - second_best_match[0] < score_diff:
+        return None, 0, 0, 0
 
     return best_barcode, best_match[0], best_match[1], best_match[2]
 
