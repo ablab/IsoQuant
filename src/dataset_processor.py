@@ -236,14 +236,14 @@ def filter_umis_in_parallel(sample, chr_id, split_barcodes_dict, args, edit_dist
             return
         os.remove(umi_filtered_done)
 
-    logger.info("Filtering PCD duplicates for chromosome " + chr_id)
+    logger.info("Filtering PCR duplicates for chromosome " + chr_id)
     umi_filter = UMIFilter(split_barcodes_dict, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
     all_info_file_name, stats_output_file_name = umi_filter.process_single_chr(args, chr_id, sample.out_raw_file,
                                                                                transcript_type_dict,
                                                                                out_umi_filtered, filtered_reads)
     open(umi_filtered_done, "w").close()
-    logger.info("PCD duplicates filtered for chromosome " + chr_id)
+    logger.info("PCR duplicates filtered for chromosome " + chr_id)
 
     return all_info_file_name, stats_output_file_name
 
