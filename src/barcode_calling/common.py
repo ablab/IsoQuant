@@ -3,6 +3,7 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
+import copy
 
 from ssw import AlignmentMgr
 
@@ -103,14 +104,14 @@ def find_candidate_with_max_score_ssw_var_len(barcode_matches: list, read_sequen
 
         ed = len(barcode) - alignment.optimal_score
         if alignment.optimal_score > best_match[0]:
-            second_best_match = best_match
+            second_best_match = copy.copy(best_match)
             best_barcode = barcode
             best_match[0] = alignment.optimal_score
             best_match[1] = alignment.reference_start - alignment.read_start
             best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
             best_match[3] = ed
         elif alignment.optimal_score == best_match[0] and ed <= best_match[3]:
-            second_best_match = best_match
+            second_best_match = copy.copy(best_match)
             best_barcode = barcode
             best_match[1] = alignment.reference_start - alignment.read_start
             best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
