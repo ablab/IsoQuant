@@ -117,7 +117,7 @@ def find_candidate_with_max_score_ssw_var_len(barcode_matches: list, read_sequen
             best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
             best_match[3] = ed
 
-    if best_match[0] < len(best_barcode) and best_match[0] - second_best_match[0] < score_diff:
+    if best_barcode and best_match[0] < len(best_barcode) and best_match[0] - second_best_match[0] < score_diff:
         return None, 0, 0, 0
 
     return best_barcode, best_match[0], best_match[1], best_match[2]
