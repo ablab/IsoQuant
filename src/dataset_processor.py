@@ -8,6 +8,7 @@
 import glob
 import itertools
 import logging
+import os
 import shutil
 from enum import Enum, unique
 from collections import defaultdict
@@ -374,6 +375,9 @@ class DatasetProcessor:
                     os.remove(f)
                 for f in glob.glob(sample.read_group_file + "*"):
                     os.remove(f)
+                for f in glob.glob(sample.umi_filtered_done + "*"):
+                    os.remove(f)
+                os.remove(split_barcodes_lock_filename(sample))
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("experiment", len(input_data.samples)))
@@ -720,12 +724,17 @@ class DatasetProcessor:
                         if len(v) != 2:
                             continue
                         stat_dict[v[0]] += int(v[1])
+                    os.remove(all_info_file_name)
+                    os.remove(stats_output_file_name)
 
             logger.info("PCR duplicates filtered with edit distance %d, filtering stats:" % edit_distance)
-            with open(output_prefix + ".allinfo", "w") as outf:
+            with open(output_prefix + ".stats.tsv", "w") as outf:
                 for k, v in stat_dict.items():
                     logger.info("  %s: %d" % (k, v))
                     outf.write("%s\t%d\n" % (k, v))
+
+            for bc_split_file in split_barcodes_dict.values():
+                os.remove(bc_split_file)
 
     @staticmethod
     def split_read_barcode_table(sample, split_barcodes_file_names):
