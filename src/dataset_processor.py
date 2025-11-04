@@ -263,12 +263,15 @@ class ReadAssignmentAggregator:
             self.transcript_set = set(get_all_chromosome_transcripts(gffutils_db, chr_id))
 
         self.read_stat_counter = EnumStats()
-        self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed,
-                                                self.args,
-                                                print_corrected=True,
-                                                gzipped=gzipped)
-        printer_list = [self.corrected_bed_printer]
-        if self.args.genedb:
+
+        printer_list = []
+        if not self.args.no_large_files:
+            self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed,
+                                                    self.args,
+                                                    print_corrected=True,
+                                                    gzipped=gzipped)
+            printer_list.append(self.corrected_bed_printer)
+        if self.args.genedb and not self.args.no_large_files:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                            additional_header=self.common_header, gzipped=gzipped)
             sample.out_assigned_tsv_result = self.basic_printer.output_file_name
@@ -599,7 +602,10 @@ class DatasetProcessor:
             # not intended for dumping transcript models directly
             exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, exon_id_storage, header=self.common_header, gzipped=self.args.gzipped
+                sample.out_dir, sample.prefix, exon_id_storage,
+                output_r2t=not self.args.no_large_files,
+                header=self.common_header,
+                gzipped=self.args.gzipped
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
