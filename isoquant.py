@@ -218,6 +218,8 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='Do not use previously generated index, feature db or alignments.')
     add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
                                    default=False, help="run only read assignment and quantification")
+    add_additional_option_to_group(pipeline_args_group, "--no_large_files", action="store_true",
+                                   default=False, help="do not output files containing all reads (bed and tsv)")
     add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
                                    help="align reads to reference without running further analysis")
     add_additional_option_to_group(pipeline_args_group, "--no_gtf_check", help="do not perform GTF checks",
