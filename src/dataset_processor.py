@@ -169,6 +169,7 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
 
     if construct_models:
         tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
+                                     output_r2t=not args.no_large_files,
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
