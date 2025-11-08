@@ -1,3 +1,4 @@
+import re
 import pysam
 import gffutils
 from collections import defaultdict
@@ -22,28 +23,61 @@ class FusionDetector:
         except Exception:
             return "unknown"
 
+    def _aligned_len_from_cigartuples(self, cigartuples):
+        # count read-aligned operations: M (=0), = (=7), X (=8)
+        if not cigartuples:
+            return 0
+        return sum(l for op, l in cigartuples if op in (0, 7, 8))
+
+    def _aligned_len_from_cigarstring(self, cigar):
+        if not cigar:
+            return 0
+        total = 0
+        for m in re.finditer(r'(\d+)([MIDNSHP=XB])', cigar):
+            length = int(m.group(1)); op = m.group(2)
+            if op in ('M', '=', 'X'):
+                total += length
+        return total
+
     def detect_fusions(self):
         bam = pysam.AlignmentFile(self.bam_path, "rb")
         for read in bam:
             if read.has_tag("SA"):
                 sa_tag = read.get_tag("SA")
                 contexts = set()
-                # primary alignment coordinates 
+                # primary alignment coordinates
                 primary_chrom = read.reference_name
                 primary_pos = None
                 try:
                     primary_pos = read.reference_start + 1 if read.reference_start is not None else None
                 except Exception:
                     primary_pos = None
-
                 primary_context = self.get_context(primary_chrom, primary_pos if primary_pos is not None else 0)
                 contexts.add(primary_context)
-
                 for sa in sa_tag.split(";"):
                     if not sa:
                         continue
                     fields = sa.split(",")
                     chrom, pos = fields[0], int(fields[1])
+                    # supplementary CIGAR is field 4 (index 3) in SAM file
+                    sa_cigar = fields[3] if len(fields) > 3 else None
+                    # compute aligned lengths for primary and supplementary alignments
+                    try:
+                        cigartuples = getattr(read, "cigartuples", None)
+                        if cigartuples:
+                            primary_al_len = self._aligned_len_from_cigartuples(cigartuples)
+                        else:
+                            primary_al_len = self._aligned_len_from_cigarstring(getattr(read, "cigarstring", None))
+                    except Exception:
+                        primary_al_len = 0
+                    try:
+                        sa_al_len = self._aligned_len_from_cigarstring(sa_cigar)
+                    except Exception:
+                        sa_al_len = 0
+                    # filter out short alignments (<100 bp) on either side
+                    if primary_al_len < 100 or sa_al_len < 100:
+                        # skip this SA, it does not provide sufficient aligned length
+                        continue
                     context = self.get_context(chrom, pos)
                     contexts.add(context)
 
@@ -54,13 +88,10 @@ class FusionDetector:
                         # store/increment breakpoint count (use 1-based positions)
                         bp = (primary_chrom, int(primary_pos), chrom, int(pos))
                         self.fusion_breakpoints[fusion_key][bp] += 1
-
         bam.close()
 
     def report(self, output_path="fusion_candidates.tsv", min_support=3):
-        """
-        Write a TSV with one consensus breakpoint per reported fusion.
-        """
+        #  write a TSV with one consensus breakpoint per reported fusion.
         with open(output_path, "w") as f:
             f.write("LeftGene\tLeftChromosome\tLeftBreakpoint\tRightGene\tRightChromosome\tRightBreakpoint\tSupportingReads\tFusionName\n")
             for fusion, reads in self.fusion_candidates.items():

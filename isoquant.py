@@ -814,7 +814,7 @@ def run_pipeline(args):
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
  
-    # gunzip refernece genome if needed
+    # gunzip reference genome if needed
     prepare_reference_genome(args)
  
     # convert GTF/GFF if needed
