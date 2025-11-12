@@ -272,6 +272,7 @@ class ReadAssignmentAggregator:
                                                     print_corrected=True,
                                                     gzipped=gzipped)
             printer_list.append(self.corrected_bed_printer)
+        self.basic_printer = None
         if self.args.genedb and not self.args.no_large_files:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                            additional_header=self.common_header, gzipped=gzipped)
@@ -379,7 +380,7 @@ class DatasetProcessor:
                     os.remove(f)
                 for f in glob.glob(sample.read_group_file + "*"):
                     os.remove(f)
-                for f in glob.glob(sample.umi_filtered_done + "*"):
+                for f in glob.glob(sample.out_umi_filtered_done + "*"):
                     os.remove(f)
                 os.remove(split_barcodes_lock_filename(sample))
 
@@ -668,9 +669,10 @@ class DatasetProcessor:
             aggregator.gene_model_global_counter.finalize(self.args)
 
     def finalize(self, aggregator):
-        if self.args.genedb:
+        if aggregator.basic_printer:
             logger.info("Read assignments are stored in " + aggregator.basic_printer.output_file_name +
                         (".gz" if self.args.gzipped else ""))
+        if self.args.genedb:
             aggregator.read_stat_counter.print_start("Read assignment statistics")
 
             logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
