@@ -783,11 +783,12 @@ class DatasetProcessor:
         return total_assignments, polya_assignments, all_read_groups
 
     def merge_assignments(self, sample, aggregator, chr_ids):
-        if self.args.genedb:
+        if self.args.genedb and aggregator.basic_printer:
             merge_files(sample.out_assigned_tsv, sample.prefix, chr_ids,
                         aggregator.basic_printer.output_file, copy_header=False)
-        merge_files(sample.out_corrected_bed, sample.prefix, chr_ids,
-                    aggregator.corrected_bed_printer.output_file, copy_header=False)
+        if aggregator.corrected_bed_printer:
+            merge_files(sample.out_corrected_bed, sample.prefix, chr_ids,
+                        aggregator.corrected_bed_printer.output_file, copy_header=False)
 
         for counter in aggregator.global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
@@ -796,7 +797,8 @@ class DatasetProcessor:
 
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
         merge_files(gff_printer.model_fname, label, chr_ids, gff_printer.out_gff, copy_header=False)
-        merge_files(gff_printer.r2t_fname, label, chr_ids, gff_printer.out_r2t, copy_header=False)
+        if gff_printer.output_r2t:
+            merge_files(gff_printer.r2t_fname, label, chr_ids, gff_printer.out_r2t, copy_header=False)
         for counter in aggregator.transcript_model_global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)
