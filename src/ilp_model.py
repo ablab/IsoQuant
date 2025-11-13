@@ -10,7 +10,7 @@ import pickle
 logger = logging.getLogger('IsoQuant')
 
 from .cell_type_tree import CellTypeTree
-from .models.minflowcelldcomp import MinFlowCellDecomp
+from .models.minflowcelldcompapproximate import MinFlowCellDecomp
 from .models.minerror_celltypeflow import MinErrorCellTypeFlow
 from .models.cellflowcorrection import MinErrorCellTypeFlowCorrection
 
