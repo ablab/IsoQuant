@@ -858,7 +858,8 @@ def run_pipeline(args):
         for bam_path in bam_files:
             try:
                 logger.info("Running fusion detection on %s" % bam_path)
-                fd = FusionDetector(bam_path, args.genedb)
+                # pass reference FASTA so FusionDetector can extract sequences and realign soft-clips
+                fd = FusionDetector(bam_path, args.genedb, reference_fasta=args.reference)
                 fd.detect_fusions()
                 out_fname = os.path.join(args.output, "fusion_" + os.path.basename(bam_path) + ".tsv")
                 fd.report(output_path=out_fname)
