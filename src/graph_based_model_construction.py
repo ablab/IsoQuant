@@ -22,6 +22,8 @@ from .common import (
 from .assignment_io import ReadAssignmentType
 from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
 from .intron_graph import IntronGraph, VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
+from .intron_graph import VERTEX_fusion
+from .gene_info import FusionTranscriptModel
 from .isoform_assignment import (
     is_matching_assignment,
     match_subtype_to_str_with_additional_info,
@@ -118,6 +120,9 @@ class GraphBasedModelConstructor:
 
     def process(self, read_assignment_storage):
         self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
+        # collect fusion-aware paths separately for downstream filtering/processing
+        self.fusion_path_storage = FusionPathStorage(self.intron_graph)
+        self.fusion_path_storage.fill()
         self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
         self.path_storage = IntronPathStorage(self.params, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
@@ -1051,3 +1056,27 @@ class TranscriptToGeneJoiner:
             model.gene_id = transcript_to_new_gene_id[model.transcript_id]
 
         return self.transcipt_model_storage
+
+
+class FusionPathStorage: 
+    # storage for fusion vertices/paths discovered in the intron graph.
+    def __init__(self, intron_graph):
+        self.intron_graph = intron_graph
+        # paths: map (left_intron, right_intron, partners_tuple) -> support (edge weight sum)
+        self.paths = defaultdict(int)
+        # detailed metadata mapping to fusion_vertex
+        self.metadata = {}
+
+    def fill(self):
+        for fv, meta in self.intron_graph.fusion_vertices.items():
+            left = meta["left"]
+            right = meta["right"]
+            partners = tuple(meta.get("partners", ()))
+            # estimate support as sum of weights of edges (left->fusion) + (fusion->right)
+            support = self.intron_graph.edge_weights.get((left, fv), 0) + self.intron_graph.edge_weights.get((fv, right), 0)
+            key = (left, right, partners)
+            self.paths[key] += support
+            self.metadata[key] = {"fusion_vertex": fv, "partners": partners, "support": support}
+
+    def get_paths(self):
+        return dict(self.paths)

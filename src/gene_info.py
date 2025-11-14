@@ -760,3 +760,75 @@ def get_all_chromosome_genes(genedb, chr_id):
 
 def get_all_chromosome_transcripts(genedb, chr_id):
     return [g.id for g in genedb.region(seqid=chr_id, start=1, featuretype=("transcript", "mRNA"))]
+
+# --- Fusion gene support ----------------------------------------------------
+class FusionGeneInfo:
+    """
+    Minimal container for fusion genes that can span discontinuous loci and
+    reference multiple partner gene IDs.
+    """
+    def __init__(self, fusion_id, partner_ids, breakpoints):
+        """
+        fusion_id: string identifier for fusion (e.g. "C1orf200--ZNF512B")
+        partner_ids: list/tuple of participating gene IDs (order-preserving)
+        breakpoints: list of breakpoint tuples [(chr1, pos1, chr2, pos2), ...]
+        """
+        self.fusion_id = fusion_id
+        self.fusion_partner_ids = tuple(partner_ids)
+        # canonical representation: set of (chr1,pos1,chr2,pos2)
+        self.fusion_breakpoints = set(tuple(bp) for bp in breakpoints)
+        # compute covered regions as list of (chr, start, end) if breakpoints provided
+        self.regions = self._compute_regions_from_breakpoints()
+
+    def _compute_regions_from_breakpoints(self):
+        regions = defaultdict(lambda: [10**18, 0])
+        for (c1, p1, c2, p2) in self.fusion_breakpoints:
+            regions[c1][0] = min(regions[c1][0], p1)
+            regions[c1][1] = max(regions[c1][1], p1)
+            regions[c2][0] = min(regions[c2][0], p2)
+            regions[c2][1] = max(regions[c2][1], p2)
+        # convert to list of (chr, start, end)
+        return [(c, s, e) for c, (s, e) in regions.items() if s <= e]
+
+    def get_partner_ids(self):
+        return self.fusion_partner_ids
+
+    def get_breakpoints(self):
+        return sorted(self.fusion_breakpoints)
+
+    def add_breakpoint(self, bp):
+        self.fusion_breakpoints.add(tuple(bp))
+        self.regions = self._compute_regions_from_breakpoints()
+
+    def summary(self):
+        return {
+            'fusion_id': self.fusion_id,
+            'partners': self.fusion_partner_ids,
+            'n_breakpoints': len(self.fusion_breakpoints),
+            'regions': list(self.regions)
+        }
+
+
+class FusionTranscriptModel(TranscriptModel):
+    # container for fusion transcripts. Stores partner gene ids and consensus breakpoint(s).
+    def __init__(self, chr_id, strand, transcript_id, gene_id, exon_blocks,
+                 transcript_type, partner_ids=None, breakpoints=None):
+        # initialize base TranscriptModel 
+        super().__init__(chr_id, strand, transcript_id, gene_id, exon_blocks, transcript_type)
+        self.fusion_partner_ids = tuple(partner_ids) if partner_ids else tuple()
+        # breakpoints: list of (chr1,pos1,chr2,pos2)
+        self.fusion_breakpoints = [tuple(bp) for bp in (breakpoints or [])]
+
+    def add_breakpoint(self, bp):
+        self.fusion_breakpoints.append(tuple(bp))
+
+    def get_partners(self):
+        return self.fusion_partner_ids
+
+    def summary(self):
+        base = getattr(super(), "summary", lambda: {})()
+        base.update({
+            "fusion_partners": self.fusion_partner_ids,
+            "fusion_breakpoints": list(self.fusion_breakpoints)
+        })
+        return base

@@ -14,6 +14,14 @@ class FusionDetector:
         # optional reference and aligner for soft-clip realignment
         self.reference_fasta = reference_fasta
         self.aligner = mp.Aligner(reference_fasta)
+        # collected metadata for downstream filtering / model construction
+        # fusion_metadata[fusion_key] = {
+        #   "supporting_reads": set(),
+        #   "consensus_bp": (chr1,pos1,chr2,pos2),
+        #   "left_gene": str, "right_gene": str,
+        #   "support": int
+        # }
+        self.fusion_metadata = {}
 
     def safe_reference_start(self, read):
         try:
@@ -30,10 +38,8 @@ class FusionDetector:
             return 0
 
     def parse_sa_fields(self, sa):
-        """
-        Parse a single SA tag entry and return (chrom, pos, cigar).
-        SA format: chrom,pos,strand,CIGAR,mapQ,NM
-        """
+        # Parse a single SA tag entry and return (chrom, pos, cigar).
+        # format: chrom,pos,strand,CIGAR,mapQ,NM
         fields = sa.split(",")
         chrom = fields[0]
         pos = int(fields[1])
@@ -95,10 +101,7 @@ class FusionDetector:
         return total
     
     def realign_clipped_seq(self, seq):
-        """
-        Realign a clipped sequence using mappy aligner.
-        Returns the best hit or None if no suitable alignment found.
-        """
+        # Realign a clipped sequence using mappy aligner. 
         try:
             for hit in self.aligner.map(seq):
                 hit_len = (getattr(hit, "r_en", None) - getattr(hit, "r_st", None)) if getattr(hit, "r_en", None) else getattr(hit, "mlen", None) or getattr(hit, "alen", None) or 0
@@ -113,6 +116,51 @@ class FusionDetector:
         self.fusion_candidates[fusion_key].add(read_name)
         bp = (chrom1, int(pos1), chrom2, int(pos2))
         self.fusion_breakpoints[fusion_key][bp] += 1
+        # also maintain supporting_reads set for quick access
+        meta = self.fusion_metadata.setdefault(fusion_key, {"supporting_reads": set(), "consensus_bp": None,
+                                                            "left_gene": None, "right_gene": None, "support": 0})
+        meta["supporting_reads"].add(read_name)
+        meta["support"] = len(meta["supporting_reads"])
+        # consensus_bp will be calculated later in build_metadata()
+
+    def build_metadata(self, min_support=1):
+        # Compute consensus breakpoint and gene names for all fusion keys,
+        for fusion_key, reads in self.fusion_candidates.items():
+            support = len(reads)
+            meta = self.fusion_metadata.setdefault(fusion_key, {"supporting_reads": set(), "consensus_bp": None,
+                                                                "left_gene": None, "right_gene": None, "support": 0})
+            meta["supporting_reads"].update(reads)
+            meta["support"] = len(meta["supporting_reads"])
+            if meta["support"] < min_support:
+                continue
+            bp_counts = self.fusion_breakpoints.get(fusion_key, {})
+            if not bp_counts:
+                continue
+            consensus_bp, _ = max(bp_counts.items(), key=lambda item: item[1])
+            meta["consensus_bp"] = consensus_bp
+            left_chr, left_pos, right_chr, right_pos = consensus_bp
+            meta["left_gene"] = self.get_context(left_chr, left_pos)
+            meta["right_gene"] = self.get_context(right_chr, right_pos)
+
+    def get_fusion_metadata(self, min_support=1):
+        """
+        Returns list of metadata dicts for fusions with support >= min_support.
+        Each dict contains keys: fusion_key, left_gene, right_gene, consensus_bp, support, supporting_reads
+        """
+        self.build_metadata(min_support=min_support)
+        results = []
+        for fusion_key, meta in self.fusion_metadata.items():
+            if meta.get("support", 0) < min_support:
+                continue
+            results.append({
+                "fusion_key": fusion_key,
+                "left_gene": meta.get("left_gene"),
+                "right_gene": meta.get("right_gene"),
+                "consensus_bp": meta.get("consensus_bp"),
+                "support": meta.get("support"),
+                "supporting_reads": set(meta.get("supporting_reads", set()))
+            })
+        return results
 
     def detect_fusions(self):
         bam = pysam.AlignmentFile(self.bam_path, "rb")
@@ -172,21 +220,19 @@ class FusionDetector:
 
     def report(self, output_path="fusion_candidates.tsv", min_support=3):
         #  write a TSV with one consensus breakpoint per reported fusion.
+        # prefer metadata-driven output (consensus breakpoint + supporting reads)
+        self.build_metadata(min_support=min_support)
         with open(output_path, "w") as f:
             f.write("LeftGene\tLeftChromosome\tLeftBreakpoint\tRightGene\tRightChromosome\tRightBreakpoint\tSupportingReads\tFusionName\n")
-            for fusion, reads in self.fusion_candidates.items():
-                support = len(reads)
+            for fusion_key, meta in sorted(self.fusion_metadata.items(), key=lambda x: -x[1].get("support", 0)):
+                support = meta.get("support", 0)
                 if support < min_support:
                     continue
-                # choose consensus breakpoint = bp with maximum supporting read count
-                bp_counts = self.fusion_breakpoints.get(fusion, {})
-                if not bp_counts:
-                    # fallback: no stored breakpoints -> skip
+                consensus_bp = meta.get("consensus_bp")
+                if not consensus_bp:
                     continue
-                consensus_bp, _ = max(bp_counts.items(), key=lambda item: item[1])
-                left_chrom, left_pos, right_chrom, right_pos = consensus_bp
-                # obtain gene names/contexts at consensus positions
-                left_gene = self.get_context(left_chrom, left_pos)
-                right_gene = self.get_context(right_chrom, right_pos)
-                fusion_name = fusion  # keep existing fusion key/name
-                f.write(f"{left_gene}\t{left_chrom}\t{left_pos}\t{right_gene}\t{right_chrom}\t{right_pos}\t{support}\t{fusion_name}\n")
+                left_chr, left_pos, right_chr, right_pos = consensus_bp
+                left_gene = meta.get("left_gene") or self.get_context(left_chr, left_pos)
+                right_gene = meta.get("right_gene") or self.get_context(right_chr, right_pos)
+                fusion_name = fusion_key
+                f.write(f"{left_gene}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_chr}\t{right_pos}\t{support}\t{fusion_name}\n")

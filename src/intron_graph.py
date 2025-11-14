@@ -17,6 +17,7 @@ VERTEX_polya = -10
 VERTEX_read_end = -11
 VERTEX_polyt = -20
 VERTEX_read_start = -21
+VERTEX_fusion = -30
 
 
 def is_terminal_vertex(v):
@@ -145,6 +146,8 @@ class IntronGraph:
         self.intron_collector = IntronCollector(gene_info, params.delta)
         self.max_coverage = 0
         self.edge_weights = defaultdict(int)
+        # store fusion-specific vertex info -> mapping fusion_vertex -> metadata
+        self.fusion_vertices = {}
 
         self.starting_known_positions = defaultdict(list)
         self.terminal_known_positions = defaultdict(list)
@@ -172,6 +175,24 @@ class IntronGraph:
         self.outgoing_edges[v1].add(v2)
         self.incoming_edges[v2].add(v1)
         self.edge_weights[(v1, v2)] += 1
+
+    def add_fusion_edge(self, left_intron, right_intron, partner_ids):
+        """
+        Create a fusion vertex and link left_intron -> fusion_vertex -> right_intron.
+        fusion_vertex is represented as a tuple with first element VERTEX_fusion so
+        existing traversal logic treats it as a special (negative) vertex.
+        """
+        fusion_vertex = (VERTEX_fusion, left_intron, right_intron, tuple(partner_ids))
+        # record metadata for later inspection
+        self.fusion_vertices[fusion_vertex] = {
+            'left': left_intron,
+            'right': right_intron,
+            'partners': tuple(partner_ids)
+        }
+        # connect edges (left -> fusion) and (fusion -> right)
+        self.add_edge(left_intron, fusion_vertex)
+        self.add_edge(fusion_vertex, right_intron)
+        return fusion_vertex
 
     def is_isolated(self, v):
         return not self.outgoing_edges[v] and not self.incoming_edges[v]
