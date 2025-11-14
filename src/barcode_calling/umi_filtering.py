@@ -474,8 +474,8 @@ class UMIFilter:
             barcode_dict[v[0]] = (v[1], v[2])
         return barcode_dict
 
-    def process_single_chr(self, args, chr_id, saves_prefix, transcript_type_dict, output_prefix, filtered_reads_file_name):
-        all_info_file_name = output_prefix + ".allinfo"
+    def process_single_chr(self, args, chr_id, saves_prefix, transcript_type_dict,
+                           all_info_file_name, filtered_reads_file_name, stats_output_file_name):
         with open(all_info_file_name, "w") as allinfo_outf:
             filtered_reads_outf = open(filtered_reads_file_name, "w") if filtered_reads_file_name else None
             read_count = 0
@@ -531,7 +531,6 @@ class UMIFilter:
             if filtered_reads_outf:
                 filtered_reads_outf.close()
 
-        stats_output_file_name = output_prefix + ".stats.tsv"
         with open(stats_output_file_name, "w") as count_hist_file:
             count_hist_file.write("Unique gene-barcodes pairs\t%d\n" % len(self.unique_gene_barcode))
             count_hist_file.write("Total reads saved\t%d\n" % read_count)

@@ -46,3 +46,23 @@ def multimappers_file_name(out_raw_file: str, chr_id: str):
 
 def filtered_reads_file_name(out_raw_file: str, chr_id: str):
     return out_raw_file + "_filtered_" + chr_id
+
+
+def umi_filtered_reads_file_name(out_umi_filtered_tmp: str, chr_id:str, edit_distance:int):
+    return out_umi_filtered_tmp + ("_%s_ED%d" % (chr_id, edit_distance))
+
+
+def umi_filtered_lock_file_name(out_umi_filtered_done: str, chr_id: str, edit_distance: int):
+    return out_umi_filtered_done + ("_%s_ED%d" % (chr_id, edit_distance))
+
+
+def allinfo_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distance: int):
+    return umi_filtered_reads_file_name(out_umi_filtered_tmp, chr_id, edit_distance) + ".allinfo"
+
+
+def allinfo_stats_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distance: int):
+    return umi_filtered_reads_file_name(out_umi_filtered_tmp, chr_id, edit_distance) + ".stats.tsv"
+
+
+def umi_filtered_global_lock_file_name(out_umi_filtered_done: str):
+    return out_umi_filtered_done + ".lock"
