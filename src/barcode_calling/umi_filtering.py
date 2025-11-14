@@ -86,7 +86,7 @@ class ShortReadAssignmentInfo:
 
 class ReadAssignmentInfo:
     def __init__(self, read_id, chr_id, gene_id, transcript_id, strand, exon_blocks, assignment_type,
-                 matching_events, barcode, umi, polya_site=-1, transcript_type = "unknown"):
+                 matching_events, barcode, umi, polya_site=-1, transcript_type = "unknown", cell_type = "None"):
         self.read_id = read_id
         self.chr_id = chr_id
         self.gene_id = gene_id
@@ -99,6 +99,7 @@ class ReadAssignmentInfo:
         self.barcode = barcode
         self.umi = umi
         self.transcript_type = transcript_type
+        self.cell_type = cell_type
 
     def short(self):
         return ShortReadAssignmentInfo(self.gene_id, self.exon_blocks, self.assignment_type,
@@ -109,7 +110,6 @@ class ReadAssignmentInfo:
         exons_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (self.chr_id, e[0], e[1], self.strand) for e in self.exon_blocks])
         introns_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (self.chr_id, e[0], e[1], self.strand) for e in intron_blocks])
 
-        cell_type = "None"
         if self.assignment_type.is_unique():
             read_type = "known"
         elif self.assignment_type.is_inconsistent():
@@ -149,7 +149,7 @@ class ReadAssignmentInfo:
                     polyA_pos = self.polya_site
                     polyA = "%s_%d_%d_%s" % (self.chr_id, polyA_pos, polyA_pos, self.strand)
 
-        return  "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s" % (self.read_id, self.gene_id, cell_type,
+        return  "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s" % (self.read_id, self.gene_id, self.cell_type,
                                                                         self.barcode, self.umi, introns_str, TSS, polyA,
                                                                         exons_str, read_type, len(intron_blocks),
                                                                         self.transcript_id, self.transcript_type)
@@ -474,7 +474,7 @@ class UMIFilter:
             barcode_dict[v[0]] = (v[1], v[2])
         return barcode_dict
 
-    def process_single_chr(self, args, chr_id, saves_prefix, transcript_type_dict,
+    def process_single_chr(self, args, chr_id, saves_prefix, transcript_type_dict, barcode_feature_table,
                            all_info_file_name, filtered_reads_file_name, stats_output_file_name):
         with open(all_info_file_name, "w") as allinfo_outf:
             filtered_reads_outf = open(filtered_reads_file_name, "w") if filtered_reads_file_name else None
@@ -509,9 +509,10 @@ class UMIFilter:
                         barcoded = barcode is not None
                         transcript_type, polya_site = (transcript_type_dict[transcript_id] if transcript_id in transcript_type_dict
                                                        else ("unknown_type", -1))
+                        cell_type = "None" if barcode is None or barcode not in barcode_feature_table else barcode_feature_table[barcode]
                         assignment_info = ReadAssignmentInfo(read_id, chr_id, gene_id, transcript_id, strand, exon_blocks,
                                                              assignment_type, matching_events, barcode, umi,
-                                                             polya_site, transcript_type)
+                                                             polya_site, transcript_type, cell_type)
                         read_infos.append(assignment_info.short())
 
                         if not barcoded or not assigned:
