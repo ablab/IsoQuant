@@ -231,23 +231,27 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
 
 def filter_umis_in_parallel(sample, chr_id, split_barcodes_dict, args, edit_distance, output_filtered_reads=False):
     transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
-    out_umi_filtered = sample.out_umi_filtered_tmp + ("_%s_ED%d" % (chr_id, edit_distance))
-    umi_filtered_done = sample.out_umi_filtered_done + ("_%s_ED%d" % (chr_id, edit_distance))
+    umi_filtered_done = umi_filtered_lock_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
+    all_info_file_name = allinfo_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
+    stats_output_file_name = allinfo_stats_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
+
     if os.path.exists(umi_filtered_done):
         if args.resume:
-            return
+            return all_info_file_name, stats_output_file_name, umi_filtered_done
         os.remove(umi_filtered_done)
 
     logger.info("Filtering PCR duplicates for chromosome " + chr_id)
     umi_filter = UMIFilter(split_barcodes_dict, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
-    all_info_file_name, stats_output_file_name = umi_filter.process_single_chr(args, chr_id, sample.out_raw_file,
-                                                                               transcript_type_dict,
-                                                                               out_umi_filtered, filtered_reads)
+    umi_filter.process_single_chr(args, chr_id, sample.out_raw_file,
+                                  transcript_type_dict,
+                                  all_info_file_name,
+                                  filtered_reads,
+                                  stats_output_file_name)
     open(umi_filtered_done, "w").close()
     logger.info("PCR duplicates filtered for chromosome " + chr_id)
 
-    return all_info_file_name, stats_output_file_name
+    return all_info_file_name, stats_output_file_name, umi_filtered_done
 
 
 class ReadAssignmentAggregator:
@@ -266,6 +270,7 @@ class ReadAssignmentAggregator:
         self.read_stat_counter = EnumStats()
 
         printer_list = []
+        self.corrected_bed_printer = None
         if not self.args.no_large_files:
             self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed,
                                                     self.args,
@@ -380,9 +385,8 @@ class DatasetProcessor:
                     os.remove(f)
                 for f in glob.glob(sample.read_group_file + "*"):
                     os.remove(f)
-                for f in glob.glob(sample.out_umi_filtered_done + "*"):
-                    os.remove(f)
-                os.remove(split_barcodes_lock_filename(sample))
+                if self.args.mode.needs_pcr_deduplication():
+                    os.remove(umi_filtered_global_lock_file_name(sample.out_umi_filtered_done))
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("experiment", len(input_data.samples)))
@@ -679,6 +683,13 @@ class DatasetProcessor:
             aggregator.global_counter.finalize(self.args)
 
     def filter_umis(self, sample):
+        umi_filtering_done = umi_filtered_global_lock_file_name(sample.out_umi_filtered_done)
+        if os.path.exists(umi_filtering_done):
+            if self.args.resume:
+                logger.info("UMI filtering detecting, skipping")
+                return
+            os.remove(umi_filtering_done)
+
         # edit distances for UMI filtering, first one will be used for counts
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX_v3: [3],
@@ -704,6 +715,13 @@ class DatasetProcessor:
 
         for i, edit_distance in enumerate(umi_ed_dict[self.args.mode]):
             logger.info("Filtering PCR duplicates with edit distance %d" % edit_distance)
+            umi_ed_filtering_done = umi_filtered_lock_file_name(sample.out_umi_filtered_done, "", edit_distance)
+            if os.path.exists(umi_ed_filtering_done):
+                if self.args.resume:
+                    logger.info("Filtering was done previously, skipping edit distance %d" % edit_distance)
+                    return
+                os.remove(umi_ed_filtering_done)
+
             output_prefix = sample.out_umi_filtered + (".ALL" if edit_distance < 0 else ".ED%d" % edit_distance)
             logger.info("Results will be saved to %s" % output_prefix)
             output_filtered_reads = i == 0
@@ -725,16 +743,18 @@ class DatasetProcessor:
                 results = map(*umi_gen)
 
             stat_dict = defaultdict(int)
+            files_to_remove = []
             with open(output_prefix + ".allinfo", "w") as outf:
-                for all_info_file_name, stats_output_file_name in results:
+                for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                     shutil.copyfileobj(open(all_info_file_name, "r"), outf)
                     for l in open(stats_output_file_name, "r"):
                         v = l.strip().split("\t")
                         if len(v) != 2:
                             continue
                         stat_dict[v[0]] += int(v[1])
-                    os.remove(all_info_file_name)
-                    os.remove(stats_output_file_name)
+                    files_to_remove.append(all_info_file_name)
+                    files_to_remove.append(stats_output_file_name)
+                    files_to_remove.append(umi_filter_done)
 
             logger.info("PCR duplicates filtered with edit distance %d, filtering stats:" % edit_distance)
             with open(output_prefix + ".stats.tsv", "w") as outf:
@@ -742,8 +762,15 @@ class DatasetProcessor:
                     logger.info("  %s: %d" % (k, v))
                     outf.write("%s\t%d\n" % (k, v))
 
-            for bc_split_file in split_barcodes_dict.values():
-                os.remove(bc_split_file)
+            open(umi_ed_filtering_done, "w").close()
+            for f in files_to_remove:
+                os.remove(f)
+
+        # move clean-up somewhere else
+        for bc_split_file in split_barcodes_dict.values():
+            os.remove(bc_split_file)
+        os.remove(barcode_split_done)
+        open(umi_filtering_done, "w").close()
 
     @staticmethod
     def split_read_barcode_table(sample, split_barcodes_file_names):
