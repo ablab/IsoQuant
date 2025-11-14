@@ -160,11 +160,12 @@ def parse_args(cmd_args=None, namespace=None):
     sc_args_group.add_argument('--barcode_whitelist', type=str, nargs='+',
                                help='file with barcode whitelist for barcode calling')
     sc_args_group.add_argument("--barcoded_reads", type=str, nargs='+',
-                               help='file with barcoded reads; barcodes will be called automatically if not provided')
+                               help='TSV file with barcoded reads; barcodes will be called automatically if not provided')
     sc_args_group.add_argument("--barcode_column", type=str,
                                help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
                                default=1)
-
+    sc_args_group.add_argument("--barcode2spot", type=str, nargs='+',
+                               help='TSV file barcode to cell type / spot id information')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,

@@ -8,7 +8,6 @@
 import glob
 import itertools
 import logging
-import os
 import shutil
 from enum import Enum, unique
 from collections import defaultdict
@@ -34,7 +33,8 @@ from .long_read_counter import (
 )
 from .read_groups import (
     create_read_grouper,
-    prepare_read_groups
+    prepare_read_groups,
+    load_table
 )
 from .assignment_io import (
     IOSupport,
@@ -241,10 +241,16 @@ def filter_umis_in_parallel(sample, chr_id, split_barcodes_dict, args, edit_dist
         os.remove(umi_filtered_done)
 
     logger.info("Filtering PCR duplicates for chromosome " + chr_id)
+    barcode_feature_table = {}
+    if args.barcode2spot:
+        for barcode2spot_file in args.barcode2spot:
+            barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
+
     umi_filter = UMIFilter(split_barcodes_dict, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(args, chr_id, sample.out_raw_file,
                                   transcript_type_dict,
+                                  barcode_feature_table,
                                   all_info_file_name,
                                   filtered_reads,
                                   stats_output_file_name)
