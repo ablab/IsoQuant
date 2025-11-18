@@ -3,19 +3,10 @@ import pysam
 import gffutils
 from collections import defaultdict
 import mappy as mp
-import json
-import os
-import tempfile
-import logging
-from src.fusion_quick_loader import process_fusion_bundle
-
-logger = logging.getLogger('IsoQuant')
 
 class FusionDetector:
     def __init__(self, bam_path, gene_db_path, reference_fasta):
         self.bam_path = bam_path
-        # keep the DB path for downstream consumers
-        self.genedb_path = gene_db_path
         self.db = gffutils.FeatureDB(gene_db_path, keep_order=True)
         self.fusion_candidates = defaultdict(set)
         # store breakpoint counts per fusion key: {(chr1,pos1,chr2,pos2): count}
@@ -180,33 +171,6 @@ class FusionDetector:
                 self._process_softclip(read)
         bam.close()
 
-        # export assignment bundle and run downstream IsoQuant model construction
-        try:
-            bundle_dir = tempfile.mkdtemp(prefix="fusion_bundle_")
-            self.export_assignment_bundle(bundle_dir)
-
-            # minimal dummy counters/params for process_fusion_bundle
-            class _DummyCounter:
-                def add_read_info_raw(self, *a, **kw): pass
-                def add_unassigned(self, *a, **kw): pass
-                def add_confirmed_features(self, *a, **kw): pass
-
-            params = type("P", (), {})()  # empty params object; pipeline may override as needed
-            transcript_counter = _DummyCounter()
-            gene_counter = _DummyCounter()
-
-            try:
-                process_fusion_bundle(bundle_dir, self.genedb_path, params, transcript_counter, gene_counter)
-            except Exception as e:
-                logger.warning("process_fusion_bundle() failed: %s" % str(e))
-
-            # delegate TSV generation to report()
-            out_tsv = os.path.join(bundle_dir, "fusion_candidates_postprocessed.tsv")
-            self.report(output_path=out_tsv, min_support=3)
-            logger.info("Fusion bundle exported to %s; postprocessed TSV written to %s" % (bundle_dir, out_tsv))
-        except Exception as e:
-            logger.error("Fusion post-processing failed: %s" % str(e))
-
     def _process_supplementary_alignment(self, read):
         sa_tag = read.get_tag("SA")
         primary_chrom = read.reference_name
@@ -272,40 +236,3 @@ class FusionDetector:
                 right_gene = meta.get("right_gene") or self.get_context(right_chr, right_pos)
                 fusion_name = fusion_key
                 f.write(f"{left_gene}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_chr}\t{right_pos}\t{support}\t{fusion_name}\n")
-
-    def export_assignment_bundle(self, out_dir):
-        os.makedirs(out_dir, exist_ok=True)
-        fusions = []
-        # ensure metadata is built
-        self.build_metadata(min_support=1)
-        for fk, meta in self.fusion_metadata.items():
-            fusions.append({
-                "fusion_key": fk,
-                "consensus_bp": meta.get("consensus_bp"),
-                "support": meta.get("support", 0),
-                "supporting_reads": list(meta.get("supporting_reads", []))
-            })
-
-        with open(os.path.join(out_dir, "fusion_candidates.json"), "w") as fh:
-            json.dump(fusions, fh, indent=2)
-
-        # write chr record if reference fasta known
-        chr_record = {}
-        if getattr(self, "reference_fasta", None):
-            try:
-                import pysam
-                fa = pysam.FastaFile(self.reference_fasta)
-                for ctg in fa.references:
-                    chr_record[ctg] = fa.get_reference_length(ctg)
-                fa.close()
-            except Exception:
-                chr_record = {}
-        with open(os.path.join(out_dir, "chr_record.json"), "w") as fh:
-            json.dump(chr_record, fh, indent=2)
-
-        # placeholder multimapped dictionary (fusion detection may produce cross-chromosome multimappers)
-        multimapped = {}
-        with open(os.path.join(out_dir, "multimapped.json"), "w") as fh:
-            json.dump(multimapped, fh, indent=2)
-
-        return out_dir
