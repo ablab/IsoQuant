@@ -53,6 +53,7 @@ class SampleData:
         self.out_intron_grouped_counts_tsv = self._make_path(self.prefix + ".intron_grouped")
         self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
         self.out_polya = self._make_path(self.prefix + ".polyA_prediction.tsv")
+        self.out_tss = self._make_path(self.prefix + ".TSS_prediction.tsv")
 
 
 class InputDataStorage:
