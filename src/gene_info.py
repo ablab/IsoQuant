@@ -143,6 +143,8 @@ class FeatureInfo:
 class GeneInfo:
     EXTRA_BASES_FOR_SEQ = 20
     OTHER_FEATURES = {'CDS', 'start_codon', 'stop_codon', 'UTR'}
+    DEFAULT_RNA_TYPES = {'transcript', 'RNA', 'mRNA', 'miRNA', 'ncRNA', 'tRNA', 'rRNA', 'snRNA', 'lnc_RNA', 'snoRNA',
+                         'tRNA', 'telomerase_RNA', 'Y_RNA', 'scRNA'}
 
     def __init__(self, gene_db_list, db, delta=0, prepare_profiles=True):
         if db is None:
@@ -446,7 +448,7 @@ class GeneInfo:
     def set_isoform_strands(self):
         self.isoform_strands = {}
         for gene_db in self.gene_db_list:
-            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
+            for t in self.db.children(gene_db, featuretype=self.DEFAULT_RNA_TYPES):
                 self.isoform_strands[t.id] = t.strand
         self.gene_strands = {}
         for gene_db in self.gene_db_list:
@@ -455,7 +457,7 @@ class GeneInfo:
     def set_other_features(self):
         self.other_features = defaultdict(list)
         for gene in self.gene_db_list:
-            for t in self.db.children(gene, featuretype=('transcript', 'mRNA')):
+            for t in self.db.children(gene, featuretype=self.DEFAULT_RNA_TYPES):
                 for e in self.db.children(t):
                     if e.featuretype in GeneInfo.OTHER_FEATURES:
                         self.other_features[t.id].append((e.start, e.end, e.featuretype))
@@ -464,14 +466,14 @@ class GeneInfo:
         self.sources = {}
         for gene in self.gene_db_list:
             self.sources[gene.id] = gene.source
-            for t in self.db.children(gene, featuretype=('transcript', 'mRNA')):
+            for t in self.db.children(gene, featuretype=self.DEFAULT_RNA_TYPES):
                 self.sources[t.id] = t.source
 
     # set isoform_id -> gene_id map
     def set_gene_ids(self):
         self.gene_id_map = {}
         for gene_db in self.gene_db_list:
-            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
+            for t in self.db.children(gene_db, featuretype=self.DEFAULT_RNA_TYPES):
                 self.gene_id_map[t.id] = gene_db.id
 
     def set_gene_attributes(self):
@@ -482,7 +484,7 @@ class GeneInfo:
                     continue
                 if gene_db.attributes[attr]:
                     self.feature_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
-            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA')):
+            for t in self.db.children(gene_db, featuretype=self.DEFAULT_RNA_TYPES):
                 for attr in t.attributes.keys():
                     if attr in ['transcript_id', 'gene_id', 'ID', 'level', 'exons', 'Parent']:
                         continue
@@ -506,7 +508,7 @@ class GeneInfo:
         all_isoforms_exons = {}
 
         for gene_db in self.gene_db_list:
-            for t in self.db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
+            for t in self.db.children(gene_db, featuretype=self.DEFAULT_RNA_TYPES, order_by='start'):
                 exons = []
                 all_features = []
                 for e in self.db.children(t, featuretype=('exon', 'CDS'), order_by='start'):
@@ -759,4 +761,4 @@ def get_all_chromosome_genes(genedb, chr_id):
 
 
 def get_all_chromosome_transcripts(genedb, chr_id):
-    return [g.id for g in genedb.region(seqid=chr_id, start=1, featuretype=("transcript", "mRNA"))]
+    return [g.id for g in genedb.region(seqid=chr_id, start=1, featuretype=GeneInfo.DEFAULT_RNA_TYPES)]
