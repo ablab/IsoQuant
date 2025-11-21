@@ -276,9 +276,14 @@ class AlignmentCollector:
                 self.alignment_stat_counter.add(AlignmentType.primary)
 
             if alignment_storage.alignment_is_not_adjacent(alignment):
-                for res in self.forward_alignments(alignment_storage):
-                    yield res
-                alignment_storage.reset()
+                preceding_genes = self.get_genes_in_region(alignment_storage.region)
+                next_genes = self.get_genes_in_region((alignment.reference_start, alignment.reference_end - 1))
+
+                if len(preceding_genes.intersection(next_genes)) == 0:
+                    for res in self.forward_alignments(alignment_storage):
+                        yield res
+                    alignment_storage.reset()
+
             alignment_storage.add_alignment(bam_index, alignment)
 
         if alignment_storage.region:
@@ -514,6 +519,14 @@ class AlignmentCollector:
                 junctions_with_indels += 1
 
         return indel_count, junctions_with_indels
+
+    def get_genes_in_region(self, current_region):
+        if not self.genedb:
+            return set()
+        return set(g.id for g in self.genedb.region(seqid=self.chr_id,
+                                                    start=current_region[0],
+                                                    end=current_region[1],
+                                                    featuretype="gene"))
 
     def get_gene_info_for_region(self, current_region):
         if not self.genedb:
