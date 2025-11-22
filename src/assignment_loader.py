@@ -6,7 +6,6 @@
 ############################################################################
 
 import logging
-import os
 from collections import defaultdict
 
 import gffutils
@@ -19,6 +18,7 @@ from .assignment_io import (
     NormalTmpFileAssignmentLoader,
     QuickTmpFileAssignmentLoader
 )
+from .gene_info import GeneList, GeneInfo
 
 logger = logging.getLogger('IsoQuant')
 
@@ -33,6 +33,8 @@ class ReadAssignmentLoader:
         self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
         self.multimapped_chr_dict = multimapped_chr_dict
         self.filtered_read_set = filtered_read_set
+        self.current_gene_list = None
+        self.merge_by_gene = False
 
     def has_next(self):
         return self.unpickler.has_next()
@@ -41,32 +43,66 @@ class ReadAssignmentLoader:
         if not self.unpickler.has_next():
             return None, None
 
-        assert self.unpickler.is_gene_info()
-        gene_info = self.unpickler.get_object()
         assignment_storage = []
-        while self.unpickler.is_read_assignment():
-            read_assignment = self.unpickler.get_object()
-            if self.filtered_read_set and read_assignment.read_id not in self.filtered_read_set:
-                continue
-            if self.multimapped_chr_dict is not None and read_assignment.read_id in self.multimapped_chr_dict:
-                resolved_assignment = None
-                for a in self.multimapped_chr_dict[read_assignment.read_id]:
-                    if a.assignment_id == read_assignment.assignment_id and a.chr_id == read_assignment.chr_id:
-                        if resolved_assignment is not None:
-                            logger.info("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
-                        resolved_assignment = a
-
-                if not resolved_assignment:
-                    logger.warning("Incomplete information on read %s" % read_assignment.read_id)
-                    continue
-                elif resolved_assignment.assignment_type == ReadAssignmentType.suspended:
-                    continue
+        while self.unpickler.has_next():
+            if self.current_gene_list is None:
+                assert self.unpickler.is_gene_info()
+                self.current_gene_list = self.unpickler.get_object(full_gene_info=False)
+            elif self.unpickler.is_gene_info():
+                gene_list = self.unpickler.get_object(full_gene_info=False)
+                if self.current_gene_list.overlaps(gene_list):
+                    self.current_gene_list.merge(gene_list)
                 else:
-                    read_assignment.assignment_type = resolved_assignment.assignment_type
-                    read_assignment.gene_assignment_type = resolved_assignment.gene_assignment_type
-                    read_assignment.multimapper = resolved_assignment.multimapper
-            assignment_storage.append(read_assignment)
+                    if not self.current_gene_list.gene_id_set:
+                        gene_info = GeneInfo.from_region(self.current_gene_list.chr_id, self.current_gene_list.start, self.current_gene_list.end, self.current_gene_list.delta)
+                    else:
 
+                        gene_info = GeneInfo([self.genedb[gene_id] for gene_id in self.current_gene_list.gene_id_set], self.genedb, self.current_gene_list.delta)
+                    if self.chr_record:
+                        gene_info.set_reference_sequence(gene_info.all_read_region_start,
+                                                         gene_info.all_read_region_end,
+                                                         self.chr_record)
+                    self.current_gene_list = gene_list
+                    for a in assignment_storage:
+                        a.gene_info = gene_info
+                    return gene_info, assignment_storage
+
+            while self.unpickler.is_read_assignment():
+                read_assignment = self.unpickler.get_object()
+                if self.filtered_read_set and read_assignment.read_id not in self.filtered_read_set:
+                    continue
+                if self.multimapped_chr_dict is not None and read_assignment.read_id in self.multimapped_chr_dict:
+                    resolved_assignment = None
+                    for a in self.multimapped_chr_dict[read_assignment.read_id]:
+                        if a.assignment_id == read_assignment.assignment_id and a.chr_id == read_assignment.chr_id:
+                            if resolved_assignment is not None:
+                                logger.info("Duplicate read: %s %s %s" % (read_assignment.read_id, a.gene_id, a.chr_id))
+                            resolved_assignment = a
+
+                    if not resolved_assignment:
+                        logger.warning("Incomplete information on read %s" % read_assignment.read_id)
+                        continue
+                    elif resolved_assignment.assignment_type == ReadAssignmentType.suspended:
+                        continue
+                    else:
+                        read_assignment.assignment_type = resolved_assignment.assignment_type
+                        read_assignment.gene_assignment_type = resolved_assignment.gene_assignment_type
+                        read_assignment.multimapper = resolved_assignment.multimapper
+                assignment_storage.append(read_assignment)
+
+        if not self.current_gene_list.gene_id_set:
+            gene_info = GeneInfo.from_region(self.current_gene_list.chr_id, self.current_gene_list.start,
+                                             self.current_gene_list.end, self.current_gene_list.delta)
+        else:
+
+            gene_info = GeneInfo([self.genedb[gene_id] for gene_id in self.current_gene_list.gene_id_set], self.genedb,
+                                 self.current_gene_list.delta)
+        if self.chr_record:
+            gene_info.set_reference_sequence(gene_info.all_read_region_start,
+                                             gene_info.all_read_region_end,
+                                             self.chr_record)
+        for a in assignment_storage:
+            a.gene_info = gene_info
         return gene_info, assignment_storage
 
 

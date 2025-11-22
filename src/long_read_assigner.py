@@ -447,6 +447,7 @@ class LongReadAssigner:
                 assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.intergenic))
             elif all(el != 1 for el in read_split_exon_profile.gene_profile):
                 # logger.debug("EMPTY - intronic")
+                # TODO: match to a gene
                 assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, IsoformMatch(MatchClassification.genic_intron))
             else:
                 # logger.debug("EMPTY - genic")

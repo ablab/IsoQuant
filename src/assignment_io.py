@@ -27,7 +27,7 @@ from .isoform_assignment import (match_subtype_to_str_with_additional_info,
                                  BasicReadAssignment,
                                  MatchClassification,
                                  ReadAssignmentType)
-from .gene_info import GeneInfo
+from .gene_info import GeneInfo, GeneList
 
 
 logger = logging.getLogger('IsoQuant')
@@ -162,6 +162,7 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
     def flush(self):
         pass
 
+
 class BaseTmpFileAssignmentLoader:
     def __init__(self, input_file_name):
         self.loader = open(input_file_name, "rb")
@@ -191,8 +192,13 @@ class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
         self.chr_record = chr_record
         self.current_gene_info = None
 
-    def get_object(self):
+    def get_object(self, full_gene_info=True):
         if self.is_gene_info():
+            if not full_gene_info:
+                self.current_gene_info = GeneList.deserialize(self.loader)
+                self._read_id()
+                return self.current_gene_info
+
             self.current_gene_info = GeneInfo.deserialize(self.loader, self.genedb)
             if self.chr_record:
                 self.current_gene_info.set_reference_sequence(self.current_gene_info.all_read_region_start,
