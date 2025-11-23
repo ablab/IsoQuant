@@ -3,24 +3,27 @@ import pysam
 import gffutils
 from collections import defaultdict
 import mappy as mp
+import logging
+from functools import lru_cache
+
+logger = logging.getLogger('IsoQuant')
+min_mapq = 20
+MAX_BREAK_SHIFT = 10
 
 class FusionDetector:
     def __init__(self, bam_path, gene_db_path, reference_fasta):
         self.bam_path = bam_path
+        self.genedb_path = gene_db_path
         self.db = gffutils.FeatureDB(gene_db_path, keep_order=True)
         self.fusion_candidates = defaultdict(set)
         # store breakpoint counts per fusion key: {(chr1,pos1,chr2,pos2): count}
         self.fusion_breakpoints = defaultdict(lambda: defaultdict(int))
         # optional reference and aligner for soft-clip realignment
         self.reference_fasta = reference_fasta
-        self.aligner = mp.Aligner(reference_fasta)
-        # collected metadata for downstream filtering / model construction
-        # fusion_metadata[fusion_key] = {
-        #   "supporting_reads": set(),
-        #   "consensus_bp": (chr1,pos1,chr2,pos2),
-        #   "left_gene": str, "right_gene": str,
-        #   "support": int
-        # }
+        try:
+            self.aligner = mp.Aligner(reference_fasta) if reference_fasta else None
+        except Exception:
+            self.aligner = None
         self.fusion_metadata = {}
 
     def safe_reference_start(self, read):
@@ -38,31 +41,45 @@ class FusionDetector:
             return 0
 
     def parse_sa_fields(self, sa):
-        # Parse a single SA tag entry and return (chrom, pos, cigar).
+        # Parse a single SA tag entry and return (chrom, pos, cigar, mapq).
         # format: chrom,pos,strand,CIGAR,mapQ,NM
         fields = sa.split(",")
         chrom = fields[0]
         pos = int(fields[1])
         sa_cigar = fields[3] if len(fields) > 3 else None
-        return chrom, pos, sa_cigar
-    
-    def get_context(self, chrom, pos):
+        sa_mapq = int(fields[4]) if len(fields) > 4 and fields[4].isdigit() else None
+        return chrom, pos, sa_cigar, sa_mapq
+
+
+    @lru_cache(maxsize=200000)
+    def _context_query(self, chrom, pos):
+        # Minimal gffutils calls; returns (gene_name, region_type)
         try:
             genes = list(self.db.region(region=(chrom, pos, pos), featuretype='gene'))
             if genes:
-                return genes[0].attributes.get('gene_name', [genes[0].id])[0]
-            exons = list(self.db.region(region=(chrom, pos, pos), featuretype='exon'))
-            if exons:
-                return "intronic"
-            return "intergenic"
+                gene_name = genes[0].attributes.get('gene_name', [genes[0].id])[0]
+                # Are we in an exon of that gene?
+                exons = list(self.db.region(region=(chrom, pos, pos), featuretype='exon'))
+                if exons:
+                    return gene_name, "exonic"
+                else:
+                    return gene_name, "intronic"
+            else:
+                # Not inside any gene; check if overlapping any exon 
+                exons = list(self.db.region(region=(chrom, pos, pos), featuretype='exon'))
+                return None, "exonic" if exons else "intergenic"
         except Exception:
-            return "unknown"
+            return None, "unknown"
+
+
+    def get_context(self, chrom, pos):
+        gene_name, region_type = self._context_query(chrom, pos)
+        return gene_name if gene_name else region_type
+
 
     def detect_softclip(self, read):
-        """
-        Detect large soft-clips (>=50 bp) on either end of the read.
-        Returns (clip_side, clip_len) or (None, 0) if no significant clip.
-        """
+        # Detect large soft-clips (>=50 bp) on either end of the read.
+        # Returns (clip_side, clip_len) or (None, 0) if no significant clip.
         cigartuples = getattr(read, "cigartuples", None)
         clip_side, clip_len = None, 0
 
@@ -101,7 +118,6 @@ class FusionDetector:
         return total
     
     def realign_clipped_seq(self, seq):
-        # Realign a clipped sequence using mappy aligner. 
         try:
             for hit in self.aligner.map(seq):
                 hit_len = (getattr(hit, "r_en", None) - getattr(hit, "r_st", None)) if getattr(hit, "r_en", None) else getattr(hit, "mlen", None) or getattr(hit, "alen", None) or 0
@@ -162,41 +178,101 @@ class FusionDetector:
             })
         return results
 
-    def detect_fusions(self):
-        bam = pysam.AlignmentFile(self.bam_path, "rb")
-        for read in bam:
-            if read.has_tag("SA"):
-                self._process_supplementary_alignment(read)
-            else:
-                self._process_softclip(read)
-        bam.close()
+    def cluster_breakpoints(self, bp_counts, window=25):
+        # bp_counts: dict[(chr1,pos1,chr2,pos2)] -> count
+        # Group by chr pairs, then cluster positions by window
+        from collections import defaultdict
+        clusters = defaultdict(list)
+        for (c1,p1,c2,p2), cnt in bp_counts.items():
+            key = (c1, c2)
+            clusters[key].append((p1, p2, cnt))
+        def cluster_positions(items):
+            items = sorted(items)
+            current = [items[0]]
+            clustered = []
+            for itm in items[1:]:
+                if abs(itm[0]-current[-1][0]) <= window and abs(itm[1]-current[-1][1]) <= window:
+                    current.append(itm)
+                else:
+                    clustered.append(current)
+                    current = [itm]
+            clustered.append(current)
+            # pick the cluster with largest total count
+            best = max(clustered, key=lambda cl: sum(x[2] for x in cl))
+            # consensus: weighted median
+            import numpy as np
+            p1s = np.array([x[0] for x in best]); w = np.array([x[2] for x in best])
+            p2s = np.array([x[1] for x in best])
+            cons_p1 = int(np.average(p1s, weights=w))
+            cons_p2 = int(np.average(p2s, weights=w))
+            total = int(np.sum(w))
+            return cons_p1, cons_p2, total
+        # choose the chr pair with max clustered support
+        best_pair, best_cons = None, (None,None,0)
+        for key, items in clusters.items():
+            c_p1, c_p2, total = cluster_positions(items)
+            if total > best_cons[2]:
+                best_pair, best_cons = key, (c_p1, c_p2, total)
+        if best_pair is None:
+            return None
+        (c1, c2), (p1, p2, total) = best_pair, best_cons
+        return (c1, p1, c2, p2), total
 
-    def _process_supplementary_alignment(self, read):
-        sa_tag = read.get_tag("SA")
-        primary_chrom = read.reference_name
-        primary_pos = self.safe_reference_start(read)
-        primary_context = self.get_context(primary_chrom, primary_pos)
-        primary_al_len = self.compute_aligned_length(read)
-        # iterate each supplementary alignment entry and handle them independently;
-        # record a fusion immediately when a valid cross-context supplementary alignment is found
+    def parse_sa_entries(self, sa_tag):
+        entries = []
+        if not sa_tag:
+            return entries
         for sa in sa_tag.split(";"):
             if not sa:
                 continue
-            chrom, pos, sa_cigar = self.parse_sa_fields(sa)
+            fields = sa.split(",")
+            if len(fields) < 6:
+                # fall back to partial parse
+                chrom = fields[0]
+                pos = int(fields[1]) if len(fields) > 1 and fields[1].isdigit() else None
+                strand = fields[2] if len(fields) > 2 else "+"
+                cigar = fields[3] if len(fields) > 3 else None
+                mapq = int(fields[4]) if len(fields) > 4 and fields[4].isdigit() else 0
+                nm = int(fields[5]) if len(fields) > 5 and fields[5].isdigit() else 0
+            else:
+                chrom = fields[0]
+                pos = int(fields[1])
+                strand = fields[2]
+                cigar = fields[3]
+                mapq = int(fields[4])
+                nm = int(fields[5])
+            entries.append((chrom, pos, strand, cigar, mapq, nm))
+        return entries
+
+    def estimate_breakpoint(self, read, sa_pos, clip_side=None, sa_cigar=None):
+        left_chr = read.reference_name
+        prim_start = self.safe_reference_start(read)
+        prim_end = (read.reference_end if read.reference_end is not None else None)
+        if prim_end is not None:
+            prim_end = int(prim_end)
+        if clip_side == "right" and prim_end is not None:
+            left_pos = prim_end
+        elif clip_side == "left" and prim_start is not None:
+            left_pos = prim_start
+        else:
+            # No strong clip cue -> choose the side with larger aligned block; default to end
+            left_pos = prim_end if prim_end is not None else prim_start
+        right_chr = read.reference_name
+        right_pos = sa_pos
+        if sa_cigar:
             sa_al_len = self.aligned_len_from_cigarstring(sa_cigar)
+            # If primary clip was 'left', SA likely anchors the right side near its end; otherwise near its start
+            if clip_side == "left" and sa_pos is not None and sa_al_len:
+                right_pos = sa_pos + sa_al_len  # approximate SA end (1-based)
+            else:
+                right_pos = sa_pos  # SA start
 
-            # require sufficient aligned length on both sides
-            if primary_al_len < 100 or sa_al_len < 100:
-                continue
+        return (left_chr, int(left_pos) if left_pos is not None else None,
+                right_chr, int(right_pos) if right_pos is not None else None)
 
-            context = self.get_context(chrom, pos)
-            if context != primary_context:
-                self.record_fusion(primary_context, context, read.query_name, primary_chrom, primary_pos, chrom, pos)
-
-    def _process_softclip(self, read):
-        clip_side, clip_len = self.detect_softclip(read)
-        if not clip_side or self.aligner is None:
-            return
+    def realign_softclip(self, read, clip_side, clip_len,
+                                seen_pairs, jitter_window=25,
+                                min_sa_mapq=20):
         seq = read.query_sequence
         if not seq:
             return
@@ -204,35 +280,169 @@ class FusionDetector:
         best_hit = self.realign_clipped_seq(clipped_seq)
         if not best_hit:
             return
-        sa_chrom, sa_pos = getattr(best_hit, "ctg", None), getattr(best_hit, "r_st", None)
-        if sa_chrom is None or sa_pos is None:
+        hit_mapq = getattr(best_hit, "mapq", 0)
+        if hit_mapq < min_sa_mapq:
             return
-        sa_pos += 1
-        primary_chrom = read.reference_name
-        primary_pos = self.safe_reference_start(read)
-        primary_al_len = self.compute_aligned_length(read)
-        if primary_al_len < 100:
+        sa_chr = getattr(best_hit, "ctg", None)
+        sa_pos = getattr(best_hit, "r_st", None)
+        if sa_chr is None or sa_pos is None:
             return
-        primary_context = self.get_context(primary_chrom, primary_pos)
-        sa_context = self.get_context(sa_chrom, sa_pos)
-        if primary_context != sa_context:
-            self.record_fusion(primary_context, sa_context, read.query_name, primary_chrom, primary_pos, sa_chrom, sa_pos)
+        sa_pos = int(sa_pos) + 1  # convert to 1-based
+        left_chr, left_pos, right_chr, right_pos = self.estimate_breakpoint(
+            read, sa_pos, clip_side=clip_side, sa_cigar=None
+        )
+        if left_pos is None or right_pos is None:
+            return
+        key = (left_chr, (left_pos // jitter_window),
+            sa_chr, (right_pos // jitter_window))
+        if key in seen_pairs:
+            return
+        left_context = self.get_context(left_chr, left_pos)
+        right_context = self.get_context(sa_chr, right_pos)
+        if left_context != right_context:
+            self.record_fusion(left_context, right_context, read.query_name,
+                            left_chr, left_pos, sa_chr, right_pos)
+            seen_pairs.add(key)
 
-    def report(self, output_path="fusion_candidates.tsv", min_support=3):
-        #  write a TSV with one consensus breakpoint per reported fusion.
-        # prefer metadata-driven output (consensus breakpoint + supporting reads)
+    def detect_fusions(self,
+                    min_al_len_primary=80,
+                    min_al_len_sa=80,
+                    min_sa_mapq=20,
+                    min_softclip_len=60,
+                    jitter_window=25,
+                    realign_when_sa_present=False):
+        bam = pysam.AlignmentFile(self.bam_path, "rb")
+        for read in bam:
+            if read.is_unmapped or read.is_secondary or read.is_supplementary:
+                continue
+            prim_al_len = self.compute_aligned_length(read)
+            if prim_al_len < min_al_len_primary:
+                continue
+            prim_mapq = getattr(read, "mapping_quality", 0)
+            if prim_mapq < min_sa_mapq:
+                continue
+            clip_side, clip_len = self.detect_softclip(read)
+            sa_entries = []
+            if read.has_tag("SA"):
+                sa_entries = self.parse_sa_entries(read.get_tag("SA"))
+            seen_pairs = set()
+            sa_used = False
+            if sa_entries:
+                # Filter & prioritize SA entries by mapq and aligned length
+                filtered = []
+                for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm) in sa_entries:
+                    if sa_pos is None or sa_cigar is None:
+                        continue
+                    sa_al_len = self.aligned_len_from_cigarstring(sa_cigar)
+                    if sa_al_len < min_al_len_sa or sa_mapq < min_sa_mapq:
+                        continue
+                    filtered.append((sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len))
+                # keep top-N by sa_mapq or aligned length to limit work
+                if len(filtered) > 3:
+                    filtered.sort(key=lambda x: (x[4], x[6]), reverse=True)
+                    filtered = filtered[:3]
+
+                for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len) in filtered:
+                    # Estimate breakpoints with clip guidance
+                    left_chr, left_pos, right_chr, right_pos = self.estimate_breakpoint(
+                        read, sa_pos, clip_side=clip_side, sa_cigar=sa_cigar
+                    )
+                    if left_pos is None or right_pos is None:
+                        continue
+                    key = (left_chr, (left_pos // jitter_window),
+                        sa_chr, (right_pos // jitter_window))
+                    if key in seen_pairs:
+                        continue
+                    seen_pairs.add(key)
+                    left_context = self.get_context(left_chr, left_pos)
+                    right_context = self.get_context(sa_chr, right_pos)
+                    if left_context != right_context:
+                        self.record_fusion(left_context, right_context, read.query_name,
+                                        left_chr, left_pos, sa_chr, right_pos)
+                        sa_used = True
+            do_realign = False
+            if clip_side and clip_len >= min_softclip_len:
+                if not sa_used:
+                    do_realign = True
+                elif realign_when_sa_present:
+                    do_realign = True
+            if do_realign:
+                self.realign_softclip(read, clip_side, clip_len,
+                                            seen_pairs,
+                                            jitter_window=jitter_window,
+                                            min_sa_mapq=min_sa_mapq)
+        bam.close()
+
+    def validate_candidates(self, min_support=3, window=25, require_gene_names=True,
+                        require_mapq=20, allow_cis_sage=True, require_exon_boundary=False,
+                        max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
+        for fusion_key, meta in self.fusion_metadata.items():
+            support = meta.get("support", 0)
+            bp_counts = self.fusion_breakpoints.get(fusion_key, {})
+            flags = {"is_valid": True, "reasons": [], "class": "canonical"}
+            if support < min_support or not bp_counts:
+                flags["is_valid"] = False
+                flags["reasons"].append(f"Low support ({support} < {min_support})")
+                meta.update(flags); continue
+            # consensus via clustering
+            cons = self.cluster_breakpoints(bp_counts, window=window)
+            if not cons:
+                flags["is_valid"] = False
+                flags["reasons"].append("No stable breakpoint cluster")
+                meta.update(flags); continue
+            consensus_bp, clustered_support = cons
+            meta["consensus_bp"] = consensus_bp
+            meta["support"] = clustered_support
+
+            c1, p1, c2, p2 = consensus_bp
+            g1_name, r1 = self._context_query(c1, p1)
+            g2_name, r2 = self._context_query(c2, p2)
+            meta["left_gene"] = g1_name or r1
+            meta["right_gene"] = g2_name or r2
+            # classify
+            if g1_name and g2_name:
+                if g1_name == g2_name:
+                    flags["class"] = "intragenic"
+                else:
+                    if c1 == c2 and max_intra_chr_distance is not None:
+                        dist = abs(p2 - p1)
+                        if dist <= max_intra_chr_distance:
+                            flags["class"] = "cis-SAGe"
+            else:
+                if (r1 == "intergenic") or (r2 == "intergenic"):
+                    flags["class"] = "intergenic"
+            # gene-name requirement
+            if require_gene_names and not (g1_name and g2_name):
+                flags["is_valid"] = False
+                flags["reasons"].append("Missing gene name on one side")
+            if require_exon_boundary:
+                ex1 = list(self.db.region(region=(c1, p1, p1), featuretype='exon'))
+                ex2 = list(self.db.region(region=(c2, p2, p2), featuretype='exon'))
+                if not ex1 or not ex2:
+                    flags["is_valid"] = False
+                    flags["reasons"].append("Junction not on exon boundary")
+            # cis-SAGe policy
+            if flags["class"] == "cis-SAGe" and not allow_cis_sage:
+                flags["is_valid"] = False
+                flags["reasons"].append("cis-SAGe disallowed by policy")
+            meta.update(flags)
+
+    def report(self, output_path="fusion_candidates.tsv", min_support=3,
+            include_classes=("canonical","cis-SAGe","intragenic"),
+            only_valid=True):
+        self.validate_candidates(min_support=min_support)
         with open(output_path, "w") as f:
-            f.write("LeftGene\tLeftChromosome\tLeftBreakpoint\tRightGene\tRightChromosome\tRightBreakpoint\tSupportingReads\tFusionName\n")
+            f.write("LeftGene\tLeftChromosome\tLeftBreakpoint\tRightGene\tRightChromosome\tRightBreakpoint\tSupportingReads\tFusionName\tClass\tValid\tReasons\n")
             for fusion_key, meta in sorted(self.fusion_metadata.items(), key=lambda x: -x[1].get("support", 0)):
-                support = meta.get("support", 0)
-                if support < min_support:
+                if only_valid and not meta.get("is_valid", True):
                     continue
-                consensus_bp = meta.get("consensus_bp")
-                if not consensus_bp:
+                if meta.get("class") not in include_classes:
                     continue
-                left_chr, left_pos, right_chr, right_pos = consensus_bp
+                if not meta.get("consensus_bp"):
+                    continue
+                left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
                 left_gene = meta.get("left_gene") or self.get_context(left_chr, left_pos)
                 right_gene = meta.get("right_gene") or self.get_context(right_chr, right_pos)
-                fusion_name = fusion_key
-                f.write(f"{left_gene}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_chr}\t{right_pos}\t{support}\t{fusion_name}\n")
+                reasons = ";".join(meta.get("reasons", []))
+                f.write(f"{left_gene}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_key}\t{meta.get('class')}\t{meta.get('is_valid')}\t{reasons}\n")
