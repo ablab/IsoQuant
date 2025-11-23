@@ -192,18 +192,32 @@ class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
         self.chr_record = chr_record
         self.current_gene_info = None
 
-    def get_object(self, full_gene_info=True):
+    def get_object(self):
         if self.is_gene_info():
-            if not full_gene_info:
-                self.current_gene_info = GeneList.deserialize(self.loader)
-                self._read_id()
-                return self.current_gene_info
-
             self.current_gene_info = GeneInfo.deserialize(self.loader, self.genedb)
             if self.chr_record:
                 self.current_gene_info.set_reference_sequence(self.current_gene_info.all_read_region_start,
                                                               self.current_gene_info.all_read_region_end,
                                                               self.chr_record)
+            self._read_id()
+            return self.current_gene_info
+        elif self.is_read_assignment():
+            assert self.current_gene_info is not None
+            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info)
+            self._read_id()
+            return assignment
+        else:
+            return None
+
+
+class GeneListTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
+    def __init__(self, input_file_name):
+        BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
+        self.current_gene_info = None
+
+    def get_object(self):
+        if self.is_gene_info():
+            self.current_gene_info = GeneList.deserialize(self.loader)
             self._read_id()
             return self.current_gene_info
         elif self.is_read_assignment():

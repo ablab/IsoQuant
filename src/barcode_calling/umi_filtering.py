@@ -13,7 +13,7 @@ import logging
 import editdistance
 import gffutils
 
-from src.assignment_loader import create_assignment_loader
+from src.assignment_loader import create_assignment_loader, create_merging_assignment_loader
 from src.isoform_assignment import MatchEventSubtype
 
 logger = logging.getLogger('IsoQuant')
@@ -483,10 +483,10 @@ class UMIFilter:
             self.unique_gene_barcode = set()
 
             barcode_dict = self.load_barcodes_simple(self.split_barcodes_dict[chr_id])
-            loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name)
+            loader = create_merging_assignment_loader(chr_id, saves_prefix)
             while loader.has_next():
                 gene_barcode_dict = defaultdict(lambda: defaultdict(list))
-                gene_info, assignment_storage = loader.get_next()
+                _, assignment_storage = loader.get_next()
                 logger.debug("Processing %d reads" % len(assignment_storage))
                 for read_assignment in assignment_storage:
                     read_id = read_assignment.read_id
