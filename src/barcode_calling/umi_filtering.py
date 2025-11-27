@@ -191,7 +191,9 @@ class UMIFilter:
                 elif len(occ) < len(umi):
                     similar, ed = occ in umi, abs(len(occ) - len(umi))
                 else:
-                    similar, ed =  umi in occ, abs(len(occ) - len(umi))
+                    similar, ed = umi in occ, abs(len(occ) - len(umi))
+            elif occ == umi:
+                similar, ed = True, 0
             else:
                 ed = editdistance.eval(occ, umi)
                 if not self.disregard_length_diff:
@@ -201,19 +203,19 @@ class UMIFilter:
             if similar and ed < best_dist:
                 similar_umi = occ
                 best_dist = ed
+                if best_dist == 0:
+                    break
 
         return similar_umi
 
-    def _process_duplicates(self, molecule_list):
-        if not molecule_list:
-            return []
+    def _construct_umi_dict(self, molecule_list):
+        umi_counter = defaultdict(int)
+        for m in molecule_list:
+            umi_counter[m.umi] += 1
+        # process reads with the same UMIs consecutively, otherwise reads with the same UMI may fall into different
+        # clusters since the heuristic is greedy
+        molecule_list = sorted(molecule_list, key=lambda m:(umi_counter[m.umi], m.umi), reverse=True)
 
-        if len(molecule_list) == 1:
-            self.duplicated_molecule_counts[1] += 1
-            logger.debug("Unique " + molecule_list[0].read_id)
-            return molecule_list
-
-        resulting_reads = []
         umi_dict = defaultdict(list)
         trusted_umi_list = []
         for m in molecule_list:
@@ -230,6 +232,19 @@ class UMIFilter:
             else:
                 umi_dict[similar_umi].append(m)
 
+        return umi_dict
+
+    def _process_duplicates(self, molecule_list):
+        if not molecule_list:
+            return []
+
+        if len(molecule_list) == 1:
+            self.duplicated_molecule_counts[1] += 1
+            logger.debug("Unique " + molecule_list[0].read_id)
+            return molecule_list
+
+        resulting_reads = []
+        umi_dict = self._construct_umi_dict(molecule_list)
         for umi in umi_dict.keys():
             duplicate_count = len(umi_dict[umi])
             self.duplicated_molecule_counts[duplicate_count] += 1
