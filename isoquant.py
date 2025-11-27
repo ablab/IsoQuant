@@ -44,7 +44,7 @@ from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, Grouped
 from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
-from detect_barcodes import process_single_thread, process_in_parallel
+from detect_barcodes import process_single_thread, process_in_parallel, get_umi_length
 
 
 logger = logging.getLogger('IsoQuant')
@@ -477,11 +477,14 @@ def check_input_params(args):
         args.mode = IsoQuantMode[args.mode]
     if not isinstance(args.mode, IsoQuantMode):
         args.mode = IsoQuantMode[args.mode]
+
+    args.umi_length = 0
     if args.mode.needs_barcode_calling():
         if not args.barcode_whitelist and not args.barcoded_reads:
             logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
                             "barcoded reads" % args.mode.name)
             exit(-3)
+        args.umi_length = get_umi_length(args.mode)
 
     check_input_files(args)
     return True

@@ -249,7 +249,7 @@ class StereoBarcodeDetector:
     TSO_PRIMER = "ACTGAGAGGCATGGCGACCTTATCAG"
     PC1_PRIMER = "CTTCCGATCTATGGCGACCTTATCAG"
     BC_LENGTH = 25
-    UMI_LENGTH = 10
+    UMI_LEN = 10
     NON_T_UMI_BASES = 0
     UMI_LEN_DELTA = 4
     TERMINAL_MATCH_DELTA = 3
@@ -348,7 +348,7 @@ class StereoBarcodeDetector:
 
         if polyt_start == -1:
             # if polyT was not detected earlier, use relaxed parameters once the linker is found
-            presumable_polyt_start = linker_end + self.UMI_LENGTH
+            presumable_polyt_start = linker_end + self.UMI_LEN
             search_start = presumable_polyt_start - 4
             search_end = min(len(sequence), presumable_polyt_start + 10)
             polyt_start = find_polyt_start(sequence[search_start:search_end], window_size=5, polya_fraction=1.0)
@@ -393,10 +393,10 @@ class StereoBarcodeDetector:
         potential_umi_end = polyt_start - 1
         umi = None
         good_umi = False
-        if potential_umi_start + 2 * self.UMI_LENGTH > potential_umi_end > potential_umi_start:
+        if potential_umi_start + 2 * self.UMI_LEN > potential_umi_end > potential_umi_start:
             umi = sequence[potential_umi_start:potential_umi_end + 1]
             logger.debug("Potential UMI: %s" % umi)
-            good_umi = abs(len(umi) - self.UMI_LENGTH) <= self.UMI_LEN_DELTA
+            good_umi = abs(len(umi) - self.UMI_LEN) <= self.UMI_LEN_DELTA
 
         if not umi:
             return DoubleBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
@@ -457,7 +457,7 @@ class StereoSplttingBarcodeDetector:
     TSO_PRIMER = "ACTGAGAGGCATGGCGACCTTATCAG"
     PC1_PRIMER = "CTTCCGATCTATGGCGACCTTATCAG"
     BC_LENGTH = 25
-    UMI_LENGTH = 10
+    UMI_LEN = 10
     NON_T_UMI_BASES = 0
     UMI_LEN_DELTA = 3
     TERMINAL_MATCH_DELTA = 3
@@ -585,7 +585,7 @@ class StereoSplttingBarcodeDetector:
 
         if polyt_start == -1 or polyt_start < linker_start:
             # if polyT was not detected earlier, use relaxed parameters once the linker is found
-            presumable_polyt_start = linker_end + self.UMI_LENGTH
+            presumable_polyt_start = linker_end + self.UMI_LEN
             search_start = presumable_polyt_start - 4
             search_end = min(len(sequence), presumable_polyt_start + 10)
             polyt_start = find_polyt_start(sequence[search_start:search_end], window_size=5, polya_fraction=1.0)
@@ -662,10 +662,10 @@ class StereoSplttingBarcodeDetector:
         potential_umi_end = polyt_start - 1
         umi = None
         good_umi = False
-        if potential_umi_start + 2 * self.UMI_LENGTH > potential_umi_end > potential_umi_start:
+        if potential_umi_start + 2 * self.UMI_LEN > potential_umi_end > potential_umi_start:
             umi = sequence[potential_umi_start:potential_umi_end + 1]
             logger.debug("Potential UMI: %s" % umi)
-            good_umi = abs(len(umi) - self.UMI_LENGTH) <= self.UMI_LEN_DELTA
+            good_umi = abs(len(umi) - self.UMI_LEN) <= self.UMI_LEN_DELTA
 
         if not umi:
             return StereoBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
@@ -749,7 +749,7 @@ class DoubleBarcodeDetector:
     LEFT_BC_LENGTH = 8
     RIGHT_BC_LENGTH = 6
     BC_LENGTH = LEFT_BC_LENGTH + RIGHT_BC_LENGTH
-    UMI_LENGTH = 9
+    UMI_LEN = 9
     NON_T_UMI_BASES = 2
     UMI_LEN_DELTA = 2
     TERMINAL_MATCH_DELTA = 2
@@ -816,9 +816,9 @@ class DoubleBarcodeDetector:
             return DoubleBarcodeDetectionResult(read_id, polyT=polyt_start)
         logger.debug("LINKER: %d-%d" % (linker_start, linker_end))
 
-        if polyt_start == -1 or polyt_start - linker_end > self.RIGHT_BC_LENGTH + self.UMI_LENGTH + 10:
+        if polyt_start == -1 or polyt_start - linker_end > self.RIGHT_BC_LENGTH + self.UMI_LEN + 10:
             # if polyT was not detected earlier, use relaxed parameters once the linker is found
-            presumable_polyt_start = linker_end + self.RIGHT_BC_LENGTH + self.UMI_LENGTH
+            presumable_polyt_start = linker_end + self.RIGHT_BC_LENGTH + self.UMI_LEN
             search_start = presumable_polyt_start - 4
             search_end = min(len(sequence), presumable_polyt_start + 10)
             polyt_start = find_polyt_start(sequence[search_start:search_end], window_size=5, polya_fraction=1.0)
@@ -854,7 +854,7 @@ class DoubleBarcodeDetector:
         potential_umi_start = read_barcode_end + 1
         potential_umi_end = polyt_start - 1
         if potential_umi_end - potential_umi_start <= 5:
-            potential_umi_end = potential_umi_start + self.UMI_LENGTH - 1
+            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
         potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
         logger.debug("Potential UMI: %s" % potential_umi)
 
@@ -868,7 +868,7 @@ class DoubleBarcodeDetector:
 
         if not umi :
             umi = potential_umi
-            if self.UMI_LENGTH - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LENGTH + self.UMI_LEN_DELTA and \
+            if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA and \
                     all(x != "T" for x in umi[-self.NON_T_UMI_BASES:]):
                 good_umi = True
 
@@ -928,7 +928,7 @@ class IlluminaDoubleBarcodeDetector:
     RIGHT_BC_LENGTH = 6
     BC_LENGTH = LEFT_BC_LENGTH + RIGHT_BC_LENGTH
     MIN_BC_LEN = BC_LENGTH - 4
-    UMI_LENGTH = 9
+    UMI_LEN = 9
     NON_T_UMI_BASES = 2
     UMI_LEN_DELTA = 2
     SCORE_DIFF = 1
@@ -978,7 +978,7 @@ class IlluminaDoubleBarcodeDetector:
         primer_end = -1 # forget about primer
 
         # use relaxed parameters once the linker is found
-        presumable_polyt_start = linker_end + self.RIGHT_BC_LENGTH + self.UMI_LENGTH
+        presumable_polyt_start = linker_end + self.RIGHT_BC_LENGTH + self.UMI_LEN
         search_start = presumable_polyt_start - 4
         search_end = min(len(sequence), presumable_polyt_start + 10)
         polyt_start = find_polyt_start(sequence[search_start:search_end], window_size=5, polya_fraction=1.0)
@@ -1011,7 +1011,7 @@ class IlluminaDoubleBarcodeDetector:
         potential_umi_start = read_barcode_end + 1
         potential_umi_end = polyt_start - 1
         if polyt_start != -1 or potential_umi_end - potential_umi_start <= 5:
-            potential_umi_end = potential_umi_start + self.UMI_LENGTH - 1
+            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
         potential_umi = sequence[potential_umi_start:min(potential_umi_end + 1, len(sequence))]
         logger.debug("Potential UMI: %s" % potential_umi)
 
@@ -1025,7 +1025,7 @@ class IlluminaDoubleBarcodeDetector:
 
         if not umi :
             umi = potential_umi
-            if self.UMI_LENGTH - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LENGTH + self.UMI_LEN_DELTA and \
+            if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA and \
                     all(x != "T" for x in umi[-self.NON_T_UMI_BASES:]):
                 good_umi = True
 
@@ -1047,7 +1047,7 @@ class TenXBarcodeDetector:
     # R1 = "ACACTCTTTCCCTACACGACGCTCTTCCGATCT"  #
     R1 = "CTACACGACGCTCTTCCGATCT" # 10x 3'
     BARCODE_LEN_10X = 16
-    UMI_LEN_10X = 12
+    UMI_LEN = 12
 
     UMI_LEN_DELTA = 2
     TERMINAL_MATCH_DELTA = 2
@@ -1107,9 +1107,9 @@ class TenXBarcodeDetector:
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
         logger.debug("LINKER: %d-%d" % (r1_start, r1_end))
 
-        if polyt_start == -1 or polyt_start - r1_end > self.BARCODE_LEN_10X + self.UMI_LEN_10X + 10:
+        if polyt_start == -1 or polyt_start - r1_end > self.BARCODE_LEN_10X + self.UMI_LEN + 10:
             # if polyT was not detected earlier, use relaxed parameters once the linker is found
-            presumable_polyt_start = r1_end + self.BARCODE_LEN_10X + self.UMI_LEN_10X
+            presumable_polyt_start = r1_end + self.BARCODE_LEN_10X + self.UMI_LEN
             search_start = presumable_polyt_start - 4
             search_end = min(len(sequence), presumable_polyt_start + 10)
             polyt_start = find_polyt_start(sequence[search_start:search_end], window_size=5, polya_fraction=1.0)
@@ -1132,7 +1132,7 @@ class TenXBarcodeDetector:
         potential_umi_start = read_barcode_end + 1
         potential_umi_end = polyt_start - 1
         if potential_umi_end - potential_umi_start <= 5:
-            potential_umi_end = potential_umi_start + self.UMI_LEN_10X - 1
+            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
         potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
         logger.debug("Potential UMI: %s" % potential_umi)
 
@@ -1146,7 +1146,7 @@ class TenXBarcodeDetector:
 
         if not umi :
             umi = potential_umi
-            if self.UMI_LEN_10X - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN_10X + self.UMI_LEN_DELTA:
+            if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA:
                 good_umi = True
 
         if not umi:

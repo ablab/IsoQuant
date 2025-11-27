@@ -156,8 +156,9 @@ class ReadAssignmentInfo:
 
 
 class UMIFilter:
-    def __init__(self, split_barcodes_dict, edit_distance=3, disregard_length_diff=True,
+    def __init__(self, split_barcodes_dict, umi_length=0, edit_distance=3, disregard_length_diff=True,
                  only_unique_assignments=False, only_spliced_reads=False):
+        self.umi_legth = umi_length
         self.max_edit_distance = edit_distance
         self.disregard_length_diff = disregard_length_diff
         self.only_unique_assignments = only_unique_assignments
@@ -177,6 +178,8 @@ class UMIFilter:
 
         self.total_assignments = 0
         self.duplicated_molecule_counts = defaultdict(int)
+
+        self.umi_len_dif_func = lambda x: 0 if self.umi_legth == 0 else lambda x: -abs(self.umi_legth - x)
 
     def _find_similar_umi(self, umi, trusted_umi_list):
         if self.max_edit_distance == -1:
@@ -214,7 +217,9 @@ class UMIFilter:
             umi_counter[m.umi] += 1
         # process reads with the same UMIs consecutively, otherwise reads with the same UMI may fall into different
         # clusters since the heuristic is greedy
-        molecule_list = sorted(molecule_list, key=lambda m:(umi_counter[m.umi], m.umi), reverse=True)
+        molecule_list = sorted(molecule_list,
+                               key=lambda ml: (umi_counter[ml.umi], self.umi_len_dif_func(len(ml.umi)), ml.umi),
+                               reverse=True)
 
         umi_dict = defaultdict(list)
         trusted_umi_list = []
