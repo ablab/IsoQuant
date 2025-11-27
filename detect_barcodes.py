@@ -57,6 +57,15 @@ def stats_file_name(file_name):
     return file_name + ".stats"
 
 
+def get_umi_length(isoquant_mode: IsoQuantMode):
+    if isoquant_mode not in BARCODE_CALLING_MODES:
+        return 0
+    try:
+        return BARCODE_CALLING_MODES[isoquant_mode].UMI_LEN
+    except AttributeError:
+        return 0
+
+
 class SimpleReadStorage:
     def __init__(self):
         self.read_ids = []

@@ -246,7 +246,7 @@ def filter_umis_in_parallel(sample, chr_id, split_barcodes_dict, args, edit_dist
         for barcode2spot_file in args.barcode2spot:
             barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
 
-    umi_filter = UMIFilter(split_barcodes_dict, edit_distance)
+    umi_filter = UMIFilter(split_barcodes_dict, args.umi_length, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(args, chr_id, sample.out_raw_file,
                                   transcript_type_dict,
