@@ -1,4 +1,5 @@
 import time
+import signal
 
 import flowpaths as fp
 import networkx as nx
@@ -180,6 +181,10 @@ def filter_constraints(graph, additional_starts,additional_ends):
     remove_nodes(endnodes_missing, additional_ends)
 
 
+def signal_handler(signum, frame):
+    raise TimeoutError
+
+
 def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constraints: list = [], ground_truth_isoforms: list = [], epsilon: float = 0.25, timeout: float = 300, threads: int = 5, draw_graphs: bool = False):
     #print("constraints", transcripts_constraints)
     #print("Running ILP part")
@@ -251,20 +256,29 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
                     include = False; break
             if include: subpath_constaints_pruned.append(path)
 
-        correction_model = MinErrorCellTypeFlowCorrection(
-            G = graph,
-            cell_tree = cell_type_tree,
-            flow_attr = "flow",
-            cell_flow_attr = "cell_flow",
-            flow_attr_origin = "node",
-            weight_type = int,
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-        )
+        signal.signal(signal.SIGALRM, signal_handler)
+        signal.alarm(timeout)   # Ten seconds
 
-        correction_model.solve()
-        corrected_graph = correction_model.get_corrected_graph()
+        try:
+
+            correction_model = MinErrorCellTypeFlowCorrection(
+                G = graph,
+                cell_tree = cell_type_tree,
+                flow_attr = "flow",
+                cell_flow_attr = "cell_flow",
+                flow_attr_origin = "node",
+                weight_type = int,
+                additional_starts = additional_starts,
+                additional_ends = additional_ends,
+            )
         
+            correction_model.solve()
+            corrected_graph = correction_model.get_corrected_graph()
+        
+        except TimeoutError:
+            print("Timelimit exceeded")
+            return []
+    
          # Draw the graph with cell type flows
         if draw_graphs:
             fp.utils.draw(
@@ -313,26 +327,32 @@ def ILP_Solver_Nodes(intron_graph, chr_id, gene_id, index, transcripts_constrain
             optimization_options["time_limit"] = timeout
     
         logger.info("Running MinFlowDecomp")
-    
-        mcd_model = MinFlowCellDecomp(
-            G = corrected_graph,
-            flow_attr = "flow",
-            cell_flow_attr = "cell_flow",
-            cell_tree = cell_type_tree,
-            flow_attr_origin = "node",
-            additional_starts = additional_starts,
-            additional_ends = additional_ends,
-            subpath_constraints = subpath_constaints_pruned,
-            optimization_options = optimization_options,
-        )
 
-        start = time.time()
-        mcd_model.solve()
-        end = time.time()
-        logger.info("Solution found! in %d seconds", end - start)
-        solution = process_solution(graph, mcd_model, additional_starts,additional_ends)
-        #print("solution",solution)
-        # Condensing the paths in the expanded graph to paths in the the original graph
+        try:
+    
+            mcd_model = MinFlowCellDecomp(
+                G = corrected_graph,
+                flow_attr = "flow",
+                cell_flow_attr = "cell_flow",
+                cell_tree = cell_type_tree,
+                flow_attr_origin = "node",
+                additional_starts = additional_starts,
+                additional_ends = additional_ends,
+                subpath_constraints = subpath_constaints_pruned,
+                optimization_options = optimization_options,
+            )
+
+            start = time.time()
+            mcd_model.solve()
+            end = time.time()
+            logger.info("Solution found! in %d seconds", end - start)
+            solution = process_solution(graph, mcd_model, additional_starts,additional_ends)
+            #print("solution",solution)
+            # Condensing the paths in the expanded graph to paths in the the original graph
+
+        except TimeoutError:
+            print("Timelimit exceeded")
+            return []
         
         if solution is None:
             fp.utils.draw(
