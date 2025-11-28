@@ -34,7 +34,7 @@ from .long_read_counter import (
     create_transcript_counter,
     GroupedOutputFormat,
 )
-from .polya_position_model import PolyACounter
+from .terminal_counter import PolyACounter, TSSCounter
 from .multimap_resolver import MultimapResolver
 from .read_groups import (
     create_read_grouper,
@@ -356,8 +356,9 @@ class ReadAssignmentAggregator:
 
         self.global_counter = CompositeCounter([])
         self.polyA_counter = PolyACounter(sample.out_polya, read_groups)
-        #self.tss_counter = TSSCounter(sample.out_tss, read_groups)
+        self.tss_counter = TSSCounter(sample.out_tss, read_groups)
         self.global_counter.add_counters([self.polyA_counter])
+        self.global_counter.add_counters([self.tss_counter])
 
         if self.args.genedb:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
