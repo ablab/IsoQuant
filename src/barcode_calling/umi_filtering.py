@@ -212,13 +212,17 @@ class UMIFilter:
         return similar_umi
 
     def _construct_umi_dict(self, molecule_list):
-        umi_counter = defaultdict(int)
+        umi_counter = defaultdict(set)
         for m in molecule_list:
-            umi_counter[m.umi] += 1
+            umi_counter[m.umi].add(m.read_id)
+
+        umi_sorting_keys = {}
+        for umi in umi_counter:
+            umi_sorting_keys[umi] = (len(umi_counter[umi]), self.umi_len_dif_func(len(umi)), umi)
         # process reads with the same UMIs consecutively, otherwise reads with the same UMI may fall into different
         # clusters since the heuristic is greedy
         molecule_list = sorted(molecule_list,
-                               key=lambda ml: (umi_counter[ml.umi], self.umi_len_dif_func(len(ml.umi)), ml.umi),
+                               key=lambda ml: umi_sorting_keys[ml.umi],
                                reverse=True)
 
         umi_dict = defaultdict(list)
