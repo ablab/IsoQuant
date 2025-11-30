@@ -331,6 +331,41 @@ def parse_args(cmd_args=None, namespace=None):
     return args, parser
 
 
+def run_fusion_detection_for_args(args):
+    logger.info("Fusion detection mode enabled.")
+    # ensure gene DB (.db) is available
+    if not args.genedb:
+        logger.critical("Fusion detection requires a gene database (--genedb). Provide a .db or a GTF/GFF to be converted.")
+        exit(-1)
+    # collect BAM files from prepared input_data (mapping step or user-provided BAMs)
+    bam_files = []
+    for sample in args.input_data.samples:
+        for lib in sample.file_list:
+            for in_file in lib:
+                # treat any existing file as candidate BAM (check existence below)
+                bam_files.append(in_file)
+        if getattr(sample, "illumina_bam", None):
+            bam_files.extend(sample.illumina_bam)
+            bam_files = [f for f in bam_files if os.path.isfile(f)]
+    if not bam_files:
+        logger.critical("No BAM files detected for fusion detection. Provide --bam or --fastq (will be mapped).")
+        exit(-1)
+    # Run fusion detection for each BAM file and write per-BAM report into the main output folder
+    for bam_path in bam_files:
+        try:
+            logger.info("Running fusion detection on %s" % bam_path)
+            # pass reference FASTA so FusionDetector can extract sequences and realign soft-clips
+            fd = FusionDetector(bam_path, args.genedb, reference_fasta=args.reference)
+            fd.detect_fusions()
+            out_fname = os.path.join(args.output, "fusion_" + os.path.basename(bam_path) + ".tsv")
+            fd.report(output_path=out_fname)
+            logger.info("Fusion candidates for %s written to %s" % (bam_path, out_fname))
+        except Exception as e:
+            logger.error("Fusion detection failed for %s: %s" % (bam_path, str(e)))
+            logger.debug("Traceback:", exc_info=True)
+    logger.info(" === Fusion detection finished === ")
+
+
 def check_and_load_args(args, parser):
     args.param_file = os.path.join(args.output, ".params")
     if args.resume:
@@ -829,46 +864,9 @@ def run_pipeline(args):
         args.index = dataset_mapper.index_fname
         args.input_data = dataset_mapper.map_reads(args)
  
-    # If fusion detection requested, call FusionDetector now that gene DB and aligned BAMs are available
+    # If fusion detection requested, delegate to helper and return early
     if getattr(args, "fusion", False):
-        logger.info("Fusion detection mode enabled.")
-
-        # ensure gene DB (.db) is available
-        if not args.genedb:
-            logger.critical("Fusion detection requires a gene database (--genedb). Provide a .db or a GTF/GFF to be converted.")
-            exit(-1)
-
-        # collect BAM files from prepared input_data (mapping step or user-provided BAMs)
-        bam_files = []
-        for sample in args.input_data.samples:
-            for lib in sample.file_list:
-                for in_file in lib:
-                    # treat any existing file as candidate BAM (check existence below)
-                    bam_files.append(in_file)
-            if getattr(sample, "illumina_bam", None):
-                bam_files.extend(sample.illumina_bam)
-
-        # keep only files that exist and look like BAMs (simple check by extension or pysam will catch invalid files)
-        bam_files = [f for f in bam_files if os.path.isfile(f)]
-        if not bam_files:
-            logger.critical("No BAM files detected for fusion detection. Provide --bam or --fastq (will be mapped).")
-            exit(-1)
-
-        # Run fusion detection for each BAM file and write per-BAM report into the main output folder
-        for bam_path in bam_files:
-            try:
-                logger.info("Running fusion detection on %s" % bam_path)
-                # pass reference FASTA so FusionDetector can extract sequences and realign soft-clips
-                fd = FusionDetector(bam_path, args.genedb, reference_fasta=args.reference)
-                fd.detect_fusions()
-                out_fname = os.path.join(args.output, "fusion_" + os.path.basename(bam_path) + ".tsv")
-                fd.report(output_path=out_fname)
-                logger.info("Fusion candidates for %s written to %s" % (bam_path, out_fname))
-            except Exception as e:
-                logger.error("Fusion detection failed for %s: %s" % (bam_path, str(e)))
-                logger.debug("Traceback:", exc_info=True)
-
-        logger.info(" === Fusion detection finished === ")
+        run_fusion_detection_for_args(args)
         return
  
     if args.run_aligner_only:

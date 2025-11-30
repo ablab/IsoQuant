@@ -7,8 +7,6 @@ import logging
 from functools import lru_cache
 
 logger = logging.getLogger('IsoQuant')
-min_mapq = 20
-MAX_BREAK_SHIFT = 10
 
 class FusionDetector:
     def __init__(self, bam_path, gene_db_path, reference_fasta):
