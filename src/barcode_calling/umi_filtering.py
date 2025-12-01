@@ -513,6 +513,9 @@ class UMIFilter:
                 _, assignment_storage = loader.get_next()
                 logger.debug("Processing %d reads" % len(assignment_storage))
                 for read_assignment in assignment_storage:
+                    if read_assignment.gene_assignment_type.is_ambiguous() or read_assignment.gene_assignment_type.is_unassigned():
+                        continue
+
                     read_id = read_assignment.read_id
                     assignment_type = read_assignment.assignment_type
                     exon_blocks = read_assignment.corrected_exons
