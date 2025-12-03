@@ -37,6 +37,12 @@ class ReadAssignmentType(Enum):
                         ReadAssignmentType.unique_minor_difference,
                         ReadAssignmentType.ambiguous]
 
+    def is_intronic_consistent(self):
+        return self in {ReadAssignmentType.unique,
+                        ReadAssignmentType.unique_minor_difference,
+                        ReadAssignmentType.ambiguous,
+                        ReadAssignmentType.inconsistent_non_intronic}
+
     def is_unassigned(self):
         return self in [ReadAssignmentType.noninformative,
                         ReadAssignmentType.intergenic]
