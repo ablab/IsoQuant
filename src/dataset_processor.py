@@ -33,7 +33,6 @@ from .long_read_counter import (
     create_gene_counter,
     create_transcript_counter,
 )
-from .polya_position_model import PolyACounter
 from .multimap_resolver import MultimapResolver
 from .read_groups import (
     create_read_grouper,
@@ -287,9 +286,6 @@ class ReadAssignmentAggregator:
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         self.global_counter = CompositeCounter([])
-        self.polyA_counter = PolyACounter(sample.out_polya) 
-        self.global_counter.add_counters([self.polyA_counter])
-
         if self.args.genedb:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
                                                     self.args.gene_quantification,
