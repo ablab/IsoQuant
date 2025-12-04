@@ -38,17 +38,6 @@ class FusionDetector:
         except Exception:
             return 0
 
-    def parse_sa_fields(self, sa):
-        # Parse a single SA tag entry and return (chrom, pos, cigar, mapq).
-        # format: chrom,pos,strand,CIGAR,mapQ,NM
-        fields = sa.split(",")
-        chrom = fields[0]
-        pos = int(fields[1])
-        sa_cigar = fields[3] if len(fields) > 3 else None
-        sa_mapq = int(fields[4]) if len(fields) > 4 and fields[4].isdigit() else None
-        return chrom, pos, sa_cigar, sa_mapq
-
-
     @lru_cache(maxsize=200000)
     def _context_query(self, chrom, pos):
         # Minimal gffutils calls; returns (gene_name, region_type)
@@ -69,11 +58,9 @@ class FusionDetector:
         except Exception:
             return None, "unknown"
 
-
     def get_context(self, chrom, pos):
         gene_name, region_type = self._context_query(chrom, pos)
         return gene_name if gene_name else region_type
-
 
     def detect_softclip(self, read):
         # Detect large soft-clips (>=50 bp) on either end of the read.
@@ -114,7 +101,7 @@ class FusionDetector:
             if op in ('M', '=', 'X'):
                 total += length
         return total
-    
+
     def realign_clipped_seq(self, seq):
         try:
             for hit in self.aligner.map(seq):
@@ -304,9 +291,9 @@ class FusionDetector:
 
     def detect_fusions(self,
                     min_al_len_primary=80,
-                    min_al_len_sa=80,
-                    min_sa_mapq=20,
-                    min_softclip_len=60,
+                    min_al_len_sa=60,
+                    min_sa_mapq=10,
+                    min_softclip_len=40,
                     jitter_window=25,
                     realign_when_sa_present=False):
         bam = pysam.AlignmentFile(self.bam_path, "rb")
@@ -371,7 +358,118 @@ class FusionDetector:
                                             min_sa_mapq=min_sa_mapq)
         bam.close()
 
-    def validate_candidates(self, min_support=3, window=25, require_gene_names=True,
+    def reconstruct_fusion_transcript(self, c1, p1, c2, p2, exon_padding=100):
+        # Returns (sequence, left_exons, right_exons) or (None, None, None) on failure.
+        try:
+            # Get exons around left breakpoint (c1:p1)
+            left_exons = list(self.db.region(region=(c1, max(1, p1 - exon_padding), p1 + exon_padding), featuretype='exon'))
+            if not left_exons:
+                return None, None, None
+            left_exons = sorted([(int(e.start), int(e.end)) for e in left_exons])
+            # Get exons around right breakpoint (c2:p2)
+            right_exons = list(self.db.region(region=(c2, max(1, p2 - exon_padding), p2 + exon_padding), featuretype='exon'))
+            if not right_exons:
+                return None, None, None
+            right_exons = sorted([(int(e.start), int(e.end)) for e in right_exons])
+            # Extract sequences
+            try:
+                ref = pysam.FastaFile(self.reference_fasta)
+            except Exception:
+                return None, None, None
+            left_seq = ""
+            for s, e in left_exons:
+                seq = ref.fetch(c1, s - 1, e)
+                if seq:
+                    left_seq += seq
+            right_seq = ""
+            for s, e in right_exons:
+                seq = ref.fetch(c2, s - 1, e)
+                if seq:
+                    right_seq += seq
+            ref.close()
+            if not left_seq or not right_seq:
+                return None, None, None
+            # Construct fusion transcript: left portion + right portion
+            fusion_transcript = left_seq + right_seq
+            return fusion_transcript, left_exons, right_exons
+        except Exception as e:
+            logger.debug(f"Failed to reconstruct fusion transcript at {c1}:{p1}--{c2}:{p2}: {str(e)}")
+            return None, None, None
+
+    def realign_fusion_transcript(self, fusion_seq, min_match_len=30, min_mapq=10):
+        #Returns list of hits or empty list if alignment fails or is weak.
+        if not self.aligner or not fusion_seq or len(fusion_seq) < min_match_len:
+            logger.debug("Realign skipped: missing aligner or sequence too short")
+            return []
+        try:
+            hits = list(self.aligner.map(fusion_seq))
+            if not hits:
+                logger.debug("No raw alignment hits for fusion transcript")
+                return []
+
+            good_hits = []
+            for h in hits:
+                # Support various mappy attribute names (q_st/q_en or qstart/qend or query_start/query_end)
+                q_st = getattr(h, 'q_st', None)
+                q_en = getattr(h, 'q_en', None)
+                if q_st is None or q_en is None:
+                    q_st = getattr(h, 'qstart', None) or getattr(h, 'query_start', None)
+                    q_en = getattr(h, 'qend', None) or getattr(h, 'query_end', None)
+
+                # Fallback to reported match/aligned lengths
+                match_len = None
+                if q_st is not None and q_en is not None:
+                    try:
+                        match_len = int(q_en) - int(q_st)
+                    except Exception:
+                        match_len = None
+                if not match_len:
+                    match_len = getattr(h, 'mlen', None) or getattr(h, 'alen', None) or 0
+
+                mapq = getattr(h, 'mapq', 0) or getattr(h, 'mapq', 0)
+
+                logger.debug(f"Raw hit: q_st={q_st} q_en={q_en} match_len={match_len} mapq={mapq} ctg={getattr(h,'ctg',None)} r_st={getattr(h,'r_st',None)} r_en={getattr(h,'r_en',None)}")
+
+                if match_len >= min_match_len and mapq >= min_mapq:
+                    good_hits.append(h)
+
+            logger.debug(f"Filtered {len(good_hits)} good hits out of {len(hits)} raw hits for fusion transcript")
+            return good_hits
+        except Exception as e:
+            logger.debug(f"Failed to realign fusion transcript: {str(e)}")
+            return []
+
+    def check_exon_boundary_proximity(self, c1, p1, c2, p2, delta=30):
+        # Check if both breakpoints are within delta bp of exon boundaries.
+        try:
+            # Check left breakpoint proximity to exons
+            left_exons = list(self.db.region(region=(c1, max(1, p1 - delta), p1 + delta), featuretype='exon'))
+            left_valid = False
+            for exon in left_exons:
+                # Check if breakpoint is near exon start or end
+                if abs(p1 - int(exon.start)) <= delta or abs(p1 - int(exon.end)) <= delta:
+                    left_valid = True
+                    break
+            # Check right breakpoint proximity to exons
+            right_exons = list(self.db.region(region=(c2, max(1, p2 - delta), p2 + delta), featuretype='exon'))
+            right_valid = False
+            for exon in right_exons:
+                # Check if breakpoint is near exon start or end
+                if abs(p2 - int(exon.start)) <= delta or abs(p2 - int(exon.end)) <= delta:
+                    right_valid = True
+                    break
+            if not left_valid and not right_valid:
+                return False, f"Both breakpoints >±{delta}bp from exon boundaries"
+            elif not left_valid:
+                return False, f"Left breakpoint {c1}:{p1} >±{delta}bp from exon boundary"
+            elif not right_valid:
+                return False, f"Right breakpoint {c2}:{p2} >±{delta}bp from exon boundary"
+            return True, ""
+        except Exception as e:
+            logger.debug(f"Exon boundary check failed at {c1}:{p1}--{c2}:{p2}: {str(e)}")
+            return False, f"Exon boundary check failed: {str(e)}"
+
+    def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
                         require_mapq=20, allow_cis_sage=True, require_exon_boundary=False,
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
@@ -382,7 +480,7 @@ class FusionDetector:
             if support < min_support or not bp_counts:
                 flags["is_valid"] = False
                 flags["reasons"].append(f"Low support ({support} < {min_support})")
-                meta.update(flags); continue
+                meta.update(flags); continue  
             # consensus via clustering
             cons = self.cluster_breakpoints(bp_counts, window=window)
             if not cons:
@@ -414,25 +512,71 @@ class FusionDetector:
             if require_gene_names and not (g1_name and g2_name):
                 flags["is_valid"] = False
                 flags["reasons"].append("Missing gene name on one side")
+            # exon boundary proximity filter: ±30 bp of exon junctions
             if require_exon_boundary:
-                ex1 = list(self.db.region(region=(c1, p1, p1), featuretype='exon'))
-                ex2 = list(self.db.region(region=(c2, p2, p2), featuretype='exon'))
-                if not ex1 or not ex2:
+                exon_valid, exon_reason = self.check_exon_boundary_proximity(c1, p1, c2, p2, delta=30)
+                if not exon_valid:
                     flags["is_valid"] = False
-                    flags["reasons"].append("Junction not on exon boundary")
+                    flags["reasons"].append(exon_reason)
+            # reconstruct and realign fusion transcript (only if still valid)
+            if flags["is_valid"] and self.reference_fasta and self.aligner:
+                fusion_seq, left_exons, right_exons = self.reconstruct_fusion_transcript(c1, p1, c2, p2, exon_padding=100)
+                if not fusion_seq:
+                    flags["is_valid"] = False
+                    flags["reasons"].append("Failed to reconstruct fusion transcript")
+                else:
+                    hits = self.realign_fusion_transcript(fusion_seq)
+                    if not hits:
+                        flags["is_valid"] = False
+                        flags["reasons"].append("Fusion transcript does not realign cleanly to genome")
+                    else:
+                        # Store realignment info for debugging
+                        meta["realignment_hits"] = len(hits)
+                        meta["best_hit_mapq"] = max([h.mapq for h in hits]) if hits else 0
+            else:
+                # If realignment was requested but reference/aligner is missing, note it
+                if flags["is_valid"] and (self.reference_fasta is None or self.aligner is None):
+                    meta.setdefault("notes", []).append("Realignment skipped: reference or aligner not available")
+
             # cis-SAGe policy
             if flags["class"] == "cis-SAGe" and not allow_cis_sage:
                 flags["is_valid"] = False
                 flags["reasons"].append("cis-SAGe disallowed by policy")
+            conf = self.confidence(meta, flags)
+            meta["confidence"] = conf
+            # convert very low-confidence to invalid
+            if conf < 0.20 and meta.get("support", 0) < 2 and flags["is_valid"]:
+                flags["is_valid"] = False
+                flags["reasons"].append("Low confidence")
             meta.update(flags)
+
+    def confidence(self, meta, flags=None):
+        # Start from clustered support normalized 
+        support = min(meta.get("support", 0), 10) / 10.0
+        # Reconstruction bonus
+        recon = 0.2 if meta.get("reconstruction_ok") else 0.0
+        # Realignment bonus: scale by number of hits and MAPQ
+        hits = meta.get("realignment_hits", 0)
+        mapq = meta.get("best_hit_mapq", 0)
+        realign = min(hits, 3) * 0.1 + min(mapq, 30) / 300.0  # up to ~0.2
+        # Penalties for missing gene names and intergenic
+        penalties = 0.0
+        if "Missing gene name on one side" in meta.get("reasons", []):
+            penalties += 0.1
+        if meta.get("class") == "intergenic":
+            penalties += 0.1
+        conf = max(0.0, min(1.0, support + recon + realign - penalties))
+        return conf
 
     def report(self, output_path="fusion_candidates.tsv", min_support=3,
             include_classes=("canonical","cis-SAGe","intragenic"),
-            only_valid=True):
+            min_confidence=0.3, only_valid=False):
         self.validate_candidates(min_support=min_support)
         with open(output_path, "w") as f:
             f.write("LeftGene\tLeftChromosome\tLeftBreakpoint\tRightGene\tRightChromosome\tRightBreakpoint\tSupportingReads\tFusionName\tClass\tValid\tReasons\n")
             for fusion_key, meta in sorted(self.fusion_metadata.items(), key=lambda x: -x[1].get("support", 0)):
+                if meta.get("confidence", 0) < min_confidence:
+                    continue
                 if only_valid and not meta.get("is_valid", True):
                     continue
                 if meta.get("class") not in include_classes:
