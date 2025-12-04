@@ -99,9 +99,9 @@ class PolyACounter(AbstractCounter):
         self.df['peak_info'] = self.df['histogram'].apply(lambda x: find_peaks(x, distance=10, threshold=(None, None), height=(None, None))[1])
         self.df['peak_location'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in find_peaks(x, distance=10)[0]])
         self.df['peak_prominence'] = self.df['histogram'].apply(lambda x: peak_prominences(x, find_peaks(x, distance=10)[0])[0])
-        self.df['peak_width'] = self.df['histogram'].apply(lambda x: peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.98)[0])
-        self.df['peak_left'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.98)[2]])
-        self.df['peak_right'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.98)[3]])
+        self.df['peak_width'] = self.df['histogram'].apply(lambda x: peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.2)[0])
+        self.df['peak_left'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.2)[2]])
+        self.df['peak_right'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.2)[3]])
         self.df['entropy'] = self.df['histogram'].apply(lambda x: stats.entropy(x))
         self.df['annotated'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['annotated'])
 
@@ -129,10 +129,9 @@ class PolyACounter(AbstractCounter):
             'rank']] = peaks[['mean', 'var', 'range', 'skew',
             'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence', 'rank']].astype(float, errors='ignore') 
-        
+
     
-        peaks['prediction'] = self.model.predict(peaks.drop(['peak_left', 'peak_right', 'histogram', 
-                                                             'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
+        peaks['prediction'] = self.model.predict(peaks.drop(['peak_left', 'peak_right', 'histogram', 'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
     
         peaks = peaks[peaks.prediction ==True].reset_index(drop=True)
         peaks['prediction'] = peaks['peak_location']
@@ -141,6 +140,8 @@ class PolyACounter(AbstractCounter):
 
         
         self.dfResult['prediction'] += self.dfResult['start']
+        self.dfResult['peak_left'] += self.dfResult['start']
+        self.dfResult['peak_right'] += self.dfResult['start']
         self.dfResult['prediction'] = self.dfResult['prediction'].astype(int)
         self.dfResult['flag'] = self.dfResult.apply(lambda x: self.flag(x), axis = 1)
         self.dfResult['peak_heights'] = self.dfResult['peak_heights'].astype(int)
@@ -153,11 +154,11 @@ class PolyACounter(AbstractCounter):
             self.dfResult['counts_byGroup'] = self.dfResult['counts_groups'].apply(lambda x: x[0])
             self.dfResult['peak_heights_byGroup'] = self.dfResult['counts_groups'].apply(lambda x: x[1])
             self.dfResult.drop('counts_groups', inplace=True, axis = 1)
-            self.dfResult = self.dfResult[['chromosome', 'transcript_id', 'gene_id', 'prediction', 'counts', 'counts_byGroup', 'flag']]
+            self.dfResult = self.dfResult[['chromosome', 'transcript_id', 'gene_id', 'peak_left', 'peak_right', 'prediction', 'peak_heights', 'peak_heights_byGroup', 'counts', 'counts_byGroup', 'flag']]
             self.dfResult['group_id'] = [self.ordered_groups for _ in range(len(self.dfResult))]
-            self.dfResult = self.dfResult.explode(['counts_byGroup', 'group_id']).reset_index(drop=True)
+            self.dfResult = self.dfResult.explode(['peak_heights_byGroup', 'counts_byGroup', 'group_id']).reset_index(drop=True)
         else:
-            self.dfResult = self.dfResult[['chromosome', 'transcript_id', 'gene_id', 'prediction', 'counts', 'flag']]
+            self.dfResult = self.dfResult[['chromosome', 'transcript_id', 'gene_id', 'peak_left', 'peak_right', 'prediction', 'peak_heights', 'counts', 'flag']]
 
         
         self.transcripts = {}
@@ -181,18 +182,18 @@ class PolyACounter(AbstractCounter):
 
 
     def counts(self, x):
-        low = int(10+x['peak_left'])
-        high = int(10+x['peak_right']+1)
-        return int(np.array(x.histogram[low:high]).sum())
+        low = int(10+x['peak_location']-5)
+        high = int(10+x['peak_location']+6)
+            
+        return np.array(x.histogram[low:high]).sum()
     
-
     def counts_byGroup(self, x):
         counts = []
         heights = []
         for i in self.group_numeric_ids.values():
             hist = np.histogram(self.transcripts[x['transcript_id']][i], bins = 1+np.max(self.transcripts[x['transcript_id']]['data']) - np.min(self.transcripts[x['transcript_id']]['data']), range=(np.min(self.transcripts[x['transcript_id']]['data']), np.max(self.transcripts[x['transcript_id']]['data'])))[0]
-            low = int(x['peak_left'])
-            high = int(x['peak_right']+1)
+            low = int(x['peak_location']-5)
+            high = int(x['peak_location']+6)
             if low < 0:
                 low = 0
             if high > len(hist):
