@@ -53,8 +53,6 @@ class PolyACounter(AbstractCounter):
         group_id = read_assignment.read_group
         group_id = self.group_numeric_ids[group_id]
         # add a single read_assignment to features dataframe
-
-
         if read_assignment.polyA_found == True and read_assignment.assignment_type in [ReadAssignmentType.inconsistent_non_intronic, ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference, ReadAssignmentType.inconsistent]:
             ok = False
             if read_assignment.strand == '-' and read_assignment.polya_info.external_polyt_pos != -1:
@@ -157,7 +155,7 @@ class PolyACounter(AbstractCounter):
         peaks = peaks[peaks.prediction ==True].reset_index(drop=True)
         peaks['prediction'] = peaks['peak_location']
         self.dfResult = pd.concat([self.dfResult, peaks], axis=0).reset_index(drop=True)
-        self.dfResult['counts'] = self.dfResult.apply(lambda x: self.counts(x), axis = 1)
+        self.dfResult['counts'] = self.dfResult.apply(lambda x: self.test(x), axis = 1)
         if not self.ignore_read_groups:
 
             self.dfResult['counts_groups'] = self.dfResult.apply(lambda x: self.counts_byGroup(x), axis = 1)
@@ -215,9 +213,13 @@ class PolyACounter(AbstractCounter):
 
 
 
-    def counts(self, x):
+    def test(self, x):
         low = int(10+x['peak_location']-5)
         high = int(10+x['peak_location']+6)
+        if low < 0:
+            low = 0
+        if high > len(x.histogram):
+            high = len(x.histogram)
             
         return np.array(x.histogram[low:high]).sum()
     
