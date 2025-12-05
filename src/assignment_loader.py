@@ -43,7 +43,7 @@ class FullAssignmentLoader(BasicAssignmentLoader):
         self.filtered_read_set = filtered_read_set
 
     def load_read_assignment(self, read_assignment):
-        if self.filtered_read_set and read_assignment.read_id not in self.filtered_read_set:
+        if self.filtered_read_set is not None and read_assignment.read_id not in self.filtered_read_set:
             return None
         if self.multimapped_chr_dict is not None and read_assignment.read_id in self.multimapped_chr_dict:
             resolved_assignment = None
@@ -207,10 +207,11 @@ def prepare_multimapped_reads(saves_prefix ,chr_id):
 
 
 def prepare_read_filter(chr_id, saves_prefix, use_filtered_reads):
+    if not use_filtered_reads:
+        return None
     filtered_reads = set()
-    if use_filtered_reads:
-        for l in open(filtered_reads_file_name(saves_prefix, chr_id), "r"):
-            filtered_reads.add(l.rstrip())
+    for l in open(filtered_reads_file_name(saves_prefix, chr_id), "r"):
+        filtered_reads.add(l.rstrip())
     return filtered_reads
 
 
