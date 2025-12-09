@@ -741,7 +741,7 @@ def set_configs_directory(args):
     for config_path in (args.db_config_path, args.index_config_path, args.bed_config_path, args.alignment_config_path):
         if not os.path.exists(config_path):
             with open(config_path, 'w') as f_out:
-                json.dump({}, f_out)
+                json.dump({}, f_out, indent=2)
 
 
 def set_additional_params(args):
