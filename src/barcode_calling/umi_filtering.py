@@ -427,7 +427,7 @@ class UMIFilter:
                         polya_sites = set()
                         gene_ids = set()
                         for m in read_assignment.isoform_matches:
-                            transcript_id = isoform_match.assigned_transcript
+                            transcript_id = m.assigned_transcript
                             gene_ids.add(m.assigned_gene)
                             transcript_type, polya_site = (
                                 transcript_type_dict[transcript_id] if transcript_id in transcript_type_dict
