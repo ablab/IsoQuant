@@ -114,7 +114,8 @@ class PolyACounter(AbstractCounter):
             self.df = self.df.drop(self.df[self.df.peak_count==0].index, axis = 0).reset_index(drop=True)
             self.dfResult['peak_heights'] = self.dfResult.apply(lambda x: x.histogram[x.prediction+10], axis = 1)        
 
-
+        print(self.df.shape)
+        print(self.df.columns)
         keys = list(self.df.peak_info[0].keys())
         peaks = self.df.drop('max', axis = 1).copy()
         for i in keys:
