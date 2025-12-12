@@ -11,6 +11,7 @@ import logging
 import os
 from collections import defaultdict, OrderedDict
 from enum import Enum, unique
+import random
 
 from .isoform_assignment import (
     ReadAssignmentType,
@@ -32,7 +33,8 @@ class PolyACounter(AbstractCounter):
         super().__init__(output_prefix, ignore_read_groups=False)
         self.ignore_read_groups = ignore_read_groups
         self.read_groups = read_groups
-        self.transcripts = {}    
+        self.transcripts = {} 
+        self.transcripts_additional = {}   
         self.gene_info = None
 
         # get read groups
@@ -44,8 +46,27 @@ class PolyACounter(AbstractCounter):
         if self.ordered_groups:
             for i, g in enumerate(self.ordered_groups):
                 self.group_numeric_ids[g] = i
-        
-    
+
+
+    def result(self, dff):
+        dff['count'] = 1
+
+        matrix = pd.pivot_table(dff, 
+                            values='count', 
+                            index='rank', 
+                            columns=['prediction', 'true_peak'], 
+                            aggfunc='count', 
+                            fill_value=0)
+
+        return matrix
+
+    def peak_target(self, x):
+        ok = False
+        delta = 10
+        for i in x['target']:
+            ok = ok or ((x['peak_location'] >= i - delta) & (x['peak_location'] <= i + delta))
+        return ok
+
     def add_read_info(self, read_assignment: ReadAssignment):
         if self.gene_info is None:
             self.gene_info: GeneInfo = read_assignment.gene_info
@@ -75,19 +96,109 @@ class PolyACounter(AbstractCounter):
                         annot_polya = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][0][0] - 1
                         annot_start = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][-1][1] + 1
                     self.transcripts[isoform_match.assigned_transcript] = {'chr': read_assignment.chr_id, 'gene_id': isoform_match.assigned_gene, 'data_polya': [], 'annotated_polya': annot_polya, 'data_start': [], 'annotated_start': annot_start}
+                    
+                    
                     if not self.ignore_read_groups:
                         for i in self.group_numeric_ids.values():
                             self.transcripts[isoform_match.assigned_transcript][i] = {}
                             self.transcripts[isoform_match.assigned_transcript][i]['data_polya'] = []
                             self.transcripts[isoform_match.assigned_transcript][i]['data_start'] = []
-
-                
-                self.transcripts[isoform_match.assigned_transcript]['data_polya'].append(int(polya_pos))
                 self.transcripts[isoform_match.assigned_transcript]['data_start'].append(int(start_pos))
+                self.transcripts[isoform_match.assigned_transcript]['data_polya'].append(int(polya_pos))
+
                 if not self.ignore_read_groups:
-                    self.transcripts[isoform_match.assigned_transcript][group_id]['data_polya'].append(int(polya_pos))
                     self.transcripts[isoform_match.assigned_transcript][group_id]['data_start'].append(int(start_pos))
-      
+                    self.transcripts[isoform_match.assigned_transcript][group_id]['data_polya'].append(int(polya_pos))
+                
+        
+        
+        elif read_assignment.polyA_found == False and read_assignment.assignment_type in [ReadAssignmentType.inconsistent_non_intronic, ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference, ReadAssignmentType.inconsistent]:
+            isoform_match: IsoformMatch = read_assignment.isoform_matches[0]
+            if read_assignment.strand == '-':
+                start_pos = read_assignment.corrected_exons[-1][1]
+            else:
+                start_pos = read_assignment.corrected_exons[0][0]
+            
+            if isoform_match.assigned_transcript not in self.transcripts_additional:
+                if read_assignment.strand == '+':
+                    annot_start = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][0][0] - 1
+                else:
+                    annot_start = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][-1][1] + 1
+                self.transcripts_additional[isoform_match.assigned_transcript] = {'chr': read_assignment.chr_id, 'gene_id': isoform_match.assigned_gene, 'data_start': [], 'annotated_start': annot_start}
+                if not self.ignore_read_groups:
+                    for i in self.group_numeric_ids.values():
+                        self.transcripts_additional[isoform_match.assigned_transcript][i] = {}
+                        self.transcripts_additional[isoform_match.assigned_transcript][i]['data_start'] = []
+            
+            self.transcripts_additional[isoform_match.assigned_transcript]['data_start'].append(int(start_pos))
+            if not self.ignore_read_groups:
+                self.transcripts_additional[isoform_match.assigned_transcript][group_id]['data_start'].append(int(start_pos))
+    
+
+    def collect_data(self):
+
+        self.peaks['target'] = self.peaks['transcript_id'].apply(lambda x: [self.transcripts[x]['annotated_start']])
+
+        for id in self.transcripts:
+            if "_" in id:
+                if self.peaks['transcript_id'].eq(id.split("_")[0]).any():
+                    self.peaks[self.peaks['transcript_id']==id.split("_")[0]]['target'] += [self.transcripts[id]['annotated_start']]
+
+
+        self.peaks['true_peak'] = self.peaks.apply(lambda x: self.peak_target(x) , axis = 1)
+
+        self.peaks = self.peaks.drop('target', axis = 1)
+
+        
+        if self.first:
+            self.peaks.to_csv("src/model_df.csv", index=False, header=True)
+        else:
+            self.peaks.to_csv("src/model_df.csv", mode="a", index=False, header=False)
+
+        self.peaks = self.peaks.drop('true_peak', axis = 1)
+        
+
+
+
+
+    def train_model(self):
+        self.model = XGBClassifier()
+        self.model.load_model('src/model.json')
+    
+        params = self.model.get_xgb_params()
+        self.model_start = XGBClassifier(**params)
+
+        self.model_df = pd.read_csv("src/model_df.csv")
+
+        X = self.model_df.copy().astype(float, errors='ignore').drop('true_peak', axis = 1)
+        y = self.model_df['true_peak'].copy()
+        
+        chrs = list(X.chromosome.unique())
+        n = len(chrs)//2
+        test_chrs = random.sample(chrs, n)
+        train_chrs = [i for i in chrs if i not in test_chrs]
+
+        X_train = X[X["chromosome"].isin(train_chrs)].drop('chromosome', axis = 1).copy().reset_index(drop=True)
+        y_train = y[X["chromosome"].isin(train_chrs)].copy().reset_index(drop=True)
+
+        X_test = X[X["chromosome"].isin(test_chrs)].drop('chromosome', axis = 1).copy().reset_index(drop=True)
+        y_test = y[X["chromosome"].isin(test_chrs)].copy().reset_index(drop=True)
+
+
+        self.model_start.fit(X_train.drop(['peak_left', 'peak_right', 'histogram', 'annotated', 'rank', 'transcript_id', 'gene_id', 'start'], axis = 1).astype(float, errors='ignore'), y_train)
+        
+        
+        rank = X_test['rank']
+        X_test.drop('rank', axis = 1, inplace=True)
+        X_test['prediction'] = self.model_start.predict(X_test.drop(['peak_left', 'peak_right', 'histogram', 'annotated', 'transcript_id', 'gene_id', 'start'], axis = 1).astype(float, errors='ignore'))
+
+        X_test['rank'] = rank
+        X_test['true_peak'] = y_test
+        self.result(X_test)
+        self.model_start.save_model('src/model_start.json')
+
+
+
     def create_df(self, data, annotated, file_name):
         self.df = pd.DataFrame({'transcript_id': self.transcripts.keys()})
         self.df['chromosome'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['chr'])
@@ -122,27 +233,30 @@ class PolyACounter(AbstractCounter):
             
     
         keys = list(self.df.peak_info[0].keys())
-        peaks = self.df.drop('max', axis = 1).copy()
+        self.peaks = self.df.drop('max', axis = 1).copy()
         for i in keys:
-            peaks[i] = peaks.peak_info.apply(lambda x: x[i])
-        peaks = peaks.drop(['left_thresholds', 'right_thresholds'], axis = 1)
-        peaks = peaks.apply(lambda x: self.sort_peaks(x), axis = 1)
+            self.peaks[i] = self.peaks.peak_info.apply(lambda x: x[i])
+        self.peaks = self.peaks.drop(['left_thresholds', 'right_thresholds'], axis = 1)
+        self.peaks = self.peaks.apply(lambda x: self.sort_peaks(x), axis = 1)
         keys.remove('left_thresholds')
         keys.remove('right_thresholds')
-        peaks = peaks.explode(keys+['peak_location', 'rank', 'peak_prominence', 'peak_width', 'peak_left', 'peak_right']).drop(['peak_info'], axis = 1).reset_index(drop=True)
-        peaks[['mean', 'var', 'range', 'skew', 'peak_count', 'peak_location', 'entropy', 
+        self.peaks = self.peaks.explode(keys+['peak_location', 'rank', 'peak_prominence', 'peak_width', 'peak_left', 'peak_right']).drop(['peak_info'], axis = 1).reset_index(drop=True)
+             
+            
+        self.peaks[['mean', 'var', 'range', 'skew', 'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence',
-            'rank']] = peaks[['mean', 'var', 'range', 'skew',
+            'rank']] = self.peaks[['mean', 'var', 'range', 'skew',
             'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence', 'rank']].astype(float, errors='ignore') 
         
+        
+        self.peaks['prediction'] = self.model.predict(self.peaks.drop(['peak_left', 'peak_right', 'histogram', 
+            'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
     
-        peaks['prediction'] = self.model.predict(peaks.drop(['peak_left', 'peak_right', 'histogram', 
-                                                             'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
-    
-        peaks = peaks[peaks.prediction ==True].reset_index(drop=True)
-        peaks['prediction'] = peaks['peak_location']
-        self.dfResult = pd.concat([self.dfResult, peaks], axis=0).reset_index(drop=True)
+        self.peaks = self.peaks[self.peaks.prediction ==True].reset_index(drop=True)
+        self.peaks['prediction'] = self.peaks['peak_location']
+        self.dfResult = pd.concat([self.dfResult, self.peaks], axis=0).reset_index(drop=True)
+        
         self.dfResult['counts'] = self.dfResult.apply(lambda x: self.counts(x), axis = 1)
         self.dfResult['prediction'] += self.dfResult['start']
         self.dfResult['prediction'] = self.dfResult['prediction'].astype(int)
@@ -169,22 +283,29 @@ class PolyACounter(AbstractCounter):
             self.dfResult.to_csv(file_name, sep="\t", index=False, mode="w", header=True)
         else:
             self.dfResult.to_csv(file_name, sep="\t", index=False, mode="a", header=False)
-        
-
-
-
-
-
-
+    
 
 
 
     def dump(self):
-        self.model = XGBClassifier()
-        self.model.load_model('src/model.json')
-        
-        self.create_df('data_polya', 'annotated_polya', self.output_prefix)
+        # self.model = XGBClassifier()
+        # self.model.load_model('src/model.json')
 
+        # self.create_df('data_polya', 'annotated_polya', self.output_prefix)
+
+        # for i in self.transcripts_additional:
+        #     if i in self.transcripts:
+        #         self.transcripts_additional[i]['data_start'].extend(self.transcripts[i]['data_start'])
+        #         if not self.ignore_read_groups:
+        #             for j in self.group_numeric_ids.values():
+        #                 self.transcripts_additional[i][j]['data_start'].extend(self.transcripts[i][j]['data_start'])
+
+
+
+        # self.transcripts = self.transcripts | self.transcripts_additional
+
+        self.model = XGBClassifier()
+        self.model.load_model('src/model_start.json')
 
         self.create_df('data_start', 'annotated_start', self.output_prefix+"_start")
                     
@@ -197,7 +318,10 @@ class PolyACounter(AbstractCounter):
         
     
     def finalize(self, args=None):
-        pass    
+        self.train_model()
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', None) 
+        print(self.model_df)
 
 
     def flag(self, x):
@@ -208,8 +332,10 @@ class PolyACounter(AbstractCounter):
 
 
     def counts(self, x):
+        
         low = int(10+x['peak_left'])
         high = int(10+x['peak_right']+1)
+        
         return int(np.array(x.histogram[low:high]).sum())
     
 
