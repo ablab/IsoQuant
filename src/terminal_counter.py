@@ -207,6 +207,13 @@ class TerminalCounter(AbstractCounter):
         self.model_new.save_model('src/model_new.json')
 
     def create_df(self):
+        if self.transcripts == {}:
+            self.df = pd.DataFrame({'chromosome':[], 'transcript_id':[], 'gene_id':[], 'prediction':[], 'counts':[], 'counts_byGroup':[], 'flag':[], 'group_id':[]})
+            if self.first:
+                self.df.to_csv(self.output_prefix, sep="\t", index=False, mode="w", header=True)
+            else:
+                self.df.to_csv(self.output_prefix, sep="\t", index=False, mode="a", header=False)
+            return
         self.df = pd.DataFrame({'transcript_id': self.transcripts.keys()})
         self.df['chromosome'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['chr'])
         self.df['gene_id'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['gene_id'])
@@ -238,7 +245,6 @@ class TerminalCounter(AbstractCounter):
             self.dfResult['peak_heights'] = self.dfResult.apply(lambda x: x.histogram[x.prediction+10], axis = 1)
        
             
-    
         keys = list(self.df.peak_info[0].keys())
         self.peaks = self.df.drop('max', axis = 1).copy()
         for i in keys:
@@ -336,7 +342,7 @@ class TSSCounter(TerminalCounter):
         self.model = XGBClassifier()
         self.model.load_model('src/model_new.json')
 
-        self.create_df()
+        # self.create_df()
         # self.collect_data()
 
         self.transcripts = {}
@@ -356,6 +362,8 @@ class PolyACounter(TerminalCounter):
             self.gene_info: GeneInfo = read_assignment.gene_info
         group_id = read_assignment.read_group
         group_id = self.group_numeric_ids[group_id]
+        if read_assignment.assignment_type != ReadAssignmentType.intergenic:
+            print("1")
 
         # add a single read_assignment to features dataframe
         if read_assignment.polyA_found == True and read_assignment.assignment_type in [ReadAssignmentType.inconsistent_non_intronic, ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference, ReadAssignmentType.inconsistent]:
@@ -387,7 +395,7 @@ class PolyACounter(TerminalCounter):
         self.model = XGBClassifier()
         self.model.load_model('src/model.json')
 
-        #self.create_df()
+        self.create_df()
 
         self.transcripts = {}
         self.first = False
