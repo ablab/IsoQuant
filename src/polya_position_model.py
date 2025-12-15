@@ -84,6 +84,14 @@ class PolyACounter(AbstractCounter):
     def dump(self):
         self.model = XGBClassifier()
         self.model.load_model('src/model.json')
+        
+        if self.transcripts == {}:
+            self.df = pd.DataFrame({'chromosome':[], 'transcript_id':[], 'gene_id':[], 'prediction':[], 'counts':[], 'counts_byGroup':[], 'flag':[], 'group_id':[]})
+            if self.first:
+                self.df.to_csv(self.output_prefix, sep="\t", index=False, mode="w", header=True)
+            else:
+                self.df.to_csv(self.output_prefix, sep="\t", index=False, mode="a", header=False)
+            return
         self.df = pd.DataFrame({'transcript_id': self.transcripts.keys()})
         self.df['chromosome'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['chr'])
         self.df['gene_id'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['gene_id'])
