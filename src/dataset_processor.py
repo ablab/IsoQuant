@@ -12,6 +12,7 @@ import shutil
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 
 import gffutils
 import pysam
@@ -53,6 +54,7 @@ from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
 from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter, load_barcodes
+from .table_splitter import split_read_table_parallel, load_barcodes_chunked
 
 logger = logging.getLogger('IsoQuant')
 
@@ -778,33 +780,12 @@ class DatasetProcessor:
         os.remove(barcode_split_done)
         open(umi_filtering_done, "w").close()
 
-    @staticmethod
-    def split_read_barcode_table(sample, split_barcodes_file_names):
-        logger.info("Loading barcodes from " + str(sample.barcoded_reads))
-        barcode_umi_dict = load_barcodes(sample.barcoded_reads, True)
-        read_group_files = {}
-        processed_reads = defaultdict(set)
-        bam_files = list(map(lambda x: x[0], sample.file_list))
+    def split_read_barcode_table(self, sample, split_barcodes_file_names):
+        logger.info("Splitting read barcode table")
+        split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
+                                  load_func=load_barcodes_chunked)
+        logger.info("Read barcode table was split")
 
-        logger.info("Splitting barcodes into " + sample.barcodes_split_reads)
-        for bam_file in bam_files:
-            bam = pysam.AlignmentFile(bam_file, "rb")
-            for chr_id in bam.references:
-                if chr_id not in read_group_files and chr_id in split_barcodes_file_names:
-                    read_group_files[chr_id] = open(split_barcodes_file_names[chr_id], "w")
-            for read_alignment in bam:
-                chr_id = read_alignment.reference_name
-                if not chr_id or chr_id not in split_barcodes_file_names:
-                    continue
-
-                read_id = read_alignment.query_name
-                if read_id in barcode_umi_dict and read_id not in processed_reads[chr_id]:
-                    read_group_files[chr_id].write("%s\t%s\t%s\n" % (read_id, barcode_umi_dict[read_id][0], barcode_umi_dict[read_id][1]))
-                    processed_reads[chr_id].add(read_id)
-
-        for f in read_group_files.values():
-            f.close()
-        barcode_umi_dict.clear()
 
     @staticmethod
     def load_read_info(dump_filename):
