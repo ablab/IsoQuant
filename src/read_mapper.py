@@ -86,11 +86,25 @@ def get_aligner(aligner):
     return path
 
 
+def load_json(json_path):
+    if not os.path.isfile(json_path):
+        return {}
+
+    try:
+        with open(json_path, "r") as json_file:
+            res_dict = json.load(json_file)
+    except json.decoder.JSONDecodeError:
+        logger.error('JSON config {json_path} was read with errors, overwriting now'.format(json_path=json_path))
+        with open(json_path, "w") as json_file:
+            json.dump({}, json_file, indent=2)
+        res_dict = {}
+
+    return res_dict
+
+
 def find_stored_index(args, aligner):
     reference_filename = os.path.abspath(args.reference)
-
-    with open(args.index_config_path, 'r') as f_in:
-        converted_indexes = json.load(f_in)
+    converted_indexes = load_json(args.index_config_path)
 
     index_filename = converted_indexes.get(reference_filename, {}).get('index_filename')
     logger.debug('Searching for previously created index for {}'.format(reference_filename))
@@ -111,8 +125,7 @@ def store_index(index, args, aligner):
     reference_filename = os.path.abspath(args.reference)
     index = os.path.abspath(index)
 
-    with open(args.index_config_path, 'r') as f_in:
-        converted_indexes = json.load(f_in)
+    converted_indexes = load_json(args.index_config_path)
     converted_indexes[reference_filename] = {
         'index_filename': index,
         'reference_mtime': os.path.getmtime(reference_filename),
@@ -120,15 +133,13 @@ def store_index(index, args, aligner):
         'aligner': aligner + str(KMER_SIZE[args.data_type])
     }
     with open(args.index_config_path, 'w') as f_out:
-        json.dump(converted_indexes, f_out)
+        json.dump(converted_indexes, f_out, indent=2)
     logger.debug('New index saved to {}'.format(index))
 
 
 def find_stored_bed(args):
     genedb_filename = os.path.abspath(args.genedb)
-
-    with open(args.bed_config_path, 'r') as f_in:
-        converted_beds = json.load(f_in)
+    converted_beds = load_json(args.bed_config_path)
 
     bed_filename = converted_beds.get(genedb_filename, {}).get('bed_filename')
     logger.debug('Searching for previously created BED for {}'.format(genedb_filename))
@@ -147,15 +158,14 @@ def store_bed(bed, args):
     genedb_filename = os.path.abspath(args.genedb)
     bed = os.path.abspath(bed)
 
-    with open(args.bed_config_path, 'r') as f_in:
-        converted_beds = json.load(f_in)
+    converted_beds = load_json(args.bed_config_path)
     converted_beds[genedb_filename] = {
         'bed_filename': bed,
         'reference_mtime': os.path.getmtime(genedb_filename),
         'bed_mtime': os.path.getmtime(bed)
     }
     with open(args.bed_config_path, 'w') as f_out:
-        json.dump(converted_beds, f_out)
+        json.dump(converted_beds, f_out, indent=2)
     logger.debug('New BED saved to {}'.format(bed))
 
 
@@ -166,8 +176,7 @@ def find_stored_alignment(fastq_file, annotation, args):
     ann_str = "_" + ann_path if ann_path else ""
 
     key = "%s_aligned_to_%s%s" % (fastq, index, ann_str)
-    with open(args.alignment_config_path, 'r') as f_in:
-        aligned_fastq_files = json.load(f_in)
+    aligned_fastq_files = load_json(args.alignment_config_path)
 
     logger.debug('Searching for previously created alignment for {}'.format(fastq))
     bam_fpath = aligned_fastq_files.get(key, {}).get('alignment_fpath')
@@ -198,9 +207,7 @@ def store_alignment(bam_file, fastq_file, annotation, args):
 
     key = "%s_aligned_to_%s%s" % (fastq, index, "_" + ann_path if ann_path else "")
     bam_file = os.path.abspath(bam_file)
-
-    with open(args.alignment_config_path, 'r') as f_in:
-        aligned_fastq_files = json.load(f_in)
+    aligned_fastq_files = load_json(args.alignment_config_path)
     aligned_fastq_files[key] = {
         'alignment_fpath': bam_file,
         'index_mtime': os.path.getmtime(index),
@@ -209,7 +216,7 @@ def store_alignment(bam_file, fastq_file, annotation, args):
         'ann_mtime': os.path.getmtime(ann_path) if ann_path else ""
     }
     with open(args.alignment_config_path, 'w') as f_out:
-        json.dump(aligned_fastq_files, f_out)
+        json.dump(aligned_fastq_files, f_out, indent=2)
     logger.debug('New alignment saved to {}'.format(bam_file))
 
 
