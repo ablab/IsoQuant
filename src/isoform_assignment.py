@@ -634,7 +634,7 @@ class ReadAssignment:
         self.polyA_found = False
         self.cage_found = False
         self.polya_info = None
-        self.read_group = "NA"
+        self.read_group = []
         self.mapped_strand = "."
         self.strand = "."
         self.chr_id = "."
@@ -678,7 +678,7 @@ class ReadAssignment:
         read_assignment.polyA_found = bool_arr[1]
         read_assignment.cage_found = bool_arr[2]
         read_assignment.polya_info = PolyAInfo(read_int_neg(infile), read_int_neg(infile), read_int_neg(infile), read_int_neg(infile))
-        read_assignment.read_group = read_string(infile)
+        read_assignment.read_group = read_list(infile, read_string)
         read_assignment.mapped_strand = read_string(infile)
         read_assignment.strand = read_string(infile)
         read_assignment.chr_id = read_string(infile)
@@ -705,7 +705,7 @@ class ReadAssignment:
         write_int_neg(self.polya_info.external_polyt_pos, outfile)
         write_int_neg(self.polya_info.internal_polya_pos, outfile)
         write_int_neg(self.polya_info.internal_polyt_pos, outfile)
-        write_string(self.read_group, outfile)
+        write_list(self.read_group, outfile, write_string)
         write_string(self.mapped_strand, outfile)
         write_string(self.strand, outfile)
         write_string(self.chr_id, outfile)
