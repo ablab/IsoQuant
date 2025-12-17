@@ -269,7 +269,7 @@ class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
             line += "\t" + " ".join(additional_info)
         else:
             line += "\t*"
-        line += "\t%s\n" % read_assignment.read_group
+        line += "\t%s\n" % ",".join(read_assignment.read_group)
         return line
 
     def add_read_info(self, read_assignment):
@@ -331,7 +331,7 @@ class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
                 line += "\t" + " ".join(additional_info)
             else:
                 line += "\t*"
-            line += "\t%s\n" % read_assignment.read_group
+            line += "\t%s\n" % ",".join(read_assignment.read_group)
             self.output_file.write(line)
 
 
