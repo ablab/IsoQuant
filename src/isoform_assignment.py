@@ -575,7 +575,7 @@ class BasicReadAssignment:
         read_int_neg(infile)
         read_int_neg(infile)
         read_int_neg(infile)
-        read_string(infile)
+        read_list(infile, read_string)  # read_group is now a list
         read_string(infile)
         read_string(infile)
         read_assignment.chr_id = read_string(infile)
