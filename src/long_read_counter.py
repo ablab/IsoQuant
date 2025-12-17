@@ -258,7 +258,7 @@ class AssignedFeatureCounter(AbstractCounter):
         self.usable_file_name = self.output_counts_file_name + ".usable"
 
     def add_read_info(self, read_assignment=None):
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[0]
         group_id = self.group_numeric_ids[group_id]
 
         if not read_assignment:
@@ -322,7 +322,7 @@ class AssignedFeatureCounter(AbstractCounter):
             self.reads_for_tpm[group_id] += 1
 
     def add_unassigned(self, read_assignment):
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[0]
         group_id = self.group_numeric_ids[group_id]
         self.not_assigned_reads += 1
         self.reads_for_tpm[group_id] += 1
@@ -557,7 +557,7 @@ class ExonCounter(ProfileFeatureCounter):
     def add_read_info(self, read_assignment):
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[0]
         self.add_read_info_from_profile(read_assignment.exon_gene_profile, read_assignment.strand,
                                         read_assignment.gene_info.exon_property_map, group_id)
 
@@ -569,7 +569,7 @@ class IntronCounter(ProfileFeatureCounter):
     def add_read_info(self, read_assignment):
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group
+        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[0]
         self.add_read_info_from_profile(read_assignment.intron_gene_profile, read_assignment.strand,
                                         read_assignment.gene_info.intron_property_map, group_id)
 
