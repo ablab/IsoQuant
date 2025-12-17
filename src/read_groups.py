@@ -105,6 +105,65 @@ class FileNameGrouper(AbstractReadGrouper):
         return filename
 
 
+class MultiColumnReadTableGrouper(AbstractReadGrouper):
+    """Grouper that handles TSV files with multiple group columns"""
+    def __init__(self, table_tsv_file, read_id_column_index=0, group_id_column_indices=None, delim='\t'):
+        AbstractReadGrouper.__init__(self)
+        if group_id_column_indices is None:
+            group_id_column_indices = [1]
+        logger.debug("Reading read groups from " + table_tsv_file)
+        self.read_map = load_multicolumn_table(table_tsv_file, read_id_column_index, group_id_column_indices, delim)
+        self.num_groups = len(group_id_column_indices)
+
+    def get_group_id(self, alignment, filename=None):
+        """Returns a list of group IDs, one per column"""
+        if alignment.query_name not in self.read_map:
+            default_groups = [self.default_group_id] * self.num_groups
+            for g in default_groups:
+                self.read_groups.add(g)
+            return default_groups
+        group_ids = self.read_map[alignment.query_name]
+        for g in group_ids:
+            self.read_groups.add(g)
+        return group_ids
+
+
+class MultiReadGrouper:
+    """Manages multiple read groupers and returns list of group IDs"""
+    def __init__(self, groupers):
+        """
+        Initialize with a list of groupers
+        Args:
+            groupers: list of AbstractReadGrouper objects
+        """
+        if not isinstance(groupers, list):
+            groupers = [groupers]
+        self.groupers = groupers
+        self.read_groups = [set() for _ in groupers]
+
+    def get_group_id(self, alignment, filename=None):
+        """Returns a list of group IDs from all groupers"""
+        group_ids = []
+        for i, grouper in enumerate(self.groupers):
+            gid = grouper.get_group_id(alignment, filename)
+            # Handle both single group IDs and lists (for MultiColumnReadTableGrouper)
+            if isinstance(gid, list):
+                group_ids.extend(gid)
+                for g in gid:
+                    self.read_groups[i].add(g)
+            else:
+                group_ids.append(gid)
+                self.read_groups[i].add(gid)
+        return group_ids
+
+    def get_all_groups(self):
+        """Returns all unique groups across all groupers"""
+        all_groups = []
+        for groups in self.read_groups:
+            all_groups.append(list(groups))
+        return all_groups
+
+
 def get_file_grouping_properties(values):
     assert len(values) >= 2
     if len(values) > 4:
@@ -116,23 +175,52 @@ def get_file_grouping_properties(values):
 
 
 def prepare_read_groups(args, sample):
+    """
+    Prepare read group files by splitting them by chromosome for memory efficiency.
+    Handles both single and multiple grouping specifications.
+
+    args.read_group should be a list of grouping specifications (nargs='+').
+    """
     if not hasattr(args, "read_group") or args.read_group is None:
         return
-    option = args.read_group
-    values = option.split(':')
-    if values[0] != 'file':
-        return
-    table_filename, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
-    logger.info("Splitting read group file %s for better memory consumption" % table_filename)
-    split_read_group_table(table_filename, sample, read_id_column_index, group_id_column_index, delim)
+
+    # Handle both list (nargs='+') and string (backward compatibility)
+    if isinstance(args.read_group, str):
+        specs = args.read_group.split(';')
+    else:
+        specs = args.read_group
+
+    for spec in specs:
+        spec = spec.strip()
+        if not spec:
+            continue
+
+        values = spec.split(':')
+        if values[0] != 'file':
+            continue
+
+        # Check if this is a multi-column specification
+        if len(values) >= 4 and ',' in values[3]:
+            # Multi-column TSV: file:filename:read_col:group_cols:delim
+            table_filename = values[1]
+            read_id_column_index = int(values[2]) if len(values) > 2 else 0
+            group_id_column_indices = [int(x) for x in values[3].split(',')]
+            delim = values[4] if len(values) > 4 else '\t'
+
+            logger.info("Splitting multi-column read group file %s for better memory consumption" % table_filename)
+            split_table(table_filename, sample, sample.read_group_file, read_id_column_index,
+                       group_id_column_indices, delim)
+        else:
+            # Single column TSV
+            table_filename, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
+            logger.info("Splitting read group file %s for better memory consumption" % table_filename)
+            split_read_group_table(table_filename, sample, read_id_column_index, group_id_column_index, delim)
 
 
-def create_read_grouper(args, sample, chr_id):
-    if not hasattr(args, "read_group") or args.read_group is None:
-        return DefaultReadGrouper()
+def parse_grouping_spec(spec_string, args, sample, chr_id):
+    """Parse a single grouping specification and return the appropriate grouper"""
+    values = spec_string.split(':')
 
-    option = args.read_group
-    values = option.split(':')
     if values[0] == "file_name":
         return FileNameGrouper(args, sample)
     elif values[0] == 'tag':
@@ -142,11 +230,74 @@ def create_read_grouper(args, sample, chr_id):
     elif values[0] == 'read_id':
         return ReadIdSplitReadGrouper(delim=values[1])
     elif values[0] == 'file':
-        read_group_chr_filename = sample.read_group_file + "_" + chr_id
-        return ReadTableGrouper(read_group_chr_filename, 0, 1, '\t')
+        # Format: file:filename:read_col:group_cols:delim
+        # group_cols can be comma-separated like "1,2,3"
+        if len(values) >= 4:
+            # Check if multiple columns are specified
+            group_col_spec = values[3]
+            if ',' in group_col_spec:
+                # Multiple columns - use MultiColumnReadTableGrouper
+                group_id_column_indices = [int(x) for x in group_col_spec.split(',')]
+                read_id_column_index = int(values[2]) if len(values) > 2 else 0
+                delim = values[4] if len(values) > 4 else '\t'
+                read_group_chr_filename = sample.read_group_file + "_" + chr_id
+                return MultiColumnReadTableGrouper(read_group_chr_filename, read_id_column_index,
+                                                   group_id_column_indices, delim)
+            else:
+                # Single column - use ReadTableGrouper
+                read_id_column_index = int(values[2]) if len(values) > 2 else 0
+                group_id_column_index = int(values[3])
+                delim = values[4] if len(values) > 4 else '\t'
+                read_group_chr_filename = sample.read_group_file + "_" + chr_id
+                return ReadTableGrouper(read_group_chr_filename, read_id_column_index,
+                                      group_id_column_index, delim)
+        else:
+            # Default format
+            read_group_chr_filename = sample.read_group_file + "_" + chr_id
+            return ReadTableGrouper(read_group_chr_filename, 0, 1, '\t')
     else:
-        logger.critical("Unsupported read grouping option")
+        logger.critical("Unsupported read grouping option: %s" % values[0])
+        return None
+
+
+def create_read_grouper(args, sample, chr_id):
+    """
+    Create read grouper(s) based on args.read_group specification.
+
+    args.read_group should be a list of grouping specifications (nargs='+'):
+    - Single grouper: ["tag:RG"] or ["file_name"]
+    - Multiple groupers: ["tag:RG", "file_name", "read_id:_"]
+    - Multi-column TSV: ["file:table.tsv:0:1,2,3"] (columns 1,2,3 as separate groups)
+
+    Returns:
+        MultiReadGrouper if multiple specifications, otherwise single grouper
+    """
+    if not hasattr(args, "read_group") or args.read_group is None:
         return DefaultReadGrouper()
+
+    # Handle both list (nargs='+') and string (backward compatibility)
+    if isinstance(args.read_group, str):
+        # Backward compatibility: semicolon-separated string
+        specs = args.read_group.split(';')
+    else:
+        # Native list from nargs='+'
+        specs = args.read_group
+
+    groupers = []
+    for spec in specs:
+        spec = spec.strip()
+        if spec:
+            grouper = parse_grouping_spec(spec, args, sample, chr_id)
+            if grouper:
+                groupers.append(grouper)
+
+    if not groupers:
+        logger.warning("No valid groupers specified, using default")
+        return DefaultReadGrouper()
+    elif len(groupers) == 1:
+        return groupers[0]
+    else:
+        return MultiReadGrouper(groupers)
 
 
 def load_table(table_tsv_file, read_id_column_index, group_id_column_index, delim):
@@ -250,7 +401,9 @@ def split_table(table_file, sample, out_prefix, read_id_column_index, group_id_c
 
             read_id = read_alignment.query_name
             if read_id in read_groups and read_id not in processed_reads[chr_id]:
-                read_group_files[chr_id].write("%s\t%s\n" % (read_id, read_groups[read_id]))
+                # read_groups[read_id] is a list, join with delimiter
+                group_values = delim.join(read_groups[read_id])
+                read_group_files[chr_id].write("%s\t%s\n" % (read_id, group_values))
                 processed_reads[chr_id].add(read_id)
 
     for f in read_group_files.values():

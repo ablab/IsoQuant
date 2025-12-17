@@ -388,7 +388,10 @@ class AlignmentCollector:
             read_assignment.exons = alignment_info.read_exons
             read_assignment.corrected_exons = corrector.correct_read(alignment_info)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
-            read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+
+            group_ids = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+            # Ensure read_group is always a list
+            read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             read_assignment.chr_id = self.chr_id
@@ -453,7 +456,9 @@ class AlignmentCollector:
                                                                                    read_assignment)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
 
-            read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+            group_ids = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+            # Ensure read_group is always a list
+            read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             AlignmentCollector.check_antisense(read_assignment)

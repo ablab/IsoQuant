@@ -133,11 +133,15 @@ def parse_args(cmd_args=None, namespace=None):
     input_args_group.add_argument('--illumina_bam', nargs='+', type=str,
                                   help='sorted and indexed file(s) with Illumina reads from the same sample')
 
-    input_args_group.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
-                                             "by BAM file tag (tag:TAG); "
-                                             "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM); "
-                                             "using read id (read_id:DELIM); "
-                                             "by original file name (file_name)", type=str)
+    input_args_group.add_argument("--read_group", nargs='+', type=str,
+                                  help="one or more ways to group feature counts (no grouping by default); "
+                                       "multiple grouping strategies can be specified (space-separated); "
+                                       "supported formats: "
+                                       "tag:TAG (BAM tag), "
+                                       "file:FILE:READ_COL:GROUP_COL(S):DELIM (TSV file, use comma-separated columns for multi-column grouping, e.g., file:table.tsv:0:1,2,3), "
+                                       "read_id:DELIM (read ID suffix), "
+                                       "file_name (original filename); "
+                                       "example: --read_group tag:CB file_name")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
                                    help="reuse read assignments (binary format)", default=None)
@@ -419,10 +423,23 @@ def save_params(args):
                 args.__dict__[file_opt] = os.path.abspath(args.__dict__[file_opt])
 
     if "read_group" in args.__dict__ and args.__dict__["read_group"]:
-        vals = args.read_group.split(":")
-        if len(vals) > 1 and vals[0] == 'file':
-            vals[1] = os.path.abspath(vals[1])
-            args.read_group = ":".join(vals)
+        # Handle both list (nargs='+') and string (backward compatibility)
+        if isinstance(args.read_group, list):
+            updated_specs = []
+            for spec in args.read_group:
+                vals = spec.split(":")
+                if len(vals) > 1 and vals[0] == 'file':
+                    vals[1] = os.path.abspath(vals[1])
+                    updated_specs.append(":".join(vals))
+                else:
+                    updated_specs.append(spec)
+            args.read_group = updated_specs
+        else:
+            # Backward compatibility with string format
+            vals = args.read_group.split(":")
+            if len(vals) > 1 and vals[0] == 'file':
+                vals[1] = os.path.abspath(vals[1])
+                args.read_group = ":".join(vals)
 
     pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
     pickler.dump(args)
