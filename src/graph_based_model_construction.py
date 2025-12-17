@@ -154,12 +154,12 @@ class GraphBasedModelConstructor:
             for read_assignment in self.transcript_read_ids[transcript_id]:
                 read_id = read_assignment.read_id
                 if self.read_assignment_counts[read_id] == 1:
-                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
-                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group)
+                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group[0])
+                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group[0])
                     continue
 
                 if read_id not in ambiguous_assignments:
-                    ambiguous_assignments[read_id] = [read_assignment.read_group]
+                    ambiguous_assignments[read_id] = [read_assignment.read_group[0]]
                 ambiguous_assignments[read_id].append(transcript_id)
 
         for read_id in ambiguous_assignments.keys():
@@ -485,7 +485,7 @@ class GraphBasedModelConstructor:
                     pass
                 else:
                     if self.params.use_technical_replicas and \
-                            len(set([a.read_group for a in self.path_storage.paths_to_reads[path]])) <= 1:
+                            len(set([a.read_group[0] for a in self.path_storage.paths_to_reads[path]])) <= 1:
                         #logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
                         continue
 
@@ -765,7 +765,7 @@ class GraphBasedModelConstructor:
             # logger.debug("# Checking read %s: %s" % (assignment.read_id, str(read_exons)))
             model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
-            model_assignment.read_group = assignment.read_group
+            model_assignment.read_group = assignment.read_group[0]
             # check that no serious contradiction occurs
             if model_assignment.assignment_type.is_consistent():
                 matched_isoforms = [m.assigned_transcript for m in model_assignment.isoform_matches]
