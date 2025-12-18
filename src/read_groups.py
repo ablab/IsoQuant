@@ -300,6 +300,57 @@ def create_read_grouper(args, sample, chr_id):
         return MultiReadGrouper(groupers)
 
 
+def get_grouping_strategy_names(args) -> list:
+    """
+    Extract descriptive names for each grouping strategy from args.read_group.
+
+    Returns a list of strategy names like: ["tag_CB", "tag_UB", "file_name", "read_id"]
+    If no read_group is specified, returns ["default"].
+
+    For multi-column TSV files with N columns, returns N separate names like:
+    ["file_col1", "file_col2", "file_col3"]
+    """
+    if not hasattr(args, "read_group") or args.read_group is None:
+        return ["default"]
+
+    # Handle both list (nargs='+') and string (backward compatibility)
+    if isinstance(args.read_group, str):
+        specs = args.read_group.split(';')
+    else:
+        specs = args.read_group
+
+    strategy_names = []
+    for spec in specs:
+        spec = spec.strip()
+        if not spec:
+            continue
+
+        values = spec.split(':')
+        spec_type = values[0]
+
+        if spec_type == "file_name":
+            strategy_names.append("file_name")
+        elif spec_type == 'tag':
+            tag_name = values[1] if len(values) > 1 else "RG"
+            strategy_names.append(f"tag_{tag_name}")
+        elif spec_type == 'read_id':
+            delim = values[1] if len(values) > 1 else "_"
+            # Sanitize delimiter for filename
+            safe_delim = delim.replace('/', '_').replace('\\', '_')
+            strategy_names.append(f"read_id_{safe_delim}")
+        elif spec_type == 'file':
+            # Check if multi-column
+            if len(values) >= 4 and ',' in values[3]:
+                group_col_indices = values[3].split(',')
+                for col_idx in group_col_indices:
+                    strategy_names.append(f"file_col{col_idx}")
+            else:
+                col_idx = values[3] if len(values) > 3 else "1"
+                strategy_names.append(f"file_col{col_idx}")
+
+    return strategy_names if strategy_names else ["default"]
+
+
 def load_table(table_tsv_file, read_id_column_index, group_id_column_index, delim):
     min_columns = max(read_id_column_index, group_id_column_index)
     _, outer_ext = os.path.splitext(table_tsv_file)

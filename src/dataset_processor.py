@@ -35,7 +35,8 @@ from .long_read_counter import (
 from .read_groups import (
     create_read_grouper,
     prepare_read_groups,
-    load_table
+    load_table,
+    get_grouping_strategy_names
 )
 from .assignment_io import (
     IOSupport,
@@ -162,7 +163,9 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
             return read_stat, transcript_stat
         os.remove(lock_file)
 
-    aggregator = ReadAssignmentAggregator(args, sample, read_groups, loader.genedb, chr_id)
+    grouping_strategy_names = get_grouping_strategy_names(args)
+    aggregator = ReadAssignmentAggregator(args, sample, read_groups, loader.genedb, chr_id,
+                                         grouping_strategy_names=grouping_strategy_names)
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
@@ -263,9 +266,10 @@ def filter_umis_in_parallel(sample, chr_id, split_barcodes_dict, args, edit_dist
 
 
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, read_groups, gffutils_db=None, chr_id=None, gzipped=False):
+    def __init__(self, args, sample, read_groups, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None):
         self.args = args
         self.read_groups = read_groups
+        self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else ["default"]
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
 
@@ -323,32 +327,63 @@ class ReadAssignmentAggregator:
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
         if self.args.read_group and self.args.genedb:
-            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
-                                                            self.args.gene_quantification,
-                                                            complete_feature_list=self.gene_set,
-                                                            read_groups=self.read_groups)
-            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
-                                                                        self.args.transcript_quantification,
-                                                                        complete_feature_list=self.transcript_set,
-                                                                        read_groups=self.read_groups)
-            self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
+            self.gene_grouped_counters = []
+            self.transcript_grouped_counters = []
+            self.exon_grouped_counters = []
+            self.intron_grouped_counters = []
 
-            if self.args.count_exons:
-                self.exon_grouped_counter = ExonCounter(sample.out_exon_grouped_counts_tsv)
-                self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
-                self.global_counter.add_counters([self.exon_grouped_counter, self.intron_grouped_counter])
+            for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
+                # Add strategy name as suffix to output file
+                gene_out_file = f"{sample.out_gene_grouped_counts_tsv}.{strategy_name}"
+                transcript_out_file = f"{sample.out_transcript_grouped_counts_tsv}.{strategy_name}"
+
+                gene_counter = create_gene_counter(gene_out_file,
+                                                   self.args.gene_quantification,
+                                                   complete_feature_list=self.gene_set,
+                                                   read_groups=self.read_groups,
+                                                   group_index=group_idx)
+                transcript_counter = create_transcript_counter(transcript_out_file,
+                                                              self.args.transcript_quantification,
+                                                              complete_feature_list=self.transcript_set,
+                                                              read_groups=self.read_groups,
+                                                              group_index=group_idx)
+
+                self.gene_grouped_counters.append(gene_counter)
+                self.transcript_grouped_counters.append(transcript_counter)
+                self.global_counter.add_counters([gene_counter, transcript_counter])
+
+                if self.args.count_exons:
+                    exon_out_file = f"{sample.out_exon_grouped_counts_tsv}.{strategy_name}"
+                    intron_out_file = f"{sample.out_intron_grouped_counts_tsv}.{strategy_name}"
+                    exon_counter = ExonCounter(exon_out_file, group_index=group_idx)
+                    intron_counter = IntronCounter(intron_out_file, group_index=group_idx)
+                    self.exon_grouped_counters.append(exon_counter)
+                    self.intron_grouped_counters.append(intron_counter)
+                    self.global_counter.add_counters([exon_counter, intron_counter])
 
         if self.args.read_group and not self.args.no_model_construction:
-            self.transcript_model_grouped_counter = create_transcript_counter(
-                sample.out_transcript_model_grouped_counts_tsv,
-                self.args.transcript_quantification,
-                read_groups=self.read_groups)
-            self.gene_model_grouped_counter = create_gene_counter(
-                sample.out_gene_model_grouped_counts_tsv,
-                self.args.gene_quantification,
-                read_groups=self.read_groups)
-            self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
-            self.gene_model_global_counter.add_counters([self.gene_model_grouped_counter])
+            self.transcript_model_grouped_counters = []
+            self.gene_model_grouped_counters = []
+
+            for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
+                transcript_model_out_file = f"{sample.out_transcript_model_grouped_counts_tsv}.{strategy_name}"
+                gene_model_out_file = f"{sample.out_gene_model_grouped_counts_tsv}.{strategy_name}"
+
+                transcript_model_counter = create_transcript_counter(
+                    transcript_model_out_file,
+                    self.args.transcript_quantification,
+                    read_groups=self.read_groups,
+                    group_index=group_idx)
+                gene_model_counter = create_gene_counter(
+                    gene_model_out_file,
+                    self.args.gene_quantification,
+                    read_groups=self.read_groups,
+                    group_index=group_idx)
+
+                self.transcript_model_grouped_counters.append(transcript_model_counter)
+                self.gene_model_grouped_counters.append(gene_model_counter)
+                self.transcript_model_global_counter.add_counters([transcript_model_counter])
+                self.gene_model_global_counter.add_counters([gene_model_counter])
 
 
 # Class for processing all samples against gene database
@@ -601,7 +636,9 @@ class DatasetProcessor:
                     ("off" if self.args.no_model_construction else "on"))
 
         # set up aggregators and outputs
-        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped)
+        grouping_strategy_names = get_grouping_strategy_names(self.args)
+        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped,
+                                             grouping_strategy_names=grouping_strategy_names)
         transcript_stat_counter = EnumStats()
 
         gff_printer = VoidTranscriptPrinter()
