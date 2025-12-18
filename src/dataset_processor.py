@@ -453,7 +453,11 @@ class DatasetProcessor:
         self.chr_ids = self.get_chromosome_ids(sample)
         logger.info("Total number of chromosomes to be processed %d: %s " %
                     (len(self.chr_ids), ", ".join(map(lambda x: str(x), sorted(self.chr_ids)))))
-        self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
+
+        # Check if file_name grouping is enabled (for technical replicas)
+        self.args.use_technical_replicas = (len(sample.file_list) > 1 and
+                                            self.args.read_group is not None and
+                                            "file_name" in self.args.read_group)
 
         self.all_read_groups = set()
         fname = read_group_lock_filename(sample)
