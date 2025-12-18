@@ -712,8 +712,9 @@ class DatasetProcessor:
             logger.info("Counts for generated transcript models are saves to: " +
                         aggregator.transcript_model_counter.output_counts_file_name)
             if self.args.read_group:
-                logger.info("Grouped counts for generated transcript models are saves to: " +
-                            aggregator.transcript_model_grouped_counter.output_counts_file_name)
+                for counter in aggregator.transcript_model_grouped_counters:
+                    logger.info("Grouped counts for generated transcript models are saves to: " +
+                                counter.output_counts_file_name)
             aggregator.transcript_model_global_counter.finalize(self.args)
             aggregator.gene_model_global_counter.finalize(self.args)
 
@@ -727,10 +728,10 @@ class DatasetProcessor:
             logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
             logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
             if self.args.read_group:
-                logger.info("Grouped gene counts are saves to: " +
-                            aggregator.gene_grouped_counter.output_counts_file_name)
-                logger.info("Grouped transcript counts are saves to: " +
-                            aggregator.transcript_grouped_counter.output_counts_file_name)
+                for counter in aggregator.gene_grouped_counters:
+                    logger.info("Grouped gene counts are saves to: " + counter.output_counts_file_name)
+                for counter in aggregator.transcript_grouped_counters:
+                    logger.info("Grouped transcript counts are saves to: " + counter.output_counts_file_name)
             logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
             aggregator.global_counter.finalize(self.args)
 
