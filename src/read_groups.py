@@ -107,6 +107,60 @@ class FileNameGrouper(AbstractReadGrouper):
         return filename
 
 
+class BarcodeSpotGrouper(AbstractReadGrouper):
+    """Grouper that maps reads to spots/cell types via barcodes"""
+    def __init__(self, barcode_file, barcode2spot_files):
+        """
+        Initialize barcode-to-spot grouper.
+
+        Args:
+            barcode_file: Path to split barcode file for chromosome (read_id -> barcode, umi)
+            barcode2spot_files: List of TSV files mapping barcode -> spot/cell type
+        """
+        AbstractReadGrouper.__init__(self)
+        logger.debug(f"Reading barcodes from {barcode_file}")
+
+        # Load barcode dict: read_id -> (barcode, umi)
+        self.read_to_barcode = {}
+        if os.path.exists(barcode_file):
+            for line in open(barcode_file):
+                if line.startswith("#"):
+                    continue
+                parts = line.split()
+                if len(parts) >= 2:
+                    # Store just the barcode (second column)
+                    self.read_to_barcode[parts[0]] = parts[1]
+
+        # Load barcode2spot mapping: barcode -> spot/cell type
+        self.barcode_to_spot = {}
+        for barcode2spot_file in barcode2spot_files:
+            logger.debug(f"Reading barcode-to-spot mapping from {barcode2spot_file}")
+            self.barcode_to_spot.update(load_table(barcode2spot_file, 0, 1, '\t'))
+
+        logger.info(f"Loaded {len(self.read_to_barcode)} read-barcode mappings and "
+                   f"{len(self.barcode_to_spot)} barcode-spot mappings")
+
+    def get_group_id(self, alignment, filename=None):
+        """Map read to spot via barcode"""
+        read_id = alignment.query_name
+
+        # Look up barcode for this read
+        if read_id not in self.read_to_barcode:
+            self.read_groups.add(self.default_group_id)
+            return self.default_group_id
+
+        barcode = self.read_to_barcode[read_id]
+
+        # Look up spot for this barcode
+        if barcode not in self.barcode_to_spot:
+            self.read_groups.add(self.default_group_id)
+            return self.default_group_id
+
+        spot = self.barcode_to_spot[barcode]
+        self.read_groups.add(spot)
+        return spot
+
+
 class MultiColumnReadTableGrouper(AbstractReadGrouper):
     """Grouper that handles TSV files with multiple group columns"""
     def __init__(self, table_tsv_file, read_id_column_index=0, group_id_column_indices=None, delim='\t'):
@@ -249,6 +303,24 @@ def parse_grouping_spec(spec_string, args, sample, chr_id):
 
     if values[0] == "file_name":
         return FileNameGrouper(args, sample)
+    elif values[0] == 'barcode_spot':
+        # Format: barcode_spot:file1.tsv or just use --barcode2spot files
+        if len(values) >= 2:
+            # Explicit file(s) specified
+            barcode2spot_files = values[1:]
+        elif hasattr(args, 'barcode2spot') and args.barcode2spot:
+            # Use --barcode2spot files
+            barcode2spot_files = args.barcode2spot
+        else:
+            logger.critical("barcode_spot grouping requires --barcode2spot or explicit file specification")
+            return None
+
+        # Get split barcode file for this chromosome
+        if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
+            logger.critical("barcode_spot grouping requires barcoded reads (use --barcoded_reads)")
+            return None
+        barcode_file = sample.barcodes_split_reads + "_" + chr_id
+        return BarcodeSpotGrouper(barcode_file, barcode2spot_files)
     elif values[0] == 'tag':
         if len(values) < 2:
             return AlignmentTagReadGrouper(tag="RG")
@@ -356,6 +428,8 @@ def get_grouping_strategy_names(args) -> list:
 
         if spec_type == "file_name":
             strategy_names.append("file_name")
+        elif spec_type == 'barcode_spot':
+            strategy_names.append("barcode_spot")
         elif spec_type == 'tag':
             tag_name = values[1] if len(values) > 1 else "RG"
             strategy_names.append(f"tag_{tag_name}")

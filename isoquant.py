@@ -140,8 +140,9 @@ def parse_args(cmd_args=None, namespace=None):
                                        "tag:TAG (BAM tag), "
                                        "file:FILE:READ_COL:GROUP_COL(S):DELIM (TSV file, use comma-separated columns for multi-column grouping, e.g., file:table.tsv:0:1,2,3), "
                                        "read_id:DELIM (read ID suffix), "
-                                       "file_name (original filename); "
-                                       "example: --read_group tag:CB file_name")
+                                       "file_name (original filename), "
+                                       "barcode_spot[:FILE] (map barcodes to spots/cell types using --barcode2spot or explicit file); "
+                                       "example: --read_group tag:CB file_name barcode_spot")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
                                    help="reuse read assignments (binary format)", default=None)
