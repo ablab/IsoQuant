@@ -11,7 +11,7 @@ import os
 import pysam
 from collections import defaultdict
 
-from .table_splitter import split_read_table_parallel, load_table_chunked
+from .table_splitter import split_read_table_parallel
 
 
 logger = logging.getLogger('IsoQuant')
@@ -233,17 +233,14 @@ def prepare_read_groups(args, sample):
         # Build output file names for each chromosome
         split_reads_file_names = {chr_id: sample.read_group_file + "_" + chr_id for chr_id in chromosomes}
 
-        # Use improved parallel splitting
+        # Use improved parallel splitting with line-by-line streaming
         num_threads = args.threads if hasattr(args, 'threads') else 4
 
-        # Create load function with correct column specification
-        def load_func(files, chunk_size=500000):
-            return load_table_chunked(files, chunk_size=chunk_size,
-                                     read_column=read_id_column_index,
-                                     group_columns=tuple(group_id_column_indices))
-
         split_read_table_parallel(sample, table_filename, split_reads_file_names,
-                                  num_threads, load_func=load_func)
+                                  num_threads,
+                                  read_column=read_id_column_index,
+                                  group_columns=tuple(group_id_column_indices),
+                                  delim=delim)
 
 
 def parse_grouping_spec(spec_string, args, sample, chr_id):

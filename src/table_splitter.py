@@ -216,13 +216,13 @@ def collect_chromosome_reads(chr_id, bam_files):
 
 
 def process_table_for_chromosomes(worker_id, input_tsvs, my_chromosomes, bam_files,
-                                  output_files, load_func, chunk_size=CHUNK_SIZE):
+                                  output_files, read_column, group_columns, delim):
     """
     Worker function: processes entire table for assigned chromosomes.
 
     Each worker:
     1. Builds read ID cache for its assigned chromosomes
-    2. Streams through table chunks
+    2. Streams through table line-by-line (memory efficient)
     3. Writes matching reads to chromosome-specific output files
 
     Args:
@@ -231,13 +231,14 @@ def process_table_for_chromosomes(worker_id, input_tsvs, my_chromosomes, bam_fil
         my_chromosomes: List of chromosome IDs assigned to this worker
         bam_files: List of BAM files to scan for read IDs
         output_files: Dict mapping chr_id -> output_file_path
-        load_func: Function to load table chunks
-        chunk_size: Size of chunks to process
+        read_column: Column index for read ID
+        group_columns: Tuple of column indices for group values
+        delim: Column delimiter
     """
     if not my_chromosomes:
         return 0, 0
 
-    logger.info(f"Worker {worker_id}: processing {len(my_chromosomes)} chromosomes: {', '.join(my_chromosomes)}")
+    logger.debug(f"Worker {worker_id}: processing {len(my_chromosomes)} chromosomes: {', '.join(my_chromosomes)}")
 
     # Step 1: Build read ID cache for assigned chromosomes
     logger.debug(f"Worker {worker_id}: building read ID cache...")
@@ -251,48 +252,68 @@ def process_table_for_chromosomes(worker_id, input_tsvs, my_chromosomes, bam_fil
     for chr_id in my_chromosomes:
         out_handles[chr_id] = open(output_files[chr_id], 'w')
 
-    # Step 3: Stream through table and write matches
+    # Step 3: Stream through table line-by-line
     total_reads_processed = 0
     total_reads_written = 0
+    min_columns = max(read_column, max(group_columns)) + 1
 
     try:
-        for read_chunk in load_func(input_tsvs, chunk_size=chunk_size):
-            total_reads_processed += len(read_chunk)
+        input_files = input_tsvs if isinstance(input_tsvs, list) else [input_tsvs]
 
-            for read_id, group_vals in read_chunk.items():
-                # Check if this read belongs to any of my chromosomes
-                for chr_id in my_chromosomes:
-                    if read_id in read_cache[chr_id]:
-                        # Format group values
-                        if isinstance(group_vals, tuple):
-                            group_str = "\t".join(group_vals)
-                        else:
-                            group_str = str(group_vals)
-                        out_handles[chr_id].write(f"{read_id}\t{group_str}\n")
-                        total_reads_written += 1
-                        break  # Read can only be on one chromosome
+        for input_file in input_files:
+            # Handle gzipped files
+            _, ext = os.path.splitext(input_file)
+            if ext.lower() in ['.gz', '.gzip']:
+                file_handle = gzip.open(input_file, 'rt')
+            else:
+                file_handle = open(input_file)
+
+            try:
+                for line in file_handle:
+                    if line.startswith("#") or not line.strip():
+                        continue
+
+                    total_reads_processed += 1
+                    columns = line.rstrip('\n').split(delim)
+
+                    if len(columns) < min_columns:
+                        continue
+
+                    read_id = columns[read_column]
+
+                    # Check if this read belongs to any of my chromosomes
+                    for chr_id in my_chromosomes:
+                        if read_id in read_cache[chr_id]:
+                            # Extract group values
+                            group_vals = delim.join(columns[c] for c in group_columns)
+                            out_handles[chr_id].write(f"{read_id}\t{group_vals}\n")
+                            total_reads_written += 1
+                            break  # Read can only be on one chromosome
+            finally:
+                file_handle.close()
     finally:
         # Close output files
         for f in out_handles.values():
             f.close()
 
-    logger.info(f"Worker {worker_id}: processed {total_reads_processed:,} table entries, "
-               f"wrote {total_reads_written:,} reads")
+    logger.debug(f"Worker {worker_id}: processed {total_reads_processed:,} table entries, "
+                 f"wrote {total_reads_written:,} reads")
 
     return total_reads_processed, total_reads_written
 
 
 def split_read_table_parallel(sample, input_tsvs, split_reads_file_names, num_threads,
-                              load_func=load_table_chunked, chunk_size=CHUNK_SIZE):
+                              read_column=0, group_columns=(1,), delim='\t'):
     """
     Improved parallel table splitting algorithm.
 
-    Strategy: Assign chromosomes to workers, each worker processes entire table for its chromosomes.
+    Strategy: Assign chromosomes to workers, each worker streams table line-by-line for its chromosomes.
 
     Advantages over old algorithm:
-    - No redundant work (each table entry checked once per worker, not once per chromosome)
-    - Minimal serialization (workers read table independently)
-    - Better memory usage (each worker caches only its chromosomes)
+    - No redundant work (each line processed once by each worker)
+    - No chunking overhead (line-by-line streaming)
+    - Minimal memory usage (no intermediate dicts)
+    - Better memory distribution (each worker caches only its chromosomes)
     - True parallelism (no generator bottleneck)
 
     Args:
@@ -300,8 +321,9 @@ def split_read_table_parallel(sample, input_tsvs, split_reads_file_names, num_th
         input_tsvs: TSV file(s) containing read groups
         split_reads_file_names: Dict mapping chr_id -> output_file_path
         num_threads: Number of worker processes
-        load_func: Function to load table chunks
-        chunk_size: Size of chunks to process
+        read_column: Column index for read ID (default: 0)
+        group_columns: Tuple of column indices for group values (default: (1,))
+        delim: Column delimiter (default: '\t')
     """
     logger.info(f"Splitting table {input_tsvs} across {num_threads} workers")
 
@@ -344,8 +366,9 @@ def split_read_table_parallel(sample, input_tsvs, split_reads_file_names, num_th
                 my_chrs,
                 bam_files,
                 split_reads_file_names,
-                load_func,
-                chunk_size
+                read_column,
+                group_columns,
+                delim
             )
             futures.append(future)
 
