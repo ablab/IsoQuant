@@ -486,6 +486,8 @@ class BasicReadAssignment:
         self.penalty_score = 0.0
         self.isoforms = []
         self.genes = []
+        self.barcode = read_assignment.barcode if hasattr(read_assignment, 'barcode') else None
+        self.umi = read_assignment.umi if hasattr(read_assignment, 'umi') else None
 
         if read_assignment.isoform_matches:
             gene_set = set()
@@ -635,6 +637,8 @@ class ReadAssignment:
         self.cage_found = False
         self.polya_info = None
         self.read_group = []
+        self.barcode = None  # Cell/spatial barcode
+        self.umi = None  # Unique molecular identifier
         self.mapped_strand = "."
         self.strand = "."
         self.chr_id = "."
