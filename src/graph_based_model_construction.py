@@ -50,11 +50,14 @@ class GraphBasedModelConstructor:
     detected_known_isoforms = set()
     extended_transcript_ids = set()
 
-    def __init__(self, gene_info, chr_record, params, transcript_counter, gene_counter, id_distributor):
+    def __init__(self, gene_info, chr_record, params, transcript_counter, gene_counter, id_distributor,
+                 transcript_grouped_counters=None, gene_grouped_counters=None):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
         self.id_distributor = id_distributor
+        self.transcript_grouped_counters = transcript_grouped_counters if transcript_grouped_counters else []
+        self.gene_grouped_counters = gene_grouped_counters if gene_grouped_counters else []
 
         self.strand_detector = StrandDetector(self.chr_record)
         self.intron_genes = defaultdict(set)
@@ -154,19 +157,36 @@ class GraphBasedModelConstructor:
             for read_assignment in self.transcript_read_ids[transcript_id]:
                 read_id = read_assignment.read_id
                 if self.read_assignment_counts[read_id] == 1:
+                    # Add to ungrouped counters
                     self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group[0])
                     self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group[0])
+                    # Add to each grouped counter with its corresponding group
+                    for idx, counter in enumerate(self.transcript_grouped_counters):
+                        if idx < len(read_assignment.read_group):
+                            counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group[idx])
+                    for idx, counter in enumerate(self.gene_grouped_counters):
+                        if idx < len(read_assignment.read_group):
+                            counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group[idx])
                     continue
 
                 if read_id not in ambiguous_assignments:
-                    ambiguous_assignments[read_id] = [read_assignment.read_group[0]]
+                    ambiguous_assignments[read_id] = [read_assignment.read_group]
                 ambiguous_assignments[read_id].append(transcript_id)
 
         for read_id in ambiguous_assignments.keys():
+            read_groups = ambiguous_assignments[read_id][0]
             transcript_ids = ambiguous_assignments[read_id][1:]
             gene_ids = [transcript2gene[transcript_id] for transcript_id in transcript_ids]
-            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, ambiguous_assignments[read_id][0])
-            self.gene_counter.add_read_info_raw(read_id, gene_ids, ambiguous_assignments[read_id][0])
+            # Add to ungrouped counters
+            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, read_groups[0] if read_groups else "NA")
+            self.gene_counter.add_read_info_raw(read_id, gene_ids, read_groups[0] if read_groups else "NA")
+            # Add to each grouped counter with its corresponding group
+            for idx, counter in enumerate(self.transcript_grouped_counters):
+                if idx < len(read_groups):
+                    counter.add_read_info_raw(read_id, transcript_ids, read_groups[idx])
+            for idx, counter in enumerate(self.gene_grouped_counters):
+                if idx < len(read_groups):
+                    counter.add_read_info_raw(read_id, gene_ids, read_groups[idx])
 
         for r in read_assignments:
             if self.read_assignment_counts[r.read_id] > 0: continue
@@ -484,10 +504,20 @@ class GraphBasedModelConstructor:
                     logger.debug("Avoiding unreliable transcript with %d exons (strand cannot be detected)" % len(novel_exons))
                     pass
                 else:
-                    if self.params.use_technical_replicas and \
-                            len(set([a.read_group[0] for a in self.path_storage.paths_to_reads[path]])) <= 1:
-                        #logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
-                        continue
+                    if self.params.use_technical_replicas:
+                        # Check if reads come from same group in any grouping strategy
+                        skip_transcript = False
+                        read_assignments = self.path_storage.paths_to_reads[path]
+                        if read_assignments:
+                            num_groups = len(read_assignments[0].read_group) if read_assignments else 0
+                            for group_idx in range(num_groups):
+                                groups_at_idx = set([a.read_group[group_idx] for a in read_assignments if group_idx < len(a.read_group)])
+                                if len(groups_at_idx) <= 1:
+                                    skip_transcript = True
+                                    break
+                        if skip_transcript:
+                            #logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
+                            continue
 
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
                     if transcript_gene is None:
@@ -765,7 +795,7 @@ class GraphBasedModelConstructor:
             # logger.debug("# Checking read %s: %s" % (assignment.read_id, str(read_exons)))
             model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
-            model_assignment.read_group = assignment.read_group[0]
+            model_assignment.read_group = assignment.read_group  # Full list, not just [0]
             # check that no serious contradiction occurs
             if model_assignment.assignment_type.is_consistent():
                 matched_isoforms = [m.assigned_transcript for m in model_assignment.isoform_matches]
