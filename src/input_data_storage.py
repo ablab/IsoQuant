@@ -42,6 +42,7 @@ class SampleData:
             self.barcoded_reads = []
         else:
             self.barcoded_reads = barcoded_reads
+        self.use_technical_replicas = False  # Will be set by DatasetProcessor
         self._init_paths()
 
     def _make_path(self, name):
