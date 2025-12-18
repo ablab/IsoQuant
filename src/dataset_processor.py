@@ -55,7 +55,7 @@ from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
 from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter, load_barcodes
-from .table_splitter import split_read_table_parallel, load_barcodes_chunked
+from .table_splitter import split_read_table_parallel
 
 logger = logging.getLogger('IsoQuant')
 
@@ -831,7 +831,7 @@ class DatasetProcessor:
     def split_read_barcode_table(self, sample, split_barcodes_file_names):
         logger.info("Splitting read barcode table")
         split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
-                                  load_func=load_barcodes_chunked)
+                                  read_column=0, group_columns=(1, 2, 3, 4), delim='\t')
         logger.info("Read barcode table was split")
 
 
