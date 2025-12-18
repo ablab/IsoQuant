@@ -50,12 +50,12 @@ class GraphBasedModelConstructor:
     detected_known_isoforms = set()
     extended_transcript_ids = set()
 
-    def __init__(self, gene_info, chr_record, params, transcript_counter, gene_counter, id_distributor,
+    def __init__(self, gene_info, chr_record, args, transcript_counter, gene_counter, id_distributor,
                  transcript_grouped_counters=None, gene_grouped_counters=None, grouping_strategy_names=None,
                  use_technical_replicas=False):
         self.gene_info = gene_info
         self.chr_record = chr_record
-        self.params = params
+        self.args = args
         self.id_distributor = id_distributor
         self.transcript_grouped_counters = transcript_grouped_counters if transcript_grouped_counters else []
         self.gene_grouped_counters = gene_grouped_counters if gene_grouped_counters else []
@@ -75,8 +75,8 @@ class GraphBasedModelConstructor:
         self.known_isoforms_in_graph = {}
         self.known_introns = set()
         self.known_isoforms_in_graph_ids = {}
-        self.assigner = LongReadAssigner(self.gene_info, self.params)
-        self.profile_constructor = CombinedProfileConstructor(self.gene_info, self.params)
+        self.assigner = LongReadAssigner(self.gene_info, self.args)
+        self.profile_constructor = CombinedProfileConstructor(self.gene_info, self.args)
 
         self.transcript_model_storage = []
         self.transcript_read_ids = defaultdict(list)
@@ -125,9 +125,9 @@ class GraphBasedModelConstructor:
         return None
 
     def process(self, read_assignment_storage):
-        self.intron_graph = IntronGraph(self.params, self.gene_info, read_assignment_storage)
-        self.path_processor = IntronPathProcessor(self.params, self.intron_graph)
-        self.path_storage = IntronPathStorage(self.params, self.path_processor)
+        self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage)
+        self.path_processor = IntronPathProcessor(self.args, self.intron_graph)
+        self.path_storage = IntronPathStorage(self.args, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
@@ -148,7 +148,7 @@ class GraphBasedModelConstructor:
         self.transcript_model_storage = transcript_joiner.join_transcripts()
         self.forward_counts(read_assignment_storage)
 
-        if self.params.sqanti_output:
+        if self.args.sqanti_output:
             self.compare_models_with_known()
 
     def forward_counts(self, read_assignments):
@@ -289,7 +289,7 @@ class GraphBasedModelConstructor:
                 internal_count_values.append(self.internal_counter[model.transcript_id])
 
         internal_count_values = sorted(internal_count_values, reverse=True)
-        coverage_cutoff = self.params.min_novel_count
+        coverage_cutoff = self.args.min_novel_count
         # dirty hack to avoid slow assignment in chrM
         if len(internal_count_values) > 50:
             coverage_cutoff = internal_count_values[50]
@@ -306,7 +306,7 @@ class GraphBasedModelConstructor:
                 continue
 
             if (model.transcript_type != TranscriptModelType.known and
-                    self.mapping_quality(model.transcript_id) < self.params.simple_models_mapq_cutoff):
+                    self.mapping_quality(model.transcript_id) < self.args.simple_models_mapq_cutoff):
                 self.delete_from_storage(model.transcript_id)
                 continue
             filtered_storage.append(model)
@@ -332,11 +332,11 @@ class GraphBasedModelConstructor:
             if component_coverage == 0 or len(model.intron_path) == 0 or \
                     (len(model.intron_path) == 1 and self.intron_graph.is_monointron(model.intron_path[0])):
                 component_coverage = self.intron_graph.get_overlapping_component_max_coverage((model.get_start(), model.get_end()))
-                novel_isoform_cutoff = max(self.params.min_novel_count,
-                                           self.params.min_mono_count_rel * component_coverage)
+                novel_isoform_cutoff = max(self.args.min_novel_count,
+                                           self.args.min_mono_count_rel * component_coverage)
             else:
-                novel_isoform_cutoff = max(self.params.min_novel_count,
-                                           self.params.min_novel_count_rel * component_coverage)
+                novel_isoform_cutoff = max(self.args.min_novel_count,
+                                           self.args.min_novel_count_rel * component_coverage)
 
             if model.transcript_id in to_substitute:
                 #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
@@ -353,7 +353,7 @@ class GraphBasedModelConstructor:
             if len(model.exon_blocks) <= 2:
                 mapq = self.mapping_quality(model.transcript_id)
                 #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
-                if mapq < self.params.simple_models_mapq_cutoff:
+                if mapq < self.args.simple_models_mapq_cutoff:
                     #logger.debug("Novel model %s has poor quality" % model.transcript_id)
                     self.delete_from_storage(model.transcript_id)
                     continue
@@ -391,9 +391,9 @@ class GraphBasedModelConstructor:
         for model in model_storage:
             if len(model.exon_blocks) <= 2 or model.transcript_id in to_substitute:
                 continue
-            transcript_model_gene_info = GeneInfo.from_models([model], self.params.delta)
-            assigner = LongReadAssigner(transcript_model_gene_info, self.params)
-            profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
+            transcript_model_gene_info = GeneInfo.from_models([model], self.args.delta)
+            assigner = LongReadAssigner(transcript_model_gene_info, self.args)
+            profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.args)
 
             for m in model_storage:
                 if m.transcript_type == TranscriptModelType.known or m.transcript_id == model.transcript_id or \
@@ -474,7 +474,7 @@ class GraphBasedModelConstructor:
                 # adding FL reference isoform
                 if reference_isoform in GraphBasedModelConstructor.detected_known_isoforms:
                     pass
-                elif count < self.params.min_known_count:
+                elif count < self.args.min_known_count:
                     pass # logger.debug("uuu Isoform %s has low coverage %d" % (reference_isoform, count))
                 else:
                     new_model = self.transcript_from_reference(reference_isoform)
@@ -485,7 +485,7 @@ class GraphBasedModelConstructor:
             else:
                 # adding FL novel isoform
                 # component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
-                novel_isoform_cutoff = self.params.min_novel_count
+                novel_isoform_cutoff = self.args.min_novel_count
 
                 has_polyt = path[0][0] == VERTEX_polyt
                 has_polya = path[-1][0] == VERTEX_polya
@@ -499,12 +499,12 @@ class GraphBasedModelConstructor:
                     # logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
                     pass
                 elif (len(novel_exons) == 2 and
-                      ((self.params.require_monointronic_polya and not polya_site) or transcript_clean_strand == '.')):
+                      ((self.args.require_monointronic_polya and not polya_site) or transcript_clean_strand == '.')):
                     # logger.debug("uuu Avoiding single intron %s isoform: %d\t%s" % (new_transcript_id, count, str(path)))
                     pass
-                elif ((self.params.report_canonical_strategy == StrandnessReportingLevel.only_canonical
+                elif ((self.args.report_canonical_strategy == StrandnessReportingLevel.only_canonical
                        and transcript_clean_strand == '.')
-                      or (self.params.report_canonical_strategy == StrandnessReportingLevel.only_stranded
+                      or (self.args.report_canonical_strategy == StrandnessReportingLevel.only_stranded
                           and transcript_strand == '.')):
                     logger.debug("Avoiding unreliable transcript with %d exons (strand cannot be detected)" % len(novel_exons))
                     pass
@@ -556,7 +556,7 @@ class GraphBasedModelConstructor:
 
         for read_assignment in read_assignment_storage:
             if len(read_assignment.corrected_exons) <= 2 and \
-                    (read_assignment.multimapper or read_assignment.mapping_quality < self.params.simple_alignments_mapq_cutoff):
+                    (read_assignment.multimapper or read_assignment.mapping_quality < self.args.simple_alignments_mapq_cutoff):
                 continue
 
             if not read_assignment:
@@ -602,23 +602,23 @@ class GraphBasedModelConstructor:
                     #             (read_assignment.read_id, refrenence_isoform_id))
                 spliced_isoform_reads[refrenence_isoform_id].append(read_assignment)
 
-                if self.params.requires_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '-':
+                if self.args.requires_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '-':
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
                         isoform_left_support[refrenence_isoform_id] += 1
-                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= self.params.apa_delta:
+                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0] - read_assignment.corrected_exons[0][0]) <= self.args.apa_delta:
                     isoform_left_support[refrenence_isoform_id] += 1
 
-                if self.params.requires_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '+':
+                if self.args.requires_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '+':
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_right for x in events):
                         isoform_right_support[refrenence_isoform_id] += 1
-                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= self.params.apa_delta:
+                elif abs(self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1] - read_assignment.corrected_exons[-1][1]) <= self.args.apa_delta:
                     isoform_right_support[refrenence_isoform_id] += 1
 
         self.construct_monoexon_isoforms(mono_exon_isoform_reads, mono_exon_isoform_coverage, polya_sites)
-        if not self.params.fl_only:
+        if not self.args.fl_only:
             logger.debug("Constructing nonFL isoforms")
             self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
-        if self.params.report_novel_unspliced:
+        if self.args.report_novel_unspliced:
             self.construct_monoexon_novel(novel_mono_exon_reads)
 
     def collect_terminal_exons_from_graph(self):
@@ -640,13 +640,13 @@ class GraphBasedModelConstructor:
         read_coordinates = alignment.corrected_exons[0]
         if forward:
             for e in terminal_exons:
-                if abs(e[1] - alignment.corrected_exons[-1][1]) <= self.params.apa_delta and \
-                        read_coordinates[0] >= e[0] - self.params.delta:
+                if abs(e[1] - alignment.corrected_exons[-1][1]) <= self.args.apa_delta and \
+                        read_coordinates[0] >= e[0] - self.args.delta:
                     return True
         else:
             for e in terminal_exons:
-                if abs(e[0] - alignment.corrected_exons[0][0]) <= self.params.apa_delta and \
-                        read_coordinates[1] <= e[1] + self.params.delta:
+                if abs(e[0] - alignment.corrected_exons[0][0]) <= self.args.apa_delta and \
+                        read_coordinates[1] <= e[1] + self.args.delta:
                     return True
         return False
 
@@ -670,7 +670,7 @@ class GraphBasedModelConstructor:
         novel_monoexon.update(self.generate_monoexon_from_clustered(clustered_polyt_reads, False))
 
     def generate_monoexon_from_clustered(self, clustered_reads, forward=True):
-        cutoff = self.params.min_novel_count
+        cutoff = self.args.min_novel_count
         result = set()
         for three_prime_pos in clustered_reads.keys():
             count = len(clustered_reads[three_prime_pos])
@@ -715,7 +715,7 @@ class GraphBasedModelConstructor:
         while grouped_reads:
             best_pair = max(grouped_reads.items(), key=lambda x:len(x[1]))
             top_position = best_pair[0]
-            for pos in range(top_position - self.params.apa_delta, top_position + self.params.apa_delta + 1):
+            for pos in range(top_position - self.args.apa_delta, top_position + self.args.apa_delta + 1):
                 if pos in grouped_reads:
                     clustered_counts[top_position] += grouped_reads[pos]
                     del grouped_reads[pos]
@@ -730,8 +730,8 @@ class GraphBasedModelConstructor:
             polya_support = polya_sites[isoform_id]
 
             # logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.intron_graph.max_coverage, count, coverage, polya_support))
-            if (count < self.params.min_known_count or coverage < self.params.min_mono_exon_coverage or
-                    (self.params.require_monoexonic_polya and polya_support == 0)):
+            if (count < self.args.min_known_count or coverage < self.args.min_mono_exon_coverage or
+                    (self.args.require_monoexonic_polya and polya_support == 0)):
                 pass # logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
             elif isoform_id not in GraphBasedModelConstructor.detected_known_isoforms:
                 new_model = self.transcript_from_reference(isoform_id)
@@ -755,7 +755,7 @@ class GraphBasedModelConstructor:
 
             intron_path = self.known_isoforms_in_graph_ids[isoform_id]
             #logger.debug("Known non-FL spliced isoform %s" % isoform_id)
-            if count < self.params.min_known_count or \
+            if count < self.args.min_known_count or \
                     spliced_isoform_left_support[isoform_id] < 1 or \
                     spliced_isoform_right_support[isoform_id] < 1:
                 pass
@@ -782,9 +782,9 @@ class GraphBasedModelConstructor:
             return
 
         logger.debug("Creating artificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
-        transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.params.delta)
-        assigner = LongReadAssigner(transcript_model_gene_info, self.params, quick_mode=True)
-        profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.params)
+        transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.args.delta)
+        assigner = LongReadAssigner(transcript_model_gene_info, self.args, quick_mode=True)
+        profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.args)
 
         for assignment in read_assignments:
             read_id = assignment.read_id
@@ -820,11 +820,11 @@ class GraphBasedModelConstructor:
 
         for assignment in assigned_reads:
             read_exons = assignment.corrected_exons
-            if abs(read_exons[0][0] - transcript_start) <= self.params.apa_delta:
+            if abs(read_exons[0][0] - transcript_start) <= self.args.apa_delta:
                 start_supported = True
             if not start_supported and read_exons[0][0] < transcript_model.exon_blocks[0][1]:
                 read_starts.add(read_exons[0][0])
-            if abs(read_exons[-1][1] - transcript_end) <= self.params.apa_delta:
+            if abs(read_exons[-1][1] - transcript_end) <= self.args.apa_delta:
                 end_supported = True
             if not end_supported and read_exons[-1][1] > transcript_model.exon_blocks[-1][0]:
                 read_ends[read_exons[-1][1]] += 1
