@@ -156,14 +156,13 @@ class ReadAssignmentInfo:
 
 
 class UMIFilter:
-    def __init__(self, split_barcodes_dict, umi_length=0, edit_distance=3, disregard_length_diff=True,
+    def __init__(self, umi_length=0, edit_distance=3, disregard_length_diff=True,
                  only_unique_assignments=False, only_spliced_reads=False):
         self.umi_length = umi_length
         self.max_edit_distance = edit_distance
         self.disregard_length_diff = disregard_length_diff
         self.only_unique_assignments = only_unique_assignments
         self.only_spliced_reads = only_spliced_reads
-        self.split_barcodes_dict = split_barcodes_dict
 
         self.selected_reads = set()
         self.assigned_to_any_gene = 0
@@ -506,7 +505,6 @@ class UMIFilter:
             spliced_count = 0
             self.unique_gene_barcode = set()
 
-            barcode_dict = self.load_barcodes_simple(self.split_barcodes_dict[chr_id])
             loader = create_merging_assignment_loader(chr_id, saves_prefix)
             while loader.has_next():
                 gene_barcode_dict = defaultdict(lambda: defaultdict(list))
@@ -519,10 +517,9 @@ class UMIFilter:
                     read_id = read_assignment.read_id
                     assignment_type = read_assignment.assignment_type
                     exon_blocks = read_assignment.corrected_exons
-                    if read_id in barcode_dict:
-                        barcode, umi = barcode_dict[read_id]
-                    else:
-                        barcode, umi = None, None
+                    # Get barcode and UMI from ReadAssignment (populated during read collection)
+                    barcode = read_assignment.barcode if hasattr(read_assignment, 'barcode') else None
+                    umi = read_assignment.umi if hasattr(read_assignment, 'umi') else None
                     strand = read_assignment.strand
 
                     read_infos = []
@@ -577,8 +574,6 @@ class UMIFilter:
         self.unique_gene_barcode = set()
 
         for chr_id in chr_ids:
-            logger.info("Loading partial barcode table from " + self.split_barcodes_dict[chr_id])
-            barcode_dict = self.load_barcodes_simple(self.split_barcodes_dict[chr_id])
             outf = open(saves_prefix + "_filtered_" + chr_id, "w") if output_filtered_reads else None
             logger.info("Processing chromosome " + chr_id)
             loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name)
@@ -590,10 +585,9 @@ class UMIFilter:
                     read_id = read_assignment.read_id
                     assignment_type = read_assignment.assignment_type
                     exon_blocks = read_assignment.corrected_exons
-                    if read_id in barcode_dict:
-                        barcode, umi = barcode_dict[read_id]
-                    else:
-                        barcode, umi = None, None
+                    # Get barcode and UMI from ReadAssignment (populated during read collection)
+                    barcode = read_assignment.barcode if hasattr(read_assignment, 'barcode') else None
+                    umi = read_assignment.umi if hasattr(read_assignment, 'umi') else None
                     strand = read_assignment.strand
 
                     read_infos = []

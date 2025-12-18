@@ -118,10 +118,23 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
     illumina_bam = sample.illumina_bam
 
+    # Load barcode dict for this chromosome if available
+    barcode_dict = {}
+    if sample.barcodes_split_reads:
+        barcode_file = sample.barcodes_split_reads + "_" + chr_id
+        if os.path.exists(barcode_file):
+            logger.debug(f"Loading barcodes from {barcode_file}")
+            for line in open(barcode_file):
+                if line.startswith("#"):
+                    continue
+                parts = line.split()
+                if len(parts) == 3:
+                    barcode_dict[parts[0]] = (parts[1], parts[2])
+
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
         AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper,
-                           args.max_coverage_small_chr, args.max_coverage_normal_chr)
+                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)
@@ -241,7 +254,7 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
     return aggregator.read_stat_counter, transcript_stat_counter
 
 
-def filter_umis_in_parallel(sample, chr_id, split_barcodes_dict, args, edit_distance, output_filtered_reads=False):
+def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered_reads=False):
     transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
     umi_filtered_done = umi_filtered_lock_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
     all_info_file_name = allinfo_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
@@ -258,7 +271,7 @@ def filter_umis_in_parallel(sample, chr_id, split_barcodes_dict, args, edit_dist
         for barcode2spot_file in args.barcode2spot:
             barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
 
-    umi_filter = UMIFilter(split_barcodes_dict, args.umi_length, edit_distance)
+    umi_filter = UMIFilter(args.umi_length, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(args, chr_id, sample.out_raw_file,
                                   transcript_type_dict,
@@ -786,7 +799,6 @@ class DatasetProcessor:
                 filter_umis_in_parallel,
                 itertools.repeat(sample),
                 self.get_chr_list(),
-                itertools.repeat(split_barcodes_dict),
                 itertools.repeat(self.args),
                 itertools.repeat(edit_distance),
                 itertools.repeat(output_filtered_reads),
