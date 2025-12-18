@@ -11,6 +11,8 @@ import os
 import pysam
 from collections import defaultdict
 
+from .table_splitter import split_read_table_parallel, load_table_chunked
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -178,6 +180,7 @@ def prepare_read_groups(args, sample):
     """
     Prepare read group files by splitting them by chromosome for memory efficiency.
     Handles both single and multiple grouping specifications.
+    Uses improved parallel algorithm for better performance.
 
     args.read_group should be a list of grouping specifications (nargs='+').
     """
@@ -190,6 +193,18 @@ def prepare_read_groups(args, sample):
     else:
         specs = args.read_group
 
+    # Collect chromosome names from BAM files to create split files
+    bam_files = list(map(lambda x: x[0], sample.file_list))
+    chromosomes = set()
+    for bam_file in bam_files:
+        try:
+            bam = pysam.AlignmentFile(bam_file, "rb")
+            chromosomes.update(bam.references)
+            bam.close()
+        except:
+            pass
+    chromosomes = list(chromosomes)
+
     for spec in specs:
         spec = spec.strip()
         if not spec:
@@ -199,22 +214,36 @@ def prepare_read_groups(args, sample):
         if values[0] != 'file':
             continue
 
-        # Check if this is a multi-column specification
+        # Parse specification
+        table_filename = values[1]
+        read_id_column_index = int(values[2]) if len(values) > 2 else 0
+
         if len(values) >= 4 and ',' in values[3]:
             # Multi-column TSV: file:filename:read_col:group_cols:delim
-            table_filename = values[1]
-            read_id_column_index = int(values[2]) if len(values) > 2 else 0
             group_id_column_indices = [int(x) for x in values[3].split(',')]
             delim = values[4] if len(values) > 4 else '\t'
-
             logger.info("Splitting multi-column read group file %s for better memory consumption" % table_filename)
-            split_table(table_filename, sample, sample.read_group_file, read_id_column_index,
-                       group_id_column_indices, delim)
         else:
             # Single column TSV
-            table_filename, read_id_column_index, group_id_column_index, delim = get_file_grouping_properties(values)
+            group_id_column_index = int(values[3]) if len(values) > 3 else 1
+            group_id_column_indices = [group_id_column_index]
+            delim = values[4] if len(values) > 4 else '\t'
             logger.info("Splitting read group file %s for better memory consumption" % table_filename)
-            split_read_group_table(table_filename, sample, read_id_column_index, group_id_column_index, delim)
+
+        # Build output file names for each chromosome
+        split_reads_file_names = {chr_id: sample.read_group_file + "_" + chr_id for chr_id in chromosomes}
+
+        # Use improved parallel splitting
+        num_threads = args.threads if hasattr(args, 'threads') else 4
+
+        # Create load function with correct column specification
+        def load_func(files, chunk_size=500000):
+            return load_table_chunked(files, chunk_size=chunk_size,
+                                     read_column=read_id_column_index,
+                                     group_columns=tuple(group_id_column_indices))
+
+        split_read_table_parallel(sample, table_filename, split_reads_file_names,
+                                  num_threads, load_func=load_func)
 
 
 def parse_grouping_spec(spec_string, args, sample, chr_id):
