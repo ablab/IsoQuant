@@ -51,13 +51,16 @@ class GraphBasedModelConstructor:
     extended_transcript_ids = set()
 
     def __init__(self, gene_info, chr_record, params, transcript_counter, gene_counter, id_distributor,
-                 transcript_grouped_counters=None, gene_grouped_counters=None):
+                 transcript_grouped_counters=None, gene_grouped_counters=None, grouping_strategy_names=None):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
         self.id_distributor = id_distributor
         self.transcript_grouped_counters = transcript_grouped_counters if transcript_grouped_counters else []
         self.gene_grouped_counters = gene_grouped_counters if gene_grouped_counters else []
+        self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else []
+        # Find file_name group index for technical replicas check
+        self.file_name_group_idx = self.grouping_strategy_names.index("file_name") if "file_name" in self.grouping_strategy_names else -1
 
         self.strand_detector = StrandDetector(self.chr_record)
         self.intron_genes = defaultdict(set)
@@ -504,20 +507,16 @@ class GraphBasedModelConstructor:
                     logger.debug("Avoiding unreliable transcript with %d exons (strand cannot be detected)" % len(novel_exons))
                     pass
                 else:
-                    if self.params.use_technical_replicas:
-                        # Check if reads come from same group in any grouping strategy
-                        skip_transcript = False
+                    if self.params.use_technical_replicas and self.file_name_group_idx >= 0:
+                        # Check if reads come from same file (technical replicates)
                         read_assignments = self.path_storage.paths_to_reads[path]
                         if read_assignments:
-                            num_groups = len(read_assignments[0].read_group) if read_assignments else 0
-                            for group_idx in range(num_groups):
-                                groups_at_idx = set([a.read_group[group_idx] for a in read_assignments if group_idx < len(a.read_group)])
-                                if len(groups_at_idx) <= 1:
-                                    skip_transcript = True
-                                    break
-                        if skip_transcript:
-                            #logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
-                            continue
+                            file_groups = set([a.read_group[self.file_name_group_idx]
+                                             for a in read_assignments
+                                             if self.file_name_group_idx < len(a.read_group)])
+                            if len(file_groups) <= 1:
+                                #logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
+                                continue
 
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
                     if transcript_gene is None:

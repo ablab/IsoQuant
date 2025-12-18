@@ -202,12 +202,14 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
         if construct_models:
             transcript_grouped = aggregator.transcript_model_grouped_counters if hasattr(aggregator, 'transcript_model_grouped_counters') else []
             gene_grouped = aggregator.gene_model_grouped_counters if hasattr(aggregator, 'gene_model_grouped_counters') else []
+            strategy_names = aggregator.grouping_strategy_names if hasattr(aggregator, 'grouping_strategy_names') else []
             model_constructor = GraphBasedModelConstructor(gene_info, loader.chr_record, args,
                                                            aggregator.transcript_model_global_counter,
                                                            aggregator.gene_model_global_counter,
                                                            transcript_id_distributor,
                                                            transcript_grouped_counters=transcript_grouped,
-                                                           gene_grouped_counters=gene_grouped)
+                                                           gene_grouped_counters=gene_grouped,
+                                                           grouping_strategy_names=strategy_names)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
