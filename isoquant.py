@@ -630,9 +630,19 @@ def set_data_dependent_options(args):
 
     args.resolve_ambiguous = 'monoexon_and_fsm' if args.fl_data else 'default'
     args.requires_polya_for_construction = False
-    if args.read_group is None and args.input_data.has_replicas():
-        args.read_group = "file_name"
-    args.use_technical_replicas = args.read_group == "file_name"
+
+    # Automatically add file_name grouping when multiple files are present
+    if args.input_data.has_replicas():
+        if args.read_group is None:
+            # No read grouping specified, use file_name
+            args.read_group = ["file_name"]
+        else:
+            # Read grouping specified, ensure file_name is included
+            if "file_name" not in args.read_group:
+                args.read_group.append("file_name")
+
+    # Check if file_name grouping is enabled (for technical replicas)
+    args.use_technical_replicas = args.read_group is not None and "file_name" in args.read_group
 
 
 def set_matching_options(args):
