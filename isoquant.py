@@ -633,9 +633,6 @@ def set_data_dependent_options(args):
             if "file_name" not in args.read_group:
                 args.read_group.append("file_name")
 
-    # Check if file_name grouping is enabled (for technical replicas)
-    args.use_technical_replicas = args.read_group is not None and "file_name" in args.read_group
-
 
 def set_matching_options(args):
     MatchingStrategy = namedtuple('MatchingStrategy',

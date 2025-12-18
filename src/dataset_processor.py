@@ -451,7 +451,10 @@ class DatasetProcessor:
         logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
         self.chr_ids = self.get_chromosome_ids(sample)
-        self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
+        # Check if file_name grouping is enabled (for technical replicas)
+        self.args.use_technical_replicas = (len(sample.file_list) > 1 and
+                                            self.args.read_group is not None and
+                                            "file_name" in self.args.read_group)
 
         self.all_read_groups = set()
         fname = read_group_lock_filename(sample)
