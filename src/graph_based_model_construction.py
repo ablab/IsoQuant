@@ -51,7 +51,8 @@ class GraphBasedModelConstructor:
     extended_transcript_ids = set()
 
     def __init__(self, gene_info, chr_record, params, transcript_counter, gene_counter, id_distributor,
-                 transcript_grouped_counters=None, gene_grouped_counters=None, grouping_strategy_names=None):
+                 transcript_grouped_counters=None, gene_grouped_counters=None, grouping_strategy_names=None,
+                 use_technical_replicas=False):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.params = params
@@ -59,6 +60,7 @@ class GraphBasedModelConstructor:
         self.transcript_grouped_counters = transcript_grouped_counters if transcript_grouped_counters else []
         self.gene_grouped_counters = gene_grouped_counters if gene_grouped_counters else []
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else []
+        self.use_technical_replicas = use_technical_replicas
         # Find file_name group index for technical replicas check
         self.file_name_group_idx = self.grouping_strategy_names.index("file_name") if "file_name" in self.grouping_strategy_names else -1
 
@@ -507,7 +509,7 @@ class GraphBasedModelConstructor:
                     logger.debug("Avoiding unreliable transcript with %d exons (strand cannot be detected)" % len(novel_exons))
                     pass
                 else:
-                    if self.params.use_technical_replicas and self.file_name_group_idx >= 0:
+                    if self.use_technical_replicas and self.file_name_group_idx >= 0:
                         # Check if reads come from same file (technical replicates)
                         read_assignments = self.path_storage.paths_to_reads[path]
                         if read_assignments:

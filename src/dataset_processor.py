@@ -209,7 +209,8 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
                                                            transcript_id_distributor,
                                                            transcript_grouped_counters=transcript_grouped,
                                                            gene_grouped_counters=gene_grouped,
-                                                           grouping_strategy_names=strategy_names)
+                                                           grouping_strategy_names=strategy_names,
+                                                           use_technical_replicas=sample.use_technical_replicas)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
@@ -451,13 +452,14 @@ class DatasetProcessor:
         logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
         self.chr_ids = self.get_chromosome_ids(sample)
+
         logger.info("Total number of chromosomes to be processed %d: %s " %
                     (len(self.chr_ids), ", ".join(map(lambda x: str(x), sorted(self.chr_ids)))))
 
-        # Check if file_name grouping is enabled (for technical replicas)
-        self.args.use_technical_replicas = (len(sample.file_list) > 1 and
-                                            self.args.read_group is not None and
-                                            "file_name" in self.args.read_group)
+        # Check if file_name grouping is enabled for this sample (for technical replicas)
+        sample.use_technical_replicas = (len(sample.file_list) > 1 and
+                                         self.args.read_group is not None and
+                                         "file_name" in self.args.read_group)
 
         self.all_read_groups = set()
         fname = read_group_lock_filename(sample)
