@@ -32,7 +32,7 @@ def get_chromosome_read_counts(bam_files, chromosomes):
                 # Get statistics from index
                 stats = bam.get_index_statistics()
                 for stat in stats:
-                    chr_id = bam.get_reference_name(stat.contig)
+                    chr_id = stat.contig
                     if chr_id in chr_counts:
                         # Use mapped + unmapped counts
                         chr_counts[chr_id] += stat.mapped + stat.unmapped
