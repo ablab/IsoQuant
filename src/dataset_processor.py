@@ -9,6 +9,7 @@ import glob
 import itertools
 import logging
 import shutil
+import sys
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
@@ -128,8 +129,8 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
                 if line.startswith("#"):
                     continue
                 parts = line.split()
-                if len(parts) == 3:
-                    barcode_dict[parts[0]] = (parts[1], parts[2])
+                barcode_dict[parts[0]] = (parts[1], parts[2])
+            logger.debug("Loaded %d barcodes" % len(barcode_dict))
 
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
@@ -480,6 +481,22 @@ class DatasetProcessor:
             prepare_read_groups(self.args, sample)
             open(fname, "w").close()
 
+        if self.args.mode.needs_pcr_deduplication():
+            if self.args.barcoded_reads:
+                sample.barcoded_reads = self.args.barcoded_reads
+
+            split_barcodes_dict = {}
+            for chr_id in self.get_chr_list():
+                split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
+            barcode_split_done = split_barcodes_lock_filename(sample)
+            if self.args.resume and os.path.exists(barcode_split_done):
+                logger.info("Barcode table was split during the previous run, existing files will be used")
+            else:
+                if os.path.exists(barcode_split_done):
+                    os.remove(barcode_split_done)
+                self.split_read_barcode_table(sample, split_barcodes_dict)
+                open(barcode_split_done, "w").close()
+
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
             logger.info('Using read assignments from {}*'.format(saves_file))
@@ -496,6 +513,12 @@ class DatasetProcessor:
 
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
+        if self.args.mode.needs_pcr_deduplication():
+            # move clean-up somewhere else
+            for bc_split_file in split_barcodes_dict.values():
+                os.remove(bc_split_file)
+            os.remove(barcode_split_done)
+
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_assignments, polya_found, polya_fraction * 100.0))
@@ -503,7 +526,6 @@ class DatasetProcessor:
                 self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
                            "If you aim to construct transcript models, consider using --polya_requirement option.")
-
         self.args.requires_polya_for_construction = set_polya_requirement_strategy(
             polya_fraction >= self.args.polya_percentage_threshold,
             self.args.polya_requirement_strategy)
@@ -767,20 +789,6 @@ class DatasetProcessor:
                        IsoQuantMode.visium_hd: [4],
                        IsoQuantMode.stereoseq: [4],
                        IsoQuantMode.stereoseq_nosplit: [4]}
-        if self.args.barcoded_reads:
-            sample.barcoded_reads = self.args.barcoded_reads
-
-        split_barcodes_dict = {}
-        for chr_id in self.get_chr_list():
-            split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
-        barcode_split_done = split_barcodes_lock_filename(sample)
-        if self.args.resume and os.path.exists(barcode_split_done):
-            logger.info("Barcode table was split during the previous run, existing files will be used")
-        else:
-            if os.path.exists(barcode_split_done):
-                os.remove(barcode_split_done)
-            self.split_read_barcode_table(sample, split_barcodes_dict)
-            open(barcode_split_done, "w").close()
 
         for i, edit_distance in enumerate(umi_ed_dict[self.args.mode]):
             logger.info("Filtering PCR duplicates with edit distance %d" % edit_distance)
@@ -834,10 +842,6 @@ class DatasetProcessor:
             for f in files_to_remove:
                 os.remove(f)
 
-        # move clean-up somewhere else
-        for bc_split_file in split_barcodes_dict.values():
-            os.remove(bc_split_file)
-        os.remove(barcode_split_done)
         open(umi_filtering_done, "w").close()
 
     def split_read_barcode_table(self, sample, split_barcodes_file_names):
