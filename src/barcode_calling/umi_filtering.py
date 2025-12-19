@@ -518,8 +518,8 @@ class UMIFilter:
                     assignment_type = read_assignment.assignment_type
                     exon_blocks = read_assignment.corrected_exons
                     # Get barcode and UMI from ReadAssignment (populated during read collection)
-                    barcode = read_assignment.barcode if hasattr(read_assignment, 'barcode') else None
-                    umi = read_assignment.umi if hasattr(read_assignment, 'umi') else None
+                    barcode = read_assignment.barcode
+                    umi = read_assignment.umi
                     strand = read_assignment.strand
 
                     read_infos = []

@@ -259,7 +259,7 @@ class AlignmentCollector:
                                           multiple_iterators=not self.params.high_memory)
         self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
-        self.barcode_dict = barcode_dict if barcode_dict else {}  # read_id -> (barcode, umi)
+        self.barcode_dict = barcode_dict # read_id -> (barcode, umi)
         self.small_chr_max_coverage = small_chr_max_coverage
         self.usual_gene_max_coverage = usual_gene_max_coverage
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
