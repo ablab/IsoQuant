@@ -16,23 +16,9 @@ import gffutils
 
 from src.assignment_loader import create_merging_assignment_loader
 from src.isoform_assignment import MatchEventSubtype, ReadAssignment
+from src.common import overlaps, junctions_from_blocks
 
 logger = logging.getLogger('IsoQuant')
-
-
-def overlaps(range1: Tuple[int, int], range2: Tuple[int, int]) -> bool:
-    """Check if two genomic ranges overlap."""
-    return not (range1[1] < range2[0] or range1[0] > range2[1])
-
-
-def junctions_from_blocks(sorted_blocks: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
-    """Extract intron coordinates from exon blocks."""
-    junctions = []
-    if len(sorted_blocks) >= 2:
-        for i in range(0, len(sorted_blocks) - 1):
-            if sorted_blocks[i][1] + 1 < sorted_blocks[i + 1][0]:
-                junctions.append((sorted_blocks[i][1] + 1, sorted_blocks[i + 1][0] - 1))
-    return junctions
 
 
 def format_read_assignment_for_output(read_assignment: ReadAssignment) -> str:
