@@ -18,6 +18,21 @@ from src.read_groups import (
 )
 
 
+# Mock alignment object
+class MockAlignment:
+    def __init__(self, read_id="", tags=None):
+        self.query_name = read_id
+        if tags is None:
+            tags = {}
+        self._tags = tags
+
+    def get_tag(self, tag_name):
+        return self._tags.get(tag_name)
+
+    def has_tag(self, tag_name):
+        return tag_name in self._tags
+
+
 class TestFileNameGrouper:
     """Test FileNameGrouper class."""
 
@@ -50,44 +65,24 @@ class TestAlignmentTagReadGrouper:
     def test_init_default_tag(self):
         """Test AlignmentTagReadGrouper with default RG tag."""
         grouper = AlignmentTagReadGrouper(None)
-        assert grouper.tag_name == "RG"
+        assert grouper.tag == "RG"
 
     def test_init_custom_tag(self):
         """Test AlignmentTagReadGrouper with custom tag."""
         grouper = AlignmentTagReadGrouper("CB")
-        assert grouper.tag_name == "CB"
+        assert grouper.tag == "CB"
 
     def test_get_group_with_tag(self):
         """Test getting group when read has tag."""
         grouper = AlignmentTagReadGrouper("CB")
-
-        # Mock alignment object
-        class MockAlignment:
-            def __init__(self, tags):
-                self._tags = tags
-
-            def get_tag(self, tag_name):
-                return self._tags.get(tag_name)
-
-            def has_tag(self, tag_name):
-                return tag_name in self._tags
-
-        alignment = MockAlignment({"CB": "ACTGACTG"})
-        assert grouper.get_group("read1", None, alignment) == "ACTGACTG"
+        alignment = MockAlignment(tags={"CB": "ACTGACTG"})
+        assert grouper.get_group_id(alignment, None, ) == "ACTGACTG"
 
     def test_get_group_missing_tag(self):
         """Test getting group when read lacks tag."""
         grouper = AlignmentTagReadGrouper("CB")
-
-        class MockAlignment:
-            def get_tag(self, tag_name):
-                raise KeyError(tag_name)
-
-            def has_tag(self, tag_name):
-                return False
-
         alignment = MockAlignment()
-        result = grouper.get_group("read1", None, alignment)
+        result = grouper.get_group_id(alignment, None, )
         # Should return None or some default value
         assert result is None or result == ""
 
@@ -98,28 +93,28 @@ class TestReadIdSplitReadGrouper:
     def test_init(self):
         """Test ReadIdSplitReadGrouper initialization."""
         grouper = ReadIdSplitReadGrouper("_")
-        assert grouper.delimiter == "_"
+        assert grouper.delim == "_"
 
     def test_get_group_with_delimiter(self):
         """Test getting group from read ID with delimiter."""
         grouper = ReadIdSplitReadGrouper("_")
 
-        assert grouper.get_group("read_001_groupA") == "groupA"
-        assert grouper.get_group("read_002_groupB") == "groupB"
+        assert grouper.get_group_id(MockAlignment(read_id="read_001_groupA")) == "groupA"
+        assert grouper.get_group_id(MockAlignment(read_id="read_002_groupB")) == "groupB"
 
     def test_get_group_no_delimiter(self):
         """Test getting group from read ID without delimiter."""
         grouper = ReadIdSplitReadGrouper("_")
 
         # Should return read ID if no delimiter found
-        assert grouper.get_group("read001") == "read001"
+        assert grouper.get_group_id(MockAlignment(read_id="read001")) == "read001"
 
     def test_get_group_multiple_delimiters(self):
         """Test getting group with multiple delimiters."""
         grouper = ReadIdSplitReadGrouper("_")
 
         # Should return last part after delimiter
-        assert grouper.get_group("prefix_middle_suffix") == "suffix"
+        assert grouper.get_group_id(MockAlignment(read_id="prefix_middle_suffix")) == "suffix"
 
 
 class TestReadTableGrouper:
@@ -135,12 +130,14 @@ class TestReadTableGrouper:
             temp_file = f.name
 
         try:
-            grouper = ReadTableGrouper([temp_file], read_col=0, group_col=1, delimiter='\t')
-            grouper.load()
+            grouper = ReadTableGrouper(temp_file,
+                                       read_id_column_index=0,
+                                       group_id_column_index=1,
+                                       delim='\t')
 
-            assert grouper.get_group("read_001") == "groupA"
-            assert grouper.get_group("read_002") == "groupB"
-            assert grouper.get_group("read_003") == "groupA"
+            assert grouper.get_group_id("read_001") == "groupA"
+            assert grouper.get_group_id("read_002") == "groupB"
+            assert grouper.get_group_id("read_003") == "groupA"
         finally:
             os.unlink(temp_file)
 

@@ -62,7 +62,7 @@ class ReadIdSplitReadGrouper(AbstractReadGrouper):
         values = read_id.split(self.delim)
         if len(values) == 1:
             logger.warning("Delimiter %s is not present in read id %s, skipping" % (self.delim, read_id))
-            return
+            return ""
 
         self.read_groups.add(values[-1])
         return values[-1]
