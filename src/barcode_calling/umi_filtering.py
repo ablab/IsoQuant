@@ -567,6 +567,7 @@ class UMIFilter:
                             assignment_type, [], barcode, umi, polya_site, transcript_type, cell_type)
                     else:
                         # Multiple inconsistent matches - skip
+                        self.total_assignments += 1
                         continue
 
                     self.total_assignments += 1
