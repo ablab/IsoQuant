@@ -35,61 +35,6 @@ def junctions_from_blocks(sorted_blocks: List[Tuple[int, int]]) -> List[Tuple[in
     return junctions
 
 
-def load_barcodes(in_file, use_untrusted_umis: bool = False, barcode_column: int = 1,
-                  umi_column: int = 2, barcode_score_column: int = 3, umi_property_column: int = 4,
-                  min_score: int = 13) -> Dict[str, Tuple[str, str]]:
-    """
-    Load barcode and UMI information from file(s).
-
-    Old format:
-    afaf0413-4dd7-491a-928b-39da40d68fb3    99      56      66      83      +       GCCGATACGCCAAT  CGACTGAAG       13      True
-
-    Returns:
-        Dict mapping read_id to (barcode, umi) tuple
-    """
-    in_files = in_file if isinstance(in_file, list) else [in_file]
-    barcode_dict = {}
-    read_count = 0
-    barcoded = 0
-    hq_barcoded = 0
-    trusted_umi = 0
-
-    for f in in_files:
-        logger.info("Loading barcodes from " + f)
-        for l in open(f):
-            if l.startswith("#"):
-                continue
-            read_count += 1
-            v = l.strip().split("\t")
-            if len(v) < 5:
-                continue
-            barcode = v[barcode_column]
-            score = int(v[barcode_score_column])
-            if barcode == "*":
-                continue
-            barcoded += 1
-            if score < min_score:
-                continue
-            hq_barcoded += 1
-            if v[umi_property_column] != "True":
-                if not use_untrusted_umis:
-                    continue
-                umi = "None"
-            else:
-                umi = v[umi_column]
-                trusted_umi += 1
-
-            barcode_dict[v[0]] = (barcode, umi)
-
-    logger.info("Total reads: %d" % read_count)
-    logger.info("Barcoded: %d" % barcoded)
-    logger.info("Barcoded with score >= %d: %d" % (min_score, hq_barcoded))
-    logger.info("Barcoded with trusted UMI: %d" % trusted_umi)
-    logger.info("Loaded %d barcodes " % len(barcode_dict))
-
-    return barcode_dict
-
-
 def format_read_assignment_for_output(read_assignment: ReadAssignment) -> str:
     """
     Format ReadAssignment for UMI filtering output file.
@@ -481,29 +426,6 @@ class UMIFilter:
                 self.stats["Uniquely assigned and barcoded"] += 1
             if unique and spliced:
                 self.stats["Uniquely assigned and spliced and barcoded"] += 1
-
-    @staticmethod
-    def load_barcodes_simple(barcode_file: str) -> Dict[str, Tuple[str, str]]:
-        """
-        Load barcodes from split barcode file (simple format).
-
-        Format: read_id barcode umi
-
-        Args:
-            barcode_file: Path to barcode file
-
-        Returns:
-            Dict mapping read_id to (barcode, umi) tuple
-        """
-        barcode_dict = {}
-        for l in open(barcode_file):
-            if l.startswith("#"):
-                continue
-            v = l.split()
-            if len(v) != 3:
-                continue
-            barcode_dict[v[0]] = (v[1], v[2])
-        return barcode_dict
 
     def process_single_chr(self, chr_id: str, saves_prefix: str, transcript_type_dict: Dict[str, Tuple[str, int]],
                           barcode_feature_table: Dict[str, str],

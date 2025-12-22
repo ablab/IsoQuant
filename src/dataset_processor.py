@@ -55,7 +55,7 @@ from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extend
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
 from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
-from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter, load_barcodes
+from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
 from .table_splitter import split_read_table_parallel
 
 logger = logging.getLogger('IsoQuant')
