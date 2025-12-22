@@ -90,82 +90,90 @@ def load_barcodes(in_file, use_untrusted_umis: bool = False, barcode_column: int
     return barcode_dict
 
 
-class ReadAssignmentInfo:
+def format_read_assignment_for_output(read_assignment: ReadAssignment) -> str:
     """
-    Stores UMI filtering-specific information about a read assignment.
+    Format ReadAssignment for UMI filtering output file.
 
-    This class is used during UMI deduplication to store read assignment details
-    along with barcode/UMI information needed for filtering.
+    Expects additional_attributes to contain:
+    - 'transcript_type': Type of transcript (e.g., 'protein_coding')
+    - 'polya_site': PolyA site position (-1 if none)
+    - 'cell_type': Cell type/spot from barcode mapping
+
+    Args:
+        read_assignment: ReadAssignment object with additional_attributes set
+
+    Returns:
+        Formatted string for output file
     """
+    exon_blocks = read_assignment.corrected_exons
+    chr_id = read_assignment.chr_id
+    strand = read_assignment.strand
 
-    def __init__(self, read_id: str, chr_id: str, gene_id: str, transcript_id: str, strand: str,
-                 exon_blocks: List[Tuple[int, int]], assignment_type, matching_events, barcode: Optional[str],
-                 umi: Optional[str], polya_site: int = -1, transcript_type: str = "unknown",
-                 cell_type: str = "None"):
-        self.read_id = read_id
-        self.chr_id = chr_id
-        self.gene_id = gene_id
-        self.transcript_id = transcript_id
-        self.strand = strand
-        self.polya_site = polya_site
-        self.exon_blocks = exon_blocks
-        self.assignment_type = assignment_type
-        self.matching_events = matching_events
-        self.barcode = barcode
-        self.umi = umi
-        self.transcript_type = transcript_type
-        self.cell_type = cell_type
+    intron_blocks = junctions_from_blocks(exon_blocks)
+    exons_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (chr_id, e[0], e[1], strand) for e in exon_blocks])
+    introns_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (chr_id, e[0], e[1], strand) for e in intron_blocks])
 
-    def to_allinfo_str(self) -> str:
-        """Format read assignment information for output file."""
-        intron_blocks = junctions_from_blocks(self.exon_blocks)
-        exons_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (self.chr_id, e[0], e[1], self.strand)
-                                        for e in self.exon_blocks])
-        introns_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (self.chr_id, e[0], e[1], self.strand)
-                                          for e in intron_blocks])
+    # Determine read type from assignment type
+    if read_assignment.assignment_type.is_unique():
+        read_type = "known"
+    elif read_assignment.assignment_type.is_inconsistent():
+        read_type = "novel"
+    elif read_assignment.assignment_type.is_ambiguous():
+        read_type = "known_ambiguous"
+    else:
+        read_type = "none"
 
-        if self.assignment_type.is_unique():
-            read_type = "known"
-        elif self.assignment_type.is_inconsistent():
-            read_type = "novel"
-        elif self.assignment_type.is_ambiguous():
-            read_type = "known_ambiguous"
-        else:
-            read_type = "none"
+    # Get gene and transcript IDs
+    if read_assignment.isoform_matches:
+        gene_id = read_assignment.isoform_matches[0].assigned_gene
+        transcript_id = read_assignment.isoform_matches[0].assigned_transcript
+        matching_events = [e.event_type for e in read_assignment.isoform_matches[0].match_subclassifications]
+    else:
+        gene_id = "."
+        transcript_id = "."
+        matching_events = []
 
-        polyA = "NoPolyA"
-        TSS = "NoTSS"
+    # Get additional attributes
+    transcript_type = read_assignment.additional_attributes.get('transcript_type', 'unknown')
+    polya_site = read_assignment.additional_attributes.get('polya_site', -1)
+    cell_type = read_assignment.additional_attributes.get('cell_type', 'None')
 
-        if isinstance(self.matching_events, str):
-            if "tss_match" in self.matching_events:
-                tss_pos = self.exon_blocks[-1][1] if self.strand == "-" else self.exon_blocks[0][0]
-                TSS = "%s_%d_%d_%s" % (self.chr_id, tss_pos, tss_pos, self.strand)
-            if "correct_polya" in self.matching_events and self.polya_site != -1:
-                polyA_pos = self.polya_site
-                polyA = "%s_%d_%d_%s" % (self.chr_id, polyA_pos, polyA_pos, self.strand)
-        else:
-            if self.strand == '+':
-                if any(x in [MatchEventSubtype.terminal_site_match_left,
-                             MatchEventSubtype.terminal_site_match_left_precise] for x in self.matching_events):
-                    tss_pos = self.exon_blocks[0][0]
-                    TSS = "%s_%d_%d_%s" % (self.chr_id, tss_pos, tss_pos, self.strand)
-                if (self.polya_site != -1 and
-                        any(x == MatchEventSubtype.correct_polya_site_right for x in self.matching_events)):
-                    polyA_pos = self.polya_site
-                    polyA = "%s_%d_%d_%s" % (self.chr_id, polyA_pos, polyA_pos, self.strand)
-            elif self.strand == '-':
-                if any(x in [MatchEventSubtype.terminal_site_match_right,
-                             MatchEventSubtype.terminal_site_match_right_precise] for x in self.matching_events):
-                    tss_pos = self.exon_blocks[-1][1]
-                    TSS = "%s_%d_%d_%s" % (self.chr_id, tss_pos, tss_pos, self.strand)
-                if (self.polya_site != -1 and
-                        any(x == MatchEventSubtype.correct_polya_site_left for x in self.matching_events)):
-                    polyA_pos = self.polya_site
-                    polyA = "%s_%d_%d_%s" % (self.chr_id, polyA_pos, polyA_pos, self.strand)
+    # Format TSS and polyA
+    polyA = "NoPolyA"
+    TSS = "NoTSS"
 
-        return "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s" % (
-            self.read_id, self.gene_id, self.cell_type, self.barcode, self.umi, introns_str, TSS, polyA,
-            exons_str, read_type, len(intron_blocks), self.transcript_id, self.transcript_type)
+    if isinstance(matching_events, str):
+        # Legacy string format
+        if "tss_match" in matching_events:
+            tss_pos = exon_blocks[-1][1] if strand == "-" else exon_blocks[0][0]
+            TSS = "%s_%d_%d_%s" % (chr_id, tss_pos, tss_pos, strand)
+        if "correct_polya" in matching_events and polya_site != -1:
+            polyA_pos = polya_site
+            polyA = "%s_%d_%d_%s" % (chr_id, polyA_pos, polyA_pos, strand)
+    else:
+        # Event subtype format
+        if strand == '+':
+            if any(x in [MatchEventSubtype.terminal_site_match_left,
+                         MatchEventSubtype.terminal_site_match_left_precise] for x in matching_events):
+                tss_pos = exon_blocks[0][0]
+                TSS = "%s_%d_%d_%s" % (chr_id, tss_pos, tss_pos, strand)
+            if (polya_site != -1 and
+                    any(x == MatchEventSubtype.correct_polya_site_right for x in matching_events)):
+                polyA_pos = polya_site
+                polyA = "%s_%d_%d_%s" % (chr_id, polyA_pos, polyA_pos, strand)
+        elif strand == '-':
+            if any(x in [MatchEventSubtype.terminal_site_match_right,
+                         MatchEventSubtype.terminal_site_match_right_precise] for x in matching_events):
+                tss_pos = exon_blocks[-1][1]
+                TSS = "%s_%d_%d_%s" % (chr_id, tss_pos, tss_pos, strand)
+            if (polya_site != -1 and
+                    any(x == MatchEventSubtype.correct_polya_site_left for x in matching_events)):
+                polyA_pos = polya_site
+                polyA = "%s_%d_%d_%s" % (chr_id, polyA_pos, polyA_pos, strand)
+
+    return "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s" % (
+        read_assignment.read_id, gene_id, cell_type, read_assignment.barcode, read_assignment.umi,
+        introns_str, TSS, polyA, exons_str, read_type, len(intron_blocks), transcript_id, transcript_type)
 
 
 class UMIFilter:
@@ -244,7 +252,7 @@ class UMIFilter:
 
         return similar_umi
 
-    def _construct_umi_dict(self, molecule_list: List[ReadAssignmentInfo]) -> Dict[str, List[ReadAssignmentInfo]]:
+    def _construct_umi_dict(self, molecule_list: List[ReadAssignment]) -> Dict[str, List[ReadAssignment]]:
         """
         Group molecules by UMI, clustering similar UMIs.
 
@@ -274,7 +282,7 @@ class UMIFilter:
         # This ensures reads with same UMI are processed consecutively
         molecule_list = sorted(molecule_list, key=lambda ml: umi_sorting_keys[ml.umi], reverse=True)
 
-        umi_dict: Dict[str, List[ReadAssignmentInfo]] = defaultdict(list)
+        umi_dict: Dict[str, List[ReadAssignment]] = defaultdict(list)
         trusted_umi_list: List[str] = []
 
         for m in molecule_list:
@@ -294,7 +302,7 @@ class UMIFilter:
 
         return umi_dict
 
-    def _process_duplicates(self, molecule_list: List[ReadAssignmentInfo]) -> List[ReadAssignmentInfo]:
+    def _process_duplicates(self, molecule_list: List[ReadAssignment]) -> List[ReadAssignment]:
         """
         Process PCR/RT duplicates for a gene-barcode pair.
 
@@ -338,11 +346,12 @@ class UMIFilter:
                 if not best_read.assignment_type.is_unique() and m.assignment_type.is_unique():
                     best_read = m
                 # Prefer more exons
-                elif len(m.exon_blocks) > len(best_read.exon_blocks):
+                elif len(m.corrected_exons) > len(best_read.corrected_exons):
                     best_read = m
                 # Prefer longer transcripts
-                elif (len(m.exon_blocks) == len(best_read.exon_blocks) and
-                      m.exon_blocks[-1][1] - m.exon_blocks[0][0] > best_read.exon_blocks[-1][1] - best_read.exon_blocks[0][0]):
+                elif (len(m.corrected_exons) == len(best_read.corrected_exons) and
+                      m.corrected_exons[-1][1] - m.corrected_exons[0][0] >
+                      best_read.corrected_exons[-1][1] - best_read.corrected_exons[0][0]):
                     best_read = m
 
             # Check for ambiguity in transcript annotation among duplicates with same read ID
@@ -352,23 +361,27 @@ class UMIFilter:
             for m in umi_dict[umi]:
                 if m.read_id != best_read.read_id:
                     continue
-                transcript_types.add(m.transcript_type)
-                polyas.add(m.polya_site)
-                isoform_ids.add(m.transcript_id)
+                transcript_types.add(m.additional_attributes.get('transcript_type', 'unknown'))
+                polyas.add(m.additional_attributes.get('polya_site', -1))
+                if m.isoform_matches:
+                    isoform_ids.add(m.isoform_matches[0].assigned_transcript)
 
-            # Resolve ambiguities
+            # Resolve ambiguities by updating additional_attributes
             if len(transcript_types) > 1:
-                best_read.transcript_type = "None"
+                best_read.set_additional_attribute('transcript_type', 'None')
             if len(polyas) > 1:
-                best_read.polya_site = -1
+                best_read.set_additional_attribute('polya_site', -1)
             if len(isoform_ids) > 1:
-                best_read.transcript_id = "None"
+                # Clear the transcript ID by removing all matches except the gene
+                if best_read.isoform_matches:
+                    best_read.isoform_matches[0].assigned_transcript = "None"
 
             # Clear annotation for inconsistent assignments
             if best_read.assignment_type.is_inconsistent():
-                best_read.transcript_id = "None"
-                best_read.polya_site = -1
-                best_read.transcript_type = "None"
+                if best_read.isoform_matches:
+                    best_read.isoform_matches[0].assigned_transcript = "None"
+                best_read.set_additional_attribute('polya_site', -1)
+                best_read.set_additional_attribute('transcript_type', 'None')
 
             logger.debug("Selected %s %s" % (best_read.read_id, best_read.umi))
             resulting_reads.append((best_read, umi))
@@ -380,7 +393,7 @@ class UMIFilter:
         # With multiple UMIs, ignore untrusted ones
         return [x[0] for x in filter(lambda x: x[1] != "None", resulting_reads)]
 
-    def _process_gene(self, gene_dict: Dict[str, List[ReadAssignmentInfo]]):
+    def _process_gene(self, gene_dict: Dict[str, List[ReadAssignment]]):
         """
         Process all barcodes for a gene.
 
@@ -394,7 +407,7 @@ class UMIFilter:
             for r in self._process_duplicates(gene_dict[barcode]):
                 yield r
 
-    def _process_chunk(self, gene_barcode_dict: Dict[str, Dict[str, List[ReadAssignmentInfo]]],
+    def _process_chunk(self, gene_barcode_dict: Dict[str, Dict[str, List[ReadAssignment]]],
                       allinfo_outf, read_ids_outf=None) -> Tuple[int, int]:
         """
         Process a chunk of reads grouped by gene and barcode.
@@ -418,9 +431,11 @@ class UMIFilter:
                     continue
 
                 read_count += 1
-                self.unique_gene_barcode.add((read_assignment.gene_id, read_assignment.barcode))
+                if read_assignment.isoform_matches:
+                    gene_id = read_assignment.isoform_matches[0].assigned_gene
+                    self.unique_gene_barcode.add((gene_id, read_assignment.barcode))
 
-                if len(read_assignment.exon_blocks) > 1:
+                if len(read_assignment.corrected_exons) > 1:
                     spliced_count += 1
 
                 if read_ids_outf:
@@ -429,20 +444,24 @@ class UMIFilter:
                 self.selected_reads.add(read_assignment.read_id)
 
                 if allinfo_outf:
-                    allinfo_outf.write(read_assignment.to_allinfo_str() + "\n")
+                    allinfo_outf.write(format_read_assignment_for_output(read_assignment) + "\n")
 
         return read_count, spliced_count
 
-    def add_stats_for_read(self, read_info: ReadAssignmentInfo):
+    def add_stats_for_read(self, read_assignment: ReadAssignment):
         """
         Update statistics for a processed read.
 
         Args:
-            read_info: Read assignment information
+            read_assignment: ReadAssignment object
         """
-        assigned = read_info.gene_id != "."
-        spliced = len(read_info.exon_blocks) > 1
-        barcoded = read_info.barcode is not None
+        gene_id = "."
+        if read_assignment.isoform_matches:
+            gene_id = read_assignment.isoform_matches[0].assigned_gene
+
+        assigned = gene_id != "."
+        spliced = len(read_assignment.corrected_exons) > 1
+        barcoded = read_assignment.barcode is not None
         unique = assigned  # In simplified logic, we only process unique/consistent assignments
 
         if assigned:
@@ -463,6 +482,28 @@ class UMIFilter:
             if unique and spliced:
                 self.stats["Uniquely assigned and spliced and barcoded"] += 1
 
+    @staticmethod
+    def load_barcodes_simple(barcode_file: str) -> Dict[str, Tuple[str, str]]:
+        """
+        Load barcodes from split barcode file (simple format).
+
+        Format: read_id barcode umi
+
+        Args:
+            barcode_file: Path to barcode file
+
+        Returns:
+            Dict mapping read_id to (barcode, umi) tuple
+        """
+        barcode_dict = {}
+        for l in open(barcode_file):
+            if l.startswith("#"):
+                continue
+            v = l.split()
+            if len(v) != 3:
+                continue
+            barcode_dict[v[0]] = (v[1], v[2])
+        return barcode_dict
 
     def process_single_chr(self, chr_id: str, saves_prefix: str, transcript_type_dict: Dict[str, Tuple[str, int]],
                           barcode_feature_table: Dict[str, str],
@@ -476,7 +517,6 @@ class UMIFilter:
             saves_prefix: Prefix for saved assignment files
             transcript_type_dict: Dict mapping transcript_id to (type, polya_site)
             barcode_feature_table: Dict mapping barcode to cell type
-            split_barcodes_dict: Dict mapping chr_id to barcode file path
             all_info_file_name: Output file for detailed assignment info
             filtered_reads_file_name: Optional output file for filtered read IDs
             stats_output_file_name: Output file for statistics
@@ -492,7 +532,7 @@ class UMIFilter:
 
             loader = create_merging_assignment_loader(chr_id, saves_prefix)
             while loader.has_next():
-                gene_barcode_dict: Dict[str, Dict[str, List[ReadAssignmentInfo]]] = defaultdict(lambda: defaultdict(list))
+                gene_barcode_dict: Dict[str, Dict[str, List[ReadAssignment]]] = defaultdict(lambda: defaultdict(list))
                 _, assignment_storage = loader.get_next()
                 logger.debug("Processing %d reads" % len(assignment_storage))
 
@@ -508,17 +548,15 @@ class UMIFilter:
                             self.stats["Spliced"] += 1
                         continue
 
-                    read_id = read_assignment.read_id
-                    assignment_type = read_assignment.assignment_type
                     exon_blocks = read_assignment.corrected_exons
-
-                    # Get barcode and UMI
                     barcode = read_assignment.barcode
                     umi = read_assignment.umi
-                    strand = read_assignment.strand
                     spliced = len(exon_blocks) > 1
                     barcoded = barcode is not None
+
+                    # Get cell type from barcode feature table
                     cell_type = "None" if barcode is None or barcode not in barcode_feature_table else barcode_feature_table[barcode]
+                    read_assignment.set_additional_attribute('cell_type', cell_type)
 
                     # Process based on number of isoform matches
                     if len(read_assignment.isoform_matches) == 1:
@@ -529,17 +567,12 @@ class UMIFilter:
                             transcript_type, polya_site = (
                                 transcript_type_dict[transcript_id] if transcript_id in transcript_type_dict
                                 else ("unknown_type", -1))
-                            assignment_info = ReadAssignmentInfo(
-                                read_id, chr_id, isoform_match.assigned_gene, transcript_id, strand,
-                                exon_blocks, assignment_type,
-                                [e.event_type for e in isoform_match.match_subclassifications],
-                                barcode, umi, polya_site, transcript_type, cell_type)
+                            read_assignment.set_additional_attribute('transcript_type', transcript_type)
+                            read_assignment.set_additional_attribute('polya_site', polya_site)
                         else:
                             # Inconsistent single match
-                            assignment_info = ReadAssignmentInfo(
-                                read_id, chr_id, isoform_match.assigned_gene, isoform_match.assigned_transcript,
-                                strand, exon_blocks, assignment_type, [], barcode, umi,
-                                -1, "unknown_type", cell_type)
+                            read_assignment.set_additional_attribute('transcript_type', 'unknown_type')
+                            read_assignment.set_additional_attribute('polya_site', -1)
 
                     elif read_assignment.assignment_type.is_consistent():
                         # Multiple consistent matches - need to resolve ambiguity
@@ -562,16 +595,19 @@ class UMIFilter:
                         transcript_type = "None" if len(transcript_types) != 1 else transcript_types.pop()
                         polya_site = -1 if len(polya_sites) != 1 else polya_sites.pop()
 
-                        assignment_info = ReadAssignmentInfo(
-                            read_id, chr_id, gene_ids.pop(), "None", strand, exon_blocks,
-                            assignment_type, [], barcode, umi, polya_site, transcript_type, cell_type)
+                        read_assignment.set_additional_attribute('transcript_type', transcript_type)
+                        read_assignment.set_additional_attribute('polya_site', polya_site)
+
+                        # Set transcript_id to "None" for ambiguous case
+                        if read_assignment.isoform_matches:
+                            read_assignment.isoform_matches[0].assigned_transcript = "None"
                     else:
                         # Multiple inconsistent matches - skip
                         self.total_assignments += 1
                         continue
 
                     self.total_assignments += 1
-                    self.add_stats_for_read(assignment_info)
+                    self.add_stats_for_read(read_assignment)
 
                     # Filter for deduplication
                     if not barcoded:
@@ -579,7 +615,10 @@ class UMIFilter:
                     if not spliced and self.only_spliced_reads:
                         continue
 
-                    gene_barcode_dict[assignment_info.gene_id][barcode].append(assignment_info)
+                    # Add to gene-barcode dict using gene from first isoform match
+                    if read_assignment.isoform_matches:
+                        gene_id = read_assignment.isoform_matches[0].assigned_gene
+                        gene_barcode_dict[gene_id][barcode].append(read_assignment)
 
                 # Process chunk
                 processed_read_count, processed_spliced_count = self._process_chunk(
