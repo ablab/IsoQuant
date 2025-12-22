@@ -38,7 +38,7 @@ from src.read_mapper import (
     DataSetReadMapper
 )
 from src.alignment_processor import PolyATrimmed
-from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies,  ISOQUANT_MODES, IsoQuantMode
+from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
