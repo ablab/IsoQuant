@@ -160,9 +160,11 @@ def parse_args(cmd_args=None, namespace=None):
                                help='file with barcode whitelist for barcode calling')
     sc_args_group.add_argument("--barcoded_reads", type=str, nargs='+',
                                help='TSV file with barcoded reads; barcodes will be called automatically if not provided')
+    # TODO: add UMI column, support various formats
     sc_args_group.add_argument("--barcode_column", type=str,
                                help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
                                default=1)
+    # TODO: add multiple columns
     sc_args_group.add_argument("--barcode2spot", type=str, nargs='+',
                                help='TSV file barcode to cell type / spot id information')
 
