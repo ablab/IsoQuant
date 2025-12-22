@@ -274,7 +274,7 @@ def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered
 
     umi_filter = UMIFilter(args.umi_length, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
-    umi_filter.process_single_chr(args, chr_id, sample.out_raw_file,
+    umi_filter.process_single_chr(chr_id, sample.out_raw_file,
                                   transcript_type_dict,
                                   barcode_feature_table,
                                   all_info_file_name,
