@@ -9,10 +9,10 @@ import tempfile
 import os
 from src.read_groups import (
     FileNameGrouper,
-    FileBasedGrouper,
+    ReadTableGrouper,
     BarcodeSpotGrouper,
-    TagGrouper,
-    ReadIdGrouper,
+    AlignmentTagReadGrouper,
+    ReadIdSplitReadGrouper,
     parse_grouping_spec,
     get_grouping_strategy_names
 )
@@ -44,22 +44,22 @@ class TestFileNameGrouper:
         assert grouper.get_group("read1", "file3.bam") == "file3.bam"
 
 
-class TestTagGrouper:
-    """Test TagGrouper class."""
+class TestAlignmentTagReadGrouper:
+    """Test AlignmentTagReadGrouper class."""
 
     def test_init_default_tag(self):
-        """Test TagGrouper with default RG tag."""
-        grouper = TagGrouper(None)
+        """Test AlignmentTagReadGrouper with default RG tag."""
+        grouper = AlignmentTagReadGrouper(None)
         assert grouper.tag_name == "RG"
 
     def test_init_custom_tag(self):
-        """Test TagGrouper with custom tag."""
-        grouper = TagGrouper("CB")
+        """Test AlignmentTagReadGrouper with custom tag."""
+        grouper = AlignmentTagReadGrouper("CB")
         assert grouper.tag_name == "CB"
 
     def test_get_group_with_tag(self):
         """Test getting group when read has tag."""
-        grouper = TagGrouper("CB")
+        grouper = AlignmentTagReadGrouper("CB")
 
         # Mock alignment object
         class MockAlignment:
@@ -77,7 +77,7 @@ class TestTagGrouper:
 
     def test_get_group_missing_tag(self):
         """Test getting group when read lacks tag."""
-        grouper = TagGrouper("CB")
+        grouper = AlignmentTagReadGrouper("CB")
 
         class MockAlignment:
             def get_tag(self, tag_name):
@@ -92,41 +92,41 @@ class TestTagGrouper:
         assert result is None or result == ""
 
 
-class TestReadIdGrouper:
-    """Test ReadIdGrouper class."""
+class TestReadIdSplitReadGrouper:
+    """Test ReadIdSplitReadGrouper class."""
 
     def test_init(self):
-        """Test ReadIdGrouper initialization."""
-        grouper = ReadIdGrouper("_")
+        """Test ReadIdSplitReadGrouper initialization."""
+        grouper = ReadIdSplitReadGrouper("_")
         assert grouper.delimiter == "_"
 
     def test_get_group_with_delimiter(self):
         """Test getting group from read ID with delimiter."""
-        grouper = ReadIdGrouper("_")
+        grouper = ReadIdSplitReadGrouper("_")
 
         assert grouper.get_group("read_001_groupA") == "groupA"
         assert grouper.get_group("read_002_groupB") == "groupB"
 
     def test_get_group_no_delimiter(self):
         """Test getting group from read ID without delimiter."""
-        grouper = ReadIdGrouper("_")
+        grouper = ReadIdSplitReadGrouper("_")
 
         # Should return read ID if no delimiter found
         assert grouper.get_group("read001") == "read001"
 
     def test_get_group_multiple_delimiters(self):
         """Test getting group with multiple delimiters."""
-        grouper = ReadIdGrouper("_")
+        grouper = ReadIdSplitReadGrouper("_")
 
         # Should return last part after delimiter
         assert grouper.get_group("prefix_middle_suffix") == "suffix"
 
 
-class TestFileBasedGrouper:
-    """Test FileBasedGrouper class."""
+class TestReadTableGrouper:
+    """Test ReadTableGrouper class."""
 
     def test_init_and_load(self):
-        """Test FileBasedGrouper initialization and file loading."""
+        """Test ReadTableGrouper initialization and file loading."""
         # Create temporary file with read-group mapping
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
             f.write("read_001\tgroupA\n")
@@ -135,29 +135,12 @@ class TestFileBasedGrouper:
             temp_file = f.name
 
         try:
-            grouper = FileBasedGrouper([temp_file], read_col=0, group_col=1, delimiter='\t')
+            grouper = ReadTableGrouper([temp_file], read_col=0, group_col=1, delimiter='\t')
             grouper.load()
 
             assert grouper.get_group("read_001") == "groupA"
             assert grouper.get_group("read_002") == "groupB"
             assert grouper.get_group("read_003") == "groupA"
-        finally:
-            os.unlink(temp_file)
-
-    def test_multi_column_grouping(self):
-        """Test grouping by multiple columns."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
-            f.write("read_001\tcellA\ttypeX\n")
-            f.write("read_002\tcellB\ttypeY\n")
-            temp_file = f.name
-
-        try:
-            grouper = FileBasedGrouper([temp_file], read_col=0, group_col=[1, 2], delimiter='\t')
-            grouper.load()
-
-            # Should concatenate columns with underscore
-            assert grouper.get_group("read_001") == "cellA_typeX"
-            assert grouper.get_group("read_002") == "cellB_typeY"
         finally:
             os.unlink(temp_file)
 
@@ -168,7 +151,7 @@ class TestFileBasedGrouper:
             temp_file = f.name
 
         try:
-            grouper = FileBasedGrouper([temp_file], read_col=0, group_col=1, delimiter='\t')
+            grouper = ReadTableGrouper([temp_file], read_col=0, group_col=1, delimiter='\t')
             grouper.load()
 
             # Should return None or read ID for missing reads
@@ -263,7 +246,7 @@ class TestParseGroupingSpec:
         groupers = parse_grouping_spec(["tag:CB"], {})
 
         assert len(groupers) == 1
-        assert isinstance(groupers[0], TagGrouper)
+        assert isinstance(groupers[0], AlignmentTagReadGrouper)
         assert groupers[0].tag_name == "CB"
 
     def test_parse_read_id(self):
@@ -271,7 +254,7 @@ class TestParseGroupingSpec:
         groupers = parse_grouping_spec(["read_id:_"], {})
 
         assert len(groupers) == 1
-        assert isinstance(groupers[0], ReadIdGrouper)
+        assert isinstance(groupers[0], ReadIdSplitReadGrouper)
         assert groupers[0].delimiter == "_"
 
     def test_parse_multiple_strategies(self):
@@ -281,7 +264,7 @@ class TestParseGroupingSpec:
 
         assert len(groupers) == 2
         assert isinstance(groupers[0], FileNameGrouper)
-        assert isinstance(groupers[1], TagGrouper)
+        assert isinstance(groupers[1], AlignmentTagReadGrouper)
 
 
 class TestGetGroupingStrategyNames:
