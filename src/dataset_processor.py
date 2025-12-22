@@ -846,6 +846,7 @@ class DatasetProcessor:
 
     def split_read_barcode_table(self, sample, split_barcodes_file_names):
         logger.info("Splitting read barcode table")
+        # TODO: untrusted UMIs and third party format, both can be done by passing parsing function instead of columns
         split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
                                   read_column=0, group_columns=(1, 2, 3, 4), delim='\t')
         logger.info("Read barcode table was split")
