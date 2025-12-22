@@ -463,38 +463,15 @@ class UMIFilter:
             if unique and spliced:
                 self.stats["Uniquely assigned and spliced and barcoded"] += 1
 
-    @staticmethod
-    def load_barcodes_simple(barcode_file: str) -> Dict[str, Tuple[str, str]]:
-        """
-        Load barcodes from split barcode file (simple format).
 
-        Format: read_id barcode umi
-
-        Args:
-            barcode_file: Path to barcode file
-
-        Returns:
-            Dict mapping read_id to (barcode, umi) tuple
-        """
-        barcode_dict = {}
-        for l in open(barcode_file):
-            if l.startswith("#"):
-                continue
-            v = l.split()
-            if len(v) != 3:
-                continue
-            barcode_dict[v[0]] = (v[1], v[2])
-        return barcode_dict
-
-    def process_single_chr(self, args, chr_id: str, saves_prefix: str, transcript_type_dict: Dict[str, Tuple[str, int]],
-                          barcode_feature_table: Dict[str, str], split_barcodes_dict: Dict[str, str],
+    def process_single_chr(self, chr_id: str, saves_prefix: str, transcript_type_dict: Dict[str, Tuple[str, int]],
+                          barcode_feature_table: Dict[str, str],
                           all_info_file_name: str, filtered_reads_file_name: Optional[str],
                           stats_output_file_name: str) -> Tuple[str, str]:
         """
         Process UMI filtering for a single chromosome.
 
         Args:
-            args: Command-line arguments
             chr_id: Chromosome ID
             saves_prefix: Prefix for saved assignment files
             transcript_type_dict: Dict mapping transcript_id to (type, polya_site)
@@ -512,9 +489,6 @@ class UMIFilter:
             read_count = 0
             spliced_count = 0
             self.unique_gene_barcode = set()
-
-            # Load barcodes for this chromosome
-            barcode_dict = self.load_barcodes_simple(split_barcodes_dict[chr_id])
 
             loader = create_merging_assignment_loader(chr_id, saves_prefix)
             while loader.has_next():
@@ -539,11 +513,8 @@ class UMIFilter:
                     exon_blocks = read_assignment.corrected_exons
 
                     # Get barcode and UMI
-                    if read_id in barcode_dict:
-                        barcode, umi = barcode_dict[read_id]
-                    else:
-                        barcode, umi = None, None
-
+                    barcode = read_assignment.barcode
+                    umi = read_assignment.umi
                     strand = read_assignment.strand
                     spliced = len(exon_blocks) > 1
                     barcoded = barcode is not None
