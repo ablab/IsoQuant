@@ -96,23 +96,68 @@ Use this option at your own risk.
 Input file names are used as labels if not set.
 
 `--read_group`
- Sets a way to group feature counts (e.g. by cell type). Available options are:
+ Sets one or more ways to group feature counts (e.g. by cell type, file, or barcode).
+ Multiple grouping strategies can be combined (space-separated).
+ Available grouping options:
 
- * `file_name`: groups reads by their original file names (or file name labels) within an experiment.
+ * `file_name` - groups reads by their original file names (or file name labels) within an experiment.
 This option makes sense when multiple files are provided.
-This option is designed for obtaining expression tables with a separate column for each file.
-If multiple BAM/FASTQ files are provided and `--read_group` option is not set, IsoQuant will set `--read_group:file_name`
+If multiple BAM/FASTQ files are provided and `--read_group` option is not set, IsoQuant will set `--read_group file_name`
 by default.
- * `tag`: groups reads by BAM file read tag: set `tag:TAG`, where `TAG` is the desired tag name
-(e.g. `tag:RG` with use `RG` values as groups, `RG` will be used if unset);
- * `read_id`: groups reads by read name suffix: set `read_id:DELIM` where `DELIM` is the
-symbol/string by which the read id will be split
-(e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will set as `NEU`);
- * `file`: uses additional file with group information for every read: `file:FILE:READ_COL:GROUP_COL:DELIM`,
-where `FILE` is the file name, `READ_COL` is column with read ids (0 if not set),
-`GROUP_COL` is column with group ids (1 if not set),
-`DELIM` is separator symbol (tab if not set). File can be gzipped.
 
+ * `tag:TAG` - groups reads by BAM file read tag, where `TAG` is the tag name
+(e.g. `tag:CB` uses `CB` tag values as groups, commonly used for cell barcodes in single-cell data).
+
+ * `read_id:DELIM` - groups reads by read name suffix, where `DELIM` is the
+symbol/string by which the read id will be split
+(e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will be `NEU`).
+
+ * `file:FILE:READ_COL:GROUP_COL(S):DELIM` - uses additional TSV file with group information for every read,
+where `FILE` is the file path, `READ_COL` is column with read ids (default: 0),
+`GROUP_COL(S)` is column(s) with group ids (default: 1; use comma-separated columns for multi-column grouping, e.g., `1,2,3`),
+`DELIM` is separator symbol (default: tab). File can be gzipped.
+
+ * `barcode_spot` or `barcode_spot:FILE` - maps barcodes to spots/cell types.
+Uses barcode-to-spot mapping from `--barcode2spot` file by default, or from explicit `FILE` if specified.
+Useful for grouping single-cell/spatial data by cell type or spatial region instead of individual barcodes.
+
+**Example**: `--read_group tag:CB file_name barcode_spot` creates multi-level grouping by cell barcode tag, file name, and cell type.
+
+
+## Single-cell and spatial transcriptomics options
+
+`--mode` or `-m`
+IsoQuant mode for processing single-cell or spatial transcriptomics data. Available modes:
+
+* `bulk` - standard bulk RNA-seq mode (default)
+* `tenX_v3` - 10x Genomics single-cell 3' gene expression
+* `curio` - Curio Bioscience single-cell
+* `visium_hd` - 10x Genomics Visium HD spatial transcriptomics
+* `visium_5prime` - 10x Genomics Visium 5' spatial transcriptomics
+* `stereoseq` - Stereo-seq spatial transcriptomics (BGI)
+* `stereoseq_nosplit` - Stereo-seq without barcode splitting
+
+Single-cell and spatial modes enable automatic barcode calling and UMI-based deduplication.
+
+`--barcode_whitelist`
+Path to file(s) with barcode whitelist for barcode calling.
+Required for single-cell/spatial modes unless `--barcoded_reads` is provided.
+File should contain one barcode per line.
+
+`--barcoded_reads`
+Path to TSV file(s) with barcoded reads.
+Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
+If not provided, barcodes will be called automatically from raw reads using `--barcode_whitelist`.
+
+`--barcode_column`
+Column index for barcodes in the `--barcoded_reads` file (default: 1).
+Read ID column is 0, barcode column is 1, UMI column is 2.
+
+`--barcode2spot`
+Path to TSV file(s) mapping barcodes to cell types or spatial spots.
+Format: `barcode<TAB>cell_type` (one barcode per line).
+Used with `--read_group barcode_spot` to group counts by cell type/spot instead of individual barcodes.
+Useful for reducing output dimensions from thousands of barcodes to tens of cell types.
 
 ### Output options
 
