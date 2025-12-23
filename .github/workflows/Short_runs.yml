@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   integration-tests:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: [isoquant]
+    name: 'IsoQuant toy dataset runs'
 
     steps:
     - uses: actions/checkout@v3

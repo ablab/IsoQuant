@@ -32,10 +32,9 @@ def test_clean_start():
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_full/")
     shutil.rmtree(out_dir, ignore_errors=True)
-    os.environ['HOME'] = source_dir # dirty hack to set $HOME for tox environment
     sample_name = "ONT_Simulated.chr9.4M"
 
-    result = subprocess.run(["python", "isoquant.py",
+    result = subprocess.run(["python3", "isoquant.py",
                              "--clean_start",
                              "-o", out_dir,
                              "--data_type", "nanopore",
@@ -50,12 +49,12 @@ def test_clean_start():
     assert result.returncode == 0
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
-    resulting_files = ["exon_counts.tsv", "exon_grouped.file_col1_counts.linear.tsv",
-                       "gene_counts.tsv", "gene_grouped.file_col1_counts.tsv",
-                       "intron_counts.tsv", "intron_grouped.file_col1_counts.linear.tsv",
+    resulting_files = ["exon_counts.tsv", "exon_grouped_file0_col1_counts.linear.tsv",
+                       "gene_counts.tsv", "gene_grouped_file0_col1_counts.tsv",
+                       "intron_counts.tsv", "intron_grouped_file0_col1_counts.linear.tsv",
                        "corrected_reads.bed.gz", "read_assignments.tsv.gz",
                        "novel_vs_known.SQANTI-like.tsv",
-                       "transcript_counts.tsv", "transcript_grouped.file_col1_counts.tsv",
+                       "transcript_counts.tsv", "transcript_grouped_file0_col1_counts.tsv",
                        "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz",
                        "discovered_transcript_tpm.tsv"]
     for f in resulting_files:
@@ -67,10 +66,9 @@ def test_usual_start():
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_usual/")
     shutil.rmtree(out_dir, ignore_errors=True)
-    os.environ['HOME'] = source_dir # dirty hack to set $HOME for tox environment
     sample_name = "ONT_Simulated.chr9.4M"
-
-    result = subprocess.run(["python", "isoquant.py",
+    result = subprocess.run(["python3", "--version"])
+    result = subprocess.run(["python3", "isoquant.py",
                              "-o", out_dir,
                              "--data_type", "nanopore",
                              "--fastq", data_dir + "chr9.4M.ont.sim.fq.gz",
@@ -93,10 +91,9 @@ def test_with_bam_and_polya():
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_polya/")
     shutil.rmtree(out_dir, ignore_errors=True)
-    os.environ['HOME'] = source_dir
     sample_name = "ONT_Simulated.chr9.4M.polyA"
 
-    result = subprocess.run(["python", "isoquant.py",
+    result = subprocess.run(["python3", "isoquant.py",
                              "-o", out_dir,
                              "--data_type", "nanopore",
                              "--bam", os.path.join(data_dir, "chr9.4M.ont.sim.polya.bam"),
@@ -123,10 +120,9 @@ def test_with_illumina():
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_illumina/")
     shutil.rmtree(out_dir, ignore_errors=True)
-    os.environ['HOME'] = source_dir
     sample_name = "ONT_Simulated.chr9.4M.polyA"
 
-    result = subprocess.run(["python", "isoquant.py",
+    result = subprocess.run(["python3", "isoquant.py",
                              "-o", out_dir,
                              "--data_type", "nanopore",
                              "--bam", os.path.join(data_dir, "chr9.4M.ont.sim.polya.bam"),
@@ -151,10 +147,9 @@ def test_with_yaml():
     data_dir = os.path.join(source_dir, 'simple_data/')
     out_dir = os.path.join(source_dir, "out_yaml/")
     shutil.rmtree(out_dir, ignore_errors=True)
-    os.environ['HOME'] = source_dir
     sample_name = "ONT_Simulated.chr9.4M.polyA"
 
-    result = subprocess.run(["python", "isoquant.py",
+    result = subprocess.run(["python3", "isoquant.py",
                              "-o", out_dir,
                              "--data_type", "nanopore",
                              "--yaml", os.path.join(data_dir, "chr9.4M.yaml"),

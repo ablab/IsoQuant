@@ -1,4 +1,4 @@
-name: Stereo toy data test
+name: StereoSeq toy data test
 
 on:
   workflow_dispatch:

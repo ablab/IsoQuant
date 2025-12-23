@@ -374,8 +374,8 @@ class ReadAssignmentAggregator:
                 self.global_counter.add_counters([gene_counter, transcript_counter])
 
                 if self.args.count_exons:
-                    exon_out_file = f"{sample.out_exon_grouped_counts_tsv}.{strategy_name}"
-                    intron_out_file = f"{sample.out_intron_grouped_counts_tsv}.{strategy_name}"
+                    exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
+                    intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
                     exon_counter = ExonCounter(exon_out_file, group_index=group_idx)
                     intron_counter = IntronCounter(intron_out_file, group_index=group_idx)
                     self.exon_grouped_counters.append(exon_counter)
@@ -387,8 +387,8 @@ class ReadAssignmentAggregator:
             self.gene_model_grouped_counters = []
 
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
-                transcript_model_out_file = f"{sample.out_transcript_model_grouped_counts_tsv}.{strategy_name}"
-                gene_model_out_file = f"{sample.out_gene_model_grouped_counts_tsv}.{strategy_name}"
+                transcript_model_out_file = f"{sample.out_transcript_model_grouped_counts_tsv}_{strategy_name}"
+                gene_model_out_file = f"{sample.out_gene_model_grouped_counts_tsv}_{strategy_name}"
 
                 transcript_model_counter = create_transcript_counter(
                     transcript_model_out_file,
