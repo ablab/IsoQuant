@@ -7,8 +7,16 @@ on:
   pull_request:
     branches: [ "master" ]
 
-permissions:
-  contents: read
+env:
+  RUN_NAME: Human.ONT_simulated.R9.uniform_cov
+  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
+  CFG_DIR: /abga/work/andreyp/ci_isoquant/data
+  BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
+  OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
+
+concurrency:
+  group: ${{github.workflow}}
+  cancel-in-progress: false
 
 jobs:
   integration-tests:
@@ -30,4 +38,5 @@ jobs:
 
       - name: Run integration tests
         run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
           pytest-3 tests/console_test.py -v
