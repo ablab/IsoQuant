@@ -18,10 +18,10 @@ logger = logging.getLogger('IsoQuant')
 
 
 class BasicReadAssignmentLoader:
-    def __init__(self, save_file_name):
+    def __init__(self, save_file_name, string_pools=None):
         assert os.path.exists(save_file_name)
         self.save_file_name = save_file_name
-        self.unpickler = QuickTmpFileAssignmentLoader(save_file_name)
+        self.unpickler = QuickTmpFileAssignmentLoader(save_file_name, string_pools)
 
     def has_next(self):
         return self.unpickler.has_next()
@@ -38,10 +38,10 @@ class BasicReadAssignmentLoader:
 
 
 class ReadAssignmentLoader:
-    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict):
+    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict, string_pools=None):
         assert os.path.exists(save_file_name)
         self.save_file_name = save_file_name
-        self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
+        self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record, string_pools)
         self.multimapped_chr_dict = multimapped_chr_dict
 
     def has_next(self):

@@ -17,16 +17,24 @@ from .read_assignment_loader import BasicReadAssignmentLoader
 logger = logging.getLogger('IsoQuant')
 
 
-def prepare_multimapper_dict(chr_ids, sample, multimappers_counts):
+def prepare_multimapper_dict(chr_ids, sample, multimappers_counts, genedb=None):
     multimapped_reads = defaultdict(list)
     unique_assignments = 0
     polya_unique_assignments = 0
 
-    # Build minimal string pools for chr_ids
+    # Build string pools for deserialization
     from .string_pools import StringPoolManager
+    from .assignment_loader import load_genedb
     string_pools = StringPoolManager()
-    for chr_id in sorted(chr_ids):
-        string_pools.chromosome_pool.add(chr_id)
+
+    # Build full pools from gene database
+    gffutils_db = load_genedb(genedb) if genedb else None
+    if gffutils_db:
+        string_pools.build_from_gffutils(gffutils_db)
+    else:
+        # Fallback: at least build chromosome pool
+        for chr_id in sorted(chr_ids):
+            string_pools.chromosome_pool.add(chr_id)
 
     for chr_id in chr_ids:
         chr_dump_file = saves_file_name(sample.out_raw_file, chr_id)
@@ -76,9 +84,10 @@ def resolve_multimappers(chr_ids, sample, multimapped_reads, strategy):
 
 
 class ProcessedReadsManager:
-    def __init__(self, sample, multimap_strategy):
+    def __init__(self, sample, multimap_strategy, genedb=None):
         self.sample = sample
         self.multimap_strategy = multimap_strategy
+        self.genedb = genedb
 
     def add_read(self, read_assignment: ReadAssignment):
         raise NotImplementedError()
@@ -97,8 +106,8 @@ class ProcessedReadsManager:
 
 
 class ProcessedReadsManagerHighMemory(ProcessedReadsManager):
-    def __init__(self, sample, multimap_strategy):
-        ProcessedReadsManager.__init__(self, sample, multimap_strategy)
+    def __init__(self, sample, multimap_strategy, genedb=None):
+        ProcessedReadsManager.__init__(self, sample, multimap_strategy, genedb)
         self.read_storage = []
         self.multimapped_reads = defaultdict(list)
         self.chr_ids = set()
@@ -119,8 +128,8 @@ class ProcessedReadsManagerHighMemory(ProcessedReadsManager):
 
 
 class ProcessedReadsManagerNormalMemory(ProcessedReadsManager):
-    def __init__(self, sample, multimap_strategy):
-        ProcessedReadsManager.__init__(self, sample, multimap_strategy)
+    def __init__(self, sample, multimap_strategy, genedb=None):
+        ProcessedReadsManager.__init__(self, sample, multimap_strategy, genedb)
         self.read_storage = []
         self.multimappers_counts = defaultdict(int)
         self.multimapped_reads = defaultdict(list)
@@ -139,7 +148,7 @@ class ProcessedReadsManagerNormalMemory(ProcessedReadsManager):
 
     def resolve(self):
         multimapped_reads, unique_assignments, polya_unique_assignments \
-            = prepare_multimapper_dict(self.chr_ids, self.sample, self.multimappers_counts)
+            = prepare_multimapper_dict(self.chr_ids, self.sample, self.multimappers_counts, self.genedb)
         total_assignments, polya_assignments = resolve_multimappers(self.chr_ids, self.sample, multimapped_reads,
                                                                     self.multimap_strategy)
         total_assignments += unique_assignments
@@ -148,8 +157,8 @@ class ProcessedReadsManagerNormalMemory(ProcessedReadsManager):
 
 
 class ProcessedReadsManagerNoSecondary(ProcessedReadsManager):
-    def __init__(self, sample, multimap_strategy):
-        ProcessedReadsManager.__init__(self, sample, multimap_strategy)
+    def __init__(self, sample, multimap_strategy, genedb=None):
+        ProcessedReadsManager.__init__(self, sample, multimap_strategy, genedb)
         self.read_storage = defaultdict(int)
         self.total_assignments = 0
         self.polya_assignments = 0
@@ -162,7 +171,7 @@ class ProcessedReadsManagerNoSecondary(ProcessedReadsManager):
 
     def finalize(self, chr_id):
         multimapped_reads_dict, unique_assignments, polya_unique_assignments   \
-            = prepare_multimapper_dict([chr_id], self.sample, self.read_storage)
+            = prepare_multimapper_dict([chr_id], self.sample, self.read_storage, self.genedb)
         self.total_assignments, self.polya_assignments = resolve_multimappers([chr_id], self.sample,
                                                                             multimapped_reads_dict,
                                                                             self.multimap_strategy)
