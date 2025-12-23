@@ -22,9 +22,15 @@ def prepare_multimapper_dict(chr_ids, sample, multimappers_counts):
     unique_assignments = 0
     polya_unique_assignments = 0
 
+    # Build minimal string pools for chr_ids
+    from .string_pools import StringPoolManager
+    string_pools = StringPoolManager()
+    for chr_id in sorted(chr_ids):
+        string_pools.chromosome_pool.add(chr_id)
+
     for chr_id in chr_ids:
         chr_dump_file = saves_file_name(sample.out_raw_file, chr_id)
-        loader = BasicReadAssignmentLoader(chr_dump_file)
+        loader = BasicReadAssignmentLoader(chr_dump_file, string_pools)
         while loader.has_next():
             for read_assignment in loader.get_next():
                 if read_assignment is None:

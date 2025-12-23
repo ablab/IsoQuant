@@ -66,11 +66,11 @@ class FullAssignmentLoader(BasicAssignmentLoader):
 
 
 class ReadAssignmentLoader(FullAssignmentLoader):
-    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict, filtered_read_set=None):
+    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict, filtered_read_set=None, string_pools=None):
         FullAssignmentLoader.__init__(self, save_file_name, multimapped_chr_dict, filtered_read_set)
         self.genedb = gffutils_db
         self.chr_record = chr_record
-        self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record)
+        self.unpickler = NormalTmpFileAssignmentLoader(save_file_name, gffutils_db, chr_record, string_pools)
 
     def has_next(self):
         return self.unpickler.has_next()
@@ -91,9 +91,9 @@ class ReadAssignmentLoader(FullAssignmentLoader):
 
 
 class MergingSimpleReadAssignmentLoader(FullAssignmentLoader):
-    def __init__(self, save_file_name, multimapped_chr_dict, filtered_read_set=None):
+    def __init__(self, save_file_name, multimapped_chr_dict, filtered_read_set=None, string_pools=None):
         FullAssignmentLoader.__init__(self, save_file_name, multimapped_chr_dict, filtered_read_set)
-        self.unpickler = GeneListTmpFileAssignmentLoader(save_file_name)
+        self.unpickler = GeneListTmpFileAssignmentLoader(save_file_name, string_pools)
         self.current_gene_list = None
 
     def has_next(self):
@@ -175,9 +175,9 @@ class MergingReadAssignmentLoader(MergingSimpleReadAssignmentLoader):
 
 
 class BasicReadAssignmentLoader(BasicAssignmentLoader):
-    def __init__(self, save_file_name):
+    def __init__(self, save_file_name, string_pools=None):
         BasicAssignmentLoader.__init__(self, save_file_name)
-        self.unpickler = QuickTmpFileAssignmentLoader(save_file_name)
+        self.unpickler = QuickTmpFileAssignmentLoader(save_file_name, string_pools)
 
     def has_next(self):
         return self.unpickler.has_next()
@@ -193,13 +193,13 @@ class BasicReadAssignmentLoader(BasicAssignmentLoader):
             yield self.unpickler.get_object()
 
 
-def prepare_multimapped_reads(saves_prefix ,chr_id):
+def prepare_multimapped_reads(saves_prefix ,chr_id, string_pools=None):
     multimapped_reads = defaultdict(list)
     multimap_loader = open(multimappers_file_name(saves_prefix ,chr_id), "rb")
     list_size = read_int(multimap_loader)
     while list_size != TERMINATION_INT:
         for i in range(list_size):
-            a = BasicReadAssignment.deserialize(multimap_loader)
+            a = BasicReadAssignment.deserialize(multimap_loader, string_pools)
             if a.chr_id == chr_id:
                 multimapped_reads[a.read_id].append(a)
         list_size = read_int(multimap_loader)
@@ -221,19 +221,19 @@ def load_genedb(genedb):
     return None
 
 
-def create_assignment_loader(chr_id, saves_prefix, genedb, reference_fasta, reference_fai, use_filtered_reads=False):
+def create_assignment_loader(chr_id, saves_prefix, genedb, reference_fasta, reference_fai, use_filtered_reads=False, string_pools=None):
     current_chr_record = Fasta(reference_fasta, indexname=reference_fai)[chr_id]
-    multimapped_reads = prepare_multimapped_reads(saves_prefix, chr_id)
+    multimapped_reads = prepare_multimapped_reads(saves_prefix, chr_id, string_pools)
     filtered_reads = prepare_read_filter(chr_id, saves_prefix, use_filtered_reads)
     gffutils_db = load_genedb(genedb)
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
 
-    return ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads, filtered_reads)
+    return ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads, filtered_reads, string_pools)
 
 
-def create_merging_assignment_loader(chr_id, saves_prefix, use_filtered_reads=False):
-    multimapped_reads = prepare_multimapped_reads(saves_prefix, chr_id)
+def create_merging_assignment_loader(chr_id, saves_prefix, use_filtered_reads=False, string_pools=None):
+    multimapped_reads = prepare_multimapped_reads(saves_prefix, chr_id, string_pools)
     filtered_reads = prepare_read_filter(chr_id, saves_prefix, use_filtered_reads)
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
 
-    return MergingSimpleReadAssignmentLoader(chr_dump_file, multimapped_reads, filtered_reads)
+    return MergingSimpleReadAssignmentLoader(chr_dump_file, multimapped_reads, filtered_reads, string_pools)

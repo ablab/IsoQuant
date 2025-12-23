@@ -52,11 +52,13 @@ class GraphBasedModelConstructor:
 
     def __init__(self, gene_info, chr_record, args, transcript_counter, gene_counter, id_distributor,
                  grouping_strategy_names=None,
-                 use_technical_replicas=False):
+                 use_technical_replicas=False,
+                 string_pools=None):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.args = args
         self.id_distributor = id_distributor
+        self.string_pools = string_pools
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else []
         self.use_technical_replicas = use_technical_replicas
         # Find file_name group index for technical replicas check
@@ -189,7 +191,8 @@ class GraphBasedModelConstructor:
                 # create intergenic
                 assignment = ReadAssignment(model.transcript_id,
                                             ReadAssignmentType.intergenic,
-                                            IsoformMatch(MatchClassification.intergenic))
+                                            IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools),
+                                            string_pools=self.string_pools)
                 if model.strand == "-":
                     polya_info = PolyAInfo(-1, model.exon_blocks[0][0], -1, -1)
                 else:

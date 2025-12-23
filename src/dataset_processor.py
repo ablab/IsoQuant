@@ -104,7 +104,29 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
                     groups_str = lines[1] if len(lines) > 1 else ""
                     read_grouper.read_groups = set(groups_str.split(";")) if groups_str else set()
             alignment_stat_counter = EnumStats(bamstat_file)
-            loader = BasicReadAssignmentLoader(save_file)
+
+            # Build string pools for loading serialized data
+            from src.string_pools import StringPoolManager
+            import gffutils
+            string_pools = StringPoolManager()
+            gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
+            if gffutils_db:
+                string_pools.build_from_gffutils(gffutils_db)
+            # Load per-chromosome pools
+            if sample.barcodes_split_reads:
+                barcode_file = sample.barcodes_split_reads + "_" + chr_id
+                string_pools.load_barcode_pool(barcode_file)
+            if sample.read_group_file:
+                import glob, re
+                base_pattern = sample.read_group_file + "_spec*_" + chr_id
+                spec_files = sorted(glob.glob(base_pattern))
+                for spec_file in spec_files:
+                    match = re.search(r'_spec(\d+)_', spec_file)
+                    if match:
+                        spec_index = int(match.group(1))
+                        string_pools.load_read_group_tsv_pool(spec_file, spec_index)
+
+            loader = BasicReadAssignmentLoader(save_file, string_pools)
             while loader.has_next():
                 for read_assignment in loader.get_next():
                     if read_assignment is None: continue
@@ -206,7 +228,16 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
 def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
-    loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, use_filtered_reads)
+
+    # Build string pools for memory optimization
+    from src.string_pools import StringPoolManager
+    from src.assignment_loader import load_genedb
+    string_pools = StringPoolManager()
+    gffutils_db = load_genedb(args.genedb)
+    if gffutils_db:
+        string_pools.build_from_gffutils(gffutils_db)
+
+    loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, use_filtered_reads, string_pools)
 
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
     lock_file = reads_processed_lock_file_name(saves_prefix, chr_id)
@@ -265,7 +296,8 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
                                                            aggregator.gene_model_global_counter,
                                                            transcript_id_distributor,
                                                            grouping_strategy_names=strategy_names,
-                                                           use_technical_replicas=sample.use_technical_replicas)
+                                                           use_technical_replicas=sample.use_technical_replicas,
+                                                           string_pools=string_pools)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
@@ -313,6 +345,14 @@ def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered
         for barcode2spot_file in args.barcode2spot:
             barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
 
+    # Build string pools for memory optimization
+    from src.string_pools import StringPoolManager
+    from src.assignment_loader import load_genedb
+    string_pools = StringPoolManager()
+    gffutils_db = load_genedb(args.genedb)
+    if gffutils_db:
+        string_pools.build_from_gffutils(gffutils_db)
+
     umi_filter = UMIFilter(args.umi_length, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(chr_id, sample.out_raw_file,
@@ -320,7 +360,8 @@ def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered
                                   barcode_feature_table,
                                   all_info_file_name,
                                   filtered_reads,
-                                  stats_output_file_name)
+                                  stats_output_file_name,
+                                  string_pools)
     open(umi_filtered_done, "w").close()
     logger.info("PCR duplicates filtered for chromosome " + chr_id)
 

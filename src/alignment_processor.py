@@ -416,7 +416,7 @@ class AlignmentCollector:
             yield read_assignment
 
     def process_genic(self, alignment_storage, gene_info, region, skip_read_fraction=1):
-        assigner = LongReadAssigner(gene_info, self.params)
+        assigner = LongReadAssigner(gene_info, self.params, string_pools=self.string_pools)
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
 
