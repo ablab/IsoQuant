@@ -426,23 +426,15 @@ def save_params(args):
                 args.__dict__[file_opt] = os.path.abspath(args.__dict__[file_opt])
 
     if "read_group" in args.__dict__ and args.__dict__["read_group"]:
-        # Handle both list (nargs='+') and string (backward compatibility)
-        if isinstance(args.read_group, list):
-            updated_specs = []
-            for spec in args.read_group:
-                vals = spec.split(":")
-                if len(vals) > 1 and vals[0] == 'file':
-                    vals[1] = os.path.abspath(vals[1])
-                    updated_specs.append(":".join(vals))
-                else:
-                    updated_specs.append(spec)
-            args.read_group = updated_specs
-        else:
-            # Backward compatibility with string format
-            vals = args.read_group.split(":")
+        updated_specs = []
+        for spec in args.read_group:
+            vals = spec.split(":")
             if len(vals) > 1 and vals[0] == 'file':
                 vals[1] = os.path.abspath(vals[1])
-                args.read_group = ":".join(vals)
+                updated_specs.append(":".join(vals))
+            else:
+                updated_specs.append(spec)
+        args.read_group = updated_specs
 
     pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
     pickler.dump(args)

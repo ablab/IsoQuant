@@ -107,6 +107,7 @@ class FileNameGrouper(AbstractReadGrouper):
         return filename
 
 
+# TODO: remove barocde table, use assignment.barcode
 class BarcodeSpotGrouper(AbstractReadGrouper):
     """Grouper that maps reads to spots/cell types via barcodes"""
     def __init__(self, barcode_file, barcode2spot_files):
@@ -319,6 +320,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id):
         if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
             logger.critical("barcode_spot grouping requires barcoded reads (use --barcoded_reads)")
             return None
+        # FIXME
         barcode_file = sample.barcodes_split_reads + "_" + chr_id
         return BarcodeSpotGrouper(barcode_file, barcode2spot_files)
     elif values[0] == 'tag':
@@ -330,29 +332,25 @@ def parse_grouping_spec(spec_string, args, sample, chr_id):
     elif values[0] == 'file':
         # Format: file:filename:read_col:group_cols:delim
         # group_cols can be comma-separated like "1,2,3"
-        if len(values) >= 4:
-            # Check if multiple columns are specified
-            group_col_spec = values[3]
-            if ',' in group_col_spec:
-                # Multiple columns - use MultiColumnReadTableGrouper
-                group_id_column_indices = [int(x) for x in group_col_spec.split(',')]
-                read_id_column_index = int(values[2]) if len(values) > 2 else 0
-                delim = values[4] if len(values) > 4 else '\t'
-                read_group_chr_filename = sample.read_group_file + "_" + chr_id
-                return MultiColumnReadTableGrouper(read_group_chr_filename, read_id_column_index,
-                                                   group_id_column_indices, delim)
-            else:
-                # Single column - use ReadTableGrouper
-                read_id_column_index = int(values[2]) if len(values) > 2 else 0
-                group_id_column_index = int(values[3])
-                delim = values[4] if len(values) > 4 else '\t'
-                read_group_chr_filename = sample.read_group_file + "_" + chr_id
-                return ReadTableGrouper(read_group_chr_filename, read_id_column_index,
-                                      group_id_column_index, delim)
-        else:
-            # Default format
+        if len(values) < 2:
+            logger.critical("group specification %s is too short, specifiy at least a file name" % spec_string)
+            return None
+
+        read_id_column_index = int(values[2]) if len(values) > 2 else 0
+        delim = values[4] if len(values) > 4 else '\t'
+        group_col_spec = values[3] if len(values) > 3 else "1"
+        if ',' in group_col_spec:
+            # Multiple columns - use MultiColumnReadTableGrouper
+            group_id_column_indices = [int(x) for x in group_col_spec.split(',')]
             read_group_chr_filename = sample.read_group_file + "_" + chr_id
-            return ReadTableGrouper(read_group_chr_filename, 0, 1, '\t')
+            return MultiColumnReadTableGrouper(read_group_chr_filename, read_id_column_index,
+                                               group_id_column_indices, delim)
+        else:
+            # Single column - use ReadTableGrouper
+            group_id_column_index = int(values[3])
+            read_group_chr_filename = sample.read_group_file + "_" + chr_id
+            return ReadTableGrouper(read_group_chr_filename, read_id_column_index,
+                                  group_id_column_index, delim)
     else:
         logger.critical("Unsupported read grouping option: %s" % values[0])
         return None
@@ -373,14 +371,7 @@ def create_read_grouper(args, sample, chr_id):
     if not hasattr(args, "read_group") or args.read_group is None:
         return DefaultReadGrouper()
 
-    # Handle both list (nargs='+') and string (backward compatibility)
-    if isinstance(args.read_group, str):
-        # Backward compatibility: semicolon-separated string
-        specs = args.read_group.split(';')
-    else:
-        # Native list from nargs='+'
-        specs = args.read_group
-
+    specs = args.read_group
     groupers = []
     for spec in specs:
         spec = spec.strip()

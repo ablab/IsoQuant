@@ -355,8 +355,8 @@ class ReadAssignmentAggregator:
 
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
                 # Add strategy name as suffix to output file
-                gene_out_file = f"{sample.out_gene_grouped_counts_tsv}.{strategy_name}"
-                transcript_out_file = f"{sample.out_transcript_grouped_counts_tsv}.{strategy_name}"
+                gene_out_file = f"{sample.out_gene_grouped_counts_tsv}_{strategy_name}"
+                transcript_out_file = f"{sample.out_transcript_grouped_counts_tsv}_{strategy_name}"
 
                 gene_counter = create_gene_counter(gene_out_file,
                                                    self.args.gene_quantification,
