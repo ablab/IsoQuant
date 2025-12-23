@@ -683,7 +683,7 @@ class LongReadAssigner:
             match_classification = MatchClassification.get_inconsistency_classification(read_match)
             isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
                                          read_match, self.gene_info.isoform_strands[isoform_id],
-                                         penalty_score=penalty_score)
+                                         penalty_score=penalty_score, string_pools=self.string_pools)
             matches.append(isoform_match)
         return matches
 
