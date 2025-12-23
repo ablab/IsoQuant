@@ -114,6 +114,48 @@ class StringPoolManager:
         self.file_name_pool = StringPool()  # For file_name grouping
         self.barcode_spot_pool = StringPool()  # For barcode_spot grouping
 
+    def build_from_gffutils(self, gffutils_db):
+        """
+        Build global pools from gffutils database.
+
+        Pools are built in deterministic sorted order to ensure consistency
+        across workers.
+
+        Args:
+            gffutils_db: gffutils.FeatureDB object
+        """
+        logger.debug("Building string pools from gffutils database")
+
+        # Gene pool
+        gene_ids = set()
+        for gene in gffutils_db.features_of_type('gene'):
+            gene_ids.add(gene.id)
+        for gene_id in sorted(gene_ids):
+            self.gene_pool.add(gene_id)
+        logger.debug(f"Gene pool: {len(self.gene_pool)} unique genes")
+
+        # Transcript pool
+        transcript_ids = set()
+        # Query different transcript feature types
+        for feature_type in ['transcript', 'RNA', 'mRNA', 'miRNA', 'ncRNA', 'tRNA', 'rRNA',
+                             'snRNA', 'lnc_RNA', 'snoRNA', 'telomerase_RNA', 'Y_RNA', 'scRNA']:
+            try:
+                for transcript in gffutils_db.features_of_type(feature_type):
+                    transcript_ids.add(transcript.id)
+            except:
+                pass  # Feature type might not exist
+        for transcript_id in sorted(transcript_ids):
+            self.transcript_pool.add(transcript_id)
+        logger.debug(f"Transcript pool: {len(self.transcript_pool)} unique transcripts")
+
+        # Chromosome pool
+        chromosomes = set()
+        for gene in gffutils_db.features_of_type('gene'):
+            chromosomes.add(gene.seqid)
+        for chr_id in sorted(chromosomes):
+            self.chromosome_pool.add(chr_id)
+        logger.debug(f"Chromosome pool: {len(self.chromosome_pool)} unique chromosomes")
+
     def build_from_gene_db(self, gene_db):
         """
         Build global pools from gene annotation database.

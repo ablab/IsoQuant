@@ -128,7 +128,35 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
     illumina_bam = sample.illumina_bam
 
-    # Load barcode dict for this chromosome if available
+    # Build string pools for memory optimization
+    from src.string_pools import StringPoolManager
+    string_pools = StringPoolManager()
+
+    # Build global pools from annotation
+    if gffutils_db:
+        string_pools.build_from_gffutils(gffutils_db)
+
+    # Load per-chromosome barcode/UMI pools
+    if sample.barcodes_split_reads:
+        barcode_file = sample.barcodes_split_reads + "_" + chr_id
+        string_pools.load_barcode_pool(barcode_file)
+
+    # Load per-chromosome read group pools if applicable
+    if sample.read_group_file:
+        # Determine how many file specs we have based on read_group_file naming
+        # Read group files are named: base_spec{i}_{chr_id}
+        import glob
+        base_pattern = sample.read_group_file + "_spec*_" + chr_id
+        spec_files = sorted(glob.glob(base_pattern))
+        for spec_file in spec_files:
+            # Extract spec_index from filename: base_spec{i}_{chr_id}
+            import re
+            match = re.search(r'_spec(\d+)_', spec_file)
+            if match:
+                spec_index = int(match.group(1))
+                string_pools.load_read_group_tsv_pool(spec_file, spec_index)
+
+    # Load barcode dict for this chromosome if available (for backward compatibility during transition)
     barcode_dict = {}
     if sample.barcodes_split_reads:
         barcode_file = sample.barcodes_split_reads + "_" + chr_id
@@ -144,7 +172,7 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
         AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper,
-                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr)
+                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr, string_pools)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)

@@ -246,13 +246,15 @@ class AlignmentCollector:
                  genedb=None, chr_record=None, read_groupper=DefaultReadGrouper(),
                  barcode_dict=None,
                  small_chr_max_coverage=1000000,
-                 usual_gene_max_coverage=-1):
+                 usual_gene_max_coverage=-1,
+                 string_pools=None):
         self.chr_id = chr_id
         self.bam_pairs = bam_pairs
         self.params = params
         self.genedb = genedb
         self.chr_record = chr_record
         self.illumina_bam = illumina_bam
+        self.string_pools = string_pools
 
         self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, 0,
                                           self.bam_pairs[0][0].get_reference_length(self.chr_id),
@@ -379,7 +381,8 @@ class AlignmentCollector:
                 alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
 
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic,
-                                             IsoformMatch(MatchClassification.intergenic))
+                                             IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools),
+                                             string_pools=self.string_pools)
 
             if alignment_info.exons_changed:
                 read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
