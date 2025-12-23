@@ -389,7 +389,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             return groupers  # Return list of groupers
         else:
             # Single column - use ReadTableGrouper
-            group_id_column_index = int(values[3])
+            group_id_column_index = int(group_col_spec)
             read_group_chr_filename = sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
 
             # Create shared data with single column for consistency
