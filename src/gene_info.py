@@ -139,6 +139,49 @@ class FeatureInfo:
         return "%s\t%d\t%d\t%s\t%s\t%s" % (self.chr_id, self.start, self.end, self.strand, self.type, ",".join(self.gene_ids))
 
 
+class GeneList:
+    def __init__(self, gene_id_list, delta, chr_id, start, end):
+        self.gene_id_set = set(gene_id_list)
+        self.delta = delta
+        self.chr_id = chr_id
+        self.start = start
+        self.end = end
+
+    def merge(self, other):
+        assert self.chr_id == other.chr_id
+        self.gene_id_set.update(other.gene_id_set)
+        self.start = min(self.start, other.start)
+        self.end = max(self.end, other.end)
+
+    def overlaps(self, other):
+        return self.chr_id == other.chr_id and len(self.gene_id_set.intersection(other.gene_id_set)) > 0
+
+    @classmethod
+    def deserialize(cls, infile):
+        gene_info = cls.__new__(cls)
+        gene_info.delta = read_int(infile)
+        gene_info.gene_id_set = set()
+
+        gene_count = read_int(infile)
+        for i in range(gene_count):
+            gene_id = read_string(infile)
+            gene_info.gene_id_set.add(gene_id)
+        gene_info.chr_id = read_string(infile)
+        gene_info.start = read_int(infile)
+        gene_info.end = read_int(infile)
+
+        return gene_info
+
+    def serialize(self, outfile):
+        write_int(self.delta, outfile)
+        write_int(len(self.gene_id_set), outfile)
+        for g in self.gene_id_set:
+            write_string(g.id, outfile)
+        write_string(self.chr_id, outfile)
+        write_int(self.start, outfile)
+        write_int(self.end, outfile)
+
+
 # All gene(s) information
 class GeneInfo:
     EXTRA_BASES_FOR_SEQ = 20
@@ -149,6 +192,8 @@ class GeneInfo:
     def __init__(self, gene_db_list, db, delta=0, prepare_profiles=True):
         if db is None:
             return
+
+        assert gene_db_list
         # gffutils main structure
         self.db = db
         # list of genes in cluster

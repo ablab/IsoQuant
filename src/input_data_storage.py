@@ -30,7 +30,7 @@ class InputDataType(Enum):
 
 
 class SampleData:
-    def __init__(self, file_list, prefix, out_dir, readable_names_dict, illumina_bam):
+    def __init__(self, file_list, prefix, out_dir, readable_names_dict, illumina_bam, barcoded_reads=None):
         # list of lists, since each sample may contain several libraries, and each library may contain 2 files (paired)
         self.file_list = file_list
         self.readable_names_dict = readable_names_dict
@@ -38,6 +38,11 @@ class SampleData:
         self.prefix = prefix
         self.out_dir = out_dir
         self.aux_dir = os.path.join(self.out_dir, "aux")
+        if not barcoded_reads:
+            self.barcoded_reads = []
+        else:
+            self.barcoded_reads = barcoded_reads
+        self.use_technical_replicas = False  # Will be set by DatasetProcessor
         self._init_paths()
 
     def _make_path(self, name):
@@ -48,6 +53,7 @@ class SampleData:
 
     def _init_paths(self):
         self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
+        self.out_assigned_tsv_result = self.out_assigned_tsv
         self.out_raw_file = self._make_aux_path(self.prefix + ".save")
         self.read_group_file = self._make_aux_path(self.prefix + ".read_group")
         self.out_corrected_bed = self._make_path(self.prefix + ".corrected_reads.bed")
@@ -65,6 +71,13 @@ class SampleData:
         self.out_exon_grouped_counts_tsv = self._make_path(self.prefix + ".exon_grouped")
         self.out_intron_grouped_counts_tsv = self._make_path(self.prefix + ".intron_grouped")
         self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
+        self.barcodes_tsv = self._make_path(self.prefix + ".barcoded_reads")
+        self.barcodes_done = self._make_aux_path(self.prefix + ".barcodes_done")
+        self.barcodes_split_reads = self._make_aux_path(self.prefix + ".split_barcodes")
+        self.out_umi_filtered = self._make_path(self.prefix + ".UMI_filtered")
+        self.out_umi_filtered_tmp = self._make_aux_path(self.prefix + ".UMI_filtered")
+        self.out_umi_filtered_done= self._make_aux_path(self.prefix + ".UMI_filtered.done")
+        self.split_reads_fasta = self._make_path(self.prefix + ".split_reads")
 
 
 class InputDataStorage:

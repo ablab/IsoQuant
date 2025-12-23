@@ -27,7 +27,7 @@ from .isoform_assignment import (match_subtype_to_str_with_additional_info,
                                  BasicReadAssignment,
                                  MatchClassification,
                                  ReadAssignmentType)
-from .gene_info import GeneInfo
+from .gene_info import GeneInfo, GeneList
 
 
 logger = logging.getLogger('IsoQuant')
@@ -71,7 +71,8 @@ class TextFileAssignmentPrinter(AbstractAssignmentPrinter):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker)
         self.gzipped = gzipped
         if gzipped:
-            self.output_file = gzip.open(output_file_name + ".gz", "wt")
+            self.output_file_name += ".gz"
+            self.output_file = gzip.open(self.output_file_name, "wt")
         else:
             self.output_file = open(self.output_file_name, "w")
 
@@ -161,6 +162,7 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
     def flush(self):
         pass
 
+
 class BaseTmpFileAssignmentLoader:
     def __init__(self, input_file_name):
         self.loader = open(input_file_name, "rb")
@@ -197,6 +199,25 @@ class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
                 self.current_gene_info.set_reference_sequence(self.current_gene_info.all_read_region_start,
                                                               self.current_gene_info.all_read_region_end,
                                                               self.chr_record)
+            self._read_id()
+            return self.current_gene_info
+        elif self.is_read_assignment():
+            assert self.current_gene_info is not None
+            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info)
+            self._read_id()
+            return assignment
+        else:
+            return None
+
+
+class GeneListTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
+    def __init__(self, input_file_name):
+        BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
+        self.current_gene_info = None
+
+    def get_object(self):
+        if self.is_gene_info():
+            self.current_gene_info = GeneList.deserialize(self.loader)
             self._read_id()
             return self.current_gene_info
         elif self.is_read_assignment():
@@ -248,7 +269,7 @@ class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
             line += "\t" + " ".join(additional_info)
         else:
             line += "\t*"
-        line += "\t%s\n" % read_assignment.read_group
+        line += "\t%s\n" % ",".join(read_assignment.read_group)
         return line
 
     def add_read_info(self, read_assignment):
@@ -310,7 +331,7 @@ class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
                 line += "\t" + " ".join(additional_info)
             else:
                 line += "\t*"
-            line += "\t%s\n" % read_assignment.read_group
+            line += "\t%s\n" % ",".join(read_assignment.read_group)
             self.output_file.write(line)
 
 

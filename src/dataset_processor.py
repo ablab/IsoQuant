@@ -6,22 +6,22 @@
 ############################################################################
 
 import glob
-import gzip
 import itertools
 import logging
-import os
 import shutil
+import sys
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 
 import gffutils
 import pysam
 from pyfaidx import Fasta
 
-from .common import proper_plural_form, convert_chr_id_to_file_name_str
+from .modes import IsoQuantMode
+from .common import proper_plural_form
 from .serialization import *
-from .isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
 from .stats import EnumStats
 from .file_utils import merge_files, merge_counts
 from .input_data_storage import SampleData
@@ -33,10 +33,11 @@ from .long_read_counter import (
     create_gene_counter,
     create_transcript_counter,
 )
-from .multimap_resolver import MultimapResolver
 from .read_groups import (
     create_read_grouper,
-    prepare_read_groups
+    prepare_read_groups,
+    load_table,
+    get_grouping_strategy_names
 )
 from .assignment_io import (
     IOSupport,
@@ -46,34 +47,18 @@ from .assignment_io import (
     BasicTSVAssignmentPrinter,
     TmpFileAssignmentPrinter,
 )
-from .read_assignment_loader import BasicReadAssignmentLoader, ReadAssignmentLoader
+from .read_assignment_loader import BasicReadAssignmentLoader
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
 from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
+from .file_naming import *
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
+from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
+from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
+from .table_splitter import split_read_table_parallel
 
 logger = logging.getLogger('IsoQuant')
-
-
-def reads_collected_lock_file_name(sample_out_raw, chr_id):
-    return "{}_{}_collected".format(sample_out_raw, convert_chr_id_to_file_name_str(chr_id))
-
-
-def reads_processed_lock_file_name(dump_filename, chr_id):
-    chr_dump_file = dump_filename + "_" + convert_chr_id_to_file_name_str(chr_id)
-    return "{}_processed".format(chr_dump_file)
-
-
-def read_group_lock_filename(sample):
-    return sample.read_group_file + "_lock"
-
-
-def clean_locks(chr_ids, base_name, fname_function):
-    for chr_id in chr_ids:
-        fname = fname_function(base_name, chr_id)
-        if os.path.exists(fname):
-            os.remove(fname)
 
 
 @unique
@@ -98,7 +83,7 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
         current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
     lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
-    save_file = "{}_{}".format(sample.out_raw_file, convert_chr_id_to_file_name_str(chr_id))
+    save_file = saves_file_name(sample.out_raw_file, chr_id)
     group_file = save_file + "_groups"
     bamstat_file = save_file + "_bamstat"
     processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy)
@@ -125,16 +110,32 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
                 logger.warning("%s does not exist" % save_file)
             os.remove(lock_file)
 
+    if os.path.exists(lock_file):
+        os.remove(lock_file)
+
     tmp_printer = TmpFileAssignmentPrinter(save_file, args)
     bam_files = list(map(lambda x: x[0], sample.file_list))
     bam_file_pairs = [(pysam.AlignmentFile(bam, "rb", require_index=True), bam) for bam in bam_files]
     gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
     illumina_bam = sample.illumina_bam
 
+    # Load barcode dict for this chromosome if available
+    barcode_dict = {}
+    if sample.barcodes_split_reads:
+        barcode_file = sample.barcodes_split_reads + "_" + chr_id
+        if os.path.exists(barcode_file):
+            logger.debug(f"Loading barcodes from {barcode_file}")
+            for line in open(barcode_file):
+                if line.startswith("#"):
+                    continue
+                parts = line.split()
+                barcode_dict[parts[0]] = (parts[1], parts[2])
+            logger.debug("Loaded %d barcodes" % len(barcode_dict))
+
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
         AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper,
-                           args.max_coverage_small_chr, args.max_coverage_normal_chr)
+                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)
@@ -157,45 +158,37 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     return chr_id, read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads_manager
 
 
-def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_groups):
+def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
-    construct_models = not args.no_model_construction
-    current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
+    use_filtered_reads = args.mode.needs_pcr_deduplication()
+    loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, use_filtered_reads)
 
-    multimapped_reads = defaultdict(list)
-    multimap_loader = open(dump_filename + "_multimappers_" + convert_chr_id_to_file_name_str(chr_id), "rb")
-    list_size = read_int(multimap_loader)
-    while list_size != TERMINATION_INT:
-        for i in range(list_size):
-            a = BasicReadAssignment.deserialize(multimap_loader)
-            if a.chr_id == chr_id:
-                multimapped_reads[a.read_id].append(a)
-        list_size = read_int(multimap_loader)
-
-    chr_dump_file = dump_filename + "_" + convert_chr_id_to_file_name_str(chr_id)
-    lock_file = reads_processed_lock_file_name(dump_filename, chr_id)
+    chr_dump_file = saves_file_name(saves_prefix, chr_id)
+    lock_file = reads_processed_lock_file_name(saves_prefix, chr_id)
     read_stat_file = "{}_read_stat".format(chr_dump_file)
     transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
+    construct_models = not args.no_model_construction
 
-    if os.path.exists(lock_file) and args.resume:
-        logger.info("Processed assignments from chromosome " + chr_id + " detected")
-        read_stat = EnumStats(read_stat_file)
-        transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
-        return read_stat, transcript_stat
+    if os.path.exists(lock_file):
+        if args.resume:
+            logger.info("Processed assignments from chromosome " + chr_id + " detected")
+            read_stat = EnumStats(read_stat_file)
+            transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
+            return read_stat, transcript_stat
+        os.remove(lock_file)
 
-    if args.genedb:
-        gffutils_db = gffutils.FeatureDB(args.genedb)
-    else:
-        gffutils_db = None
-    aggregator = ReadAssignmentAggregator(args, sample, read_groups, gffutils_db, chr_id)
+    grouping_strategy_names = get_grouping_strategy_names(args)
+    aggregator = ReadAssignmentAggregator(args, sample, read_groups, loader.genedb, chr_id,
+                                         grouping_strategy_names=grouping_strategy_names)
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)
-    transcript_id_distributor = ExcludingIdDistributor(gffutils_db, chr_id)
-    exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), gffutils_db, chr_id, "exon")
+    transcript_id_distributor = ExcludingIdDistributor(loader.genedb, chr_id)
+    exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), loader.genedb, chr_id, "exon")
 
     if construct_models:
         tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
+                                     output_r2t=not args.no_large_files,
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
@@ -210,8 +203,6 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
         if args.sqanti_output else VoidTranscriptPrinter()
     novel_model_storage = []
 
-
-    loader = ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads)
     while loader.has_next():
         gene_info, assignment_storage = loader.get_next()
         logger.debug("Processing %d reads" % len(assignment_storage))
@@ -223,10 +214,17 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
             aggregator.global_counter.add_read_info(read_assignment)
 
         if construct_models:
-            model_constructor = GraphBasedModelConstructor(gene_info, current_chr_record, args,
+            transcript_grouped = aggregator.transcript_model_grouped_counters if hasattr(aggregator, 'transcript_model_grouped_counters') else []
+            gene_grouped = aggregator.gene_model_grouped_counters if hasattr(aggregator, 'gene_model_grouped_counters') else []
+            strategy_names = aggregator.grouping_strategy_names if hasattr(aggregator, 'grouping_strategy_names') else []
+            model_constructor = GraphBasedModelConstructor(gene_info, loader.chr_record, args,
                                                            aggregator.transcript_model_global_counter,
                                                            aggregator.gene_model_global_counter,
-                                                           transcript_id_distributor)
+                                                           transcript_id_distributor,
+                                                           transcript_grouped_counters=transcript_grouped,
+                                                           gene_grouped_counters=gene_grouped,
+                                                           grouping_strategy_names=strategy_names,
+                                                           use_technical_replicas=sample.use_technical_replicas)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
@@ -243,8 +241,8 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     aggregator.global_counter.dump()
     aggregator.read_stat_counter.dump(read_stat_file)
     if construct_models:
-        if gffutils_db:
-            all_models, gene_info = create_extended_storage(gffutils_db, chr_id, current_chr_record, novel_model_storage)
+        if loader.genedb:
+            all_models, gene_info = create_extended_storage(loader.genedb, chr_id, loader.chr_record, novel_model_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(all_models, gene_info)
             tmp_extended_gff_printer.dump(gene_info, all_models)
@@ -257,10 +255,42 @@ def construct_models_in_parallel(sample, chr_id, dump_filename, args, read_group
     return aggregator.read_stat_counter, transcript_stat_counter
 
 
+def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered_reads=False):
+    transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
+    umi_filtered_done = umi_filtered_lock_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
+    all_info_file_name = allinfo_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
+    stats_output_file_name = allinfo_stats_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
+
+    if os.path.exists(umi_filtered_done):
+        if args.resume:
+            return all_info_file_name, stats_output_file_name, umi_filtered_done
+        os.remove(umi_filtered_done)
+
+    logger.info("Filtering PCR duplicates for chromosome " + chr_id)
+    barcode_feature_table = {}
+    if args.barcode2spot:
+        for barcode2spot_file in args.barcode2spot:
+            barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
+
+    umi_filter = UMIFilter(args.umi_length, edit_distance)
+    filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
+    umi_filter.process_single_chr(chr_id, sample.out_raw_file,
+                                  transcript_type_dict,
+                                  barcode_feature_table,
+                                  all_info_file_name,
+                                  filtered_reads,
+                                  stats_output_file_name)
+    open(umi_filtered_done, "w").close()
+    logger.info("PCR duplicates filtered for chromosome " + chr_id)
+
+    return all_info_file_name, stats_output_file_name, umi_filtered_done
+
+
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, read_groups, gffutils_db=None, chr_id=None, gzipped=False):
+    def __init__(self, args, sample, read_groups, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None):
         self.args = args
         self.read_groups = read_groups
+        self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else ["default"]
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
 
@@ -271,14 +301,20 @@ class ReadAssignmentAggregator:
             self.transcript_set = set(get_all_chromosome_transcripts(gffutils_db, chr_id))
 
         self.read_stat_counter = EnumStats()
-        self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed,
-                                                self.args,
-                                                print_corrected=True,
-                                                gzipped=gzipped)
-        printer_list = [self.corrected_bed_printer]
-        if self.args.genedb:
+
+        printer_list = []
+        self.corrected_bed_printer = None
+        if not self.args.no_large_files:
+            self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed,
+                                                    self.args,
+                                                    print_corrected=True,
+                                                    gzipped=gzipped)
+            printer_list.append(self.corrected_bed_printer)
+        self.basic_printer = None
+        if self.args.genedb and not self.args.no_large_files:
             self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                            additional_header=self.common_header, gzipped=gzipped)
+            sample.out_assigned_tsv_result = self.basic_printer.output_file_name
             printer_list.append(self.basic_printer)
         self.t2t_sqanti_printer = VoidTranscriptPrinter()
         if self.args.sqanti_output:
@@ -312,47 +348,83 @@ class ReadAssignmentAggregator:
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
         if self.args.read_group and self.args.genedb:
-            self.gene_grouped_counter = create_gene_counter(sample.out_gene_grouped_counts_tsv,
-                                                            self.args.gene_quantification,
-                                                            complete_feature_list=self.gene_set,
-                                                            read_groups=self.read_groups)
-            self.transcript_grouped_counter = create_transcript_counter(sample.out_transcript_grouped_counts_tsv,
-                                                                        self.args.transcript_quantification,
-                                                                        complete_feature_list=self.transcript_set,
-                                                                        read_groups=self.read_groups)
-            self.global_counter.add_counters([self.gene_grouped_counter, self.transcript_grouped_counter])
+            self.gene_grouped_counters = []
+            self.transcript_grouped_counters = []
+            self.exon_grouped_counters = []
+            self.intron_grouped_counters = []
 
-            if self.args.count_exons:
-                self.exon_grouped_counter = ExonCounter(sample.out_exon_grouped_counts_tsv)
-                self.intron_grouped_counter = IntronCounter(sample.out_intron_grouped_counts_tsv)
-                self.global_counter.add_counters([self.exon_grouped_counter, self.intron_grouped_counter])
+            for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
+                # Add strategy name as suffix to output file
+                gene_out_file = f"{sample.out_gene_grouped_counts_tsv}_{strategy_name}"
+                transcript_out_file = f"{sample.out_transcript_grouped_counts_tsv}_{strategy_name}"
+
+                gene_counter = create_gene_counter(gene_out_file,
+                                                   self.args.gene_quantification,
+                                                   complete_feature_list=self.gene_set,
+                                                   read_groups=self.read_groups,
+                                                   group_index=group_idx)
+                transcript_counter = create_transcript_counter(transcript_out_file,
+                                                              self.args.transcript_quantification,
+                                                              complete_feature_list=self.transcript_set,
+                                                              read_groups=self.read_groups,
+                                                              group_index=group_idx)
+
+                self.gene_grouped_counters.append(gene_counter)
+                self.transcript_grouped_counters.append(transcript_counter)
+                self.global_counter.add_counters([gene_counter, transcript_counter])
+
+                if self.args.count_exons:
+                    exon_out_file = f"{sample.out_exon_grouped_counts_tsv}.{strategy_name}"
+                    intron_out_file = f"{sample.out_intron_grouped_counts_tsv}.{strategy_name}"
+                    exon_counter = ExonCounter(exon_out_file, group_index=group_idx)
+                    intron_counter = IntronCounter(intron_out_file, group_index=group_idx)
+                    self.exon_grouped_counters.append(exon_counter)
+                    self.intron_grouped_counters.append(intron_counter)
+                    self.global_counter.add_counters([exon_counter, intron_counter])
 
         if self.args.read_group and not self.args.no_model_construction:
-            self.transcript_model_grouped_counter = create_transcript_counter(
-                sample.out_transcript_model_grouped_counts_tsv,
-                self.args.transcript_quantification,
-                read_groups=self.read_groups)
-            self.gene_model_grouped_counter = create_gene_counter(
-                sample.out_gene_model_grouped_counts_tsv,
-                self.args.gene_quantification,
-                read_groups=self.read_groups)
-            self.transcript_model_global_counter.add_counters([self.transcript_model_grouped_counter])
-            self.gene_model_global_counter.add_counters([self.gene_model_grouped_counter])
+            self.transcript_model_grouped_counters = []
+            self.gene_model_grouped_counters = []
+
+            for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
+                transcript_model_out_file = f"{sample.out_transcript_model_grouped_counts_tsv}.{strategy_name}"
+                gene_model_out_file = f"{sample.out_gene_model_grouped_counts_tsv}.{strategy_name}"
+
+                transcript_model_counter = create_transcript_counter(
+                    transcript_model_out_file,
+                    self.args.transcript_quantification,
+                    read_groups=self.read_groups,
+                    group_index=group_idx)
+                gene_model_counter = create_gene_counter(
+                    gene_model_out_file,
+                    self.args.gene_quantification,
+                    read_groups=self.read_groups,
+                    group_index=group_idx)
+
+                self.transcript_model_grouped_counters.append(transcript_model_counter)
+                self.gene_model_grouped_counters.append(gene_model_counter)
+                self.transcript_model_global_counter.add_counters([transcript_model_counter])
+                self.gene_model_global_counter.add_counters([gene_model_counter])
 
 
 # Class for processing all samples against gene database
 class DatasetProcessor:
     def __init__(self, args):
         self.args = args
+        self.input_data = args.input_data
         self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
         self.all_read_groups = set()
         self.alignment_stat_counter = EnumStats()
+        self.transcript_type_dict = {}
 
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
             self.gffutils_db = gffutils.FeatureDB(self.args.genedb)
+            # TODO remove
+            if self.args.mode.needs_pcr_deduplication():
+                self.transcript_type_dict = create_transcript_info_dict(self.args.genedb)
         else:
             self.gffutils_db = None
 
@@ -371,13 +443,22 @@ class DatasetProcessor:
             if os.path.exists(self.args.gunzipped_reference):
                 os.remove(self.args.gunzipped_reference)
 
+        for sample in self.input_data.samples:
+            if not self.args.read_assignments and not self.args.keep_tmp:
+                for f in glob.glob(sample.out_raw_file + "_*"):
+                    os.remove(f)
+                for f in glob.glob(sample.read_group_file + "*"):
+                    os.remove(f)
+                if self.args.mode.needs_pcr_deduplication():
+                    os.remove(umi_filtered_global_lock_file_name(sample.out_umi_filtered_done))
+
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("experiment", len(input_data.samples)))
         logger.info("Secondary alignments will%s be used" % ("" if self.args.use_secondary else " not"))
         for sample in input_data.samples:
             self.process_sample(sample)
         self.clean_up()
-        logger.info("Processed " + proper_plural_form("experiment", len(input_data.samples)))
+        logger.info("Processed " + proper_plural_form("experiment", len(self.input_data.samples)))
 
     # Run through all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
@@ -385,19 +466,40 @@ class DatasetProcessor:
         logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
         self.chr_ids = self.get_chromosome_ids(sample)
+
         logger.info("Total number of chromosomes to be processed %d: %s " %
                     (len(self.chr_ids), ", ".join(map(lambda x: str(x), sorted(self.chr_ids)))))
-        self.args.use_technical_replicas = self.args.read_group == "file_name" and len(sample.file_list) > 1
+
+        # Check if file_name grouping is enabled for this sample (for technical replicas)
+        sample.use_technical_replicas = (len(sample.file_list) > 1 and
+                                         self.args.read_group is not None and
+                                         "file_name" in self.args.read_group)
 
         self.all_read_groups = set()
-        if self.args.resume and os.path.exists(sample.read_group_file + "_lock"):
+        fname = read_group_lock_filename(sample)
+        if self.args.resume and os.path.exists(fname):
             logger.info("Read group table was split during the previous run, existing files will be used")
         else:
-            fname = read_group_lock_filename(sample)
             if os.path.exists(fname):
                 os.remove(fname)
             prepare_read_groups(self.args, sample)
             open(fname, "w").close()
+
+        if self.args.mode.needs_pcr_deduplication():
+            if self.args.barcoded_reads:
+                sample.barcoded_reads = self.args.barcoded_reads
+
+            split_barcodes_dict = {}
+            for chr_id in self.get_chr_list():
+                split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
+            barcode_split_done = split_barcodes_lock_filename(sample)
+            if self.args.resume and os.path.exists(barcode_split_done):
+                logger.info("Barcode table was split during the previous run, existing files will be used")
+            else:
+                if os.path.exists(barcode_split_done):
+                    os.remove(barcode_split_done)
+                self.split_read_barcode_table(sample, split_barcodes_dict)
+                open(barcode_split_done, "w").close()
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
@@ -410,7 +512,16 @@ class DatasetProcessor:
             if not self.args.keep_tmp:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
 
+            if self.args.mode.needs_pcr_deduplication():
+                self.filter_umis(sample)
+
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
+
+        if self.args.mode.needs_pcr_deduplication():
+            # move clean-up somewhere else
+            for bc_split_file in split_barcodes_dict.values():
+                os.remove(bc_split_file)
+            os.remove(barcode_split_done)
 
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
@@ -433,11 +544,6 @@ class DatasetProcessor:
             self.args.polya_requirement_strategy)
 
         self.process_assigned_reads(sample, saves_file)
-        if not self.args.read_assignments and not self.args.keep_tmp:
-            for f in glob.glob(saves_file + "_*"):
-                os.remove(f)
-            for f in glob.glob(sample.read_group_file + "*"):
-                os.remove(f)
         logger.info("Processed experiment " + sample.prefix)
 
     def keep_only_defined_chromosomes(self, chr_set: set):
@@ -492,6 +598,7 @@ class DatasetProcessor:
                 logger.warning("Chromosome list from the gene annotation is not the same as the chromosome list from"
                                " the reference genomes or BAM file(s). Please, check you input data.")
                 logger.warning("Only %d overlapping chromosomes will be processed." % len(common_overlap))
+
         return list(sorted(
             common_overlap,
             key=lambda x: len(self.reference_record_dict[x]),
@@ -577,7 +684,9 @@ class DatasetProcessor:
                     ("off" if self.args.no_model_construction else "on"))
 
         # set up aggregators and outputs
-        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped)
+        grouping_strategy_names = get_grouping_strategy_names(self.args)
+        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped,
+                                             grouping_strategy_names=grouping_strategy_names)
         transcript_stat_counter = EnumStats()
 
         gff_printer = VoidTranscriptPrinter()
@@ -599,7 +708,10 @@ class DatasetProcessor:
             # not intended for dumping transcript models directly
             exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
             gff_printer = GFFPrinter(
-                sample.out_dir, sample.prefix, exon_id_storage, header=self.common_header, gzipped=self.args.gzipped
+                sample.out_dir, sample.prefix, exon_id_storage,
+                output_r2t=not self.args.no_large_files,
+                header=self.common_header,
+                gzipped=self.args.gzipped
             )
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
@@ -610,7 +722,7 @@ class DatasetProcessor:
 
         model_gen = (
             construct_models_in_parallel,
-            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict, sample.illumina_bam) for chr_id in chr_ids),
+            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict, sample.illumina_bam, sample.barcoded_reads) for chr_id in chr_ids),
             chr_ids,
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),
@@ -648,26 +760,107 @@ class DatasetProcessor:
             logger.info("Counts for generated transcript models are saves to: " +
                         aggregator.transcript_model_counter.output_counts_file_name)
             if self.args.read_group:
-                logger.info("Grouped counts for generated transcript models are saves to: " +
-                            aggregator.transcript_model_grouped_counter.output_counts_file_name)
+                for counter in aggregator.transcript_model_grouped_counters:
+                    logger.info("Grouped counts for generated transcript models are saves to: " +
+                                counter.output_counts_file_name)
             aggregator.transcript_model_global_counter.finalize(self.args)
             aggregator.gene_model_global_counter.finalize(self.args)
 
     def finalize(self, aggregator):
-        if self.args.genedb:
+        if aggregator.basic_printer:
             logger.info("Read assignments are stored in " + aggregator.basic_printer.output_file_name +
                         (".gz" if self.args.gzipped else ""))
+        if self.args.genedb:
             aggregator.read_stat_counter.print_start("Read assignment statistics")
 
             logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
             logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
             if self.args.read_group:
-                logger.info("Grouped gene counts are saves to: " +
-                            aggregator.gene_grouped_counter.output_counts_file_name)
-                logger.info("Grouped transcript counts are saves to: " +
-                            aggregator.transcript_grouped_counter.output_counts_file_name)
+                for counter in aggregator.gene_grouped_counters:
+                    logger.info("Grouped gene counts are saves to: " + counter.output_counts_file_name)
+                for counter in aggregator.transcript_grouped_counters:
+                    logger.info("Grouped transcript counts are saves to: " + counter.output_counts_file_name)
             logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
             aggregator.global_counter.finalize(self.args)
+
+    def filter_umis(self, sample):
+        umi_filtering_done = umi_filtered_global_lock_file_name(sample.out_umi_filtered_done)
+        if os.path.exists(umi_filtering_done):
+            if self.args.resume:
+                logger.info("UMI filtering detecting, skipping")
+                return
+            os.remove(umi_filtering_done)
+
+        # edit distances for UMI filtering, first one will be used for counts
+        umi_ed_dict = {IsoQuantMode.bulk: [],
+                       IsoQuantMode.tenX_v3: [3],
+                       IsoQuantMode.visium_5prime: [3],
+                       IsoQuantMode.curio: [3],
+                       IsoQuantMode.visium_hd: [4],
+                       IsoQuantMode.stereoseq: [4],
+                       IsoQuantMode.stereoseq_nosplit: [4]}
+
+        for i, edit_distance in enumerate(umi_ed_dict[self.args.mode]):
+            logger.info("Filtering PCR duplicates with edit distance %d" % edit_distance)
+            umi_ed_filtering_done = umi_filtered_lock_file_name(sample.out_umi_filtered_done, "", edit_distance)
+            if os.path.exists(umi_ed_filtering_done):
+                if self.args.resume:
+                    logger.info("Filtering was done previously, skipping edit distance %d" % edit_distance)
+                    return
+                os.remove(umi_ed_filtering_done)
+
+            output_prefix = sample.out_umi_filtered + (".ALL" if edit_distance < 0 else ".ED%d" % edit_distance)
+            logger.info("Results will be saved to %s" % output_prefix)
+            output_filtered_reads = i == 0
+
+            umi_gen = (
+                filter_umis_in_parallel,
+                itertools.repeat(sample),
+                self.get_chr_list(),
+                itertools.repeat(self.args),
+                itertools.repeat(edit_distance),
+                itertools.repeat(output_filtered_reads),
+            )
+
+            if self.args.threads > 1:
+                with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+                    results = proc.map(*umi_gen, chunksize=1)
+            else:
+                results = map(*umi_gen)
+
+            stat_dict = defaultdict(int)
+            files_to_remove = []
+            with open(output_prefix + ".allinfo", "w") as outf:
+                for all_info_file_name, stats_output_file_name, umi_filter_done in results:
+                    shutil.copyfileobj(open(all_info_file_name, "r"), outf)
+                    for l in open(stats_output_file_name, "r"):
+                        v = l.strip().split("\t")
+                        if len(v) != 2:
+                            continue
+                        stat_dict[v[0]] += int(v[1])
+                    files_to_remove.append(all_info_file_name)
+                    files_to_remove.append(stats_output_file_name)
+                    files_to_remove.append(umi_filter_done)
+
+            logger.info("PCR duplicates filtered with edit distance %d, filtering stats:" % edit_distance)
+            with open(output_prefix + ".stats.tsv", "w") as outf:
+                for k, v in stat_dict.items():
+                    logger.info("  %s: %d" % (k, v))
+                    outf.write("%s\t%d\n" % (k, v))
+
+            open(umi_ed_filtering_done, "w").close()
+            for f in files_to_remove:
+                os.remove(f)
+
+        open(umi_filtering_done, "w").close()
+
+    def split_read_barcode_table(self, sample, split_barcodes_file_names):
+        logger.info("Splitting read barcode table")
+        # TODO: untrusted UMIs and third party format, both can be done by passing parsing function instead of columns
+        split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
+                                  read_column=0, group_columns=(1, 2, 3, 4), delim='\t')
+        logger.info("Read barcode table was split")
+
 
     @staticmethod
     def load_read_info(dump_filename):
@@ -679,11 +872,12 @@ class DatasetProcessor:
         return total_assignments, polya_assignments, all_read_groups
 
     def merge_assignments(self, sample, aggregator, chr_ids):
-        if self.args.genedb:
+        if self.args.genedb and aggregator.basic_printer:
             merge_files(sample.out_assigned_tsv, sample.prefix, chr_ids,
                         aggregator.basic_printer.output_file, copy_header=False)
-        merge_files(sample.out_corrected_bed, sample.prefix, chr_ids,
-                    aggregator.corrected_bed_printer.output_file, copy_header=False)
+        if aggregator.corrected_bed_printer:
+            merge_files(sample.out_corrected_bed, sample.prefix, chr_ids,
+                        aggregator.corrected_bed_printer.output_file, copy_header=False)
 
         for counter in aggregator.global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
@@ -692,7 +886,8 @@ class DatasetProcessor:
 
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
         merge_files(gff_printer.model_fname, label, chr_ids, gff_printer.out_gff, copy_header=False)
-        merge_files(gff_printer.r2t_fname, label, chr_ids, gff_printer.out_r2t, copy_header=False)
+        if gff_printer.output_r2t:
+            merge_files(gff_printer.r2t_fname, label, chr_ids, gff_printer.out_r2t, copy_header=False)
         for counter in aggregator.transcript_model_global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)

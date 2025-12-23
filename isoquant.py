@@ -19,11 +19,14 @@ import gzip
 from collections import namedtuple
 from io import StringIO
 from traceback import print_exc
+from concurrent.futures import ProcessPoolExecutor
+import concurrent.futures
 
 import pysam
 import gffutils
 import pyfaidx
 
+from src.modes import IsoQuantMode, ISOQUANT_MODES
 from src.gtf2db import convert_gtf_to_db
 from src.read_mapper import (
     DATA_TYPE_ALIASES,
@@ -34,15 +37,20 @@ from src.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from src.alignment_processor import PolyATrimmed
+from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from src.graph_based_model_construction import StrandnessReportingLevel
 from src.long_read_assigner import AmbiguityResolvingMethod
 from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
 from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
+<<<<<<< HEAD
 from src.fusion_detector import FusionDetector
+=======
+from detect_barcodes import process_single_thread, process_in_parallel, get_umi_length
+
+>>>>>>> upstream/master
 
 logger = logging.getLogger('IsoQuant')
 
@@ -64,6 +72,7 @@ def parse_args(cmd_args=None, namespace=None):
     output_setup_args_group = parser.add_argument_group('Output configuration')
     align_args_group = parser.add_argument_group('Aligner settings')
     filer_args_group = parser.add_argument_group('Read filtering options')
+    sc_args_group = parser.add_argument_group('Single-cell/spatial-related options:')
 
     other_options = parser.add_argument_group("Additional options:")
     show_full_help = '--full_help' in cmd_args
@@ -128,11 +137,16 @@ def parse_args(cmd_args=None, namespace=None):
     input_args_group.add_argument('--illumina_bam', nargs='+', type=str,
                                   help='sorted and indexed file(s) with Illumina reads from the same sample')
 
-    input_args_group.add_argument("--read_group", help="a way to group feature counts (no grouping by default): "
-                                             "by BAM file tag (tag:TAG); "
-                                             "using additional file (file:FILE:READ_COL:GROUP_COL:DELIM); "
-                                             "using read id (read_id:DELIM); "
-                                             "by original file name (file_name)", type=str)
+    input_args_group.add_argument("--read_group", nargs='+', type=str,
+                                  help="one or more ways to group feature counts (no grouping by default); "
+                                       "multiple grouping strategies can be specified (space-separated); "
+                                       "supported formats: "
+                                       "tag:TAG (BAM tag), "
+                                       "file:FILE:READ_COL:GROUP_COL(S):DELIM (TSV file, use comma-separated columns for multi-column grouping, e.g., file:table.tsv:0:1,2,3), "
+                                       "read_id:DELIM (read ID suffix), "
+                                       "file_name (original filename), "
+                                       "barcode_spot[:FILE] (map barcodes to spots/cell types using --barcode2spot or explicit file); "
+                                       "example: --read_group tag:CB file_name barcode_spot")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
                                    help="reuse read assignments (binary format)", default=None)
@@ -147,6 +161,22 @@ def parse_args(cmd_args=None, namespace=None):
                                   help="define reads which had polyA tail trimmed")
     input_args_group.add_argument('--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
+
+    # SC ARGUMENTS
+    add_additional_option_to_group(sc_args_group, "--mode", "-m", type=str, choices=ISOQUANT_MODES,
+                                   help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
+                                        "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
+    add_additional_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
+                                   help='file with barcode whitelist for barcode calling')
+    add_additional_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
+                                   help='TSV file with barcoded reads; barcodes will be called automatically if not provided')
+    # TODO: add UMI column, support various formats
+    add_additional_option_to_group(sc_args_group, "--barcode_column", type=str,
+                                   help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
+                                   default=1)
+    # TODO: add multiple columns
+    add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str, nargs='+',
+                                   help='TSV file barcode to cell type / spot id information')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
@@ -204,6 +234,8 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='Do not use previously generated index, feature db or alignments.')
     add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
                                    default=False, help="run only read assignment and quantification")
+    add_additional_option_to_group(pipeline_args_group, "--no_large_files", action="store_true",
+                                   default=False, help="do not output files containing all reads (bed and tsv)")
     add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
                                    help="align reads to reference without running further analysis")
     add_additional_option_to_group(pipeline_args_group, "--no_gtf_check", help="do not perform GTF checks",
@@ -437,10 +469,15 @@ def save_params(args):
                 args.__dict__[file_opt] = os.path.abspath(args.__dict__[file_opt])
 
     if "read_group" in args.__dict__ and args.__dict__["read_group"]:
-        vals = args.read_group.split(":")
-        if len(vals) > 1 and vals[0] == 'file':
-            vals[1] = os.path.abspath(vals[1])
-            args.read_group = ":".join(vals)
+        updated_specs = []
+        for spec in args.read_group:
+            vals = spec.split(":")
+            if len(vals) > 1 and vals[0] == 'file':
+                vals[1] = os.path.abspath(vals[1])
+                updated_specs.append(":".join(vals))
+            else:
+                updated_specs.append(spec)
+        args.read_group = updated_specs
 
     pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
     pickler.dump(args)
@@ -463,7 +500,7 @@ def check_input_params(args):
     if not args.fastq and not args.bam and not args.unmapped_bam and not args.read_assignments and not args.yaml:
         logger.error("No input data was provided")
         return False
-        
+
     if args.yaml and args.illumina_bam:
         logger.error("When providing a yaml file it should include all input files, including the illumina bam file.")
         return False
@@ -500,7 +537,18 @@ def check_input_params(args):
     if args.process_only_chr and args.discard_chr:
         args.discard_chr = []
         logger.warning("--discard_chr has not effect when --process_only_chr is set and will be ignored")
-        
+
+    if not isinstance(args.mode, IsoQuantMode):
+        args.mode = IsoQuantMode[args.mode]
+
+    args.umi_length = 0
+    if args.mode.needs_barcode_calling():
+        if not args.barcode_whitelist and not args.barcoded_reads:
+            logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
+                            "barcoded reads" % args.mode.name)
+            exit(-3)
+        args.umi_length = get_umi_length(args.mode)
+
     check_input_files(args)
     return True
 
@@ -620,9 +668,16 @@ def set_data_dependent_options(args):
 
     args.resolve_ambiguous = 'monoexon_and_fsm' if args.fl_data else 'default'
     args.requires_polya_for_construction = False
-    if args.read_group is None and args.input_data.has_replicas():
-        args.read_group = "file_name"
-    args.use_technical_replicas = args.read_group == "file_name"
+
+    # Automatically add file_name grouping when multiple files are present
+    if args.input_data.has_replicas():
+        if args.read_group is None:
+            # No read grouping specified, use file_name
+            args.read_group = ["file_name"]
+        else:
+            # Read grouping specified, ensure file_name is included
+            if "file_name" not in args.read_group:
+                args.read_group.append("file_name")
 
 
 def set_matching_options(args):
@@ -842,14 +897,84 @@ def prepare_reference_genome(args):
         args.reference = gunzipped_reference
 
 
+class BarcodeCallingArgs:
+    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads):
+        self.input = input
+        self.barcodes = barcode_whitelist
+        self.mode = mode
+        self.output_tsv = output
+        self.out_fasta = out_fasta
+        self.tmp_dir = tmp_dir
+        self.threads = threads
+        self.min_score = None
+
+
+def call_barcodes(args):
+    if not args.barcoded_reads:
+        for sample in args.input_data.samples:
+            new_reads = []
+            for i, files in enumerate(sample.file_list):
+                output_barcodes = sample.barcodes_tsv + "_%d.tsv" % i
+                barcodes_done = sample.barcodes_done + "_%d.tsv" % i
+
+                output_fasta = None
+                if args.mode.produces_new_fasta():
+                    output_fasta = sample.split_reads_fasta + "_%d.fa" % i
+                    new_reads.append([output_fasta])
+                bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
+                if os.path.exists(barcodes_done):
+                    if args.resume:
+                        logger.info("Barcodes were called during the previous run, skipping")
+                        sample.barcoded_reads.append(output_barcodes)
+                        continue
+                    os.remove(barcodes_done)
+
+                bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode,
+                                             output_barcodes, output_fasta, sample.aux_dir, bc_threads)
+                # Launching barcode calling in a separate process has the following reason:
+                # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
+                # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
+                # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
+                with ProcessPoolExecutor(max_workers=1) as proc:
+                    logger.info("Detecting barcodes")
+                    if bc_threads == 1:
+                        future_res = proc.submit(process_single_thread, bc_args)
+                    else:
+                        future_res = proc.submit(process_in_parallel, bc_args)
+
+                concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
+                if future_res.exception() is not None:
+                    raise future_res.exception()
+
+                sample.barcoded_reads.append(output_barcodes)
+                open(barcodes_done, "w").close()
+                logger.info("Processed %s, barcodes are stored in %s" % (files[0], output_barcodes))
+
+            if args.mode.produces_new_fasta():
+                logger.info("Reads were split during barcode calling")
+                logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
+                sample.file_list = new_reads
+    else:
+        # TODO barcoded files via YAML
+        args.input_data.samples[0].barcoded_reads = args.barcoded_reads
+
+
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
     logger.info("Python version: %s" % sys.version)
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
+<<<<<<< HEAD
  
     # gunzip reference genome if needed
+=======
+    if args.mode.needs_barcode_calling():
+        # call barcodes
+        call_barcodes(args)
+
+    # gunzip refernece genome if needed
+>>>>>>> upstream/master
     prepare_reference_genome(args)
  
     # convert GTF/GFF if needed
@@ -871,6 +996,7 @@ def run_pipeline(args):
  
     if args.run_aligner_only:
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
+<<<<<<< HEAD
     else:
         # run isoform assignment
         dataset_processor = DatasetProcessor(args)
@@ -880,6 +1006,18 @@ def run_pipeline(args):
         if len(args.input_data.samples) > 1 and args.genedb:
             combine_counts(args.input_data, args.output)
  
+=======
+        return
+
+    # run isoform assignment
+    dataset_processor = DatasetProcessor(args)
+    dataset_processor.process_all_samples(args.input_data)
+
+    # aggregate counts for all samples
+    if len(args.input_data.samples) > 1 and args.genedb:
+        combine_counts(args.input_data, args.output)
+
+>>>>>>> upstream/master
     logger.info(" === IsoQuant pipeline finished === ")
 
 

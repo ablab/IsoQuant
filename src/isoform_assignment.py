@@ -486,6 +486,8 @@ class BasicReadAssignment:
         self.penalty_score = 0.0
         self.isoforms = []
         self.genes = []
+        self.barcode = read_assignment.barcode if hasattr(read_assignment, 'barcode') else None
+        self.umi = read_assignment.umi if hasattr(read_assignment, 'umi') else None
 
         if read_assignment.isoform_matches:
             gene_set = set()
@@ -575,7 +577,9 @@ class BasicReadAssignment:
         read_int_neg(infile)
         read_int_neg(infile)
         read_int_neg(infile)
-        read_string(infile)
+        read_list(infile, read_string)  # read_group is now a list
+        read_string_or_none(infile)
+        read_string_or_none(infile)
         read_string(infile)
         read_string(infile)
         read_assignment.chr_id = read_string(infile)
@@ -634,7 +638,9 @@ class ReadAssignment:
         self.polyA_found = False
         self.cage_found = False
         self.polya_info = None
-        self.read_group = "NA"
+        self.read_group = []
+        self.barcode = None  # Cell/spatial barcode
+        self.umi = None  # Unique molecular identifier
         self.mapped_strand = "."
         self.strand = "."
         self.chr_id = "."
@@ -678,7 +684,9 @@ class ReadAssignment:
         read_assignment.polyA_found = bool_arr[1]
         read_assignment.cage_found = bool_arr[2]
         read_assignment.polya_info = PolyAInfo(read_int_neg(infile), read_int_neg(infile), read_int_neg(infile), read_int_neg(infile))
-        read_assignment.read_group = read_string(infile)
+        read_assignment.read_group = read_list(infile, read_string)
+        read_assignment.barcode = read_string_or_none(infile)
+        read_assignment.umi = read_string_or_none(infile)
         read_assignment.mapped_strand = read_string(infile)
         read_assignment.strand = read_string(infile)
         read_assignment.chr_id = read_string(infile)
@@ -705,7 +713,9 @@ class ReadAssignment:
         write_int_neg(self.polya_info.external_polyt_pos, outfile)
         write_int_neg(self.polya_info.internal_polya_pos, outfile)
         write_int_neg(self.polya_info.internal_polyt_pos, outfile)
-        write_string(self.read_group, outfile)
+        write_list(self.read_group, outfile, write_string)
+        write_string_or_none(self.barcode, outfile)
+        write_string_or_none(self.umi, outfile)
         write_string(self.mapped_strand, outfile)
         write_string(self.strand, outfile)
         write_string(self.chr_id, outfile)

@@ -244,6 +244,7 @@ class AlignmentCollector:
 
     def __init__(self, chr_id, bam_pairs, params, illumina_bam,
                  genedb=None, chr_record=None, read_groupper=DefaultReadGrouper(),
+                 barcode_dict=None,
                  small_chr_max_coverage=1000000,
                  usual_gene_max_coverage=-1):
         self.chr_id = chr_id
@@ -258,6 +259,7 @@ class AlignmentCollector:
                                           multiple_iterators=not self.params.high_memory)
         self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
+        self.barcode_dict = barcode_dict # read_id -> (barcode, umi)
         self.small_chr_max_coverage = small_chr_max_coverage
         self.usual_gene_max_coverage = usual_gene_max_coverage
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
@@ -276,9 +278,14 @@ class AlignmentCollector:
                 self.alignment_stat_counter.add(AlignmentType.primary)
 
             if alignment_storage.alignment_is_not_adjacent(alignment):
-                for res in self.forward_alignments(alignment_storage):
-                    yield res
-                alignment_storage.reset()
+                preceding_genes = self.get_genes_in_region(alignment_storage.region)
+                next_genes = self.get_genes_in_region((alignment.reference_start, alignment.reference_end - 1))
+
+                if len(preceding_genes.intersection(next_genes)) == 0:
+                    for res in self.forward_alignments(alignment_storage):
+                        yield res
+                    alignment_storage.reset()
+
             alignment_storage.add_alignment(bam_index, alignment)
 
         if alignment_storage.region:
@@ -383,7 +390,13 @@ class AlignmentCollector:
             read_assignment.exons = alignment_info.read_exons
             read_assignment.corrected_exons = corrector.correct_read(alignment_info)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
-            read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+
+            group_ids = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+            # Ensure read_group is always a list
+            read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
+            # Populate barcode and UMI if available
+            if read_id in self.barcode_dict:
+                read_assignment.barcode, read_assignment.umi = self.barcode_dict[read_id]
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             read_assignment.chr_id = self.chr_id
@@ -448,7 +461,12 @@ class AlignmentCollector:
                                                                                    read_assignment)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
 
-            read_assignment.read_group = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+            group_ids = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
+            # Ensure read_group is always a list
+            read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
+            # Populate barcode and UMI if available
+            if read_id in self.barcode_dict:
+                read_assignment.barcode, read_assignment.umi = self.barcode_dict[read_id]
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             AlignmentCollector.check_antisense(read_assignment)
@@ -514,6 +532,14 @@ class AlignmentCollector:
                 junctions_with_indels += 1
 
         return indel_count, junctions_with_indels
+
+    def get_genes_in_region(self, current_region):
+        if not self.genedb:
+            return set()
+        return set(g.id for g in self.genedb.region(seqid=self.chr_id,
+                                                    start=current_region[0],
+                                                    end=current_region[1],
+                                                    featuretype="gene"))
 
     def get_gene_info_for_region(self, current_region):
         if not self.genedb:
