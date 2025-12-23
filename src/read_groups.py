@@ -275,7 +275,7 @@ def prepare_read_groups(args, sample):
             pass
     chromosomes = list(chromosomes)
 
-    for spec in specs:
+    for spec_index, spec in enumerate(specs):
         spec = spec.strip()
         if not spec:
             continue
@@ -292,16 +292,19 @@ def prepare_read_groups(args, sample):
             # Multi-column TSV: file:filename:read_col:group_cols:delim
             group_id_column_indices = [int(x) for x in values[3].split(',')]
             delim = values[4] if len(values) > 4 else '\t'
-            logger.info("Splitting multi-column read group file %s for better memory consumption" % table_filename)
+            logger.info("Splitting multi-column read group file %s (spec %d) for better memory consumption" %
+                       (table_filename, spec_index))
         else:
             # Single column TSV
             group_id_column_index = int(values[3]) if len(values) > 3 else 1
             group_id_column_indices = [group_id_column_index]
             delim = values[4] if len(values) > 4 else '\t'
-            logger.info("Splitting read group file %s for better memory consumption" % table_filename)
+            logger.info("Splitting read group file %s (spec %d) for better memory consumption" %
+                       (table_filename, spec_index))
 
-        # Build output file names for each chromosome
-        split_reads_file_names = {chr_id: sample.read_group_file + "_" + chr_id for chr_id in chromosomes}
+        # Build output file names for each chromosome with spec_index to avoid overwrites
+        split_reads_file_names = {chr_id: sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
+                                 for chr_id in chromosomes}
 
         # Use improved parallel splitting with line-by-line streaming
         num_threads = args.threads if hasattr(args, 'threads') else 4
@@ -313,9 +316,16 @@ def prepare_read_groups(args, sample):
                                   delim=delim)
 
 
-def parse_grouping_spec(spec_string, args, sample, chr_id):
+def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
     """
     Parse a single grouping specification and return the appropriate grouper(s).
+
+    Args:
+        spec_string: Grouping specification string
+        args: Command line arguments
+        sample: Sample object
+        chr_id: Chromosome ID
+        spec_index: Index of this spec in the list (for file-based grouping)
 
     Returns:
         - Single grouper for most cases
@@ -365,7 +375,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id):
             # Multiple columns - create separate groupers sharing the same table data
             # This makes file:table.tsv:0:1,2,3 equivalent to three separate --read_group arguments
             group_id_column_indices = [int(x) for x in group_col_spec.split(',')]
-            read_group_chr_filename = sample.read_group_file + "_" + chr_id
+            read_group_chr_filename = sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
 
             # Create shared table data once
             shared_data = SharedTableData(read_group_chr_filename, read_id_column_index,
@@ -380,7 +390,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id):
         else:
             # Single column - use ReadTableGrouper
             group_id_column_index = int(values[3])
-            read_group_chr_filename = sample.read_group_file + "_" + chr_id
+            read_group_chr_filename = sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
 
             # Create shared data with single column for consistency
             shared_data = SharedTableData(read_group_chr_filename, read_id_column_index,
@@ -408,10 +418,10 @@ def create_read_grouper(args, sample, chr_id):
 
     specs = args.read_group
     groupers = []
-    for spec in specs:
+    for spec_index, spec in enumerate(specs):
         spec = spec.strip()
         if spec:
-            grouper = parse_grouping_spec(spec, args, sample, chr_id)
+            grouper = parse_grouping_spec(spec, args, sample, chr_id, spec_index)
             if grouper:
                 # parse_grouping_spec can return either a single grouper or a list of groupers
                 # (multi-column file specs return lists)
@@ -437,7 +447,10 @@ def get_grouping_strategy_names(args) -> list:
     If no read_group is specified, returns ["default"].
 
     For multi-column TSV files with N columns, returns N separate names like:
-    ["file_col1", "file_col2", "file_col3"]
+    ["file0_col1", "file0_col2", "file0_col3"]
+
+    For multiple file specs, includes spec index to avoid name collisions:
+    ["file0_col1", "file1_col1", "file2_col1"]
     """
     if not hasattr(args, "read_group") or args.read_group is None:
         return ["default"]
@@ -449,7 +462,7 @@ def get_grouping_strategy_names(args) -> list:
         specs = args.read_group
 
     strategy_names = []
-    for spec in specs:
+    for spec_index, spec in enumerate(specs):
         spec = spec.strip()
         if not spec:
             continue
@@ -470,14 +483,15 @@ def get_grouping_strategy_names(args) -> list:
             safe_delim = delim.replace('/', '_').replace('\\', '_')
             strategy_names.append(f"read_id_{safe_delim}")
         elif spec_type == 'file':
+            # Include spec_index to distinguish between different file specs
             # Check if multi-column
             if len(values) >= 4 and ',' in values[3]:
                 group_col_indices = values[3].split(',')
                 for col_idx in group_col_indices:
-                    strategy_names.append(f"file_col{col_idx}")
+                    strategy_names.append(f"file{spec_index}_col{col_idx}")
             else:
                 col_idx = values[3] if len(values) > 3 else "1"
-                strategy_names.append(f"file_col{col_idx}")
+                strategy_names.append(f"file{spec_index}_col{col_idx}")
 
     return strategy_names if strategy_names else ["default"]
 
