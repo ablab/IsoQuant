@@ -5,15 +5,13 @@
 ############################################################################
 
 import pytest
-from collections import defaultdict
 from src.barcode_calling.umi_filtering import (
     UMIFilter,
     format_read_assignment_for_output,
-    create_transcript_info_dict
+
 )
 from src.isoform_assignment import ReadAssignment, ReadAssignmentType
-from src.gene_info import GeneInfo
-
+from src.common import junctions_from_blocks
 
 class TestFormatReadAssignmentForOutput:
     """Test read assignment output formatting."""
@@ -29,6 +27,7 @@ class TestFormatReadAssignmentForOutput:
         read_assignment.start = 1000
         read_assignment.end = 2000
         read_assignment.corrected_exons = [(1000, 1500), (1600, 2000)]
+        read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
         read_assignment.barcode = "ACTG"
         read_assignment.umi = "GGGG"
         read_assignment.strand = '+'
@@ -57,6 +56,7 @@ class TestFormatReadAssignmentForOutput:
         read_assignment.start = 1000
         read_assignment.end = 2000
         read_assignment.corrected_exons = [(1000, 2000)]
+        read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
         read_assignment.barcode = "ACTG"
         read_assignment.umi = "CCCC"
         read_assignment.strand = '-'
