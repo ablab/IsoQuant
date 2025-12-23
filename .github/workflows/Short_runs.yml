@@ -17,17 +17,17 @@ jobs:
     name: 'IsoQuant toy dataset runs'
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.8"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest
-        sudo apt-get install -y minimap2 samtools
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Run integration tests
-      run: |
-        pytest tests/console_test.py -v
+      - name: 'Cleanup'
+        run: >
+          set -e &&
+          shopt -s dotglob &&
+          rm -rf *
+
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Run integration tests
+        run: |
+          pytest-3 tests/console_test.py -v
