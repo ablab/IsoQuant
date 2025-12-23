@@ -124,7 +124,9 @@ Useful for grouping single-cell/spatial data by cell type or spatial region inst
 **Example**: `--read_group tag:CB file_name barcode_spot` creates multi-level grouping by cell barcode tag, file name, and cell type.
 
 
-## Single-cell and spatial transcriptomics options
+### Single-cell and spatial transcriptomics options
+
+**NB! This functionality is not officially released yet, use it at your own risk.**
 
 `--mode` or `-m`
 IsoQuant mode for processing single-cell or spatial transcriptomics data. Available modes:
