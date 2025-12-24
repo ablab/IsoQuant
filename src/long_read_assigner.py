@@ -608,13 +608,13 @@ class LongReadAssigner:
         # detect inconsistency for each one
         read_matches = self.detect_inconsistensies(read_id, combined_read_profile, best_candidates)
         if not read_matches:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative, string_pools=self.string_pools)
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools)
         # logger.debug("* Inconsistencies detected: " + str(read_matches))
 
         # select ones with the least number of inconsistent events
         best_isoforms, penalty_score = self.select_best_among_inconsistent(combined_read_profile, read_matches)
         if not best_isoforms:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative, string_pools=self.string_pools)
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools)
         # logger.debug("* Selected isoforms: " + str(best_isoforms))
 
         best_isoforms = sorted(best_isoforms)
@@ -625,7 +625,7 @@ class LongReadAssigner:
             isoform_matches = self.create_inconsistent_matches(read_matches, best_isoforms, penalty_score)
         else:
             isoform_matches = self.create_consistent_matches(read_matches, best_isoforms, combined_read_profile)
-        return ReadAssignment(read_id, assignment_type, isoform_matches, string_pools=self.string_pools)
+        return ReadAssignment(read_id, assignment_type, self.string_pools, match=isoform_matches)
 
     def classify_assignment(self, best_isoforms, read_matches):
         is_abmiguous = len(best_isoforms) > 1
