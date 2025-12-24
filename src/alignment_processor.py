@@ -380,9 +380,8 @@ class AlignmentCollector:
             if self.params.polya_trimmed == PolyATrimmed.none:
                 alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
 
-            read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic,
-                                             IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools),
-                                             string_pools=self.string_pools)
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic, self.string_pools,
+                                             match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
 
             if alignment_info.exons_changed:
                 read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))

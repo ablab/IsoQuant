@@ -191,8 +191,8 @@ class GraphBasedModelConstructor:
                 # create intergenic
                 assignment = ReadAssignment(model.transcript_id,
                                             ReadAssignmentType.intergenic,
-                                            IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools),
-                                            string_pools=self.string_pools)
+                                            self.string_pools,
+                                            match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
                 if model.strand == "-":
                     polya_info = PolyAInfo(-1, model.exon_blocks[0][0], -1, -1)
                 else:

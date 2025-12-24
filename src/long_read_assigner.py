@@ -435,9 +435,8 @@ class LongReadAssigner:
         # logger.debug("Read intron profile" + str(read_intron_profile.read_profile))
         # logger.debug("Gene intron profile" + str(read_intron_profile.gene_profile))
         if self.gene_info.empty():
-            return ReadAssignment(read_id, ReadAssignmentType.intergenic,
-                                  IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools),
-                                  string_pools=self.string_pools)
+            return ReadAssignment(read_id, ReadAssignmentType.intergenic, self.string_pools,
+                                  match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
 
         if all(el != 1 for el in read_split_exon_profile.read_profile) \
                 or all(el == 0 or el == -2 for el in read_split_exon_profile.gene_profile):
@@ -447,20 +446,17 @@ class LongReadAssigner:
             # none of the blocks matched
             if not overlaps(read_region, gene_region):
                 # logger.debug("EMPTY - noninformative")
-                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative,
-                                          IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools),
-                                          string_pools=self.string_pools)
+                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
+                                          match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
             elif all(el != 1 for el in read_split_exon_profile.gene_profile):
                 # logger.debug("EMPTY - intronic")
                 # TODO: match to a gene
-                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative,
-                                          IsoformMatch(MatchClassification.genic_intron, string_pools=self.string_pools),
-                                          string_pools=self.string_pools)
+                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
+                                          match=IsoformMatch(MatchClassification.genic_intron, string_pools=self.string_pools))
             else:
                 # logger.debug("EMPTY - genic")
-                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative,
-                                          IsoformMatch(MatchClassification.genic, string_pools=self.string_pools),
-                                          string_pools=self.string_pools)
+                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
+                                          match=IsoformMatch(MatchClassification.genic, string_pools=self.string_pools))
             return assignment
 
         elif any(el == -1 for el in read_intron_profile.read_profile) \
@@ -562,8 +558,8 @@ class LongReadAssigner:
         elif len(matched_isoforms) > 1:
             # logger.debug("+ + Ambiguous read")
             isoform_matches = self.categorize_multiple_splice_matches(combined_read_profile, matched_isoforms)
-            return ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches,
-                                string_pools=self.string_pools)
+            return ReadAssignment(read_id, ReadAssignmentType.ambiguous, self.string_pools,
+                                match=isoform_matches)
 
         return read_assignment
 
@@ -580,30 +576,28 @@ class LongReadAssigner:
             isoform_id = matched_isoforms[0]
             # logger.debug("Single monoexonic match: %s" % isoform_id)
             isoform_match = self.categorize_correct_unspliced_match(combined_read_profile, isoform_id)
-            read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match,
-                                            string_pools=self.string_pools)
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, self.string_pools,
+                                            match=isoform_match)
 
         elif len(matched_isoforms) > 1:
             # logger.debug("Nucleotide similarity picked multiple isoforms")
             isoform_matches = self.categorize_multiple_unspliced_matches(combined_read_profile, matched_isoforms)
-            read_assignment = ReadAssignment(read_id, ReadAssignmentType.ambiguous, isoform_matches,
-                                            string_pools=self.string_pools)
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.ambiguous, self.string_pools,
+                                            match=isoform_matches)
 
         return read_assignment
 
     # resolve when there are -1s in read profile or when there are no exactly matching isoforms, but no -1s in read profiles
     def match_inconsistent(self, read_id, combined_read_profile):
         if self.quick_mode:
-            return ReadAssignment(read_id, ReadAssignmentType.inconsistent,
-                                IsoformMatch(MatchClassification.genic, string_pools=self.string_pools),
-                                string_pools=self.string_pools)
+            return ReadAssignment(read_id, ReadAssignmentType.inconsistent, self.string_pools,
+                                match=IsoformMatch(MatchClassification.genic, string_pools=self.string_pools))
 
         # select most similar isoforms based on multiple criteria
         best_candidates = self.select_similar_isoforms(combined_read_profile)
         if not best_candidates:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative,
-                                IsoformMatch(MatchClassification.genic, string_pools=self.string_pools),
-                                string_pools=self.string_pools)
+            return ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
+                                match=IsoformMatch(MatchClassification.genic, string_pools=self.string_pools))
 
         # logger.debug("* Best candidates for inconsistency detection: " + str(best_candidates))
         # detect inconsistency for each one
