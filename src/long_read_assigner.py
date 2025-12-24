@@ -377,9 +377,11 @@ class LongReadAssigner:
             match_classification = MatchClassification.incomplete_splice_match
             match_subclassifications = self.detect_ism_subtype(read_region, isoform_id)
 
-        return IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
-                            match_subclassifications, self.gene_info.isoform_strands[isoform_id],
-                            string_pools=self.string_pools)
+        return IsoformMatch(match_classification, self.string_pools,
+                            assigned_gene=self.get_gene_id(isoform_id),
+                            assigned_transcript=isoform_id,
+                            match_subclassification=match_subclassifications,
+                            transcript_strand=self.gene_info.isoform_strands[isoform_id])
 
     # make proper match subtype
     def categorize_multiple_splice_matches(self, combined_read_profile, isoform_ids):
@@ -398,8 +400,11 @@ class LongReadAssigner:
             events = [MatchEvent(MatchEventSubtype.mono_exonic)]
 
         match_classification = MatchClassification.get_mono_exon_classification(events)
-        return IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id, events,
-                            self.gene_info.isoform_strands[isoform_id], string_pools=self.string_pools)
+        return IsoformMatch(match_classification, self.string_pools,
+                            assigned_gene=self.get_gene_id(isoform_id),
+                            assigned_transcript=isoform_id,
+                            match_subclassification=events,
+                            transcript_strand=self.gene_info.isoform_strands[isoform_id])
 
     def categorize_multiple_unspliced_matches(self, combined_read_profile, isoform_ids):
         isoform_matches = []
@@ -654,9 +659,11 @@ class LongReadAssigner:
         for isoform_id in selected_isoforms:
             read_match = read_matches[isoform_id]
             match_classification = MatchClassification.get_mono_exon_classification(read_match)
-            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
-                                         read_match, self.gene_info.isoform_strands[isoform_id],
-                                         string_pools=self.string_pools)
+            isoform_match = IsoformMatch(match_classification, self.string_pools,
+                                         assigned_gene=self.get_gene_id(isoform_id),
+                                         assigned_transcript=isoform_id,
+                                         match_subclassification=read_match,
+                                         transcript_strand=self.gene_info.isoform_strands[isoform_id])
             matches.append(isoform_match)
         return matches
 
@@ -675,9 +682,12 @@ class LongReadAssigner:
         for isoform_id in selected_isoforms:
             read_match = read_matches[isoform_id]
             match_classification = MatchClassification.get_inconsistency_classification(read_match)
-            isoform_match = IsoformMatch(match_classification, self.get_gene_id(isoform_id), isoform_id,
-                                         read_match, self.gene_info.isoform_strands[isoform_id],
-                                         penalty_score=penalty_score, string_pools=self.string_pools)
+            isoform_match = IsoformMatch(match_classification, self.string_pools,
+                                         assigned_gene=self.get_gene_id(isoform_id),
+                                         assigned_transcript=isoform_id,
+                                         match_subclassification=read_match,
+                                         transcript_strand=self.gene_info.isoform_strands[isoform_id],
+                                         penalty_score=penalty_score)
             matches.append(isoform_match)
         return matches
 
