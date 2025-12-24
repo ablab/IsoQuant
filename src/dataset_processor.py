@@ -422,8 +422,6 @@ class ReadAssignmentAggregator:
 
                 self.transcript_model_grouped_counters.append(transcript_model_counter)
                 self.gene_model_grouped_counters.append(gene_model_counter)
-                self.transcript_model_global_counter.add_counters([transcript_model_counter])
-                self.gene_model_global_counter.add_counters([gene_model_counter])
 
 
 # Class for processing all samples against gene database

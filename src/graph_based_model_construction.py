@@ -185,7 +185,7 @@ class GraphBasedModelConstructor:
             self.gene_counter.add_read_info_raw(read_id, gene_ids)
             # Add to each grouped counter with its corresponding group
 
-            for counter in enumerate(self.transcript_grouped_counters):
+            for counter in self.transcript_grouped_counters:
                 counter.add_read_info_raw(read_id, transcript_ids, read_groups)
             for counter in self.gene_grouped_counters:
                 counter.add_read_info_raw(read_id, gene_ids, read_groups)
