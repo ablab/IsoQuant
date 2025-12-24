@@ -495,6 +495,17 @@ def check_input_params(args):
         args.discard_chr = []
         logger.warning("--discard_chr has not effect when --process_only_chr is set and will be ignored")
 
+    if "read_group" in args.__dict__ and args.__dict__["read_group"]:
+        updated_specs = []
+        spec_set = set()
+        for spec in args.read_group:
+            if spec in spec_set:
+                logger.warning("Read group %s is set twice, which has no effect, duplicate will be ignored" % spec)
+                continue
+            updated_specs.append(spec)
+            spec_set.add(spec)
+        args.read_group = updated_specs
+
     if not isinstance(args.mode, IsoQuantMode):
         args.mode = IsoQuantMode[args.mode]
 
