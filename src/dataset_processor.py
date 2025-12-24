@@ -91,9 +91,20 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
         if os.path.exists(group_file) and os.path.exists(save_file):
-            read_grouper.read_groups.clear()
-            for g in open(group_file):
-                read_grouper.read_groups.add(g.strip())
+            # Load read_groups from file
+            with open(group_file) as f:
+                lines = [line.strip() for line in f]
+                num_strategies = int(lines[0])
+                if isinstance(read_grouper.read_groups, list):
+                    # MultiReadGrouper: list of sets
+                    read_grouper.read_groups = []
+                    for i in range(num_strategies):
+                        groups = set(lines[i + 1].split(";")) if lines[i + 1] else set()
+                        read_grouper.read_groups.append(groups)
+                else:
+                    # Single grouper: single set
+                    groups_str = lines[1] if len(lines) > 1 else ""
+                    read_grouper.read_groups = set(groups_str.split(";")) if groups_str else set()
             alignment_stat_counter = EnumStats(bamstat_file)
             loader = BasicReadAssignmentLoader(save_file)
             while loader.has_next():
@@ -143,8 +154,16 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
             tmp_printer.add_read_info(read_assignment)
             processed_reads_manager.add_read(read_assignment)
     with open(group_file, "w") as group_dump:
-        for g in read_grouper.read_groups:
-            group_dump.write("%s\n" % g)
+        # Save read_groups (can be set or list of sets)
+        if isinstance(read_grouper.read_groups, list):
+            # MultiReadGrouper: list of sets
+            group_dump.write("%d\n" % len(read_grouper.read_groups))  # Number of strategies
+            for group_set in read_grouper.read_groups:
+                group_dump.write("%s\n" % ";".join(sorted(group_set)))  # Semicolon-separated groups
+        else:
+            # Single grouper: single set
+            group_dump.write("1\n")  # One strategy
+            group_dump.write("%s\n" % ";".join(sorted(read_grouper.read_groups)))
     alignment_collector.alignment_stat_counter.dump(bamstat_file)
 
     for bam in bam_file_pairs:
@@ -415,7 +434,7 @@ class DatasetProcessor:
         self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
-        self.all_read_groups = set()
+        self.all_read_groups = []  # Will be initialized per sample as list of sets
         self.alignment_stat_counter = EnumStats()
         self.transcript_type_dict = {}
 
@@ -475,7 +494,9 @@ class DatasetProcessor:
                                          self.args.read_group is not None and
                                          "file_name" in self.args.read_group)
 
-        self.all_read_groups = set()
+        # Initialize all_read_groups as list of sets (one per grouping strategy)
+        grouping_strategy_names = get_grouping_strategy_names(self.args)
+        self.all_read_groups = [set() for _ in grouping_strategy_names]
         fname = read_group_lock_filename(sample)
         if self.args.resume and os.path.exists(fname):
             logger.info("Read group table was split during the previous run, existing files will be used")
@@ -640,7 +661,10 @@ class DatasetProcessor:
             itertools.repeat(processed_read_manager_type)
         )
 
-        all_read_groups = set()
+        # Initialize all_read_groups as list of sets (one per grouping strategy)
+        grouping_strategy_names = get_grouping_strategy_names(self.args)
+        all_read_groups = [set() for _ in grouping_strategy_names]
+
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
@@ -651,7 +675,14 @@ class DatasetProcessor:
         logger.info("Counting multimapped reads")
         for chr_id, read_groups, alignment_stats, processed_reads in results:
             logger.info("Counting reads from %s" % chr_id)
-            all_read_groups.update(read_groups)
+            # read_groups can be either a single set or a list of sets
+            if isinstance(read_groups, list):
+                # MultiReadGrouper returns list of sets
+                for i, group_set in enumerate(read_groups):
+                    all_read_groups[i].update(group_set)
+            else:
+                # Single grouper returns a set
+                all_read_groups[0].update(read_groups)
             self.alignment_stat_counter.merge(alignment_stats)
             sample_procesed_read_manager.merge(processed_reads, chr_id)
 
@@ -667,7 +698,10 @@ class DatasetProcessor:
         info_dumper = open(info_file, "wb")
         write_int(total_assignments, info_dumper)
         write_int(polya_assignments, info_dumper)
-        write_list(list(all_read_groups), info_dumper, write_string)
+        # Save all_read_groups as list of lists (convert sets to lists)
+        write_int(len(all_read_groups), info_dumper)  # Number of grouping strategies
+        for group_set in all_read_groups:
+            write_list(list(group_set), info_dumper, write_string)
         info_dumper.close()
         open(lock_file, "w").close()
 
@@ -867,7 +901,12 @@ class DatasetProcessor:
         info_loader = open(dump_filename + "_info", "rb")
         total_assignments = read_int(info_loader)
         polya_assignments = read_int(info_loader)
-        all_read_groups = set(read_list(info_loader, read_string))
+        # Load all_read_groups as list of sets
+        num_strategies = read_int(info_loader)
+        all_read_groups = []
+        for _ in range(num_strategies):
+            group_list = read_list(info_loader, read_string)
+            all_read_groups.append(set(group_list))
         info_loader.close()
         return total_assignments, polya_assignments, all_read_groups
 
