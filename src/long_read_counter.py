@@ -173,7 +173,7 @@ class AbstractCounter:
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
 
-    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+    def add_read_info_raw(self, read_id, feature_ids, group_ids):
         raise NotImplementedError()
 
     def add_confirmed_features(self, features):
@@ -193,19 +193,25 @@ class AbstractCounter:
 
 
 class CompositeCounter:
-    def __init__(self, counters):
-        self.counters = counters
+    def __init__(self, counters: list = None):
+        if counters is None:
+            self.counters = []
+        else:
+            self.counters: list = counters
 
     def add_counters(self, counters):
         self.counters += counters
+
+    def add_counter(self, counter):
+        self.counters.append(counter)
 
     def add_read_info(self, read_assignment):
         for p in self.counters:
             p.add_read_info(read_assignment)
 
-    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+    def add_read_info_raw(self, read_id, feature_ids, group_ids):
         for p in self.counters:
-            p.add_read_info_raw(read_id, feature_ids, group_id)
+            p.add_read_info_raw(read_id, feature_ids, group_ids)
 
     def add_confirmed_features(self, features):
         for p in self.counters:
@@ -301,9 +307,11 @@ class AssignedFeatureCounter(AbstractCounter):
             if self.assignment_extractor.confirms_feature(read_assignment):
                 self.confirmed_features.add(feature_id)
 
-    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
-        if self.ignore_read_groups:
+    def add_read_info_raw(self, read_id, feature_ids, group_ids):
+        if self.ignore_read_groups or group_ids is None:
             group_id = AbstractReadGrouper.default_group_id
+        else:
+            group_id = group_ids[self.group_index]
         group_id = self.group_numeric_ids[group_id]
         if not read_id:
             self.not_aligned_reads += 1

@@ -51,14 +51,12 @@ class GraphBasedModelConstructor:
     extended_transcript_ids = set()
 
     def __init__(self, gene_info, chr_record, args, transcript_counter, gene_counter, id_distributor,
-                 transcript_grouped_counters=None, gene_grouped_counters=None, grouping_strategy_names=None,
+                 grouping_strategy_names=None,
                  use_technical_replicas=False):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.args = args
         self.id_distributor = id_distributor
-        self.transcript_grouped_counters = transcript_grouped_counters if transcript_grouped_counters else []
-        self.gene_grouped_counters = gene_grouped_counters if gene_grouped_counters else []
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else []
         self.use_technical_replicas = use_technical_replicas
         # Find file_name group index for technical replicas check
@@ -163,15 +161,8 @@ class GraphBasedModelConstructor:
                 read_id = read_assignment.read_id
                 if self.read_assignment_counts[read_id] == 1:
                     # Add to ungrouped counters
-                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group[0])
-                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group[0])
-                    # Add to each grouped counter with its corresponding group
-                    for idx, counter in enumerate(self.transcript_grouped_counters):
-                        if idx < len(read_assignment.read_group):
-                            counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group[idx])
-                    for idx, counter in enumerate(self.gene_grouped_counters):
-                        if idx < len(read_assignment.read_group):
-                            counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group[idx])
+                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
+                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group)
                     continue
 
                 if read_id not in ambiguous_assignments:
@@ -183,15 +174,8 @@ class GraphBasedModelConstructor:
             transcript_ids = ambiguous_assignments[read_id][1:]
             gene_ids = [transcript2gene[transcript_id] for transcript_id in transcript_ids]
             # Add to ungrouped counters
-            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, read_groups[0] if read_groups else "NA")
-            self.gene_counter.add_read_info_raw(read_id, gene_ids, read_groups[0] if read_groups else "NA")
-            # Add to each grouped counter with its corresponding group
-            for idx, counter in enumerate(self.transcript_grouped_counters):
-                if idx < len(read_groups):
-                    counter.add_read_info_raw(read_id, transcript_ids, read_groups[idx])
-            for idx, counter in enumerate(self.gene_grouped_counters):
-                if idx < len(read_groups):
-                    counter.add_read_info_raw(read_id, gene_ids, read_groups[idx])
+            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, read_groups)
+            self.gene_counter.add_read_info_raw(read_id, gene_ids, read_groups)
 
         for r in read_assignments:
             if self.read_assignment_counts[r.read_id] > 0: continue

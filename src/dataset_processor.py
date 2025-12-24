@@ -9,11 +9,9 @@ import glob
 import itertools
 import logging
 import shutil
-import sys
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
-from functools import partial
 
 import gffutils
 import pysam
@@ -91,9 +89,20 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
         if os.path.exists(group_file) and os.path.exists(save_file):
-            read_grouper.read_groups.clear()
-            for g in open(group_file):
-                read_grouper.read_groups.add(g.strip())
+            # Load read_groups from file
+            with open(group_file) as f:
+                lines = [line.strip() for line in f]
+                num_strategies = int(lines[0])
+                if isinstance(read_grouper.read_groups, list):
+                    # MultiReadGrouper: list of sets
+                    read_grouper.read_groups = []
+                    for i in range(num_strategies):
+                        groups = set(lines[i + 1].split(";")) if lines[i + 1] else set()
+                        read_grouper.read_groups.append(groups)
+                else:
+                    # Single grouper: single set
+                    groups_str = lines[1] if len(lines) > 1 else ""
+                    read_grouper.read_groups = set(groups_str.split(";")) if groups_str else set()
             alignment_stat_counter = EnumStats(bamstat_file)
             loader = BasicReadAssignmentLoader(save_file)
             while loader.has_next():
@@ -143,8 +152,16 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
             tmp_printer.add_read_info(read_assignment)
             processed_reads_manager.add_read(read_assignment)
     with open(group_file, "w") as group_dump:
-        for g in read_grouper.read_groups:
-            group_dump.write("%s\n" % g)
+        # Save read_groups (can be set or list of sets)
+        if isinstance(read_grouper.read_groups, list):
+            # MultiReadGrouper: list of sets
+            group_dump.write("%d\n" % len(read_grouper.read_groups))  # Number of strategies
+            for group_set in read_grouper.read_groups:
+                group_dump.write("%s\n" % ";".join(sorted(group_set)))  # Semicolon-separated groups
+        else:
+            # Single grouper: single set
+            group_dump.write("1\n")  # One strategy
+            group_dump.write("%s\n" % ";".join(sorted(read_grouper.read_groups)))
     alignment_collector.alignment_stat_counter.dump(bamstat_file)
 
     for bam in bam_file_pairs:
@@ -214,15 +231,11 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
             aggregator.global_counter.add_read_info(read_assignment)
 
         if construct_models:
-            transcript_grouped = aggregator.transcript_model_grouped_counters if hasattr(aggregator, 'transcript_model_grouped_counters') else []
-            gene_grouped = aggregator.gene_model_grouped_counters if hasattr(aggregator, 'gene_model_grouped_counters') else []
             strategy_names = aggregator.grouping_strategy_names if hasattr(aggregator, 'grouping_strategy_names') else []
             model_constructor = GraphBasedModelConstructor(gene_info, loader.chr_record, args,
                                                            aggregator.transcript_model_global_counter,
                                                            aggregator.gene_model_global_counter,
                                                            transcript_id_distributor,
-                                                           transcript_grouped_counters=transcript_grouped,
-                                                           gene_grouped_counters=gene_grouped,
                                                            grouping_strategy_names=strategy_names,
                                                            use_technical_replicas=sample.use_technical_replicas)
             model_constructor.process(assignment_storage)
@@ -321,7 +334,7 @@ class ReadAssignmentAggregator:
             self.t2t_sqanti_printer = SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
-        self.global_counter = CompositeCounter([])
+        self.global_counter = CompositeCounter()
         if self.args.genedb:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
                                                     self.args.gene_quantification,
@@ -331,16 +344,16 @@ class ReadAssignmentAggregator:
                                                                 complete_feature_list=self.transcript_set)
             self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
 
-        self.transcript_model_global_counter = CompositeCounter([])
-        self.gene_model_global_counter = CompositeCounter([])
+        self.transcript_model_global_counter = CompositeCounter()
+        self.gene_model_global_counter = CompositeCounter()
         if not self.args.no_model_construction:
             self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
                                                                       self.args.transcript_quantification)
             self.gene_model_counter = create_gene_counter(sample.out_gene_model_counts_tsv,
                                                           self.args.gene_quantification)
 
-            self.transcript_model_global_counter.add_counters([self.transcript_model_counter])
-            self.gene_model_global_counter.add_counters([self.gene_model_counter])
+            self.transcript_model_global_counter.add_counter(self.transcript_model_counter)
+            self.gene_model_global_counter.add_counter(self.gene_model_counter)
 
         if self.args.count_exons and self.args.genedb:
             self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
@@ -348,11 +361,6 @@ class ReadAssignmentAggregator:
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
         if self.args.read_group and self.args.genedb:
-            self.gene_grouped_counters = []
-            self.transcript_grouped_counters = []
-            self.exon_grouped_counters = []
-            self.intron_grouped_counters = []
-
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
                 # Add strategy name as suffix to output file
                 gene_out_file = f"{sample.out_gene_grouped_counts_tsv}_{strategy_name}"
@@ -361,16 +369,14 @@ class ReadAssignmentAggregator:
                 gene_counter = create_gene_counter(gene_out_file,
                                                    self.args.gene_quantification,
                                                    complete_feature_list=self.gene_set,
-                                                   read_groups=self.read_groups,
+                                                   read_groups=self.read_groups[group_idx],
                                                    group_index=group_idx)
                 transcript_counter = create_transcript_counter(transcript_out_file,
                                                               self.args.transcript_quantification,
                                                               complete_feature_list=self.transcript_set,
-                                                              read_groups=self.read_groups,
+                                                              read_groups=self.read_groups[group_idx],
                                                               group_index=group_idx)
 
-                self.gene_grouped_counters.append(gene_counter)
-                self.transcript_grouped_counters.append(transcript_counter)
                 self.global_counter.add_counters([gene_counter, transcript_counter])
 
                 if self.args.count_exons:
@@ -378,14 +384,9 @@ class ReadAssignmentAggregator:
                     intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
                     exon_counter = ExonCounter(exon_out_file, group_index=group_idx)
                     intron_counter = IntronCounter(intron_out_file, group_index=group_idx)
-                    self.exon_grouped_counters.append(exon_counter)
-                    self.intron_grouped_counters.append(intron_counter)
                     self.global_counter.add_counters([exon_counter, intron_counter])
 
         if self.args.read_group and not self.args.no_model_construction:
-            self.transcript_model_grouped_counters = []
-            self.gene_model_grouped_counters = []
-
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
                 transcript_model_out_file = f"{sample.out_transcript_model_grouped_counts_tsv}_{strategy_name}"
                 gene_model_out_file = f"{sample.out_gene_model_grouped_counts_tsv}_{strategy_name}"
@@ -393,18 +394,16 @@ class ReadAssignmentAggregator:
                 transcript_model_counter = create_transcript_counter(
                     transcript_model_out_file,
                     self.args.transcript_quantification,
-                    read_groups=self.read_groups,
+                    read_groups=self.read_groups[group_idx],
                     group_index=group_idx)
                 gene_model_counter = create_gene_counter(
                     gene_model_out_file,
                     self.args.gene_quantification,
-                    read_groups=self.read_groups,
+                    read_groups=self.read_groups[group_idx],
                     group_index=group_idx)
 
-                self.transcript_model_grouped_counters.append(transcript_model_counter)
-                self.gene_model_grouped_counters.append(gene_model_counter)
-                self.transcript_model_global_counter.add_counters([transcript_model_counter])
-                self.gene_model_global_counter.add_counters([gene_model_counter])
+                self.transcript_model_global_counter.add_counter(transcript_model_counter)
+                self.gene_model_global_counter.add_counters(gene_model_counter)
 
 
 # Class for processing all samples against gene database
@@ -415,7 +414,7 @@ class DatasetProcessor:
         self.args.gunzipped_reference = None
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
-        self.all_read_groups = set()
+        self.all_read_groups = []  # Will be initialized per sample as list of sets
         self.alignment_stat_counter = EnumStats()
         self.transcript_type_dict = {}
 
@@ -475,7 +474,9 @@ class DatasetProcessor:
                                          self.args.read_group is not None and
                                          "file_name" in self.args.read_group)
 
-        self.all_read_groups = set()
+        # Initialize all_read_groups as list of sets (one per grouping strategy)
+        grouping_strategy_names = get_grouping_strategy_names(self.args)
+        self.all_read_groups = [set() for _ in grouping_strategy_names]
         fname = read_group_lock_filename(sample)
         if self.args.resume and os.path.exists(fname):
             logger.info("Read group table was split during the previous run, existing files will be used")
@@ -640,7 +641,10 @@ class DatasetProcessor:
             itertools.repeat(processed_read_manager_type)
         )
 
-        all_read_groups = set()
+        # Initialize all_read_groups as list of sets (one per grouping strategy)
+        grouping_strategy_names = get_grouping_strategy_names(self.args)
+        all_read_groups = [set() for _ in grouping_strategy_names]
+
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
                 results = proc.map(*read_gen, chunksize=1)
@@ -651,7 +655,14 @@ class DatasetProcessor:
         logger.info("Counting multimapped reads")
         for chr_id, read_groups, alignment_stats, processed_reads in results:
             logger.info("Counting reads from %s" % chr_id)
-            all_read_groups.update(read_groups)
+            # read_groups can be either a single set or a list of sets
+            if isinstance(read_groups, list):
+                # MultiReadGrouper returns list of sets
+                for i, group_set in enumerate(read_groups):
+                    all_read_groups[i].update(group_set)
+            else:
+                # Single grouper returns a set
+                all_read_groups[0].update(read_groups)
             self.alignment_stat_counter.merge(alignment_stats)
             sample_procesed_read_manager.merge(processed_reads, chr_id)
 
@@ -667,7 +678,10 @@ class DatasetProcessor:
         info_dumper = open(info_file, "wb")
         write_int(total_assignments, info_dumper)
         write_int(polya_assignments, info_dumper)
-        write_list(list(all_read_groups), info_dumper, write_string)
+        # Save all_read_groups as list of lists (convert sets to lists)
+        write_int(len(all_read_groups), info_dumper)  # Number of grouping strategies
+        for group_set in all_read_groups:
+            write_list(list(group_set), info_dumper, write_string)
         info_dumper.close()
         open(lock_file, "w").close()
 
@@ -760,8 +774,10 @@ class DatasetProcessor:
             logger.info("Counts for generated transcript models are saves to: " +
                         aggregator.transcript_model_counter.output_counts_file_name)
             if self.args.read_group:
-                for counter in aggregator.transcript_model_grouped_counters:
-                    logger.info("Grouped counts for generated transcript models are saves to: " +
+                for counter in aggregator.transcript_model_global_counter.counters:
+                    if counter.ignore_read_groups:
+                        continue
+                    logger.info("Grouped counts for discovered transcript models are saves to: " +
                                 counter.output_counts_file_name)
             aggregator.transcript_model_global_counter.finalize(self.args)
             aggregator.gene_model_global_counter.finalize(self.args)
@@ -776,10 +792,10 @@ class DatasetProcessor:
             logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
             logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
             if self.args.read_group:
-                for counter in aggregator.gene_grouped_counters:
-                    logger.info("Grouped gene counts are saves to: " + counter.output_counts_file_name)
-                for counter in aggregator.transcript_grouped_counters:
-                    logger.info("Grouped transcript counts are saves to: " + counter.output_counts_file_name)
+                for counter in aggregator.global_counter.counters:
+                    if counter.ignore_read_groups:
+                        continue
+                    logger.info("Grouped counts are saves to: " + counter.output_counts_file_name)
             logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
             aggregator.global_counter.finalize(self.args)
 
@@ -867,7 +883,12 @@ class DatasetProcessor:
         info_loader = open(dump_filename + "_info", "rb")
         total_assignments = read_int(info_loader)
         polya_assignments = read_int(info_loader)
-        all_read_groups = set(read_list(info_loader, read_string))
+        # Load all_read_groups as list of sets
+        num_strategies = read_int(info_loader)
+        all_read_groups = []
+        for _ in range(num_strategies):
+            group_list = read_list(info_loader, read_string)
+            all_read_groups.append(set(group_list))
         info_loader.close()
         return total_assignments, polya_assignments, all_read_groups
 
