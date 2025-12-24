@@ -173,7 +173,7 @@ class AbstractCounter:
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
 
-    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+    def add_read_info_raw(self, read_id, feature_ids, group_ids=None):
         raise NotImplementedError()
 
     def add_confirmed_features(self, features):
@@ -203,9 +203,9 @@ class CompositeCounter:
         for p in self.counters:
             p.add_read_info(read_assignment)
 
-    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
+    def add_read_info_raw(self, read_id, feature_ids, group_ids=None):
         for p in self.counters:
-            p.add_read_info_raw(read_id, feature_ids, group_id)
+            p.add_read_info_raw(read_id, feature_ids, group_ids)
 
     def add_confirmed_features(self, features):
         for p in self.counters:
