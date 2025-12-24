@@ -66,7 +66,7 @@ class FullAssignmentLoader(BasicAssignmentLoader):
 
 
 class ReadAssignmentLoader(FullAssignmentLoader):
-    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict, filtered_read_set=None, string_pools):
+    def __init__(self, save_file_name, gffutils_db, chr_record, multimapped_chr_dict, string_pools, filtered_read_set=None):
         FullAssignmentLoader.__init__(self, save_file_name, multimapped_chr_dict, filtered_read_set)
         self.genedb = gffutils_db
         self.chr_record = chr_record
@@ -91,7 +91,7 @@ class ReadAssignmentLoader(FullAssignmentLoader):
 
 
 class MergingSimpleReadAssignmentLoader(FullAssignmentLoader):
-    def __init__(self, save_file_name, multimapped_chr_dict, filtered_read_set=None, string_pools):
+    def __init__(self, save_file_name, multimapped_chr_dict, string_pools, filtered_read_set=None):
         FullAssignmentLoader.__init__(self, save_file_name, multimapped_chr_dict, filtered_read_set)
         self.unpickler = GeneListTmpFileAssignmentLoader(save_file_name, string_pools)
         self.current_gene_list = None
@@ -228,7 +228,7 @@ def create_assignment_loader(chr_id, saves_prefix, genedb, reference_fasta, refe
     gffutils_db = load_genedb(genedb)
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
 
-    return ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads, filtered_reads, string_pools)
+    return ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads, string_pools, filtered_reads)
 
 
 def create_merging_assignment_loader(chr_id, saves_prefix, use_filtered_reads=False, string_pools):
@@ -236,4 +236,4 @@ def create_merging_assignment_loader(chr_id, saves_prefix, use_filtered_reads=Fa
     filtered_reads = prepare_read_filter(chr_id, saves_prefix, use_filtered_reads)
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
 
-    return MergingSimpleReadAssignmentLoader(chr_dump_file, multimapped_reads, filtered_reads, string_pools)
+    return MergingSimpleReadAssignmentLoader(chr_dump_file, multimapped_reads, string_pools, filtered_reads)
