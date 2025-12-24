@@ -554,39 +554,3 @@ def load_multicolumn_table(table_tsv_file, read_id_column_index, group_id_column
     if warn_count > 0:
         logger.warning("Total number of malformed lines in %s: %d" % (table_tsv_file, warn_count))
     return read_map
-
-
-def split_table(table_file, sample, out_prefix, read_id_column_index, group_id_column_indices, delim):
-    read_groups = load_multicolumn_table(table_file, read_id_column_index, group_id_column_indices, delim)
-    read_group_files = {}
-    processed_reads = defaultdict(set)
-    bam_files = list(map(lambda x: x[0], sample.file_list))
-
-    for bam_file in bam_files:
-        bam = pysam.AlignmentFile(bam_file, "rb")
-        for chr_id in bam.references:
-            if chr_id not in read_group_files:
-                read_group_files[chr_id] = open(out_prefix + "_" + chr_id, "w")
-        for read_alignment in bam:
-            chr_id = read_alignment.reference_name
-            if not chr_id:
-                continue
-
-            read_id = read_alignment.query_name
-            if read_id in read_groups and read_id not in processed_reads[chr_id]:
-                # read_groups[read_id] is a list, join with delimiter
-                group_values = delim.join(read_groups[read_id])
-                read_group_files[chr_id].write("%s%s%s\n" % (read_id, delim, group_values))
-                processed_reads[chr_id].add(read_id)
-
-    for f in read_group_files.values():
-        f.close()
-
-
-def prepare_barcoded_reads(args, sample):
-    logger.info("Splitting barcoded reads %s for better memory consumption" % sample.out_barcodes_tsv)
-    split_read_table_parallel(sample, sample.out_barcodes_tsv, sample.barcodes_split_reads,
-                              args.threads,
-                              read_column=0,
-                              group_columns=(1, 2, 3, 4),
-                              delim='\t')
