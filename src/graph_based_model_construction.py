@@ -163,15 +163,13 @@ class GraphBasedModelConstructor:
                 read_id = read_assignment.read_id
                 if self.read_assignment_counts[read_id] == 1:
                     # Add to ungrouped counters
-                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group[0])
-                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group[0])
+                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id])
+                    self.gene_counter.add_read_info_raw(read_id, [gene_id])
                     # Add to each grouped counter with its corresponding group
-                    for idx, counter in enumerate(self.transcript_grouped_counters):
-                        if idx < len(read_assignment.read_group):
-                            counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group[idx])
-                    for idx, counter in enumerate(self.gene_grouped_counters):
-                        if idx < len(read_assignment.read_group):
-                            counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group[idx])
+                    for counter in self.transcript_grouped_counters:
+                        counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
+                    for counter in self.gene_grouped_counters:
+                        counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group)
                     continue
 
                 if read_id not in ambiguous_assignments:
@@ -183,15 +181,14 @@ class GraphBasedModelConstructor:
             transcript_ids = ambiguous_assignments[read_id][1:]
             gene_ids = [transcript2gene[transcript_id] for transcript_id in transcript_ids]
             # Add to ungrouped counters
-            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, read_groups[0] if read_groups else "NA")
-            self.gene_counter.add_read_info_raw(read_id, gene_ids, read_groups[0] if read_groups else "NA")
+            self.transcript_counter.add_read_info_raw(read_id, transcript_ids)
+            self.gene_counter.add_read_info_raw(read_id, gene_ids)
             # Add to each grouped counter with its corresponding group
-            for idx, counter in enumerate(self.transcript_grouped_counters):
-                if idx < len(read_groups):
-                    counter.add_read_info_raw(read_id, transcript_ids, read_groups[idx])
-            for idx, counter in enumerate(self.gene_grouped_counters):
-                if idx < len(read_groups):
-                    counter.add_read_info_raw(read_id, gene_ids, read_groups[idx])
+
+            for counter in enumerate(self.transcript_grouped_counters):
+                counter.add_read_info_raw(read_id, transcript_ids, read_groups)
+            for counter in self.gene_grouped_counters:
+                counter.add_read_info_raw(read_id, gene_ids, read_groups)
 
         for r in read_assignments:
             if self.read_assignment_counts[r.read_id] > 0: continue

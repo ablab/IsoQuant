@@ -301,9 +301,11 @@ class AssignedFeatureCounter(AbstractCounter):
             if self.assignment_extractor.confirms_feature(read_assignment):
                 self.confirmed_features.add(feature_id)
 
-    def add_read_info_raw(self, read_id, feature_ids, group_id=AbstractReadGrouper.default_group_id):
-        if self.ignore_read_groups:
+    def add_read_info_raw(self, read_id, feature_ids, group_ids=None):
+        if self.ignore_read_groups or group_ids is None:
             group_id = AbstractReadGrouper.default_group_id
+        else:
+            group_id = group_ids[self.group_index]
         group_id = self.group_numeric_ids[group_id]
         if not read_id:
             self.not_aligned_reads += 1
