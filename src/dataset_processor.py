@@ -232,7 +232,7 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
     if gffutils_db:
         string_pools.build_from_gffutils(gffutils_db)
 
-    loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, use_filtered_reads, string_pools)
+    loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, string_pools, use_filtered_reads)
 
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
     lock_file = reads_processed_lock_file_name(saves_prefix, chr_id)

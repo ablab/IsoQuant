@@ -221,7 +221,7 @@ def load_genedb(genedb):
     return None
 
 
-def create_assignment_loader(chr_id, saves_prefix, genedb, reference_fasta, reference_fai, use_filtered_reads=False, string_pools):
+def create_assignment_loader(chr_id, saves_prefix, genedb, reference_fasta, reference_fai, string_pools, use_filtered_reads=False):
     current_chr_record = Fasta(reference_fasta, indexname=reference_fai)[chr_id]
     multimapped_reads = prepare_multimapped_reads(saves_prefix, chr_id, string_pools)
     filtered_reads = prepare_read_filter(chr_id, saves_prefix, use_filtered_reads)
@@ -231,7 +231,7 @@ def create_assignment_loader(chr_id, saves_prefix, genedb, reference_fasta, refe
     return ReadAssignmentLoader(chr_dump_file, gffutils_db, current_chr_record, multimapped_reads, string_pools, filtered_reads)
 
 
-def create_merging_assignment_loader(chr_id, saves_prefix, use_filtered_reads=False, string_pools):
+def create_merging_assignment_loader(chr_id, saves_prefix, string_pools, use_filtered_reads=False):
     multimapped_reads = prepare_multimapped_reads(saves_prefix, chr_id, string_pools)
     filtered_reads = prepare_read_filter(chr_id, saves_prefix, use_filtered_reads)
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
