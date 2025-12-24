@@ -12,16 +12,20 @@ from src.barcode_calling.umi_filtering import (
 )
 from src.isoform_assignment import ReadAssignment, ReadAssignmentType
 from src.common import junctions_from_blocks
+from src.string_pools import StringPoolManager
+
 
 class TestFormatReadAssignmentForOutput:
     """Test read assignment output formatting."""
+    string_pools = StringPoolManager()
 
     def test_format_basic(self):
         """Test basic formatting with all attributes."""
         # Create a ReadAssignment
         read_assignment = ReadAssignment(
             read_id="read_001",
-            assignment_type=ReadAssignmentType.unique
+            assignment_type=ReadAssignmentType.unique,
+            string_pools=self.string_pools
         )
         read_assignment.chr_id = "chr1"
         read_assignment.start = 1000
@@ -50,7 +54,8 @@ class TestFormatReadAssignmentForOutput:
         """Test formatting with missing optional attributes."""
         read_assignment = ReadAssignment(
             read_id="read_002",
-            assignment_type=ReadAssignmentType.ambiguous
+            assignment_type=ReadAssignmentType.ambiguous,
+            string_pools=self.string_pools
         )
         read_assignment.chr_id = "chr1"
         read_assignment.start = 1000
@@ -70,6 +75,7 @@ class TestFormatReadAssignmentForOutput:
 
 class TestUMIFilter:
     """Test UMIFilter class."""
+    string_pools = StringPoolManager()
 
     @pytest.fixture
     def umi_filter(self):
@@ -87,13 +93,13 @@ class TestUMIFilter:
     def test_construct_umi_dict(self, umi_filter):
         """Test UMI dictionary construction."""
         # Create mock ReadAssignments
-        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique)
+        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique, string_pools=self.string_pools)
         read1.umi = "AAAA"
 
-        read2 = ReadAssignment(read_id="read_002", assignment_type=ReadAssignmentType.unique)
+        read2 = ReadAssignment(read_id="read_002", assignment_type=ReadAssignmentType.unique, string_pools=self.string_pools)
         read2.umi = "AAAA"
 
-        read3 = ReadAssignment(read_id="read_003", assignment_type=ReadAssignmentType.unique)
+        read3 = ReadAssignment(read_id="read_003", assignment_type=ReadAssignmentType.unique, string_pools=self.string_pools)
         read3.umi = "TTTT"
 
         molecule_list = [read1, read2, read3]
@@ -108,7 +114,7 @@ class TestUMIFilter:
 
     def test_construct_umi_dict_untrusted(self, umi_filter):
         """Test UMI dict construction with untrusted UMIs."""
-        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique)
+        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique, string_pools=self.string_pools)
         read1.umi = ""  # Untrusted UMI
 
         molecule_list = [read1]
@@ -121,13 +127,13 @@ class TestUMIFilter:
     def test_select_best_read(self, umi_filter):
         """Test selecting best read from duplicates."""
         # Create reads with different qualities
-        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique)
+        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique, string_pools=self.string_pools)
         read1.corrected_exons = [(1000, 1500), (1600, 2000)]
 
-        read2 = ReadAssignment(read_id="read_002", assignment_type=ReadAssignmentType.ambiguous)
+        read2 = ReadAssignment(read_id="read_002", assignment_type=ReadAssignmentType.ambiguous, string_pools=self.string_pools)
         read2.corrected_exons = [(1000, 1500), (1600, 2000)]
 
-        read3 = ReadAssignment(read_id="read_003", assignment_type=ReadAssignmentType.unique)
+        read3 = ReadAssignment(read_id="read_003", assignment_type=ReadAssignmentType.unique, string_pools=self.string_pools)
         read3.corrected_exons = [(1000, 2000)]  # Single exon, less informative
 
         duplicates = [read2, read1, read3]
