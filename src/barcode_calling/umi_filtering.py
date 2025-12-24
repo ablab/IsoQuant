@@ -6,8 +6,6 @@
 
 import pysam
 import sys
-import gzip
-import os.path
 from collections import defaultdict
 from typing import Dict, List, Tuple, Set, Optional
 import logging
@@ -16,7 +14,6 @@ import gffutils
 
 from src.assignment_loader import create_merging_assignment_loader
 from src.isoform_assignment import MatchEventSubtype, ReadAssignment
-from src.common import overlaps, junctions_from_blocks
 
 logger = logging.getLogger('IsoQuant')
 
@@ -40,7 +37,7 @@ def format_read_assignment_for_output(read_assignment: ReadAssignment) -> str:
     chr_id = read_assignment.chr_id
     strand = read_assignment.strand
 
-    intron_blocks = junctions_from_blocks(exon_blocks)
+    intron_blocks = read_assignment.corrected_introns
     exons_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (chr_id, e[0], e[1], strand) for e in exon_blocks])
     introns_str = ";%;" + ";%;".join(["%s_%d_%d_%s" % (chr_id, e[0], e[1], strand) for e in intron_blocks])
 
