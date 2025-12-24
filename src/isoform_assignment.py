@@ -420,7 +420,7 @@ class MatchEvent:
 
 class IsoformMatch:
     def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
-                 match_subclassification = None, transcript_strand='.', penalty_score=0, string_pools=None):
+                 match_subclassification = None, transcript_strand='.', penalty_score=0, string_pools):
         # Store string pools reference (required for memory optimization)
         assert string_pools is not None, "string_pools is required"
         self._string_pools = string_pools
@@ -732,7 +732,7 @@ class BasicReadAssignment:
 class ReadAssignment:
     assignment_id_generator = SimpleIDDistributor()
 
-    def __init__(self, read_id, assignment_type, match=None, string_pools=None):
+    def __init__(self, read_id, assignment_type, match=None, string_pools):
         assert string_pools is not None, "string_pools is required"
         self.assignment_id = ReadAssignment.assignment_id_generator.increment()
         self.read_id = read_id
