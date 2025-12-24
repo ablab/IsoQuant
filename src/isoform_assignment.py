@@ -419,6 +419,13 @@ class MatchEvent:
 
 
 class IsoformMatch:
+    """
+    Represents a match between a read and an isoform.
+
+    Memory Optimization:
+        Gene and transcript IDs are stored as integers referencing
+        shared string pools (string_pools parameter required).
+    """
     def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
                  match_subclassification = None, transcript_strand='.', penalty_score=0, string_pools):
         # Store string pools reference (required for memory optimization)
@@ -497,6 +504,13 @@ class IsoformMatch:
 
 
 class BasicReadAssignment:
+    """
+    Simplified read assignment for serialization and multimap resolution.
+
+    Memory Optimization:
+        chr_id, barcode, umi, gene IDs, and isoform IDs are stored as integers
+        referencing shared string pools (string_pools parameter required).
+    """
     def __init__(self, read_assignment):
         self.assignment_id = read_assignment.assignment_id
         self.read_id = read_assignment.read_id
@@ -730,6 +744,13 @@ class BasicReadAssignment:
 
 
 class ReadAssignment:
+    """
+    Complete read assignment with isoform matches and additional metadata.
+
+    Memory Optimization:
+        chr_id, barcode, and umi are stored as integers referencing
+        shared string pools (string_pools parameter required).
+    """
     assignment_id_generator = SimpleIDDistributor()
 
     def __init__(self, read_id, assignment_type, match=None, string_pools):

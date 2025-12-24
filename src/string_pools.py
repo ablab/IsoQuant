@@ -9,6 +9,25 @@ String interning for memory optimization.
 
 Replaces duplicated strings with integer indices referencing shared string pools.
 Expected memory reduction: ~78% for billion-read datasets.
+
+Architecture:
+- StringPool: Bidirectional mapping between strings and integers
+- StringPoolManager: Manages all pools for a worker
+  - Global pools: gene, transcript, chromosome (from annotation)
+  - Per-chromosome pools: barcode, UMI (from split files)
+  - Read group pools: Multiple types depending on strategy
+
+Usage:
+- Workers build pools from gene database at start
+- All IsoformMatch/ReadAssignment objects store integer IDs
+- Properties provide transparent string access via pools
+- Serialization writes integer format for disk savings
+
+Implementation Details:
+- All data classes (IsoformMatch, ReadAssignment, BasicReadAssignment)
+  require string_pools parameter - no fallback to strings
+- Pools are built deterministically (sorted order) for consistency
+- Per-worker pools ensure no sharing/locking between parallel workers
 """
 
 import logging
