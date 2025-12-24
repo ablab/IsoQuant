@@ -123,3 +123,12 @@ jobs:
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Mixed groups for simulated SIRVs'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: GROUP10.MIX.SIRVs.R10
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
