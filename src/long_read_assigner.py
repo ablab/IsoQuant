@@ -557,8 +557,8 @@ class LongReadAssigner:
             isoform_id = list(matched_isoforms)[0]
             # logger.debug("+ + UNIQUE intron match found " + isoform_id)
             isoform_match = self.categorize_correct_splice_match(combined_read_profile, isoform_id)
-            read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, isoform_match,
-                                            string_pools=self.string_pools)
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, self.string_pools,
+                                            match=isoform_match)
 
         elif len(matched_isoforms) > 1:
             # logger.debug("+ + Ambiguous read")
