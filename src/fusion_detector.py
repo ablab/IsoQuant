@@ -23,7 +23,6 @@ class FusionDetector:
         except Exception:
             self.aligner = None
         self.fusion_metadata = {}
-        
         # cache for resolved names: id_or_symbol -> gene_symbol (if found)
         self._resolved_name_cache = {}
 
@@ -203,26 +202,6 @@ class FusionDetector:
             meta["left_gene"] = self.resolve_gene_name(left_ctx)
             meta["right_gene"] = self.resolve_gene_name(right_ctx)
 
-    def get_fusion_metadata(self, min_support=1):
-        """
-        Returns list of metadata dicts for fusions with support >= min_support.
-        Each dict contains keys: fusion_key, left_gene, right_gene, consensus_bp, support, supporting_reads
-        """
-        self.build_metadata(min_support=min_support)
-        results = []
-        for fusion_key, meta in self.fusion_metadata.items():
-            if meta.get("support", 0) < min_support:
-                continue
-            results.append({
-                "fusion_key": fusion_key,
-                "left_gene": meta.get("left_gene"),
-                "right_gene": meta.get("right_gene"),
-                "consensus_bp": meta.get("consensus_bp"),
-                "support": meta.get("support"),
-                "supporting_reads": set(meta.get("supporting_reads", set()))
-            })
-        return results
-
     def cluster_breakpoints(self, bp_counts, window=25):
         # bp_counts: dict[(chr1,pos1,chr2,pos2)] -> count
         # Group by chr pairs, then cluster positions by window
@@ -350,8 +329,8 @@ class FusionDetector:
             seen_pairs.add(key)
 
     def detect_fusions(self,
-                    min_al_len_primary=80,
-                    min_al_len_sa=60,
+                    min_al_len_primary=50,
+                    min_al_len_sa=40,
                     min_sa_mapq=10,
                     min_softclip_len=40,
                     jitter_window=25,
@@ -499,7 +478,7 @@ class FusionDetector:
             logger.debug(f"Failed to realign fusion transcript: {str(e)}")
             return []
 
-    def check_exon_boundary_proximity(self, c1, p1, c2, p2, delta=30):
+    def check_exon_boundary_proximity(self, c1, p1, c2, p2, delta=100):
         # Check if both breakpoints are within delta bp of exon boundaries.
         try:
             # Check left breakpoint proximity to exons
@@ -530,7 +509,7 @@ class FusionDetector:
             return False, f"Exon boundary check failed: {str(e)}"
 
     def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
-                        require_mapq=20, allow_cis_sage=True, require_exon_boundary=False,
+                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=False,
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
         for fusion_key, meta in self.fusion_metadata.items():
@@ -540,72 +519,42 @@ class FusionDetector:
             if support < min_support or not bp_counts:
                 flags["is_valid"] = False
                 flags["reasons"].append(f"Low support ({support} < {min_support})")
-                meta.update(flags); continue  
+                meta.update(flags)
+                continue
+
             # consensus via clustering
             cons = self.cluster_breakpoints(bp_counts, window=window)
             if not cons:
                 flags["is_valid"] = False
                 flags["reasons"].append("No stable breakpoint cluster")
-                meta.update(flags); continue
+                meta.update(flags)
+                continue
             consensus_bp, clustered_support = cons
             meta["consensus_bp"] = consensus_bp
             meta["support"] = clustered_support
 
+            # perform classification and basic filtering
             c1, p1, c2, p2 = consensus_bp
             g1_name, r1 = self._context_query(c1, p1)
             g2_name, r2 = self._context_query(c2, p2)
-            # Resolve Ensembl/RP11 ids to gene symbols when possible, but keep region type fallback
-            resolved_left = self.resolve_gene_name(g1_name) if g1_name else r1
-            resolved_right = self.resolve_gene_name(g2_name) if g2_name else r2
-            meta["left_gene"] = resolved_left
-            meta["right_gene"] = resolved_right
-            # classify
-            if g1_name and g2_name:
-                # compare resolved gene symbols for intragenic check
-                if self.resolve_gene_name(g1_name) == self.resolve_gene_name(g2_name):
-                    flags["class"] = "intragenic"
-                else:
-                    if c1 == c2 and max_intra_chr_distance is not None:
-                        dist = abs(p2 - p1)
-                        if dist <= max_intra_chr_distance:
-                            flags["class"] = "cis-SAGe"
-            else:
-                if (r1 == "intergenic") or (r2 == "intergenic"):
-                    flags["class"] = "intergenic"
-            # gene-name requirement
-            if require_gene_names and not (g1_name and g2_name):
-                flags["is_valid"] = False
-                flags["reasons"].append("Missing gene name on one side")
-            # exon boundary proximity filter: ±30 bp of exon junctions
-            if require_exon_boundary:
-                exon_valid, exon_reason = self.check_exon_boundary_proximity(c1, p1, c2, p2, delta=30)
-                if not exon_valid:
-                    flags["is_valid"] = False
-                    flags["reasons"].append(exon_reason)
-            # reconstruct and realign fusion transcript (only if still valid)
-            if flags["is_valid"] and self.reference_fasta and self.aligner:
-                fusion_seq, left_exons, right_exons = self.reconstruct_fusion_transcript(c1, p1, c2, p2, exon_padding=100)
-                if not fusion_seq:
-                    flags["is_valid"] = False
-                    flags["reasons"].append("Failed to reconstruct fusion transcript")
-                else:
-                    hits = self.realign_fusion_transcript(fusion_seq)
-                    if not hits:
-                        flags["is_valid"] = False
-                        flags["reasons"].append("Fusion transcript does not realign cleanly to genome")
-                    else:
-                        # Store realignment info for debugging
-                        meta["realignment_hits"] = len(hits)
-                        meta["best_hit_mapq"] = max([h.mapq for h in hits]) if hits else 0
-            else:
-                # If realignment was requested but reference/aligner is missing, note it
-                if flags["is_valid"] and (self.reference_fasta is None or self.aligner is None):
-                    meta.setdefault("notes", []).append("Realignment skipped: reference or aligner not available")
+            self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
+                                                   g1_name, r1, g2_name, r2,
+                                                   require_gene_names, require_exon_boundary,
+                                                   allow_cis_sage, max_intra_chr_distance)
 
-            # cis-SAGe policy
+            # skip reconstruction for mitochondrial candidates and invalid ones
+            if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
+                self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)
+            else:
+                if flags["is_valid"] and self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
+                    flags["is_valid"] = False
+                    flags["reasons"].append("Mitochondrial fusion candidate filtered out")
+
+            # cis-SAGe policy enforcement
             if flags["class"] == "cis-SAGe" and not allow_cis_sage:
                 flags["is_valid"] = False
                 flags["reasons"].append("cis-SAGe disallowed by policy")
+
             conf = self.confidence(meta, flags)
             meta["confidence"] = conf
             # convert very low-confidence to invalid
@@ -613,6 +562,78 @@ class FusionDetector:
                 flags["is_valid"] = False
                 flags["reasons"].append("Low confidence")
             meta.update(flags)
+
+    def _is_mitochondrial_candidate(self, c1, c2, left_gene, right_gene):
+        # Return True if either side appears mitochondrial by chromosome or gene name.
+        mito_chrs = {"chrM", "MT", "M", "chrMT", "mitochondrion"}
+        if (c1 in mito_chrs) or (c2 in mito_chrs):
+            return True
+        # gene names like MT-TS1, MT-ND1 etc. treat as mitochondrial
+        for g in (left_gene, right_gene):
+            if not g:
+                continue
+            if isinstance(g, str) and g.upper().startswith("MT-"):
+                return True
+            if g.upper() in ("MT", "MTDNA"):
+                return True
+        return False
+
+    def _apply_classification_and_filters(self, meta, flags, c1, p1, c2, p2,
+                                          g1_name, r1, g2_name, r2,
+                                          require_gene_names, require_exon_boundary,
+                                          allow_cis_sage, max_intra_chr_distance):
+        # Apply classification rules and basic filters, update meta and flags.
+        # Resolve Ensembl/RP11 ids to gene symbols when possible, but keep region type fallback
+        resolved_left = self.resolve_gene_name(g1_name) if g1_name else r1
+        resolved_right = self.resolve_gene_name(g2_name) if g2_name else r2
+        meta["left_gene"] = resolved_left
+        meta["right_gene"] = resolved_right
+
+        # classify
+        if g1_name and g2_name:
+            # compare resolved gene symbols for intragenic check
+            if self.resolve_gene_name(g1_name) == self.resolve_gene_name(g2_name):
+                flags["class"] = "intragenic"
+            else:
+                if c1 == c2 and max_intra_chr_distance is not None:
+                    dist = abs(p2 - p1)
+                    if dist <= max_intra_chr_distance:
+                        flags["class"] = "cis-SAGe"
+        else:
+            if (r1 == "intergenic") or (r2 == "intergenic"):
+                flags["class"] = "intergenic"
+        # gene-name requirement
+        if require_gene_names and not (g1_name and g2_name):
+            flags["is_valid"] = False
+            flags["reasons"].append("Missing gene name on one side")
+        # exon boundary proximity filter: ±30 bp of exon junctions
+        if require_exon_boundary:
+            exon_valid, exon_reason = self.check_exon_boundary_proximity(c1, p1, c2, p2, delta=30)
+            if not exon_valid:
+                flags["is_valid"] = False
+                flags["reasons"].append(exon_reason)
+
+    def _attempt_reconstruction_and_realignment(self, meta, flags, c1, p1, c2, p2):
+        # Try to reconstruct fusion transcript and realign; update meta/flags accordingly.
+        if not (self.reference_fasta and self.aligner):
+            meta.setdefault("notes", []).append("Realignment skipped: reference or aligner not available")
+            return
+        fusion_seq, left_exons, right_exons = self.reconstruct_fusion_transcript(c1, p1, c2, p2, exon_padding=100)
+        if not fusion_seq:
+            flags["is_valid"] = False
+            flags["reasons"].append("Failed to reconstruct fusion transcript")
+            return
+        hits = self.realign_fusion_transcript(fusion_seq)
+        if not hits:
+            flags["is_valid"] = False
+            flags["reasons"].append("Fusion transcript does not realign cleanly to genome")
+        else:
+            # Store realignment info for debugging
+            meta["realignment_hits"] = len(hits)
+            try:
+                meta["best_hit_mapq"] = max([h.mapq for h in hits]) if hits else 0
+            except Exception:
+                meta["best_hit_mapq"] = 0
 
     def confidence(self, meta, flags=None):
         # Start from clustered support normalized 
