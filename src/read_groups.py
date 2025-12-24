@@ -585,4 +585,8 @@ def split_table(table_file, sample, out_prefix, read_id_column_index, group_id_c
 
 def prepare_barcoded_reads(args, sample):
     logger.info("Splitting barcoded reads %s for better memory consumption" % sample.out_barcodes_tsv)
-    split_table(sample.out_barcodes_tsv, sample, sample.barcodes_split_reads, 0, [1, 2, 3, 4], '\t')
+    split_read_table_parallel(sample, sample.out_barcodes_tsv, sample.barcodes_split_reads,
+                              args.threads,
+                              read_column=0,
+                              group_columns=(1, 2, 3, 4),
+                              delim='\t')
