@@ -27,6 +27,7 @@ from src.long_read_profiles import (
 )
 from src.gene_info import GeneInfo
 from src.polya_finder import PolyAInfo
+from src.string_pools import StringPoolManager
 
 
 class Params:
@@ -56,7 +57,8 @@ GeneInfoTuple = namedtuple("GeneInfo", ("intron_profiles", "start", "end"))
 
 class TestMatchProfileAndFindMatchingIsoforms:
     gene_info = GeneInfoTuple(IntronProfiles([(50, 60), (80, 100), (80, 110), (200, 210)]), 0, 300)
-    assigner = LongReadAssigner(gene_info, Params(0))  # we need no params here
+    string_pools = StringPoolManager()
+    assigner = LongReadAssigner(gene_info, Params(0), string_pools)  # we need no params here
 
     @pytest.mark.parametrize("read_gene_profile, isoform_profiles, hint, expected",
                              [([], dict(id1=[1], id2=[-1]), None, [IsoformDiff("id2", 0), IsoformDiff("id1", 0)])])
@@ -114,12 +116,13 @@ class TestMatchProfileAndFindMatchingIsoforms:
 
 class TestCompareJunctions:
     gene_info = GeneInfoTuple(IntronProfiles([(50, 60), (80, 100), (80, 110), (80, 150), (200, 210)]), 0, 300)
+    string_pools = StringPoolManager()
 
     @pytest.mark.parametrize("junctions, region, delta, expected",
                              [([(50, 60), (80, 100), (200, 210)], (1, 1), 3, [0, 1, -1, 0]),
                               ([(50, 60), (80, 100), (200, 210)], (0, 1), 3, [1, 1, -1, 0])])
     def test_profile_for_junctions_introns(self, junctions, region, delta,  expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         profile = assigner.intron_comparator.profile_for_junctions_introns(junctions, region)
         assert profile.gene_profile == expected
 
@@ -129,7 +132,7 @@ class TestCompareJunctions:
                               ([(48, 61), (80, 98), (160, 220)], (0, 1), 3, True),
                               ([(48, 66), (80, 99), (200, 210)], (0, 1), 3, False)])
     def test_profile_for_junctions_introns(self, junctions, region, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assert assigner.intron_comparator.are_known_introns(junctions, region) == expected
 
     @pytest.mark.parametrize("read_intron_read_profile, read_region, read_introns, delta, expected",
@@ -138,7 +141,7 @@ class TestCompareJunctions:
                               ([1, 1, 0], (0, 300), [(50, 60), (82, 100), (200, 210)], 3, MatchEventSubtype.extra_intron_flanking_right),
                               ([1, 1, 0], (0, 300), [(50, 60), (82, 100), (200, 292)], 3, MatchEventSubtype.fake_terminal_exon_right)])
     def test_add_extra_out_exon_events(self, read_intron_read_profile, read_region, read_introns, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assigner.params.max_fake_terminal_exon_len = 10
         events = []
         assigner.intron_comparator.add_extra_out_exon_events(events, read_intron_read_profile, read_region, read_introns, 100)
@@ -150,7 +153,7 @@ class TestCompareJunctions:
                               ((0, 300), [(38, 61), (80, 98), (160, 220)], (0, 0), 3, False),
                               ((50, 300), [(58, 76), (80, 97), (130, 210)], (0, 1), 3, False)])
     def test_profile_for_junctions_introns(self, read_region, junctions, region, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assigner.params.max_suspicious_intron_abs_len = 20
         assigner.params.max_suspicious_intron_rel_len = 0.2
         assert assigner.intron_comparator.are_suspicious_introns(read_region, junctions, region) == expected
@@ -158,7 +161,7 @@ class TestCompareJunctions:
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([], (20, 200), [], (20, 290), 1)])
     def test_monoexon_match(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
@@ -167,7 +170,7 @@ class TestCompareJunctions:
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([], (20, 200), [(150, 170)], (20, 290), 1)])
     def test_unspliced_intron_retention(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
@@ -176,7 +179,7 @@ class TestCompareJunctions:
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([], (20, 100), [(50, 170)], (20, 290), 1)])
     def test_incomplete_intron_retention_right(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
@@ -185,7 +188,7 @@ class TestCompareJunctions:
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([], (150, 320), [(50, 170)], (20, 290), 1)])
     def test_incomplete_intron_retention_left(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
@@ -195,7 +198,7 @@ class TestCompareJunctions:
                              [([], (100, 150), [(50, 170)], (20, 290), 1),
                               ([], (20, 55), [(50, 170)], (20, 290), 1)])
     def test_mono_exonic(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
@@ -207,7 +210,7 @@ class TestCompareJunctions:
                               ([(1, 10), (15, 20)], (0, 30), [(1, 10), (15, 21)], (0, 30), 1),
                               ([(15, 20), (25, 35)], (10, 40), [(1, 10), (15, 21), (25, 34)], (0, 40), 2)])
     def test_no_contradiction(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
@@ -217,7 +220,7 @@ class TestCompareJunctions:
                              [([(1, 100), (150,  200)], (0, 300), [(2, 101)], (0, 120), 1, 1),
                               ([(1, 100), (150, 200), (250, 360), (380, 390)], (0, 400), [(3, 100), (150, 201)], (0, 249), 3, 2)])
     def test_extra_intron_out_right(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected_len):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == expected_len
@@ -227,7 +230,7 @@ class TestCompareJunctions:
                              [([(1, 100), (150, 200)], (0, 300), [(150, 201)], (110, 220), 1, 1),
                               ([(1, 100), (150, 200), (250, 360)], (0, 400), [(251, 361)], (201, 405), 3, 2)])
     def test_extra_intron_out_left(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected_len):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == expected_len
@@ -248,7 +251,7 @@ class TestCompareJunctions:
                                MatchEventSubtype.fake_terminal_exon_right)
                               ])
     def test_extra_intron(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assigner.params.max_suspicious_intron_abs_len = 10
         assigner.params.max_suspicious_intron_rel_len = 0.1
         assigner.params.max_fake_terminal_exon_len = 10
@@ -260,7 +263,7 @@ class TestCompareJunctions:
     @pytest.mark.parametrize("read_junctions, read_region, isoform_junctions, isoform_region, delta",
                              [([(10, 50), (150,  200)], (0, 300), [(10, 51), (80, 100), (150, 200), (225, 240)], (0, 310), 3)])
     def test_missed_intron_in(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         event_types = [match_events[i].event_type for i in range(len(match_events))]
@@ -274,7 +277,7 @@ class TestCompareJunctions:
                               ([(70, 110)], (20, 150), [(55, 90), (105, 110)], (20, 149), 3, MatchEventSubtype.exon_merge_novel),
                               ([(81, 109)], (50, 150), [(80, 98), (102, 110)], (50, 149), 3, MatchEventSubtype.exon_misalignment)])
     def test_exon_skipping(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
@@ -291,7 +294,7 @@ class TestCompareJunctions:
                                MatchEventSubtype.alternative_structure_known)
                               ])
     def test_complex_alteration(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
                                                                     isoform_junctions, isoform_region)
         assert len(match_events) == 1
@@ -315,7 +318,7 @@ class TestCompareJunctions:
                               ([(10, 13), (95, 100)], (0, 150), [(10, 100)], (9, 149), 2,
                                MatchEventSubtype.intron_retention)])
     def test_exon_gain(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assigner.params.max_suspicious_intron_abs_len = 10
         assigner.params.max_suspicious_intron_rel_len = 0.1
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
@@ -348,7 +351,7 @@ class TestCompareJunctions:
                                MatchEventSubtype.intron_retention)
                               ])
     def test_single_introns(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assigner.params.max_suspicious_intron_abs_len = 5
         assigner.params.max_suspicious_intron_rel_len = 0.1
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
@@ -365,7 +368,7 @@ class TestCompareJunctions:
                                MatchEventSubtype.incomplete_intron_retention_left),
                               ])
     def test_ir(self, read_junctions, read_region, isoform_junctions, isoform_region, delta, expected):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assigner.params.max_suspicious_intron_abs_len = 5
         assigner.params.max_suspicious_intron_rel_len = 0.1
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
@@ -378,7 +381,7 @@ class TestCompareJunctions:
                               ([(80, 100)], (57, 150), [(20, 60), (80, 100)], (9, 149), 2),
                               ])
     def test_no_ir(self, read_junctions, read_region, isoform_junctions, isoform_region, delta):
-        assigner = LongReadAssigner(self.gene_info, Params(delta))
+        assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assigner.params.max_suspicious_intron_abs_len = 5
         assigner.params.max_suspicious_intron_rel_len = 0.1
         match_events = assigner.intron_comparator.compare_junctions(read_junctions, read_region,
@@ -388,9 +391,10 @@ class TestCompareJunctions:
 
 class TestDetectContradictionType:
     gene_info = GeneInfoTuple(IntronProfiles([(1, 1)]), 1, 100)
+    string_pools = StringPoolManager()
 
     def test(self):
-        assigner = LongReadAssigner(self.gene_info, Params(3))
+        assigner = LongReadAssigner(self.gene_info, Params(3), self.string_pools)
         match_events = assigner.intron_comparator.detect_contradiction_type((0, 200), [(50, 75)], (0, 200), [(45, 70)], [((0, 0), (0, 0))])
         assert len(match_events) == 1
         assert match_events[0].event_type == MatchEventSubtype.intron_shift
@@ -402,7 +406,8 @@ class TestAssignIsoform:
     gffutils_db = gffutils.FeatureDB(os.path.join(source_dir, 'toy_data/synth.db'), keep_order=True)
     gene_db = gffutils_db['ENSMUSG00000020196.10']
     gene_info = GeneInfo([gene_db], gffutils_db)
-    assigner = LongReadAssigner(gene_info, params)
+    string_pools = StringPoolManager()
+    assigner = LongReadAssigner(gene_info, params, string_pools)
     gene_region = (gene_info.start, gene_info.end)
 
     intron_profile_constructor = \

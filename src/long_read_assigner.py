@@ -57,7 +57,8 @@ class AmbiguityResolvingMethod(Enum):
 
 
 class LongReadAssigner:
-    def __init__(self, gene_info, params, quick_mode=False, string_pools=None):
+    def __init__(self, gene_info, params, string_pools, quick_mode=False):
+        assert string_pools is not None, "string_pools is required"
         self.gene_info = gene_info
         self.params = params
         self.quick_mode = quick_mode

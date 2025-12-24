@@ -75,7 +75,7 @@ class GraphBasedModelConstructor:
         self.known_isoforms_in_graph = {}
         self.known_introns = set()
         self.known_isoforms_in_graph_ids = {}
-        self.assigner = LongReadAssigner(self.gene_info, self.args)
+        self.assigner = LongReadAssigner(self.gene_info, self.args, self.string_pools)
         self.profile_constructor = CombinedProfileConstructor(self.gene_info, self.args)
 
         self.transcript_model_storage = []
@@ -379,7 +379,7 @@ class GraphBasedModelConstructor:
             if len(model.exon_blocks) <= 2 or model.transcript_id in to_substitute:
                 continue
             transcript_model_gene_info = GeneInfo.from_models([model], self.args.delta)
-            assigner = LongReadAssigner(transcript_model_gene_info, self.args)
+            assigner = LongReadAssigner(transcript_model_gene_info, self.args, self.string_pools)
             profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.args)
 
             for m in model_storage:
@@ -770,7 +770,7 @@ class GraphBasedModelConstructor:
 
         logger.debug("Creating artificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
         transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.args.delta)
-        assigner = LongReadAssigner(transcript_model_gene_info, self.args, quick_mode=True)
+        assigner = LongReadAssigner(transcript_model_gene_info, self.args, self.string_pools, quick_mode=True)
         profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.args)
 
         for assignment in read_assignments:
