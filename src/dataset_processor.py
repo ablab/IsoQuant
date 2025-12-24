@@ -380,12 +380,12 @@ class ReadAssignmentAggregator:
                 gene_counter = create_gene_counter(gene_out_file,
                                                    self.args.gene_quantification,
                                                    complete_feature_list=self.gene_set,
-                                                   read_groups=self.read_groups,
+                                                   read_groups=self.read_groups[group_idx],
                                                    group_index=group_idx)
                 transcript_counter = create_transcript_counter(transcript_out_file,
                                                               self.args.transcript_quantification,
                                                               complete_feature_list=self.transcript_set,
-                                                              read_groups=self.read_groups,
+                                                              read_groups=self.read_groups[group_idx],
                                                               group_index=group_idx)
 
                 self.gene_grouped_counters.append(gene_counter)
@@ -412,12 +412,12 @@ class ReadAssignmentAggregator:
                 transcript_model_counter = create_transcript_counter(
                     transcript_model_out_file,
                     self.args.transcript_quantification,
-                    read_groups=self.read_groups,
+                    read_groups=self.read_groups[group_idx],
                     group_index=group_idx)
                 gene_model_counter = create_gene_counter(
                     gene_model_out_file,
                     self.args.gene_quantification,
-                    read_groups=self.read_groups,
+                    read_groups=self.read_groups[group_idx],
                     group_index=group_idx)
 
                 self.transcript_model_grouped_counters.append(transcript_model_counter)
