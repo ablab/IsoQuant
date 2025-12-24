@@ -12,7 +12,8 @@ from .file_naming import saves_file_name, multimappers_file_name
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
 from .multimap_resolver import MultimapResolver
-from .read_assignment_loader import BasicReadAssignmentLoader
+from .assignment_loader import BasicReadAssignmentLoader, load_genedb
+from .string_pools import StringPoolManager
 
 logger = logging.getLogger('IsoQuant')
 
@@ -23,8 +24,6 @@ def prepare_multimapper_dict(chr_ids, sample, multimappers_counts, genedb=None):
     polya_unique_assignments = 0
 
     # Build string pools for deserialization
-    from .string_pools import StringPoolManager
-    from .assignment_loader import load_genedb
     string_pools = StringPoolManager()
 
     # Build full pools from gene database

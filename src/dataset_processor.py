@@ -45,16 +45,16 @@ from .assignment_io import (
     BasicTSVAssignmentPrinter,
     TmpFileAssignmentPrinter,
 )
-from .read_assignment_loader import BasicReadAssignmentLoader
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
 from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
 from .file_naming import *
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .gene_info import TranscriptModelType, get_all_chromosome_genes, get_all_chromosome_transcripts
-from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
+from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader, load_genedb
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
 from .table_splitter import split_read_table_parallel
+from .string_pools import StringPoolManager
 
 logger = logging.getLogger('IsoQuant')
 
@@ -106,7 +106,6 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
             alignment_stat_counter = EnumStats(bamstat_file)
 
             # Build string pools for loading serialized data
-            from src.string_pools import StringPoolManager
             string_pools = StringPoolManager()
             gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
             if gffutils_db:
@@ -150,7 +149,6 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     illumina_bam = sample.illumina_bam
 
     # Build string pools for memory optimization
-    from src.string_pools import StringPoolManager
     string_pools = StringPoolManager()
 
     # Build global pools from annotation
@@ -229,8 +227,6 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
     # Build string pools for memory optimization
-    from src.string_pools import StringPoolManager
-    from src.assignment_loader import load_genedb
     string_pools = StringPoolManager()
     gffutils_db = load_genedb(args.genedb)
     if gffutils_db:
@@ -345,8 +341,6 @@ def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered
             barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
 
     # Build string pools for memory optimization
-    from src.string_pools import StringPoolManager
-    from src.assignment_loader import load_genedb
     string_pools = StringPoolManager()
     gffutils_db = load_genedb(args.genedb)
     if gffutils_db:

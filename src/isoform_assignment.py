@@ -421,19 +421,13 @@ class MatchEvent:
 class IsoformMatch:
     def __init__(self, match_classification, assigned_gene=None, assigned_transcript=None,
                  match_subclassification = None, transcript_strand='.', penalty_score=0, string_pools=None):
-        # Store string pools reference
+        # Store string pools reference (required for memory optimization)
+        assert string_pools is not None, "string_pools is required"
         self._string_pools = string_pools
 
-        # Store gene/transcript as integers if pools available
-        if string_pools is not None:
-            self.assigned_gene_id = string_pools.gene_pool.get_int(assigned_gene) if assigned_gene else None
-            self.assigned_transcript_id = string_pools.transcript_pool.get_int(assigned_transcript) if assigned_transcript else None
-        else:
-            # Fallback for compatibility during transition
-            self.assigned_gene_id = None
-            self.assigned_transcript_id = None
-            self._assigned_gene_str = assigned_gene
-            self._assigned_transcript_str = assigned_transcript
+        # Store gene/transcript as integers
+        self.assigned_gene_id = string_pools.gene_pool.get_int(assigned_gene) if assigned_gene else None
+        self.assigned_transcript_id = string_pools.transcript_pool.get_int(assigned_transcript) if assigned_transcript else None
 
         self.transcript_strand = transcript_strand  # Keep as char (1 byte)
         self.match_classification = match_classification
@@ -449,68 +443,40 @@ class IsoformMatch:
     @property
     def assigned_gene(self):
         """Return gene string (backward compatibility)"""
-        if self._string_pools is not None:
-            return self._string_pools.gene_pool.get_str(self.assigned_gene_id) if self.assigned_gene_id is not None else None
-        else:
-            return self._assigned_gene_str
+        return self._string_pools.gene_pool.get_str(self.assigned_gene_id) if self.assigned_gene_id is not None else None
 
     @assigned_gene.setter
     def assigned_gene(self, value):
         """Set gene from string"""
-        if self._string_pools is not None:
-            self.assigned_gene_id = self._string_pools.gene_pool.get_int(value) if value is not None else None
-        else:
-            self._assigned_gene_str = value
+        self.assigned_gene_id = self._string_pools.gene_pool.get_int(value) if value is not None else None
 
     @property
     def assigned_transcript(self):
         """Return transcript string (backward compatibility)"""
-        if self._string_pools is not None:
-            return self._string_pools.transcript_pool.get_str(self.assigned_transcript_id) if self.assigned_transcript_id is not None else None
-        else:
-            return self._assigned_transcript_str
+        return self._string_pools.transcript_pool.get_str(self.assigned_transcript_id) if self.assigned_transcript_id is not None else None
 
     @assigned_transcript.setter
     def assigned_transcript(self, value):
         """Set transcript from string"""
-        if self._string_pools is not None:
-            self.assigned_transcript_id = self._string_pools.transcript_pool.get_int(value) if value is not None else None
-        else:
-            self._assigned_transcript_str = value
+        self.assigned_transcript_id = self._string_pools.transcript_pool.get_int(value) if value is not None else None
 
     @classmethod
-    def deserialize(cls, infile, string_pools=None):
+    def deserialize(cls, infile, string_pools):
+        assert string_pools is not None, "string_pools is required"
         match = cls.__new__(cls)
         match._string_pools = string_pools
-
-        if string_pools is not None:
-            # Read integers and convert to strings via pools
-            match.assigned_gene_id = read_int_or_none(infile)
-            match.assigned_transcript_id = read_int_or_none(infile)
-        else:
-            # Fallback: read strings directly
-            match._assigned_gene_str = read_string_or_none(infile)
-            match._assigned_transcript_str = read_string_or_none(infile)
-            match.assigned_gene_id = None
-            match.assigned_transcript_id = None
-
-        match.transcript_strand = read_string(infile)  # Still a char
+        match.assigned_gene_id = read_int_or_none(infile)
+        match.assigned_transcript_id = read_int_or_none(infile)
+        match.transcript_strand = read_string(infile)
         match.match_classification = MatchClassification(read_short_int(infile))
         match.penalty_score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
         match.match_subclassifications = read_list(infile, MatchEvent.deserialize)
         return match
 
     def serialize(self, outfile):
-        if self._string_pools is not None:
-            # Write integers
-            write_int_or_none(self.assigned_gene_id, outfile)
-            write_int_or_none(self.assigned_transcript_id, outfile)
-        else:
-            # Fallback: write strings
-            write_string_or_none(self._assigned_gene_str, outfile)
-            write_string_or_none(self._assigned_transcript_str, outfile)
-
-        write_string(self.transcript_strand, outfile)  # Still a char
+        write_int_or_none(self.assigned_gene_id, outfile)
+        write_int_or_none(self.assigned_transcript_id, outfile)
+        write_string(self.transcript_strand, outfile)
         write_short_int(self.match_classification.value, outfile)
         write_int(int(self.penalty_score * SHORT_FLOAT_MULTIPLIER), outfile)
         write_list(self.match_subclassifications, outfile, MatchEvent.serialize)
@@ -536,20 +502,14 @@ class BasicReadAssignment:
         self.read_id = read_assignment.read_id
 
         # String interning for memory optimization
-        self._string_pools = read_assignment._string_pools if hasattr(read_assignment, '_string_pools') else None
+        assert hasattr(read_assignment, '_string_pools'), "read_assignment must have string_pools"
+        self._string_pools = read_assignment._string_pools
+        assert self._string_pools is not None, "string_pools is required"
 
         # Copy interned fields
-        if self._string_pools is not None:
-            self.chr_id_int = read_assignment.chr_id_int
-            self.barcode_id = read_assignment.barcode_id
-            self.umi_id = read_assignment.umi_id
-        else:
-            self._chr_id_str = read_assignment.chr_id
-            self.chr_id_int = None
-            self.barcode_id = None
-            self.umi_id = None
-            self._barcode_str = read_assignment.barcode if hasattr(read_assignment, 'barcode') else None
-            self._umi_str = read_assignment.umi if hasattr(read_assignment, 'umi') else None
+        self.chr_id_int = read_assignment.chr_id_int
+        self.barcode_id = read_assignment.barcode_id
+        self.umi_id = read_assignment.umi_id
 
         self.start = 0
         self.end = 0
@@ -563,13 +523,9 @@ class BasicReadAssignment:
         self.gene_assignment_type = read_assignment.gene_assignment_type
         self.penalty_score = 0.0
 
-        # Store gene/isoform lists as integer IDs if pools available
-        if self._string_pools is not None:
-            self.gene_ids = []
-            self.isoform_ids = []
-        else:
-            self._genes = []
-            self._isoforms = []
+        # Store gene/isoform lists as integer IDs
+        self.gene_ids = []
+        self.isoform_ids = []
 
         if read_assignment.isoform_matches:
             gene_set = set()
@@ -577,107 +533,68 @@ class BasicReadAssignment:
             for m in read_assignment.isoform_matches:
                 self.penalty_score = min(self.penalty_score, read_assignment.isoform_matches[0].penalty_score)
                 if m.assigned_gene:
-                    if self._string_pools is not None:
-                        gene_set.add(m.assigned_gene_id)
-                    else:
-                        gene_set.add(m.assigned_gene)
+                    gene_set.add(m.assigned_gene_id)
                 if m.assigned_transcript:
-                    if self._string_pools is not None:
-                        isoform_set.add(m.assigned_transcript_id)
-                    else:
-                        isoform_set.add(m.assigned_transcript)
+                    isoform_set.add(m.assigned_transcript_id)
 
-            if self._string_pools is not None:
-                self.gene_ids = list(gene_set)
-                self.isoform_ids = list(isoform_set)
-            else:
-                self._genes = list(gene_set)
-                self._isoforms = list(isoform_set)
+            self.gene_ids = list(gene_set)
+            self.isoform_ids = list(isoform_set)
 
     @property
     def chr_id(self):
         """Return chromosome string"""
-        if self._string_pools is not None and self.chr_id_int is not None:
+        if self.chr_id_int is not None:
             return self._string_pools.chromosome_pool.get_str(self.chr_id_int)
-        elif self._string_pools is None and hasattr(self, '_chr_id_str'):
-            return self._chr_id_str
         return "."
 
     @chr_id.setter
     def chr_id(self, value):
         """Set chromosome from string"""
-        if self._string_pools is not None:
-            self.chr_id_int = self._string_pools.chromosome_pool.get_int(value) if value else None
-        else:
-            self._chr_id_str = value
+        self.chr_id_int = self._string_pools.chromosome_pool.get_int(value) if value else None
 
     @property
     def barcode(self):
         """Return barcode string"""
-        if self._string_pools is not None and self.barcode_id is not None:
+        if self.barcode_id is not None:
             return self._string_pools.barcode_pool.get_str(self.barcode_id)
-        elif self._string_pools is None and hasattr(self, '_barcode_str'):
-            return self._barcode_str
         return None
 
     @barcode.setter
     def barcode(self, value):
         """Set barcode from string"""
-        if self._string_pools is not None:
-            self.barcode_id = self._string_pools.barcode_pool.get_int(value) if value else None
-        else:
-            self._barcode_str = value
+        self.barcode_id = self._string_pools.barcode_pool.get_int(value) if value else None
 
     @property
     def umi(self):
         """Return UMI string"""
-        if self._string_pools is not None and self.umi_id is not None:
+        if self.umi_id is not None:
             return self._string_pools.umi_pool.get_str(self.umi_id)
-        elif self._string_pools is None and hasattr(self, '_umi_str'):
-            return self._umi_str
         return None
 
     @umi.setter
     def umi(self, value):
         """Set UMI from string"""
-        if self._string_pools is not None:
-            self.umi_id = self._string_pools.umi_pool.get_int(value) if value else None
-        else:
-            self._umi_str = value
+        self.umi_id = self._string_pools.umi_pool.get_int(value) if value else None
 
     @property
     def genes(self):
         """Return list of gene strings"""
-        if self._string_pools is not None:
-            return [self._string_pools.gene_pool.get_str(gid) for gid in self.gene_ids]
-        elif hasattr(self, '_genes'):
-            return self._genes
-        return []
+        return [self._string_pools.gene_pool.get_str(gid) for gid in self.gene_ids]
 
     @genes.setter
     def genes(self, value):
         """Set genes from list of strings"""
-        if self._string_pools is not None:
-            self.gene_ids = [self._string_pools.gene_pool.get_int(g) for g in value]
-        else:
-            self._genes = value
+        self.gene_ids = [self._string_pools.gene_pool.get_int(g) for g in value]
 
     @property
     def isoforms(self):
         """Return list of isoform strings"""
-        if self._string_pools is not None:
-            return [self._string_pools.transcript_pool.get_str(tid) for tid in self.isoform_ids]
-        elif hasattr(self, '_isoforms'):
-            return self._isoforms
-        return []
+        return [self._string_pools.transcript_pool.get_str(tid) for tid in self.isoform_ids]
 
     @isoforms.setter
     def isoforms(self, value):
         """Set isoforms from list of strings"""
-        if self._string_pools is not None:
-            self.isoform_ids = [self._string_pools.transcript_pool.get_int(t) for t in value]
-        else:
-            self._isoforms = value
+        self.isoform_ids = [self._string_pools.transcript_pool.get_int(t) for t in value]
 
     def __eq__(self, other):
         if isinstance(other, BasicReadAssignment):
@@ -728,19 +645,13 @@ class BasicReadAssignment:
         self.isoform_ids = []
 
     @classmethod
-    def deserialize(cls, infile, string_pools=None):
+    def deserialize(cls, infile, string_pools):
+        assert string_pools is not None, "string_pools is required"
         read_assignment = cls.__new__(cls)
         read_assignment._string_pools = string_pools
         read_assignment.assignment_id = read_int(infile)
         read_assignment.read_id = read_string(infile)
-
-        # Read chr_id as integer if pools available
-        if string_pools is not None:
-            read_assignment.chr_id_int = read_int_or_none(infile)
-        else:
-            read_assignment._chr_id_str = read_string(infile)
-            read_assignment.chr_id_int = None
-
+        read_assignment.chr_id_int = read_int_or_none(infile)
         read_assignment.start = read_int(infile)
         read_assignment.end = read_int(infile)
         read_assignment.genomic_region = (read_int(infile), read_int(infile))
@@ -750,21 +661,13 @@ class BasicReadAssignment:
         read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
         read_assignment.gene_assignment_type = ReadAssignmentType(read_short_int(infile))
         read_assignment.penalty_score = float(read_int(infile)) / float(SHORT_FLOAT_MULTIPLIER)
-
-        # Read genes and isoforms as integer lists if pools available
-        if string_pools is not None:
-            read_assignment.gene_ids = read_list(infile, read_int)
-            read_assignment.isoform_ids = read_list(infile, read_int)
-        else:
-            read_assignment._genes = read_list(infile, read_string)
-            read_assignment._isoforms = read_list(infile, read_string)
-            read_assignment.gene_ids = []
-            read_assignment.isoform_ids = []
-
+        read_assignment.gene_ids = read_list(infile, read_int)
+        read_assignment.isoform_ids = read_list(infile, read_int)
         return read_assignment
 
     @classmethod
-    def deserialize_from_read_assignment(cls, infile, string_pools=None):
+    def deserialize_from_read_assignment(cls, infile, string_pools):
+        assert string_pools is not None, "string_pools is required"
         read_assignment = cls.__new__(cls)
         read_assignment._string_pools = string_pools
         read_assignment.assignment_id = read_int(infile)
@@ -781,32 +684,15 @@ class BasicReadAssignment:
         read_int_neg(infile)
         read_int_neg(infile)
         read_int_neg(infile)
-        read_list(infile, read_string)  # read_group is now a list
-
-        # Read barcode, umi as integers if pools available
-        if string_pools is not None:
-            read_assignment.barcode_id = read_int_or_none(infile)
-            read_assignment.umi_id = read_int_or_none(infile)
-        else:
-            read_assignment._barcode_str = read_string_or_none(infile)
-            read_assignment._umi_str = read_string_or_none(infile)
-            read_assignment.barcode_id = None
-            read_assignment.umi_id = None
-
-        read_string(infile)  # mapped_strand
-        read_string(infile)  # strand
-
-        # Read chr_id as integer if pools available
-        if string_pools is not None:
-            read_assignment.chr_id_int = read_int_or_none(infile)
-        else:
-            read_assignment._chr_id_str = read_string(infile)
-            read_assignment.chr_id_int = None
-
-        read_short_int(infile)  # mapping_quality
+        read_list(infile, read_string)
+        read_assignment.barcode_id = read_int_or_none(infile)
+        read_assignment.umi_id = read_int_or_none(infile)
+        read_string(infile)
+        read_string(infile)
+        read_assignment.chr_id_int = read_int_or_none(infile)
+        read_short_int(infile)
         read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
         read_assignment.gene_assignment_type = ReadAssignmentType(read_short_int(infile))
-
         read_assignment.penalty_score = 0.0
         isoform_matches = read_list(infile, lambda f: IsoformMatch.deserialize(f, string_pools))
         gene_set = set()
@@ -814,24 +700,11 @@ class BasicReadAssignment:
         for m in isoform_matches:
             read_assignment.penalty_score = min(read_assignment.penalty_score, isoform_matches[0].penalty_score)
             if m.assigned_gene:
-                if string_pools is not None:
-                    gene_set.add(m.assigned_gene_id)
-                else:
-                    gene_set.add(m.assigned_gene)
+                gene_set.add(m.assigned_gene_id)
             if m.assigned_transcript:
-                if string_pools is not None:
-                    isoform_set.add(m.assigned_transcript_id)
-                else:
-                    isoform_set.add(m.assigned_transcript)
-
-        if string_pools is not None:
-            read_assignment.gene_ids = list(gene_set)
-            read_assignment.isoform_ids = list(isoform_set)
-        else:
-            read_assignment._genes = list(gene_set)
-            read_assignment._isoforms = list(isoform_set)
-            read_assignment.gene_ids = []
-            read_assignment.isoform_ids = []
+                isoform_set.add(m.assigned_transcript_id)
+        read_assignment.gene_ids = list(gene_set)
+        read_assignment.isoform_ids = list(isoform_set)
 
         read_dict(infile)
         read_dict(infile)
@@ -843,13 +716,7 @@ class BasicReadAssignment:
     def serialize(self, outfile):
         write_int(self.assignment_id, outfile)
         write_string(self.read_id, outfile)
-
-        # Write chr_id as integer if pools available
-        if self._string_pools is not None:
-            write_int_or_none(self.chr_id_int, outfile)
-        else:
-            write_string(self._chr_id_str if hasattr(self, '_chr_id_str') else ".", outfile)
-
+        write_int_or_none(self.chr_id_int, outfile)
         write_int(self.start, outfile)
         write_int(self.end, outfile)
         write_int(self.genomic_region[0], outfile)
@@ -858,20 +725,15 @@ class BasicReadAssignment:
         write_short_int(self.assignment_type.value, outfile)
         write_short_int(self.gene_assignment_type.value, outfile)
         write_int(int(self.penalty_score * SHORT_FLOAT_MULTIPLIER), outfile)
-
-        # Write genes and isoforms as integer lists if pools available
-        if self._string_pools is not None:
-            write_list(self.gene_ids, outfile, write_int)
-            write_list(self.isoform_ids, outfile, write_int)
-        else:
-            write_list(self._genes if hasattr(self, '_genes') else [], outfile, write_string)
-            write_list(self._isoforms if hasattr(self, '_isoforms') else [], outfile, write_string)
+        write_list(self.gene_ids, outfile, write_int)
+        write_list(self.isoform_ids, outfile, write_int)
 
 
 class ReadAssignment:
     assignment_id_generator = SimpleIDDistributor()
 
     def __init__(self, read_id, assignment_type, match=None, string_pools=None):
+        assert string_pools is not None, "string_pools is required"
         self.assignment_id = ReadAssignment.assignment_id_generator.increment()
         self.read_id = read_id
         self.genomic_region = (0, 0)
@@ -921,56 +783,42 @@ class ReadAssignment:
     @property
     def chr_id(self):
         """Return chromosome string"""
-        if self._string_pools is not None and self.chr_id_int is not None:
+        if self.chr_id_int is not None:
             return self._string_pools.chromosome_pool.get_str(self.chr_id_int)
-        elif self._string_pools is None and hasattr(self, '_chr_id_str'):
-            return self._chr_id_str
         return "."
 
     @chr_id.setter
     def chr_id(self, value):
         """Set chromosome from string"""
-        if self._string_pools is not None:
-            self.chr_id_int = self._string_pools.chromosome_pool.get_int(value) if value else None
-        else:
-            self._chr_id_str = value
+        self.chr_id_int = self._string_pools.chromosome_pool.get_int(value) if value else None
 
     @property
     def barcode(self):
         """Return barcode string"""
-        if self._string_pools is not None and self.barcode_id is not None:
+        if self.barcode_id is not None:
             return self._string_pools.barcode_pool.get_str(self.barcode_id)
-        elif self._string_pools is None and hasattr(self, '_barcode_str'):
-            return self._barcode_str
         return None
 
     @barcode.setter
     def barcode(self, value):
         """Set barcode from string"""
-        if self._string_pools is not None:
-            self.barcode_id = self._string_pools.barcode_pool.get_int(value) if value else None
-        else:
-            self._barcode_str = value
+        self.barcode_id = self._string_pools.barcode_pool.get_int(value) if value else None
 
     @property
     def umi(self):
         """Return UMI string"""
-        if self._string_pools is not None and self.umi_id is not None:
+        if self.umi_id is not None:
             return self._string_pools.umi_pool.get_str(self.umi_id)
-        elif self._string_pools is None and hasattr(self, '_umi_str'):
-            return self._umi_str
         return None
 
     @umi.setter
     def umi(self, value):
         """Set UMI from string"""
-        if self._string_pools is not None:
-            self.umi_id = self._string_pools.umi_pool.get_int(value) if value else None
-        else:
-            self._umi_str = value
+        self.umi_id = self._string_pools.umi_pool.get_int(value) if value else None
 
     @classmethod
-    def deserialize(cls, infile, gene_info, string_pools=None):
+    def deserialize(cls, infile, gene_info, string_pools):
+        assert string_pools is not None, "string_pools is required"
         read_assignment = cls.__new__(cls)
         read_assignment._string_pools = string_pools
         read_assignment.assignment_id = read_int(infile)
@@ -986,26 +834,11 @@ class ReadAssignment:
         read_assignment.cage_found = bool_arr[2]
         read_assignment.polya_info = PolyAInfo(read_int_neg(infile), read_int_neg(infile), read_int_neg(infile), read_int_neg(infile))
         read_assignment.read_group = read_list(infile, read_string)
-
-        # Read barcode, umi, chr_id as integers if pools available
-        if string_pools is not None:
-            read_assignment.barcode_id = read_int_or_none(infile)
-            read_assignment.umi_id = read_int_or_none(infile)
-        else:
-            read_assignment._barcode_str = read_string_or_none(infile)
-            read_assignment._umi_str = read_string_or_none(infile)
-            read_assignment.barcode_id = None
-            read_assignment.umi_id = None
-
+        read_assignment.barcode_id = read_int_or_none(infile)
+        read_assignment.umi_id = read_int_or_none(infile)
         read_assignment.mapped_strand = read_string(infile)
         read_assignment.strand = read_string(infile)
-
-        if string_pools is not None:
-            read_assignment.chr_id_int = read_int_or_none(infile)
-        else:
-            read_assignment._chr_id_str = read_string(infile)
-            read_assignment.chr_id_int = None
-
+        read_assignment.chr_id_int = read_int_or_none(infile)
         read_assignment.mapping_quality = read_short_int(infile)
         read_assignment.assignment_type = ReadAssignmentType(read_short_int(infile))
         read_assignment.gene_assignment_type = ReadAssignmentType(read_short_int(infile))
@@ -1030,23 +863,11 @@ class ReadAssignment:
         write_int_neg(self.polya_info.internal_polya_pos, outfile)
         write_int_neg(self.polya_info.internal_polyt_pos, outfile)
         write_list(self.read_group, outfile, write_string)
-
-        # Write barcode, umi, chr_id as integers if pools available
-        if self._string_pools is not None:
-            write_int_or_none(self.barcode_id, outfile)
-            write_int_or_none(self.umi_id, outfile)
-        else:
-            write_string_or_none(self._barcode_str if hasattr(self, '_barcode_str') else None, outfile)
-            write_string_or_none(self._umi_str if hasattr(self, '_umi_str') else None, outfile)
-
+        write_int_or_none(self.barcode_id, outfile)
+        write_int_or_none(self.umi_id, outfile)
         write_string(self.mapped_strand, outfile)
         write_string(self.strand, outfile)
-
-        if self._string_pools is not None:
-            write_int_or_none(self.chr_id_int, outfile)
-        else:
-            write_string(self._chr_id_str if hasattr(self, '_chr_id_str') else ".", outfile)
-
+        write_int_or_none(self.chr_id_int, outfile)
         write_short_int(self.mapping_quality, outfile)
         write_short_int(self.assignment_type.value, outfile)
         write_short_int(self.gene_assignment_type.value, outfile)
@@ -1054,7 +875,6 @@ class ReadAssignment:
         write_dict(self.additional_info, outfile)
         write_dict(self.additional_attributes, outfile)
         write_short_int(int(self.introns_match), outfile)
-        # TODO optimize profiles, possible to write single bytes here
         write_list(self.exon_gene_profile, outfile, write_int_neg)
         write_list(self.intron_gene_profile, outfile, write_int_neg)
 
