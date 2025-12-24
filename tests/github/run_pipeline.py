@@ -66,6 +66,13 @@ def load_tsv_config(config_file):
     return config_dict
 
 
+def fix_paths(config_file, paths):
+    new_paths = []
+    for p in paths.split(' '):
+        new_paths.append(fix_path(config_file, p))
+    return ' '.join(new_paths)
+
+
 def fix_path(config_file, path):
     if path.startswith('/'):
         return path
@@ -117,14 +124,14 @@ def run_isoquant(args, config_dict):
             isoquant_command_list += ["--genedb", genedb]
         if "bam" in config_dict:
             isoquant_command_list.append("--bam")
-            bam = fix_path(config_file, config_dict["bam"])
+            bam = fix_paths(config_file, config_dict["bam"])
             isoquant_command_list.append(bam)
         elif "ubam" in config_dict:
-            reads = fix_path(config_file, config_dict["ubam"])
+            reads = fix_paths(config_file, config_dict["ubam"])
             isoquant_command_list.append("--unmapped_bam")
             isoquant_command_list.append(reads)
         elif "reads" in config_dict:
-            reads = fix_path(config_file, config_dict["reads"])
+            reads = fix_paths(config_file, config_dict["reads"])
             isoquant_command_list.append("--fastq")
             isoquant_command_list.append(reads)
 
