@@ -45,12 +45,8 @@ from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, Grouped
 from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
-<<<<<<< HEAD
 from src.fusion_detector import FusionDetector
-=======
 from detect_barcodes import process_single_thread, process_in_parallel, get_umi_length
-
->>>>>>> upstream/master
 
 logger = logging.getLogger('IsoQuant')
 
@@ -965,16 +961,13 @@ def run_pipeline(args):
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
-<<<<<<< HEAD
- 
     # gunzip reference genome if needed
-=======
+
     if args.mode.needs_barcode_calling():
         # call barcodes
         call_barcodes(args)
 
     # gunzip refernece genome if needed
->>>>>>> upstream/master
     prepare_reference_genome(args)
  
     # convert GTF/GFF if needed
@@ -996,17 +989,6 @@ def run_pipeline(args):
  
     if args.run_aligner_only:
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
-<<<<<<< HEAD
-    else:
-        # run isoform assignment
-        dataset_processor = DatasetProcessor(args)
-        dataset_processor.process_all_samples(args.input_data)
- 
-        # aggregate counts for all samples
-        if len(args.input_data.samples) > 1 and args.genedb:
-            combine_counts(args.input_data, args.output)
- 
-=======
         return
 
     # run isoform assignment
@@ -1017,7 +999,6 @@ def run_pipeline(args):
     if len(args.input_data.samples) > 1 and args.genedb:
         combine_counts(args.input_data, args.output)
 
->>>>>>> upstream/master
     logger.info(" === IsoQuant pipeline finished === ")
 
 

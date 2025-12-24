@@ -23,6 +23,9 @@ class FusionDetector:
         except Exception:
             self.aligner = None
         self.fusion_metadata = {}
+        
+        # cache for resolved names: id_or_symbol -> gene_symbol (if found)
+        self._resolved_name_cache = {}
 
     def safe_reference_start(self, read):
         try:
@@ -57,6 +60,60 @@ class FusionDetector:
                 return None, "exonic" if exons else "intergenic"
         except Exception:
             return None, "unknown"
+
+    def resolve_gene_name(self, name_or_id):
+        # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene_name when possible.
+        # If `name_or_id` is already a gene symbol or cannot be resolved, return it unchanged.
+        if not name_or_id:
+            return name_or_id
+        # quick cache hit
+        if name_or_id in self._resolved_name_cache:
+            return self._resolved_name_cache[name_or_id]
+        # if looks like an Ensembl or RP11 identifier, try to resolve via genedb
+        resolved = name_or_id
+        try:
+            # Try direct lookup by id
+            try:
+                feat = self.db[name_or_id]
+            except Exception:
+                feat = None
+
+            if feat is not None:
+                # If it's a gene, prefer gene_name attribute
+                if feat.featuretype == 'gene':
+                    resolved = feat.attributes.get('gene_name', [feat.id])[0]
+                else:
+                    # For transcript or other features, try to get parent gene id
+                    if 'gene_id' in feat.attributes:
+                        gid = feat.attributes['gene_id'][0]
+                        try:
+                            g = self.db[gid]
+                            resolved = g.attributes.get('gene_name', [g.id])[0]
+                        except Exception:
+                            resolved = gid
+                    elif 'Parent' in feat.attributes:
+                        gid = feat.attributes['Parent'][0]
+                        try:
+                            g = self.db[gid]
+                            resolved = g.attributes.get('gene_name', [g.id])[0]
+                        except Exception:
+                            resolved = gid
+                    else:
+                        # fallback to feature id
+                        resolved = feat.attributes.get('gene_name', [feat.id])[0] if hasattr(feat, 'attributes') else feat.id
+            else:
+                # As a last resort, try to find a gene feature whose id equals the provided id
+                try:
+                    genes = list(self.db.features_of_type('gene', id=name_or_id))
+                    if genes:
+                        resolved = genes[0].attributes.get('gene_name', [genes[0].id])[0]
+                except Exception:
+                    pass
+        except Exception:
+            resolved = name_or_id
+        # cache and return
+        self._resolved_name_cache[name_or_id] = resolved
+        return resolved
 
     def get_context(self, chrom, pos):
         gene_name, region_type = self._context_query(chrom, pos)
@@ -140,8 +197,11 @@ class FusionDetector:
             consensus_bp, _ = max(bp_counts.items(), key=lambda item: item[1])
             meta["consensus_bp"] = consensus_bp
             left_chr, left_pos, right_chr, right_pos = consensus_bp
-            meta["left_gene"] = self.get_context(left_chr, left_pos)
-            meta["right_gene"] = self.get_context(right_chr, right_pos)
+            # Normalize possible Ensembl / RP11 ids to gene symbols when possible
+            left_ctx = self.get_context(left_chr, left_pos)
+            right_ctx = self.get_context(right_chr, right_pos)
+            meta["left_gene"] = self.resolve_gene_name(left_ctx)
+            meta["right_gene"] = self.resolve_gene_name(right_ctx)
 
     def get_fusion_metadata(self, min_support=1):
         """
@@ -494,11 +554,15 @@ class FusionDetector:
             c1, p1, c2, p2 = consensus_bp
             g1_name, r1 = self._context_query(c1, p1)
             g2_name, r2 = self._context_query(c2, p2)
-            meta["left_gene"] = g1_name or r1
-            meta["right_gene"] = g2_name or r2
+            # Resolve Ensembl/RP11 ids to gene symbols when possible, but keep region type fallback
+            resolved_left = self.resolve_gene_name(g1_name) if g1_name else r1
+            resolved_right = self.resolve_gene_name(g2_name) if g2_name else r2
+            meta["left_gene"] = resolved_left
+            meta["right_gene"] = resolved_right
             # classify
             if g1_name and g2_name:
-                if g1_name == g2_name:
+                # compare resolved gene symbols for intragenic check
+                if self.resolve_gene_name(g1_name) == self.resolve_gene_name(g2_name):
                     flags["class"] = "intragenic"
                 else:
                     if c1 == c2 and max_intra_chr_distance is not None:
@@ -584,7 +648,7 @@ class FusionDetector:
                 if not meta.get("consensus_bp"):
                     continue
                 left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
-                left_gene = meta.get("left_gene") or self.get_context(left_chr, left_pos)
-                right_gene = meta.get("right_gene") or self.get_context(right_chr, right_pos)
+                left_gene = self.resolve_gene_name(meta.get("left_gene") or self.get_context(left_chr, left_pos))
+                right_gene = self.resolve_gene_name(meta.get("right_gene") or self.get_context(right_chr, right_pos))
                 reasons = ";".join(meta.get("reasons", []))
                 f.write(f"{left_gene}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_key}\t{meta.get('class')}\t{meta.get('is_valid')}\t{reasons}\n")
