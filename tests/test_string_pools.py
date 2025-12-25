@@ -139,9 +139,10 @@ class TestStringPoolManager:
         sample = MockSample()
         manager.build_file_name_pool(sample)
 
-        assert len(manager.file_name_pool) == 2  # file1.bam, file2.bam
-        assert "file1.bam" in manager.file_name_pool
-        assert "file2.bam" in manager.file_name_pool
+        # Pool stores basenames without extensions (matching FileNameGrouper logic)
+        assert len(manager.file_name_pool) == 2  # file1, file2
+        assert "file1" in manager.file_name_pool
+        assert "file2" in manager.file_name_pool
 
     def test_build_barcode_spot_pool(self):
         """Test building barcode-to-spot pool."""
