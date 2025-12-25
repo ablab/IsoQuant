@@ -110,6 +110,13 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
             gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
             if gffutils_db:
                 string_pools.build_from_gffutils(gffutils_db)
+
+            # Set up read group pool type mapping for string interning
+            from .read_groups import get_grouping_pool_types
+            pool_types = get_grouping_pool_types(args)
+            for spec_idx, pool_type in pool_types.items():
+                string_pools.set_group_spec_pool_type(spec_idx, pool_type)
+
             # Load per-chromosome pools
             if sample.barcodes_split_reads:
                 barcode_file = sample.barcodes_split_reads + "_" + chr_id
@@ -154,6 +161,12 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     # Build global pools from annotation
     if gffutils_db:
         string_pools.build_from_gffutils(gffutils_db)
+
+    # Set up read group pool type mapping for string interning
+    from .read_groups import get_grouping_pool_types
+    pool_types = get_grouping_pool_types(args)
+    for spec_idx, pool_type in pool_types.items():
+        string_pools.set_group_spec_pool_type(spec_idx, pool_type)
 
     # Load per-chromosome barcode/UMI pools
     if sample.barcodes_split_reads:
@@ -345,6 +358,12 @@ def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered
     gffutils_db = load_genedb(args.genedb)
     if gffutils_db:
         string_pools.build_from_gffutils(gffutils_db)
+
+    # Set up read group pool type mapping for string interning (same as in collect_reads_in_parallel)
+    from .read_groups import get_grouping_pool_types
+    pool_types = get_grouping_pool_types(args)
+    for spec_idx, pool_type in pool_types.items():
+        string_pools.set_group_spec_pool_type(spec_idx, pool_type)
 
     # Load per-chromosome barcode/UMI pools (same as in collect_reads_in_parallel)
     # This is critical: ReadAssignments were serialized with barcode_id values that

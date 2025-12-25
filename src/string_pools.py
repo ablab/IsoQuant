@@ -133,6 +133,9 @@ class StringPoolManager:
         self.file_name_pool = StringPool()  # For file_name grouping
         self.barcode_spot_pool = StringPool()  # For barcode_spot grouping
 
+        # Mapping from group spec index to pool type ('file_name', 'barcode_spot', 'tsv:N', 'dynamic')
+        self.group_spec_pool_types: Dict[int, str] = {}
+
     def build_from_gffutils(self, gffutils_db):
         """
         Build global pools from gffutils database.
@@ -292,6 +295,99 @@ class StringPoolManager:
 
         self.read_group_tsv_pools[spec_index] = pool
         logger.debug(f"Read group TSV pool (spec {spec_index}): {len(pool)} unique values")
+
+    def set_group_spec_pool_type(self, spec_index: int, pool_type: str):
+        """
+        Set the pool type for a grouping specification index.
+
+        Args:
+            spec_index: Index of the grouping spec (position in read_group list)
+            pool_type: One of 'file_name', 'barcode_spot', 'tsv:N', 'dynamic'
+        """
+        self.group_spec_pool_types[spec_index] = pool_type
+
+    def get_read_group_pool(self, spec_index: int) -> StringPool:
+        """
+        Get the appropriate pool for a grouping spec index.
+
+        Args:
+            spec_index: Index of the grouping spec
+
+        Returns:
+            The StringPool to use for this grouping spec
+        """
+        if spec_index not in self.group_spec_pool_types:
+            # Default to dynamic pool if not specified
+            return self.read_group_dynamic_pool
+
+        pool_type = self.group_spec_pool_types[spec_index]
+
+        if pool_type == 'file_name':
+            return self.file_name_pool
+        elif pool_type == 'barcode_spot':
+            return self.barcode_spot_pool
+        elif pool_type.startswith('tsv:'):
+            # Extract TSV spec index from 'tsv:N'
+            tsv_spec_idx = int(pool_type.split(':')[1])
+            if tsv_spec_idx in self.read_group_tsv_pools:
+                return self.read_group_tsv_pools[tsv_spec_idx]
+            else:
+                # Pool not loaded yet, return empty dynamic pool
+                return self.read_group_dynamic_pool
+        else:  # 'dynamic' or unknown
+            return self.read_group_dynamic_pool
+
+    def read_group_to_ids(self, group_strings: List[str]) -> List[int]:
+        """
+        Convert list of group strings to list of integer IDs.
+
+        Args:
+            group_strings: List of group ID strings
+
+        Returns:
+            List of integer IDs
+        """
+        if not group_strings:
+            return []
+
+        ids = []
+        for spec_index, group_str in enumerate(group_strings):
+            if group_str is not None:
+                pool = self.get_read_group_pool(spec_index)
+                ids.append(pool.get_int(group_str))
+            else:
+                ids.append(-1)  # Use -1 for None values
+        return ids
+
+    def read_group_from_ids(self, group_ids: List[int]) -> List[str]:
+        """
+        Convert list of integer IDs to list of group strings.
+
+        Args:
+            group_ids: List of integer IDs
+
+        Returns:
+            List of group ID strings
+        """
+        if not group_ids:
+            return []
+
+        strings = []
+        for spec_index, group_id in enumerate(group_ids):
+            if group_id < 0:
+                strings.append(None)  # -1 means None
+            else:
+                pool = self.get_read_group_pool(spec_index)
+                try:
+                    strings.append(pool.get_str(group_id))
+                except IndexError:
+                    # Pool not populated yet or ID out of range
+                    # This can happen during deserialization if pools weren't loaded
+                    # (e.g., default grouper with 'NA' or dynamic pools not yet built)
+                    # Fall back to returning the ID as a string
+                    logger.debug(f"Read group ID {group_id} not found in pool for spec {spec_index}, using ID as string")
+                    strings.append(str(group_id))
+        return strings
 
     def get_stats(self) -> str:
         """

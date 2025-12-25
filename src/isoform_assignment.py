@@ -766,10 +766,10 @@ class ReadAssignment:
         self.polyA_found = False
         self.cage_found = False
         self.polya_info = None
-        self.read_group = []  # Keep as list of strings for now
 
         # String interning for memory optimization
         self._string_pools = string_pools
+        self.read_group_ids = []  # List of integer IDs for read groups
         self.barcode_id = None  # Integer ID for cell/spatial barcode
         self.umi_id = None  # Integer ID for unique molecular identifier
         self.chr_id_int = None  # Integer ID for chromosome
@@ -837,6 +837,21 @@ class ReadAssignment:
         """Set UMI from string"""
         self.umi_id = self._string_pools.umi_pool.get_int(value) if value else None
 
+    @property
+    def read_group(self):
+        """Return read group as list of strings"""
+        if not self.read_group_ids:
+            return []
+        return self._string_pools.read_group_from_ids(self.read_group_ids)
+
+    @read_group.setter
+    def read_group(self, value):
+        """Set read group from list of strings"""
+        if not value:
+            self.read_group_ids = []
+        else:
+            self.read_group_ids = self._string_pools.read_group_to_ids(value)
+
     @classmethod
     def deserialize(cls, infile, gene_info, string_pools):
         assert string_pools is not None, "string_pools is required"
@@ -854,7 +869,8 @@ class ReadAssignment:
         read_assignment.polyA_found = bool_arr[1]
         read_assignment.cage_found = bool_arr[2]
         read_assignment.polya_info = PolyAInfo(read_int_neg(infile), read_int_neg(infile), read_int_neg(infile), read_int_neg(infile))
-        read_assignment.read_group = read_list(infile, read_string)
+        # Read group: now stored as integers, but support old format (strings)
+        read_assignment.read_group_ids = read_list(infile, read_int)
         read_assignment.barcode_id = read_int_or_none(infile)
         read_assignment.umi_id = read_int_or_none(infile)
         read_assignment.mapped_strand = read_string(infile)
@@ -883,7 +899,8 @@ class ReadAssignment:
         write_int_neg(self.polya_info.external_polyt_pos, outfile)
         write_int_neg(self.polya_info.internal_polya_pos, outfile)
         write_int_neg(self.polya_info.internal_polyt_pos, outfile)
-        write_list(self.read_group, outfile, write_string)
+        # Serialize read_group as integers
+        write_list(self.read_group_ids, outfile, write_int)
         write_int_or_none(self.barcode_id, outfile)
         write_int_or_none(self.umi_id, outfile)
         write_string(self.mapped_strand, outfile)
