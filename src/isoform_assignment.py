@@ -559,6 +559,9 @@ class BasicReadAssignment:
         """Return chromosome string"""
         if self.chr_id_int is not None:
             return self._string_pools.chromosome_pool.get_str(self.chr_id_int)
+        # Handle unpickled state where chr_id is stored as string
+        if hasattr(self, '_chr_id_str'):
+            return self._chr_id_str
         return "."
 
     @chr_id.setter
@@ -593,7 +596,12 @@ class BasicReadAssignment:
     @property
     def genes(self):
         """Return list of gene strings"""
-        return [self._string_pools.gene_pool.get_str(gid) for gid in self.gene_ids]
+        if self.gene_ids:
+            return [self._string_pools.gene_pool.get_str(gid) for gid in self.gene_ids]
+        # Handle unpickled state where genes are stored as strings
+        if hasattr(self, '_genes'):
+            return self._genes
+        return []
 
     @genes.setter
     def genes(self, value):
@@ -603,7 +611,12 @@ class BasicReadAssignment:
     @property
     def isoforms(self):
         """Return list of isoform strings"""
-        return [self._string_pools.transcript_pool.get_str(tid) for tid in self.isoform_ids]
+        if self.isoform_ids:
+            return [self._string_pools.transcript_pool.get_str(tid) for tid in self.isoform_ids]
+        # Handle unpickled state where isoforms are stored as strings
+        if hasattr(self, '_isoforms'):
+            return self._isoforms
+        return []
 
     @isoforms.setter
     def isoforms(self, value):
