@@ -185,7 +185,7 @@ def process_table_for_chromosomes(worker_id, input_tsvs, my_chromosomes, bam_fil
                         if read_id in read_cache[chr_id]:
                             # Extract group values
                             group_vals = delim.join(columns[c] for c in group_columns)
-                            out_handles[chr_id].write(f"{read_id}\t{group_vals}\n")
+                            out_handles[chr_id].write(f"{read_id}{delim}{group_vals}\n")
                             total_reads_written += 1
                             break  # Read can only be on one chromosome
             finally:

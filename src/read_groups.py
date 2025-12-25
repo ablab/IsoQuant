@@ -236,16 +236,6 @@ class MultiReadGrouper:
         return all_groups
 
 
-def get_file_grouping_properties(values):
-    assert len(values) >= 2
-    if len(values) > 4:
-        return values[1], int(values[2]), int(values[3]), values[4]
-    elif len(values) > 3:
-        return values[1], int(values[2]), int(values[3]), "\t"
-    else:
-        return values[1], 0, 1, "\t"
-
-
 def prepare_read_groups(args, sample):
     """
     Prepare read group files by splitting them by chromosome for memory efficiency.
@@ -505,6 +495,7 @@ def load_table(table_tsv_file, read_id_column_index, group_id_column_index, deli
         handle = open(table_tsv_file, 'r')
 
     read_map = {}
+    warn_count = 0
     for line in handle:
         line = line.strip()
         if line.startswith('#') or not line:
@@ -512,8 +503,10 @@ def load_table(table_tsv_file, read_id_column_index, group_id_column_index, deli
 
         column_values = line.split(delim)
         if len(column_values) <= min_columns:
-            logger.warning("Malformed input read information table, minimum, of %d columns expected, "
-                           "file %s, line: %s" % (min_columns, table_tsv_file, line))
+            if warn_count == 0:
+                logger.warning("Malformed input read information table, minimum, of %d columns expected, "
+                               "file %s, line: %s" % (min_columns, table_tsv_file, line))
+            warn_count += 1
             continue
 
         read_id = column_values[read_id_column_index]
@@ -522,6 +515,9 @@ def load_table(table_tsv_file, read_id_column_index, group_id_column_index, deli
 
         group_id = column_values[group_id_column_index]
         read_map[read_id] = group_id
+
+    if warn_count > 0:
+        logger.warning("Total number of malformed lines in %s: %d" % (table_tsv_file, warn_count))
     return read_map
 
 
@@ -534,6 +530,7 @@ def load_multicolumn_table(table_tsv_file, read_id_column_index, group_id_column
         handle = open(table_tsv_file, 'r')
 
     read_map = {}
+    warn_count = 0
     for line in handle:
         line = line.strip()
         if line.startswith('#') or not line:
@@ -541,8 +538,10 @@ def load_multicolumn_table(table_tsv_file, read_id_column_index, group_id_column
 
         column_values = line.split(delim)
         if len(column_values) <= min_columns:
-            logger.warning("Malformed input read information table, minimum, of %d columns expected, "
-                           "file %s, line: %s" % (min_columns, table_tsv_file, line))
+            if warn_count == 0:
+                logger.warning("Malformed input read information table, minimum, of %d columns expected, "
+                               "file %s, line: %s" % (min_columns, table_tsv_file, line))
+            warn_count += 1
             continue
 
         read_id = column_values[read_id_column_index]
@@ -551,36 +550,7 @@ def load_multicolumn_table(table_tsv_file, read_id_column_index, group_id_column
 
         column_data = [column_values[i] for i in group_id_column_indices]
         read_map[read_id] = column_data
+
+    if warn_count > 0:
+        logger.warning("Total number of malformed lines in %s: %d" % (table_tsv_file, warn_count))
     return read_map
-
-
-def split_table(table_file, sample, out_prefix, read_id_column_index, group_id_column_indices, delim):
-    read_groups = load_multicolumn_table(table_file, read_id_column_index, group_id_column_indices, delim)
-    read_group_files = {}
-    processed_reads = defaultdict(set)
-    bam_files = list(map(lambda x: x[0], sample.file_list))
-
-    for bam_file in bam_files:
-        bam = pysam.AlignmentFile(bam_file, "rb")
-        for chr_id in bam.references:
-            if chr_id not in read_group_files:
-                read_group_files[chr_id] = open(out_prefix + "_" + chr_id, "w")
-        for read_alignment in bam:
-            chr_id = read_alignment.reference_name
-            if not chr_id:
-                continue
-
-            read_id = read_alignment.query_name
-            if read_id in read_groups and read_id not in processed_reads[chr_id]:
-                # read_groups[read_id] is a list, join with delimiter
-                group_values = delim.join(read_groups[read_id])
-                read_group_files[chr_id].write("%s\t%s\n" % (read_id, group_values))
-                processed_reads[chr_id].add(read_id)
-
-    for f in read_group_files.values():
-        f.close()
-
-
-def prepare_barcoded_reads(args, sample):
-    logger.info("Splitting barcoded reads %s for better memory consumption" % sample.out_barcodes_tsv)
-    split_table(sample.out_barcodes_tsv, sample, sample.barcodes_split_reads, 0, [1, 2, 3, 4], '\t')
