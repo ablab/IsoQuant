@@ -346,6 +346,15 @@ def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered
     if gffutils_db:
         string_pools.build_from_gffutils(gffutils_db)
 
+    # Load per-chromosome barcode/UMI pools (same as in collect_reads_in_parallel)
+    # This is critical: ReadAssignments were serialized with barcode_id values that
+    # reference the barcode pool from read collection. We must reload the same pool
+    # here before deserializing, otherwise accessing read_assignment.barcode will fail
+    # with IndexError when trying to get_str(barcode_id) from an empty pool.
+    if sample.barcodes_split_reads:
+        barcode_file = sample.barcodes_split_reads + "_" + chr_id
+        string_pools.load_barcode_pool(barcode_file)
+
     umi_filter = UMIFilter(args.umi_length, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(chr_id, sample.out_raw_file,
