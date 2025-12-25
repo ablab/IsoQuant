@@ -218,7 +218,12 @@ class StringPoolManager:
             sample: Sample object with file_list attribute
         """
         import os
-        for file_path, _ in sample.file_list:
+        for file_entry in sample.file_list:
+            # file_entry can be either a tuple (file_path, type) or just file_path
+            if isinstance(file_entry, (list, tuple)):
+                file_path = file_entry[0]
+            else:
+                file_path = file_entry
             filename = os.path.basename(file_path)
             self.file_name_pool.add(filename)
         logger.debug(f"File name pool: {len(self.file_name_pool)} unique filenames")
