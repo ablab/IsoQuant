@@ -403,7 +403,7 @@ class ReadAssignmentAggregator:
                     group_index=group_idx)
 
                 self.transcript_model_global_counter.add_counter(transcript_model_counter)
-                self.gene_model_global_counter.add_counters(gene_model_counter)
+                self.gene_model_global_counter.add_counter(gene_model_counter)
 
 
 # Class for processing all samples against gene database
