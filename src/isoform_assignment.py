@@ -698,7 +698,8 @@ class BasicReadAssignment:
         read_int_neg(infile)
         read_int_neg(infile)
         read_int_neg(infile)
-        read_list(infile, read_string)
+        # Read group: now stored as integers
+        read_assignment.read_group_ids = read_list(infile, read_int)
         read_assignment.barcode_id = read_int_or_none(infile)
         read_assignment.umi_id = read_int_or_none(infile)
         read_string(infile)

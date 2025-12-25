@@ -214,19 +214,18 @@ class StringPoolManager:
         """
         Build file name pool from sample file list.
 
+        Uses same logic as FileNameGrouper: basename without extension.
+
         Args:
             sample: Sample object with file_list attribute
         """
         import os
-        for file_entry in sample.file_list:
-            # file_entry can be either a tuple (file_path, type) or just file_path
-            if isinstance(file_entry, (list, tuple)):
-                file_path = file_entry[0]
-            else:
-                file_path = file_entry
-            filename = os.path.basename(file_path)
-            self.file_name_pool.add(filename)
-        logger.debug(f"File name pool: {len(self.file_name_pool)} unique filenames")
+        # file_list is a list of lists (libraries), each library has one or more files
+        for lib in sample.file_list:
+            # Get basename without extension, matching FileNameGrouper logic
+            readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
+            self.file_name_pool.add(readable_name)
+        logger.debug(f"File name pool: {len(self.file_name_pool)} unique readable names")
 
     def build_barcode_spot_pool(self, barcode2spot_files: List[str]):
         """
