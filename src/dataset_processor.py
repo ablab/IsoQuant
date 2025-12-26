@@ -59,6 +59,65 @@ from .string_pools import StringPoolManager
 logger = logging.getLogger('IsoQuant')
 
 
+def setup_string_pools(args, sample, chr_id=None, gffutils_db=None,
+                       load_barcode_pool=False, load_tsv_pools=False):
+    """
+    Set up string pools for memory optimization during parallel processing.
+
+    Args:
+        args: Command-line arguments
+        sample: SampleData object
+        chr_id: Chromosome ID (required if loading per-chromosome pools)
+        gffutils_db: Pre-loaded gffutils database (if None, will load from args.genedb)
+        load_barcode_pool: Whether to load per-chromosome barcode pool
+        load_tsv_pools: Whether to load per-chromosome TSV read group pools
+
+    Returns:
+        StringPoolManager with pools configured
+    """
+    from .read_groups import get_grouping_pool_types
+
+    string_pools = StringPoolManager()
+
+    # Build global pools from annotation
+    if gffutils_db is None and args.genedb:
+        gffutils_db = load_genedb(args.genedb)
+    if gffutils_db:
+        string_pools.build_from_gffutils(gffutils_db)
+
+    # Set up read group pool type mapping
+    pool_types = get_grouping_pool_types(args)
+    for spec_idx, pool_type in pool_types.items():
+        string_pools.set_group_spec_pool_type(spec_idx, pool_type)
+
+    # Build file_name pool if needed
+    if any(pt == 'file_name' for pt in pool_types.values()):
+        string_pools.build_file_name_pool(sample)
+
+    # Build barcode_spot pool if needed
+    if any(pt == 'barcode_spot' for pt in pool_types.values()):
+        if args.barcode2spot:
+            string_pools.build_barcode_spot_pool(args.barcode2spot)
+
+    # Load per-chromosome pools if requested
+    if chr_id:
+        if load_barcode_pool and sample.barcodes_split_reads:
+            barcode_file = sample.barcodes_split_reads + "_" + chr_id
+            string_pools.load_barcode_pool(barcode_file)
+
+        if load_tsv_pools and sample.read_group_file:
+            import re
+            base_pattern = sample.read_group_file + "_spec*_" + chr_id
+            spec_files = sorted(glob.glob(base_pattern))
+            for spec_file in spec_files:
+                match = re.search(r'_spec(\d+)_', spec_file)
+                if match:
+                    spec_index = int(match.group(1))
+                    string_pools.load_read_group_tsv_pool(spec_file, spec_index)
+
+    return string_pools
+
+
 @unique
 class PolyAUsageStrategies(Enum):
     auto = 1
@@ -106,39 +165,9 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
             alignment_stat_counter = EnumStats(bamstat_file)
 
             # Build string pools for loading serialized data
-            string_pools = StringPoolManager()
             gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
-            if gffutils_db:
-                string_pools.build_from_gffutils(gffutils_db)
-
-            # Set up read group pool type mapping for string interning
-            from .read_groups import get_grouping_pool_types
-            pool_types = get_grouping_pool_types(args)
-            for spec_idx, pool_type in pool_types.items():
-                string_pools.set_group_spec_pool_type(spec_idx, pool_type)
-
-            # Build file_name pool if needed
-            if any(pt == 'file_name' for pt in pool_types.values()):
-                string_pools.build_file_name_pool(sample)
-
-            # Build barcode_spot pool if needed
-            if any(pt == 'barcode_spot' for pt in pool_types.values()):
-                if args.barcode2spot:
-                    string_pools.build_barcode_spot_pool(args.barcode2spot)
-
-            # Load per-chromosome pools
-            if sample.barcodes_split_reads:
-                barcode_file = sample.barcodes_split_reads + "_" + chr_id
-                string_pools.load_barcode_pool(barcode_file)
-            if sample.read_group_file:
-                import glob, re
-                base_pattern = sample.read_group_file + "_spec*_" + chr_id
-                spec_files = sorted(glob.glob(base_pattern))
-                for spec_file in spec_files:
-                    match = re.search(r'_spec(\d+)_', spec_file)
-                    if match:
-                        spec_index = int(match.group(1))
-                        string_pools.load_read_group_tsv_pool(spec_file, spec_index)
+            string_pools = setup_string_pools(args, sample, chr_id, gffutils_db,
+                                              load_barcode_pool=True, load_tsv_pools=True)
 
             loader = BasicReadAssignmentLoader(save_file, string_pools)
             while loader.has_next():
@@ -165,46 +194,8 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     illumina_bam = sample.illumina_bam
 
     # Build string pools for memory optimization
-    string_pools = StringPoolManager()
-
-    # Build global pools from annotation
-    if gffutils_db:
-        string_pools.build_from_gffutils(gffutils_db)
-
-    # Set up read group pool type mapping for string interning
-    from .read_groups import get_grouping_pool_types
-    pool_types = get_grouping_pool_types(args)
-    for spec_idx, pool_type in pool_types.items():
-        string_pools.set_group_spec_pool_type(spec_idx, pool_type)
-
-    # Build file_name pool if needed (for known file names)
-    if any(pt == 'file_name' for pt in pool_types.values()):
-        string_pools.build_file_name_pool(sample)
-
-    # Build barcode_spot pool if needed (for known barcode-to-spot mappings)
-    if any(pt == 'barcode_spot' for pt in pool_types.values()):
-        if args.barcode2spot:
-            string_pools.build_barcode_spot_pool(args.barcode2spot)
-
-    # Load per-chromosome barcode/UMI pools
-    if sample.barcodes_split_reads:
-        barcode_file = sample.barcodes_split_reads + "_" + chr_id
-        string_pools.load_barcode_pool(barcode_file)
-
-    # Load per-chromosome read group pools if applicable
-    if sample.read_group_file:
-        # Determine how many file specs we have based on read_group_file naming
-        # Read group files are named: base_spec{i}_{chr_id}
-        import glob
-        base_pattern = sample.read_group_file + "_spec*_" + chr_id
-        spec_files = sorted(glob.glob(base_pattern))
-        for spec_file in spec_files:
-            # Extract spec_index from filename: base_spec{i}_{chr_id}
-            import re
-            match = re.search(r'_spec(\d+)_', spec_file)
-            if match:
-                spec_index = int(match.group(1))
-                string_pools.load_read_group_tsv_pool(spec_file, spec_index)
+    string_pools = setup_string_pools(args, sample, chr_id, gffutils_db,
+                                      load_barcode_pool=True, load_tsv_pools=True)
 
     # Load barcode dict for this chromosome if available (for backward compatibility during transition)
     barcode_dict = {}
@@ -258,36 +249,8 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
     # Build string pools for memory optimization
-    string_pools = StringPoolManager()
-    gffutils_db = load_genedb(args.genedb)
-    if gffutils_db:
-        string_pools.build_from_gffutils(gffutils_db)
-
-    # Set up read group pool type mapping for string interning (same as in collect_reads_in_parallel)
-    from .read_groups import get_grouping_pool_types
-    pool_types = get_grouping_pool_types(args)
-    for spec_idx, pool_type in pool_types.items():
-        string_pools.set_group_spec_pool_type(spec_idx, pool_type)
-
-    # Build file_name pool if needed (same as in collect_reads_in_parallel)
-    if any(pt == 'file_name' for pt in pool_types.values()):
-        string_pools.build_file_name_pool(sample)
-
-    # Build barcode_spot pool if needed (same as in collect_reads_in_parallel)
-    if any(pt == 'barcode_spot' for pt in pool_types.values()):
-        if args.barcode2spot:
-            string_pools.build_barcode_spot_pool(args.barcode2spot)
-
-    # Load per-chromosome read group pools if applicable (same as in collect_reads_in_parallel)
-    if sample.read_group_file:
-        import glob, re
-        base_pattern = sample.read_group_file + "_spec*_" + chr_id
-        spec_files = sorted(glob.glob(base_pattern))
-        for spec_file in spec_files:
-            match = re.search(r'_spec(\d+)_', spec_file)
-            if match:
-                spec_index = int(match.group(1))
-                string_pools.load_read_group_tsv_pool(spec_file, spec_index)
+    string_pools = setup_string_pools(args, sample, chr_id,
+                                      load_barcode_pool=False, load_tsv_pools=True)
 
     loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, string_pools, use_filtered_reads)
 
@@ -398,34 +361,10 @@ def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered
             barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
 
     # Build string pools for memory optimization
-    string_pools = StringPoolManager()
-    gffutils_db = load_genedb(args.genedb)
-    if gffutils_db:
-        string_pools.build_from_gffutils(gffutils_db)
-
-    # Set up read group pool type mapping for string interning (same as in collect_reads_in_parallel)
-    from .read_groups import get_grouping_pool_types
-    pool_types = get_grouping_pool_types(args)
-    for spec_idx, pool_type in pool_types.items():
-        string_pools.set_group_spec_pool_type(spec_idx, pool_type)
-
-    # Build file_name pool if needed
-    if any(pt == 'file_name' for pt in pool_types.values()):
-        string_pools.build_file_name_pool(sample)
-
-    # Build barcode_spot pool if needed
-    if any(pt == 'barcode_spot' for pt in pool_types.values()):
-        if args.barcode2spot:
-            string_pools.build_barcode_spot_pool(args.barcode2spot)
-
-    # Load per-chromosome barcode/UMI pools (same as in collect_reads_in_parallel)
-    # This is critical: ReadAssignments were serialized with barcode_id values that
-    # reference the barcode pool from read collection. We must reload the same pool
-    # here before deserializing, otherwise accessing read_assignment.barcode will fail
-    # with IndexError when trying to get_str(barcode_id) from an empty pool.
-    if sample.barcodes_split_reads:
-        barcode_file = sample.barcodes_split_reads + "_" + chr_id
-        string_pools.load_barcode_pool(barcode_file)
+    # Barcode pool is critical: ReadAssignments were serialized with barcode_id values
+    # that reference the barcode pool from read collection
+    string_pools = setup_string_pools(args, sample, chr_id,
+                                      load_barcode_pool=True, load_tsv_pools=False)
 
     umi_filter = UMIFilter(args.umi_length, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
