@@ -18,7 +18,7 @@ from .string_pools import StringPoolManager
 logger = logging.getLogger('IsoQuant')
 
 
-def prepare_multimapper_dict(chr_ids, sample, multimappers_counts, all_chr_ids=None, genedb=None):
+def prepare_multimapper_dict(chr_ids, sample, multimappers_counts, all_chr_ids, genedb=None):
     multimapped_reads = defaultdict(list)
     unique_assignments = 0
     polya_unique_assignments = 0
@@ -26,9 +26,8 @@ def prepare_multimapper_dict(chr_ids, sample, multimappers_counts, all_chr_ids=N
     # Build string pools for deserialization
     string_pools = StringPoolManager()
 
-    # Build chromosome pool from full list (or fallback to current chr_ids)
-    pool_chr_ids = all_chr_ids if all_chr_ids else chr_ids
-    string_pools.build_chromosome_pool(pool_chr_ids)
+    # Build chromosome pool from full list
+    string_pools.build_chromosome_pool(all_chr_ids)
 
     # Build gene/transcript pools from annotation (needed for deserialization)
     gffutils_db = load_genedb(genedb) if genedb else None
@@ -83,7 +82,7 @@ def resolve_multimappers(chr_ids, sample, multimapped_reads, strategy):
 
 
 class ProcessedReadsManager:
-    def __init__(self, sample, multimap_strategy, all_chr_ids=None, genedb=None):
+    def __init__(self, sample, multimap_strategy, all_chr_ids, genedb=None):
         self.sample = sample
         self.multimap_strategy = multimap_strategy
         self.all_chr_ids = all_chr_ids
@@ -106,7 +105,7 @@ class ProcessedReadsManager:
 
 
 class ProcessedReadsManagerHighMemory(ProcessedReadsManager):
-    def __init__(self, sample, multimap_strategy, all_chr_ids=None, genedb=None):
+    def __init__(self, sample, multimap_strategy, all_chr_ids, genedb=None):
         ProcessedReadsManager.__init__(self, sample, multimap_strategy, all_chr_ids, genedb)
         self.read_storage = []
         self.multimapped_reads = defaultdict(list)
@@ -128,7 +127,7 @@ class ProcessedReadsManagerHighMemory(ProcessedReadsManager):
 
 
 class ProcessedReadsManagerNormalMemory(ProcessedReadsManager):
-    def __init__(self, sample, multimap_strategy, all_chr_ids=None, genedb=None):
+    def __init__(self, sample, multimap_strategy, all_chr_ids, genedb=None):
         ProcessedReadsManager.__init__(self, sample, multimap_strategy, all_chr_ids, genedb)
         self.read_storage = []
         self.multimappers_counts = defaultdict(int)
@@ -157,7 +156,7 @@ class ProcessedReadsManagerNormalMemory(ProcessedReadsManager):
 
 
 class ProcessedReadsManagerNoSecondary(ProcessedReadsManager):
-    def __init__(self, sample, multimap_strategy, all_chr_ids=None, genedb=None):
+    def __init__(self, sample, multimap_strategy, all_chr_ids, genedb=None):
         ProcessedReadsManager.__init__(self, sample, multimap_strategy, all_chr_ids, genedb)
         self.read_storage = defaultdict(int)
         self.total_assignments = 0
