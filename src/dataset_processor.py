@@ -147,7 +147,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     save_file = saves_file_name(sample.out_raw_file, chr_id)
     group_file = save_file + "_groups"
     bamstat_file = save_file + "_bamstat"
-    processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, chr_ids)
+    processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, chr_ids, args.genedb)
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
@@ -738,7 +738,7 @@ class DatasetProcessor:
         else:
             results = map(*read_gen)
 
-        sample_procesed_read_manager = processed_read_manager_type(sample, self.args.multimap_strategy, chr_ids)
+        sample_procesed_read_manager = processed_read_manager_type(sample, self.args.multimap_strategy, chr_ids, self.args.genedb)
         logger.info("Counting multimapped reads")
         for chr_id, read_groups, alignment_stats, processed_reads in results:
             logger.info("Counting reads from %s" % chr_id)
