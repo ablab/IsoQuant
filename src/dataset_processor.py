@@ -59,7 +59,7 @@ from .string_pools import StringPoolManager
 logger = logging.getLogger('IsoQuant')
 
 
-def setup_string_pools(args, sample, chr_id=None, gffutils_db=None,
+def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
                        load_barcode_pool=False, load_tsv_pools=False):
     """
     Set up string pools for memory optimization during parallel processing.
@@ -67,7 +67,8 @@ def setup_string_pools(args, sample, chr_id=None, gffutils_db=None,
     Args:
         args: Command-line arguments
         sample: SampleData object
-        chr_id: Chromosome ID (required if loading per-chromosome pools)
+        chr_ids: List of all chromosome IDs to process (for chromosome pool)
+        chr_id: Current chromosome ID (required if loading per-chromosome pools)
         gffutils_db: Pre-loaded gffutils database (if None, will load from args.genedb)
         load_barcode_pool: Whether to load per-chromosome barcode pool
         load_tsv_pools: Whether to load per-chromosome TSV read group pools
@@ -79,7 +80,10 @@ def setup_string_pools(args, sample, chr_id=None, gffutils_db=None,
 
     string_pools = StringPoolManager()
 
-    # Build global pools from annotation
+    # Build chromosome pool from the definitive list of chromosomes to process
+    string_pools.build_chromosome_pool(chr_ids)
+
+    # Build gene/transcript pools from annotation (if available)
     if gffutils_db is None and args.genedb:
         gffutils_db = load_genedb(args.genedb)
     if gffutils_db:
@@ -134,7 +138,7 @@ def set_polya_requirement_strategy(flag, polya_requirement_strategy):
         return True
 
 
-def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type):
+def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_manager_type):
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
         current_chr_record = str(current_chr_record)
@@ -143,7 +147,7 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     save_file = saves_file_name(sample.out_raw_file, chr_id)
     group_file = save_file + "_groups"
     bamstat_file = save_file + "_bamstat"
-    processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, args.genedb)
+    processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, chr_ids)
 
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
@@ -166,7 +170,7 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
 
             # Build string pools for loading serialized data
             gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
-            string_pools = setup_string_pools(args, sample, chr_id, gffutils_db,
+            string_pools = setup_string_pools(args, sample, chr_ids, chr_id, gffutils_db,
                                               load_barcode_pool=True, load_tsv_pools=True)
 
             loader = BasicReadAssignmentLoader(save_file, string_pools)
@@ -194,7 +198,7 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     illumina_bam = sample.illumina_bam
 
     # Build string pools for memory optimization
-    string_pools = setup_string_pools(args, sample, chr_id, gffutils_db,
+    string_pools = setup_string_pools(args, sample, chr_ids, chr_id, gffutils_db,
                                       load_barcode_pool=True, load_tsv_pools=True)
 
     # Load barcode dict for this chromosome if available (for backward compatibility during transition)
@@ -244,12 +248,12 @@ def collect_reads_in_parallel(sample, chr_id, args, processed_read_manager_type)
     return chr_id, read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads_manager
 
 
-def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups):
+def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, read_groups):
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
     # Build string pools for memory optimization
-    string_pools = setup_string_pools(args, sample, chr_id,
+    string_pools = setup_string_pools(args, sample, chr_ids, chr_id,
                                       load_barcode_pool=False, load_tsv_pools=True)
 
     loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, string_pools, use_filtered_reads)
@@ -343,7 +347,7 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
     return aggregator.read_stat_counter, transcript_stat_counter
 
 
-def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered_reads=False):
+def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output_filtered_reads=False):
     transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
     umi_filtered_done = umi_filtered_lock_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
     all_info_file_name = allinfo_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
@@ -363,7 +367,7 @@ def filter_umis_in_parallel(sample, chr_id, args, edit_distance, output_filtered
     # Build string pools for memory optimization
     # Barcode pool is critical: ReadAssignments were serialized with barcode_id values
     # that reference the barcode pool from read collection
-    string_pools = setup_string_pools(args, sample, chr_id,
+    string_pools = setup_string_pools(args, sample, chr_ids, chr_id,
                                       load_barcode_pool=True, load_tsv_pools=False)
 
     umi_filter = UMIFilter(args.umi_length, edit_distance)
@@ -719,6 +723,7 @@ class DatasetProcessor:
             collect_reads_in_parallel,
             itertools.repeat(sample),
             chr_ids,
+            itertools.repeat(chr_ids),
             itertools.repeat(self.args),
             itertools.repeat(processed_read_manager_type)
         )
@@ -733,7 +738,7 @@ class DatasetProcessor:
         else:
             results = map(*read_gen)
 
-        sample_procesed_read_manager = processed_read_manager_type(sample, self.args.multimap_strategy, self.args.genedb)
+        sample_procesed_read_manager = processed_read_manager_type(sample, self.args.multimap_strategy, chr_ids)
         logger.info("Counting multimapped reads")
         for chr_id, read_groups, alignment_stats, processed_reads in results:
             logger.info("Counting reads from %s" % chr_id)
@@ -820,6 +825,7 @@ class DatasetProcessor:
             construct_models_in_parallel,
             (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict, sample.illumina_bam, sample.barcoded_reads) for chr_id in chr_ids),
             chr_ids,
+            itertools.repeat(chr_ids),
             itertools.repeat(dump_filename),
             itertools.repeat(self.args),
             itertools.repeat(self.all_read_groups),
@@ -915,6 +921,7 @@ class DatasetProcessor:
                 filter_umis_in_parallel,
                 itertools.repeat(sample),
                 self.get_chr_list(),
+                itertools.repeat(self.get_chr_list()),
                 itertools.repeat(self.args),
                 itertools.repeat(edit_distance),
                 itertools.repeat(output_filtered_reads),

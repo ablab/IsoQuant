@@ -13,12 +13,13 @@ Expected memory reduction: ~78% for billion-read datasets.
 Architecture:
 - StringPool: Bidirectional mapping between strings and integers
 - StringPoolManager: Manages all pools for a worker
-  - Global pools: gene, transcript, chromosome (from annotation)
+  - Global pools: gene, transcript (from annotation), chromosome (from chr_ids list)
   - Per-chromosome pools: barcode, UMI (from split files)
   - Read group pools: Multiple types depending on strategy
 
 Usage:
-- Workers build pools from gene database at start
+- Workers build chromosome pool from chr_ids list
+- Workers build gene/transcript pools from annotation database
 - All IsoformMatch/ReadAssignment objects store integer IDs
 - Properties provide transparent string access via pools
 - Serialization writes integer format for disk savings
@@ -111,17 +112,17 @@ class StringPoolManager:
     Manages all string pools for a chromosome processing worker.
 
     Pools are categorized by data type:
-    - Global pools: gene, transcript, chromosome (from annotation)
+    - Global pools: gene, transcript (from annotation), chromosome (from chr_ids list)
     - Per-chromosome pools: barcode, UMI (from split files)
     - Read group pools: Multiple types depending on grouping strategy
     """
 
     def __init__(self):
         """Initialize all string pools."""
-        # Global pools (from annotation)
-        self.gene_pool = StringPool()
-        self.transcript_pool = StringPool()
-        self.chromosome_pool = StringPool()
+        # Global pools
+        self.gene_pool = StringPool()  # from annotation
+        self.transcript_pool = StringPool()  # from annotation
+        self.chromosome_pool = StringPool()  # from chr_ids list
 
         # Per-chromosome pools (from split files)
         self.barcode_pool = StringPool()
@@ -170,14 +171,6 @@ class StringPoolManager:
             self.transcript_pool.add(transcript_id)
         logger.debug(f"Transcript pool: {len(self.transcript_pool)} unique transcripts")
 
-        # Chromosome pool
-        chromosomes = set()
-        for gene in gffutils_db.features_of_type('gene'):
-            chromosomes.add(gene.seqid)
-        for chr_id in sorted(chromosomes):
-            self.chromosome_pool.add(chr_id)
-        logger.debug(f"Chromosome pool: {len(self.chromosome_pool)} unique chromosomes")
-
     def build_from_gene_db(self, gene_db):
         """
         Build global pools from gene annotation database.
@@ -202,13 +195,17 @@ class StringPoolManager:
             self.transcript_pool.add(transcript_id)
         logger.debug(f"Transcript pool: {len(self.transcript_pool)} unique transcripts")
 
-        # Chromosome pool
-        chromosomes = set()
-        for gene in gene_db.genes.values():
-            chromosomes.add(gene.chr_id)
-        for chr_id in sorted(chromosomes):
+    def build_chromosome_pool(self, chr_ids):
+        """
+        Build chromosome pool from list of chromosome IDs.
+
+        Args:
+            chr_ids: List of chromosome IDs to process
+        """
+        # Sort alphabetically for deterministic order across workers
+        for chr_id in sorted(chr_ids):
             self.chromosome_pool.add(chr_id)
-        logger.debug(f"Chromosome pool: {len(self.chromosome_pool)} unique chromosomes")
+        logger.debug(f"Chromosome pool: {len(self.chromosome_pool)} chromosomes")
 
     def build_file_name_pool(self, sample):
         """
