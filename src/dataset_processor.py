@@ -210,8 +210,13 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
             for line in open(barcode_file):
                 if line.startswith("#"):
                     continue
-                parts = line.split()
-                barcode_dict[parts[0]] = (parts[1], parts[2])
+                # Use split('\t') to preserve empty fields (empty UMI = consecutive tabs)
+                parts = line.strip().split('\t')
+                if len(parts) >= 3:
+                    # Empty strings become None (not added to pool)
+                    barcode = parts[1] if parts[1] else None
+                    umi = parts[2] if parts[2] else None
+                    barcode_dict[parts[0]] = (barcode, umi)
             logger.debug("Loaded %d barcodes" % len(barcode_dict))
 
     logger.info("Processing chromosome " + chr_id)

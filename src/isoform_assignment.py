@@ -714,6 +714,7 @@ class BasicReadAssignment:
         # Read group: stored as strings for cross-worker compatibility
         read_group_strings = read_list(infile, read_string)
         read_assignment.read_group_ids = string_pools.read_group_to_ids(read_group_strings) if read_group_strings else []
+        # Barcode/UMI pools are built in sorted order, so IDs are deterministic
         read_assignment.barcode_id = read_int_or_none(infile)
         read_assignment.umi_id = read_int_or_none(infile)
         read_string(infile)
@@ -887,6 +888,7 @@ class ReadAssignment:
         # Read group: stored as strings for cross-worker compatibility
         read_group_strings = read_list(infile, read_string)
         read_assignment.read_group_ids = string_pools.read_group_to_ids(read_group_strings) if read_group_strings else []
+        # Barcode/UMI pools are built in sorted order, so IDs are deterministic
         read_assignment.barcode_id = read_int_or_none(infile)
         read_assignment.umi_id = read_int_or_none(infile)
         read_assignment.mapped_strand = read_string(infile)
@@ -918,6 +920,7 @@ class ReadAssignment:
         # Serialize read_group as strings for cross-worker compatibility
         # (dynamic pools like BAM tags have worker-specific ID mappings)
         write_list(self.read_group, outfile, write_string)
+        # Barcode/UMI pools are built in sorted order, so IDs are deterministic
         write_int_or_none(self.barcode_id, outfile)
         write_int_or_none(self.umi_id, outfile)
         write_string(self.mapped_strand, outfile)

@@ -212,25 +212,35 @@ class StringPoolManager:
         Build file name pool from sample file list.
 
         Uses same logic as FileNameGrouper: basename without extension.
+        Pool is built in sorted order for deterministic IDs across workers.
 
         Args:
             sample: Sample object with file_list attribute
         """
         import os
+        # Collect all file names first
+        file_names = set()
         # file_list is a list of lists (libraries), each library has one or more files
         for lib in sample.file_list:
             # Get basename without extension, matching FileNameGrouper logic
             readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
-            self.file_name_pool.add(readable_name)
+            file_names.add(readable_name)
+        # Add in sorted order for deterministic IDs
+        for name in sorted(file_names):
+            self.file_name_pool.add(name)
         logger.debug(f"File name pool: {len(self.file_name_pool)} unique readable names")
 
     def build_barcode_spot_pool(self, barcode2spot_files: List[str]):
         """
         Build barcode-to-spot pool from mapping files.
 
+        Pool is built in sorted order for deterministic IDs across workers.
+
         Args:
             barcode2spot_files: List of TSV files mapping barcode -> spot/cell_type
         """
+        # Collect all spots first
+        spots = set()
         for bc2spot_file in barcode2spot_files:
             with open(bc2spot_file, 'r') as f:
                 for line in f:
@@ -239,13 +249,17 @@ class StringPoolManager:
                         continue
                     parts = line.split('\t')
                     if len(parts) >= 2:
-                        spot = parts[1]
-                        self.barcode_spot_pool.add(spot)
+                        spots.add(parts[1])
+        # Add in sorted order for deterministic IDs
+        for spot in sorted(spots):
+            self.barcode_spot_pool.add(spot)
         logger.debug(f"Barcode spot pool: {len(self.barcode_spot_pool)} unique spots")
 
     def load_barcode_pool(self, barcode_file: str):
         """
         Load barcode pool from split barcode file.
+
+        Pool is built in sorted order for deterministic IDs across workers.
 
         Args:
             barcode_file: Path to split barcode file for chromosome
@@ -256,17 +270,25 @@ class StringPoolManager:
             logger.debug(f"Barcode file not found: {barcode_file}")
             return
 
+        # Collect all barcodes and UMIs first
+        # Use split('\t') to preserve empty fields (empty UMI = consecutive tabs)
+        barcodes = set()
+        umis = set()
         with open(barcode_file, 'r') as f:
             for line in f:
                 if line.startswith('#'):
                     continue
                 parts = line.strip().split('\t')
-                if len(parts) >= 2:
-                    barcode = parts[1]
-                    self.barcode_pool.add(barcode)
-                if len(parts) >= 3:
-                    umi = parts[2]
-                    self.umi_pool.add(umi)
+                if len(parts) >= 2 and parts[1]:
+                    barcodes.add(parts[1])
+                if len(parts) >= 3 and parts[2]:
+                    umis.add(parts[2])
+
+        # Add in sorted order for deterministic IDs
+        for barcode in sorted(barcodes):
+            self.barcode_pool.add(barcode)
+        for umi in sorted(umis):
+            self.umi_pool.add(umi)
 
         logger.debug(f"Barcode pool: {len(self.barcode_pool)} unique barcodes")
         logger.debug(f"UMI pool: {len(self.umi_pool)} unique UMIs")
@@ -274,6 +296,8 @@ class StringPoolManager:
     def load_read_group_tsv_pool(self, read_group_file: str, spec_index: int):
         """
         Load read group pool from split TSV file.
+
+        Pool is built in sorted order for deterministic IDs across workers.
 
         Args:
             read_group_file: Path to split read_group file for chromosome
@@ -284,15 +308,20 @@ class StringPoolManager:
             logger.debug(f"Read group file not found: {read_group_file}")
             return
 
-        pool = StringPool()
+        # Collect all group values first
+        group_values = set()
         with open(read_group_file, 'r') as f:
             for line in f:
                 if line.startswith('#'):
                     continue
                 parts = line.strip().split('\t')
                 if len(parts) >= 2:
-                    group_value = parts[1]
-                    pool.add(group_value)
+                    group_values.add(parts[1])
+
+        # Add in sorted order for deterministic IDs
+        pool = StringPool()
+        for value in sorted(group_values):
+            pool.add(value)
 
         self.read_group_tsv_pools[spec_index] = pool
         logger.debug(f"Read group TSV pool (spec {spec_index}): {len(pool)} unique values")
