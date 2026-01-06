@@ -9,11 +9,9 @@ import glob
 import itertools
 import logging
 import shutil
-import sys
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
-from functools import partial
 
 import gffutils
 import pysam
@@ -233,15 +231,11 @@ def construct_models_in_parallel(sample, chr_id, saves_prefix, args, read_groups
             aggregator.global_counter.add_read_info(read_assignment)
 
         if construct_models:
-            transcript_grouped = aggregator.transcript_model_grouped_counters if hasattr(aggregator, 'transcript_model_grouped_counters') else []
-            gene_grouped = aggregator.gene_model_grouped_counters if hasattr(aggregator, 'gene_model_grouped_counters') else []
             strategy_names = aggregator.grouping_strategy_names if hasattr(aggregator, 'grouping_strategy_names') else []
             model_constructor = GraphBasedModelConstructor(gene_info, loader.chr_record, args,
                                                            aggregator.transcript_model_global_counter,
                                                            aggregator.gene_model_global_counter,
                                                            transcript_id_distributor,
-                                                           transcript_grouped_counters=transcript_grouped,
-                                                           gene_grouped_counters=gene_grouped,
                                                            grouping_strategy_names=strategy_names,
                                                            use_technical_replicas=sample.use_technical_replicas)
             model_constructor.process(assignment_storage)
@@ -340,7 +334,7 @@ class ReadAssignmentAggregator:
             self.t2t_sqanti_printer = SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
-        self.global_counter = CompositeCounter([])
+        self.global_counter = CompositeCounter()
         if self.args.genedb:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
                                                     self.args.gene_quantification,
@@ -350,16 +344,16 @@ class ReadAssignmentAggregator:
                                                                 complete_feature_list=self.transcript_set)
             self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
 
-        self.transcript_model_global_counter = CompositeCounter([])
-        self.gene_model_global_counter = CompositeCounter([])
+        self.transcript_model_global_counter = CompositeCounter()
+        self.gene_model_global_counter = CompositeCounter()
         if not self.args.no_model_construction:
             self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
                                                                       self.args.transcript_quantification)
             self.gene_model_counter = create_gene_counter(sample.out_gene_model_counts_tsv,
                                                           self.args.gene_quantification)
 
-            self.transcript_model_global_counter.add_counters([self.transcript_model_counter])
-            self.gene_model_global_counter.add_counters([self.gene_model_counter])
+            self.transcript_model_global_counter.add_counter(self.transcript_model_counter)
+            self.gene_model_global_counter.add_counter(self.gene_model_counter)
 
         if self.args.count_exons and self.args.genedb:
             self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
@@ -367,11 +361,6 @@ class ReadAssignmentAggregator:
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
         if self.args.read_group and self.args.genedb:
-            self.gene_grouped_counters = []
-            self.transcript_grouped_counters = []
-            self.exon_grouped_counters = []
-            self.intron_grouped_counters = []
-
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
                 # Add strategy name as suffix to output file
                 gene_out_file = f"{sample.out_gene_grouped_counts_tsv}_{strategy_name}"
@@ -388,8 +377,6 @@ class ReadAssignmentAggregator:
                                                               read_groups=self.read_groups[group_idx],
                                                               group_index=group_idx)
 
-                self.gene_grouped_counters.append(gene_counter)
-                self.transcript_grouped_counters.append(transcript_counter)
                 self.global_counter.add_counters([gene_counter, transcript_counter])
 
                 if self.args.count_exons:
@@ -397,14 +384,9 @@ class ReadAssignmentAggregator:
                     intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
                     exon_counter = ExonCounter(exon_out_file, group_index=group_idx)
                     intron_counter = IntronCounter(intron_out_file, group_index=group_idx)
-                    self.exon_grouped_counters.append(exon_counter)
-                    self.intron_grouped_counters.append(intron_counter)
                     self.global_counter.add_counters([exon_counter, intron_counter])
 
         if self.args.read_group and not self.args.no_model_construction:
-            self.transcript_model_grouped_counters = []
-            self.gene_model_grouped_counters = []
-
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
                 transcript_model_out_file = f"{sample.out_transcript_model_grouped_counts_tsv}_{strategy_name}"
                 gene_model_out_file = f"{sample.out_gene_model_grouped_counts_tsv}_{strategy_name}"
@@ -420,8 +402,8 @@ class ReadAssignmentAggregator:
                     read_groups=self.read_groups[group_idx],
                     group_index=group_idx)
 
-                self.transcript_model_grouped_counters.append(transcript_model_counter)
-                self.gene_model_grouped_counters.append(gene_model_counter)
+                self.transcript_model_global_counter.add_counter(transcript_model_counter)
+                self.gene_model_global_counter.add_counter(gene_model_counter)
 
 
 # Class for processing all samples against gene database
@@ -792,8 +774,10 @@ class DatasetProcessor:
             logger.info("Counts for generated transcript models are saves to: " +
                         aggregator.transcript_model_counter.output_counts_file_name)
             if self.args.read_group:
-                for counter in aggregator.transcript_model_grouped_counters:
-                    logger.info("Grouped counts for generated transcript models are saves to: " +
+                for counter in aggregator.transcript_model_global_counter.counters:
+                    if counter.ignore_read_groups:
+                        continue
+                    logger.info("Grouped counts for discovered transcript models are saves to: " +
                                 counter.output_counts_file_name)
             aggregator.transcript_model_global_counter.finalize(self.args)
             aggregator.gene_model_global_counter.finalize(self.args)
@@ -808,10 +792,10 @@ class DatasetProcessor:
             logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
             logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
             if self.args.read_group:
-                for counter in aggregator.gene_grouped_counters:
-                    logger.info("Grouped gene counts are saves to: " + counter.output_counts_file_name)
-                for counter in aggregator.transcript_grouped_counters:
-                    logger.info("Grouped transcript counts are saves to: " + counter.output_counts_file_name)
+                for counter in aggregator.global_counter.counters:
+                    if counter.ignore_read_groups:
+                        continue
+                    logger.info("Grouped counts are saves to: " + counter.output_counts_file_name)
             logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
             aggregator.global_counter.finalize(self.args)
 

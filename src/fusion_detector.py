@@ -653,7 +653,7 @@ class FusionDetector:
         conf = max(0.0, min(1.0, support + recon + realign - penalties))
         return conf
 
-    def report(self, output_path="fusion_candidates.tsv", min_support=3,
+    def report(self, output_path="fusion_candidates.tsv", min_support=2,
             include_classes=("canonical","cis-SAGe","intragenic"),
             min_confidence=0.3, only_valid=False):
         self.validate_candidates(min_support=min_support)
