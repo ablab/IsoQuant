@@ -132,6 +132,59 @@ class SampleData:
         from .file_naming import convert_chr_id_to_file_name_str
         return self.barcodes_split_reads + "_" + convert_chr_id_to_file_name_str(chr_id)
 
+    # Chromosome-specific output file getters (for parallel processing)
+
+    def get_chr_prefix(self, chr_id: str) -> str:
+        """Get chromosome-specific prefix for output files."""
+        from .file_naming import convert_chr_id_to_file_name_str
+        return f"{self.prefix}_{convert_chr_id_to_file_name_str(chr_id)}"
+
+    def get_corrected_bed_file(self, chr_id: str) -> str:
+        """Get path to corrected reads BED file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".corrected_reads.bed")
+
+    def get_assigned_tsv_file(self, chr_id: str) -> str:
+        """Get path to read assignments TSV for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".read_assignments.tsv")
+
+    def get_gene_counts_file(self, chr_id: str) -> str:
+        """Get path to gene counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".gene")
+
+    def get_transcript_counts_file(self, chr_id: str) -> str:
+        """Get path to transcript counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".transcript")
+
+    def get_exon_counts_file(self, chr_id: str) -> str:
+        """Get path to exon counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".exon")
+
+    def get_intron_counts_file(self, chr_id: str) -> str:
+        """Get path to intron counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".intron")
+
+    def get_transcript_model_counts_file(self, chr_id: str) -> str:
+        """Get path to discovered transcript counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".discovered_transcript")
+
+    def get_gene_model_counts_file(self, chr_id: str) -> str:
+        """Get path to discovered gene counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".discovered_gene")
+
+    def get_t2t_tsv_file(self, chr_id: str) -> str:
+        """Get path to SQANTI-like TSV for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".novel_vs_known.SQANTI-like.tsv")
+
+    def get_grouped_counts_file(self, chr_id: str, feature: str, strategy_name: str) -> str:
+        """Get path to grouped counts file for a chromosome.
+
+        Args:
+            chr_id: Chromosome ID
+            feature: Feature type (gene, transcript, exon, intron, discovered_transcript, discovered_gene)
+            strategy_name: Grouping strategy name
+        """
+        return self._make_path(f"{self.get_chr_prefix(chr_id)}.{feature}_grouped_{strategy_name}")
+
 
 class InputDataStorage:
     def __init__(self, args):

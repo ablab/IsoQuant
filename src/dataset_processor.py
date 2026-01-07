@@ -333,20 +333,23 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     transcript_id_distributor = ExcludingIdDistributor(loader.genedb, chr_id)
     exon_id_storage = FeatureIdStorage(SimpleIDDistributor(), loader.genedb, chr_id, "exon")
 
+    # Use chromosome-specific prefix for output files
+    chr_prefix = sample.get_chr_prefix(chr_id)
+
     if construct_models:
-        tmp_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
+        tmp_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
                                      output_r2t=not args.no_large_files,
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
     if construct_models and args.genedb:
-        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
+        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
                                               gtf_suffix=".extended_annotation.gtf",
                                               output_r2t=False, check_canonical=args.check_canonical)
     else:
         tmp_extended_gff_printer = VoidTranscriptPrinter()
 
-    sqanti_t2t_printer = SqantiTSVPrinter(sample.out_t2t_tsv, args, IOSupport(args)) \
+    sqanti_t2t_printer = SqantiTSVPrinter(sample.get_t2t_tsv_file(chr_id), args, IOSupport(args)) \
         if args.sqanti_output else VoidTranscriptPrinter()
     novel_model_storage = []
 
@@ -463,28 +466,33 @@ class ReadAssignmentAggregator:
         printer_list = []
         self.corrected_bed_printer = None
         if not self.args.no_large_files:
-            self.corrected_bed_printer = BEDPrinter(sample.out_corrected_bed,
+            corrected_bed_path = sample.get_corrected_bed_file(chr_id) if chr_id else sample.out_corrected_bed
+            self.corrected_bed_printer = BEDPrinter(corrected_bed_path,
                                                     self.args,
                                                     print_corrected=True,
                                                     gzipped=gzipped)
             printer_list.append(self.corrected_bed_printer)
         self.basic_printer = None
         if self.args.genedb and not self.args.no_large_files:
-            self.basic_printer = BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
+            assigned_tsv_path = sample.get_assigned_tsv_file(chr_id) if chr_id else sample.out_assigned_tsv
+            self.basic_printer = BasicTSVAssignmentPrinter(assigned_tsv_path, self.args, self.io_support,
                                                            additional_header=self.common_header, gzipped=gzipped)
             sample.out_assigned_tsv_result = self.basic_printer.output_file_name
             printer_list.append(self.basic_printer)
         self.t2t_sqanti_printer = VoidTranscriptPrinter()
         if self.args.sqanti_output:
-            self.t2t_sqanti_printer = SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support)
+            t2t_path = sample.get_t2t_tsv_file(chr_id) if chr_id else sample.out_t2t_tsv
+            self.t2t_sqanti_printer = SqantiTSVPrinter(t2t_path, self.args, self.io_support)
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         self.global_counter = CompositeCounter()
         if self.args.genedb:
-            self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
+            gene_counts_path = sample.get_gene_counts_file(chr_id) if chr_id else sample.out_gene_counts_tsv
+            transcript_counts_path = sample.get_transcript_counts_file(chr_id) if chr_id else sample.out_transcript_counts_tsv
+            self.gene_counter = create_gene_counter(gene_counts_path,
                                                     self.args.gene_quantification,
                                                     complete_feature_list=self.gene_set)
-            self.transcript_counter = create_transcript_counter(sample.out_transcript_counts_tsv,
+            self.transcript_counter = create_transcript_counter(transcript_counts_path,
                                                                 self.args.transcript_quantification,
                                                                 complete_feature_list=self.transcript_set)
             self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
@@ -492,24 +500,32 @@ class ReadAssignmentAggregator:
         self.transcript_model_global_counter = CompositeCounter()
         self.gene_model_global_counter = CompositeCounter()
         if not self.args.no_model_construction:
-            self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
+            transcript_model_counts_path = sample.get_transcript_model_counts_file(chr_id) if chr_id else sample.out_transcript_model_counts_tsv
+            gene_model_counts_path = sample.get_gene_model_counts_file(chr_id) if chr_id else sample.out_gene_model_counts_tsv
+            self.transcript_model_counter = create_transcript_counter(transcript_model_counts_path,
                                                                       self.args.transcript_quantification)
-            self.gene_model_counter = create_gene_counter(sample.out_gene_model_counts_tsv,
+            self.gene_model_counter = create_gene_counter(gene_model_counts_path,
                                                           self.args.gene_quantification)
 
             self.transcript_model_global_counter.add_counter(self.transcript_model_counter)
             self.gene_model_global_counter.add_counter(self.gene_model_counter)
 
         if self.args.count_exons and self.args.genedb:
-            self.exon_counter = ExonCounter(sample.out_exon_counts_tsv, ignore_read_groups=True)
-            self.intron_counter = IntronCounter(sample.out_intron_counts_tsv, ignore_read_groups=True)
+            exon_counts_path = sample.get_exon_counts_file(chr_id) if chr_id else sample.out_exon_counts_tsv
+            intron_counts_path = sample.get_intron_counts_file(chr_id) if chr_id else sample.out_intron_counts_tsv
+            self.exon_counter = ExonCounter(exon_counts_path, ignore_read_groups=True)
+            self.intron_counter = IntronCounter(intron_counts_path, ignore_read_groups=True)
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
         if self.args.read_group and self.args.genedb:
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
-                # Add strategy name as suffix to output file
-                gene_out_file = f"{sample.out_gene_grouped_counts_tsv}_{strategy_name}"
-                transcript_out_file = f"{sample.out_transcript_grouped_counts_tsv}_{strategy_name}"
+                # Use chr-specific paths if chr_id is provided
+                if chr_id:
+                    gene_out_file = sample.get_grouped_counts_file(chr_id, "gene", strategy_name)
+                    transcript_out_file = sample.get_grouped_counts_file(chr_id, "transcript", strategy_name)
+                else:
+                    gene_out_file = f"{sample.out_gene_grouped_counts_tsv}_{strategy_name}"
+                    transcript_out_file = f"{sample.out_transcript_grouped_counts_tsv}_{strategy_name}"
 
                 gene_counter = create_gene_counter(gene_out_file,
                                                    self.args.gene_quantification,
@@ -525,16 +541,24 @@ class ReadAssignmentAggregator:
                 self.global_counter.add_counters([gene_counter, transcript_counter])
 
                 if self.args.count_exons:
-                    exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
-                    intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
+                    if chr_id:
+                        exon_out_file = sample.get_grouped_counts_file(chr_id, "exon", strategy_name)
+                        intron_out_file = sample.get_grouped_counts_file(chr_id, "intron", strategy_name)
+                    else:
+                        exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
+                        intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
                     exon_counter = ExonCounter(exon_out_file, group_index=group_idx)
                     intron_counter = IntronCounter(intron_out_file, group_index=group_idx)
                     self.global_counter.add_counters([exon_counter, intron_counter])
 
         if self.args.read_group and not self.args.no_model_construction:
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
-                transcript_model_out_file = f"{sample.out_transcript_model_grouped_counts_tsv}_{strategy_name}"
-                gene_model_out_file = f"{sample.out_gene_model_grouped_counts_tsv}_{strategy_name}"
+                if chr_id:
+                    transcript_model_out_file = sample.get_grouped_counts_file(chr_id, "discovered_transcript", strategy_name)
+                    gene_model_out_file = sample.get_grouped_counts_file(chr_id, "discovered_gene", strategy_name)
+                else:
+                    transcript_model_out_file = f"{sample.out_transcript_model_grouped_counts_tsv}_{strategy_name}"
+                    gene_model_out_file = f"{sample.out_gene_model_grouped_counts_tsv}_{strategy_name}"
 
                 transcript_model_counter = create_transcript_counter(
                     transcript_model_out_file,
@@ -882,7 +906,7 @@ class DatasetProcessor:
 
         model_gen = (
             construct_models_in_parallel,
-            (SampleData(sample.file_list, f"{sample.prefix}_{chr_id}", sample.out_dir, sample.readable_names_dict, sample.illumina_bam, sample.barcoded_reads) for chr_id in chr_ids),
+            itertools.repeat(sample),
             chr_ids,
             itertools.repeat(chr_ids),
             itertools.repeat(dump_filename),
