@@ -128,13 +128,14 @@ class TestStringPoolManager:
         """Test building file name pool."""
         manager = StringPoolManager()
 
-        # Mock sample object
+        # Mock sample object without labels
         class MockSample:
             file_list = [
                 ("/path/to/file1.bam", None),
                 ("/path/to/file2.bam", None),
                 ("/another/path/file1.bam", None),  # Same basename
             ]
+            readable_names_dict = None
 
         sample = MockSample()
         manager.build_file_name_pool(sample)
@@ -143,6 +144,35 @@ class TestStringPoolManager:
         assert len(manager.file_name_pool) == 2  # file1, file2
         assert "file1" in manager.file_name_pool
         assert "file2" in manager.file_name_pool
+
+    def test_build_file_name_pool_with_labels(self):
+        """Test building file name pool when -l labels are used."""
+        manager = StringPoolManager()
+
+        # Mock sample object with labels
+        class MockSample:
+            file_list = [
+                ("/path/to/file1.bam", None),
+                ("/path/to/file2.bam", None),
+                ("/path/to/file3.bam", None),
+            ]
+            # readable_names_dict maps file paths to labels (set via -l option)
+            readable_names_dict = {
+                "/path/to/file1.bam": "g1",
+                "/path/to/file2.bam": "g2",
+                "/path/to/file3.bam": "g3",
+            }
+
+        sample = MockSample()
+        manager.build_file_name_pool(sample)
+
+        # Pool should contain labels, not basenames
+        assert len(manager.file_name_pool) == 3  # g1, g2, g3
+        assert "g1" in manager.file_name_pool
+        assert "g2" in manager.file_name_pool
+        assert "g3" in manager.file_name_pool
+        # Basenames should NOT be in the pool
+        assert "file1" not in manager.file_name_pool
 
     def test_build_barcode_spot_pool(self):
         """Test building barcode-to-spot pool."""

@@ -211,20 +211,29 @@ class StringPoolManager:
         """
         Build file name pool from sample file list.
 
-        Uses same logic as FileNameGrouper: basename without extension.
+        Uses same logic as FileNameGrouper: uses readable_names_dict (labels)
+        if available, otherwise uses basename without extension.
         Pool is built in sorted order for deterministic IDs across workers.
 
         Args:
-            sample: Sample object with file_list attribute
+            sample: Sample object with file_list and readable_names_dict attributes
         """
         import os
         # Collect all file names first
         file_names = set()
-        # file_list is a list of lists (libraries), each library has one or more files
-        for lib in sample.file_list:
-            # Get basename without extension, matching FileNameGrouper logic
-            readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
-            file_names.add(readable_name)
+
+        # If readable_names_dict is available (e.g., when -l labels are used),
+        # use its values - matching FileNameGrouper behavior
+        if sample.readable_names_dict:
+            for readable_name in sample.readable_names_dict.values():
+                file_names.add(readable_name)
+        else:
+            # file_list is a list of lists (libraries), each library has one or more files
+            for lib in sample.file_list:
+                # Get basename without extension, matching FileNameGrouper logic
+                readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
+                file_names.add(readable_name)
+
         # Add in sorted order for deterministic IDs
         for name in sorted(file_names):
             self.file_name_pool.add(name)
