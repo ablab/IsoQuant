@@ -199,11 +199,13 @@ class TestStringPoolManager:
             temp_file = f.name
 
         try:
-            manager.load_read_group_tsv_pool(temp_file, spec_index=0)
+            pool_key = "0:1"  # Format: spec_index:col_index
+            manager.load_read_group_tsv_pool(temp_file, pool_key, col_index=1, delimiter='\t')
 
-            assert 0 in manager.read_group_tsv_pools
-            pool = manager.read_group_tsv_pools[0]
-            assert len(pool) == 2  # groupA, groupB
+            assert pool_key in manager.read_group_tsv_pools
+            pool = manager.read_group_tsv_pools[pool_key]
+            assert len(pool) == 3  # NA (default), groupA, groupB
+            assert "NA" in pool  # Default group ID always included
             assert "groupA" in pool
             assert "groupB" in pool
         finally:
@@ -223,15 +225,58 @@ class TestStringPoolManager:
             temp_file2 = f2.name
 
         try:
-            manager.load_read_group_tsv_pool(temp_file1, spec_index=0)
-            manager.load_read_group_tsv_pool(temp_file2, spec_index=1)
+            pool_key1 = "0:1"  # spec 0, column 1
+            pool_key2 = "1:1"  # spec 1, column 1
+            manager.load_read_group_tsv_pool(temp_file1, pool_key1, col_index=1, delimiter='\t')
+            manager.load_read_group_tsv_pool(temp_file2, pool_key2, col_index=1, delimiter='\t')
 
             assert len(manager.read_group_tsv_pools) == 2
-            assert "groupA" in manager.read_group_tsv_pools[0]
-            assert "groupX" in manager.read_group_tsv_pools[1]
+            assert "groupA" in manager.read_group_tsv_pools[pool_key1]
+            assert "groupX" in manager.read_group_tsv_pools[pool_key2]
+            # Both should also have NA
+            assert "NA" in manager.read_group_tsv_pools[pool_key1]
+            assert "NA" in manager.read_group_tsv_pools[pool_key2]
         finally:
             os.unlink(temp_file1)
             os.unlink(temp_file2)
+
+    def test_load_multicolumn_tsv_pool(self):
+        """Test loading multi-column TSV with different columns creating separate pools."""
+        manager = StringPoolManager()
+
+        # Create temporary multi-column file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
+            f.write("read_001,groupA,typeX\n")
+            f.write("read_002,groupB,typeY\n")
+            f.write("read_003,groupA,typeX\n")  # Duplicates
+            temp_file = f.name
+
+        try:
+            # Load column 1 (groups)
+            pool_key1 = "0:1"
+            manager.load_read_group_tsv_pool(temp_file, pool_key1, col_index=1, delimiter=',')
+
+            # Load column 2 (types)
+            pool_key2 = "0:2"
+            manager.load_read_group_tsv_pool(temp_file, pool_key2, col_index=2, delimiter=',')
+
+            assert len(manager.read_group_tsv_pools) == 2
+
+            # Column 1 pool
+            pool1 = manager.read_group_tsv_pools[pool_key1]
+            assert len(pool1) == 3  # NA, groupA, groupB
+            assert "NA" in pool1
+            assert "groupA" in pool1
+            assert "groupB" in pool1
+
+            # Column 2 pool
+            pool2 = manager.read_group_tsv_pools[pool_key2]
+            assert len(pool2) == 3  # NA, typeX, typeY
+            assert "NA" in pool2
+            assert "typeX" in pool2
+            assert "typeY" in pool2
+        finally:
+            os.unlink(temp_file)
 
     def test_load_nonexistent_file(self):
         """Test loading from nonexistent file doesn't crash."""
@@ -239,7 +284,7 @@ class TestStringPoolManager:
 
         # Should not raise exception
         manager.load_barcode_pool("/nonexistent/file.tsv")
-        manager.load_read_group_tsv_pool("/nonexistent/file.tsv", spec_index=0)
+        manager.load_read_group_tsv_pool("/nonexistent/file.tsv", pool_key="0:1", col_index=1, delimiter='\t')
 
         assert len(manager.barcode_pool) == 0
         assert len(manager.read_group_tsv_pools) == 0
