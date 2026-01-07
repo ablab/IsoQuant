@@ -60,7 +60,7 @@ logger = logging.getLogger('IsoQuant')
 
 
 def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
-                       load_barcode_pool=False, load_tsv_pools=False):
+                       load_barcode_pool=False, load_tsv_pools=False, read_group_file_prefix=None):
     """
     Set up string pools for memory optimization during parallel processing.
 
@@ -72,6 +72,7 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
         gffutils_db: Pre-loaded gffutils database (if None, will load from args.genedb)
         load_barcode_pool: Whether to load per-chromosome barcode pool
         load_tsv_pools: Whether to load per-chromosome TSV read group pools
+        read_group_file_prefix: Override for read_group_file path (used when sample has modified prefix)
 
     Returns:
         StringPoolManager with pools configured
@@ -109,15 +110,35 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
             barcode_file = sample.barcodes_split_reads + "_" + chr_id
             string_pools.load_barcode_pool(barcode_file)
 
-        if load_tsv_pools and sample.read_group_file:
+        # Use override if provided, otherwise use sample's read_group_file
+        read_group_file = read_group_file_prefix if read_group_file_prefix else sample.read_group_file
+        if load_tsv_pools and read_group_file:
             import re
-            base_pattern = sample.read_group_file + "_spec*_" + chr_id
+            # Build mapping from tsv spec_index to (col_index, delimiter) from pool_types
+            # pool_type format: 'tsv:SPEC_INDEX:COL_INDEX:DELIMITER'
+            tsv_pool_info = {}  # spec_index -> list of (col_index, delimiter, pool_key)
+            for pool_type in pool_types.values():
+                if pool_type.startswith('tsv:'):
+                    parts = pool_type.split(':')
+                    if len(parts) >= 4:
+                        tsv_spec_idx = int(parts[1])
+                        col_idx = int(parts[2])
+                        delimiter = parts[3]
+                        # pool_key is spec_idx:col_idx to uniquely identify multi-column pools
+                        pool_key = f"{tsv_spec_idx}:{col_idx}"
+                        if tsv_spec_idx not in tsv_pool_info:
+                            tsv_pool_info[tsv_spec_idx] = []
+                        tsv_pool_info[tsv_spec_idx].append((col_idx, delimiter, pool_key))
+
+            base_pattern = read_group_file + "_spec*_" + chr_id
             spec_files = sorted(glob.glob(base_pattern))
             for spec_file in spec_files:
                 match = re.search(r'_spec(\d+)_', spec_file)
                 if match:
                     spec_index = int(match.group(1))
-                    string_pools.load_read_group_tsv_pool(spec_file, spec_index)
+                    # Load pool for each column in this spec file
+                    for col_idx, delimiter, pool_key in tsv_pool_info.get(spec_index, [(1, '\t', f"{spec_index}:1")]):
+                        string_pools.load_read_group_tsv_pool(spec_file, pool_key, col_idx, delimiter)
 
     return string_pools
 
@@ -172,6 +193,13 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
             gffutils_db = gffutils.FeatureDB(args.genedb) if args.genedb else None
             string_pools = setup_string_pools(args, sample, chr_ids, chr_id, gffutils_db,
                                               load_barcode_pool=True, load_tsv_pools=True)
+
+            # Load dynamic pools (for read groups from BAM tags/read IDs)
+            dynamic_pools_file = dynamic_pools_file_name(sample.out_raw_file, chr_id)
+            if os.path.exists(dynamic_pools_file):
+                logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
+                with open(dynamic_pools_file, 'rb') as f:
+                    string_pools.deserialize_dynamic_pools(f)
 
             loader = BasicReadAssignmentLoader(save_file, string_pools)
             while loader.has_next():
@@ -246,6 +274,14 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
         bam[0].close()
 
     tmp_printer.close()
+
+    # Save dynamic pools if they have data (for read groups from BAM tags/read IDs)
+    if string_pools.has_dynamic_pools():
+        dynamic_pools_file = dynamic_pools_file_name(sample.out_raw_file, chr_id)
+        logger.debug(f"Saving dynamic pools to {dynamic_pools_file}")
+        with open(dynamic_pools_file, 'wb') as f:
+            string_pools.serialize_dynamic_pools(f)
+
     processed_reads_manager.finalize(chr_id)
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
@@ -257,9 +293,20 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
+    # Derive read_group_file prefix from saves_prefix (replace .save with .read_group)
+    read_group_file_prefix = saves_prefix.replace('.save', '.read_group') if saves_prefix.endswith('.save') else None
+
     # Build string pools for memory optimization
     string_pools = setup_string_pools(args, sample, chr_ids, chr_id,
-                                      load_barcode_pool=False, load_tsv_pools=True)
+                                      load_barcode_pool=False, load_tsv_pools=True,
+                                      read_group_file_prefix=read_group_file_prefix)
+
+    # Load dynamic pools (for read groups from BAM tags/read IDs)
+    dynamic_pools_file = dynamic_pools_file_name(saves_prefix, chr_id)
+    if os.path.exists(dynamic_pools_file):
+        logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
+        with open(dynamic_pools_file, 'rb') as f:
+            string_pools.deserialize_dynamic_pools(f)
 
     loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, string_pools, use_filtered_reads)
 
@@ -374,6 +421,13 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
     # that reference the barcode pool from read collection
     string_pools = setup_string_pools(args, sample, chr_ids, chr_id,
                                       load_barcode_pool=True, load_tsv_pools=False)
+
+    # Load dynamic pools (for read groups from BAM tags/read IDs)
+    dynamic_pools_file = dynamic_pools_file_name(sample.out_raw_file, chr_id)
+    if os.path.exists(dynamic_pools_file):
+        logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
+        with open(dynamic_pools_file, 'rb') as f:
+            string_pools.deserialize_dynamic_pools(f)
 
     umi_filter = UMIFilter(args.umi_length, edit_distance)
     filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None

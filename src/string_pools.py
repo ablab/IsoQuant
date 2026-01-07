@@ -129,10 +129,10 @@ class StringPoolManager:
         self.umi_pool = StringPool()
 
         # Read group pools by type
-        self.read_group_tsv_pools: Dict[int, StringPool] = {}  # spec_index -> pool
-        self.read_group_dynamic_pool = StringPool()  # For tag/read_id grouping
-        self.file_name_pool = StringPool()  # For file_name grouping
-        self.barcode_spot_pool = StringPool()  # For barcode_spot grouping
+        self.read_group_tsv_pools: Dict[str, StringPool] = {}  # pool_key -> pool (static, from TSV files)
+        self.read_group_dynamic_pools: Dict[int, StringPool] = {}  # spec_index -> pool (dynamic, for tag/read_id)
+        self.file_name_pool = StringPool()  # For file_name grouping (static)
+        self.barcode_spot_pool = StringPool()  # For barcode_spot grouping (static)
 
         # Mapping from group spec index to pool type ('file_name', 'barcode_spot', 'tsv:N', 'dynamic')
         self.group_spec_pool_types: Dict[int, str] = {}
@@ -293,15 +293,17 @@ class StringPoolManager:
         logger.debug(f"Barcode pool: {len(self.barcode_pool)} unique barcodes")
         logger.debug(f"UMI pool: {len(self.umi_pool)} unique UMIs")
 
-    def load_read_group_tsv_pool(self, read_group_file: str, spec_index: int):
+    def load_read_group_tsv_pool(self, read_group_file: str, pool_key: str, col_index: int = 1, delimiter: str = '\t'):
         """
-        Load read group pool from split TSV file.
+        Load read group pool from split TSV/CSV file.
 
         Pool is built in sorted order for deterministic IDs across workers.
 
         Args:
             read_group_file: Path to split read_group file for chromosome
-            spec_index: Index of the file spec (for multiple file specs)
+            pool_key: Unique key for this pool (e.g., 'spec2_col1' for multi-column files)
+            col_index: Column index to read group values from (1-based, default 1)
+            delimiter: Field delimiter (from file spec, defaults to tab)
         """
         import os
         if not os.path.exists(read_group_file):
@@ -309,22 +311,27 @@ class StringPoolManager:
             return
 
         # Collect all group values first
-        group_values = set()
+        # Always include 'NA' (default group ID) in case some reads are not in the TSV file
+        from .read_groups import AbstractReadGrouper
+        group_values = {AbstractReadGrouper.default_group_id}
         with open(read_group_file, 'r') as f:
             for line in f:
                 if line.startswith('#'):
                     continue
-                parts = line.strip().split('\t')
-                if len(parts) >= 2:
-                    group_values.add(parts[1])
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split(delimiter)
+                if len(parts) > col_index:
+                    group_values.add(parts[col_index])
 
         # Add in sorted order for deterministic IDs
         pool = StringPool()
         for value in sorted(group_values):
             pool.add(value)
 
-        self.read_group_tsv_pools[spec_index] = pool
-        logger.debug(f"Read group TSV pool (spec {spec_index}): {len(pool)} unique values")
+        self.read_group_tsv_pools[pool_key] = pool
+        logger.debug(f"Read group TSV pool ({pool_key}): {len(pool)} unique values")
 
     def set_group_spec_pool_type(self, spec_index: int, pool_type: str):
         """
@@ -348,7 +355,7 @@ class StringPoolManager:
         """
         if spec_index not in self.group_spec_pool_types:
             # Default to dynamic pool if not specified
-            return self.read_group_dynamic_pool
+            return self._get_or_create_dynamic_pool(spec_index)
 
         pool_type = self.group_spec_pool_types[spec_index]
 
@@ -357,15 +364,26 @@ class StringPoolManager:
         elif pool_type == 'barcode_spot':
             return self.barcode_spot_pool
         elif pool_type.startswith('tsv:'):
-            # Extract TSV spec index from 'tsv:N'
-            tsv_spec_idx = int(pool_type.split(':')[1])
-            if tsv_spec_idx in self.read_group_tsv_pools:
-                return self.read_group_tsv_pools[tsv_spec_idx]
+            # Extract pool_key from 'tsv:SPEC_INDEX:COL_INDEX:DELIMITER'
+            # pool_key format is 'SPEC_INDEX:COL_INDEX'
+            parts = pool_type.split(':')
+            if len(parts) >= 3:
+                pool_key = f"{parts[1]}:{parts[2]}"
             else:
-                # Pool not loaded yet, return empty dynamic pool
-                return self.read_group_dynamic_pool
+                pool_key = parts[1]  # Fallback for old format 'tsv:N'
+            if pool_key in self.read_group_tsv_pools:
+                return self.read_group_tsv_pools[pool_key]
+            else:
+                # Pool not loaded yet, use dynamic pool for this spec
+                return self._get_or_create_dynamic_pool(spec_index)
         else:  # 'dynamic' or unknown
-            return self.read_group_dynamic_pool
+            return self._get_or_create_dynamic_pool(spec_index)
+
+    def _get_or_create_dynamic_pool(self, spec_index: int) -> StringPool:
+        """Get or create a dynamic pool for a spec index."""
+        if spec_index not in self.read_group_dynamic_pools:
+            self.read_group_dynamic_pools[spec_index] = StringPool()
+        return self.read_group_dynamic_pools[spec_index]
 
     def read_group_to_ids(self, group_strings: List[str]) -> List[int]:
         """
@@ -415,9 +433,59 @@ class StringPoolManager:
                     # This can happen during deserialization if pools weren't loaded
                     # (e.g., default grouper with 'NA' or dynamic pools not yet built)
                     # Fall back to returning the ID as a string
-                    logger.debug(f"Read group ID {group_id} not found in pool for spec {spec_index}, using ID as string")
+                    pool_type = self.group_spec_pool_types.get(spec_index, 'unknown')
+                    logger.warning(f"Read group ID {group_id} not found in pool for spec {spec_index} (type={pool_type}, pool_size={len(pool)}), using ID as string")
                     strings.append(str(group_id))
         return strings
+
+    def has_dynamic_pools(self) -> bool:
+        """Check if any dynamic pools have data."""
+        return any(len(pool) > 0 for pool in self.read_group_dynamic_pools.values())
+
+    def serialize_dynamic_pools(self, outfile):
+        """
+        Serialize dynamic read group pools to binary file.
+
+        Format:
+            num_specs (int)
+            for each spec:
+                spec_index (int)
+                num_strings (int)
+                for each string:
+                    string (length-prefixed)
+        """
+        from .serialization import write_int, write_string
+
+        # Only serialize non-empty dynamic pools
+        non_empty_pools = {idx: pool for idx, pool in self.read_group_dynamic_pools.items()
+                          if len(pool) > 0}
+
+        write_int(len(non_empty_pools), outfile)
+        for spec_index in sorted(non_empty_pools.keys()):
+            pool = non_empty_pools[spec_index]
+            write_int(spec_index, outfile)
+            write_int(len(pool), outfile)
+            # Write strings in ID order (0, 1, 2, ...) to preserve mapping
+            for i in range(len(pool)):
+                write_string(pool.get_str(i), outfile)
+
+    def deserialize_dynamic_pools(self, infile):
+        """
+        Deserialize dynamic read group pools from binary file.
+
+        Rebuilds pools with same ID mappings as when serialized.
+        """
+        from .serialization import read_int, read_string
+
+        num_specs = read_int(infile)
+        for _ in range(num_specs):
+            spec_index = read_int(infile)
+            num_strings = read_int(infile)
+            pool = StringPool()
+            for _ in range(num_strings):
+                string = read_string(infile)
+                pool.add(string)  # IDs assigned in order: 0, 1, 2, ...
+            self.read_group_dynamic_pools[spec_index] = pool
 
     def get_stats(self) -> str:
         """
@@ -434,7 +502,8 @@ class StringPoolManager:
         lines.append(f"  UMIs: {len(self.umi_pool)}")
         lines.append(f"  File names: {len(self.file_name_pool)}")
         lines.append(f"  Barcode spots: {len(self.barcode_spot_pool)}")
-        lines.append(f"  Read group dynamic: {len(self.read_group_dynamic_pool)}")
+        for spec_idx, pool in self.read_group_dynamic_pools.items():
+            lines.append(f"  Read group dynamic (spec {spec_idx}): {len(pool)}")
         for spec_idx, pool in self.read_group_tsv_pools.items():
             lines.append(f"  Read group TSV (spec {spec_idx}): {len(pool)}")
         return "\n".join(lines)

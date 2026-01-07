@@ -436,7 +436,8 @@ def get_grouping_pool_types(args) -> dict:
     Returns dict mapping spec_index -> pool_type, where pool_type is one of:
     - 'file_name': Uses file_name_pool (known in advance from file list)
     - 'barcode_spot': Uses barcode_spot_pool (known in advance from barcode2spot files)
-    - 'tsv:N': Uses read_group_tsv_pools[N] (loaded per-chromosome from split TSV files)
+    - 'tsv:SPEC_INDEX:COL_INDEX:DELIMITER': Uses read_group_tsv_pools[SPEC_INDEX:COL_INDEX]
+      (loaded per-chromosome from split TSV files)
     - 'dynamic': Uses read_group_dynamic_pool (collected during processing)
 
     Args:
@@ -476,16 +477,20 @@ def get_grouping_pool_types(args) -> dict:
             pool_types[grouper_index] = 'dynamic'
             grouper_index += 1
         elif spec_type == 'file':
-            # TSV/CSV files: check if multi-column
+            # TSV/CSV files: extract delimiter (default to tab)
+            delimiter = values[4] if len(values) >= 5 else '\t'
+            # Check if multi-column
             if len(values) >= 4 and ',' in values[3]:
-                # Multi-column: each column is a separate grouper using same TSV pool
+                # Multi-column: each column is a separate grouper with its own column index
+                # Format: tsv:SPEC_INDEX:COL_INDEX:DELIMITER
                 group_col_indices = values[3].split(',')
-                for _ in group_col_indices:
-                    pool_types[grouper_index] = f'tsv:{spec_index}'
+                for col_idx in group_col_indices:
+                    pool_types[grouper_index] = f'tsv:{spec_index}:{col_idx}:{delimiter}'
                     grouper_index += 1
             else:
                 # Single column
-                pool_types[grouper_index] = f'tsv:{spec_index}'
+                col_idx = values[3] if len(values) > 3 else '1'
+                pool_types[grouper_index] = f'tsv:{spec_index}:{col_idx}:{delimiter}'
                 grouper_index += 1
 
     return pool_types

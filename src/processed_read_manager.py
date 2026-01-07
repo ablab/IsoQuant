@@ -6,9 +6,10 @@
 ############################################################################
 
 import logging
+import os
 from collections import defaultdict
 
-from .file_naming import saves_file_name, multimappers_file_name
+from .file_naming import saves_file_name, multimappers_file_name, dynamic_pools_file_name
 from .serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
 from .multimap_resolver import MultimapResolver
@@ -35,6 +36,13 @@ def prepare_multimapper_dict(chr_ids, sample, multimappers_counts, all_chr_ids, 
         string_pools.build_from_gffutils(gffutils_db)
 
     for chr_id in chr_ids:
+        # Load dynamic pools for this chromosome (for read groups from BAM tags/read IDs)
+        dynamic_pools_file = dynamic_pools_file_name(sample.out_raw_file, chr_id)
+        if os.path.exists(dynamic_pools_file):
+            logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
+            with open(dynamic_pools_file, 'rb') as f:
+                string_pools.deserialize_dynamic_pools(f)
+
         chr_dump_file = saves_file_name(sample.out_raw_file, chr_id)
         loader = BasicReadAssignmentLoader(chr_dump_file, string_pools)
         while loader.has_next():

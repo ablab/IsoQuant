@@ -66,3 +66,8 @@ def allinfo_stats_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distanc
 
 def umi_filtered_global_lock_file_name(out_umi_filtered_done: str):
     return out_umi_filtered_done + ".lock"
+
+
+def dynamic_pools_file_name(out_raw_file: str, chr_id: str):
+    """File name for per-chromosome dynamic string pools (for read groups from BAM tags/read IDs)."""
+    return out_raw_file + "_dynamic_pools_" + convert_chr_id_to_file_name_str(chr_id)

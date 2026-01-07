@@ -711,9 +711,8 @@ class BasicReadAssignment:
         read_int_neg(infile)
         read_int_neg(infile)
         read_int_neg(infile)
-        # Read group: stored as strings for cross-worker compatibility
-        read_group_strings = read_list(infile, read_string)
-        read_assignment.read_group_ids = string_pools.read_group_to_ids(read_group_strings) if read_group_strings else []
+        # Read group: stored as int IDs (dynamic pools loaded from separate file before deserialization)
+        read_assignment.read_group_ids = read_list(infile, read_int)
         # Barcode/UMI pools are built in sorted order, so IDs are deterministic
         read_assignment.barcode_id = read_int_or_none(infile)
         read_assignment.umi_id = read_int_or_none(infile)
@@ -885,9 +884,8 @@ class ReadAssignment:
         read_assignment.polyA_found = bool_arr[1]
         read_assignment.cage_found = bool_arr[2]
         read_assignment.polya_info = PolyAInfo(read_int_neg(infile), read_int_neg(infile), read_int_neg(infile), read_int_neg(infile))
-        # Read group: stored as strings for cross-worker compatibility
-        read_group_strings = read_list(infile, read_string)
-        read_assignment.read_group_ids = string_pools.read_group_to_ids(read_group_strings) if read_group_strings else []
+        # Read group: stored as int IDs (dynamic pools loaded from separate file before deserialization)
+        read_assignment.read_group_ids = read_list(infile, read_int)
         # Barcode/UMI pools are built in sorted order, so IDs are deterministic
         read_assignment.barcode_id = read_int_or_none(infile)
         read_assignment.umi_id = read_int_or_none(infile)
@@ -917,9 +915,8 @@ class ReadAssignment:
         write_int_neg(self.polya_info.external_polyt_pos, outfile)
         write_int_neg(self.polya_info.internal_polya_pos, outfile)
         write_int_neg(self.polya_info.internal_polyt_pos, outfile)
-        # Serialize read_group as strings for cross-worker compatibility
-        # (dynamic pools like BAM tags have worker-specific ID mappings)
-        write_list(self.read_group, outfile, write_string)
+        # Serialize read_group as int IDs (dynamic pools saved to separate file)
+        write_list(self.read_group_ids, outfile, write_int)
         # Barcode/UMI pools are built in sorted order, so IDs are deterministic
         write_int_or_none(self.barcode_id, outfile)
         write_int_or_none(self.umi_id, outfile)
