@@ -55,8 +55,7 @@ class BarcodeDetectionResult:
     NOSEQ = "*"  # Sentinel for missing/undetected sequence
 
     def __init__(self, read_id: str, barcode: str = NOSEQ, UMI: str = NOSEQ,
-                 BC_score: int = -1, UMI_good: bool = False, strand: str = ".",
-                 additional_info: Optional[Dict] = None):
+                 BC_score: int = -1, UMI_good: bool = False, strand: str = "."):
         """
         Initialize barcode detection result.
 
@@ -67,11 +66,14 @@ class BarcodeDetectionResult:
             BC_score: Barcode alignment score
             UMI_good: Whether UMI passes quality filters
             strand: Detected strand ('+', '-', or '.')
-            additional_info: Optional platform-specific metadata
         """
         self.read_id: str = read_id
         self.barcode: str = barcode
+        if not self.barcode:
+            self.barcode = BarcodeDetectionResult.NOSEQ
         self.UMI: str = UMI
+        if not self.UMI:
+            self.UMI = BarcodeDetectionResult.NOSEQ
         self.BC_score: int = BC_score
         self.UMI_good: bool = UMI_good
         self.strand: str = strand
