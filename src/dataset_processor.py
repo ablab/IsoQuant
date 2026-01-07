@@ -107,7 +107,7 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
     # Load per-chromosome pools if requested
     if chr_id:
         if load_barcode_pool and sample.barcodes_split_reads:
-            barcode_file = sample.barcodes_split_reads + "_" + chr_id
+            barcode_file = sample.get_barcodes_split_file(chr_id)
             string_pools.load_barcode_pool(barcode_file)
 
         # Use override if provided, otherwise use sample's read_group_file
@@ -164,8 +164,8 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     if args.high_memory:
         current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
-    lock_file = reads_collected_lock_file_name(sample.out_raw_file, chr_id)
-    save_file = saves_file_name(sample.out_raw_file, chr_id)
+    lock_file = sample.get_collected_lock_file(chr_id)
+    save_file = sample.get_save_file(chr_id)
     group_file = save_file + "_groups"
     bamstat_file = save_file + "_bamstat"
     processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, chr_ids, args.genedb)
@@ -195,7 +195,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
                                               load_barcode_pool=True, load_tsv_pools=True)
 
             # Load dynamic pools (for read groups from BAM tags/read IDs)
-            dynamic_pools_file = dynamic_pools_file_name(sample.out_raw_file, chr_id)
+            dynamic_pools_file = sample.get_dynamic_pools_file(chr_id)
             if os.path.exists(dynamic_pools_file):
                 logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
                 with open(dynamic_pools_file, 'rb') as f:
@@ -232,7 +232,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     # Load barcode dict for this chromosome if available (for backward compatibility during transition)
     barcode_dict = {}
     if sample.barcodes_split_reads:
-        barcode_file = sample.barcodes_split_reads + "_" + chr_id
+        barcode_file = sample.get_barcodes_split_file(chr_id)
         if os.path.exists(barcode_file):
             logger.debug(f"Loading barcodes from {barcode_file}")
             for line in open(barcode_file):
@@ -277,7 +277,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
 
     # Save dynamic pools if they have data (for read groups from BAM tags/read IDs)
     if string_pools.has_dynamic_pools():
-        dynamic_pools_file = dynamic_pools_file_name(sample.out_raw_file, chr_id)
+        dynamic_pools_file = sample.get_dynamic_pools_file(chr_id)
         logger.debug(f"Saving dynamic pools to {dynamic_pools_file}")
         with open(dynamic_pools_file, 'wb') as f:
             string_pools.serialize_dynamic_pools(f)
@@ -423,14 +423,14 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
                                       load_barcode_pool=True, load_tsv_pools=False)
 
     # Load dynamic pools (for read groups from BAM tags/read IDs)
-    dynamic_pools_file = dynamic_pools_file_name(sample.out_raw_file, chr_id)
+    dynamic_pools_file = sample.get_dynamic_pools_file(chr_id)
     if os.path.exists(dynamic_pools_file):
         logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
         with open(dynamic_pools_file, 'rb') as f:
             string_pools.deserialize_dynamic_pools(f)
 
     umi_filter = UMIFilter(args.umi_length, edit_distance)
-    filtered_reads = filtered_reads_file_name(sample.out_raw_file, chr_id) if output_filtered_reads else None
+    filtered_reads = sample.get_filtered_reads_file(chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(chr_id, sample.out_raw_file,
                                   transcript_type_dict,
                                   barcode_feature_table,

@@ -79,6 +79,59 @@ class SampleData:
         self.out_umi_filtered_done= self._make_aux_path(self.prefix + ".UMI_filtered.done")
         self.split_reads_fasta = self._make_path(self.prefix + ".split_reads")
 
+    # Chromosome-specific path methods (delegate to file_naming.py)
+
+    def get_save_file(self, chr_id: str) -> str:
+        """Get path to serialized read assignments for a chromosome."""
+        from .file_naming import saves_file_name
+        return saves_file_name(self.out_raw_file, chr_id)
+
+    def get_multimappers_file(self, chr_id: str) -> str:
+        """Get path to multimapper assignments for a chromosome."""
+        from .file_naming import multimappers_file_name
+        return multimappers_file_name(self.out_raw_file, chr_id)
+
+    def get_filtered_reads_file(self, chr_id: str) -> str:
+        """Get path to filtered reads for a chromosome."""
+        from .file_naming import filtered_reads_file_name
+        return filtered_reads_file_name(self.out_raw_file, chr_id)
+
+    def get_dynamic_pools_file(self, chr_id: str) -> str:
+        """Get path to dynamic string pools for a chromosome."""
+        from .file_naming import dynamic_pools_file_name
+        return dynamic_pools_file_name(self.out_raw_file, chr_id)
+
+    def get_collected_lock_file(self, chr_id: str) -> str:
+        """Get path to lock file indicating reads collected for a chromosome."""
+        from .file_naming import reads_collected_lock_file_name
+        return reads_collected_lock_file_name(self.out_raw_file, chr_id)
+
+    def get_processed_lock_file(self, chr_id: str) -> str:
+        """Get path to lock file indicating reads processed for a chromosome."""
+        from .file_naming import reads_processed_lock_file_name
+        return reads_processed_lock_file_name(self.out_raw_file, chr_id)
+
+    def get_read_group_split_file(self, chr_id: str, spec_index: int = None) -> str:
+        """Get path to split read group file for a chromosome.
+
+        Args:
+            chr_id: Chromosome ID
+            spec_index: Optional spec index for multi-spec files
+
+        Returns:
+            Path like 'prefix.read_group_spec0_chr1' or 'prefix.read_group_chr1'
+        """
+        from .file_naming import convert_chr_id_to_file_name_str
+        chr_str = convert_chr_id_to_file_name_str(chr_id)
+        if spec_index is not None:
+            return f"{self.read_group_file}_spec{spec_index}_{chr_str}"
+        return f"{self.read_group_file}_{chr_str}"
+
+    def get_barcodes_split_file(self, chr_id: str) -> str:
+        """Get path to split barcodes file for a chromosome."""
+        from .file_naming import convert_chr_id_to_file_name_str
+        return self.barcodes_split_reads + "_" + convert_chr_id_to_file_name_str(chr_id)
+
 
 class InputDataStorage:
     def __init__(self, args):
