@@ -210,6 +210,9 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="transcript model construction strategy to use", type=str, default=None)
     add_additional_option_to_group(algo_args_group, "--delta", type=int, default=None,
                                    help="delta for inexact splice junction comparison, chosen automatically based on data type")
+    add_additional_option_to_group(algo_args_group, "--use_replicas", type=bool_str, default=True,
+                                   help="require novel transcripts to be confirmed by multiple files "
+                                        "when file_name grouping is used (default: true)")
 
 
     # PIPELINE STEPS
