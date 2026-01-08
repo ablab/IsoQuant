@@ -516,3 +516,89 @@ class StringPoolManager:
         for spec_idx, pool in self.read_group_tsv_pools.items():
             lines.append(f"  Read group TSV (spec {spec_idx}): {len(pool)}")
         return "\n".join(lines)
+
+
+def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
+                       load_barcode_pool=False, load_tsv_pools=False, read_group_file_prefix=None):
+    """
+    Set up string pools for memory optimization during parallel processing.
+
+    Args:
+        args: Command-line arguments
+        sample: SampleData object
+        chr_ids: List of all chromosome IDs to process (for chromosome pool)
+        chr_id: Current chromosome ID (required if loading per-chromosome pools)
+        gffutils_db: Pre-loaded gffutils database (if None, will load from args.genedb)
+        load_barcode_pool: Whether to load per-chromosome barcode pool
+        load_tsv_pools: Whether to load per-chromosome TSV read group pools
+        read_group_file_prefix: Override for read_group_file path (used when sample has modified prefix)
+
+    Returns:
+        StringPoolManager with pools configured
+    """
+    import glob
+    import re
+    from .read_groups import get_grouping_pool_types
+    from .assignment_loader import load_genedb
+
+    string_pools = StringPoolManager()
+
+    # Build chromosome pool from the definitive list of chromosomes to process
+    string_pools.build_chromosome_pool(chr_ids)
+
+    # Build gene/transcript pools from annotation (if available)
+    if gffutils_db is None and args.genedb:
+        gffutils_db = load_genedb(args.genedb)
+    if gffutils_db:
+        string_pools.build_from_gffutils(gffutils_db)
+
+    # Set up read group pool type mapping
+    pool_types = get_grouping_pool_types(args)
+    for spec_idx, pool_type in pool_types.items():
+        string_pools.set_group_spec_pool_type(spec_idx, pool_type)
+
+    # Build file_name pool if needed
+    if any(pt == 'file_name' for pt in pool_types.values()):
+        string_pools.build_file_name_pool(sample)
+
+    # Build barcode_spot pool if needed
+    if any(pt == 'barcode_spot' for pt in pool_types.values()):
+        if args.barcode2spot:
+            string_pools.build_barcode_spot_pool(args.barcode2spot)
+
+    # Load per-chromosome pools if requested
+    if chr_id:
+        if load_barcode_pool and sample.barcodes_split_reads:
+            barcode_file = sample.get_barcodes_split_file(chr_id)
+            string_pools.load_barcode_pool(barcode_file)
+
+        # Use override if provided, otherwise use sample's read_group_file
+        read_group_file = read_group_file_prefix if read_group_file_prefix else sample.read_group_file
+        if load_tsv_pools and read_group_file:
+            # Build mapping from tsv spec_index to (col_index, delimiter) from pool_types
+            # pool_type format: 'tsv:SPEC_INDEX:COL_INDEX:DELIMITER'
+            tsv_pool_info = {}  # spec_index -> list of (col_index, delimiter, pool_key)
+            for pool_type in pool_types.values():
+                if pool_type.startswith('tsv:'):
+                    parts = pool_type.split(':')
+                    if len(parts) >= 4:
+                        tsv_spec_idx = int(parts[1])
+                        col_idx = int(parts[2])
+                        delimiter = parts[3]
+                        # pool_key is spec_idx:col_idx to uniquely identify multi-column pools
+                        pool_key = f"{tsv_spec_idx}:{col_idx}"
+                        if tsv_spec_idx not in tsv_pool_info:
+                            tsv_pool_info[tsv_spec_idx] = []
+                        tsv_pool_info[tsv_spec_idx].append((col_idx, delimiter, pool_key))
+
+            base_pattern = read_group_file + "_spec*_" + chr_id
+            spec_files = sorted(glob.glob(base_pattern))
+            for spec_file in spec_files:
+                match = re.search(r'_spec(\d+)_', spec_file)
+                if match:
+                    spec_index = int(match.group(1))
+                    # Load pool for each column in this spec file
+                    for col_idx, delimiter, pool_key in tsv_pool_info.get(spec_index, [(1, '\t', f"{spec_index}:1")]):
+                        string_pools.load_read_group_tsv_pool(spec_file, pool_key, col_idx, delimiter)
+
+    return string_pools
