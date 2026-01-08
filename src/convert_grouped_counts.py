@@ -16,6 +16,8 @@ import logging
 import gzip
 import gffutils
 
+from .file_naming import mtx_matrix_file, mtx_features_file, mtx_barcodes_file
+
 
 GROUP_COUNT_CUTOFF = 100
 
@@ -83,9 +85,9 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
     group_index_map = {group_id: idx + 1 for idx, group_id in enumerate(unique_groups)}
 
     # Write the count matrix to an MTX file
-    mtx_file = output_file_prefix + ".matrix.mtx"
-    features_file = output_file_prefix + ".features.tsv"
-    barcodes_files = output_file_prefix + ".barcodes.tsv"
+    mtx_file = mtx_matrix_file(output_file_prefix)
+    features_file = mtx_features_file(output_file_prefix)
+    barcodes_files = mtx_barcodes_file(output_file_prefix)
 
     normalization_factors = {g: 1.0 for g in df['group_id'].unique()} if not convert_to_tpm \
         else get_normalization_factors(df, usable_reads_per_group)

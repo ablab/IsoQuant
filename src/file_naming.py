@@ -121,3 +121,52 @@ def umi_output_prefix(out_umi_filtered: str, edit_distance: int):
     if edit_distance < 0:
         return out_umi_filtered + ".ALL"
     return out_umi_filtered + ".ED%d" % edit_distance
+
+
+# Counter output files
+
+def counts_prefix(output_prefix: str):
+    """Get counts file prefix from output prefix."""
+    return output_prefix + "_counts"
+
+
+def tpm_prefix(output_prefix: str):
+    """Get TPM file prefix from output prefix."""
+    return output_prefix + "_tpm"
+
+
+def counts_file_name(counts_prefix: str, linear: bool = False):
+    """Get counts file name with optional linear format."""
+    return counts_prefix + (".linear.tsv" if linear else ".tsv")
+
+
+def tpm_file_name(tpm_prefix: str):
+    """Get TPM file name."""
+    return tpm_prefix + ".tsv"
+
+
+def counts_stats_file_name(counts_file: str):
+    """Get stats file name from counts file."""
+    return counts_file + ".stats"
+
+
+def counts_usable_file_name(counts_file: str):
+    """Get usable reads file name from counts file."""
+    return counts_file + ".usable"
+
+
+# Matrix Market format files (for grouped counts)
+
+def mtx_matrix_file(output_prefix: str):
+    """Get Matrix Market file name."""
+    return output_prefix + ".matrix.mtx"
+
+
+def mtx_features_file(output_prefix: str):
+    """Get features file name for Matrix Market format."""
+    return output_prefix + ".features.tsv"
+
+
+def mtx_barcodes_file(output_prefix: str):
+    """Get barcodes file name for Matrix Market format."""
+    return output_prefix + ".barcodes.tsv"

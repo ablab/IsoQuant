@@ -15,6 +15,10 @@ from .isoform_assignment import (
 from .gene_info import FeatureInfo
 from .read_groups import AbstractReadGrouper
 from .convert_grouped_counts import GROUP_COUNT_CUTOFF, convert_to_mtx, convert_to_matrix
+from .file_naming import (
+    counts_prefix, tpm_prefix, counts_file_name, tpm_file_name,
+    counts_stats_file_name, counts_usable_file_name
+)
 
 logger = logging.getLogger('IsoQuant')
 
@@ -155,13 +159,10 @@ class AbstractCounter:
     def __init__(self, output_prefix, ignore_read_groups=False):
         self.ignore_read_groups = ignore_read_groups
         self.output_prefix = output_prefix
-        self.output_counts_prefix = output_prefix + "_counts"
-        self.output_tpm_prefix = output_prefix + "_tpm"
-        if ignore_read_groups:
-            self.output_counts_file_name = self.output_counts_prefix + ".tsv"
-        else:
-            self.output_counts_file_name = self.output_counts_prefix + ".linear.tsv"
-        self.output_tpm_file_name = self.output_tpm_prefix + ".tsv"
+        self.output_counts_prefix = counts_prefix(output_prefix)
+        self.output_tpm_prefix = tpm_prefix(output_prefix)
+        self.output_counts_file_name = counts_file_name(self.output_counts_prefix, linear=not ignore_read_groups)
+        self.output_tpm_file_name = tpm_file_name(self.output_tpm_prefix)
         self.output_file = self.output_counts_file_name
         open(self.output_file, "w").close()
         self.output_stats_file_name = None
@@ -261,8 +262,8 @@ class AssignedFeatureCounter(AbstractCounter):
         # feature_id -> (group_id -> count)
         self.feature_counter = defaultdict(IncrementalDict)
         self.confirmed_features = set()
-        self.output_stats_file_name = self.output_counts_file_name + ".stats"
-        self.usable_file_name = self.output_counts_file_name + ".usable"
+        self.output_stats_file_name = counts_stats_file_name(self.output_counts_file_name)
+        self.usable_file_name = counts_usable_file_name(self.output_counts_file_name)
 
     def add_read_info(self, read_assignment=None):
         group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[self.group_index]
