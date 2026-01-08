@@ -173,11 +173,7 @@ class AbstractCounter:
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
 
-<<<<<<< HEAD
-    def add_read_info_raw(self, read_id, feature_ids, group_ids=None):
-=======
     def add_read_info_raw(self, read_id, feature_ids, group_ids):
->>>>>>> upstream/master
         raise NotImplementedError()
 
     def add_confirmed_features(self, features):
@@ -310,11 +306,7 @@ class AssignedFeatureCounter(AbstractCounter):
             if self.assignment_extractor.confirms_feature(read_assignment):
                 self.confirmed_features.add(feature_id)
 
-<<<<<<< HEAD
-    def add_read_info_raw(self, read_id, feature_ids, group_ids=None):
-=======
     def add_read_info_raw(self, read_id, feature_ids, group_ids):
->>>>>>> upstream/master
         if self.ignore_read_groups or group_ids is None:
             group_id = AbstractReadGrouper.default_group_id
         else:
