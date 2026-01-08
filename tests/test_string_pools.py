@@ -332,6 +332,241 @@ class TestStringPoolManager:
         assert "Transcripts: 1" in stats
         assert "Barcodes: 1" in stats
 
+    def test_build_chromosome_pool(self):
+        """Test building chromosome pool."""
+        manager = StringPoolManager()
+
+        chr_ids = ["chr3", "chr1", "chr2", "chrX"]
+        manager.build_chromosome_pool(chr_ids)
+
+        # Pool should have all chromosomes
+        assert len(manager.chromosome_pool) == 4
+        assert "chr1" in manager.chromosome_pool
+        assert "chr2" in manager.chromosome_pool
+        assert "chr3" in manager.chromosome_pool
+        assert "chrX" in manager.chromosome_pool
+
+        # IDs should be assigned in sorted order (deterministic across workers)
+        assert manager.chromosome_pool.get_int("chr1") == 0
+        assert manager.chromosome_pool.get_int("chr2") == 1
+        assert manager.chromosome_pool.get_int("chr3") == 2
+        assert manager.chromosome_pool.get_int("chrX") == 3
+
+    def test_set_and_get_group_spec_pool_type_file_name(self):
+        """Test setting and getting pool type for file_name grouping."""
+        manager = StringPoolManager()
+
+        # Set up file_name pool
+        manager.file_name_pool.add("sample1")
+        manager.file_name_pool.add("sample2")
+
+        # Set pool type for spec index 0
+        manager.set_group_spec_pool_type(0, 'file_name')
+
+        # get_read_group_pool should return file_name_pool
+        pool = manager.get_read_group_pool(0)
+        assert pool is manager.file_name_pool
+        assert "sample1" in pool
+        assert "sample2" in pool
+
+    def test_set_and_get_group_spec_pool_type_barcode_spot(self):
+        """Test setting and getting pool type for barcode_spot grouping."""
+        manager = StringPoolManager()
+
+        # Set up barcode_spot pool
+        manager.barcode_spot_pool.add("cell_typeA")
+        manager.barcode_spot_pool.add("cell_typeB")
+
+        # Set pool type for spec index 1
+        manager.set_group_spec_pool_type(1, 'barcode_spot')
+
+        # get_read_group_pool should return barcode_spot_pool
+        pool = manager.get_read_group_pool(1)
+        assert pool is manager.barcode_spot_pool
+        assert "cell_typeA" in pool
+
+    def test_set_and_get_group_spec_pool_type_tsv(self):
+        """Test setting and getting pool type for TSV grouping."""
+        manager = StringPoolManager()
+
+        # Create a TSV pool
+        pool_key = "0:1"
+        tsv_pool = StringPool()
+        tsv_pool.add("groupA")
+        tsv_pool.add("groupB")
+        manager.read_group_tsv_pools[pool_key] = tsv_pool
+
+        # Set pool type for spec index 0 (format: tsv:spec_idx:col_idx:delimiter)
+        manager.set_group_spec_pool_type(0, 'tsv:0:1:\t')
+
+        # get_read_group_pool should return the TSV pool
+        pool = manager.get_read_group_pool(0)
+        assert pool is tsv_pool
+        assert "groupA" in pool
+
+    def test_get_read_group_pool_dynamic_fallback(self):
+        """Test that get_read_group_pool creates dynamic pool if no type set."""
+        manager = StringPoolManager()
+
+        # No pool type set for spec index 5
+        pool = manager.get_read_group_pool(5)
+
+        # Should create a new dynamic pool
+        assert pool is not None
+        assert 5 in manager.read_group_dynamic_pools
+        assert pool is manager.read_group_dynamic_pools[5]
+
+    def test_get_or_create_dynamic_pool(self):
+        """Test dynamic pool creation."""
+        manager = StringPoolManager()
+
+        # First call creates the pool
+        pool1 = manager._get_or_create_dynamic_pool(3)
+        assert pool1 is not None
+        assert 3 in manager.read_group_dynamic_pools
+
+        # Second call returns the same pool
+        pool2 = manager._get_or_create_dynamic_pool(3)
+        assert pool1 is pool2
+
+        # Different index creates different pool
+        pool3 = manager._get_or_create_dynamic_pool(4)
+        assert pool3 is not pool1
+        assert 4 in manager.read_group_dynamic_pools
+
+    def test_read_group_to_ids_and_from_ids(self):
+        """Test converting between group strings and IDs."""
+        manager = StringPoolManager()
+
+        # Set up pools for different spec indices
+        manager.set_group_spec_pool_type(0, 'file_name')
+        manager.file_name_pool.add("sample1")
+        manager.file_name_pool.add("sample2")
+
+        manager.set_group_spec_pool_type(1, 'dynamic')
+        dynamic_pool = manager._get_or_create_dynamic_pool(1)
+        dynamic_pool.add("groupA")
+        dynamic_pool.add("groupB")
+
+        # Convert strings to IDs
+        group_strings = ["sample1", "groupB"]
+        ids = manager.read_group_to_ids(group_strings)
+
+        assert ids[0] == manager.file_name_pool.get_int("sample1")
+        assert ids[1] == dynamic_pool.get_int("groupB")
+
+        # Convert IDs back to strings
+        recovered = manager.read_group_from_ids(ids)
+        assert recovered == group_strings
+
+    def test_read_group_to_ids_with_none(self):
+        """Test that None values are handled correctly."""
+        manager = StringPoolManager()
+
+        manager.set_group_spec_pool_type(0, 'file_name')
+        manager.file_name_pool.add("sample1")
+
+        # Convert with None value
+        group_strings = ["sample1", None]
+        ids = manager.read_group_to_ids(group_strings)
+
+        assert ids[0] == manager.file_name_pool.get_int("sample1")
+        assert ids[1] == -1  # None -> -1
+
+        # Convert back
+        recovered = manager.read_group_from_ids(ids)
+        assert recovered[0] == "sample1"
+        assert recovered[1] is None  # -1 -> None
+
+    def test_read_group_to_ids_empty(self):
+        """Test empty list handling."""
+        manager = StringPoolManager()
+
+        ids = manager.read_group_to_ids([])
+        assert ids == []
+
+        strings = manager.read_group_from_ids([])
+        assert strings == []
+
+    def test_has_dynamic_pools(self):
+        """Test has_dynamic_pools method."""
+        manager = StringPoolManager()
+
+        # No dynamic pools yet
+        assert manager.has_dynamic_pools() is False
+
+        # Create empty dynamic pool
+        manager._get_or_create_dynamic_pool(0)
+        assert manager.has_dynamic_pools() is False  # Empty pool
+
+        # Add data to dynamic pool
+        manager.read_group_dynamic_pools[0].add("value1")
+        assert manager.has_dynamic_pools() is True
+
+    def test_serialize_and_deserialize_dynamic_pools(self):
+        """Test serialization and deserialization of dynamic pools."""
+        import io
+
+        manager = StringPoolManager()
+
+        # Create dynamic pools with data
+        pool0 = manager._get_or_create_dynamic_pool(0)
+        pool0.add("group_a")
+        pool0.add("group_b")
+        pool0.add("group_c")
+
+        pool2 = manager._get_or_create_dynamic_pool(2)
+        pool2.add("type_x")
+        pool2.add("type_y")
+
+        # Serialize
+        buffer = io.BytesIO()
+        manager.serialize_dynamic_pools(buffer)
+
+        # Create new manager and deserialize
+        manager2 = StringPoolManager()
+        buffer.seek(0)
+        manager2.deserialize_dynamic_pools(buffer)
+
+        # Verify pools were restored
+        assert 0 in manager2.read_group_dynamic_pools
+        assert 2 in manager2.read_group_dynamic_pools
+
+        # Verify pool contents
+        restored_pool0 = manager2.read_group_dynamic_pools[0]
+        assert len(restored_pool0) == 3
+        assert "group_a" in restored_pool0
+        assert "group_b" in restored_pool0
+        assert "group_c" in restored_pool0
+
+        restored_pool2 = manager2.read_group_dynamic_pools[2]
+        assert len(restored_pool2) == 2
+        assert "type_x" in restored_pool2
+        assert "type_y" in restored_pool2
+
+        # Verify IDs are preserved (critical for deserialization consistency)
+        assert restored_pool0.get_int("group_a") == pool0.get_int("group_a")
+        assert restored_pool0.get_int("group_b") == pool0.get_int("group_b")
+        assert restored_pool2.get_int("type_x") == pool2.get_int("type_x")
+
+    def test_serialize_empty_dynamic_pools(self):
+        """Test serialization with no dynamic pools."""
+        import io
+
+        manager = StringPoolManager()
+
+        # Serialize empty pools
+        buffer = io.BytesIO()
+        manager.serialize_dynamic_pools(buffer)
+
+        # Deserialize into new manager
+        manager2 = StringPoolManager()
+        buffer.seek(0)
+        manager2.deserialize_dynamic_pools(buffer)
+
+        # Should have no dynamic pools
+        assert len(manager2.read_group_dynamic_pools) == 0
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
