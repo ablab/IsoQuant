@@ -50,6 +50,9 @@ from detect_barcodes import process_single_thread, process_in_parallel, get_umi_
 
 logger = logging.getLogger('IsoQuant')
 
+# Large output file types for --large_output option
+LARGE_OUTPUT_TYPES = ["read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
+
 
 def bool_str(s):
     s = s.lower()
@@ -229,8 +232,6 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='Do not use previously generated index, feature db or alignments.')
     add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
                                    default=False, help="run only read assignment and quantification")
-    add_additional_option_to_group(pipeline_args_group, "--no_large_files", action="store_true",
-                                   default=False, help="do not output files containing all reads (bed and tsv)")
     add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
                                    help="align reads to reference without running further analysis")
     add_additional_option_to_group(pipeline_args_group, "--no_gtf_check", help="do not perform GTF checks",
@@ -255,6 +256,10 @@ def parse_args(cmd_args=None, namespace=None):
                                    type=str)
     add_additional_option_to_group(output_setup_args_group, "--no_gzip", help="do not gzip large output files", dest="gzipped",
                                    action='store_false', default=True)
+    add_additional_option_to_group(output_setup_args_group, "--large_output", nargs='*', type=str,
+                                   default=["read_assignments", "allinfo"],
+                                   help="large output files to generate: " + ", ".join(LARGE_OUTPUT_TYPES) +
+                                        " (default: read_assignments allinfo)")
     add_additional_option_to_group(output_setup_args_group, "--normalization_method", type=str, choices=[e.name for e in NormalizationMethod],
                                    help="TPM normalization method: simple - conventional normalization using all counted reads;"
                                         "usable_reads - includes all assigned reads;"
@@ -399,6 +404,16 @@ def check_and_load_args(args, parser):
     if not check_input_params(args):
         parser.print_usage()
         exit(-1)
+
+    # Validate --large_output values
+    if args.large_output:
+        if "none" in args.large_output and len(args.large_output) > 1:
+            logger.error("--large_output 'none' cannot be combined with other values")
+            exit(-1)
+        for val in args.large_output:
+            if val not in LARGE_OUTPUT_TYPES:
+                logger.error("Invalid --large_output value: %s. Valid values: %s" % (val, ", ".join(LARGE_OUTPUT_TYPES)))
+                exit(-1)
 
     save_params(args)
     return args

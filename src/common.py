@@ -886,3 +886,20 @@ base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', 'a': 't', 'c': 'g
 def reverse_complement(seq):
     lms = list(map(lambda x: base_comp[x], seq))[::-1]
     return ''.join(lms)
+
+
+def large_output_enabled(args, output_type):
+    """Check if a large output type is enabled.
+
+    Args:
+        args: Parsed command-line arguments
+        output_type: One of 'read_assignments', 'corrected_bed', 'read2transcripts', 'allinfo'
+
+    Returns:
+        True if the output type is enabled, False otherwise
+    """
+    if not hasattr(args, 'large_output') or not args.large_output:
+        return False
+    if "none" in args.large_output:
+        return False
+    return output_type in args.large_output

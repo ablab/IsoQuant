@@ -6,6 +6,7 @@
 ############################################################################
 
 import glob
+import gzip
 import itertools
 import logging
 import shutil
@@ -18,7 +19,7 @@ import pysam
 from pyfaidx import Fasta
 
 from .modes import IsoQuantMode
-from .common import proper_plural_form
+from .common import proper_plural_form, large_output_enabled
 from .serialization import *
 from .stats import EnumStats
 from .file_utils import merge_files, merge_counts
@@ -379,7 +380,7 @@ class DatasetProcessor:
             exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
             gff_printer = GFFPrinter(
                 sample.out_dir, sample.prefix, exon_id_storage,
-                output_r2t=not self.args.no_large_files,
+                output_r2t=large_output_enabled(self.args, "read2transcripts"),
                 header=self.common_header,
                 gzipped=self.args.gzipped
             )
@@ -504,17 +505,29 @@ class DatasetProcessor:
 
             stat_dict = defaultdict(int)
             files_to_remove = []
-            with open(output_prefix + ".allinfo", "w") as outf:
-                for all_info_file_name, stats_output_file_name, umi_filter_done in results:
-                    shutil.copyfileobj(open(all_info_file_name, "r"), outf)
-                    for l in open(stats_output_file_name, "r"):
-                        v = l.strip().split("\t")
-                        if len(v) != 2:
-                            continue
-                        stat_dict[v[0]] += int(v[1])
-                    files_to_remove.append(all_info_file_name)
-                    files_to_remove.append(stats_output_file_name)
-                    files_to_remove.append(umi_filter_done)
+            save_allinfo = large_output_enabled(self.args, "allinfo")
+            if save_allinfo:
+                allinfo_fname = output_prefix + ".allinfo"
+                if self.args.gzipped:
+                    allinfo_fname += ".gz"
+                    allinfo_outf = gzip.open(allinfo_fname, "wt")
+                else:
+                    allinfo_outf = open(allinfo_fname, "w")
+
+            for all_info_file_name, stats_output_file_name, umi_filter_done in results:
+                if save_allinfo:
+                    shutil.copyfileobj(open(all_info_file_name, "r"), allinfo_outf)
+                for l in open(stats_output_file_name, "r"):
+                    v = l.strip().split("\t")
+                    if len(v) != 2:
+                        continue
+                    stat_dict[v[0]] += int(v[1])
+                files_to_remove.append(all_info_file_name)
+                files_to_remove.append(stats_output_file_name)
+                files_to_remove.append(umi_filter_done)
+
+            if save_allinfo:
+                allinfo_outf.close()
 
             logger.info("PCR duplicates filtered with edit distance %d, filtering stats:" % edit_distance)
             with open(output_prefix + ".stats.tsv", "w") as outf:

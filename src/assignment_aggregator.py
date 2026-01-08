@@ -24,6 +24,7 @@ from .assignment_io import (
 )
 from .transcript_printer import VoidTranscriptPrinter
 from .gene_info import get_all_chromosome_genes, get_all_chromosome_transcripts
+from .common import large_output_enabled
 
 logger = logging.getLogger('IsoQuant')
 
@@ -46,7 +47,7 @@ class ReadAssignmentAggregator:
 
         printer_list = []
         self.corrected_bed_printer = None
-        if not self.args.no_large_files:
+        if large_output_enabled(self.args, "corrected_bed"):
             corrected_bed_path = sample.get_corrected_bed_file(chr_id) if chr_id else sample.out_corrected_bed
             self.corrected_bed_printer = BEDPrinter(corrected_bed_path,
                                                     self.args,
@@ -54,7 +55,7 @@ class ReadAssignmentAggregator:
                                                     gzipped=gzipped)
             printer_list.append(self.corrected_bed_printer)
         self.basic_printer = None
-        if self.args.genedb and not self.args.no_large_files:
+        if self.args.genedb and large_output_enabled(self.args, "read_assignments"):
             assigned_tsv_path = sample.get_assigned_tsv_file(chr_id) if chr_id else sample.out_assigned_tsv
             self.basic_printer = BasicTSVAssignmentPrinter(assigned_tsv_path, self.args, self.io_support,
                                                            additional_header=self.common_header, gzipped=gzipped)

@@ -37,6 +37,7 @@ from .read_groups import create_read_grouper, get_grouping_strategy_names, load_
 from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .assignment_aggregator import ReadAssignmentAggregator
 from .string_pools import setup_string_pools
+from .common import large_output_enabled
 
 logger = logging.getLogger('IsoQuant')
 
@@ -238,7 +239,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
 
     if construct_models:
         tmp_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
-                                     output_r2t=not args.no_large_files,
+                                     output_r2t=large_output_enabled(args, "read2transcripts"),
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
