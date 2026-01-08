@@ -166,8 +166,8 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     read_grouper = create_read_grouper(args, sample, chr_id)
     lock_file = sample.get_collected_lock_file(chr_id)
     save_file = sample.get_save_file(chr_id)
-    group_file = save_file + "_groups"
-    bamstat_file = save_file + "_bamstat"
+    group_file = read_groups_file_name(save_file)
+    bamstat_file = bamstat_file_name(save_file)
     processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, chr_ids, args.genedb)
 
     if os.path.exists(lock_file) and args.resume:
@@ -293,8 +293,8 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
-    # Derive read_group_file prefix from saves_prefix (replace .save with .read_group)
-    read_group_file_prefix = saves_prefix.replace('.save', '.read_group') if saves_prefix.endswith('.save') else None
+    # Derive read_group_file prefix from saves_prefix
+    read_group_file_prefix = read_group_file_from_saves(saves_prefix)
 
     # Build string pools for memory optimization
     string_pools = setup_string_pools(args, sample, chr_ids, chr_id,
@@ -312,15 +312,15 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
 
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
     lock_file = reads_processed_lock_file_name(saves_prefix, chr_id)
-    read_stat_file = "{}_read_stat".format(chr_dump_file)
-    transcript_stat_file = "{}_transcript_stat".format(chr_dump_file)
+    chr_read_stat_file = read_stat_file_name(chr_dump_file)
+    chr_transcript_stat_file = transcript_stat_file_name(chr_dump_file)
     construct_models = not args.no_model_construction
 
     if os.path.exists(lock_file):
         if args.resume:
             logger.info("Processed assignments from chromosome " + chr_id + " detected")
-            read_stat = EnumStats(read_stat_file)
-            transcript_stat = EnumStats(transcript_stat_file) if construct_models else EnumStats()
+            read_stat = EnumStats(chr_read_stat_file)
+            transcript_stat = EnumStats(chr_transcript_stat_file) if construct_models else EnumStats()
             return read_stat, transcript_stat
         os.remove(lock_file)
 
@@ -386,7 +386,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
                 transcript_stat_counter.add(t.transcript_type)
 
     aggregator.global_counter.dump()
-    aggregator.read_stat_counter.dump(read_stat_file)
+    aggregator.read_stat_counter.dump(chr_read_stat_file)
     if construct_models:
         if loader.genedb:
             all_models, gene_info = create_extended_storage(loader.genedb, chr_id, loader.chr_record, novel_model_storage)
@@ -395,7 +395,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
             tmp_extended_gff_printer.dump(gene_info, all_models)
         aggregator.transcript_model_global_counter.dump()
         aggregator.gene_model_global_counter.dump()
-        transcript_stat_counter.dump(transcript_stat_file)
+        transcript_stat_counter.dump(chr_transcript_stat_file)
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
 
@@ -781,8 +781,8 @@ class DatasetProcessor:
     def collect_reads(self, sample):
         logger.info('Collecting read alignments')
         chr_ids = self.get_chr_list()
-        info_file = sample.out_raw_file + "_info"
-        lock_file = sample.out_raw_file + "_lock"
+        info_file = sample.get_info_file()
+        lock_file = sample.get_collection_lock_file()
 
         if os.path.exists(lock_file):
             if self.args.resume:
@@ -996,7 +996,7 @@ class DatasetProcessor:
                     return
                 os.remove(umi_ed_filtering_done)
 
-            output_prefix = sample.out_umi_filtered + (".ALL" if edit_distance < 0 else ".ED%d" % edit_distance)
+            output_prefix = umi_output_prefix(sample.out_umi_filtered, edit_distance)
             logger.info("Results will be saved to %s" % output_prefix)
             output_filtered_reads = i == 0
 
@@ -1052,7 +1052,7 @@ class DatasetProcessor:
 
     @staticmethod
     def load_read_info(dump_filename):
-        info_loader = open(dump_filename + "_info", "rb")
+        info_loader = open(info_file_name(dump_filename), "rb")
         total_assignments = read_int(info_loader)
         polya_assignments = read_int(info_loader)
         # Load all_read_groups as list of sets

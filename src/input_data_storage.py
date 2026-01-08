@@ -185,6 +185,18 @@ class SampleData:
         """
         return self._make_path(f"{self.get_chr_prefix(chr_id)}.{feature}_grouped_{strategy_name}")
 
+    # Sample-level auxiliary files (for resume functionality)
+
+    def get_info_file(self) -> str:
+        """Get path to sample collection info file."""
+        from .file_naming import info_file_name
+        return info_file_name(self.out_raw_file)
+
+    def get_collection_lock_file(self) -> str:
+        """Get path to sample collection lock file."""
+        from .file_naming import collection_lock_file_name
+        return collection_lock_file_name(self.out_raw_file)
+
 
 class InputDataStorage:
     def __init__(self, args):

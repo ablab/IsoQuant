@@ -71,3 +71,53 @@ def umi_filtered_global_lock_file_name(out_umi_filtered_done: str):
 def dynamic_pools_file_name(out_raw_file: str, chr_id: str):
     """File name for per-chromosome dynamic string pools (for read groups from BAM tags/read IDs)."""
     return out_raw_file + "_dynamic_pools_" + convert_chr_id_to_file_name_str(chr_id)
+
+
+# Read collection auxiliary files
+
+def read_groups_file_name(save_file: str):
+    """File name for storing read group assignments during collection."""
+    return save_file + "_groups"
+
+
+def bamstat_file_name(save_file: str):
+    """File name for BAM alignment statistics."""
+    return save_file + "_bamstat"
+
+
+def info_file_name(out_raw_file: str):
+    """File name for sample collection info (resume functionality)."""
+    return out_raw_file + "_info"
+
+
+def collection_lock_file_name(out_raw_file: str):
+    """File name for sample collection lock (resume functionality)."""
+    return out_raw_file + "_lock"
+
+
+# Model construction auxiliary files
+
+def read_stat_file_name(saves_file: str):
+    """File name for read assignment statistics."""
+    return saves_file + "_read_stat"
+
+
+def transcript_stat_file_name(saves_file: str):
+    """File name for transcript model statistics."""
+    return saves_file + "_transcript_stat"
+
+
+def read_group_file_from_saves(saves_prefix: str):
+    """Convert saves file prefix to read_group file prefix."""
+    if saves_prefix.endswith('.save'):
+        return saves_prefix.replace('.save', '.read_group')
+    return None
+
+
+# UMI filtering output files
+
+def umi_output_prefix(out_umi_filtered: str, edit_distance: int):
+    """Get UMI filtered output prefix with edit distance encoding."""
+    if edit_distance < 0:
+        return out_umi_filtered + ".ALL"
+    return out_umi_filtered + ".ED%d" % edit_distance
