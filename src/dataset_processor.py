@@ -67,6 +67,7 @@ class DatasetProcessor:
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
         self.all_read_groups = []  # Will be initialized per sample as list of sets
+        self.grouping_strategy_names = get_grouping_strategy_names(self.args)
         self.alignment_stat_counter = EnumStats()
         self.transcript_type_dict = {}
 
@@ -127,8 +128,7 @@ class DatasetProcessor:
                                          "file_name" in self.args.read_group)
 
         # Initialize all_read_groups as list of sets (one per grouping strategy)
-        grouping_strategy_names = get_grouping_strategy_names(self.args)
-        self.all_read_groups = [set() for _ in grouping_strategy_names]
+        self.all_read_groups = [set() for _ in self.grouping_strategy_names]
         fname = read_group_lock_filename(sample)
         if self.args.resume and os.path.exists(fname):
             logger.info("Read group table was split during the previous run, existing files will be used")
@@ -295,8 +295,7 @@ class DatasetProcessor:
         )
 
         # Initialize all_read_groups as list of sets (one per grouping strategy)
-        grouping_strategy_names = get_grouping_strategy_names(self.args)
-        all_read_groups = [set() for _ in grouping_strategy_names]
+        all_read_groups = [set() for _ in self.grouping_strategy_names]
 
         if self.args.threads > 1:
             with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
@@ -351,9 +350,8 @@ class DatasetProcessor:
                     ("off" if self.args.no_model_construction else "on"))
 
         # set up aggregators and outputs
-        grouping_strategy_names = get_grouping_strategy_names(self.args)
         aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped,
-                                             grouping_strategy_names=grouping_strategy_names)
+                                             grouping_strategy_names=self.grouping_strategy_names)
         transcript_stat_counter = EnumStats()
 
         gff_printer = VoidTranscriptPrinter()

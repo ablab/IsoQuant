@@ -41,6 +41,74 @@ from .string_pools import setup_string_pools
 logger = logging.getLogger('IsoQuant')
 
 
+# Helper functions to reduce code duplication
+
+def load_dynamic_pools(string_pools, dynamic_pools_file):
+    """Load dynamic pools from file if it exists."""
+    if os.path.exists(dynamic_pools_file):
+        logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
+        with open(dynamic_pools_file, 'rb') as f:
+            string_pools.deserialize_dynamic_pools(f)
+
+
+def save_dynamic_pools(string_pools, dynamic_pools_file):
+    """Save dynamic pools to file if they have data."""
+    if string_pools.has_dynamic_pools():
+        logger.debug(f"Saving dynamic pools to {dynamic_pools_file}")
+        with open(dynamic_pools_file, 'wb') as f:
+            string_pools.serialize_dynamic_pools(f)
+
+
+def save_read_groups(group_file, read_groups):
+    """Save read_groups to file (handles both single set and list of sets)."""
+    with open(group_file, "w") as group_dump:
+        if isinstance(read_groups, list):
+            # MultiReadGrouper: list of sets
+            group_dump.write("%d\n" % len(read_groups))
+            for group_set in read_groups:
+                group_dump.write("%s\n" % ";".join(sorted(group_set)))
+        else:
+            # Single grouper: single set
+            group_dump.write("1\n")
+            group_dump.write("%s\n" % ";".join(sorted(read_groups)))
+
+
+def load_read_groups(group_file, read_grouper):
+    """Load read_groups from file into read_grouper."""
+    with open(group_file) as f:
+        lines = [line.strip() for line in f]
+        num_strategies = int(lines[0])
+        if isinstance(read_grouper.read_groups, list):
+            # MultiReadGrouper: list of sets
+            read_grouper.read_groups = []
+            for i in range(num_strategies):
+                groups = set(lines[i + 1].split(";")) if lines[i + 1] else set()
+                read_grouper.read_groups.append(groups)
+        else:
+            # Single grouper: single set
+            groups_str = lines[1] if len(lines) > 1 else ""
+            read_grouper.read_groups = set(groups_str.split(";")) if groups_str else set()
+
+
+def load_barcode_dict(sample, chr_id):
+    """Load barcode dictionary for a chromosome."""
+    barcode_dict = {}
+    if sample.barcodes_split_reads:
+        barcode_file = sample.get_barcodes_split_file(chr_id)
+        if os.path.exists(barcode_file):
+            logger.debug(f"Loading barcodes from {barcode_file}")
+            for line in open(barcode_file):
+                if line.startswith("#"):
+                    continue
+                parts = line.strip().split('\t')
+                if len(parts) >= 3:
+                    barcode = parts[1] if parts[1] else None
+                    umi = parts[2] if parts[2] else None
+                    barcode_dict[parts[0]] = (barcode, umi)
+            logger.debug("Loaded %d barcodes" % len(barcode_dict))
+    return barcode_dict
+
+
 def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_manager_type):
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
@@ -55,20 +123,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     if os.path.exists(lock_file) and args.resume:
         logger.info("Detected processed reads for " + chr_id)
         if os.path.exists(group_file) and os.path.exists(save_file):
-            # Load read_groups from file
-            with open(group_file) as f:
-                lines = [line.strip() for line in f]
-                num_strategies = int(lines[0])
-                if isinstance(read_grouper.read_groups, list):
-                    # MultiReadGrouper: list of sets
-                    read_grouper.read_groups = []
-                    for i in range(num_strategies):
-                        groups = set(lines[i + 1].split(";")) if lines[i + 1] else set()
-                        read_grouper.read_groups.append(groups)
-                else:
-                    # Single grouper: single set
-                    groups_str = lines[1] if len(lines) > 1 else ""
-                    read_grouper.read_groups = set(groups_str.split(";")) if groups_str else set()
+            load_read_groups(group_file, read_grouper)
             alignment_stat_counter = EnumStats(bamstat_file)
 
             # Build string pools for loading serialized data
@@ -77,11 +132,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
                                               load_barcode_pool=True, load_tsv_pools=True)
 
             # Load dynamic pools (for read groups from BAM tags/read IDs)
-            dynamic_pools_file = sample.get_dynamic_pools_file(chr_id)
-            if os.path.exists(dynamic_pools_file):
-                logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
-                with open(dynamic_pools_file, 'rb') as f:
-                    string_pools.deserialize_dynamic_pools(f)
+            load_dynamic_pools(string_pools, sample.get_dynamic_pools_file(chr_id))
 
             loader = BasicReadAssignmentLoader(save_file, string_pools)
             while loader.has_next():
@@ -111,23 +162,8 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     string_pools = setup_string_pools(args, sample, chr_ids, chr_id, gffutils_db,
                                       load_barcode_pool=True, load_tsv_pools=True)
 
-    # Load barcode dict for this chromosome if available (for backward compatibility during transition)
-    barcode_dict = {}
-    if sample.barcodes_split_reads:
-        barcode_file = sample.get_barcodes_split_file(chr_id)
-        if os.path.exists(barcode_file):
-            logger.debug(f"Loading barcodes from {barcode_file}")
-            for line in open(barcode_file):
-                if line.startswith("#"):
-                    continue
-                # Use split('\t') to preserve empty fields (empty UMI = consecutive tabs)
-                parts = line.strip().split('\t')
-                if len(parts) >= 3:
-                    # Empty strings become None (not added to pool)
-                    barcode = parts[1] if parts[1] else None
-                    umi = parts[2] if parts[2] else None
-                    barcode_dict[parts[0]] = (barcode, umi)
-            logger.debug("Loaded %d barcodes" % len(barcode_dict))
+    # Load barcode dict for this chromosome if available
+    barcode_dict = load_barcode_dict(sample, chr_id)
 
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
@@ -139,17 +175,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
         for read_assignment in assignment_storage:
             tmp_printer.add_read_info(read_assignment)
             processed_reads_manager.add_read(read_assignment)
-    with open(group_file, "w") as group_dump:
-        # Save read_groups (can be set or list of sets)
-        if isinstance(read_grouper.read_groups, list):
-            # MultiReadGrouper: list of sets
-            group_dump.write("%d\n" % len(read_grouper.read_groups))  # Number of strategies
-            for group_set in read_grouper.read_groups:
-                group_dump.write("%s\n" % ";".join(sorted(group_set)))  # Semicolon-separated groups
-        else:
-            # Single grouper: single set
-            group_dump.write("1\n")  # One strategy
-            group_dump.write("%s\n" % ";".join(sorted(read_grouper.read_groups)))
+    save_read_groups(group_file, read_grouper.read_groups)
     alignment_collector.alignment_stat_counter.dump(bamstat_file)
 
     for bam in bam_file_pairs:
@@ -158,11 +184,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     tmp_printer.close()
 
     # Save dynamic pools if they have data (for read groups from BAM tags/read IDs)
-    if string_pools.has_dynamic_pools():
-        dynamic_pools_file = sample.get_dynamic_pools_file(chr_id)
-        logger.debug(f"Saving dynamic pools to {dynamic_pools_file}")
-        with open(dynamic_pools_file, 'wb') as f:
-            string_pools.serialize_dynamic_pools(f)
+    save_dynamic_pools(string_pools, sample.get_dynamic_pools_file(chr_id))
 
     processed_reads_manager.finalize(chr_id)
     logger.info("Finished processing chromosome " + chr_id)
@@ -184,11 +206,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
                                       read_group_file_prefix=read_group_file_prefix)
 
     # Load dynamic pools (for read groups from BAM tags/read IDs)
-    dynamic_pools_file = dynamic_pools_file_name(saves_prefix, chr_id)
-    if os.path.exists(dynamic_pools_file):
-        logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
-        with open(dynamic_pools_file, 'rb') as f:
-            string_pools.deserialize_dynamic_pools(f)
+    load_dynamic_pools(string_pools, dynamic_pools_file_name(saves_prefix, chr_id))
 
     loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, string_pools, use_filtered_reads)
 
@@ -308,11 +326,7 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
                                       load_barcode_pool=True, load_tsv_pools=False)
 
     # Load dynamic pools (for read groups from BAM tags/read IDs)
-    dynamic_pools_file = sample.get_dynamic_pools_file(chr_id)
-    if os.path.exists(dynamic_pools_file):
-        logger.debug(f"Loading dynamic pools from {dynamic_pools_file}")
-        with open(dynamic_pools_file, 'rb') as f:
-            string_pools.deserialize_dynamic_pools(f)
+    load_dynamic_pools(string_pools, sample.get_dynamic_pools_file(chr_id))
 
     umi_filter = UMIFilter(args.umi_length, edit_distance)
     filtered_reads = sample.get_filtered_reads_file(chr_id) if output_filtered_reads else None
