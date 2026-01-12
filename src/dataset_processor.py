@@ -5,10 +5,12 @@
 # See file LICENSE for details.
 ############################################################################
 
+import gc
 import glob
 import gzip
 import itertools
 import logging
+import multiprocessing
 import shutil
 from enum import Enum, unique
 from collections import defaultdict
@@ -304,7 +306,10 @@ class DatasetProcessor:
         all_read_groups = [set() for _ in self.grouping_strategy_names]
 
         if self.args.threads > 1:
-            with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+            # Clean up parent memory before spawning workers
+            gc.collect()
+            mp_context = multiprocessing.get_context('fork')
+            with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context) as proc:
                 results = proc.map(*read_gen, chunksize=1)
         else:
             results = map(*read_gen)
@@ -402,7 +407,10 @@ class DatasetProcessor:
         )
 
         if self.args.threads > 1:
-            with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+            # Clean up parent memory before spawning workers
+            gc.collect()
+            mp_context = multiprocessing.get_context('fork')
+            with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context) as proc:
                 results = proc.map(*model_gen, chunksize=1)
         else:
             results = map(*model_gen)
@@ -498,7 +506,10 @@ class DatasetProcessor:
             )
 
             if self.args.threads > 1:
-                with ProcessPoolExecutor(max_workers=self.args.threads) as proc:
+                # Clean up parent memory before spawning workers
+                gc.collect()
+                mp_context = multiprocessing.get_context('fork')
+                with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context) as proc:
                     results = proc.map(*umi_gen, chunksize=1)
             else:
                 results = map(*umi_gen)

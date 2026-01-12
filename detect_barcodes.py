@@ -6,6 +6,8 @@
 # See file LICENSE for details.
 ############################################################################
 import concurrent.futures
+import gc
+import multiprocessing
 import os
 import random
 import sys
@@ -13,7 +15,6 @@ import argparse
 import gzip
 from traceback import print_exc
 import shutil
-from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
 import numpy
 import pysam
@@ -340,7 +341,14 @@ def process_in_parallel(args):
     future_results = []
     output_files = []
 
-    with ProcessPoolExecutor(max_workers=args.threads) as proc:
+    # Clean up parent memory before spawning workers
+    gc.collect()
+    mp_context = multiprocessing.get_context('spawn')
+    # max_tasks_per_child requires Python 3.11+
+    executor_kwargs = {'max_workers': args.threads, 'mp_context': mp_context}
+    if sys.version_info >= (3, 11):
+        executor_kwargs['max_tasks_per_child'] = 20
+    with concurrent.futures.ProcessPoolExecutor(**executor_kwargs) as proc:
         for chunk in read_chunk_gen:
             future_results.append(proc.submit(process_chunk,
                                               barcode_detector,

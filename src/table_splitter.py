@@ -6,11 +6,14 @@
 ############################################################################
 
 
-import pysam
-from concurrent.futures import ProcessPoolExecutor
-import logging
+import gc
 import gzip
+import logging
+import multiprocessing
 import os
+from concurrent.futures import ProcessPoolExecutor
+
+import pysam
 
 
 logger = logging.getLogger('IsoQuant')
@@ -262,7 +265,10 @@ def split_read_table_parallel(sample, input_tsvs, split_reads_file_names, num_th
         open(split_reads_file_names[chr_id], 'w').close()
 
     # Step 4: Launch workers
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+    # Clean up parent memory before spawning workers
+    gc.collect()
+    mp_context = multiprocessing.get_context('spawn')
+    with ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context) as executor:
         futures = []
         for worker_id, my_chrs in enumerate(chr_assignments):
             future = executor.submit(
