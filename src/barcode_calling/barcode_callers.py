@@ -820,7 +820,7 @@ class SharedMemoryStereoSplttingBarcodeDetector(StereoSplttingBarcodeDetector):
             self.barcode_indexer = KmerIndexer(list(map(lambda x: bit_to_str(x, self.BC_LENGTH), bit_barcodes)), kmer_size=14)
             self.barcodes = self.barcode_indexer.seq_list
         else:
-            self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=10,
+            self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=14,
                                                                     seq_len=super().BC_LENGTH)
 
         logger.info("Indexed %d barcodes" % self.barcode_count)
