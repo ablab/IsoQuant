@@ -5,30 +5,30 @@
 ############################################################################
 
 """
-Barcode calling for single-cell and spatial transcriptomics.
+Barcode detection classes for single-cell and spatial transcriptomics.
 
-This package provides k-mer indexing and barcode detection for various platforms:
-- Curio (double barcode)
-- Stereo-seq (standard and splitting modes)
-- 10x Genomics (v3, Visium HD)
+Classes:
+    BarcodeDetectionResult: Base result class
+    CurioBarcodeDetectionResult: Result for Curio (double barcode) platform
+    StereoBarcodeDetectionResult: Result for Stereo-seq platform
+    TenXBarcodeDetectionResult: Result for 10x Genomics platform
+    SplittingBarcodeDetectionResult: Result for read splitting modes
+    ReadStats: Statistics tracker for barcode detection
 
-Subpackages:
-    indexers: K-mer indexing implementations
-    callers: Barcode detector implementations
+Detectors:
+    CurioBarcodeDetector: Curio platform detector
+    CurioBruteForceDetector: Brute force Curio detector
+    CurioIlluminaDetector: Curio detector for Illumina reads
+    StereoBarcodeDetector: Stereo-seq detector
+    SharedMemoryStereoBarcodeDetector: Stereo-seq with shared memory
+    StereoSplittingBarcodeDetector: Stereo-seq with read splitting
+    SharedMemoryStereoSplittingBarcodeDetector: Stereo-seq splitting with shared memory
+    SharedMemoryWrapper: Generic shared memory wrapper
+    TenXBarcodeDetector: 10x Genomics v3 detector
+    VisiumHDBarcodeDetector: Visium HD detector
 """
 
-# Indexers
-from .indexers import (
-    KmerIndexer,
-    ArrayKmerIndexer,
-    Dict2BitKmerIndexer,
-    Array2BitKmerIndexer,
-    SharedMemoryArray2BitKmerIndexer,
-    SharedMemoryIndexInfo,
-)
-
-# Result classes
-from .callers import (
+from .base import (
     BarcodeDetectionResult,
     CurioBarcodeDetectionResult,
     StereoBarcodeDetectionResult,
@@ -38,31 +38,26 @@ from .callers import (
     increase_if_valid,
 )
 
-# Detector classes
-from .callers import (
+from .curio import (
     CurioBarcodeDetector,
     CurioBruteForceDetector,
     CurioIlluminaDetector,
+)
+
+from .stereo import (
     StereoBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
     StereoSplittingBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
     SharedMemoryWrapper,
+)
+
+from .tenx import (
     TenXBarcodeDetector,
     VisiumHDBarcodeDetector,
 )
 
-# Utilities
-from .common import str_to_2bit, bit_to_str, find_polyt_start
-
 __all__ = [
-    # Indexers
-    'KmerIndexer',
-    'ArrayKmerIndexer',
-    'Dict2BitKmerIndexer',
-    'Array2BitKmerIndexer',
-    'SharedMemoryArray2BitKmerIndexer',
-    'SharedMemoryIndexInfo',
     # Result classes
     'BarcodeDetectionResult',
     'CurioBarcodeDetectionResult',
@@ -84,8 +79,4 @@ __all__ = [
     # 10x detectors
     'TenXBarcodeDetector',
     'VisiumHDBarcodeDetector',
-    # Utilities
-    'str_to_2bit',
-    'bit_to_str',
-    'find_polyt_start',
 ]

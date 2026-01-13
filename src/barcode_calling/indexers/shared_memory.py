@@ -3,13 +3,22 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
+
+"""
+Shared memory k-mer indexer for parallel processing of large barcode sets.
+
+Uses multiprocessing.shared_memory to share index across worker processes.
+Optimized with Numba JIT compilation when available.
+"""
+
 import gc
 import logging
 import math
 import numpy
 from collections import defaultdict
 from multiprocessing import shared_memory
-from .common import bit_to_str, str_to_2bit
+from typing import List, Tuple
+from ..common import bit_to_str, str_to_2bit
 
 logger = logging.getLogger('IsoQuant')
 
@@ -77,7 +86,16 @@ else:
 
 
 class SharedMemoryIndexInfo:
-    def __init__(self, barcode_count, kmer_size, seq_len, index_size, barcodes_sm_name, index_sm_name, index_range_sm_name):
+    """
+    Metadata container for passing shared memory index info between processes.
+
+    Stores shared memory block names and index parameters for reconstruction
+    in worker processes.
+    """
+
+    def __init__(self, barcode_count: int, kmer_size: int, seq_len: int,
+                 index_size: int, barcodes_sm_name: str, index_sm_name: str,
+                 index_range_sm_name: str):
         self.barcode_count = barcode_count
         self.kmer_size = kmer_size
         self.seq_len = seq_len
@@ -87,13 +105,9 @@ class SharedMemoryIndexInfo:
         self.index_range_sm_name = index_range_sm_name
 
     def __getstate__(self):
-        return (self.barcode_count,
-                self.kmer_size,
-                self.seq_len,
-                self.index_size,
-                self.barcodes_sm_name,
-                self.index_sm_name,
-                self.index_range_sm_name)
+        return (self.barcode_count, self.kmer_size, self.seq_len,
+                self.index_size, self.barcodes_sm_name,
+                self.index_sm_name, self.index_range_sm_name)
 
     def __setstate__(self, state):
         self.barcode_count = state[0]
@@ -106,14 +120,29 @@ class SharedMemoryIndexInfo:
 
 
 class SharedMemoryArray2BitKmerIndexer:
-    # @params:
-    # known_bin_seq: collection of strings in binary or string format (barcodes or UMI)
-    # kmer_size: K to use for indexing
+    """
+    Shared memory k-mer indexer for parallel processing of large barcode sets.
+
+    Allocates index data in shared memory so worker processes can access
+    the same index without copying. Uses Numba JIT compilation when available
+    for fast index construction.
+
+    Best for barcode sets > 1M where memory sharing is critical.
+    """
+
     SEQ_DTYPE = numpy.uint64
     KMER_DTYPE = numpy.uint64
     INDEX_DTYPE = numpy.uint64
 
-    def __init__(self, known_bin_seq: list, kmer_size=12, seq_len=25):
+    def __init__(self, known_bin_seq: list, kmer_size: int = 12, seq_len: int = 25):
+        """
+        Initialize shared memory k-mer index.
+
+        Args:
+            known_bin_seq: Pre-encoded sequences as integers (use str_to_2bit)
+            kmer_size: Length of k-mers
+            seq_len: Length of sequences (all must be same length)
+        """
         self.main_instance = True
         self.k = kmer_size
         total_kmers = int(math.pow(4, self.k))
@@ -204,7 +233,8 @@ class SharedMemoryArray2BitKmerIndexer:
                 ranges_sm.unlink()
 
     @classmethod
-    def from_sharable_info(cls, shared_mem_index_info: SharedMemoryIndexInfo):
+    def from_sharable_info(cls, shared_mem_index_info: SharedMemoryIndexInfo) -> 'SharedMemoryArray2BitKmerIndexer':
+        """Reconstruct indexer in worker process from shared memory info."""
         kmer_index = cls.__new__(cls)
         kmer_index.main_instance = False
         kmer_index.k = shared_mem_index_info.kmer_size
@@ -214,34 +244,61 @@ class SharedMemoryArray2BitKmerIndexer:
         kmer_index.index_size = shared_mem_index_info.index_size
         kmer_index.total_sequences = shared_mem_index_info.barcode_count
         total_kmers = int(math.pow(4, kmer_index.k))
-        kmer_index.barcodes_shared_memory = shared_memory.SharedMemory(create=False, name=shared_mem_index_info.barcodes_sm_name)
-        kmer_index.known_bin_seq = numpy.ndarray(shape=(kmer_index.total_sequences, ), dtype=SharedMemoryArray2BitKmerIndexer.SEQ_DTYPE, buffer=kmer_index.barcodes_shared_memory.buf)
-        kmer_index.index_shared_memory = shared_memory.SharedMemory(create=False, name=shared_mem_index_info.index_sm_name)
-        kmer_index.index = numpy.ndarray(shape=(kmer_index.index_size, ), dtype=kmer_index.KMER_DTYPE, buffer=kmer_index.index_shared_memory.buf)
-        kmer_index.index_ranges_shared_memory = shared_memory.SharedMemory(create=False, name=shared_mem_index_info.index_range_sm_name)
-        kmer_index.index_ranges = numpy.ndarray(shape=(total_kmers + 1, ), dtype=kmer_index.INDEX_DTYPE, buffer=kmer_index.index_ranges_shared_memory.buf)
+
+        kmer_index.barcodes_shared_memory = shared_memory.SharedMemory(
+            create=False, name=shared_mem_index_info.barcodes_sm_name)
+        kmer_index.known_bin_seq = numpy.ndarray(
+            shape=(kmer_index.total_sequences,),
+            dtype=SharedMemoryArray2BitKmerIndexer.SEQ_DTYPE,
+            buffer=kmer_index.barcodes_shared_memory.buf)
+
+        kmer_index.index_shared_memory = shared_memory.SharedMemory(
+            create=False, name=shared_mem_index_info.index_sm_name)
+        kmer_index.index = numpy.ndarray(
+            shape=(kmer_index.index_size,),
+            dtype=kmer_index.KMER_DTYPE,
+            buffer=kmer_index.index_shared_memory.buf)
+
+        kmer_index.index_ranges_shared_memory = shared_memory.SharedMemory(
+            create=False, name=shared_mem_index_info.index_range_sm_name)
+        kmer_index.index_ranges = numpy.ndarray(
+            shape=(total_kmers + 1,),
+            dtype=kmer_index.INDEX_DTYPE,
+            buffer=kmer_index.index_ranges_shared_memory.buf)
+
         return kmer_index
 
-    def get_sharable_info(self):
-        return SharedMemoryIndexInfo(self.total_sequences, self.k, self.seq_len, self.index_size,
-                                     self.barcodes_shared_memory.name, self.index_shared_memory.name,
-                                     self.index_ranges_shared_memory.name)
+    def get_sharable_info(self) -> SharedMemoryIndexInfo:
+        """Get info needed to reconstruct indexer in worker process."""
+        return SharedMemoryIndexInfo(
+            self.total_sequences, self.k, self.seq_len, self.index_size,
+            self.barcodes_shared_memory.name, self.index_shared_memory.name,
+            self.index_ranges_shared_memory.name)
 
-    def _get_kmer_bin_indexes(self, bin_seq):
+    def _get_kmer_bin_indexes(self, bin_seq: int):
+        """Extract k-mer indices from a 2-bit encoded sequence."""
         for i in range(self.seq_len - self.k + 1):
             yield (bin_seq >> ((self.seq_len - self.k - i) * 2)) & self.mask
 
-    def empty(self):
+    def empty(self) -> bool:
+        """Check if index is empty."""
         return len(self.known_bin_seq) == 0
 
-    # @params:
-    # sequence: a string to be searched against known strings
-    # max_hits: return at most max_hits candidates
-    # min_kmers: minimal number of matching k-mers
-    # @return
-    # a list of (pattern: str, number of shared kmers: int, their positions: list)
-    # sorted descending by the number of shared k-m
-    def get_occurrences(self, sequence, max_hits=0, min_kmers=1, hits_delta=1, ignore_equal=False):
+    def get_occurrences(self, sequence: str, max_hits: int = 0, min_kmers: int = 1,
+                       hits_delta: int = 1, ignore_equal: bool = False) -> List[Tuple[str, int, List[int]]]:
+        """
+        Find indexed sequences with shared k-mers.
+
+        Args:
+            sequence: Query sequence (string, will be converted to 2-bit)
+            max_hits: Maximum number of results (0 = unlimited)
+            min_kmers: Minimum shared k-mers required
+            hits_delta: Include results within this many k-mers of top hit
+            ignore_equal: Skip exact matches
+
+        Returns:
+            List of (sequence_str, shared_kmer_count, kmer_positions) tuples
+        """
         barcode_counts = defaultdict(int)
         barcode_positions = defaultdict(list)
 
@@ -271,6 +328,5 @@ class SharedMemoryArray2BitKmerIndexer:
         result = sorted(result, reverse=True, key=lambda x: x[1])
 
         if max_hits == 0:
-            return  [(bit_to_str(x[0], self.seq_len), x[1], x[2]) for x in result]
+            return [(bit_to_str(x[0], self.seq_len), x[1], x[2]) for x in result]
         return [(bit_to_str(x[0], self.seq_len), x[1], x[2]) for x in list(result)[:max_hits]]
-    

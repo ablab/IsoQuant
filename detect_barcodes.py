@@ -23,13 +23,13 @@ import logging
 
 from src.modes import IsoQuantMode
 from src.barcode_calling.common import bit_to_str, reverese_complement
-from src.barcode_calling.barcode_callers import (
+from src.barcode_calling import (
     TenXBarcodeDetector,
-    DoubleBarcodeDetector,
+    CurioBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
-    SharedMemoryStereoSplttingBarcodeDetector,
-    ReadStats, 
-    VisiumHDBarcodeDetector
+    SharedMemoryStereoSplittingBarcodeDetector,
+    ReadStats,
+    VisiumHDBarcodeDetector,
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -38,9 +38,9 @@ logger = logging.getLogger('IsoQuant')
 READ_CHUNK_SIZE = 100000
 
 BARCODE_CALLING_MODES = {IsoQuantMode.tenX_v3: TenXBarcodeDetector,
-                         IsoQuantMode.curio: DoubleBarcodeDetector,
+                         IsoQuantMode.curio: CurioBarcodeDetector,
                          IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
-                         IsoQuantMode.stereoseq: SharedMemoryStereoSplttingBarcodeDetector,
+                         IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
                          IsoQuantMode.visium_5prime: TenXBarcodeDetector,
                          IsoQuantMode.visium_hd: VisiumHDBarcodeDetector
                          }
