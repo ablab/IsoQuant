@@ -8,11 +8,15 @@ import pytest
 from src.barcode_calling.common import (
     str_to_2bit,
     bit_to_str,
+    batch_str_to_2bit,
+    batch_str_to_2bit_chunked,
     reverese_complement,
     find_polyt_start,
     align_pattern_ssw,
     find_candidate_with_max_score_ssw,
     find_candidate_with_max_score_ssw_var_len,
+    detect_exact_positions,
+    detect_first_exact_positions,
     NUCL2BIN,
     BIN2NUCL,
     base_comp,
@@ -250,6 +254,287 @@ class TestFindCandidateSSW:
             barcode_matches, read_seq, min_score=8)
 
         assert barcode == "ACTGACTGACTG"  # Should prefer longer exact match
+
+
+class TestNumba2BitEncoding:
+    """Test Numba JIT-compiled 2-bit encoding consistency."""
+
+    def test_numba_consistency_with_numpy(self):
+        """Test that Numba and NumPy fallback produce identical results."""
+        import numpy as np
+        from src.barcode_calling.common import NUMBA_AVAILABLE, _convert_chunk_to_2bit
+
+        barcodes = [
+            "ACTGACTGACTGACTGACTGACTGA",
+            "TGCATGCATGCATGCATGCATGCAT",
+            "GGGGGGGGGGGGGGGGGGGGGGGGG",
+            "AAAAAAAAAAAAAAAAAAAAAAAAA",
+            "CCCCCCCCCCCCCCCCCCCCCCCCC",
+        ]
+        seq_len = 25
+
+        # Get result from current implementation (Numba if available)
+        result = _convert_chunk_to_2bit(barcodes, seq_len)
+
+        # Verify against individual str_to_2bit calls
+        for i, bc in enumerate(barcodes):
+            expected = str_to_2bit(bc)
+            assert result[i] == expected, f"Mismatch for {bc}: got {result[i]}, expected {expected}"
+
+    def test_numba_available_flag(self):
+        """Test that NUMBA_AVAILABLE flag is set correctly."""
+        from src.barcode_calling.common import NUMBA_AVAILABLE
+
+        # Just verify the flag is a boolean
+        assert isinstance(NUMBA_AVAILABLE, bool)
+
+        # If numba is importable without errors, flag should be True
+        try:
+            from numba import njit, prange
+            assert NUMBA_AVAILABLE is True
+        except (ImportError, SystemError):
+            # SystemError can occur with broken numba installations
+            assert NUMBA_AVAILABLE is False
+
+
+class TestBatchStrTo2Bit:
+    """Test batch 2-bit DNA encoding functions."""
+
+    def test_empty_input(self):
+        """Test empty input returns empty array."""
+        import numpy as np
+        result = batch_str_to_2bit([])
+        assert len(result) == 0
+        assert result.dtype == np.uint64
+
+    def test_single_barcode(self):
+        """Test single barcode matches str_to_2bit."""
+        barcode = "ACTGACTG"
+        result = batch_str_to_2bit([barcode], seq_len=8)
+        expected = str_to_2bit(barcode)
+        assert result[0] == expected
+
+    def test_multiple_barcodes(self):
+        """Test multiple barcodes match individual str_to_2bit calls."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG", "AAAAAAAA"]
+        result = batch_str_to_2bit(barcodes, seq_len=8)
+
+        assert len(result) == 4
+        for i, bc in enumerate(barcodes):
+            assert result[i] == str_to_2bit(bc), f"Mismatch for barcode {bc}"
+
+    def test_25mer_barcodes(self):
+        """Test with default 25-mer barcodes (Stereo-seq length)."""
+        barcodes = [
+            "ACTGACTGACTGACTGACTGACTGA",
+            "TGCATGCATGCATGCATGCATGCAT",
+            "GGGGGGGGGGGGGGGGGGGGGGGGG",
+        ]
+        result = batch_str_to_2bit(barcodes, seq_len=25)
+
+        assert len(result) == 3
+        for i, bc in enumerate(barcodes):
+            assert result[i] == str_to_2bit(bc), f"Mismatch for barcode {bc}"
+
+    def test_iterator_input(self):
+        """Test that iterator input works correctly."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG"]
+        result = batch_str_to_2bit(iter(barcodes), seq_len=8)
+
+        assert len(result) == 3
+        for i, bc in enumerate(barcodes):
+            assert result[i] == str_to_2bit(bc)
+
+    def test_roundtrip(self):
+        """Test that batch encoding can be decoded correctly."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG"]
+        encoded = batch_str_to_2bit(barcodes, seq_len=8)
+
+        for i, bc in enumerate(barcodes):
+            decoded = bit_to_str(encoded[i], 8)
+            assert decoded == bc, f"Roundtrip failed for {bc}: got {decoded}"
+
+
+class TestBatchStrTo2BitChunked:
+    """Test chunked batch 2-bit DNA encoding function."""
+
+    def test_empty_input(self):
+        """Test empty iterator returns empty array."""
+        import numpy as np
+        result = batch_str_to_2bit_chunked(iter([]))
+        assert len(result) == 0
+        assert result.dtype == np.uint64
+
+    def test_single_chunk(self):
+        """Test processing fewer items than chunk size."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG"]
+        result = batch_str_to_2bit_chunked(iter(barcodes), seq_len=8, chunk_size=100)
+
+        assert len(result) == 3
+        for i, bc in enumerate(barcodes):
+            assert result[i] == str_to_2bit(bc)
+
+    def test_multiple_chunks(self):
+        """Test processing more items than chunk size."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG", "AAAAAAAA", "CCCCCCCC"]
+        # Use chunk_size=2 to force multiple chunks
+        result = batch_str_to_2bit_chunked(iter(barcodes), seq_len=8, chunk_size=2)
+
+        assert len(result) == 5
+        for i, bc in enumerate(barcodes):
+            assert result[i] == str_to_2bit(bc), f"Mismatch for barcode {bc}"
+
+    def test_exact_chunk_boundary(self):
+        """Test when barcode count equals chunk size."""
+        barcodes = ["ACTGACTG", "TGCATGCA"]
+        result = batch_str_to_2bit_chunked(iter(barcodes), seq_len=8, chunk_size=2)
+
+        assert len(result) == 2
+        for i, bc in enumerate(barcodes):
+            assert result[i] == str_to_2bit(bc)
+
+    def test_consistency_with_batch(self):
+        """Test that chunked and non-chunked produce same results."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG", "AAAAAAAA", "CCCCCCCC"]
+
+        batch_result = batch_str_to_2bit(barcodes, seq_len=8)
+        chunked_result = batch_str_to_2bit_chunked(iter(barcodes), seq_len=8, chunk_size=2)
+
+        assert len(batch_result) == len(chunked_result)
+        for i in range(len(batch_result)):
+            assert batch_result[i] == chunked_result[i], f"Mismatch at index {i}"
+
+
+class TestDetectExactPositions:
+    """Test detect_exact_positions function."""
+
+    def test_exact_match_in_sequence(self):
+        """Test finding exact pattern in sequence."""
+        sequence = "NNNNACTGACTGNNNN"
+        pattern = "ACTGACTG"
+        # Simulate k-mer occurrences: (pattern, count, [positions])
+        # Positions are k-mer match positions within the search window
+        pattern_occurrences = [(pattern, 5, [4, 5, 6, 7])]
+
+        start, end = detect_exact_positions(
+            sequence, 0, len(sequence), kmer_size=4,
+            pattern=pattern, pattern_occurrences=pattern_occurrences,
+            min_score=6
+        )
+
+        assert start is not None
+        assert end is not None
+        # Should find the pattern starting around position 4
+        assert sequence[start:end] == pattern or pattern in sequence[start:end+1]
+
+    def test_pattern_not_in_occurrences(self):
+        """Test when pattern is not in the occurrence list."""
+        sequence = "NNNNACTGACTGNNNN"
+        pattern = "ACTGACTG"
+        pattern_occurrences = [("TGCATGCA", 5, [0, 1, 2])]  # Different pattern
+
+        start, end = detect_exact_positions(
+            sequence, 0, len(sequence), kmer_size=4,
+            pattern=pattern, pattern_occurrences=pattern_occurrences,
+            min_score=6
+        )
+
+        assert start is None
+        assert end is None
+
+    def test_empty_occurrences(self):
+        """Test with empty occurrence list."""
+        sequence = "NNNNACTGACTGNNNN"
+
+        start, end = detect_exact_positions(
+            sequence, 0, len(sequence), kmer_size=4,
+            pattern="ACTGACTG", pattern_occurrences=[],
+            min_score=6
+        )
+
+        assert start is None
+        assert end is None
+
+    def test_no_positions_for_pattern(self):
+        """Test when pattern has no match positions."""
+        sequence = "NNNNACTGACTGNNNN"
+        pattern = "ACTGACTG"
+        pattern_occurrences = [(pattern, 0, [])]  # No positions
+
+        start, end = detect_exact_positions(
+            sequence, 0, len(sequence), kmer_size=4,
+            pattern=pattern, pattern_occurrences=pattern_occurrences,
+            min_score=6
+        )
+
+        assert start is None
+        assert end is None
+
+
+class TestDetectFirstExactPositions:
+    """Test detect_first_exact_positions function."""
+
+    def test_finds_first_match(self):
+        """Test that first match is returned."""
+        sequence = "NNACTGACTGNNACTGACTGNN"
+        pattern = "ACTGACTG"
+        # Two potential matches - should return first one
+        pattern_occurrences = [(pattern, 5, [2, 12])]
+
+        start, end = detect_first_exact_positions(
+            sequence, 0, len(sequence), kmer_size=4,
+            pattern=pattern, pattern_occurrences=pattern_occurrences,
+            min_score=6
+        )
+
+        assert start is not None
+        # First match should be around position 2
+        assert start <= 5
+
+    def test_pattern_not_found(self):
+        """Test when pattern is not in occurrence list."""
+        sequence = "NNNNACTGACTGNNNN"
+        pattern_occurrences = [("TGCATGCA", 5, [0, 1])]
+
+        start, end = detect_first_exact_positions(
+            sequence, 0, len(sequence), kmer_size=4,
+            pattern="ACTGACTG", pattern_occurrences=pattern_occurrences,
+            min_score=6
+        )
+
+        assert start is None
+        assert end is None
+
+    def test_empty_positions(self):
+        """Test with empty position list."""
+        sequence = "NNNNACTGACTGNNNN"
+        pattern = "ACTGACTG"
+        pattern_occurrences = [(pattern, 0, [])]
+
+        start, end = detect_first_exact_positions(
+            sequence, 0, len(sequence), kmer_size=4,
+            pattern=pattern, pattern_occurrences=pattern_occurrences,
+            min_score=6
+        )
+
+        assert start is None
+        assert end is None
+
+    def test_min_score_threshold(self):
+        """Test that min_score filters weak matches."""
+        sequence = "NNNNACNNNNNN"  # Only partial match
+        pattern = "ACTGACTG"
+        pattern_occurrences = [(pattern, 2, [4])]
+
+        # With high min_score, should not find match
+        start, end = detect_first_exact_positions(
+            sequence, 0, len(sequence), kmer_size=4,
+            pattern=pattern, pattern_occurrences=pattern_occurrences,
+            min_score=7
+        )
+
+        assert start is None
+        assert end is None
 
 
 if __name__ == '__main__':
