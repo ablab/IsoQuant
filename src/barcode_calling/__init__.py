@@ -53,7 +53,7 @@ from .callers import (
 )
 
 # Utilities
-from .common import str_to_2bit, bit_to_str, find_polyt_start
+from .common import str_to_2bit, bit_to_str, find_polyt_start, batch_str_to_2bit, batch_str_to_2bit_chunked
 
 __all__ = [
     # Indexers
@@ -88,4 +88,6 @@ __all__ = [
     'str_to_2bit',
     'bit_to_str',
     'find_polyt_start',
+    'batch_str_to_2bit',
+    'batch_str_to_2bit_chunked',
 ]

@@ -5,9 +5,9 @@
 ############################################################################
 
 import pytest
-from src.barcode_calling.barcode_callers import (
+from src.barcode_calling.callers import (
     BarcodeDetectionResult,
-    DoubleBarcodeDetectionResult,
+    CurioBarcodeDetectionResult,
     StereoBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
@@ -107,12 +107,12 @@ class TestBarcodeDetectionResult:
         assert "BC_score" in header
 
 
-class TestDoubleBarcodeDetectionResult:
+class TestCurioBarcodeDetectionResult:
     """Test double barcode detection result class."""
 
     def test_init_default(self):
         """Test initialization with defaults."""
-        result = DoubleBarcodeDetectionResult("read_001")
+        result = CurioBarcodeDetectionResult("read_001")
 
         assert result.read_id == "read_001"
         assert result.polyT == -1
@@ -122,7 +122,7 @@ class TestDoubleBarcodeDetectionResult:
 
     def test_init_with_positions(self):
         """Test initialization with all positions."""
-        result = DoubleBarcodeDetectionResult(
+        result = CurioBarcodeDetectionResult(
             read_id="read_001",
             barcode="ACTGACTG",
             UMI="GGGG",
@@ -142,7 +142,7 @@ class TestDoubleBarcodeDetectionResult:
 
     def test_update_coordinates(self):
         """Test coordinate shifting."""
-        result = DoubleBarcodeDetectionResult(
+        result = CurioBarcodeDetectionResult(
             "read_001",
             polyT=100,
             primer=50,
@@ -159,7 +159,7 @@ class TestDoubleBarcodeDetectionResult:
 
     def test_update_coordinates_invalid(self):
         """Test coordinate shifting with invalid values."""
-        result = DoubleBarcodeDetectionResult("read_001")
+        result = CurioBarcodeDetectionResult("read_001")
         result.update_coordinates(10)
 
         # Invalid values (-1) should remain unchanged
@@ -168,18 +168,18 @@ class TestDoubleBarcodeDetectionResult:
 
     def test_more_informative_than_by_score(self):
         """Test comparison by barcode score."""
-        result1 = DoubleBarcodeDetectionResult("read_001", BC_score=16)
-        result2 = DoubleBarcodeDetectionResult("read_001", BC_score=14)
+        result1 = CurioBarcodeDetectionResult("read_001", BC_score=16)
+        result2 = CurioBarcodeDetectionResult("read_001", BC_score=14)
 
         assert result1.more_informative_than(result2) is True
         assert result2.more_informative_than(result1) is False
 
     def test_more_informative_than_by_linker(self):
         """Test comparison by linker position (tie-breaker)."""
-        result1 = DoubleBarcodeDetectionResult(
+        result1 = CurioBarcodeDetectionResult(
             "read_001", BC_score=16, linker_start=80
         )
-        result2 = DoubleBarcodeDetectionResult(
+        result2 = CurioBarcodeDetectionResult(
             "read_001", BC_score=16, linker_start=60
         )
 
@@ -188,7 +188,7 @@ class TestDoubleBarcodeDetectionResult:
 
     def test_get_additional_attributes_all(self):
         """Test attribute detection with all features."""
-        result = DoubleBarcodeDetectionResult(
+        result = CurioBarcodeDetectionResult(
             "read_001",
             polyT=100,
             primer=50,
@@ -203,7 +203,7 @@ class TestDoubleBarcodeDetectionResult:
 
     def test_get_additional_attributes_partial(self):
         """Test attribute detection with some features."""
-        result = DoubleBarcodeDetectionResult(
+        result = CurioBarcodeDetectionResult(
             "read_001",
             polyT=100,
             # No primer or linker
@@ -217,7 +217,7 @@ class TestDoubleBarcodeDetectionResult:
 
     def test_str_format(self):
         """Test string formatting includes positions."""
-        result = DoubleBarcodeDetectionResult(
+        result = CurioBarcodeDetectionResult(
             "read_001", "ACTG", "GGGG", 16, True, "+",
             polyT=100, primer=50, linker_start=60, linker_end=75
         )
@@ -404,7 +404,7 @@ class TestReadStats:
     def test_add_read_with_barcode(self):
         """Test adding read with valid barcode."""
         stats = ReadStats()
-        result = DoubleBarcodeDetectionResult(
+        result = CurioBarcodeDetectionResult(
             "read_001",
             barcode="ACTG",
             UMI_good=True,
@@ -421,7 +421,7 @@ class TestReadStats:
     def test_add_read_without_barcode(self):
         """Test adding read without barcode."""
         stats = ReadStats()
-        result = DoubleBarcodeDetectionResult("read_001")  # No barcode
+        result = CurioBarcodeDetectionResult("read_001")  # No barcode
 
         stats.add_read(result)
 
@@ -433,9 +433,9 @@ class TestReadStats:
         """Test adding multiple reads."""
         stats = ReadStats()
 
-        result1 = DoubleBarcodeDetectionResult("read_001", barcode="ACTG", polyT=100)
-        result2 = DoubleBarcodeDetectionResult("read_002", barcode="TGCA", primer=50)
-        result3 = DoubleBarcodeDetectionResult("read_003")  # No barcode
+        result1 = CurioBarcodeDetectionResult("read_001", barcode="ACTG", polyT=100)
+        result2 = CurioBarcodeDetectionResult("read_002", barcode="TGCA", primer=50)
+        result3 = CurioBarcodeDetectionResult("read_003")  # No barcode
 
         stats.add_read(result1)
         stats.add_read(result2)
@@ -458,7 +458,7 @@ class TestReadStats:
     def test_str_format(self):
         """Test string formatting."""
         stats = ReadStats()
-        result = DoubleBarcodeDetectionResult("read_001", barcode="ACTG", UMI_good=True)
+        result = CurioBarcodeDetectionResult("read_001", barcode="ACTG", UMI_good=True)
         stats.add_read(result)
 
         output = str(stats)
@@ -470,7 +470,7 @@ class TestReadStats:
     def test_iter(self):
         """Test iteration over statistics."""
         stats = ReadStats()
-        result = DoubleBarcodeDetectionResult("read_001", barcode="ACTG", polyT=100)
+        result = CurioBarcodeDetectionResult("read_001", barcode="ACTG", polyT=100)
         stats.add_read(result)
 
         lines = list(stats)
