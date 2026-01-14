@@ -5,6 +5,9 @@ from collections import defaultdict
 import mappy as mp
 import logging
 from functools import lru_cache
+from sklearn.cluster import DBSCAN
+import numpy as np
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -202,7 +205,7 @@ class FusionDetector:
             meta["left_gene"] = self.resolve_gene_name(left_ctx)
             meta["right_gene"] = self.resolve_gene_name(right_ctx)
 
-    def cluster_breakpoints(self, bp_counts, window=25):
+    def cluster_breakpoints(self, bp_counts, window=100):
         # bp_counts: dict[(chr1,pos1,chr2,pos2)] -> count
         # Group by chr pairs, then cluster positions by window
         from collections import defaultdict
@@ -241,6 +244,7 @@ class FusionDetector:
             return None
         (c1, c2), (p1, p2, total) = best_pair, best_cons
         return (c1, p1, c2, p2), total
+
 
     def parse_sa_entries(self, sa_tag):
         entries = []
@@ -334,7 +338,7 @@ class FusionDetector:
                     min_sa_mapq=10,
                     min_softclip_len=40,
                     jitter_window=25,
-                    realign_when_sa_present=False):
+                    realign_when_sa_present=True):
         bam = pysam.AlignmentFile(self.bam_path, "rb")
         for read in bam:
             if read.is_unmapped or read.is_secondary or read.is_supplementary:
@@ -509,7 +513,7 @@ class FusionDetector:
             return False, f"Exon boundary check failed: {str(e)}"
 
     def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
-                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=False,
+                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
         for fusion_key, meta in self.fusion_metadata.items():
@@ -589,6 +593,21 @@ class FusionDetector:
         meta["left_gene"] = resolved_left
         meta["right_gene"] = resolved_right
 
+        # Prefer nearby protein-coding genes if the chosen gene looks like RP11/ENSG/non-coding
+        try:
+            if isinstance(meta.get("left_gene"), str) and (meta["left_gene"].startswith("RP11") or meta["left_gene"].upper().startswith("ENS")):
+                nearby = self._find_nearby_protein_coding(c1, p1, window=500)
+                if nearby:
+                    meta["left_gene"] = nearby
+                    meta.setdefault("notes", []).append(f"Left gene resolved to nearby coding {nearby}")
+            if isinstance(meta.get("right_gene"), str) and (meta["right_gene"].startswith("RP11") or meta["right_gene"].upper().startswith("ENS")):
+                nearby = self._find_nearby_protein_coding(c2, p2, window=500)
+                if nearby:
+                    meta["right_gene"] = nearby
+                    meta.setdefault("notes", []).append(f"Right gene resolved to nearby coding {nearby}")
+        except Exception:
+            pass
+
         # classify
         if g1_name and g2_name:
             # compare resolved gene symbols for intragenic check
@@ -622,7 +641,10 @@ class FusionDetector:
         if not fusion_seq:
             flags["is_valid"] = False
             flags["reasons"].append("Failed to reconstruct fusion transcript")
+            meta["reconstruction_ok"] = False
             return
+        # mark that reconstruction produced a transcript
+        meta["reconstruction_ok"] = True
         hits = self.realign_fusion_transcript(fusion_seq)
         if not hits:
             flags["is_valid"] = False
@@ -634,6 +656,26 @@ class FusionDetector:
                 meta["best_hit_mapq"] = max([h.mapq for h in hits]) if hits else 0
             except Exception:
                 meta["best_hit_mapq"] = 0
+
+    def _find_nearby_protein_coding(self, chrom, pos, window=500):
+        """Search for a nearby protein-coding gene within +/- window and return its gene_name if found."""
+        try:
+            start = max(1, pos - window)
+            end = pos + window
+            genes = list(self.db.region(region=(chrom, start, end), featuretype='gene'))
+            for g in genes:
+                # check common biotype attribute keys
+                attrs = g.attributes if hasattr(g, 'attributes') else {}
+                biotype = None
+                for key in ('gene_type', 'gene_biotype', 'transcript_type', 'transcript_biotype'):
+                    if key in attrs:
+                        biotype = attrs.get(key, [None])[0]
+                        break
+                if biotype and biotype == 'protein_coding':
+                    return attrs.get('gene_name', [g.id])[0]
+            return None
+        except Exception:
+            return None
 
     def confidence(self, meta, flags=None):
         # Start from clustered support normalized 
