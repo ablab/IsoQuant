@@ -124,6 +124,10 @@ def process_table_for_chromosomes(worker_id, input_tsvs, my_chromosomes, bam_fil
     2. Streams through table line-by-line (memory efficient)
     3. Writes matching reads to chromosome-specific output files
 
+    Note: Output files preserve all columns from 0 to max(group_columns) to keep
+    column indices valid. This avoids index shifting when non-contiguous columns
+    are specified (e.g., columns 0 and 2 but not 1).
+
     Args:
         worker_id: Worker identifier for logging
         input_tsvs: TSV file(s) to read from
@@ -154,7 +158,9 @@ def process_table_for_chromosomes(worker_id, input_tsvs, my_chromosomes, bam_fil
     # Step 3: Stream through table line-by-line
     total_reads_processed = 0
     total_reads_written = 0
-    min_columns = max(read_column, max(group_columns)) + 1
+    # Keep all columns from 0 to max index to preserve column indices
+    max_column_index = max(read_column, max(group_columns))
+    min_columns = max_column_index + 1
 
     try:
         input_files = input_tsvs if isinstance(input_tsvs, list) else [input_tsvs]
@@ -183,9 +189,10 @@ def process_table_for_chromosomes(worker_id, input_tsvs, my_chromosomes, bam_fil
                     # Check if this read belongs to any of my chromosomes
                     for chr_id in my_chromosomes:
                         if read_id in read_cache[chr_id]:
-                            # Extract group values
-                            group_vals = delim.join(columns[c] for c in group_columns)
-                            out_handles[chr_id].write(f"{read_id}{delim}{group_vals}\n")
+                            # Keep all columns from 0 to max_column_index to preserve indices
+                            # This ensures column references remain valid in split files
+                            output_cols = delim.join(columns[:max_column_index + 1])
+                            out_handles[chr_id].write(f"{output_cols}\n")
                             total_reads_written += 1
                             break  # Read can only be on one chromosome
             finally:
