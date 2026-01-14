@@ -194,55 +194,6 @@ class CurioBarcodeDetector:
         return CurioBarcodeDetectionResult
 
 
-class CurioBruteForceDetector:
-    """
-    Brute force Curio barcode detector.
-
-    Uses exact string matching instead of k-mer indexing.
-    """
-
-    LINKER = "TCTTCAGCGTTCCCGAGA"
-    LEFT_BC_LENGTH = 2
-    RIGHT_BC_LENGTH = 12
-    BC_LENGTH = LEFT_BC_LENGTH + RIGHT_BC_LENGTH
-
-    def __init__(self, joint_barcode_list: List[str]):
-        """
-        Initialize brute force detector.
-
-        Args:
-            joint_barcode_list: List of known barcodes
-        """
-        self.barcode_set = set(joint_barcode_list)
-
-    def find_barcode_umi(self, read_id: str, sequence: str) -> CurioBarcodeDetectionResult:
-        """Detect barcode using exact linker matching."""
-        linker_found, barcode = self._find_barcode_umi_fwd(read_id, sequence)
-        if linker_found:
-            return linker_found, barcode
-
-        rev_seq = reverese_complement(sequence)
-        return self._find_barcode_umi_fwd(read_id, rev_seq)
-
-    def _find_barcode_umi_fwd(self, read_id: str, sequence: str) -> CurioBarcodeDetectionResult:
-        pos = sequence.find(self.LINKER)
-        if pos == -1:
-            return CurioBarcodeDetectionResult(read_id)
-
-        bc_start = max(0, pos - self.LEFT_BC_LENGTH)
-        barcode = sequence[bc_start:pos]
-        linker_end = pos + len(self.LINKER)
-        bc_end = min(len(sequence), linker_end + 1 + self.RIGHT_BC_LENGTH)
-        barcode += sequence[linker_end + 1:bc_end]
-        if len(barcode) != self.BC_LENGTH or barcode not in self.barcode_set:
-            return CurioBarcodeDetectionResult(read_id, linker_start=pos)
-        return CurioBarcodeDetectionResult(read_id, barcode, BC_score=len(barcode), linker_start=pos)
-
-    @staticmethod
-    def result_type():
-        return CurioBarcodeDetectionResult
-
-
 class CurioIlluminaDetector:
     """
     Curio barcode detector optimized for Illumina short reads.
