@@ -143,6 +143,10 @@ def track_disk_usage(folder, interval, outfile, res_stats):
     start_time = time()
     max_usage = 0
     while not task_over.is_set():
+        if not os.path.exists(folder):
+            sleep(interval)
+            continue
+
         disk_usage = int(subprocess.check_output(['du', '-s', folder]).split()[0].decode('utf-8'))
         current_time = time() - start_time
         max_usage =max(max_usage, disk_usage)
