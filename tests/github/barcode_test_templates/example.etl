@@ -1,0 +1,15 @@
+# Example etalon file for barcode quality comparison
+# Tab-separated metric-value format
+# Only metrics listed here will be checked
+
+# Basic metrics
+precision	98.50
+recall	95.00
+
+# Optional: score threshold metrics
+# precision_at_21	99.00
+# recall_at_21	94.50
+
+# Optional: UMI accuracy (if editdistance available)
+# umi_within_1	9200
+# umi_within_2	9400
