@@ -41,7 +41,6 @@ from .callers import (
 # Detector classes
 from .callers import (
     CurioBarcodeDetector,
-    CurioBruteForceDetector,
     CurioIlluminaDetector,
     StereoBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
@@ -73,7 +72,6 @@ __all__ = [
     'increase_if_valid',
     # Curio detectors
     'CurioBarcodeDetector',
-    'CurioBruteForceDetector',
     'CurioIlluminaDetector',
     # Stereo detectors
     'StereoBarcodeDetector',

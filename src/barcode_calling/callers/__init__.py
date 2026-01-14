@@ -17,7 +17,6 @@ Classes:
 
 Detectors:
     CurioBarcodeDetector: Curio platform detector
-    CurioBruteForceDetector: Brute force Curio detector
     CurioIlluminaDetector: Curio detector for Illumina reads
     StereoBarcodeDetector: Stereo-seq detector
     SharedMemoryStereoBarcodeDetector: Stereo-seq with shared memory
@@ -40,7 +39,6 @@ from .base import (
 
 from .curio import (
     CurioBarcodeDetector,
-    CurioBruteForceDetector,
     CurioIlluminaDetector,
 )
 
@@ -68,7 +66,6 @@ __all__ = [
     'increase_if_valid',
     # Curio detectors
     'CurioBarcodeDetector',
-    'CurioBruteForceDetector',
     'CurioIlluminaDetector',
     # Stereo detectors
     'StereoBarcodeDetector',
