@@ -13,9 +13,9 @@ Stereo-seq uses spatial barcodes with linker sequences and optional TSO detectio
 import logging
 from typing import List, Optional
 
-from ..indexers import KmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer, SharedMemoryArray2BitKmerIndexer
+from ..indexers import ArrayKmerIndexer, Dict2BitKmerIndexer, SharedMemoryArray2BitKmerIndexer
 from ..common import (
-    find_polyt_start, reverese_complement, str_to_2bit, bit_to_str,
+    find_polyt_start, reverese_complement, batch_str_to_2bit_chunked,
     find_candidate_with_max_score_ssw, detect_exact_positions, detect_first_exact_positions,
 )
 from .base import CurioBarcodeDetectionResult, StereoBarcodeDetectionResult, SplittingBarcodeDetectionResult
@@ -51,9 +51,9 @@ class StereoBarcodeDetector:
 
         self.barcode_indexer = None
         if barcodes:
-            bit_barcodes = map(str_to_2bit, barcodes)
-            self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
-            logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
+            bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
+            self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+            logger.info("Indexed %d barcodes" % len(bit_barcodes))
 
         self.umi_set = None
         self.min_score = min_score
@@ -209,16 +209,18 @@ class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
 
     def __init__(self, barcodes: List[str], min_score: int = 21):
         super().__init__([], min_score=min_score)
-        bit_barcodes = list(map(str_to_2bit, barcodes))
+        # Convert to 2-bit encoding first (memory efficient)
+        bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
         self.barcode_count = len(bit_barcodes)
-        self.barcodes = []
+        self.bit_barcodes = None
         if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
-            # workaround for --test and small barcode sets (which cannot happen in practice)
-            self.barcode_indexer = KmerIndexer(list(map(lambda x: bit_to_str(x, self.BC_LENGTH), bit_barcodes)), kmer_size=14)
-            self.barcodes = self.barcode_indexer.seq_list
+            # For small/medium sets, use Dict2BitKmerIndexer
+            self.bit_barcodes = bit_barcodes
+            self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
+            # For large sets, use shared memory indexer
             self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=14,
-                                                                    seq_len=super().BC_LENGTH)
+                                                                    seq_len=self.BC_LENGTH)
 
         logger.info("Indexed %d barcodes" % self.barcode_count)
 
@@ -226,7 +228,7 @@ class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
         if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
             return (self.min_score,
                     self.barcode_count,
-                    self.barcodes)
+                    self.bit_barcodes)
         else:
             return (self.min_score,
                     self.barcode_count,
@@ -235,11 +237,11 @@ class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
     def __setstate__(self, state):
         self.min_score = state[0]
         super().__init__([], min_score=self.min_score)
-        self.barcodes = []
+        self.bit_barcodes = None
         self.barcode_count = state[1]
         if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
-            self.barcodes = state[2]
-            self.barcode_indexer = KmerIndexer(self.barcodes, kmer_size=14)
+            self.bit_barcodes = state[2]
+            self.barcode_indexer = Dict2BitKmerIndexer(self.bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
             self.barcode_indexer = SharedMemoryArray2BitKmerIndexer.from_sharable_info(state[2])
 
@@ -274,9 +276,9 @@ class StereoSplittingBarcodeDetector:
 
         self.barcode_indexer = None
         if barcodes:
-            bit_barcodes = map(str_to_2bit, barcodes)
-            self.barcode_indexer = Array2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
-            logger.info("Indexed %d barcodes" % self.barcode_indexer.total_sequences)
+            bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
+            self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+            logger.info("Indexed %d barcodes" % len(bit_barcodes))
         self.umi_set = None
         self.min_score = min_score
 
@@ -492,16 +494,18 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
 
     def __init__(self, barcodes: List[str], min_score: int = 21):
         super().__init__([], min_score=min_score)
-        bit_barcodes = list(map(str_to_2bit, barcodes))
+        # Convert to 2-bit encoding first (memory efficient)
+        bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
         self.barcode_count = len(bit_barcodes)
-        self.barcodes = []
+        self.bit_barcodes = None
         if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
-            # workaround for --test and small barcode sets (which cannot happen in practice)
-            self.barcode_indexer = KmerIndexer(list(map(lambda x: bit_to_str(x, self.BC_LENGTH), bit_barcodes)), kmer_size=14)
-            self.barcodes = self.barcode_indexer.seq_list
+            # For small/medium sets, use Dict2BitKmerIndexer
+            self.bit_barcodes = bit_barcodes
+            self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
+            # For large sets, use shared memory indexer
             self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=14,
-                                                                    seq_len=super().BC_LENGTH)
+                                                                    seq_len=self.BC_LENGTH)
 
         logger.info("Indexed %d barcodes" % self.barcode_count)
 
@@ -509,7 +513,7 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
         if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
             return (self.min_score,
                     self.barcode_count,
-                    self.barcodes)
+                    self.bit_barcodes)
         else:
             return (self.min_score,
                     self.barcode_count,
@@ -518,11 +522,11 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
     def __setstate__(self, state):
         self.min_score = state[0]
         super().__init__([], min_score=self.min_score)
-        self.barcodes = []
+        self.bit_barcodes = None
         self.barcode_count = state[1]
         if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
-            self.barcodes = state[2]
-            self.barcode_indexer = KmerIndexer(self.barcodes, kmer_size=14)
+            self.bit_barcodes = state[2]
+            self.barcode_indexer = Dict2BitKmerIndexer(self.bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
             self.barcode_indexer = SharedMemoryArray2BitKmerIndexer.from_sharable_info(state[2])
 
@@ -542,7 +546,9 @@ class SharedMemoryWrapper:
         self.barcode_detector_class = barcode_detector_class
         self.min_score = min_score
         self.barcode_detector = self.barcode_detector_class([], self.min_score)
-        bit_barcodes = list(map(str_to_2bit, barcodes))
+        # Convert to 2-bit and use shared memory indexer
+        barcode_iter = iter(barcodes) if isinstance(barcodes, list) else barcodes
+        bit_barcodes = batch_str_to_2bit_chunked(barcode_iter, seq_len=self.barcode_detector_class.BC_LENGTH)
         self.barcode_detector.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=14,
                                                                                  seq_len=self.barcode_detector_class.BC_LENGTH)
 

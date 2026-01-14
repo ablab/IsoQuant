@@ -19,59 +19,57 @@ from ..common import bit_to_str, str_to_2bit
 
 class Dict2BitKmerIndexer:
     """
-    Memory-efficient k-mer indexer using 2-bit encoded integer keys.
+    Memory-efficient k-mer indexer using 2-bit encoded sequences and integer keys.
 
-    Uses integer k-mer indices (2 bits per nucleotide) instead of string keys,
-    reducing memory by ~40% compared to KmerIndexer while maintaining the same API.
-    Best for medium to large barcode sets where ArrayKmerIndexer's O(4^k) memory
-    would be prohibitive.
+    Stores sequences as 2-bit encoded integers (8 bytes per 25bp barcode vs 25+ bytes for strings).
+    Uses dictionary for k-mer index (vs 4^k array in Array2BitKmerIndexer).
+    Best for medium to large barcode sets.
     """
 
-    # Nucleotide to 2-bit encoding (A=00, C=01, G=10, T=11)
-    NUCL2BIN: Dict[str, int] = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'a': 0, 'c': 1, 'g': 2, 't': 3}
-
-    def __init__(self, known_strings: Iterable[str], kmer_size: int = 6):
+    def __init__(self, known_bit_seqs: Iterable[int], kmer_size: int = 6, seq_len: int = 25):
         """
-        Initialize k-mer index with integer keys.
+        Initialize k-mer index with 2-bit encoded sequences.
 
         Args:
-            known_strings: Collection of reference sequences (barcodes/UMIs)
+            known_bit_seqs: Collection of 2-bit encoded sequences (use str_to_2bit or batch_str_to_2bit)
             kmer_size: Length of k-mers to use for indexing
+            seq_len: Length of sequences in nucleotides
         """
-        self.seq_list: List[str] = list(known_strings)
+        self.seq_list: List[int] = list(known_bit_seqs)
         self.k: int = kmer_size
+        self.seq_len: int = seq_len
         self.mask: int = (1 << (2 * self.k)) - 1
         self.index: DefaultDict[int, List[int]] = defaultdict(list)
         self._index()
 
-    def _get_kmer_indexes(self, seq: str) -> Iterable[int]:
-        """Generate binary-encoded k-mer indices using sliding window."""
+    def _get_kmer_indexes_from_bits(self, bin_seq: int) -> Iterable[int]:
+        """Extract k-mer indices from a 2-bit encoded sequence."""
+        # Convert numpy scalar to Python int for bitwise operations
+        bin_seq = int(bin_seq)
+        for i in range(self.seq_len - self.k + 1):
+            yield (bin_seq >> ((self.seq_len - self.k - i) * 2)) & self.mask
+
+    def _get_kmer_indexes_from_str(self, seq: str) -> Iterable[int]:
+        """Generate binary-encoded k-mer indices from string using sliding window."""
         if len(seq) < self.k:
             return
-
+        # Use same encoding as common.py: (ord(char) & 6) >> 1
+        # A=0, C=1, T=2, G=3
         # Initialize first k-mer
         kmer_idx = 0
         for i in range(self.k):
-            kmer_idx |= Dict2BitKmerIndexer.NUCL2BIN[seq[i]] << ((self.k - i - 1) * 2)
+            kmer_idx |= ((ord(seq[i]) & 6) >> 1) << ((self.k - i - 1) * 2)
         yield kmer_idx
-
-        # Slide window: shift left 2 bits, add new nucleotide
+        # Slide window
         for i in range(self.k, len(seq)):
-            kmer_idx = ((kmer_idx << 2) & self.mask) | Dict2BitKmerIndexer.NUCL2BIN[seq[i]]
+            kmer_idx = ((kmer_idx << 2) & self.mask) | ((ord(seq[i]) & 6) >> 1)
             yield kmer_idx
 
     def _index(self) -> None:
         """Build k-mer index from all sequences."""
-        for i, seq in enumerate(self.seq_list):
-            for kmer_idx in self._get_kmer_indexes(seq):
+        for i, bin_seq in enumerate(self.seq_list):
+            for kmer_idx in self._get_kmer_indexes_from_bits(bin_seq):
                 self.index[kmer_idx].append(i)
-
-    def append(self, seq: str) -> None:
-        """Add a new sequence to the index."""
-        i = len(self.seq_list)
-        self.seq_list.append(seq)
-        for kmer_idx in self._get_kmer_indexes(seq):
-            self.index[kmer_idx].append(i)
 
     def empty(self) -> bool:
         """Check if index is empty."""
@@ -83,19 +81,20 @@ class Dict2BitKmerIndexer:
         Find indexed sequences with shared k-mers.
 
         Args:
-            sequence: Query sequence to search
+            sequence: Query sequence (string) to search
             max_hits: Maximum number of results (0 = unlimited)
             min_kmers: Minimum shared k-mers required
             hits_delta: Include results within this many k-mers of top hit
             ignore_equal: Skip exact matches
 
         Returns:
-            List of (sequence, shared_kmer_count, kmer_positions) tuples
+            List of (sequence_str, shared_kmer_count, kmer_positions) tuples
         """
         barcode_counts: DefaultDict[int, int] = defaultdict(int)
         barcode_positions: DefaultDict[int, List[int]] = defaultdict(list)
 
-        for pos, kmer_idx in enumerate(self._get_kmer_indexes(sequence)):
+        query_bin = str_to_2bit(sequence)
+        for pos, kmer_idx in enumerate(self._get_kmer_indexes_from_str(sequence)):
             for seq_index in self.index.get(kmer_idx, []):
                 barcode_counts[seq_index] += 1
                 barcode_positions[seq_index].append(pos)
@@ -105,21 +104,22 @@ class Dict2BitKmerIndexer:
             count = barcode_counts[seq_index]
             if count < min_kmers:
                 continue
-            seq = self.seq_list[seq_index]
-            if ignore_equal and seq == sequence:
+            bin_seq = self.seq_list[seq_index]
+            if ignore_equal and bin_seq == query_bin:
                 continue
-            result.append((seq, count, barcode_positions[seq_index]))
+            result.append((bin_seq, count, barcode_positions[seq_index]))
 
         if not result:
             return []
 
         top_hits = max(result, key=lambda x: x[1])[1]
         result = filter(lambda x: x[1] >= top_hits - hits_delta, result)
-        result = list(sorted(result, reverse=True, key=lambda x: x[1]))
+        result = sorted(result, reverse=True, key=lambda x: x[1])
 
+        # Convert 2-bit sequences back to strings
         if max_hits == 0:
-            return result
-        return result[:max_hits]
+            return [(bit_to_str(x[0], self.seq_len), x[1], x[2]) for x in result]
+        return [(bit_to_str(x[0], self.seq_len), x[1], x[2]) for x in list(result)[:max_hits]]
 
 
 class Array2BitKmerIndexer:

@@ -5,11 +5,11 @@
 ############################################################################
 
 import pytest
-from src.barcode_calling.shared_mem_index import (
+from src.barcode_calling.indexers import (
     SharedMemoryArray2BitKmerIndexer,
     SharedMemoryIndexInfo,
+    Array2BitKmerIndexer,
 )
-from src.barcode_calling.kmer_indexer import Array2BitKmerIndexer
 from src.barcode_calling.common import str_to_2bit
 
 
