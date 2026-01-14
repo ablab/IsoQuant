@@ -11,4 +11,4 @@ scipy>=1.4.1
 seaborn>=0.10.0
 editdistance>=0.8.1
 biopython>=1.76
-
+numba
