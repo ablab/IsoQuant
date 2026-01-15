@@ -287,28 +287,36 @@ class TerminalCounter(AbstractCounter):
         self.peaks['prediction'] = self.model.predict(self.peaks.drop(['peak_left', 'peak_right', 'histogram', 
             'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
         
-
+        self.peaks['prediction'] = self.peaks['prediction'].apply(lambda x: True if x == 1 else False)
         if self.first:
             self.peaks.to_csv("src/peaks_1.csv", sep="\t", index=False, mode="w", header=True)
         else:
             self.peaks.to_csv("src/peaks_1.csv", sep="\t", index=False, mode="a", header=False)
 
 
-        self.peaks = self.peaks[self.peaks.prediction ==True].reset_index(drop=True)   
+        
+        # self.peaks = self.peaks[self.peaks.prediction ==True].reset_index(drop=True) 
+        # 
+        self.peaks = self.peaks[self.peaks.peak_location > 40].reset_index(drop=True)   
+        
+        
+        
+        
+        
         self.peaks['prediction'] = self.peaks['peak_location']
-        
-
-
         self.dfResult = pd.concat([self.dfResult, self.peaks], axis=0).reset_index(drop=True)
-        
-        
-        # if self.peaks.empty:
-        #     print("peaks is empty 6")
 
-        # if self.first:
-        #     self.dfResult.to_csv("src/dfResult.csv", sep="\t", index=False, mode="w", header=True)
-        # else:
-        #     self.dfResult.to_csv("src/dfResult.csv", sep="\t", index=False, mode="a", header=False)
+        
+        if self.dfResult.empty:
+            self.df = pd.DataFrame({'chromosome':[], 'transcript_id':[], 'gene_id':[], 'prediction':[], 'counts':[], 'counts_byGroup':[], 'flag':[], 'group_id':[]})
+            if self.first:
+                self.df.to_csv(self.output_prefix, sep="\t", index=False, mode="w", header=True)
+            else:
+                self.df.to_csv(self.output_prefix, sep="\t", index=False, mode="a", header=False)
+            return
+
+        print(len(self.dfResult))
+        
 
 
         self.dfResult['counts'] = self.dfResult.apply(lambda x: self.counts(x), axis = 1)
@@ -410,7 +418,7 @@ class TSSCounter(TerminalCounter):
         
     def dump(self):
         self.model = XGBClassifier()
-        self.model.load_model('src/model.json')
+        self.model.load_model('src/model_new.json')
 
         self.create_df()
         # self.collect_data()
@@ -461,8 +469,8 @@ class PolyACounter(TerminalCounter):
      
     def dump(self):
         self.model = XGBClassifier()
-        # self.model.load_model('src/model.json')
-        self.model.load_model('src/model_new.json')
+        self.model.load_model('src/model.json')
+        # self.model.load_model('src/model_new.json')
 
 
         # self.create_df()
@@ -479,4 +487,3 @@ class PolyACounter(TerminalCounter):
 # to train a model: 
 # in the dump function of the wanted class comment self.create_df() and uncomment self.collect_data() 
 # and in the finalize function uncomment self.train_model()
-
