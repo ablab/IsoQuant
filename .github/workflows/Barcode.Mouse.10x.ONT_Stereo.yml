@@ -1,0 +1,74 @@
+name: Barcode Mouse 10x ONT Stereo
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '30 2 * * 1'
+
+env:
+  LAUNCHER: ${{github.workspace}}/tests/github/run_barcode_test.py
+  CFG_DIR: /abga/work/andreyp/ci_isoquant/data/barcodes
+  BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
+  OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/barcodes/
+
+concurrency:
+  group: ${{github.workflow}}
+  cancel-in-progress: false
+
+jobs:
+  check-changes:
+    runs-on:
+      labels: [isoquant]
+    name: 'Check for recent changes'
+    outputs:
+      has_changes: ${{steps.check.outputs.has_changes}}
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 'Check for commits in last 7 days'
+        id: check
+        run: |
+          # Always run on manual trigger
+          if [ "${{github.event_name}}" = "workflow_dispatch" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Check for commits in last 7 days
+          COMMITS=$(git log --oneline --since="7 days ago" | wc -l)
+          if [ "$COMMITS" -gt 0 ]; then
+            echo "Found $COMMITS commits in last 7 days"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "No commits in last 7 days, skipping"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+  launch-runner:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on:
+      labels: [isoquant]
+    name: 'Running barcode detection QC'
+
+    steps:
+      - name: 'Cleanup'
+        run: >
+          set -e &&
+          shopt -s dotglob &&
+          rm -rf *
+
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: 'Mouse 10x ONT Stereo'
+        shell: bash
+        env:
+          STEP_NAME: Mouse.10x.5k.no_truncation.ONT_Stereo
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
