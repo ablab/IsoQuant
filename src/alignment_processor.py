@@ -6,6 +6,7 @@
 
 import logging
 import math
+import random
 from collections import defaultdict
 from queue import PriorityQueue
 
@@ -269,6 +270,16 @@ class AlignmentCollector:
         # self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
         self.alignment_stat_counter = EnumStats()
 
+        # Initialize random number generator for read fraction sampling
+        self.read_fraction = getattr(params, 'fraction', 1.0)
+        if self.read_fraction < 1.0:
+            seed = getattr(params, 'seed', None)
+            # Per-chromosome deterministic seed for parallel reproducibility
+            chr_seed = seed + hash(chr_id) if seed is not None else None
+            self.rng = random.Random(chr_seed)
+        else:
+            self.rng = None
+
     def process(self):
         alignment_storage = BAMAlignmentStorage(self.bam_merger) if not self.params.high_memory else InMemoryAlignmentStorage()
         for bam_index, alignment in self.bam_merger.get():
@@ -376,6 +387,9 @@ class AlignmentCollector:
             counter += 1
             if skip_read_fraction > 1 and counter % skip_read_fraction != 0:
                 continue
+            # Random fraction-based skip
+            if self.rng is not None and self.rng.random() > self.read_fraction:
+                continue
 
             if self.params.polya_trimmed == PolyATrimmed.none:
                 alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
@@ -430,6 +444,9 @@ class AlignmentCollector:
 
             counter += 1
             if skip_read_fraction > 1 and counter % skip_read_fraction != 0:
+                continue
+            # Random fraction-based skip
+            if self.rng is not None and self.rng.random() > self.read_fraction:
                 continue
 
             read_id = alignment.query_name

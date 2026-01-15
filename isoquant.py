@@ -95,6 +95,10 @@ def parse_args(cmd_args=None, namespace=None):
     parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
     add_hidden_option('--debug', action='store_true', default=False,
                       help='Debug log output.')
+    add_hidden_option('--seed', type=int, default=None,
+                      help='Random seed for reproducibility.')
+    add_hidden_option('--fraction', type=float, default=1.0,
+                      help='Fraction of reads to process (0-1), randomly samples reads.')
 
     output_args_group.add_argument("--output", "-o", help="output folder, will be created automatically "
                                                           "[default=isoquant_output]",
@@ -414,6 +418,11 @@ def check_and_load_args(args, parser):
             if val not in LARGE_OUTPUT_TYPES:
                 logger.error("Invalid --large_output value: %s. Valid values: %s" % (val, ", ".join(LARGE_OUTPUT_TYPES)))
                 exit(-1)
+
+    # Validate --fraction value
+    if args.fraction is not None and (args.fraction < 0 or args.fraction > 1):
+        logger.error("--fraction must be between 0 and 1")
+        exit(-1)
 
     save_params(args)
     return args
