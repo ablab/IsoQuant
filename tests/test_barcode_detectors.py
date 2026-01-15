@@ -29,9 +29,9 @@ from src.barcode_calling.callers import (
 )
 from src.barcode_calling.callers.base import (
     SplittingBarcodeDetectionResult,
-    StereoBarcodeDetectionResult,
+    TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
-    CurioBarcodeDetectionResult,
+    LinkerBarcodeDetectionResult,
 )
 
 
@@ -107,7 +107,7 @@ class TestStereoBarcodeDetector:
         detector = StereoBarcodeDetector(DUMMY_BARCODES_25, min_score=21)
         result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
 
-        assert isinstance(result, (CurioBarcodeDetectionResult, StereoBarcodeDetectionResult))
+        assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
         assert result.read_id == "test_read"
         # Random sequence should not match any barcode
         assert not result.is_valid()
@@ -138,7 +138,7 @@ class TestStereoBarcodeDetector:
         detector = StereoBarcodeDetector(barcodes, min_score=21)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
-        assert isinstance(result, (CurioBarcodeDetectionResult, StereoBarcodeDetectionResult))
+        assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
         assert result.read_id == "test_read"
         # Random sequence should not match any barcode
         assert result.is_valid()
@@ -217,7 +217,7 @@ class TestSharedMemStereoBarcodeDetector:
         detector = SharedMemoryStereoBarcodeDetector(DUMMY_BARCODES_25, min_score=21)
         result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
 
-        assert isinstance(result, (CurioBarcodeDetectionResult, StereoBarcodeDetectionResult))
+        assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
         assert result.read_id == "test_read"
         # Random sequence should not match any barcode
         assert not result.is_valid()
@@ -248,7 +248,7 @@ class TestSharedMemStereoBarcodeDetector:
         detector = SharedMemoryStereoBarcodeDetector(barcodes, min_score=21)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
-        assert isinstance(result, (CurioBarcodeDetectionResult, StereoBarcodeDetectionResult))
+        assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
         assert result.read_id == "test_read"
         # Random sequence should not match any barcode
         assert result.is_valid()
@@ -468,7 +468,7 @@ class TestCurioBarcodeDetector:
         detector = CurioBarcodeDetector(DUMMY_BARCODES_14, min_score=13)
         result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
 
-        assert isinstance(result, CurioBarcodeDetectionResult)
+        assert isinstance(result, LinkerBarcodeDetectionResult)
         assert result.read_id == "test_read"
         assert not result.is_valid()
 
@@ -509,7 +509,7 @@ class TestCurioBarcodeDetector:
         detector = CurioBarcodeDetector(barcodes)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
-        assert isinstance(result, CurioBarcodeDetectionResult)
+        assert isinstance(result, LinkerBarcodeDetectionResult)
         assert result.read_id == "test_read"
         # Random sequence should not match any barcode
         assert result.is_valid()
@@ -531,7 +531,7 @@ class TestCurioIlluminaDetector:
         detector = CurioIlluminaDetector(DUMMY_BARCODES_14, min_score=14)
         result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
 
-        assert isinstance(result, CurioBarcodeDetectionResult)
+        assert isinstance(result, LinkerBarcodeDetectionResult)
         assert result.read_id == "test_read"
         assert not result.is_valid()
 
