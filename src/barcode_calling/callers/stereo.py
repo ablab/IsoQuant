@@ -182,6 +182,8 @@ class StereoBarcodeDetector:
 
         potential_umi_start = linker_end + 1
         potential_umi_end = polyt_start - 1
+        if potential_umi_end - potential_umi_start <= 5:
+            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
         umi = None
         good_umi = False
         if potential_umi_start + 2 * self.UMI_LEN > potential_umi_end > potential_umi_start:
@@ -409,7 +411,7 @@ class StereoSplittingBarcodeDetector:
                                                                 start_delta=self.TERMINAL_MATCH_DELTA,
                                                                 end_delta=self.TERMINAL_MATCH_DELTA)
 
-        if tso5_start:
+        if tso5_start is not None:
             logger.debug("TSO found %d" % tso5_start)
             # check that no another linker is found inbetween polyA and TSO 5'
             linker_occurrences = self.strict_linker_indexer.get_occurrences(sequence[polyt_start + 1: tso5_start])
@@ -467,6 +469,8 @@ class StereoSplittingBarcodeDetector:
 
         potential_umi_start = linker_end + 1
         potential_umi_end = polyt_start - 1
+        if potential_umi_end - potential_umi_start <= 5:
+            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
         umi = None
         good_umi = False
         if potential_umi_start + 2 * self.UMI_LEN > potential_umi_end > potential_umi_start:
