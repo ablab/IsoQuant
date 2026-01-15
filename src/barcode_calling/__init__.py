@@ -30,8 +30,8 @@ from .indexers import (
 # Result classes
 from .callers import (
     BarcodeDetectionResult,
-    CurioBarcodeDetectionResult,
-    StereoBarcodeDetectionResult,
+    LinkerBarcodeDetectionResult,
+    TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
@@ -64,8 +64,8 @@ __all__ = [
     'SharedMemoryIndexInfo',
     # Result classes
     'BarcodeDetectionResult',
-    'CurioBarcodeDetectionResult',
-    'StereoBarcodeDetectionResult',
+    'LinkerBarcodeDetectionResult',
+    'TSOBarcodeDetectionResult',
     'TenXBarcodeDetectionResult',
     'SplittingBarcodeDetectionResult',
     'ReadStats',

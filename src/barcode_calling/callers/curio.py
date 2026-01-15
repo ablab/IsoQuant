@@ -18,7 +18,7 @@ from ..common import (
     find_polyt_start, reverese_complement,
     find_candidate_with_max_score_ssw, detect_exact_positions,
 )
-from .base import CurioBarcodeDetectionResult
+from .base import LinkerBarcodeDetectionResult
 
 logger = logging.getLogger('IsoQuant')
 
@@ -69,7 +69,7 @@ class CurioBarcodeDetector:
             self.umi_indexer = KmerIndexer(umi_list, kmer_size=5)
         self.min_score = min_score
 
-    def find_barcode_umi(self, read_id: str, sequence: str) -> CurioBarcodeDetectionResult:
+    def find_barcode_umi(self, read_id: str, sequence: str) -> LinkerBarcodeDetectionResult:
         """
         Detect barcode and UMI in a read sequence.
 
@@ -97,7 +97,7 @@ class CurioBarcodeDetector:
 
         return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
 
-    def _find_barcode_umi_fwd(self, read_id: str, sequence: str) -> CurioBarcodeDetectionResult:
+    def _find_barcode_umi_fwd(self, read_id: str, sequence: str) -> LinkerBarcodeDetectionResult:
         """Detect barcode/UMI in forward orientation."""
         polyt_start = find_polyt_start(sequence)
 
@@ -122,7 +122,7 @@ class CurioBarcodeDetector:
                                                               end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
         if linker_start is None:
-            return CurioBarcodeDetectionResult(read_id, polyT=polyt_start)
+            return LinkerBarcodeDetectionResult(read_id, polyT=polyt_start)
         logger.debug("LINKER: %d-%d" % (linker_start, linker_end))
 
         if polyt_start == -1 or polyt_start - linker_end > self.RIGHT_BC_LENGTH + self.UMI_LEN + 10:
@@ -154,7 +154,7 @@ class CurioBarcodeDetector:
             find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode, min_score=self.min_score)
 
         if barcode is None:
-            return CurioBarcodeDetectionResult(read_id, polyT=polyt_start, primer=primer_end,
+            return LinkerBarcodeDetectionResult(read_id, polyT=polyt_start, primer=primer_end,
                                                 linker_start=linker_start, linker_end=linker_end)
         logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
         # position of barcode end in the reference: end of potential barcode minus bases to the alignment end
@@ -182,16 +182,16 @@ class CurioBarcodeDetector:
                 good_umi = True
 
         if not umi:
-            return CurioBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
-                                               polyT=polyt_start, primer=primer_end,
-                                               linker_start=linker_start, linker_end=linker_end)
-        return CurioBarcodeDetectionResult(read_id, barcode, umi, bc_score, good_umi,
-                                           polyT=polyt_start, primer=primer_end,
-                                           linker_start=linker_start, linker_end=linker_end)
+            return LinkerBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
+                                                polyT=polyt_start, primer=primer_end,
+                                                linker_start=linker_start, linker_end=linker_end)
+        return LinkerBarcodeDetectionResult(read_id, barcode, umi, bc_score, good_umi,
+                                            polyT=polyt_start, primer=primer_end,
+                                            linker_start=linker_start, linker_end=linker_end)
 
     @staticmethod
     def result_type():
-        return CurioBarcodeDetectionResult
+        return LinkerBarcodeDetectionResult
 
 
 class CurioIlluminaDetector:
@@ -235,7 +235,7 @@ class CurioIlluminaDetector:
             self.umi_indexer = KmerIndexer(umi_list, kmer_size=5)
         self.min_score = min_score
 
-    def find_barcode_umi(self, read_id: str, sequence: str) -> CurioBarcodeDetectionResult:
+    def find_barcode_umi(self, read_id: str, sequence: str) -> LinkerBarcodeDetectionResult:
         """Detect barcode and UMI."""
         read_result = self._find_barcode_umi_fwd(read_id, sequence)
         if read_result.polyT != -1:
@@ -252,7 +252,7 @@ class CurioIlluminaDetector:
 
         return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
 
-    def _find_barcode_umi_fwd(self, read_id: str, sequence: str) -> CurioBarcodeDetectionResult:
+    def _find_barcode_umi_fwd(self, read_id: str, sequence: str) -> LinkerBarcodeDetectionResult:
         # look for linker in the entire read
         linker_occurrences = self.linker_indexer.get_occurrences(sequence)
         linker_start, linker_end = detect_exact_positions(sequence, 0, len(sequence),
@@ -262,7 +262,7 @@ class CurioIlluminaDetector:
                                                           end_delta=self.TERMINAL_MATCH_DELTA)
 
         if linker_start is None:
-            return CurioBarcodeDetectionResult(read_id)
+            return LinkerBarcodeDetectionResult(read_id)
         logger.debug("LINKER: %d-%d" % (linker_start, linker_end))
         primer_end = -1  # forget about primer
 
@@ -284,15 +284,15 @@ class CurioIlluminaDetector:
         potential_barcode = sequence[barcode_start:linker_start] + sequence[linker_end + 1:barcode_end]
         logger.debug("Barcode: %s" % (potential_barcode))
         if len(potential_barcode) < self.MIN_BC_LEN:
-            return CurioBarcodeDetectionResult(read_id, linker_start=linker_start, linker_end=linker_end)
+            return LinkerBarcodeDetectionResult(read_id, linker_start=linker_start, linker_end=linker_end)
         matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode)
         barcode, bc_score, bc_start, bc_end = \
             find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
                                               min_score=len(potential_barcode) - 1, score_diff=self.SCORE_DIFF)
 
         if barcode is None:
-            return CurioBarcodeDetectionResult(read_id, polyT=polyt_start, primer=-1,
-                                               linker_start=linker_start, linker_end=linker_end)
+            return LinkerBarcodeDetectionResult(read_id, polyT=polyt_start, primer=-1,
+                                                linker_start=linker_start, linker_end=linker_end)
         logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
         # position of barcode end in the reference: end of potential barcode minus bases to the alignment end
         read_barcode_end = barcode_start + bc_end - 1 + (linker_end - linker_start + 1)
@@ -319,13 +319,13 @@ class CurioIlluminaDetector:
                 good_umi = True
 
         if not umi:
-            return CurioBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
-                                               polyT=polyt_start, primer=primer_end,
-                                               linker_start=linker_start, linker_end=linker_end)
-        return CurioBarcodeDetectionResult(read_id, barcode, umi, bc_score, good_umi,
-                                           polyT=polyt_start, primer=primer_end,
-                                           linker_start=linker_start, linker_end=linker_end)
+            return LinkerBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
+                                                polyT=polyt_start, primer=primer_end,
+                                                linker_start=linker_start, linker_end=linker_end)
+        return LinkerBarcodeDetectionResult(read_id, barcode, umi, bc_score, good_umi,
+                                            polyT=polyt_start, primer=primer_end,
+                                            linker_start=linker_start, linker_end=linker_end)
 
     @staticmethod
     def result_type():
-        return CurioBarcodeDetectionResult
+        return LinkerBarcodeDetectionResult

@@ -29,8 +29,8 @@ Detectors:
 
 from .base import (
     BarcodeDetectionResult,
-    CurioBarcodeDetectionResult,
-    StereoBarcodeDetectionResult,
+    LinkerBarcodeDetectionResult,
+    TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
@@ -58,8 +58,8 @@ from .tenx import (
 __all__ = [
     # Result classes
     'BarcodeDetectionResult',
-    'CurioBarcodeDetectionResult',
-    'StereoBarcodeDetectionResult',
+    'LinkerBarcodeDetectionResult',
+    'TSOBarcodeDetectionResult',
     'TenXBarcodeDetectionResult',
     'SplittingBarcodeDetectionResult',
     'ReadStats',

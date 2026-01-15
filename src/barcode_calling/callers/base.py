@@ -120,7 +120,7 @@ class BarcodeDetectionResult:
         return "#read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
 
 
-class CurioBarcodeDetectionResult(BarcodeDetectionResult):
+class LinkerBarcodeDetectionResult(BarcodeDetectionResult):
     """
     Detection result for platforms with double barcodes (e.g., Curio, Stereo-seq).
 
@@ -162,7 +162,7 @@ class CurioBarcodeDetectionResult(BarcodeDetectionResult):
         self.linker_end = increase_if_valid(self.linker_end, delta)
         self.polyT = increase_if_valid(self.polyT, delta)
 
-    def more_informative_than(self, that: 'CurioBarcodeDetectionResult') -> bool:
+    def more_informative_than(self, that: 'LinkerBarcodeDetectionResult') -> bool:
         if self.BC_score != that.BC_score:
             return self.BC_score > that.BC_score
         if self.linker_start != that.linker_start:
@@ -193,7 +193,7 @@ class CurioBarcodeDetectionResult(BarcodeDetectionResult):
         return BarcodeDetectionResult.header() + "\tpolyT_start\tprimer_end\tlinker_start\tlinker_end"
 
 
-class StereoBarcodeDetectionResult(CurioBarcodeDetectionResult):
+class TSOBarcodeDetectionResult(LinkerBarcodeDetectionResult):
     """Detection result for Stereo-seq with TSO detection."""
 
     def __init__(self, read_id: str, barcode: str = BarcodeDetectionResult.NOSEQ,
@@ -201,16 +201,16 @@ class StereoBarcodeDetectionResult(CurioBarcodeDetectionResult):
                  BC_score: int = -1, UMI_good: bool = False, strand: str = ".",
                  polyT: int = -1, primer: int = -1, linker_start: int = -1,
                  linker_end: int = -1, tso: int = -1):
-        CurioBarcodeDetectionResult.__init__(self, read_id, barcode, UMI, BC_score, UMI_good, strand,
+        LinkerBarcodeDetectionResult.__init__(self, read_id, barcode, UMI, BC_score, UMI_good, strand,
                                               polyT, primer, linker_start, linker_end)
         self.tso5: int = tso
 
     def update_coordinates(self, delta: int) -> None:
         self.tso5 = increase_if_valid(self.tso5, delta)
-        CurioBarcodeDetectionResult.update_coordinates(self, delta)
+        LinkerBarcodeDetectionResult.update_coordinates(self, delta)
 
     def __str__(self) -> str:
-        return (CurioBarcodeDetectionResult.__str__(self) +
+        return (LinkerBarcodeDetectionResult.__str__(self) +
                 "\t%d" % self.tso5)
 
     def get_additional_attributes(self) -> List[str]:
@@ -227,7 +227,7 @@ class StereoBarcodeDetectionResult(CurioBarcodeDetectionResult):
 
     @staticmethod
     def header() -> str:
-        return CurioBarcodeDetectionResult.header() + "\tTSO5"
+        return LinkerBarcodeDetectionResult.header() + "\tTSO5"
 
 
 class TenXBarcodeDetectionResult(BarcodeDetectionResult):
@@ -280,9 +280,9 @@ class SplittingBarcodeDetectionResult:
 
     def __init__(self, read_id: str):
         self.read_id: str = read_id
-        self.detected_patterns: List[StereoBarcodeDetectionResult] = []
+        self.detected_patterns: List[TSOBarcodeDetectionResult] = []
 
-    def append(self, barcode_detection_result: StereoBarcodeDetectionResult) -> None:
+    def append(self, barcode_detection_result: TSOBarcodeDetectionResult) -> None:
         self.detected_patterns.append(barcode_detection_result)
 
     def empty(self) -> bool:
@@ -303,7 +303,7 @@ class SplittingBarcodeDetectionResult:
 
     @staticmethod
     def header() -> str:
-        return StereoBarcodeDetectionResult.header()
+        return TSOBarcodeDetectionResult.header()
 
 
 class ReadStats:

@@ -7,8 +7,8 @@
 import pytest
 from src.barcode_calling.callers import (
     BarcodeDetectionResult,
-    CurioBarcodeDetectionResult,
-    StereoBarcodeDetectionResult,
+    LinkerBarcodeDetectionResult,
+    TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
@@ -112,7 +112,7 @@ class TestCurioBarcodeDetectionResult:
 
     def test_init_default(self):
         """Test initialization with defaults."""
-        result = CurioBarcodeDetectionResult("read_001")
+        result = LinkerBarcodeDetectionResult("read_001")
 
         assert result.read_id == "read_001"
         assert result.polyT == -1
@@ -122,7 +122,7 @@ class TestCurioBarcodeDetectionResult:
 
     def test_init_with_positions(self):
         """Test initialization with all positions."""
-        result = CurioBarcodeDetectionResult(
+        result = LinkerBarcodeDetectionResult(
             read_id="read_001",
             barcode="ACTGACTG",
             UMI="GGGG",
@@ -142,7 +142,7 @@ class TestCurioBarcodeDetectionResult:
 
     def test_update_coordinates(self):
         """Test coordinate shifting."""
-        result = CurioBarcodeDetectionResult(
+        result = LinkerBarcodeDetectionResult(
             "read_001",
             polyT=100,
             primer=50,
@@ -159,7 +159,7 @@ class TestCurioBarcodeDetectionResult:
 
     def test_update_coordinates_invalid(self):
         """Test coordinate shifting with invalid values."""
-        result = CurioBarcodeDetectionResult("read_001")
+        result = LinkerBarcodeDetectionResult("read_001")
         result.update_coordinates(10)
 
         # Invalid values (-1) should remain unchanged
@@ -168,18 +168,18 @@ class TestCurioBarcodeDetectionResult:
 
     def test_more_informative_than_by_score(self):
         """Test comparison by barcode score."""
-        result1 = CurioBarcodeDetectionResult("read_001", BC_score=16)
-        result2 = CurioBarcodeDetectionResult("read_001", BC_score=14)
+        result1 = LinkerBarcodeDetectionResult("read_001", BC_score=16)
+        result2 = LinkerBarcodeDetectionResult("read_001", BC_score=14)
 
         assert result1.more_informative_than(result2) is True
         assert result2.more_informative_than(result1) is False
 
     def test_more_informative_than_by_linker(self):
         """Test comparison by linker position (tie-breaker)."""
-        result1 = CurioBarcodeDetectionResult(
+        result1 = LinkerBarcodeDetectionResult(
             "read_001", BC_score=16, linker_start=80
         )
-        result2 = CurioBarcodeDetectionResult(
+        result2 = LinkerBarcodeDetectionResult(
             "read_001", BC_score=16, linker_start=60
         )
 
@@ -188,7 +188,7 @@ class TestCurioBarcodeDetectionResult:
 
     def test_get_additional_attributes_all(self):
         """Test attribute detection with all features."""
-        result = CurioBarcodeDetectionResult(
+        result = LinkerBarcodeDetectionResult(
             "read_001",
             polyT=100,
             primer=50,
@@ -203,7 +203,7 @@ class TestCurioBarcodeDetectionResult:
 
     def test_get_additional_attributes_partial(self):
         """Test attribute detection with some features."""
-        result = CurioBarcodeDetectionResult(
+        result = LinkerBarcodeDetectionResult(
             "read_001",
             polyT=100,
             # No primer or linker
@@ -217,7 +217,7 @@ class TestCurioBarcodeDetectionResult:
 
     def test_str_format(self):
         """Test string formatting includes positions."""
-        result = CurioBarcodeDetectionResult(
+        result = LinkerBarcodeDetectionResult(
             "read_001", "ACTG", "GGGG", 16, True, "+",
             polyT=100, primer=50, linker_start=60, linker_end=75
         )
@@ -234,7 +234,7 @@ class TestStereoBarcodeDetectionResult:
 
     def test_init_with_tso(self):
         """Test initialization with TSO position."""
-        result = StereoBarcodeDetectionResult(
+        result = TSOBarcodeDetectionResult(
             "read_001",
             polyT=100,
             tso=150
@@ -244,7 +244,7 @@ class TestStereoBarcodeDetectionResult:
 
     def test_update_coordinates_includes_tso(self):
         """Test coordinate shifting includes TSO."""
-        result = StereoBarcodeDetectionResult(
+        result = TSOBarcodeDetectionResult(
             "read_001",
             polyT=100,
             tso=150
@@ -257,7 +257,7 @@ class TestStereoBarcodeDetectionResult:
 
     def test_get_additional_attributes_with_tso(self):
         """Test attribute detection includes TSO."""
-        result = StereoBarcodeDetectionResult(
+        result = TSOBarcodeDetectionResult(
             "read_001",
             polyT=100,
             tso=150
@@ -338,8 +338,8 @@ class TestSplittingBarcodeDetectionResult:
         """Test appending detection patterns."""
         result = SplittingBarcodeDetectionResult("read_001")
 
-        pattern1 = StereoBarcodeDetectionResult("read_001", barcode="ACTG")
-        pattern2 = StereoBarcodeDetectionResult("read_001", barcode="TGCA")
+        pattern1 = TSOBarcodeDetectionResult("read_001", barcode="ACTG")
+        pattern2 = TSOBarcodeDetectionResult("read_001", barcode="TGCA")
 
         result.append(pattern1)
         result.append(pattern2)
@@ -354,7 +354,7 @@ class TestSplittingBarcodeDetectionResult:
     def test_empty_false(self):
         """Test non-empty detection."""
         result = SplittingBarcodeDetectionResult("read_001")
-        pattern = StereoBarcodeDetectionResult("read_001", barcode="ACTG")
+        pattern = TSOBarcodeDetectionResult("read_001", barcode="ACTG")
         result.append(pattern)
 
         assert result.empty() is False
@@ -363,8 +363,8 @@ class TestSplittingBarcodeDetectionResult:
         """Test filter keeps results with barcodes."""
         result = SplittingBarcodeDetectionResult("read_001")
 
-        barcoded = StereoBarcodeDetectionResult("read_001", barcode="ACTG")
-        unbarcoded = StereoBarcodeDetectionResult("read_001")  # No barcode
+        barcoded = TSOBarcodeDetectionResult("read_001", barcode="ACTG")
+        unbarcoded = TSOBarcodeDetectionResult("read_001")  # No barcode
 
         result.append(barcoded)
         result.append(unbarcoded)
@@ -378,8 +378,8 @@ class TestSplittingBarcodeDetectionResult:
         """Test filter keeps first result if none have barcodes."""
         result = SplittingBarcodeDetectionResult("read_001")
 
-        unbarcoded1 = StereoBarcodeDetectionResult("read_001")
-        unbarcoded2 = StereoBarcodeDetectionResult("read_001")
+        unbarcoded1 = TSOBarcodeDetectionResult("read_001")
+        unbarcoded2 = TSOBarcodeDetectionResult("read_001")
 
         result.append(unbarcoded1)
         result.append(unbarcoded2)
@@ -404,7 +404,7 @@ class TestReadStats:
     def test_add_read_with_barcode(self):
         """Test adding read with valid barcode."""
         stats = ReadStats()
-        result = CurioBarcodeDetectionResult(
+        result = LinkerBarcodeDetectionResult(
             "read_001",
             barcode="ACTG",
             UMI_good=True,
@@ -421,7 +421,7 @@ class TestReadStats:
     def test_add_read_without_barcode(self):
         """Test adding read without barcode."""
         stats = ReadStats()
-        result = CurioBarcodeDetectionResult("read_001")  # No barcode
+        result = LinkerBarcodeDetectionResult("read_001")  # No barcode
 
         stats.add_read(result)
 
@@ -433,9 +433,9 @@ class TestReadStats:
         """Test adding multiple reads."""
         stats = ReadStats()
 
-        result1 = CurioBarcodeDetectionResult("read_001", barcode="ACTG", polyT=100)
-        result2 = CurioBarcodeDetectionResult("read_002", barcode="TGCA", primer=50)
-        result3 = CurioBarcodeDetectionResult("read_003")  # No barcode
+        result1 = LinkerBarcodeDetectionResult("read_001", barcode="ACTG", polyT=100)
+        result2 = LinkerBarcodeDetectionResult("read_002", barcode="TGCA", primer=50)
+        result3 = LinkerBarcodeDetectionResult("read_003")  # No barcode
 
         stats.add_read(result1)
         stats.add_read(result2)
@@ -458,7 +458,7 @@ class TestReadStats:
     def test_str_format(self):
         """Test string formatting."""
         stats = ReadStats()
-        result = CurioBarcodeDetectionResult("read_001", barcode="ACTG", UMI_good=True)
+        result = LinkerBarcodeDetectionResult("read_001", barcode="ACTG", UMI_good=True)
         stats.add_read(result)
 
         output = str(stats)
@@ -470,7 +470,7 @@ class TestReadStats:
     def test_iter(self):
         """Test iteration over statistics."""
         stats = ReadStats()
-        result = CurioBarcodeDetectionResult("read_001", barcode="ACTG", polyT=100)
+        result = LinkerBarcodeDetectionResult("read_001", barcode="ACTG", polyT=100)
         stats.add_read(result)
 
         lines = list(stats)
