@@ -283,11 +283,12 @@ class TerminalCounter(AbstractCounter):
             'peak_heights', 'peak_width', 'peak_prominence', 'rank']].astype(float, errors='ignore') 
         
         
-
+        
         self.peaks['prediction'] = self.model.predict(self.peaks.drop(['peak_left', 'peak_right', 'histogram', 
             'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
         
         self.peaks['prediction'] = self.peaks['prediction'].apply(lambda x: True if x == 1 else False)
+        
         if self.first:
             self.peaks.to_csv("src/peaks_1.csv", sep="\t", index=False, mode="w", header=True)
         else:
@@ -296,8 +297,8 @@ class TerminalCounter(AbstractCounter):
 
         
         # self.peaks = self.peaks[self.peaks.prediction ==True].reset_index(drop=True) 
-        # 
-        self.peaks = self.peaks[self.peaks.peak_location > 40].reset_index(drop=True)   
+
+        # self.peaks = self.peaks[self.peaks.peak_location > 40].reset_index(drop=True)   
         
         
         
@@ -474,14 +475,13 @@ class PolyACounter(TerminalCounter):
 
 
         # self.create_df()
-        # self.collect_data()
+        self.collect_data()
 
         self.transcripts = {}
         self.first = False
 
     def finalize(self, args=None):
-        # self.test_model()
-        # self.train_model()
+        self.train_model()
         pass
 
 # to train a model: 
