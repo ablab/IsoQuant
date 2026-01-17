@@ -16,6 +16,7 @@ import gzip
 import sys
 
 from .common import get_path_to_program
+from .error_codes import IsoQuantExitCode
 from .gtf2db import convert_db_to_gtf, db2bed
 from .input_data_storage import SampleData, InputDataType
 
@@ -83,7 +84,7 @@ def get_aligner(aligner):
     path = get_path_to_program(aligner)
     if not path:
         logger.critical('{aligner} is not found! Make sure that {aligner} is in your PATH or use other alignment method'.format(aligner=aligner))
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.ALIGNER_NOT_FOUND)
     return path
 
 
@@ -255,13 +256,13 @@ def index_reference(aligner, args):
 
     else:
         logger.critical("Aligner " + aligner + " is not supported")
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.ALIGNER_NOT_FOUND)
 
     log_fpath = os.path.join(args.output, "alignment.log")
     log_file = open(log_fpath, "w")
     if subprocess.call(command, stdout=log_file, stderr=log_file) != 0:
         logger.critical("Failed indexing reference! See " + log_fpath)
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.INDEXING_FAILED)
     return index_name
 
 
@@ -329,7 +330,7 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
     if aligner == "starlong":
         if data_type != InputDataType.fastq:
             logger.critical("Input data type must be FASTA/FASTQ when using star aligner, unmapped BAM is not supported yet")
-            sys.exit(-1)
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
         star_path = get_aligner('STARlong')
         zcat_option = ['--readFilesCommand', 'zcat'] if (ext.endswith('gz') or ext.endswith('gzip')) else []
         # command = '{star} --runThreadN 16 --genomeDir {ref_index_name}  --readFilesIn {transcripts}  --outSAMtype SAM
@@ -346,7 +347,7 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
         with open(log_fpath, "a") as log_file:
             if subprocess.call(command, stdout=log_file, stderr=log_file) != 0:
                 logger.critical("STAR finished with errors! See " + log_fpath)
-                sys.exit(-1)
+                sys.exit(IsoQuantExitCode.ALIGNMENT_FAILED)
         shutil.move(alignment_prefix + "Aligned.sortedByCoord.out.bam", alignment_bam_path)
 
     elif aligner == "minimap2":
@@ -367,7 +368,7 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
                        '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
         else:
             logger.critical("Data type %s is not compatible with minimap2" % data_type.name)
-            sys.exit(-1)
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
         if args.mapping_options:
             command += args.mapping_options.split()
@@ -387,11 +388,11 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
                 minimap2_process.stdout.close()
                 if minimap2_return_code != 0:
                     logger.critical("Minimap2 finished with errors! See " + log_fpath)
-                    sys.exit(-1)
+                    sys.exit(IsoQuantExitCode.ALIGNMENT_FAILED)
                 samtools_return_code = samtools_sort_process.wait()
                 if samtools_return_code != 0:
                     logger.critical("Samtools sort finished with errors! See " + log_fpath)
-                    sys.exit(-1)
+                    sys.exit(IsoQuantExitCode.SAMTOOLS_FAILED)
 
         elif data_type == InputDataType.unmapped_bam:
             with open(log_fpath, "a") as log_file:
@@ -404,20 +405,20 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
                 bam_open_process.stdout.close()
                 if bam_open_return_code != 0:
                     logger.critical("BAM to FASTQ conversion finished with errors! See " + log_fpath)
-                    sys.exit(-1)
+                    sys.exit(IsoQuantExitCode.SUBPROCESS_FAILED)
                 minimap2_return_code = minimap2_process.wait()
                 minimap2_process.stdout.close()
                 if minimap2_return_code != 0:
                     logger.critical("Minimap2 finished with errors! See " + log_fpath)
-                    sys.exit(-1)
+                    sys.exit(IsoQuantExitCode.ALIGNMENT_FAILED)
                 samtools_return_code = samtools_sort_process.wait()
                 if samtools_return_code != 0:
                     logger.critical("Samtools sort finished with errors! See " + log_fpath)
-                    sys.exit(-1)
+                    sys.exit(IsoQuantExitCode.SAMTOOLS_FAILED)
 
     else:
         logger.critical("Aligner " + aligner + " is not supported")
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.ALIGNER_NOT_FOUND)
     logger.info("Indexing alignments")
     try:
         pysam.index(alignment_bam_path)
@@ -429,13 +430,13 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
                 pysam.index('-@', str(args.threads), '-c', alignment_bam_path)
             except pysam.SamtoolsError as err:
                 logger.error(f"Failed to create CSI index: {err.value}")
-                sys.exit(-1)
+                sys.exit(IsoQuantExitCode.SAMTOOLS_FAILED)
         else:
             logger.error(err.value)
-            sys.exit(-1)
+            sys.exit(IsoQuantExitCode.SAMTOOLS_FAILED)
     except OSError as err:
         logger.error(err)
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.SUBPROCESS_FAILED)
 
     return alignment_bam_path
 

@@ -26,6 +26,7 @@ import pysam
 import gffutils
 import pyfaidx
 
+from src.error_codes import IsoQuantExitCode
 from src.modes import IsoQuantMode, ISOQUANT_MODES
 from src.gtf2db import convert_gtf_to_db
 from src.read_mapper import (
@@ -351,7 +352,7 @@ def parse_args(cmd_args=None, namespace=None):
             logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory "
                          "with --resume option")
             parser.print_usage()
-            exit(-2)
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
 
     args._cmd_line = " ".join(sys.argv)
     args._version = isoquant_version
@@ -370,7 +371,7 @@ def check_and_load_args(args, parser):
             # logger is not defined yet
             logger.error("Previous run config was not detected, cannot resume. "
                          "Check that output folder is correctly specified.")
-            exit(-3)
+            sys.exit(IsoQuantExitCode.RESUME_CONFIG_NOT_FOUND)
         args = load_previous_run(args)
     elif args.output_exists:
         if os.path.exists(args.param_file):
@@ -403,17 +404,17 @@ def check_and_load_args(args, parser):
 
     if not check_input_params(args):
         parser.print_usage()
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
     # Validate --large_output values
     if args.large_output:
         if "none" in args.large_output and len(args.large_output) > 1:
             logger.error("--large_output 'none' cannot be combined with other values")
-            exit(-1)
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
         for val in args.large_output:
             if val not in LARGE_OUTPUT_TYPES:
                 logger.error("Invalid --large_output value: %s. Valid values: %s" % (val, ", ".join(LARGE_OUTPUT_TYPES)))
-                exit(-1)
+                sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
     save_params(args)
     return args
@@ -532,7 +533,7 @@ def check_input_params(args):
         if not args.barcode_whitelist and not args.barcoded_reads:
             logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
                             "barcoded reads" % args.mode.name)
-            exit(-3)
+            sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
         args.umi_length = get_umi_length(args.mode)
 
     check_input_files(args)
@@ -550,32 +551,32 @@ def check_input_files(args):
                     continue
                 if not os.path.isfile(in_file):
                     logger.critical("Input file " + in_file + " does not exist")
-                    exit(-1)
+                    sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
                 if args.input_data.input_type == InputDataType.bam:
                     bamfile_in = pysam.AlignmentFile(in_file, "rb")
                     if not bamfile_in.has_index():
                         logger.critical("BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
-                        exit(-1)
+                        sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
                     bamfile_in.close()
         if sample.illumina_bam is not None:
             for illumina in sample.illumina_bam:
                 bamfile_in = pysam.AlignmentFile(illumina, "rb")
                 if not bamfile_in.has_index():
                     logger.critical("BAM file " + illumina + " is not indexed, run samtools sort and samtools index")
-                    exit(-1)
+                    sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
                 bamfile_in.close()
 
     if args.cage is not None:
         logger.critical("CAGE data is not supported yet")
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
         if not os.path.isfile(args.cage):
             logger.critical("Bed file with CAGE peaks " + args.cage + " does not exist")
-            exit(-1)
+            sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
     if args.genedb is not None:
         if not os.path.isfile(args.genedb):
             logger.critical("Gene database " + args.genedb + " does not exist")
-            exit(-1)
+            sys.exit(IsoQuantExitCode.GENE_DB_NOT_FOUND)
     else:
         args.no_junc_bed = True
 
@@ -583,7 +584,7 @@ def check_input_files(args):
         for r in args.read_assignments:
             if not glob.glob(r + "*"):
                 logger.critical("No files found with prefix " + str(r))
-                exit(-1)
+                sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
 
 def create_output_dirs(args):
@@ -685,7 +686,7 @@ def set_matching_options(args):
         args.delta = strategy.delta
     elif args.delta < 0:
         logger.error("--delta can not be negative")
-        exit(-3)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
     args.minor_exon_extension = 50
     args.major_exon_extension = 300
     args.max_intron_shift = strategy.max_intron_shift
@@ -779,7 +780,7 @@ def set_model_construction_options(args):
         args.graph_clustering_distance = strategy.graph_clustering_distance
     elif args.graph_clustering_distance < 0:
         logger.error("--graph_clustering_distance can not be negative")
-        exit(-3)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
     args.min_novel_isolated_intron_abs = strategy.min_novel_isolated_intron_abs
     args.min_novel_isolated_intron_rel = strategy.min_novel_isolated_intron_rel
     args.terminal_position_abs = strategy.terminal_position_abs
@@ -1004,7 +1005,7 @@ class TestMode(argparse.Action):
             logger.info(' === TEST PASSED CORRECTLY === ')
         else:
             logger.error(' === TEST FAILED ===')
-            exit(-1)
+            sys.exit(IsoQuantExitCode.TEST_FAILED)
         parser.exit()
 
     @staticmethod
@@ -1020,7 +1021,7 @@ def main(cmd_args):
     args, parser = parse_args(cmd_args)
     if not cmd_args:
         parser.print_usage()
-        exit(0)
+        sys.exit(IsoQuantExitCode.SUCCESS)
     set_logger(args, logger)
     args = check_and_load_args(args, parser)
     create_output_dirs(args)
@@ -1050,4 +1051,4 @@ if __name__ == "__main__":
             sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
                              "https://github.com/ablab/IsoQuant/issues\n")
             print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

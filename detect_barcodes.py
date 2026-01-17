@@ -22,6 +22,7 @@ from Bio import SeqIO, Seq, SeqRecord
 import logging
 
 from src.modes import IsoQuantMode
+from src.error_codes import IsoQuantExitCode
 from src.barcode_calling.common import bit_to_str, reverese_complement
 from src.barcode_calling import (
     TenXBarcodeDetector,
@@ -265,7 +266,7 @@ def prepare_barcodes(args):
     if barcode_files not in BARCODE_FILES_REQUIRED[args.mode]:
         logger.critical("Barcode calling mode %s requires %s files, %d provided" %
                         (args.mode.name, " or ".join([str(x) for x in BARCODE_FILES_REQUIRED[args.mode]]), barcode_files))
-        exit(-3)
+        sys.exit(IsoQuantExitCode.BARCODE_FILE_COUNT_MISMATCH)
     barcodes = []
     for bc in args.barcodes:
         barcodes.append(load_barcodes(bc, needs_iterator=args.mode.needs_barcode_iterator()))
@@ -318,7 +319,7 @@ def process_in_parallel(args):
         read_chunk_gen = bam_file_chunk_reader(pysam.AlignmentFile(input_file, "rb", check_sq=False))
     else:
         logger.error("Unknown file format " + input_file)
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
     tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
     while os.path.exists(tmp_dir):
@@ -512,4 +513,4 @@ if __name__ == "__main__":
         raise
     except:
         print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

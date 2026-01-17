@@ -18,6 +18,8 @@ from traceback import print_exc
 import subprocess
 import logging
 
+from error_codes import IsoQuantExitCode
+
 
 _quote = {"'": "|'", "|": "||", "\n": "|n", "\r": "|r", '[': '|[', ']': '|]'}
 
@@ -449,12 +451,12 @@ def main():
     set_logger(args, log)
     if not args.config_file:
         log.error("Provide configuration file")
-        exit(-2)
+        sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
     config_file = args.config_file
     if not os.path.exists(config_file):
         log.error("Provide correct path to configuration file, %s does not exits" % config_file)
-        exit(-3)
+        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
     log.info("Loading config from %s" % config_file)
     config_dict = load_tsv_config(config_file)
@@ -464,7 +466,7 @@ def main():
     for k in required:
         if k not in config_dict:
             log.error(k + " is not set in the config")
-            exit(-4)
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
     err_code = run_isoquant(args, config_dict)
     if err_code != 0:
@@ -513,4 +515,4 @@ if __name__ == "__main__":
         raise
     except:
         print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

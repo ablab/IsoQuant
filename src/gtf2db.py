@@ -10,10 +10,13 @@
 import json
 import logging
 import os
+import sys
 import gffutils
 import argparse
 from traceback import print_exc
 import gzip
+
+from .error_codes import IsoQuantExitCode
 
 logger = logging.getLogger('IsoQuant')
 
@@ -107,7 +110,7 @@ def check_input_gtf(gtf, db, complete_db):
             logger.error("An attempt to correct this GTF was made, the result is written to %s" % new_gtf_path)
             logger.error("NB! some transcript / gene ids in the corrected annotation are modified.")
         logger.error("Provide a correct GTF by fixing the original input GTF or checking the corrected one.")
-        exit(-3)
+        sys.exit(IsoQuantExitCode.CORRUPTED_GTF)
     else:
         logger.info("Gene annotation seems to be correct")
 
@@ -117,7 +120,7 @@ def check_input_gtf(gtf, db, complete_db):
                          "does not contain any gene or transcript records.")
             logger.error("The results of this run will not be meaningful.")
             logger.error("Remove the output folder and restart IsoQuant without --complete_genedb.")
-            exit(-3)
+            sys.exit(IsoQuantExitCode.CORRUPTED_GTF)
         elif has_meta_features == 0:
             logger.warning("You set --complete_genedb option but it looks like the provided annotation "
                            "does not contain all necessary gene or transcript records.")
@@ -388,7 +391,7 @@ def parse_args():
     args = parser.parse_args()
     if not args.output or not args.input:
         parser.print_usage()
-        exit(-1)
+        sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
     return args
 
 
@@ -398,7 +401,7 @@ def main():
         conversion_func = mode_dict[args.mode]
     else:
         logger.error("Mode %s is not available" % args.mode)
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_CONVERSION_MODE)
 
     conversion_func(args.input, args.output, args.complete_genedb)
 

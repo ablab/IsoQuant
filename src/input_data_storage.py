@@ -6,11 +6,13 @@
 ############################################################################
 
 import os
+import sys
 import logging
 import yaml
 from collections import defaultdict
 from enum import Enum, unique
 
+from .error_codes import IsoQuantExitCode
 from .file_utils import normalize_path
 
 
@@ -216,12 +218,12 @@ class InputDataStorage:
             experiment_names.append(experiment_name)
             if args.labels and len(args.labels) != len(args.fastq):
                 logger.critical("Number of labels is not equal to the number of files")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.LABEL_COUNT_MISMATCH)
             for i, fq in enumerate(args.fastq):
                 check_input_type(fq, self.input_type)
                 if fq in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fq)
-                    exit(-2)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fq)
+                    sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([fq])
                 readable_names_dict[experiment_name][fq] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(fq))[0]
@@ -238,12 +240,12 @@ class InputDataStorage:
             experiment_names.append(experiment_name)
             if args.labels and len(args.labels) != len(args.bam):
                 logger.critical("Number of labels is not equal to the number of files")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.LABEL_COUNT_MISMATCH)
             for i, bam in enumerate(args.bam):
                 check_input_type(bam, self.input_type)
                 if bam in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
-                    exit(-2)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %bam)
+                    sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(bam))[0]
@@ -256,12 +258,12 @@ class InputDataStorage:
             experiment_names.append(experiment_name)
             if args.labels and len(args.labels) != len(args.unmapped_bam):
                 logger.critical("Number of labels is not equal to the number of files")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.LABEL_COUNT_MISMATCH)
             for i, bam in enumerate(args.unmapped_bam):
                 check_input_type(bam, self.input_type)
                 if bam in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
-                    exit(-2)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %bam)
+                    sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(bam))[0]
@@ -281,7 +283,7 @@ class InputDataStorage:
 
         else:
             logger.critical("Input data was not specified")
-            exit(-1)
+            sys.exit(IsoQuantExitCode.NO_INPUT_DATA)
 
         for i in range(len(sample_files)):
             self.samples.append(SampleData(sample_files[i], experiment_names[i],
@@ -313,7 +315,7 @@ class InputDataStorage:
                     new_sample_name = self.experiment_prefix + str(current_index)
                     if current_sample_name == new_sample_name:
                         logger.critical("Change experiment name %s and rerun IsoQuant" % current_sample_name)
-                        exit(-1)
+                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     logger.warning("Duplicate folder prefix %s, will change to %s" %
                                    (current_sample_name, new_sample_name))
                     current_sample_name = new_sample_name
@@ -328,8 +330,8 @@ class InputDataStorage:
                 current_sample.append(files)
                 for fname in files:
                     if fname in readable_names_dict[current_sample_name]:
-                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
-                        exit(-2)
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fname)
+                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     readable_names_dict[current_sample_name][fname] = readable_name
 
         if len(current_sample) > 0:
@@ -358,7 +360,7 @@ class InputDataStorage:
         t = con[0]
         if not 'data format' in t.keys():
             logger.critical("Please specify whether you are using fastq or bam files in the first entry")
-            exit(-2)
+            sys.exit(IsoQuantExitCode.YAML_PARSING_ERROR)
         else:
             if len(t.keys()) > 1:
                 logger.warning("The first entry should only specify the input data format. Any additional info will be ignored")
@@ -370,7 +372,7 @@ class InputDataStorage:
                 self.input_type = InputDataType.fastq
             else:
                 logger.critical("The input data format can only be either fastq, fasta or bam.")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
         for sample in con[1:]:
             if not 'name' in sample.keys():
                 current_sample_name = self.experiment_prefix + str(current_index)
@@ -380,20 +382,20 @@ class InputDataStorage:
                     new_sample_name = self.experiment_prefix + str(current_index)
                     if current_sample_name == new_sample_name:
                         logger.critical("Change experiment name %s and rerun IsoQuant" % current_sample_name)
-                        exit(-1)
+                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     logger.warning("Duplicate folder prefix %s, will change to %s" %
                                    (current_sample_name, new_sample_name))
                     current_sample_name = new_sample_name
             current_index += 1
             if not 'long read files' in sample.keys():
                 logger.critical("Experiment %s does not contain any files" %current_sample_name)
-                exit(-2)
+                sys.exit(IsoQuantExitCode.YAML_PARSING_ERROR)
             else:
                 current_sample = [normalize_path(yaml_file_path, b) for b in sample['long read files']]
                 names = 'labels' in sample.keys()
                 if names and not len(sample['labels']) == len(current_sample):
                     logger.critical("The number of file aliases differs from the number of files")
-                    exit(-2)
+                    sys.exit(IsoQuantExitCode.LABEL_COUNT_MISMATCH)
                 for f in range(len(current_sample)):
                     fname = current_sample[f]
                     if names:
@@ -401,8 +403,8 @@ class InputDataStorage:
                     else:
                         readable_name = os.path.splitext(os.path.basename(fname))[0]
                     if fname in readable_names_dict[current_sample_name]:
-                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
-                        exit(-2)
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fname)
+                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     readable_names_dict[current_sample_name][fname] = readable_name
             if len(current_sample) > 0:
                 current_sample_list = [[s] for s in current_sample]

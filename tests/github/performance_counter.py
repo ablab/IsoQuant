@@ -12,6 +12,8 @@ import sys
 import psutil
 import subprocess
 from traceback import print_exc
+
+from error_codes import IsoQuantExitCode
 from time import time
 from time import sleep
 from collections import defaultdict
@@ -186,7 +188,7 @@ def main():
         cmd = open(args.cmd_file).readline().strip().split()
     else:
         sys.stderr.write("Provide command line to run with --cmd or --cmd_file")
-        exit(-1)
+        sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
     print("Running %s" % " ".join(cmd))
 
     if not args.output:
@@ -228,6 +230,6 @@ if __name__ == "__main__":
         raise
     except:
         print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)
 
 

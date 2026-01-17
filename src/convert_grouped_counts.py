@@ -16,6 +16,7 @@ import logging
 import gzip
 import gffutils
 
+from .error_codes import IsoQuantExitCode
 from .file_naming import mtx_matrix_file, mtx_features_file, mtx_barcodes_file
 
 
@@ -199,7 +200,7 @@ def main():
                     out_mapf.write("%s\t%s\t%s\n" % (t, gene_info[0], gene_info[1]))
         else:
             logger.error("Unknown feature %s" % args.feature_type)
-            exit(-1)
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
     if args.output_format == "mtx":
         convert_to_mtx(args.input, args.output, feature_name_dict, gzipped=args.gzipped,
@@ -209,7 +210,7 @@ def main():
                           feature_type=args.feature_type, convert_to_tpm=args.convert_to_tpm)
     else:
         logger.error("Unknown format %s" % args.output_format)
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
 
 if __name__ == "__main__":
@@ -220,4 +221,4 @@ if __name__ == "__main__":
         raise
     except:
         print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

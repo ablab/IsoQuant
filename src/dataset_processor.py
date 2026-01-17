@@ -12,6 +12,7 @@ import itertools
 import logging
 import multiprocessing
 import shutil
+import sys
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
@@ -22,6 +23,7 @@ from pyfaidx import Fasta
 
 from .modes import IsoQuantMode
 from .common import proper_plural_form, large_output_enabled
+from .error_codes import IsoQuantExitCode
 from .serialization import *
 from .stats import EnumStats
 from .file_utils import merge_files, merge_counts
@@ -230,7 +232,7 @@ class DatasetProcessor:
             if len(bam_genome_overlap) == 0:
                 logger.critical("Chromosomes in the BAM file(s) have different names than chromosomes in the reference"
                                 " genome. Make sure that the same genome was used to generate your BAM file(s).")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.CHROMOSOME_MISMATCH)
             else:
                 logger.warning("Chromosome list from the reference genome is not the same as the chromosome list from"
                                " the BAM file(s). Make sure that the same genome was used to generate the BAM file(s).")
@@ -254,7 +256,7 @@ class DatasetProcessor:
             if len(common_overlap) == 0:
                 logger.critical("Chromosomes in the gene annotation have different names than chromosomes in the "
                                 "reference genome or BAM file(s). Please, check the input data.")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.CHROMOSOME_MISMATCH)
             else:
                 logger.warning("Chromosome list from the gene annotation is not the same as the chromosome list from"
                                " the reference genomes or BAM file(s). Please, check you input data.")
