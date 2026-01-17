@@ -13,6 +13,7 @@ import subprocess
 import json
 import pysam
 import gzip
+import sys
 
 from .common import get_path_to_program
 from .gtf2db import convert_db_to_gtf, db2bed
@@ -82,7 +83,7 @@ def get_aligner(aligner):
     path = get_path_to_program(aligner)
     if not path:
         logger.critical('{aligner} is not found! Make sure that {aligner} is in your PATH or use other alignment method'.format(aligner=aligner))
-        exit(-1)
+        sys.exit(-1)
     return path
 
 
@@ -254,13 +255,13 @@ def index_reference(aligner, args):
 
     else:
         logger.critical("Aligner " + aligner + " is not supported")
-        exit(-1)
+        sys.exit(-1)
 
     log_fpath = os.path.join(args.output, "alignment.log")
     log_file = open(log_fpath, "w")
     if subprocess.call(command, stdout=log_file, stderr=log_file) != 0:
         logger.critical("Failed indexing reference! See " + log_fpath)
-        exit(-1)
+        sys.exit(-1)
     return index_name
 
 
@@ -325,12 +326,10 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
     alignment_sam_path = alignment_bam_path[:-4] + '.sam'
 
     log_fpath = os.path.join(args.output, "alignment.log")
-    log_file = open(log_fpath, "a")
-
     if aligner == "starlong":
         if data_type != InputDataType.fastq:
             logger.critical("Input data type must be FASTA/FASTQ when using star aligner, unmapped BAM is not supported yet")
-            exit(-1)
+            sys.exit(-1)
         star_path = get_aligner('STARlong')
         zcat_option = ['--readFilesCommand', 'zcat'] if (ext.endswith('gz') or ext.endswith('gzip')) else []
         # command = '{star} --runThreadN 16 --genomeDir {ref_index_name}  --readFilesIn {transcripts}  --outSAMtype SAM
@@ -344,9 +343,10 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
             command += args.mapping_options.split()
 
         logger.info("Running STAR (takes a while)")
-        if subprocess.call(command, stdout=log_file, stderr=log_file) != 0:
-            logger.critical("STAR finished with errors! See " + log_fpath)
-            exit(-1)
+        with open(log_fpath, "a") as log_file:
+            if subprocess.call(command, stdout=log_file, stderr=log_file) != 0:
+                logger.critical("STAR finished with errors! See " + log_fpath)
+                sys.exit(-1)
         shutil.move(alignment_prefix + "Aligned.sortedByCoord.out.bam", alignment_bam_path)
 
     elif aligner == "minimap2":
@@ -367,7 +367,7 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
                        '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
         else:
             logger.critical("Data type %s is not compatible with minimap2" % data_type.name)
-            exit(-1)
+            sys.exit(-1)
 
         if args.mapping_options:
             command += args.mapping_options.split()
@@ -379,28 +379,45 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
 
         logger.info("Running minimap2 version %s (takes a while)" % minimap_version)
         if data_type == InputDataType.fastq:
-            if subprocess.call(command, stdout=open(alignment_sam_path, "w"), stderr=log_file) != 0:
-                logger.critical("Minimap2 finished with errors! See " + log_fpath)
-                exit(-1)
+            with open(log_fpath, "a") as log_file:
+                minimap2_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=log_file)
+                samtools_sort_process = subprocess.Popen(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path],
+                                                         stdin=minimap2_process.stdout, stderr=log_file)
+                minimap2_return_code = minimap2_process.wait()
+                minimap2_process.stdout.close()
+                if minimap2_return_code != 0:
+                    logger.critical("Minimap2 finished with errors! See " + log_fpath)
+                    sys.exit(-1)
+                samtools_return_code = samtools_sort_process.wait()
+                if samtools_return_code != 0:
+                    logger.critical("Samtools sort finished with errors! See " + log_fpath)
+                    sys.exit(-1)
+
         elif data_type == InputDataType.unmapped_bam:
-            bam_open = subprocess.Popen(['samtools', 'fastq', reads_path], stdout=subprocess.PIPE, stderr=log_file)
-            minimap_run = subprocess.run(command, stdin=bam_open.stdout, stdout=open(alignment_sam_path, "w"), stderr=log_file)
+            with open(log_fpath, "a") as log_file:
+                bam_open_process = subprocess.Popen(['samtools', 'fastq', reads_path], stdout=subprocess.PIPE, stderr=log_file)
+                minimap2_process = subprocess.Popen(command, stdin=bam_open_process.stdout, stdout=subprocess.PIPE, stderr=log_file)
+                samtools_sort_process = subprocess.Popen(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path],
+                                                         stdin=minimap2_process.stdout, stderr=log_file)
 
-            if minimap_run.returncode != 0:
-                logger.critical("Minimap2 finished with errors! See " + log_fpath)
-                exit(-1)
+                bam_open_return_code = bam_open_process.wait()
+                bam_open_process.stdout.close()
+                if bam_open_return_code != 0:
+                    logger.critical("BAM to FASTQ conversion finished with errors! See " + log_fpath)
+                    sys.exit(-1)
+                minimap2_return_code = minimap2_process.wait()
+                minimap2_process.stdout.close()
+                if minimap2_return_code != 0:
+                    logger.critical("Minimap2 finished with errors! See " + log_fpath)
+                    sys.exit(-1)
+                samtools_return_code = samtools_sort_process.wait()
+                if samtools_return_code != 0:
+                    logger.critical("Samtools sort finished with errors! See " + log_fpath)
+                    sys.exit(-1)
 
-        logger.info("Sorting alignments")
-        try:
-            pysam.sort('-@', str(args.threads), '-o', alignment_bam_path, alignment_sam_path)
-        except pysam.SamtoolsError as err:
-            logger.error(err.value)
-            exit(-1)
-
-        os.remove(alignment_sam_path)
     else:
         logger.critical("Aligner " + aligner + " is not supported")
-        exit(-1)
+        sys.exit(-1)
     logger.info("Indexing alignments")
     try:
         pysam.index(alignment_bam_path)
@@ -412,13 +429,13 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
                 pysam.index('-@', str(args.threads), '-c', alignment_bam_path)
             except pysam.SamtoolsError as err:
                 logger.error(f"Failed to create CSI index: {err.value}")
-                exit(-1)
+                sys.exit(-1)
         else:
             logger.error(err.value)
-            exit(-1) 
+            sys.exit(-1)
     except OSError as err:
         logger.error(err)
-        exit(-1)
+        sys.exit(-1)
 
     return alignment_bam_path
 
