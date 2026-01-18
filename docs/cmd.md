@@ -382,8 +382,33 @@ However, normalization method does not affect correlation/relative proportions.
 
 * `matrix` - standard matrix format with genes as rows and groups as columns;
 * `mtx` - MTX format compatible with Seurat;
-* `default` - with small number of groups/samples (<=100), counts will be converted to standard matrix; 
+* `default` - with small number of groups/samples (<=100), counts will be converted to standard matrix;
 larger matrices (e.g. for single-cell experiments) will be saved to MTX (default).
 * `none` - no convertion.
 
 Note, that grouped counts can be converted to any format using `src/convert_grouped_counts.py`.
+
+`--large_output`
+    Controls which large per-read output files are generated.
+    By default, only `read_assignments` and `allinfo` (for single-cell/spatial modes) are generated.
+    Accepts a space-separated list of the following values:
+
+* `read_assignments` - TSV file with read-to-isoform assignments (`*.read_assignments.tsv`);
+* `corrected_bed` - BED file with corrected read exon coordinates (`*.corrected_reads.bed`);
+* `read2transcripts` - TSV file mapping reads to discovered transcript models (`*.transcript_model_reads.tsv`);
+* `allinfo` - detailed UMI filtering information for single-cell/spatial modes (`*.allinfo`);
+* `none` - do not generate any large output files.
+
+Example usage:
+```bash
+# Generate all large output files
+isoquant.py --large_output read_assignments corrected_bed read2transcripts allinfo ...
+
+# Disable all large output files
+isoquant.py --large_output none ...
+
+# Default behavior (read_assignments and allinfo only)
+isoquant.py ...
+```
+
+Note: large output files are gzipped by default unless `--no_gzip` is specified.

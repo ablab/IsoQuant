@@ -16,6 +16,9 @@ import logging
 import gzip
 import gffutils
 
+from .error_codes import IsoQuantExitCode
+from .file_naming import mtx_matrix_file, mtx_features_file, mtx_barcodes_file
+
 
 GROUP_COUNT_CUTOFF = 100
 
@@ -83,9 +86,9 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
     group_index_map = {group_id: idx + 1 for idx, group_id in enumerate(unique_groups)}
 
     # Write the count matrix to an MTX file
-    mtx_file = output_file_prefix + ".matrix.mtx"
-    features_file = output_file_prefix + ".features.tsv"
-    barcodes_files = output_file_prefix + ".barcodes.tsv"
+    mtx_file = mtx_matrix_file(output_file_prefix)
+    features_file = mtx_features_file(output_file_prefix)
+    barcodes_files = mtx_barcodes_file(output_file_prefix)
 
     normalization_factors = {g: 1.0 for g in df['group_id'].unique()} if not convert_to_tpm \
         else get_normalization_factors(df, usable_reads_per_group)
@@ -197,7 +200,7 @@ def main():
                     out_mapf.write("%s\t%s\t%s\n" % (t, gene_info[0], gene_info[1]))
         else:
             logger.error("Unknown feature %s" % args.feature_type)
-            exit(-1)
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
     if args.output_format == "mtx":
         convert_to_mtx(args.input, args.output, feature_name_dict, gzipped=args.gzipped,
@@ -207,7 +210,7 @@ def main():
                           feature_type=args.feature_type, convert_to_tpm=args.convert_to_tpm)
     else:
         logger.error("Unknown format %s" % args.output_format)
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
 
 if __name__ == "__main__":
@@ -218,4 +221,4 @@ if __name__ == "__main__":
         raise
     except:
         print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

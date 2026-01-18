@@ -6,11 +6,13 @@
 ############################################################################
 
 import os
+import sys
 import logging
 import yaml
 from collections import defaultdict
 from enum import Enum, unique
 
+from .error_codes import IsoQuantExitCode
 from .file_utils import normalize_path
 
 
@@ -79,6 +81,124 @@ class SampleData:
         self.out_umi_filtered_done= self._make_aux_path(self.prefix + ".UMI_filtered.done")
         self.split_reads_fasta = self._make_path(self.prefix + ".split_reads")
 
+    # Chromosome-specific path methods (delegate to file_naming.py)
+
+    def get_save_file(self, chr_id: str) -> str:
+        """Get path to serialized read assignments for a chromosome."""
+        from .file_naming import saves_file_name
+        return saves_file_name(self.out_raw_file, chr_id)
+
+    def get_multimappers_file(self, chr_id: str) -> str:
+        """Get path to multimapper assignments for a chromosome."""
+        from .file_naming import multimappers_file_name
+        return multimappers_file_name(self.out_raw_file, chr_id)
+
+    def get_filtered_reads_file(self, chr_id: str) -> str:
+        """Get path to filtered reads for a chromosome."""
+        from .file_naming import filtered_reads_file_name
+        return filtered_reads_file_name(self.out_raw_file, chr_id)
+
+    def get_dynamic_pools_file(self, chr_id: str) -> str:
+        """Get path to dynamic string pools for a chromosome."""
+        from .file_naming import dynamic_pools_file_name
+        return dynamic_pools_file_name(self.out_raw_file, chr_id)
+
+    def get_collected_lock_file(self, chr_id: str) -> str:
+        """Get path to lock file indicating reads collected for a chromosome."""
+        from .file_naming import reads_collected_lock_file_name
+        return reads_collected_lock_file_name(self.out_raw_file, chr_id)
+
+    def get_processed_lock_file(self, chr_id: str) -> str:
+        """Get path to lock file indicating reads processed for a chromosome."""
+        from .file_naming import reads_processed_lock_file_name
+        return reads_processed_lock_file_name(self.out_raw_file, chr_id)
+
+    def get_read_group_split_file(self, chr_id: str, spec_index: int = None) -> str:
+        """Get path to split read group file for a chromosome.
+
+        Args:
+            chr_id: Chromosome ID
+            spec_index: Optional spec index for multi-spec files
+
+        Returns:
+            Path like 'prefix.read_group_spec0_chr1' or 'prefix.read_group_chr1'
+        """
+        from .file_naming import convert_chr_id_to_file_name_str
+        chr_str = convert_chr_id_to_file_name_str(chr_id)
+        if spec_index is not None:
+            return f"{self.read_group_file}_spec{spec_index}_{chr_str}"
+        return f"{self.read_group_file}_{chr_str}"
+
+    def get_barcodes_split_file(self, chr_id: str) -> str:
+        """Get path to split barcodes file for a chromosome."""
+        from .file_naming import convert_chr_id_to_file_name_str
+        return self.barcodes_split_reads + "_" + convert_chr_id_to_file_name_str(chr_id)
+
+    # Chromosome-specific output file getters (for parallel processing)
+
+    def get_chr_prefix(self, chr_id: str) -> str:
+        """Get chromosome-specific prefix for output files."""
+        from .file_naming import convert_chr_id_to_file_name_str
+        return f"{self.prefix}_{convert_chr_id_to_file_name_str(chr_id)}"
+
+    def get_corrected_bed_file(self, chr_id: str) -> str:
+        """Get path to corrected reads BED file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".corrected_reads.bed")
+
+    def get_assigned_tsv_file(self, chr_id: str) -> str:
+        """Get path to read assignments TSV for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".read_assignments.tsv")
+
+    def get_gene_counts_file(self, chr_id: str) -> str:
+        """Get path to gene counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".gene")
+
+    def get_transcript_counts_file(self, chr_id: str) -> str:
+        """Get path to transcript counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".transcript")
+
+    def get_exon_counts_file(self, chr_id: str) -> str:
+        """Get path to exon counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".exon")
+
+    def get_intron_counts_file(self, chr_id: str) -> str:
+        """Get path to intron counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".intron")
+
+    def get_transcript_model_counts_file(self, chr_id: str) -> str:
+        """Get path to discovered transcript counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".discovered_transcript")
+
+    def get_gene_model_counts_file(self, chr_id: str) -> str:
+        """Get path to discovered gene counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".discovered_gene")
+
+    def get_t2t_tsv_file(self, chr_id: str) -> str:
+        """Get path to SQANTI-like TSV for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".novel_vs_known.SQANTI-like.tsv")
+
+    def get_grouped_counts_file(self, chr_id: str, feature: str, strategy_name: str) -> str:
+        """Get path to grouped counts file for a chromosome.
+
+        Args:
+            chr_id: Chromosome ID
+            feature: Feature type (gene, transcript, exon, intron, discovered_transcript, discovered_gene)
+            strategy_name: Grouping strategy name
+        """
+        return self._make_path(f"{self.get_chr_prefix(chr_id)}.{feature}_grouped_{strategy_name}")
+
+    # Sample-level auxiliary files (for resume functionality)
+
+    def get_info_file(self) -> str:
+        """Get path to sample collection info file."""
+        from .file_naming import info_file_name
+        return info_file_name(self.out_raw_file)
+
+    def get_collection_lock_file(self) -> str:
+        """Get path to sample collection lock file."""
+        from .file_naming import collection_lock_file_name
+        return collection_lock_file_name(self.out_raw_file)
+
 
 class InputDataStorage:
     def __init__(self, args):
@@ -98,12 +218,12 @@ class InputDataStorage:
             experiment_names.append(experiment_name)
             if args.labels and len(args.labels) != len(args.fastq):
                 logger.critical("Number of labels is not equal to the number of files")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.LABEL_COUNT_MISMATCH)
             for i, fq in enumerate(args.fastq):
                 check_input_type(fq, self.input_type)
                 if fq in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fq)
-                    exit(-2)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fq)
+                    sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([fq])
                 readable_names_dict[experiment_name][fq] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(fq))[0]
@@ -120,12 +240,12 @@ class InputDataStorage:
             experiment_names.append(experiment_name)
             if args.labels and len(args.labels) != len(args.bam):
                 logger.critical("Number of labels is not equal to the number of files")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.LABEL_COUNT_MISMATCH)
             for i, bam in enumerate(args.bam):
                 check_input_type(bam, self.input_type)
                 if bam in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
-                    exit(-2)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %bam)
+                    sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(bam))[0]
@@ -138,12 +258,12 @@ class InputDataStorage:
             experiment_names.append(experiment_name)
             if args.labels and len(args.labels) != len(args.unmapped_bam):
                 logger.critical("Number of labels is not equal to the number of files")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.LABEL_COUNT_MISMATCH)
             for i, bam in enumerate(args.unmapped_bam):
                 check_input_type(bam, self.input_type)
                 if bam in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
-                    exit(-2)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %bam)
+                    sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
                     os.path.splitext(os.path.basename(bam))[0]
@@ -163,7 +283,7 @@ class InputDataStorage:
 
         else:
             logger.critical("Input data was not specified")
-            exit(-1)
+            sys.exit(IsoQuantExitCode.NO_INPUT_DATA)
 
         for i in range(len(sample_files)):
             self.samples.append(SampleData(sample_files[i], experiment_names[i],
@@ -195,7 +315,7 @@ class InputDataStorage:
                     new_sample_name = self.experiment_prefix + str(current_index)
                     if current_sample_name == new_sample_name:
                         logger.critical("Change experiment name %s and rerun IsoQuant" % current_sample_name)
-                        exit(-1)
+                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     logger.warning("Duplicate folder prefix %s, will change to %s" %
                                    (current_sample_name, new_sample_name))
                     current_sample_name = new_sample_name
@@ -210,8 +330,8 @@ class InputDataStorage:
                 current_sample.append(files)
                 for fname in files:
                     if fname in readable_names_dict[current_sample_name]:
-                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
-                        exit(-2)
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fname)
+                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     readable_names_dict[current_sample_name][fname] = readable_name
 
         if len(current_sample) > 0:
@@ -240,7 +360,7 @@ class InputDataStorage:
         t = con[0]
         if not 'data format' in t.keys():
             logger.critical("Please specify whether you are using fastq or bam files in the first entry")
-            exit(-2)
+            sys.exit(IsoQuantExitCode.YAML_PARSING_ERROR)
         else:
             if len(t.keys()) > 1:
                 logger.warning("The first entry should only specify the input data format. Any additional info will be ignored")
@@ -252,7 +372,7 @@ class InputDataStorage:
                 self.input_type = InputDataType.fastq
             else:
                 logger.critical("The input data format can only be either fastq, fasta or bam.")
-                exit(-1)
+                sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
         for sample in con[1:]:
             if not 'name' in sample.keys():
                 current_sample_name = self.experiment_prefix + str(current_index)
@@ -262,20 +382,20 @@ class InputDataStorage:
                     new_sample_name = self.experiment_prefix + str(current_index)
                     if current_sample_name == new_sample_name:
                         logger.critical("Change experiment name %s and rerun IsoQuant" % current_sample_name)
-                        exit(-1)
+                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     logger.warning("Duplicate folder prefix %s, will change to %s" %
                                    (current_sample_name, new_sample_name))
                     current_sample_name = new_sample_name
             current_index += 1
             if not 'long read files' in sample.keys():
                 logger.critical("Experiment %s does not contain any files" %current_sample_name)
-                exit(-2)
+                sys.exit(IsoQuantExitCode.YAML_PARSING_ERROR)
             else:
                 current_sample = [normalize_path(yaml_file_path, b) for b in sample['long read files']]
                 names = 'labels' in sample.keys()
                 if names and not len(sample['labels']) == len(current_sample):
                     logger.critical("The number of file aliases differs from the number of files")
-                    exit(-2)
+                    sys.exit(IsoQuantExitCode.LABEL_COUNT_MISMATCH)
                 for f in range(len(current_sample)):
                     fname = current_sample[f]
                     if names:
@@ -283,8 +403,8 @@ class InputDataStorage:
                     else:
                         readable_name = os.path.splitext(os.path.basename(fname))[0]
                     if fname in readable_names_dict[current_sample_name]:
-                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
-                        exit(-2)
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fname)
+                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     readable_names_dict[current_sample_name][fname] = readable_name
             if len(current_sample) > 0:
                 current_sample_list = [[s] for s in current_sample]

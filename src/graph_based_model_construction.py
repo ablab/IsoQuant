@@ -52,11 +52,13 @@ class GraphBasedModelConstructor:
 
     def __init__(self, gene_info, chr_record, args, transcript_counter, gene_counter, id_distributor,
                  grouping_strategy_names=None,
-                 use_technical_replicas=False):
+                 use_technical_replicas=False,
+                 string_pools=None):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.args = args
         self.id_distributor = id_distributor
+        self.string_pools = string_pools
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else []
         self.use_technical_replicas = use_technical_replicas
         # Find file_name group index for technical replicas check
@@ -73,7 +75,7 @@ class GraphBasedModelConstructor:
         self.known_isoforms_in_graph = {}
         self.known_introns = set()
         self.known_isoforms_in_graph_ids = {}
-        self.assigner = LongReadAssigner(self.gene_info, self.args)
+        self.assigner = LongReadAssigner(self.gene_info, self.args, self.string_pools)
         self.profile_constructor = CombinedProfileConstructor(self.gene_info, self.args)
 
         self.transcript_model_storage = []
@@ -189,7 +191,8 @@ class GraphBasedModelConstructor:
                 # create intergenic
                 assignment = ReadAssignment(model.transcript_id,
                                             ReadAssignmentType.intergenic,
-                                            IsoformMatch(MatchClassification.intergenic))
+                                            self.string_pools,
+                                            match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
                 if model.strand == "-":
                     polya_info = PolyAInfo(-1, model.exon_blocks[0][0], -1, -1)
                 else:
@@ -376,7 +379,7 @@ class GraphBasedModelConstructor:
             if len(model.exon_blocks) <= 2 or model.transcript_id in to_substitute:
                 continue
             transcript_model_gene_info = GeneInfo.from_models([model], self.args.delta)
-            assigner = LongReadAssigner(transcript_model_gene_info, self.args)
+            assigner = LongReadAssigner(transcript_model_gene_info, self.args, self.string_pools)
             profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.args)
 
             for m in model_storage:
@@ -767,7 +770,7 @@ class GraphBasedModelConstructor:
 
         logger.debug("Creating artificial GeneInfo from %d transcript models" % len(self.transcript_model_storage))
         transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.args.delta)
-        assigner = LongReadAssigner(transcript_model_gene_info, self.args, quick_mode=True)
+        assigner = LongReadAssigner(transcript_model_gene_info, self.args, self.string_pools, quick_mode=True)
         profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.args)
 
         for assignment in read_assignments:

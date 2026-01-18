@@ -14,6 +14,8 @@ import argparse
 from traceback import print_exc
 import shutil
 
+from error_codes import IsoQuantExitCode
+
 
 def load_tsv_config(config_file):
     config_dict = {}
@@ -58,12 +60,12 @@ def main():
     args = parse_args()
     if not args.config_file:
         print("Provide configuration file")
-        exit(-2)
+        sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
     for config_file in args.config_file:
         if not os.path.exists(config_file):
             print("Provide correct path to configuration file, %s does not exits" % config_file)
-            exit(-3)
+            sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
         print("Loading config from %s" % config_file)
         config_dict = load_tsv_config(config_file)
@@ -91,4 +93,4 @@ if __name__ == "__main__":
         raise
     except:
         print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

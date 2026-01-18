@@ -5,8 +5,8 @@
 ############################################################################
 
 import pytest
-from src.barcode_calling.kmer_indexer import KmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
-from src.barcode_calling.common import str_to_2bit
+from src.barcode_calling.indexers import KmerIndexer, Dict2BitKmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
+from src.barcode_calling.common import str_to_2bit, batch_str_to_2bit
 
 
 class TestKmerIndexer:
@@ -119,6 +119,147 @@ class TestKmerIndexer:
         assert isinstance(seq, str)
         assert isinstance(count, int)
         assert isinstance(positions, list)
+
+
+class TestDict2BitKmerIndexer:
+    """Test memory-efficient Dict2BitKmerIndexer with 2-bit encoded sequences."""
+
+    def test_init(self):
+        """Test indexer initialization with 2-bit encoded sequences."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=3, seq_len=8)
+
+        assert len(indexer.seq_list) == 3
+        assert indexer.k == 3
+        assert not indexer.empty()
+
+    def test_empty(self):
+        """Test empty index detection."""
+        indexer = Dict2BitKmerIndexer([], kmer_size=3, seq_len=8)
+        assert indexer.empty()
+
+    def test_exact_match(self):
+        """Test finding exact match."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=4, seq_len=8)
+
+        results = indexer.get_occurrences("ACTGACTG")
+
+        assert len(results) > 0
+        assert results[0][0] == "ACTGACTG"
+        assert results[0][1] > 0  # Shared k-mer count
+
+    def test_similar_match(self):
+        """Test finding similar sequence."""
+        barcodes = ["ACTGACTG", "TGCATGCA"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=4, seq_len=8)
+
+        # Query with 1 mismatch
+        results = indexer.get_occurrences("ACTGACTT")
+
+        assert len(results) > 0
+        assert results[0][0] == "ACTGACTG"
+
+    def test_min_kmers_filter(self):
+        """Test minimum k-mer threshold."""
+        barcodes = ["ACTGACTG", "TGCATGCA"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=4, seq_len=8)
+
+        # Very different sequence
+        results = indexer.get_occurrences("CCCCCCCC", min_kmers=3)
+
+        assert len(results) <= 2
+
+    def test_max_hits(self):
+        """Test maximum hits limit."""
+        barcodes = ["ACTGACTG", "ACTCACTC", "ACTAACTA", "ACTTACTT"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=3, seq_len=8)
+
+        results = indexer.get_occurrences("ACTGACTG", max_hits=2)
+
+        assert len(results) <= 2
+
+    def test_ignore_equal(self):
+        """Test ignoring exact matches."""
+        barcodes = ["ACTGACTG", "TGCATGCA"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=3, seq_len=8)
+
+        results = indexer.get_occurrences("ACTGACTG", ignore_equal=True)
+
+        for seq, _, _ in results:
+            assert seq != "ACTGACTG"
+
+    def test_consistency_with_kmerindexer(self):
+        """Test that results match basic KmerIndexer."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG"]
+        basic = KmerIndexer(barcodes, kmer_size=4)
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        dict2bit = Dict2BitKmerIndexer(bit_barcodes, kmer_size=4, seq_len=8)
+
+        query = "ACTGACTT"
+        basic_results = basic.get_occurrences(query)
+        dict2bit_results = dict2bit.get_occurrences(query)
+
+        # Should find same sequences
+        basic_seqs = set(seq for seq, _, _ in basic_results)
+        dict2bit_seqs = set(seq for seq, _, _ in dict2bit_results)
+        assert basic_seqs == dict2bit_seqs
+
+    def test_consistency_with_arraykmerindexer(self):
+        """Test that results match ArrayKmerIndexer."""
+        barcodes = ["ACTGACTG", "TGCATGCA", "GGGGGGGG"]
+        array = ArrayKmerIndexer(barcodes, kmer_size=4)
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        dict2bit = Dict2BitKmerIndexer(bit_barcodes, kmer_size=4, seq_len=8)
+
+        query = "ACTGACTT"
+        array_results = array.get_occurrences(query)
+        dict2bit_results = dict2bit.get_occurrences(query)
+
+        # Should find same sequences
+        array_seqs = set(seq for seq, _, _ in array_results)
+        dict2bit_seqs = set(seq for seq, _, _ in dict2bit_results)
+        assert array_seqs == dict2bit_seqs
+
+    def test_result_format(self):
+        """Test result tuple format."""
+        barcodes = ["ACTGACTG"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=4, seq_len=8)
+
+        results = indexer.get_occurrences("ACTGACTG")
+
+        assert len(results) > 0
+        seq, count, positions = results[0]
+        assert isinstance(seq, str)
+        assert isinstance(count, int)
+        assert isinstance(positions, list)
+
+    def test_index_uses_int_keys(self):
+        """Test that index uses integer keys, not strings."""
+        barcodes = ["ACTGACTG"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=3, seq_len=8)
+
+        # All keys should be integers
+        for key in indexer.index.keys():
+            assert isinstance(key, int)
+
+    def test_sequences_stored_as_integers(self):
+        """Test that sequences are stored as 2-bit encoded integers."""
+        barcodes = ["ACTGACTG"]
+        bit_barcodes = batch_str_to_2bit(barcodes, seq_len=8)
+        indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=3, seq_len=8)
+
+        # Sequences should be integers
+        for seq in indexer.seq_list:
+            assert isinstance(seq, (int, type(bit_barcodes[0])))
 
 
 class TestArrayKmerIndexer:

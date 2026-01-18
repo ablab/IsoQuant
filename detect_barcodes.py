@@ -6,6 +6,8 @@
 # See file LICENSE for details.
 ############################################################################
 import concurrent.futures
+import gc
+import multiprocessing
 import os
 import random
 import sys
@@ -13,7 +15,6 @@ import argparse
 import gzip
 from traceback import print_exc
 import shutil
-from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
 import numpy
 import pysam
@@ -21,14 +22,15 @@ from Bio import SeqIO, Seq, SeqRecord
 import logging
 
 from src.modes import IsoQuantMode
+from src.error_codes import IsoQuantExitCode
 from src.barcode_calling.common import bit_to_str, reverese_complement
-from src.barcode_calling.barcode_callers import (
+from src.barcode_calling import (
     TenXBarcodeDetector,
-    DoubleBarcodeDetector,
+    CurioBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
-    SharedMemoryStereoSplttingBarcodeDetector,
-    ReadStats, 
-    VisiumHDBarcodeDetector
+    SharedMemoryStereoSplittingBarcodeDetector,
+    ReadStats,
+    VisiumHDBarcodeDetector,
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -37,9 +39,9 @@ logger = logging.getLogger('IsoQuant')
 READ_CHUNK_SIZE = 100000
 
 BARCODE_CALLING_MODES = {IsoQuantMode.tenX_v3: TenXBarcodeDetector,
-                         IsoQuantMode.curio: DoubleBarcodeDetector,
+                         IsoQuantMode.curio: CurioBarcodeDetector,
                          IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
-                         IsoQuantMode.stereoseq: SharedMemoryStereoSplttingBarcodeDetector,
+                         IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
                          IsoQuantMode.visium_5prime: TenXBarcodeDetector,
                          IsoQuantMode.visium_hd: VisiumHDBarcodeDetector
                          }
@@ -264,7 +266,7 @@ def prepare_barcodes(args):
     if barcode_files not in BARCODE_FILES_REQUIRED[args.mode]:
         logger.critical("Barcode calling mode %s requires %s files, %d provided" %
                         (args.mode.name, " or ".join([str(x) for x in BARCODE_FILES_REQUIRED[args.mode]]), barcode_files))
-        exit(-3)
+        sys.exit(IsoQuantExitCode.BARCODE_FILE_COUNT_MISMATCH)
     barcodes = []
     for bc in args.barcodes:
         barcodes.append(load_barcodes(bc, needs_iterator=args.mode.needs_barcode_iterator()))
@@ -287,17 +289,25 @@ def process_single_thread(args):
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
         barcode_detector.min_score = args.min_score
-    barcode_caller = BarcodeCaller(args.output_tsv, barcode_detector, header=True, output_sequences=args.out_fasta)
-    barcode_caller.process(args.input)
-    barcode_caller.dump_stats()
-    for stat_line in barcode_caller.get_stats():
-        logger.info("  " + stat_line)
-    barcode_caller.close()
+
+    # args.input, args.output_tsv are always lists
+    # args.out_fasta is a list or None
+    out_fastas = args.out_fasta if args.out_fasta else [None] * len(args.input)
+
+    for idx, (input_file, output_tsv, out_fasta) in enumerate(zip(args.input, args.output_tsv, out_fastas)):
+        if len(args.input) > 1:
+            logger.info("Processing file %d/%d: %s" % (idx + 1, len(args.input), input_file))
+        barcode_caller = BarcodeCaller(output_tsv, barcode_detector, header=True, output_sequences=out_fasta)
+        barcode_caller.process(input_file)
+        barcode_caller.dump_stats()
+        for stat_line in barcode_caller.get_stats():
+            logger.info("  " + stat_line)
+        barcode_caller.close()
     logger.info("Finished barcode calling")
 
 
-def process_in_parallel(args):
-    input_file = args.input
+def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcodes):
+    """Process a single file in parallel (internal helper function)."""
     logger.info("Processing " + input_file)
     fname, outer_ext = os.path.splitext(os.path.basename(input_file))
     low_ext = outer_ext.lower()
@@ -317,7 +327,7 @@ def process_in_parallel(args):
         read_chunk_gen = bam_file_chunk_reader(pysam.AlignmentFile(input_file, "rb", check_sq=False))
     else:
         logger.error("Unknown file format " + input_file)
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
     tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
     while os.path.exists(tmp_dir):
@@ -326,7 +336,6 @@ def process_in_parallel(args):
         tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
     os.makedirs(tmp_dir)
 
-    barcodes = prepare_barcodes(args)
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     logger.info("Barcode caller created")
 
@@ -335,12 +344,19 @@ def process_in_parallel(args):
         min_score = args.min_score
 
     tmp_barcode_file = os.path.join(tmp_dir, "bc")
-    tmp_fasta_file = os.path.join(tmp_dir, "subreads") if args.out_fasta else None
+    tmp_fasta_file = os.path.join(tmp_dir, "subreads") if out_fasta else None
     chunk_counter = 0
     future_results = []
     output_files = []
 
-    with ProcessPoolExecutor(max_workers=args.threads) as proc:
+    # Clean up parent memory before spawning workers
+    gc.collect()
+    mp_context = multiprocessing.get_context('spawn')
+    # max_tasks_per_child requires Python 3.11+
+    executor_kwargs = {'max_workers': args.threads, 'mp_context': mp_context}
+    if sys.version_info >= (3, 11):
+        executor_kwargs['max_tasks_per_child'] = 20
+    with concurrent.futures.ProcessPoolExecutor(**executor_kwargs) as proc:
         for chunk in read_chunk_gen:
             future_results.append(proc.submit(process_chunk,
                                               barcode_detector,
@@ -362,10 +378,10 @@ def process_in_parallel(args):
                 if c.exception() is not None:
                     raise c.exception()
                 res = c.result()
-                out_file, out_fasta, read_count = res
+                tmp_out_file, tmp_out_fasta, read_count = res
                 read_counter += read_count
                 sys.stdout.write("Processed %d reads\r" % read_counter)
-                output_files.append((out_file, out_fasta))
+                output_files.append((tmp_out_file, tmp_out_fasta))
                 future_results.remove(c)
                 if reads_left:
                     try:
@@ -381,8 +397,8 @@ def process_in_parallel(args):
                     except StopIteration:
                         reads_left = False
 
-    with open(args.output_tsv, "w") as final_output_tsv:
-        final_output_fasta = open(args.out_fasta, "w") if args.out_fasta else None
+    with open(output_tsv, "w") as final_output_tsv:
+        final_output_fasta = open(out_fasta, "w") if out_fasta else None
         header = BARCODE_CALLING_MODES[args.mode].result_type().header()
         final_output_tsv.write(header + "\n")
         stat_dict = defaultdict(int)
@@ -399,11 +415,27 @@ def process_in_parallel(args):
         if final_output_fasta is not None:
             final_output_fasta.close()
 
-    with open(stats_file_name(args.output_tsv), "w") as out_stats:
+    with open(stats_file_name(output_tsv), "w") as out_stats:
         for k, v in stat_dict.items():
             logger.info("  %s: %d" % (k, v))
             out_stats.write("%s\t%d\n" % (k, v))
     shutil.rmtree(tmp_dir)
+
+
+def process_in_parallel(args):
+    """Process input files in parallel."""
+    # args.input, args.output_tsv are always lists
+    # args.out_fasta is a list or None
+    out_fastas = args.out_fasta if args.out_fasta else [None] * len(args.input)
+
+    # Prepare barcodes once for all files
+    barcodes = prepare_barcodes(args)
+
+    for idx, (input_file, output_tsv, out_fasta) in enumerate(zip(args.input, args.output_tsv, out_fastas)):
+        if len(args.input) > 1:
+            logger.info("Processing file %d/%d: %s" % (idx + 1, len(args.input), input_file))
+        _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcodes)
+
     logger.info("Finished barcode calling")
 
 
@@ -460,7 +492,7 @@ def parse_args(sys_argv):
     # parser.add_argument("--umi", "-u", type=str, help="potential UMIs, detected de novo if not set")
     parser.add_argument("--mode", type=str, help="mode to be used", choices=[x.name for x in BARCODE_CALLING_MODES.keys()],
                         default=IsoQuantMode.stereoseq.name)
-    parser.add_argument("--input", "-i", type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM, SAM",
+    parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM, SAM",
                         required=True)
     parser.add_argument("--threads", "-t", type=int, help="threads to use (16)", default=16)
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
@@ -476,16 +508,28 @@ def parse_args(sys_argv):
 
 
 def check_args(args):
-    if args.out_fasta is None and args.mode.produces_new_fasta():
-        args.out_fasta = args.output + ".split_reads.fasta"
+    """Set up output file lists based on input files."""
+    # args.input is always a list (nargs='+')
+    num_files = len(args.input)
+
     if args.output_tsv is None:
-        args.output_tsv = args.output + ".barcoded_reads.tsv"
+        if num_files == 1:
+            args.output_tsv = [args.output + ".barcoded_reads.tsv"]
+        else:
+            args.output_tsv = [args.output + "_%d.barcoded_reads.tsv" % i for i in range(num_files)]
+
+    if args.out_fasta is None and args.mode.produces_new_fasta():
+        if num_files == 1:
+            args.out_fasta = [args.output + ".split_reads.fasta"]
+        else:
+            args.out_fasta = [args.output + "_%d.split_reads.fasta" % i for i in range(num_files)]
 
 
 def main(sys_argv):
     args = parse_args(sys_argv)
     set_logger(logger, args)
     check_args(args)
+
     out_dir = os.path.dirname(args.output)
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
@@ -504,4 +548,4 @@ if __name__ == "__main__":
         raise
     except:
         print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

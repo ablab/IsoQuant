@@ -186,11 +186,12 @@ class BaseTmpFileAssignmentLoader:
 
 
 class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
-    def __init__(self, input_file_name, genedb, chr_record):
+    def __init__(self, input_file_name, genedb, chr_record, string_pools=None):
         BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
         self.genedb = genedb
         self.chr_record = chr_record
         self.current_gene_info = None
+        self.string_pools = string_pools
 
     def get_object(self):
         if self.is_gene_info():
@@ -203,7 +204,7 @@ class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
             return self.current_gene_info
         elif self.is_read_assignment():
             assert self.current_gene_info is not None
-            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info)
+            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info, self.string_pools)
             self._read_id()
             return assignment
         else:
@@ -211,9 +212,10 @@ class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
 
 
 class GeneListTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
-    def __init__(self, input_file_name):
+    def __init__(self, input_file_name, string_pools=None):
         BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
         self.current_gene_info = None
+        self.string_pools = string_pools
 
     def get_object(self):
         if self.is_gene_info():
@@ -222,7 +224,7 @@ class GeneListTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
             return self.current_gene_info
         elif self.is_read_assignment():
             assert self.current_gene_info is not None
-            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info)
+            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info, self.string_pools)
             self._read_id()
             return assignment
         else:
@@ -230,8 +232,9 @@ class GeneListTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
 
 
 class QuickTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
-    def __init__(self, input_file_name):
+    def __init__(self, input_file_name, string_pools=None):
         BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
+        self.string_pools = string_pools
 
     def get_object(self):
         if self.is_gene_info():
@@ -239,7 +242,7 @@ class QuickTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
             self._read_id()
             return None
         elif self.is_read_assignment():
-            assignment = BasicReadAssignment.deserialize_from_read_assignment(self.loader)
+            assignment = BasicReadAssignment.deserialize_from_read_assignment(self.loader, self.string_pools)
             self._read_id()
             return assignment
         else:

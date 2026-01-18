@@ -413,7 +413,7 @@ class UMIFilter:
     def process_single_chr(self, chr_id: str, saves_prefix: str, transcript_type_dict: Dict[str, Tuple[str, int]],
                           barcode_feature_table: Dict[str, str],
                           all_info_file_name: str, filtered_reads_file_name: Optional[str],
-                          stats_output_file_name: str) -> Tuple[str, str]:
+                          stats_output_file_name: str, string_pools=None) -> Tuple[str, str]:
         """
         Process UMI filtering for a single chromosome.
 
@@ -435,7 +435,7 @@ class UMIFilter:
             spliced_count = 0
             self.unique_gene_barcode = set()
 
-            loader = create_merging_assignment_loader(chr_id, saves_prefix)
+            loader = create_merging_assignment_loader(chr_id, saves_prefix, string_pools=string_pools)
             while loader.has_next():
                 gene_barcode_dict: Dict[str, Dict[str, List[ReadAssignment]]] = defaultdict(lambda: defaultdict(list))
                 _, assignment_storage = loader.get_next()

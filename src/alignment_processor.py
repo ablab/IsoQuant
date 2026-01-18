@@ -246,13 +246,15 @@ class AlignmentCollector:
                  genedb=None, chr_record=None, read_groupper=DefaultReadGrouper(),
                  barcode_dict=None,
                  small_chr_max_coverage=1000000,
-                 usual_gene_max_coverage=-1):
+                 usual_gene_max_coverage=-1,
+                 string_pools=None):
         self.chr_id = chr_id
         self.bam_pairs = bam_pairs
         self.params = params
         self.genedb = genedb
         self.chr_record = chr_record
         self.illumina_bam = illumina_bam
+        self.string_pools = string_pools
 
         self.bam_merger = BAMOnlineMerger(self.bam_pairs, self.chr_id, 0,
                                           self.bam_pairs[0][0].get_reference_length(self.chr_id),
@@ -378,8 +380,8 @@ class AlignmentCollector:
             if self.params.polya_trimmed == PolyATrimmed.none:
                 alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
 
-            read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic,
-                                             IsoformMatch(MatchClassification.intergenic))
+            read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic, self.string_pools,
+                                             match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
 
             if alignment_info.exons_changed:
                 read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
@@ -413,7 +415,7 @@ class AlignmentCollector:
             yield read_assignment
 
     def process_genic(self, alignment_storage, gene_info, region, skip_read_fraction=1):
-        assigner = LongReadAssigner(gene_info, self.params)
+        assigner = LongReadAssigner(gene_info, self.params, self.string_pools)
         profile_constructor = CombinedProfileConstructor(gene_info, self.params)
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
 

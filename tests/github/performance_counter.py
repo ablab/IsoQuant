@@ -12,6 +12,8 @@ import sys
 import psutil
 import subprocess
 from traceback import print_exc
+
+from error_codes import IsoQuantExitCode
 from time import time
 from time import sleep
 from collections import defaultdict
@@ -41,6 +43,8 @@ def human_readable_time(time_secs):
 def get_current_stats(pids):
     total_vms = 0
     total_rss = 0
+    total_uss = 0
+    max_shared = 0
     total_cpu = 0.0
     for pid in pids.keys():
         proc = pids[pid]
@@ -49,10 +53,22 @@ def get_current_stats(pids):
             total_vms += mem_info.vms
             total_rss += mem_info.rss
             total_cpu += proc.cpu_percent(interval=None)
+            # USS (Unique Set Size) = memory unique to this process, excluding shared
+            # This avoids overcounting shared memory across processes
+            try:
+                full_info = proc.memory_full_info()
+                total_uss += full_info.uss
+                # Track max shared memory from any process (shared mem is the same across processes)
+                max_shared = max(max_shared, full_info.shared)
+            except (psutil.AccessDenied, AttributeError):
+                # memory_full_info may require elevated privileges or not be available
+                total_uss += mem_info.rss
         except psutil.NoSuchProcess:
             pass
 
-    return total_rss, total_vms, total_cpu
+    # Effective RAM = USS (unique to each process) + shared memory (counted once)
+    effective_ram = total_uss + max_shared
+    return total_rss, total_vms, total_uss, max_shared, effective_ram, total_cpu
 
 
 def get_children(pid):
@@ -64,13 +80,15 @@ def get_children(pid):
 
 def track_ram_and_cpu(task_subprocess, interval, outfile):
     outf = open(outfile, "w")
-    outf.write("Time\tRSS\tVMS\tCPU %\n")
+    outf.write("Time\tRSS\tUSS\tShared\tEffective\tVMS\tCPU %\n")
 
     task_pid = task_subprocess.pid
     task_process_obj = psutil.Process(task_pid)
     all_pids = {task_pid : task_process_obj}
     start_time = time()
     max_rss = 0
+    max_uss = 0
+    max_effective = 0
     cpu_times = defaultdict(float)
     flush_interval = 0
 
@@ -79,10 +97,12 @@ def track_ram_and_cpu(task_subprocess, interval, outfile):
         for child in children_pids:
             if child not in all_pids:
                 all_pids[child] = psutil.Process(child)
-        total_rss, total_vms, total_cpu = get_current_stats(all_pids)
+        total_rss, total_vms, total_uss, max_shared, effective_ram, total_cpu = get_current_stats(all_pids)
         max_rss = max(max_rss, total_rss)
+        max_uss = max(max_uss, total_uss)
+        max_effective = max(max_effective, effective_ram)
         current_time = time() - start_time
-        outf.write("%d\t%d\t%d\t%.1f\n" % (current_time, total_rss, total_vms, total_cpu))
+        outf.write("%d\t%d\t%d\t%d\t%d\t%d\t%.1f\n" % (current_time, total_rss, total_uss, max_shared, effective_ram, total_vms, total_cpu))
         if flush_interval > 60:
             flush_interval = 0
             outf.flush()
@@ -98,13 +118,21 @@ def track_ram_and_cpu(task_subprocess, interval, outfile):
     cpu_time = sum(cpu_times.values())
     wall_clock_time = time() - start_time
     human_readable_stats = ("Max RSS: %.3f GB\n"
+                            "Max USS: %.3f GB (excluding shared memory)\n"
+                            "Max Effective: %.3f GB (USS + shared memory once)\n"
                             "CPU time:\t%s\n"
                             "Wall clock time:\t%s") % (to_gb(max_rss),
+                                                       to_gb(max_uss),
+                                                       to_gb(max_effective),
                                                        human_readable_time(cpu_time),
                                                        human_readable_time(wall_clock_time))
     tsv_stats = ("max_rss\t%d\t%.3fGB\n"
+                 "max_uss\t%d\t%.3fGB\n"
+                 "max_effective\t%d\t%.3fGB\n"
                  "cpu_time\t%.0f\t%s\n"
                  "clock_time\t%.0f\t%s") % (max_rss, to_gb(max_rss),
+                                             max_uss, to_gb(max_uss),
+                                             max_effective, to_gb(max_effective),
                                              cpu_time, human_readable_time(cpu_time),
                                              wall_clock_time, human_readable_time(wall_clock_time))
 
@@ -117,6 +145,10 @@ def track_disk_usage(folder, interval, outfile, res_stats):
     start_time = time()
     max_usage = 0
     while not task_over.is_set():
+        if not os.path.exists(folder):
+            sleep(interval)
+            continue
+
         disk_usage = int(subprocess.check_output(['du', '-s', folder]).split()[0].decode('utf-8'))
         current_time = time() - start_time
         max_usage =max(max_usage, disk_usage)
@@ -156,7 +188,7 @@ def main():
         cmd = open(args.cmd_file).readline().strip().split()
     else:
         sys.stderr.write("Provide command line to run with --cmd or --cmd_file")
-        exit(-1)
+        sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
     print("Running %s" % " ".join(cmd))
 
     if not args.output:
@@ -198,6 +230,6 @@ if __name__ == "__main__":
         raise
     except:
         print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)
 
 

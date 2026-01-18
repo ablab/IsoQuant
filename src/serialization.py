@@ -45,6 +45,20 @@ def read_string_or_none(inf):
     return inf.read(str_len).decode(encoding=ENCODING)
 
 
+def write_int_or_none(val, outf, bytes_len=LONG_INT_BYTES):
+    if val is None:
+        outf.write(TERMINATION_INT.to_bytes(bytes_len, BYTE_ORDER))
+        return
+    outf.write(val.to_bytes(bytes_len, BYTE_ORDER))
+
+
+def read_int_or_none(inf, bytes_len=LONG_INT_BYTES):
+    val = int.from_bytes(inf.read(bytes_len), BYTE_ORDER)
+    if val == TERMINATION_INT:
+        return None
+    return val
+
+
 def write_int(val, outf, bytes_len=LONG_INT_BYTES):
     outf.write(val.to_bytes(bytes_len, BYTE_ORDER))
 

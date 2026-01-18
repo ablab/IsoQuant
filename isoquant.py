@@ -26,6 +26,7 @@ import pysam
 import gffutils
 import pyfaidx
 
+from src.error_codes import IsoQuantExitCode
 from src.modes import IsoQuantMode, ISOQUANT_MODES
 from src.gtf2db import convert_gtf_to_db
 from src.read_mapper import (
@@ -49,6 +50,9 @@ from src.fusion_detector import FusionDetector
 from detect_barcodes import process_single_thread, process_in_parallel, get_umi_length
 
 logger = logging.getLogger('IsoQuant')
+
+# Large output file types for --large_output option
+LARGE_OUTPUT_TYPES = ["read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
 
 
 def bool_str(s):
@@ -210,6 +214,9 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="transcript model construction strategy to use", type=str, default=None)
     add_additional_option_to_group(algo_args_group, "--delta", type=int, default=None,
                                    help="delta for inexact splice junction comparison, chosen automatically based on data type")
+    add_additional_option_to_group(algo_args_group, "--use_replicas", type=bool_str, default=True,
+                                   help="require novel transcripts to be confirmed by multiple files "
+                                        "when file_name grouping is used (default: true)")
 
 
     # PIPELINE STEPS
@@ -230,8 +237,6 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='Do not use previously generated index, feature db or alignments.')
     add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
                                    default=False, help="run only read assignment and quantification")
-    add_additional_option_to_group(pipeline_args_group, "--no_large_files", action="store_true",
-                                   default=False, help="do not output files containing all reads (bed and tsv)")
     add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
                                    help="align reads to reference without running further analysis")
     add_additional_option_to_group(pipeline_args_group, "--no_gtf_check", help="do not perform GTF checks",
@@ -256,6 +261,10 @@ def parse_args(cmd_args=None, namespace=None):
                                    type=str)
     add_additional_option_to_group(output_setup_args_group, "--no_gzip", help="do not gzip large output files", dest="gzipped",
                                    action='store_false', default=True)
+    add_additional_option_to_group(output_setup_args_group, "--large_output", nargs='*', type=str,
+                                   default=["read_assignments", "allinfo"],
+                                   help="large output files to generate: " + ", ".join(LARGE_OUTPUT_TYPES) +
+                                        " (default: read_assignments allinfo)")
     add_additional_option_to_group(output_setup_args_group, "--normalization_method", type=str, choices=[e.name for e in NormalizationMethod],
                                    help="TPM normalization method: simple - conventional normalization using all counted reads;"
                                         "usable_reads - includes all assigned reads;"
@@ -347,7 +356,7 @@ def parse_args(cmd_args=None, namespace=None):
             logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory "
                          "with --resume option")
             parser.print_usage()
-            exit(-2)
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
 
     args._cmd_line = " ".join(sys.argv)
     args._version = isoquant_version
@@ -401,7 +410,7 @@ def check_and_load_args(args, parser):
             # logger is not defined yet
             logger.error("Previous run config was not detected, cannot resume. "
                          "Check that output folder is correctly specified.")
-            exit(-3)
+            sys.exit(IsoQuantExitCode.RESUME_CONFIG_NOT_FOUND)
         args = load_previous_run(args)
     elif args.output_exists:
         if os.path.exists(args.param_file):
@@ -434,7 +443,17 @@ def check_and_load_args(args, parser):
 
     if not check_input_params(args):
         parser.print_usage()
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+
+    # Validate --large_output values
+    if args.large_output:
+        if "none" in args.large_output and len(args.large_output) > 1:
+            logger.error("--large_output 'none' cannot be combined with other values")
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+        for val in args.large_output:
+            if val not in LARGE_OUTPUT_TYPES:
+                logger.error("Invalid --large_output value: %s. Valid values: %s" % (val, ", ".join(LARGE_OUTPUT_TYPES)))
+                sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
     save_params(args)
     return args
@@ -553,7 +572,7 @@ def check_input_params(args):
         if not args.barcode_whitelist and not args.barcoded_reads:
             logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
                             "barcoded reads" % args.mode.name)
-            exit(-3)
+            sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
         args.umi_length = get_umi_length(args.mode)
 
     check_input_files(args)
@@ -571,32 +590,32 @@ def check_input_files(args):
                     continue
                 if not os.path.isfile(in_file):
                     logger.critical("Input file " + in_file + " does not exist")
-                    exit(-1)
+                    sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
                 if args.input_data.input_type == InputDataType.bam:
                     bamfile_in = pysam.AlignmentFile(in_file, "rb")
                     if not bamfile_in.has_index():
                         logger.critical("BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
-                        exit(-1)
+                        sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
                     bamfile_in.close()
         if sample.illumina_bam is not None:
             for illumina in sample.illumina_bam:
                 bamfile_in = pysam.AlignmentFile(illumina, "rb")
                 if not bamfile_in.has_index():
                     logger.critical("BAM file " + illumina + " is not indexed, run samtools sort and samtools index")
-                    exit(-1)
+                    sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
                 bamfile_in.close()
 
     if args.cage is not None:
         logger.critical("CAGE data is not supported yet")
-        exit(-1)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
         if not os.path.isfile(args.cage):
             logger.critical("Bed file with CAGE peaks " + args.cage + " does not exist")
-            exit(-1)
+            sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
     if args.genedb is not None:
         if not os.path.isfile(args.genedb):
             logger.critical("Gene database " + args.genedb + " does not exist")
-            exit(-1)
+            sys.exit(IsoQuantExitCode.GENE_DB_NOT_FOUND)
     else:
         args.no_junc_bed = True
 
@@ -604,7 +623,7 @@ def check_input_files(args):
         for r in args.read_assignments:
             if not glob.glob(r + "*"):
                 logger.critical("No files found with prefix " + str(r))
-                exit(-1)
+                sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
 
 def create_output_dirs(args):
@@ -706,7 +725,7 @@ def set_matching_options(args):
         args.delta = strategy.delta
     elif args.delta < 0:
         logger.error("--delta can not be negative")
-        exit(-3)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
     args.minor_exon_extension = 50
     args.major_exon_extension = 300
     args.max_intron_shift = strategy.max_intron_shift
@@ -800,7 +819,7 @@ def set_model_construction_options(args):
         args.graph_clustering_distance = strategy.graph_clustering_distance
     elif args.graph_clustering_distance < 0:
         logger.error("--graph_clustering_distance can not be negative")
-        exit(-3)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
     args.min_novel_isolated_intron_abs = strategy.min_novel_isolated_intron_abs
     args.min_novel_isolated_intron_rel = strategy.min_novel_isolated_intron_rel
     args.terminal_position_abs = strategy.terminal_position_abs
@@ -906,11 +925,11 @@ def prepare_reference_genome(args):
 
 class BarcodeCallingArgs:
     def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads):
-        self.input = input
+        self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
-        self.output_tsv = output
-        self.out_fasta = out_fasta
+        self.output_tsv = output  # Can be a single filename (str) or list of filenames
+        self.out_fasta = out_fasta  # Can be a single filename (str), list of filenames, or None
         self.tmp_dir = tmp_dir
         self.threads = threads
         self.min_score = None
@@ -919,43 +938,54 @@ class BarcodeCallingArgs:
 def call_barcodes(args):
     if not args.barcoded_reads:
         for sample in args.input_data.samples:
-            new_reads = []
-            for i, files in enumerate(sample.file_list):
-                output_barcodes = sample.barcodes_tsv + "_%d.tsv" % i
-                barcodes_done = sample.barcodes_done + "_%d.tsv" % i
+            # Collect all input files for this sample
+            input_files = [files[0] for files in sample.file_list]
+            output_barcodes_list = [sample.barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
+            barcodes_done_list = [sample.barcodes_done + "_%d.tsv" % i for i in range(len(input_files))]
 
-                output_fasta = None
+            output_fasta_list = None
+            new_reads = []
+            if args.mode.produces_new_fasta():
+                output_fasta_list = [sample.split_reads_fasta + "_%d.fa" % i for i in range(len(input_files))]
+                new_reads = [[fasta] for fasta in output_fasta_list]
+
+            # Check if all files were already processed during resume
+            all_done = all(os.path.exists(done) for done in barcodes_done_list)
+            if all_done and args.resume:
+                logger.info("Barcodes were called during the previous run, skipping")
+                sample.barcoded_reads.extend(output_barcodes_list)
                 if args.mode.produces_new_fasta():
-                    output_fasta = sample.split_reads_fasta + "_%d.fa" % i
-                    new_reads.append([output_fasta])
-                bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
+                    sample.file_list = new_reads
+                continue
+
+            # Remove existing done markers
+            for barcodes_done in barcodes_done_list:
                 if os.path.exists(barcodes_done):
-                    if args.resume:
-                        logger.info("Barcodes were called during the previous run, skipping")
-                        sample.barcoded_reads.append(output_barcodes)
-                        continue
                     os.remove(barcodes_done)
 
-                bc_args = BarcodeCallingArgs(files[0], args.barcode_whitelist, args.mode,
-                                             output_barcodes, output_fasta, sample.aux_dir, bc_threads)
-                # Launching barcode calling in a separate process has the following reason:
-                # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
-                # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
-                # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
-                with ProcessPoolExecutor(max_workers=1) as proc:
-                    logger.info("Detecting barcodes")
-                    if bc_threads == 1:
-                        future_res = proc.submit(process_single_thread, bc_args)
-                    else:
-                        future_res = proc.submit(process_in_parallel, bc_args)
+            bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
+            bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
+                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads)
+            # Launching barcode calling in a separate process has the following reason:
+            # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
+            # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
+            # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
+            with ProcessPoolExecutor(max_workers=1) as proc:
+                logger.info("Detecting barcodes for %d file(s)" % len(input_files))
+                if bc_threads == 1:
+                    future_res = proc.submit(process_single_thread, bc_args)
+                else:
+                    future_res = proc.submit(process_in_parallel, bc_args)
 
                 concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
                 if future_res.exception() is not None:
                     raise future_res.exception()
 
+            # Mark all files as done and add to barcoded_reads
+            for i, (input_file, output_barcodes, barcodes_done) in enumerate(zip(input_files, output_barcodes_list, barcodes_done_list)):
                 sample.barcoded_reads.append(output_barcodes)
                 open(barcodes_done, "w").close()
-                logger.info("Processed %s, barcodes are stored in %s" % (files[0], output_barcodes))
+                logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
 
             if args.mode.produces_new_fasta():
                 logger.info("Reads were split during barcode calling")
@@ -1032,7 +1062,7 @@ class TestMode(argparse.Action):
             logger.info(' === TEST PASSED CORRECTLY === ')
         else:
             logger.error(' === TEST FAILED ===')
-            exit(-1)
+            sys.exit(IsoQuantExitCode.TEST_FAILED)
         parser.exit()
 
     @staticmethod
@@ -1048,7 +1078,7 @@ def main(cmd_args):
     args, parser = parse_args(cmd_args)
     if not cmd_args:
         parser.print_usage()
-        exit(0)
+        sys.exit(IsoQuantExitCode.SUCCESS)
     set_logger(args, logger)
     args = check_and_load_args(args, parser)
     create_output_dirs(args)
@@ -1078,4 +1108,4 @@ if __name__ == "__main__":
             sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
                              "https://github.com/ablab/IsoQuant/issues\n")
             print_exc()
-        sys.exit(-1)
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

@@ -49,13 +49,15 @@ def test_clean_start():
     assert result.returncode == 0
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
+    # Note: corrected_reads.bed.gz and transcript_model_reads.tsv.gz are only generated
+    # with --large_output corrected_bed read2transcripts (not in default)
     resulting_files = ["exon_counts.tsv", "exon_grouped_file0_col1_counts.linear.tsv",
                        "gene_counts.tsv", "gene_grouped_file0_col1_counts.tsv",
                        "intron_counts.tsv", "intron_grouped_file0_col1_counts.linear.tsv",
-                       "corrected_reads.bed.gz", "read_assignments.tsv.gz",
+                       "read_assignments.tsv.gz",
                        "novel_vs_known.SQANTI-like.tsv",
                        "transcript_counts.tsv", "transcript_grouped_file0_col1_counts.tsv",
-                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz",
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf",
                        "discovered_transcript_tpm.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
@@ -81,7 +83,7 @@ def test_usual_start():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["gene_counts.tsv", "read_assignments.tsv.gz", "transcript_counts.tsv",
-                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
@@ -107,14 +109,14 @@ def test_with_bam_and_polya():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["exon_counts.tsv", "gene_counts.tsv",
-                       "intron_counts.tsv", "corrected_reads.bed.gz", "read_assignments.tsv.gz",
+                       "intron_counts.tsv", "read_assignments.tsv.gz",
                        "novel_vs_known.SQANTI-like.tsv",
                        "transcript_counts.tsv",
-                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
-        
-        
+
+
 def test_with_illumina():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
@@ -136,12 +138,12 @@ def test_with_illumina():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["gene_counts.tsv",
-                       "corrected_reads.bed.gz", "read_assignments.tsv.gz",
+                       "read_assignments.tsv.gz",
                        "transcript_counts.tsv",
-                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
-        
+
 def test_with_yaml():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
@@ -161,9 +163,9 @@ def test_with_yaml():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["gene_counts.tsv",
-                       "corrected_reads.bed.gz", "read_assignments.tsv.gz",
+                       "read_assignments.tsv.gz",
                        "transcript_counts.tsv",
-                       "discovered_transcript_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
