@@ -145,7 +145,8 @@ def parse_args(cmd_args=None, namespace=None):
                                        "file:FILE:READ_COL:GROUP_COL(S):DELIM (TSV file, use comma-separated columns for multi-column grouping, e.g., file:table.tsv:0:1,2,3), "
                                        "read_id:DELIM (read ID suffix), "
                                        "file_name (original filename), "
-                                       "barcode_spot[:FILE] (map barcodes to spots/cell types using --barcode2spot or explicit file); "
+                                       "barcode_spot (map barcodes to spots/cell types using --barcode2spot), "
+                                       "barcode (group by barcode from --barcoded_reads); "
                                        "example: --read_group tag:CB file_name barcode_spot")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
@@ -665,6 +666,13 @@ def set_data_dependent_options(args):
             # Read grouping specified, ensure file_name is included
             if "file_name" not in args.read_group:
                 args.read_group.append("file_name")
+
+    # Automatically add barcode_spot grouping when --barcode2spot is set
+    if hasattr(args, 'barcode2spot') and args.barcode2spot:
+        if args.read_group is None:
+            args.read_group = ["barcode_spot"]
+        elif "barcode_spot" not in args.read_group:
+            args.read_group.append("barcode_spot")
 
 
 def set_matching_options(args):
