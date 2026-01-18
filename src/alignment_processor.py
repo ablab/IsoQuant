@@ -393,12 +393,13 @@ class AlignmentCollector:
             read_assignment.corrected_exons = corrector.correct_read(alignment_info)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
 
-            group_ids = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
-            # Ensure read_group is always a list
-            read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
-            # Populate barcode and UMI if available
+            # Populate barcode and UMI first (needed by some groupers)
             if read_id in self.barcode_dict:
                 read_assignment.barcode, read_assignment.umi = self.barcode_dict[read_id]
+            # Get group ID(s) - pass read_assignment for groupers that need barcode
+            group_ids = self.read_groupper.get_group_id(alignment, read_assignment, self.bam_merger.bam_pairs[bam_index][1])
+            # Ensure read_group is always a list
+            read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             read_assignment.chr_id = self.chr_id
@@ -463,12 +464,13 @@ class AlignmentCollector:
                                                                                    read_assignment)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
 
-            group_ids = self.read_groupper.get_group_id(alignment, self.bam_merger.bam_pairs[bam_index][1])
-            # Ensure read_group is always a list
-            read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
-            # Populate barcode and UMI if available
+            # Populate barcode and UMI first (needed by some groupers)
             if read_id in self.barcode_dict:
                 read_assignment.barcode, read_assignment.umi = self.barcode_dict[read_id]
+            # Get group ID(s) - pass read_assignment for groupers that need barcode
+            group_ids = self.read_groupper.get_group_id(alignment, read_assignment, self.bam_merger.bam_pairs[bam_index][1])
+            # Ensure read_group is always a list
+            read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
             read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             AlignmentCollector.check_antisense(read_assignment)
