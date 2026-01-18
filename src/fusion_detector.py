@@ -482,11 +482,19 @@ class FusionDetector:
             logger.debug(f"Failed to realign fusion transcript: {str(e)}")
             return []
 
+    @lru_cache(maxsize=200000)
+    def _get_nearby_exons(self, chrom, start, end):
+        # Cached query for exons in a region
+        try:
+            return tuple(list(self.db.region(region=(chrom, start, end), featuretype='exon')))
+        except Exception:
+            return ()
+
     def check_exon_boundary_proximity(self, c1, p1, c2, p2, delta=100):
         # Check if both breakpoints are within delta bp of exon boundaries.
         try:
             # Check left breakpoint proximity to exons
-            left_exons = list(self.db.region(region=(c1, max(1, p1 - delta), p1 + delta), featuretype='exon'))
+            left_exons = self._get_nearby_exons(c1, max(1, p1 - delta), p1 + delta)
             left_valid = False
             for exon in left_exons:
                 # Check if breakpoint is near exon start or end
@@ -494,7 +502,7 @@ class FusionDetector:
                     left_valid = True
                     break
             # Check right breakpoint proximity to exons
-            right_exons = list(self.db.region(region=(c2, max(1, p2 - delta), p2 + delta), featuretype='exon'))
+            right_exons = self._get_nearby_exons(c2, max(1, p2 - delta), p2 + delta)
             right_valid = False
             for exon in right_exons:
                 # Check if breakpoint is near exon start or end
@@ -613,6 +621,9 @@ class FusionDetector:
             # compare resolved gene symbols for intragenic check
             if self.resolve_gene_name(g1_name) == self.resolve_gene_name(g2_name):
                 flags["class"] = "intragenic"
+                # Filter out intragenic fusions (same gene on both sides)
+                flags["is_valid"] = False
+                flags["reasons"].append(f"Intragenic fusion: both sides map to {self.resolve_gene_name(g1_name)}")
             else:
                 if c1 == c2 and max_intra_chr_distance is not None:
                     dist = abs(p2 - p1)
@@ -657,8 +668,9 @@ class FusionDetector:
             except Exception:
                 meta["best_hit_mapq"] = 0
 
+    @lru_cache(maxsize=50000)
     def _find_nearby_protein_coding(self, chrom, pos, window=500):
-        """Search for a nearby protein-coding gene within +/- window and return its gene_name if found."""
+        # Search for a nearby protein-coding gene within +/- window and return its gene_name if found.
         try:
             start = max(1, pos - window)
             end = pos + window
@@ -713,5 +725,10 @@ class FusionDetector:
                 left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
                 left_gene = self.resolve_gene_name(meta.get("left_gene") or self.get_context(left_chr, left_pos))
                 right_gene = self.resolve_gene_name(meta.get("right_gene") or self.get_context(right_chr, right_pos))
+                # Skip intragenic fusions (same gene on both sides)
+                if left_gene == right_gene:
+                    continue
+                # Create fusion name using resolved gene names
+                fusion_name = f"{left_gene}-{right_gene}"
                 reasons = ";".join(meta.get("reasons", []))
-                f.write(f"{left_gene}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_key}\t{meta.get('class')}\t{meta.get('is_valid')}\t{reasons}\n")
+                f.write(f"{left_gene}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t{meta.get('is_valid')}\t{reasons}\n")
