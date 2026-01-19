@@ -8,9 +8,12 @@
 import logging
 import gzip
 import os
+import sys
+
 import pysam
 from collections import defaultdict
 
+from .error_codes import IsoQuantExitCode
 from .table_splitter import split_read_table_parallel
 
 
@@ -110,7 +113,7 @@ class BarcodeSpotGrouper(AbstractReadGrouper):
             logger.debug(f"Reading barcode-to-spot mapping from {barcode2spot_file}")
             self.barcode_to_spot.update(load_table(barcode2spot_file, 0, 1, '\t'))
 
-        logger.info(f"Loaded {len(self.barcode_to_spot)} barcode-spot mappings")
+        logger.debug(f"Loaded {len(self.barcode_to_spot)} barcode-spot mappings")
 
     def get_group_id(self, alignment, read_assignment=None, filename=None):
         """Map read to spot via barcode from read_assignment"""
@@ -327,18 +330,18 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
         # Always uses --barcode2spot files (no inline file specification)
         if not hasattr(args, 'barcode2spot') or not args.barcode2spot:
             logger.critical("barcode_spot grouping requires --barcode2spot")
-            return None
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
         if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
             logger.critical("barcode_spot grouping requires barcoded reads (use --barcoded_reads)")
-            return None
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
         return BarcodeSpotGrouper(args.barcode2spot)
     elif values[0] == 'barcode':
         # Direct barcode grouping - uses barcode from read_assignment
         if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
             logger.critical("barcode grouping requires barcoded reads (use --barcoded_reads)")
-            return None
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
         return BarcodeGrouper()
     elif values[0] == 'tag':
@@ -352,7 +355,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
         # group_cols can be comma-separated like "1,2,3"
         if len(values) < 2:
             logger.critical("group specification %s is too short, specifiy at least a file name" % spec_string)
-            return None
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
         read_id_column_index = int(values[2]) if len(values) > 2 else 0
         delim = values[4] if len(values) > 4 else '\t'
@@ -385,7 +388,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             return ReadTableGrouper(shared_data, 0)
     else:
         logger.critical("Unsupported read grouping option: %s" % values[0])
-        return None
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
 
 def create_read_grouper(args, sample, chr_id):
