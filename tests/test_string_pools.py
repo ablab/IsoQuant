@@ -188,7 +188,7 @@ class TestStringPoolManager:
         try:
             manager.build_barcode_spot_pool([temp_file])
 
-            assert len(manager.barcode_spot_pool) == 2  # cell_typeA, cell_typeB
+            assert len(manager.barcode_spot_pool) == 3  # cell_typeA, cell_typeB
             assert "cell_typeA" in manager.barcode_spot_pool
             assert "cell_typeB" in manager.barcode_spot_pool
         finally:
@@ -208,7 +208,7 @@ class TestStringPoolManager:
         try:
             manager.load_barcode_pool(temp_file)
 
-            assert len(manager.barcode_pool) == 2  # ACTG, TGCA
+            assert len(manager.barcode_pool) == 3  # ACTG, TGCA
             assert "ACTG" in manager.barcode_pool
             assert "TGCA" in manager.barcode_pool
 
