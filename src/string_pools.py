@@ -31,8 +31,15 @@ Implementation Details:
 - Per-worker pools ensure no sharing/locking between parallel workers
 """
 
+import os
+import glob
+import re
 import logging
-from typing import Optional, List, Dict
+from typing import List, Dict
+
+from .read_groups import AbstractReadGrouper, get_grouping_pool_types
+from .assignment_loader import load_genedb
+from .serialization import write_int, write_string, read_int, read_string
 
 logger = logging.getLogger('IsoQuant')
 
@@ -218,7 +225,6 @@ class StringPoolManager:
         Args:
             sample: Sample object with file_list and readable_names_dict attributes
         """
-        import os
         # Collect all file names first
         file_names = set()
 
@@ -274,7 +280,6 @@ class StringPoolManager:
             barcode_file: Path to split barcode file for chromosome
                          Format: read_id\tbarcode\tumi
         """
-        import os
         if not os.path.exists(barcode_file):
             logger.debug(f"Barcode file not found: {barcode_file}")
             return
@@ -314,14 +319,12 @@ class StringPoolManager:
             col_index: Column index to read group values from (1-based, default 1)
             delimiter: Field delimiter (from file spec, defaults to tab)
         """
-        import os
         if not os.path.exists(read_group_file):
             logger.debug(f"Read group file not found: {read_group_file}")
             return
 
         # Collect all group values first
         # Always include 'NA' (default group ID) in case some reads are not in the TSV file
-        from .read_groups import AbstractReadGrouper
         group_values = {AbstractReadGrouper.default_group_id}
         with open(read_group_file, 'r') as f:
             for line in f:
@@ -463,7 +466,6 @@ class StringPoolManager:
                 for each string:
                     string (length-prefixed)
         """
-        from .serialization import write_int, write_string
 
         # Only serialize non-empty dynamic pools
         non_empty_pools = {idx: pool for idx, pool in self.read_group_dynamic_pools.items()
@@ -484,8 +486,6 @@ class StringPoolManager:
 
         Rebuilds pools with same ID mappings as when serialized.
         """
-        from .serialization import read_int, read_string
-
         num_specs = read_int(infile)
         for _ in range(num_specs):
             spec_index = read_int(infile)
@@ -536,10 +536,6 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
     Returns:
         StringPoolManager with pools configured
     """
-    import glob
-    import re
-    from .read_groups import get_grouping_pool_types
-    from .assignment_loader import load_genedb
 
     string_pools = StringPoolManager()
 
