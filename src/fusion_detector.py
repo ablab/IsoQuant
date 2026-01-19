@@ -10,6 +10,7 @@ import numpy as np
 
 
 logger = logging.getLogger('IsoQuant')
+ANTISENSE_SUFFIX_RE = re.compile(r"-(AS\d+|DT|DIVERGENT|NAT)$", re.IGNORECASE)
 
 class FusionDetector:
     def __init__(self, bam_path, gene_db_path, reference_fasta):
@@ -171,8 +172,10 @@ class FusionDetector:
         except Exception:
             return None
 
-    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
-        fusion_key = "--".join(sorted([context1, context2]))
+    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):        
+        c1 = self.canonical_locus_name(context1)
+        c2 = self.canonical_locus_name(context2)
+        fusion_key = "--".join(sorted([c1, c2]))
         self.fusion_candidates[fusion_key].add(read_name)
         bp = (chrom1, int(pos1), chrom2, int(pos2))
         self.fusion_breakpoints[fusion_key][bp] += 1
@@ -327,6 +330,8 @@ class FusionDetector:
             return
         left_context = self.get_context(left_chr, left_pos)
         right_context = self.get_context(sa_chr, right_pos)
+        left_context  = self.canonical_locus_name(left_context)
+        right_context = self.canonical_locus_name(right_context)
         if left_context != right_context:
             self.record_fusion(left_context, right_context, read.query_name,
                             left_chr, left_pos, sa_chr, right_pos)
@@ -619,11 +624,12 @@ class FusionDetector:
         # classify
         if g1_name and g2_name:
             # compare resolved gene symbols for intragenic check
-            if self.resolve_gene_name(g1_name) == self.resolve_gene_name(g2_name):
+            g1 = self.canonical_locus_name(self.resolve_gene_name(g1_name))
+            g2 = self.canonical_locus_name(self.resolve_gene_name(g2_name))
+            if g1 == g2:
                 flags["class"] = "intragenic"
-                # Filter out intragenic fusions (same gene on both sides)
                 flags["is_valid"] = False
-                flags["reasons"].append(f"Intragenic fusion: both sides map to {self.resolve_gene_name(g1_name)}")
+                flags["reasons"].append(f"Intralocus (antisense/divergent) event at {g1}")
             else:
                 if c1 == c2 and max_intra_chr_distance is not None:
                     dist = abs(p2 - p1)
@@ -705,10 +711,19 @@ class FusionDetector:
         if meta.get("class") == "intergenic":
             penalties += 0.1
         conf = max(0.0, min(1.0, support + recon + realign - penalties))
-        return conf
+        return conf  
+
+    def canonical_locus_name(self, gene_name):
+        # Collapse antisense / divergent transcript names to the canonical locus name.
+        if not gene_name:
+            return gene_name
+        # Strip common antisense / divergent suffixes
+        collapsed = ANTISENSE_SUFFIX_RE.sub("", gene_name)
+        return collapsed
+
 
     def report(self, output_path="fusion_candidates.tsv", min_support=2,
-            include_classes=("canonical","cis-SAGe","intragenic"),
+            include_classes=("canonical","cis-SAGe"),
             min_confidence=0.3, only_valid=False):
         self.validate_candidates(min_support=min_support)
         with open(output_path, "w") as f:
