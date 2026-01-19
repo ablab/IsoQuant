@@ -241,9 +241,6 @@ class StringPoolManager:
                 readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
                 file_names.add(readable_name)
 
-        # Add default group ID for reads without filename info
-        file_names.add(AbstractReadGrouper.default_group_id)
-
         # Add in sorted order for deterministic IDs
         for name in sorted(file_names):
             self.file_name_pool.add(name)
