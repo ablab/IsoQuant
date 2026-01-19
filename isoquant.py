@@ -146,8 +146,7 @@ def parse_args(cmd_args=None, namespace=None):
                                        "read_id:DELIM (read ID suffix), "
                                        "file_name (original filename), "
                                        "barcode_spot (map barcodes to spots/cell types using --barcode2spot), "
-                                       "barcode (group by barcode from --barcoded_reads); "
-                                       "example: --read_group tag:CB file_name barcode_spot")
+                                       "barcode (group by barcode from --barcoded_reads)")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
                                    help="reuse read assignments (binary format)", default=None)
@@ -168,16 +167,16 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
                                         "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
     add_additional_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
-                                   help='file with barcode whitelist for barcode calling')
+                                   help='file(s) with barcode whitelist for barcode calling')
     add_additional_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
-                                   help='TSV file with barcoded reads; barcodes will be called automatically if not provided')
+                                   help='TSV file(s) with barcoded reads; barcodes will be called automatically if not provided')
     # TODO: add UMI column, support various formats
     add_additional_option_to_group(sc_args_group, "--barcode_column", type=str,
                                    help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
                                    default=1)
     # TODO: add multiple columns
     add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str, nargs='+',
-                                   help='TSV file barcode to cell type / spot id information')
+                                   help='TSV file(s) barcode to cell type / spot id information')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
