@@ -221,6 +221,7 @@ class StringPoolManager:
         Uses same logic as FileNameGrouper: uses readable_names_dict (labels)
         if available, otherwise uses basename without extension.
         Pool is built in sorted order for deterministic IDs across workers.
+        Also includes 'NA' for reads without filename info.
 
         Args:
             sample: Sample object with file_list and readable_names_dict attributes
@@ -240,6 +241,9 @@ class StringPoolManager:
                 readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
                 file_names.add(readable_name)
 
+        # Add default group ID for reads without filename info
+        file_names.add(AbstractReadGrouper.default_group_id)
+
         # Add in sorted order for deterministic IDs
         for name in sorted(file_names):
             self.file_name_pool.add(name)
@@ -250,6 +254,7 @@ class StringPoolManager:
         Build barcode-to-spot pool from mapping files.
 
         Pool is built in sorted order for deterministic IDs across workers.
+        Also includes 'NA' for reads without barcode mapping.
 
         Args:
             barcode2spot_files: List of TSV files mapping barcode -> spot/cell_type
@@ -265,6 +270,8 @@ class StringPoolManager:
                     parts = line.split('\t')
                     if len(parts) >= 2:
                         spots.add(parts[1])
+        # Add default group ID for reads without barcode mapping
+        spots.add(AbstractReadGrouper.default_group_id)
         # Add in sorted order for deterministic IDs
         for spot in sorted(spots):
             self.barcode_spot_pool.add(spot)
@@ -275,6 +282,7 @@ class StringPoolManager:
         Load barcode pool from split barcode file.
 
         Pool is built in sorted order for deterministic IDs across workers.
+        Also includes 'NA' for reads without barcode.
 
         Args:
             barcode_file: Path to split barcode file for chromosome
@@ -297,6 +305,9 @@ class StringPoolManager:
                     barcodes.add(parts[1])
                 if len(parts) >= 3 and parts[2]:
                     umis.add(parts[2])
+
+        # Add default group ID for reads without barcode
+        barcodes.add(AbstractReadGrouper.default_group_id)
 
         # Add in sorted order for deterministic IDs
         for barcode in sorted(barcodes):
@@ -375,6 +386,9 @@ class StringPoolManager:
             return self.file_name_pool
         elif pool_type == 'barcode_spot':
             return self.barcode_spot_pool
+        elif pool_type == 'barcode':
+            # Use barcode pool for direct barcode grouping
+            return self.barcode_pool
         elif pool_type.startswith('tsv:'):
             # Extract pool_key from 'tsv:SPEC_INDEX:COL_INDEX:DELIMITER'
             # pool_key format is 'SPEC_INDEX:COL_INDEX'

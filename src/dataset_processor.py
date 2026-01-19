@@ -148,11 +148,14 @@ class DatasetProcessor:
             prepare_read_groups(self.args, sample)
             open(fname, "w").close()
 
+        # Initialize for later cleanup (after process_assigned_reads)
+        split_barcodes_dict = {}
+        barcode_split_done = None
+
         if self.args.mode.needs_pcr_deduplication():
             if self.args.barcoded_reads:
                 sample.barcoded_reads = self.args.barcoded_reads
 
-            split_barcodes_dict = {}
             for chr_id in self.get_chr_list():
                 split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
             barcode_split_done = split_barcodes_lock_filename(sample)
@@ -180,12 +183,6 @@ class DatasetProcessor:
 
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
-        if self.args.mode.needs_pcr_deduplication():
-            # move clean-up somewhere else
-            for bc_split_file in split_barcodes_dict.values():
-                os.remove(bc_split_file)
-            os.remove(barcode_split_done)
-
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_assignments, polya_found, polya_fraction * 100.0))
@@ -207,6 +204,15 @@ class DatasetProcessor:
             self.args.polya_requirement_strategy)
 
         self.process_assigned_reads(sample, saves_file)
+
+        # Clean up split barcode files after all processing is done
+        if split_barcodes_dict:
+            for bc_split_file in split_barcodes_dict.values():
+                if os.path.exists(bc_split_file):
+                    os.remove(bc_split_file)
+        if barcode_split_done and os.path.exists(barcode_split_done):
+            os.remove(barcode_split_done)
+
         logger.info("Processed experiment " + sample.prefix)
 
     def keep_only_defined_chromosomes(self, chr_set: set):

@@ -472,6 +472,10 @@ def get_grouping_pool_types(args) -> dict:
         elif spec_type == 'barcode_spot':
             pool_types[grouper_index] = 'barcode_spot'
             grouper_index += 1
+        elif spec_type == 'barcode':
+            # Barcode grouper uses the barcode pool (loaded per-chromosome)
+            pool_types[grouper_index] = 'barcode'
+            grouper_index += 1
         elif spec_type in ['tag', 'read_id']:
             # BAM tags and read_id suffixes are discovered dynamically
             pool_types[grouper_index] = 'dynamic'

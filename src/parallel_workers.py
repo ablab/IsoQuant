@@ -195,15 +195,20 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
 
 
 def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, read_groups):
+    from .read_groups import get_grouping_pool_types
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
     # Derive read_group_file prefix from saves_prefix
     read_group_file_prefix = read_group_file_from_saves(saves_prefix)
 
+    # Check if barcode pool is needed for any grouper
+    pool_types = get_grouping_pool_types(args)
+    needs_barcode_pool = any(pt == 'barcode' for pt in pool_types.values())
+
     # Build string pools for memory optimization
     string_pools = setup_string_pools(args, sample, chr_ids, chr_id,
-                                      load_barcode_pool=False, load_tsv_pools=True,
+                                      load_barcode_pool=needs_barcode_pool, load_tsv_pools=True,
                                       read_group_file_prefix=read_group_file_prefix)
 
     # Load dynamic pools (for read groups from BAM tags/read IDs)
