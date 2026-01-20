@@ -238,36 +238,33 @@ class CompositeCounter:
 # count meta-features assigned to reads (genes or isoforms)
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, assignment_extractor, read_groups, read_counter,
+    def __init__(self, output_prefix, assignment_extractor, string_pools, read_counter,
                  all_features=None, group_index: int = 0):
-        AbstractCounter.__init__(self, output_prefix, not read_groups)
+        AbstractCounter.__init__(self, output_prefix, string_pools is None)
         self.assignment_extractor = assignment_extractor
+        self.string_pools = string_pools
         self.all_features = set(all_features) if all_features is not None else set()
         self.group_index = group_index  # Index in read_group list to use
-        if not read_groups:
-            self.group_numeric_ids = {AbstractReadGrouper.default_group_id: 0}
-            self.ordered_groups = [AbstractReadGrouper.default_group_id]
-        else:
-            self.group_numeric_ids = {}
-            self.ordered_groups = sorted(read_groups)
-            if self.ordered_groups:
-                for i, g in enumerate(self.ordered_groups):
-                    self.group_numeric_ids[g] = i
         self.read_counter = read_counter
 
         self.ambiguous_reads = 0
         self.reads_for_tpm = defaultdict(int)
         self.not_assigned_reads = 0
         self.not_aligned_reads = 0
-        # feature_id -> (group_id -> count)
+        # feature_id -> (group_id -> count)  -- group_id is now an integer pool index
         self.feature_counter = defaultdict(IncrementalDict)
         self.confirmed_features = set()
         self.output_stats_file_name = counts_stats_file_name(self.output_counts_file_name)
         self.usable_file_name = counts_usable_file_name(self.output_counts_file_name)
 
     def add_read_info(self, read_assignment=None):
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[self.group_index]
-        group_id = self.group_numeric_ids[group_id]
+        # Use read_group_ids directly (integers) instead of string conversion
+        if self.ignore_read_groups:
+            group_id = 0  # Default group index
+        elif not read_assignment.read_group_ids:
+            group_id = 0
+        else:
+            group_id = read_assignment.read_group_ids[self.group_index]
 
         if not read_assignment:
             self.not_aligned_reads += 1
@@ -309,11 +306,11 @@ class AssignedFeatureCounter(AbstractCounter):
                 self.confirmed_features.add(feature_id)
 
     def add_read_info_raw(self, read_id, feature_ids, group_ids):
+        # group_ids is now a list of integers (pool indices)
         if self.ignore_read_groups or group_ids is None:
-            group_id = AbstractReadGrouper.default_group_id
+            group_id = 0  # Default group index
         else:
             group_id = group_ids[self.group_index]
-        group_id = self.group_numeric_ids[group_id]
         if not read_id:
             self.not_aligned_reads += 1
         elif not feature_ids:
@@ -332,8 +329,13 @@ class AssignedFeatureCounter(AbstractCounter):
             self.reads_for_tpm[group_id] += 1
 
     def add_unassigned(self, read_assignment):
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[self.group_index]
-        group_id = self.group_numeric_ids[group_id]
+        # Use read_group_ids directly (integers)
+        if self.ignore_read_groups:
+            group_id = 0
+        elif not read_assignment.read_group_ids:
+            group_id = 0
+        else:
+            group_id = read_assignment.read_group_ids[self.group_index]
         self.not_assigned_reads += 1
         self.reads_for_tpm[group_id] += 1
 
@@ -365,10 +367,31 @@ class AssignedFeatureCounter(AbstractCounter):
             self.dump_grouped(all_features)
         self.dump_usable()
 
+    def _get_ordered_groups(self):
+        """Get ordered list of group names from string pool."""
+        if self.string_pools is None:
+            return [AbstractReadGrouper.default_group_id]
+        pool = self.string_pools.get_read_group_pool(self.group_index)
+        return [pool.get_str(i) for i in range(len(pool))]
+
+    def _get_group_name(self, group_id: int) -> str:
+        """Get group name from pool for a group ID."""
+        if self.string_pools is None:
+            return AbstractReadGrouper.default_group_id
+        pool = self.string_pools.get_read_group_pool(self.group_index)
+        return pool.get_str(group_id)
+
+    def _get_num_groups(self) -> int:
+        """Get number of groups from pool."""
+        if self.string_pools is None:
+            return 1
+        pool = self.string_pools.get_read_group_pool(self.group_index)
+        return len(pool)
+
     def dump_ungrouped(self, all_features):
         with self.get_output_file_handler() as output_file:
-            default_group_id = list(self.group_numeric_ids.values())[0]
-            output_file.write(self.format_header(self.ordered_groups))
+            default_group_id = 0  # Default group index
+            output_file.write(self.format_header(self._get_ordered_groups()))
             for feature_id in all_features:
                 count = self.feature_counter[feature_id].get(default_group_id)
                 output_file.write("%s\t%.2f\n" % (feature_id, count))
@@ -386,19 +409,32 @@ class AssignedFeatureCounter(AbstractCounter):
                 for group_id in self.feature_counter[feature_id].data.keys():
                     count = self.feature_counter[feature_id].data[group_id]
                     if count != 0:
-                        output_file.write("%s\t%s\t%.2f\n" % (feature_id, self.ordered_groups[group_id], count))
+                        group_name = self._get_group_name(group_id)
+                        output_file.write("%s\t%s\t%.2f\n" % (feature_id, group_name, count))
                     row_count += count
             output_file.close()
 
     def dump_usable(self):
         with open(self.usable_file_name, "w") as f:
-            for g in self.group_numeric_ids.keys():
-                f.write("%s\t%d\n" % (g, self.reads_for_tpm[self.group_numeric_ids[g]]))
+            # Iterate over all groups in pool order
+            for group_id in range(self._get_num_groups()):
+                group_name = self._get_group_name(group_id)
+                f.write("%s\t%d\n" % (group_name, self.reads_for_tpm[group_id]))
 
     def load_usable(self, usable_file_name):
-        for l in open(usable_file_name, "r"):
-            v = l.strip().split('\t')
-            self.reads_for_tpm[self.group_numeric_ids[v[0]]] += int(v[1])
+        if self.string_pools is None:
+            # Ungrouped: just load into default group
+            for l in open(usable_file_name, "r"):
+                v = l.strip().split('\t')
+                self.reads_for_tpm[0] += int(v[1])
+        else:
+            pool = self.string_pools.get_read_group_pool(self.group_index)
+            for l in open(usable_file_name, "r"):
+                v = l.strip().split('\t')
+                group_name = v[0]
+                if group_name in pool.str_to_int:
+                    group_id = pool.str_to_int[group_name]
+                    self.reads_for_tpm[group_id] += int(v[1])
 
     def finalize(self, args=None):
         if not args:
@@ -413,43 +449,44 @@ class AssignedFeatureCounter(AbstractCounter):
             if normalization_method == NormalizationMethod.none:
                 return
             convert_ungrouped_to_tpm(self.output_file, self.output_tpm_file_name,
-                                     normalization_method, self.reads_for_tpm[AbstractReadGrouper.default_group_id])
+                                     normalization_method, self.reads_for_tpm[0])  # Default group index is 0
             return
 
+        num_groups = self._get_num_groups()
         counts_format = {GroupedOutputFormat[f] for f in args.counts_format}
         if (GroupedOutputFormat.matrix in counts_format or
-                (GroupedOutputFormat.default in counts_format and len(self.ordered_groups) <= GROUP_COUNT_CUTOFF)):
+                (GroupedOutputFormat.default in counts_format and num_groups <= GROUP_COUNT_CUTOFF)):
             convert_to_matrix(self.output_file, self.output_counts_prefix)
             if normalization_method != NormalizationMethod.none:
                 reads_for_tpm = None
                 if normalization_method == NormalizationMethod.usable_reads:
-                    reads_for_tpm = {self.ordered_groups[group_id]: self.reads_for_tpm[group_id] for group_id in
-                                     self.group_numeric_ids.values()}
+                    reads_for_tpm = {self._get_group_name(group_id): self.reads_for_tpm[group_id]
+                                     for group_id in range(num_groups)}
                 convert_to_matrix(self.output_file, self.output_tpm_prefix,
                                   convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
 
         if (GroupedOutputFormat.mtx in counts_format or
-                (GroupedOutputFormat.default in counts_format and len(self.ordered_groups) > GROUP_COUNT_CUTOFF)):
+                (GroupedOutputFormat.default in counts_format and num_groups > GROUP_COUNT_CUTOFF)):
             convert_to_mtx(self.output_file, self.output_counts_prefix)
             if normalization_method != NormalizationMethod.none:
                 reads_for_tpm = None
                 if normalization_method == NormalizationMethod.usable_reads:
-                    reads_for_tpm = {self.ordered_groups[group_id]: self.reads_for_tpm[group_id] for group_id in
-                                     self.group_numeric_ids.values()}
+                    reads_for_tpm = {self._get_group_name(group_id): self.reads_for_tpm[group_id]
+                                     for group_id in range(num_groups)}
                 convert_to_mtx(self.output_file, self.output_tpm_prefix,
                                convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
 
-def create_gene_counter(output_file_name, strategy, complete_feature_list=None, read_groups=None, group_index: int = 0):
+def create_gene_counter(output_file_name, strategy, complete_feature_list=None, string_pools=None, group_index: int = 0):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
-                                  read_groups, read_weight_counter, complete_feature_list, group_index)
+                                  string_pools, read_weight_counter, complete_feature_list, group_index)
 
 
 def create_transcript_counter(output_file_name, strategy, complete_feature_list=None,
-                              read_groups=None, group_index: int = 0):
+                              string_pools=None, group_index: int = 0):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
-                                  read_groups, read_weight_counter, complete_feature_list, group_index)
+                                  string_pools, read_weight_counter, complete_feature_list, group_index)
 
 
 @unique
@@ -497,26 +534,22 @@ def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalizati
 
 # count simple features inclusion/exclusion (exons / introns)
 class ProfileFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, ignore_read_groups=False, group_index: int = 0):
-        AbstractCounter.__init__(self, output_prefix, ignore_read_groups)
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
+        AbstractCounter.__init__(self, output_prefix, string_pools is None)
+        self.string_pools = string_pools
         self.group_index = group_index  # Index in read_group list to use
-        # feature_id -> (group_id -> count)
+        # feature_id -> (group_id -> count)  -- group_id is now an integer pool index
         self.inclusion_feature_counter = defaultdict(lambda: IncrementalDict(int))
         self.exclusion_feature_counter = defaultdict(lambda: IncrementalDict(int))
         self.feature_name_dict = OrderedDict()
-        if ignore_read_groups:
-            self.group_numeric_ids = {AbstractReadGrouper.default_group_id: 0}
-        else:
-            self.group_numeric_ids = {}
-        self.current_group_id = 1
+        # Track which group IDs have been encountered (for dump)
+        self.encountered_group_ids = set()
 
     def add_read_info_from_profile(self, gene_feature_profile, read_assigned_strand, feature_property_map,
-                                   read_group = AbstractReadGrouper.default_group_id):
-        if read_group not in self.group_numeric_ids:
-            self.group_numeric_ids[read_group] = self.current_group_id
-            self.current_group_id += 1
+                                   group_id: int = 0):
+        """Process feature profile. group_id is an integer pool index."""
+        self.encountered_group_ids.add(group_id)
 
-        group_id = self.group_numeric_ids[read_group]
         for i in range(len(gene_feature_profile)):
             if read_assigned_strand not in feature_property_map[i].strand:
                 # skip features that do not match read's strand
@@ -532,15 +565,22 @@ class ProfileFeatureCounter(AbstractCounter):
                 if feature_id not in self.feature_name_dict:
                     self.feature_name_dict[feature_id] = feature_property_map[i].to_str()
 
+    def _get_group_name(self, group_id: int) -> str:
+        """Get group name from pool for a group ID."""
+        if self.string_pools is None:
+            return AbstractReadGrouper.default_group_id
+        pool = self.string_pools.get_read_group_pool(self.group_index)
+        return pool.get_str(group_id)
+
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
             f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
 
-            all_groups = sorted(self.group_numeric_ids.keys())
+            all_group_ids = sorted(self.encountered_group_ids)
             for feature_id in self.feature_name_dict.keys():
-                for group_name in all_groups:
+                for group_id in all_group_ids:
                     feature_name = self.feature_name_dict[feature_id]
-                    group_id = self.group_numeric_ids[group_name]
+                    group_name = self._get_group_name(group_id)
                     incl_count = self.inclusion_feature_counter[feature_id].get(group_id)
                     excl_count = self.exclusion_feature_counter[feature_id].get(group_id)
                     if incl_count > 0 or excl_count > 0:
@@ -562,25 +602,37 @@ class ProfileFeatureCounter(AbstractCounter):
 
 
 class ExonCounter(ProfileFeatureCounter):
-    def __init__(self, output_prefix, ignore_read_groups=False, group_index: int = 0):
-        ProfileFeatureCounter.__init__(self, output_prefix, ignore_read_groups, group_index)
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
 
     def add_read_info(self, read_assignment):
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[self.group_index]
+        # Use read_group_ids directly (integers)
+        if self.ignore_read_groups:
+            group_id = 0
+        elif not read_assignment.read_group_ids:
+            group_id = 0
+        else:
+            group_id = read_assignment.read_group_ids[self.group_index]
         self.add_read_info_from_profile(read_assignment.exon_gene_profile, read_assignment.strand,
                                         read_assignment.gene_info.exon_property_map, group_id)
 
 
 class IntronCounter(ProfileFeatureCounter):
-    def __init__(self, output_prefix, ignore_read_groups=False, group_index: int = 0):
-        ProfileFeatureCounter.__init__(self, output_prefix, ignore_read_groups, group_index)
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
 
     def add_read_info(self, read_assignment):
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
-        group_id = AbstractReadGrouper.default_group_id if self.ignore_read_groups else read_assignment.read_group[self.group_index]
+        # Use read_group_ids directly (integers)
+        if self.ignore_read_groups:
+            group_id = 0
+        elif not read_assignment.read_group_ids:
+            group_id = 0
+        else:
+            group_id = read_assignment.read_group_ids[self.group_index]
         self.add_read_info_from_profile(read_assignment.intron_gene_profile, read_assignment.strand,
                                         read_assignment.gene_info.intron_property_map, group_id)
 

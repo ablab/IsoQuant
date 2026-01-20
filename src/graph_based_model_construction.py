@@ -162,22 +162,22 @@ class GraphBasedModelConstructor:
             for read_assignment in self.transcript_read_ids[transcript_id]:
                 read_id = read_assignment.read_id
                 if self.read_assignment_counts[read_id] == 1:
-                    # Add to ungrouped counters
-                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group)
-                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group)
+                    # Add to ungrouped counters - use read_group_ids (integers) directly
+                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group_ids)
+                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group_ids)
                     continue
 
                 if read_id not in ambiguous_assignments:
-                    ambiguous_assignments[read_id] = [read_assignment.read_group]
+                    ambiguous_assignments[read_id] = [read_assignment.read_group_ids]
                 ambiguous_assignments[read_id].append(transcript_id)
 
         for read_id in ambiguous_assignments.keys():
-            read_groups = ambiguous_assignments[read_id][0]
+            read_group_ids = ambiguous_assignments[read_id][0]
             transcript_ids = ambiguous_assignments[read_id][1:]
             gene_ids = [transcript2gene[transcript_id] for transcript_id in transcript_ids]
-            # Add to ungrouped counters
-            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, read_groups)
-            self.gene_counter.add_read_info_raw(read_id, gene_ids, read_groups)
+            # Add to ungrouped counters - use read_group_ids (integers) directly
+            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, read_group_ids)
+            self.gene_counter.add_read_info_raw(read_id, gene_ids, read_group_ids)
 
         for r in read_assignments:
             if self.read_assignment_counts[r.read_id] > 0: continue

@@ -38,6 +38,7 @@ from .transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
 from .table_splitter import split_read_table_parallel
 from .assignment_aggregator import ReadAssignmentAggregator
+from .string_pools import setup_string_pools
 from .parallel_workers import (
     collect_reads_in_parallel,
     construct_models_in_parallel,
@@ -368,8 +369,15 @@ class DatasetProcessor:
         logger.info("Transcript models construction is turned %s" %
                     ("off" if self.args.no_model_construction else "on"))
 
+        # Build string pools for the merge phase (to convert group names <-> IDs)
+        # This must match the pools used by parallel workers
+        string_pools = None
+        if self.args.read_group:
+            string_pools = setup_string_pools(self.args, sample, chr_ids, chr_id=None,
+                                              load_barcode_pool=False, load_tsv_pools=False)
+
         # set up aggregators and outputs
-        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped,
+        aggregator = ReadAssignmentAggregator(self.args, sample, string_pools, gzipped=self.args.gzipped,
                                              grouping_strategy_names=self.grouping_strategy_names)
         transcript_stat_counter = EnumStats()
 

@@ -30,9 +30,9 @@ logger = logging.getLogger('IsoQuant')
 
 
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, read_groups, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None):
+    def __init__(self, args, sample, string_pools, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None):
         self.args = args
-        self.read_groups = read_groups
+        self.string_pools = string_pools
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else ["default"]
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
         self.io_support = IOSupport(self.args)
@@ -95,8 +95,9 @@ class ReadAssignmentAggregator:
         if self.args.count_exons and self.args.genedb:
             exon_counts_path = sample.get_exon_counts_file(chr_id) if chr_id else sample.out_exon_counts_tsv
             intron_counts_path = sample.get_intron_counts_file(chr_id) if chr_id else sample.out_intron_counts_tsv
-            self.exon_counter = ExonCounter(exon_counts_path, ignore_read_groups=True)
-            self.intron_counter = IntronCounter(intron_counts_path, ignore_read_groups=True)
+            # string_pools=None means ungrouped counting
+            self.exon_counter = ExonCounter(exon_counts_path)
+            self.intron_counter = IntronCounter(intron_counts_path)
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
         if self.args.read_group and self.args.genedb:
@@ -112,12 +113,12 @@ class ReadAssignmentAggregator:
                 gene_counter = create_gene_counter(gene_out_file,
                                                    self.args.gene_quantification,
                                                    complete_feature_list=self.gene_set,
-                                                   read_groups=self.read_groups[group_idx],
+                                                   string_pools=self.string_pools,
                                                    group_index=group_idx)
                 transcript_counter = create_transcript_counter(transcript_out_file,
                                                               self.args.transcript_quantification,
                                                               complete_feature_list=self.transcript_set,
-                                                              read_groups=self.read_groups[group_idx],
+                                                              string_pools=self.string_pools,
                                                               group_index=group_idx)
 
                 self.global_counter.add_counters([gene_counter, transcript_counter])
@@ -129,8 +130,8 @@ class ReadAssignmentAggregator:
                     else:
                         exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
                         intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
-                    exon_counter = ExonCounter(exon_out_file, group_index=group_idx)
-                    intron_counter = IntronCounter(intron_out_file, group_index=group_idx)
+                    exon_counter = ExonCounter(exon_out_file, string_pools=self.string_pools, group_index=group_idx)
+                    intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx)
                     self.global_counter.add_counters([exon_counter, intron_counter])
 
         if self.args.read_group and not self.args.no_model_construction:
@@ -145,12 +146,12 @@ class ReadAssignmentAggregator:
                 transcript_model_counter = create_transcript_counter(
                     transcript_model_out_file,
                     self.args.transcript_quantification,
-                    read_groups=self.read_groups[group_idx],
+                    string_pools=self.string_pools,
                     group_index=group_idx)
                 gene_model_counter = create_gene_counter(
                     gene_model_out_file,
                     self.args.gene_quantification,
-                    read_groups=self.read_groups[group_idx],
+                    string_pools=self.string_pools,
                     group_index=group_idx)
 
                 self.transcript_model_global_counter.add_counter(transcript_model_counter)
