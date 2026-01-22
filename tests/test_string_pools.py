@@ -186,11 +186,11 @@ class TestStringPoolManager:
             temp_file = f.name
 
         try:
-            manager.build_barcode_spot_pool([temp_file])
+            manager.build_barcode_spot_pool(temp_file, column_index=0, file_column=1)
 
-            assert len(manager.barcode_spot_pool) == 3  # cell_typeA, cell_typeB
-            assert "cell_typeA" in manager.barcode_spot_pool
-            assert "cell_typeB" in manager.barcode_spot_pool
+            assert len(manager.barcode_spot_pools[0]) == 3  # cell_typeA, cell_typeB, NA
+            assert "cell_typeA" in manager.barcode_spot_pools[0]
+            assert "cell_typeB" in manager.barcode_spot_pools[0]
         finally:
             os.unlink(temp_file)
 
@@ -373,17 +373,44 @@ class TestStringPoolManager:
         """Test setting and getting pool type for barcode_spot grouping."""
         manager = StringPoolManager()
 
-        # Set up barcode_spot pool
-        manager.barcode_spot_pool.add("cell_typeA")
-        manager.barcode_spot_pool.add("cell_typeB")
+        # Set up barcode_spot pool at column index 0
+        pool = StringPool()
+        pool.add("cell_typeA")
+        pool.add("cell_typeB")
+        manager.barcode_spot_pools[0] = pool
 
-        # Set pool type for spec index 1
+        # Set pool type for spec index 1 (legacy format)
         manager.set_group_spec_pool_type(1, 'barcode_spot')
 
-        # get_read_group_pool should return barcode_spot_pool
-        pool = manager.get_read_group_pool(1)
-        assert pool is manager.barcode_spot_pool
-        assert "cell_typeA" in pool
+        # get_read_group_pool should return barcode_spot_pools[0]
+        returned_pool = manager.get_read_group_pool(1)
+        assert returned_pool is manager.barcode_spot_pools[0]
+        assert "cell_typeA" in returned_pool
+
+    def test_set_and_get_group_spec_pool_type_barcode_spot_multi_column(self):
+        """Test setting and getting pool type for multi-column barcode_spot grouping."""
+        manager = StringPoolManager()
+
+        # Set up barcode_spot pools for multiple columns
+        pool0 = StringPool()
+        pool0.add("organ_liver")
+        pool0.add("organ_kidney")
+        manager.barcode_spot_pools[0] = pool0
+
+        pool1 = StringPool()
+        pool1.add("cell_hepatocyte")
+        pool1.add("cell_nephron")
+        manager.barcode_spot_pools[1] = pool1
+
+        # Set pool types for spec indices with explicit column format
+        manager.set_group_spec_pool_type(0, 'barcode_spot:0')
+        manager.set_group_spec_pool_type(1, 'barcode_spot:1')
+
+        # get_read_group_pool should return correct pools
+        assert manager.get_read_group_pool(0) is manager.barcode_spot_pools[0]
+        assert manager.get_read_group_pool(1) is manager.barcode_spot_pools[1]
+        assert "organ_liver" in manager.get_read_group_pool(0)
+        assert "cell_hepatocyte" in manager.get_read_group_pool(1)
 
     def test_set_and_get_group_spec_pool_type_tsv(self):
         """Test setting and getting pool type for TSV grouping."""

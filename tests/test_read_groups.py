@@ -353,5 +353,186 @@ class TestParseGroupingSpec:
             shutil.rmtree(temp_dir)
 
 
+class TestParseBarcodeSpotSpec:
+    """Test parse_barcode2spot_spec function."""
+
+    def test_default_columns(self):
+        """Test parsing spec with default columns."""
+        from src.read_groups import parse_barcode2spot_spec
+
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec("my_file.tsv")
+
+        assert filename == "my_file.tsv"
+        assert barcode_col == 0
+        assert spot_cols == [1]
+
+    def test_explicit_single_column(self):
+        """Test parsing spec with explicit single column."""
+        from src.read_groups import parse_barcode2spot_spec
+
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec("my_file.tsv:0:1")
+
+        assert filename == "my_file.tsv"
+        assert barcode_col == 0
+        assert spot_cols == [1]
+
+    def test_explicit_multiple_columns(self):
+        """Test parsing spec with explicit multiple columns."""
+        from src.read_groups import parse_barcode2spot_spec
+
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec("my_file.tsv:0:1,2,3")
+
+        assert filename == "my_file.tsv"
+        assert barcode_col == 0
+        assert spot_cols == [1, 2, 3]
+
+    def test_custom_barcode_column(self):
+        """Test parsing spec with custom barcode column."""
+        from src.read_groups import parse_barcode2spot_spec
+
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec("my_file.tsv:2:3,4")
+
+        assert filename == "my_file.tsv"
+        assert barcode_col == 2
+        assert spot_cols == [3, 4]
+
+
+class TestBarcodeSpotGrouper:
+    """Test BarcodeSpotGrouper class."""
+
+    # Mock read_assignment object
+    class MockReadAssignment:
+        def __init__(self, barcode=None):
+            self.barcode = barcode
+
+    def test_init_and_get_group(self):
+        """Test BarcodeSpotGrouper initialization and grouping."""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
+            f.write("ACTGACTG\tcell_typeA\n")
+            f.write("TGCATGCA\tcell_typeB\n")
+            f.write("GGGGGGGG\tcell_typeA\n")
+            temp_file = f.name
+
+        try:
+            from src.read_groups import SharedTableData, BarcodeSpotGrouper
+
+            # Create shared data (barcode col 0, spot col 1)
+            shared_data = SharedTableData(temp_file,
+                                         read_id_column_index=0,
+                                         group_id_column_indices=[1],
+                                         delim='\t')
+            grouper = BarcodeSpotGrouper(shared_data, column_index=0)
+
+            # Create read assignments with barcodes
+            ra1 = self.MockReadAssignment(barcode="ACTGACTG")
+            ra2 = self.MockReadAssignment(barcode="TGCATGCA")
+            ra3 = self.MockReadAssignment(barcode="GGGGGGGG")
+
+            # Alignment is ignored, barcode comes from read_assignment
+            alignment = MockAlignment()
+
+            assert grouper.get_group_id(alignment, read_assignment=ra1) == "cell_typeA"
+            assert grouper.get_group_id(alignment, read_assignment=ra2) == "cell_typeB"
+            assert grouper.get_group_id(alignment, read_assignment=ra3) == "cell_typeA"
+
+        finally:
+            os.unlink(temp_file)
+
+    def test_missing_barcode(self):
+        """Test getting group when barcode is not in mapping."""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
+            f.write("ACTGACTG\tcell_typeA\n")
+            temp_file = f.name
+
+        try:
+            from src.read_groups import SharedTableData, BarcodeSpotGrouper
+
+            shared_data = SharedTableData(temp_file,
+                                         read_id_column_index=0,
+                                         group_id_column_indices=[1],
+                                         delim='\t')
+            grouper = BarcodeSpotGrouper(shared_data, column_index=0)
+
+            # Unknown barcode
+            ra = self.MockReadAssignment(barcode="ZZZZZZZZ")
+            alignment = MockAlignment()
+
+            result = grouper.get_group_id(alignment, read_assignment=ra)
+            assert result == "NA"
+
+        finally:
+            os.unlink(temp_file)
+
+    def test_no_barcode(self):
+        """Test getting group when read_assignment has no barcode."""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
+            f.write("ACTGACTG\tcell_typeA\n")
+            temp_file = f.name
+
+        try:
+            from src.read_groups import SharedTableData, BarcodeSpotGrouper
+
+            shared_data = SharedTableData(temp_file,
+                                         read_id_column_index=0,
+                                         group_id_column_indices=[1],
+                                         delim='\t')
+            grouper = BarcodeSpotGrouper(shared_data, column_index=0)
+
+            # No barcode
+            ra = self.MockReadAssignment(barcode=None)
+            alignment = MockAlignment()
+
+            result = grouper.get_group_id(alignment, read_assignment=ra)
+            assert result == "NA"
+
+        finally:
+            os.unlink(temp_file)
+
+    def test_multicolumn_barcode_spot(self):
+        """Test BarcodeSpotGrouper with multiple columns."""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
+            f.write("ACTGACTG\torgan_liver\tcell_hepatocyte\tzone_central\n")
+            f.write("TGCATGCA\torgan_kidney\tcell_nephron\tzone_cortex\n")
+            temp_file = f.name
+
+        try:
+            from src.read_groups import SharedTableData, BarcodeSpotGrouper
+
+            # Create shared data with 3 spot columns
+            shared_data = SharedTableData(temp_file,
+                                         read_id_column_index=0,
+                                         group_id_column_indices=[1, 2, 3],
+                                         delim='\t')
+
+            # Create groupers for each column
+            grouper_col0 = BarcodeSpotGrouper(shared_data, column_index=0)
+            grouper_col1 = BarcodeSpotGrouper(shared_data, column_index=1)
+            grouper_col2 = BarcodeSpotGrouper(shared_data, column_index=2)
+
+            ra1 = self.MockReadAssignment(barcode="ACTGACTG")
+            ra2 = self.MockReadAssignment(barcode="TGCATGCA")
+            alignment = MockAlignment()
+
+            # Test column 0 (organ)
+            assert grouper_col0.get_group_id(alignment, read_assignment=ra1) == "organ_liver"
+            assert grouper_col0.get_group_id(alignment, read_assignment=ra2) == "organ_kidney"
+
+            # Test column 1 (cell)
+            assert grouper_col1.get_group_id(alignment, read_assignment=ra1) == "cell_hepatocyte"
+            assert grouper_col1.get_group_id(alignment, read_assignment=ra2) == "cell_nephron"
+
+            # Test column 2 (zone)
+            assert grouper_col2.get_group_id(alignment, read_assignment=ra1) == "zone_central"
+            assert grouper_col2.get_group_id(alignment, read_assignment=ra2) == "zone_cortex"
+
+            # Verify all groupers share the same data
+            assert grouper_col0.shared_data is shared_data
+            assert grouper_col1.shared_data is shared_data
+            assert grouper_col2.shared_data is shared_data
+
+        finally:
+            os.unlink(temp_file)
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

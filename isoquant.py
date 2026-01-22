@@ -174,9 +174,10 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(sc_args_group, "--barcode_column", type=str,
                                    help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
                                    default=1)
-    # TODO: add multiple columns
-    add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str, nargs='+',
-                                   help='TSV file(s) barcode to cell type / spot id information')
+    add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str,
+                                   help='TSV file mapping barcode to cell type / spot id. '
+                                        'Format: file.tsv or file.tsv:barcode_col:spot_cols '
+                                        '(e.g., file.tsv:0:1,2,3 for multiple spot columns)')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,

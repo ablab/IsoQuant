@@ -459,8 +459,16 @@ class UMIFilter:
                     spliced = len(exon_blocks) > 1
                     barcoded = barcode is not None
 
-                    # Get cell type from barcode feature table
-                    cell_type = "None" if barcode is None or barcode not in barcode_feature_table else barcode_feature_table[barcode]
+                    # Get cell types from barcode feature table (may be a list for multi-column)
+                    if barcode is None or barcode not in barcode_feature_table:
+                        cell_type = "None"
+                    else:
+                        cell_types = barcode_feature_table[barcode]
+                        # Handle both old format (string) and new format (list)
+                        if isinstance(cell_types, list):
+                            cell_type = ",".join(cell_types) if cell_types else "None"
+                        else:
+                            cell_type = cell_types
                     read_assignment.set_additional_attribute('cell_type', cell_type)
 
                     # Process based on number of isoform matches

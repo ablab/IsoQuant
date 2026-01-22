@@ -96,39 +96,62 @@ class FileNameGrouper(AbstractReadGrouper):
         return filename
 
 
+def parse_barcode2spot_spec(spec: str):
+    """
+    Parse barcode2spot specification string.
+
+    Format: file.tsv or file.tsv:barcode_col:spot_cols
+    - file.tsv           -> (file.tsv, 0, [1])
+    - file.tsv:0:1       -> (file.tsv, 0, [1])
+    - file.tsv:0:1,2,3   -> (file.tsv, 0, [1, 2, 3])
+
+    Args:
+        spec: barcode2spot specification string
+
+    Returns:
+        Tuple of (filename, barcode_column_index, spot_column_indices)
+    """
+    parts = spec.split(':')
+    filename = parts[0]
+    barcode_col = int(parts[1]) if len(parts) > 1 else 0
+    if len(parts) > 2:
+        spot_cols = [int(x) for x in parts[2].split(',')]
+    else:
+        spot_cols = [1]  # Default: column 1
+    return filename, barcode_col, spot_cols
+
+
 class BarcodeSpotGrouper(AbstractReadGrouper):
-    """Grouper that maps reads to spots/cell types via barcodes from read_assignment"""
-    def __init__(self, barcode2spot_files):
+    """Grouper that uses a single column from shared barcode-to-spot data."""
+    def __init__(self, shared_data: 'SharedTableData', column_index: int):
         """
         Initialize barcode-to-spot grouper.
 
         Args:
-            barcode2spot_files: List of TSV files mapping barcode -> spot/cell type
+            shared_data: SharedTableData instance (barcode in col 0, spots in cols 1-N)
+            column_index: Index within the loaded columns (0-based)
         """
         AbstractReadGrouper.__init__(self)
-
-        # Load barcode2spot mapping only (barcode comes from read_assignment)
-        self.barcode_to_spot = {}
-        for barcode2spot_file in barcode2spot_files:
-            logger.debug(f"Reading barcode-to-spot mapping from {barcode2spot_file}")
-            self.barcode_to_spot.update(load_table(barcode2spot_file, 0, 1, '\t'))
-
-        logger.debug(f"Loaded {len(self.barcode_to_spot)} barcode-spot mappings")
+        self.shared_data = shared_data
+        self.column_index = column_index
 
     def get_group_id(self, alignment, read_assignment=None, filename=None):
-        """Map read to spot via barcode from read_assignment"""
+        """Map read to spot via barcode from read_assignment (not alignment.query_name)"""
         if read_assignment is None or read_assignment.barcode is None:
             self.read_groups.add(self.default_group_id)
             return self.default_group_id
 
         barcode = read_assignment.barcode
-
-        # Look up spot for this barcode
-        if barcode not in self.barcode_to_spot:
+        if barcode not in self.shared_data.read_map:
             self.read_groups.add(self.default_group_id)
             return self.default_group_id
 
-        spot = self.barcode_to_spot[barcode]
+        values = self.shared_data.read_map[barcode]
+        if self.column_index >= len(values):
+            self.read_groups.add(self.default_group_id)
+            return self.default_group_id
+
+        spot = values[self.column_index]
         self.read_groups.add(spot)
         return spot
 
@@ -327,7 +350,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
     if values[0] == "file_name":
         return FileNameGrouper(args, sample)
     elif values[0] == 'barcode_spot':
-        # Always uses --barcode2spot files (no inline file specification)
+        # Always uses --barcode2spot (single argument)
         if not hasattr(args, 'barcode2spot') or not args.barcode2spot:
             logger.critical("barcode_spot grouping requires --barcode2spot")
             sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
@@ -336,7 +359,22 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             logger.critical("barcode_spot grouping requires barcoded reads (use --barcoded_reads)")
             sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
-        return BarcodeSpotGrouper(args.barcode2spot)
+        # Parse barcode2spot spec
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+
+        # Load shared data using SharedTableData
+        shared_data = SharedTableData(filename, read_id_column_index=barcode_col,
+                                      group_id_column_indices=spot_cols, delim='\t')
+
+        if shared_data.num_columns == 1:
+            # Single column - return single grouper (backward compatible)
+            return BarcodeSpotGrouper(shared_data, column_index=0)
+        else:
+            # Multiple columns - return list of groupers sharing same data
+            groupers = []
+            for col_idx in range(shared_data.num_columns):
+                groupers.append(BarcodeSpotGrouper(shared_data, column_index=col_idx))
+            return groupers
     elif values[0] == 'barcode':
         # Direct barcode grouping - uses barcode from read_assignment
         if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
@@ -470,8 +508,14 @@ def get_grouping_pool_types(args) -> dict:
             pool_types[grouper_index] = 'file_name'
             grouper_index += 1
         elif spec_type == 'barcode_spot':
-            pool_types[grouper_index] = 'barcode_spot'
-            grouper_index += 1
+            if hasattr(args, 'barcode2spot') and args.barcode2spot:
+                _, _, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+                for col_idx in range(len(spot_cols)):
+                    pool_types[grouper_index] = f'barcode_spot:{col_idx}'
+                    grouper_index += 1
+            else:
+                pool_types[grouper_index] = 'barcode_spot'
+                grouper_index += 1
         elif spec_type == 'barcode':
             # Barcode grouper uses the barcode pool (loaded per-chromosome)
             pool_types[grouper_index] = 'barcode'
@@ -534,7 +578,15 @@ def get_grouping_strategy_names(args) -> list:
         if spec_type == "file_name":
             strategy_names.append("file_name")
         elif spec_type == 'barcode_spot':
-            strategy_names.append("barcode_spot")
+            if hasattr(args, 'barcode2spot') and args.barcode2spot:
+                _, _, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+                if len(spot_cols) == 1:
+                    strategy_names.append("barcode_spot")
+                else:
+                    for col_idx in range(len(spot_cols)):
+                        strategy_names.append(f"barcode_spot_col{col_idx}")
+            else:
+                strategy_names.append("barcode_spot")
         elif spec_type == 'barcode':
             strategy_names.append("barcode")
         elif spec_type == 'tag':
