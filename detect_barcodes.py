@@ -16,14 +16,13 @@ import gzip
 from traceback import print_exc
 import shutil
 from collections import defaultdict
-import numpy
 import pysam
 from Bio import SeqIO, Seq, SeqRecord
 import logging
 
 from src.modes import IsoQuantMode
 from src.error_codes import IsoQuantExitCode
-from src.barcode_calling.common import bit_to_str, reverese_complement
+from src.barcode_calling.common import reverese_complement, load_barcodes
 from src.barcode_calling import (
     TenXBarcodeDetector,
     CurioBarcodeDetector,
@@ -31,6 +30,8 @@ from src.barcode_calling import (
     SharedMemoryStereoSplittingBarcodeDetector,
     ReadStats,
     VisiumHDBarcodeDetector,
+    UniversalSingleMoleculeExtractor,
+    MoleculeStructure
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -43,7 +44,8 @@ BARCODE_CALLING_MODES = {IsoQuantMode.tenX_v3: TenXBarcodeDetector,
                          IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
                          IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
                          IsoQuantMode.visium_5prime: TenXBarcodeDetector,
-                         IsoQuantMode.visium_hd: VisiumHDBarcodeDetector
+                         IsoQuantMode.visium_hd: VisiumHDBarcodeDetector,
+                         IsoQuantMode.custom_sc: UniversalSingleMoleculeExtractor
                          }
 
 BARCODE_FILES_REQUIRED = {IsoQuantMode.tenX_v3: [1],
@@ -51,7 +53,8 @@ BARCODE_FILES_REQUIRED = {IsoQuantMode.tenX_v3: [1],
                           IsoQuantMode.stereoseq_nosplit: [1],
                           IsoQuantMode.stereoseq: [1],
                           IsoQuantMode.visium_5prime: [1],
-                          IsoQuantMode.visium_hd: [2]
+                          IsoQuantMode.visium_hd: [2],
+                          IsoQuantMode.custom_sc: [0]
                           }
 
 
@@ -108,7 +111,7 @@ class BarcodeCaller:
             self.output_sequences_file = open(self.output_sequences, "w")
             self.process_function = self._process_read_split
         if header:
-            self.output_file.write(barcode_detector.result_type().header() + "\n")
+            self.output_file.write(barcode_detector.header() + "\n")
         self.read_stat = ReadStats()
 
     def get_stats(self):
@@ -261,12 +264,23 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None
 
 
 def prepare_barcodes(args):
+    if args.mode == IsoQuantMode.custom_sc:
+        if not args.molecule:
+            logger.critical("Custom single-cell/spatial mode requires molecule description to be provided via --molecule")
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+        if not os.path.isfile(args.molecule):
+            logger.critical("Molecule file %s does not exist" % args.molecule)
+            sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
+        return MoleculeStructure(open(args.molecule))
+
     logger.info("Using barcodes from %s" % ", ".join(args.barcodes))
     barcode_files = len(args.barcodes)
     if barcode_files not in BARCODE_FILES_REQUIRED[args.mode]:
         logger.critical("Barcode calling mode %s requires %s files, %d provided" %
                         (args.mode.name, " or ".join([str(x) for x in BARCODE_FILES_REQUIRED[args.mode]]), barcode_files))
         sys.exit(IsoQuantExitCode.BARCODE_FILE_COUNT_MISMATCH)
+
     barcodes = []
     for bc in args.barcodes:
         barcodes.append(load_barcodes(bc, needs_iterator=args.mode.needs_barcode_iterator()))
@@ -399,7 +413,7 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
 
     with open(output_tsv, "w") as final_output_tsv:
         final_output_fasta = open(out_fasta, "w") if out_fasta else None
-        header = BARCODE_CALLING_MODES[args.mode].result_type().header()
+        header = BARCODE_CALLING_MODES[args.mode].header()
         final_output_tsv.write(header + "\n")
         stat_dict = defaultdict(int)
         for tmp_file, tmp_fasta in output_files:
@@ -439,34 +453,6 @@ def process_in_parallel(args):
     logger.info("Finished barcode calling")
 
 
-def load_barcodes(inf, needs_iterator=False):
-    if inf.endswith("h5") or inf.endswith("hdf5"):
-        return load_h5_barcodes_bit(inf)
-
-    if inf.endswith("gz") or inf.endswith("gzip"):
-        handle = gzip.open(inf, "rt")
-    else:
-        handle = open(inf, "r")
-
-    barcode_iterator = iter(l.strip().split()[0] for l in handle)
-    if needs_iterator:
-        return barcode_iterator
-
-    return [b for b in barcode_iterator]
-
-
-def load_h5_barcodes_bit(h5_file_path, dataset_name='bpMatrix_1'):
-    raise NotImplementedError()
-    import h5py
-    barcode_list = []
-    with h5py.File(h5_file_path, 'r') as h5_file:
-        dataset = numpy.array(h5_file[dataset_name])
-        for row in dataset:
-            for col in row:
-                barcode_list.append(bit_to_str(int(col[0])))
-    return barcode_list
-
-
 def set_logger(logger_instance, args):
     logger_instance.setLevel(logging.INFO)
     if args.debug:
@@ -492,6 +478,8 @@ def parse_args(sys_argv):
     # parser.add_argument("--umi", "-u", type=str, help="potential UMIs, detected de novo if not set")
     parser.add_argument("--mode", type=str, help="mode to be used", choices=[x.name for x in BARCODE_CALLING_MODES.keys()],
                         default=IsoQuantMode.stereoseq.name)
+    parser.add_argument("--molecule", type=str, help="MDF files with molecule description (for custom_sc mode only)")
+
     parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM, SAM",
                         required=True)
     parser.add_argument("--threads", "-t", type=int, help="threads to use (16)", default=16)

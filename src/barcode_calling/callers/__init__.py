@@ -55,6 +55,10 @@ from .tenx import (
     VisiumHDBarcodeDetector,
 )
 
+from .molecule_structure import MoleculeStructure
+
+from .universal_extraction import UniversalSingleMoleculeExtractor
+
 __all__ = [
     # Result classes
     'BarcodeDetectionResult',
@@ -76,4 +80,6 @@ __all__ = [
     # 10x detectors
     'TenXBarcodeDetector',
     'VisiumHDBarcodeDetector',
+    'MoleculeStructure',
+    'UniversalSingleMoleculeExtractor',
 ]

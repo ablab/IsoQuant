@@ -193,6 +193,9 @@ class CurioBarcodeDetector:
     def result_type():
         return LinkerBarcodeDetectionResult
 
+    def header(self):
+        return self.result_type().header()
+
 
 class CurioIlluminaDetector:
     """
@@ -329,3 +332,6 @@ class CurioIlluminaDetector:
     @staticmethod
     def result_type():
         return LinkerBarcodeDetectionResult
+
+    def header(self):
+        return self.result_type().header()

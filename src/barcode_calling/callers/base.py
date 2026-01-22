@@ -30,6 +30,9 @@ def increase_if_valid(val: Optional[int], delta: int) -> Optional[int]:
     return val
 
 
+
+
+
 class BarcodeDetectionResult:
     """
     Base class for barcode detection results.
@@ -333,11 +336,11 @@ class ReadStats:
         for a in barcode_detection_result.get_additional_attributes():
             self.additional_attributes_counts[a] += 1
         # Count valid barcode
-        if barcode_detection_result.barcode != BarcodeDetectionResult.NOSEQ:
-            self.bc_count += 1
+#        if barcode_detection_result.barcode != BarcodeDetectionResult.NOSEQ:
+#            self.bc_count += 1
         # Count valid UMI
-        if barcode_detection_result.UMI_good:
-            self.umi_count += 1
+#        if barcode_detection_result.UMI_good:
+#            self.umi_count += 1
 
     def add_custom_stats(self, stat_name: str, val: int) -> None:
         """
