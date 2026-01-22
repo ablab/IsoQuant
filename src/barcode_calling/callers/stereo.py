@@ -203,6 +203,9 @@ class StereoBarcodeDetector:
     def result_type():
         return LinkerBarcodeDetectionResult
 
+    def header(self):
+        return self.result_type().header()
+
 
 class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
     """Stereo-seq detector with shared memory for large barcode sets."""
@@ -489,6 +492,9 @@ class StereoSplittingBarcodeDetector:
     @staticmethod
     def result_type():
         return SplittingBarcodeDetectionResult
+
+    def header(self):
+        return self.result_type().header()
 
 
 class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector):

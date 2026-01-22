@@ -4,10 +4,15 @@
 # See file LICENSE for details.
 ############################################################################
 import copy
+import os
+import sys
 import logging
-
+import gzip
 import numpy as np
 from ssw import AlignmentMgr
+
+from ..error_codes import IsoQuantExitCode
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -54,6 +59,48 @@ def find_polyt_start(seq, window_size = 16, polya_fraction = 0.75):
         return -1
 
     return i + max(0, seq[i:].find('TTTT'))
+
+
+def find_polyt(seq, window_size = 16, polya_fraction = 0.75):
+    polyA_count = int(window_size * polya_fraction)
+
+    if len(seq) < window_size:
+        return -1, -1
+    i = 0
+    a_count = seq[0:window_size].count('T')
+    while i < len(seq) - window_size:
+        if a_count >= polyA_count:
+            break
+        first_base_a = seq[i] == 'T'
+        new_base_a = i + window_size < len(seq) and seq[i + window_size] == 'T'
+        if first_base_a and not new_base_a:
+            a_count -= 1
+        elif not first_base_a and new_base_a:
+            a_count += 1
+        i += 1
+
+    if i >= len(seq) - window_size:
+        return -1, -1
+    polyt_start = i + max(0, seq[i:].find('TTTT'))
+
+    while i < len(seq) - window_size:
+        if a_count < polyA_count:
+            break
+        first_base_a = seq[i] == 'T'
+        new_base_a = i + window_size < len(seq) and seq[i + window_size] == 'T'
+        if first_base_a and not new_base_a:
+            a_count -= 1
+        elif not first_base_a and new_base_a:
+            a_count += 1
+        i += 1
+
+    if i >= len(seq) - window_size:
+        polyt_end = len(seq) - 1
+    else:
+        last_t_pos = seq[i:i + window_size].rfind('TTTT')
+        polyt_end = i + window_size - 1 if last_t_pos == -1 else i + last_t_pos + 4
+
+    return polyt_start, polyt_end
 
 
 base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', " ": " "}
@@ -369,3 +416,36 @@ def bit_to_str(seq, seq_len):
     for i in range(seq_len):
         str_seq += BIN2NUCL[(seq >> ((seq_len - i - 1) * 2)) & 3]
     return str_seq
+
+
+
+def load_h5_barcodes_bit(h5_file_path, dataset_name='bpMatrix_1'):
+    raise NotImplementedError()
+    import h5py
+    barcode_list = []
+    with h5py.File(h5_file_path, 'r') as h5_file:
+        dataset = numpy.array(h5_file[dataset_name])
+        for row in dataset:
+            for col in row:
+                barcode_list.append(bit_to_str(int(col[0])))
+    return barcode_list
+
+
+def load_barcodes(inf, needs_iterator=False):
+    if not os.path.isfile(inf):
+        logger.critical("Barcode file '%s' does not exist.", inf)
+        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
+    if inf.endswith("h5") or inf.endswith("hdf5"):
+        return load_h5_barcodes_bit(inf)
+
+    if inf.endswith("gz") or inf.endswith("gzip"):
+        handle = gzip.open(inf, "rt")
+    else:
+        handle = open(inf, "r")
+
+    barcode_iterator = iter(l.strip().split()[0] for l in handle)
+    if needs_iterator:
+        return barcode_iterator
+
+    return list(barcode_iterator)
