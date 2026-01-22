@@ -1,3 +1,10 @@
+
+############################################################################
+# Copyright (c) 2022-2026 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 #!/usr/bin/env python3
 import argparse
 import csv

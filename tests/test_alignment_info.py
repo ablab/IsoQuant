@@ -1,3 +1,10 @@
+
+############################################################################
+# Copyright (c) 2022-2026 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
 import pytest
 
 from src.alignment_info import AlignmentInfo

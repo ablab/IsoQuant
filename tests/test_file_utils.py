@@ -1,6 +1,6 @@
 
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2019-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
