@@ -322,8 +322,19 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
     logger.info("Filtering PCR duplicates for chromosome " + chr_id)
     barcode_feature_table = {}
     if args.barcode2spot:
-        for barcode2spot_file in args.barcode2spot:
-            barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
+        from .read_groups import parse_barcode2spot_spec
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+        with open(filename, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.split('\t')
+                if len(parts) > barcode_col:
+                    barcode = parts[barcode_col]
+                    # Extract only the specified spot columns
+                    cell_types = [parts[col] for col in spot_cols if col < len(parts)]
+                    barcode_feature_table[barcode] = cell_types
 
     # Build string pools for memory optimization
     # Barcode pool is critical: ReadAssignments were serialized with barcode_id values
