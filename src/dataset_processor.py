@@ -570,9 +570,10 @@ class DatasetProcessor:
 
     def split_read_barcode_table(self, sample, split_barcodes_file_names):
         logger.info("Splitting read barcode table")
-        # TODO: untrusted UMIs and third party format, both can be done by passing parsing function instead of columns
+        # Supports both IsoQuant's 6-column format and third-party 3-column format
+        # Only columns 0, 1, 2 (read_id, barcode, umi) are required and preserved
         split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
-                                  read_column=0, group_columns=(1, 2, 3, 4), delim='\t')
+                                  read_column=0, group_columns=(1, 2), delim='\t')
         logger.info("Read barcode table was split")
 
 
