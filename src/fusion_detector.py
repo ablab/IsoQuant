@@ -5,12 +5,124 @@ from collections import defaultdict
 import mappy as mp
 import logging
 from functools import lru_cache
-from sklearn.cluster import DBSCAN
-import numpy as np
-
+from intervaltree import IntervalTree
 
 logger = logging.getLogger('IsoQuant')
 ANTISENSE_SUFFIX_RE = re.compile(r"-(AS\d+|DT|DIVERGENT|NAT)$", re.IGNORECASE)
+
+class GenomicIntervalIndex:
+    # interval tree index for mapping genomic coordinates to biological entities.
+    # Pre-builds interval trees for genes and exons to eliminate repeated database queries.
+    def __init__(self, genedb, chromosomes=None):
+        self.db = genedb
+        self.gene_trees = {}  # chrom -> IntervalTree of genes
+        self.exon_trees = {}  # chrom -> IntervalTree of exons
+        self.chromosomes = set(chromosomes) if chromosomes else None
+        self._build_indices()
+
+    def _build_indices(self):
+        # Build interval trees for all genes and exons in the database.
+        logger.info("Building genomic interval trees (memory-efficient mode)...")
+        gene_count = 0
+        # Collect all genes and build gene trees
+        try:
+            for gene in self.db.features_of_type('gene'):
+                chrom = str(gene.chrom)
+                if self.chromosomes and chrom not in self.chromosomes:
+                    continue
+
+                if chrom not in self.gene_trees:
+                    self.gene_trees[chrom] = IntervalTree()
+                start = int(gene.start)
+                end = int(gene.end)
+                gene_id = gene.id
+                # Store only the feature ID in the interval tree (not the whole object)
+                self.gene_trees[chrom][start:end+1] = gene_id
+                gene_count += 1
+                # Log progress for large genomes
+                if gene_count % 10000 == 0:
+                    logger.debug(f"  Indexed {gene_count} genes...")
+        except Exception as e:
+            logger.warning(f"Error building gene index: {e}")
+        exon_count = 0
+        # Collect all exons and build exon trees
+        try:
+            for exon in self.db.features_of_type('exon'):
+                chrom = str(exon.chrom)
+                if self.chromosomes and chrom not in self.chromosomes:
+                    continue
+                if chrom not in self.exon_trees:
+                    self.exon_trees[chrom] = IntervalTree()
+                start = int(exon.start)
+                end = int(exon.end)
+                exon_id = exon.id
+                # Store only the feature ID in the interval tree (not the whole object)
+                self.exon_trees[chrom][start:end+1] = exon_id
+                exon_count += 1
+                # Log progress for large genomes
+                if exon_count % 50000 == 0:
+                    logger.debug(f"  Indexed {exon_count} exons...")
+        except Exception as e:
+            logger.warning(f"Error building exon index: {e}")
+        logger.info(f"Built gene trees for {len(self.gene_trees)} chromosomes with {gene_count} genes")
+        logger.info(f"Built exon trees for {len(self.exon_trees)} chromosomes with {exon_count} exons")
+
+    def get_genes_at(self, chrom, pos, window=None):
+        # Get all genes overlapping position pos on chromosome chrom.
+        # If window is specified, returns genes within pos-window to pos+window.
+        if IntervalTree is None or chrom not in self.gene_trees:
+            return []
+        if window is None:
+            # Point query
+            intervals = self.gene_trees[chrom][pos]
+        else:
+            # Range query
+            start = max(1, pos - window)
+            end = pos + window
+            intervals = self.gene_trees[chrom][start:end]
+        # Fetch feature objects from database using IDs from interval tree
+        genes = []
+        for iv in intervals:
+            try:
+                gene_id = iv.data
+                gene = self.db[gene_id]
+                genes.append(gene)
+            except Exception:
+                # Feature may have been deleted or is invalid, skip it
+                pass
+        return genes
+
+    def get_exons_at(self, chrom, pos, window=None):
+        # Get all exons overlapping position pos on chromosome chrom.
+        # If window is specified, returns exons within pos-window to pos+window.
+        if IntervalTree is None or chrom not in self.exon_trees:
+            return []
+        if window is None:
+            # Point query
+            intervals = self.exon_trees[chrom][pos]
+        else:
+            # Range query
+            start = max(1, pos - window)
+            end = pos + window
+            intervals = self.exon_trees[chrom][start:end]
+        # Fetch feature objects from database using IDs from interval tree
+        exons = []
+        for iv in intervals:
+            try:
+                exon_id = iv.data
+                exon = self.db[exon_id]
+                exons.append(exon)
+            except Exception:
+                # Feature may have been deleted or is invalid, skip it
+                pass
+        return exons
+
+    def get_exons_of_gene(self, gene_feature):
+        """Get all exons for a specific gene feature."""
+        try:
+            return list(self.db.children(gene_feature, featuretype="exon", order_by="start"))
+        except Exception:
+            return []
 
 class FusionDetector:
     def __init__(self, bam_path, gene_db_path, reference_fasta):
@@ -29,6 +141,13 @@ class FusionDetector:
         self.fusion_metadata = {}
         # cache for resolved names: id_or_symbol -> gene_symbol (if found)
         self._resolved_name_cache = {}
+        # Build interval tree index for fast coordinate-to-gene/exon mapping
+        logger.info("Initializing genomic interval index for efficient database queries...")
+        if IntervalTree is not None:
+            self.interval_index = GenomicIntervalIndex(self.db)
+        else:
+            logger.warning("intervaltree not available; falling back to gffutils queries")
+            self.interval_index = None
 
     def safe_reference_start(self, read):
         try:
@@ -46,20 +165,28 @@ class FusionDetector:
 
     @lru_cache(maxsize=200000)
     def _context_query(self, chrom, pos):
-        # Minimal gffutils calls; returns (gene_name, region_type)
+        # Query genomic context at position (chrom, pos).
+        # Uses interval tree if available for O(log n) performance, otherwise falls back to gffutils.
         try:
-            genes = list(self.db.region(region=(chrom, pos, pos), featuretype='gene'))
+            genes = []
+            exons = []
+            # Try interval tree first if available
+            if self.interval_index is not None:
+                genes = self.interval_index.get_genes_at(chrom, pos)
+                exons = self.interval_index.get_exons_at(chrom, pos)
+            else:
+                # Fallback to gffutils
+                genes = list(self.db.region(region=(chrom, pos, pos), featuretype='gene'))
+                exons = list(self.db.region(region=(chrom, pos, pos), featuretype='exon'))
             if genes:
                 gene_name = genes[0].attributes.get('gene_name', [genes[0].id])[0]
                 # Are we in an exon of that gene?
-                exons = list(self.db.region(region=(chrom, pos, pos), featuretype='exon'))
                 if exons:
                     return gene_name, "exonic"
                 else:
                     return gene_name, "intronic"
             else:
                 # Not inside any gene; check if overlapping any exon 
-                exons = list(self.db.region(region=(chrom, pos, pos), featuretype='exon'))
                 return None, "exonic" if exons else "intergenic"
         except Exception:
             return None, "unknown"
@@ -80,7 +207,6 @@ class FusionDetector:
                 feat = self.db[name_or_id]
             except Exception:
                 feat = None
-
             if feat is not None:
                 # If it's a gene, prefer gene_name attribute
                 if feat.featuretype == 'gene':
@@ -118,16 +244,143 @@ class FusionDetector:
         self._resolved_name_cache[name_or_id] = resolved
         return resolved
 
-    def get_context(self, chrom, pos):
-        gene_name, region_type = self._context_query(chrom, pos)
-        return gene_name if gene_name else region_type
+    def has_antisense_suffix(self, gene_name):
+        # Check if gene name ends with antisense/regulatory suffixes (AS1, DT, etc.)
+        if not gene_name or not isinstance(gene_name, str):
+            return False
+        return ANTISENSE_SUFFIX_RE.search(gene_name) is not None
+
+    def strip_antisense_suffix(self, gene_name):
+        # Remove antisense/regulatory suffix and return stripped name
+        if not gene_name or not isinstance(gene_name, str):
+            return gene_name
+        return ANTISENSE_SUFFIX_RE.sub('', gene_name)
+
+    def normalize_and_resolve_gene_name(self, chrom, pos, original_name, window=500):
+        # Normalize gene name: strip antisense suffixes and try to find parent gene
+        if not original_name:
+            return original_name
+        # If has antisense suffix, try to find the parent gene
+        if self.has_antisense_suffix(original_name):
+            stripped = self.strip_antisense_suffix(original_name)
+            # Try to find parent gene without the suffix nearby
+            try:
+                # Use interval tree if available
+                if self.interval_index is not None:
+                    genes = self.interval_index.get_genes_at(chrom, pos, window=window)
+                else:
+                    start = max(1, pos - window)
+                    end = pos + window
+                    genes = list(self.db.region(region=(chrom, start, end), featuretype='gene'))
+                for g in genes:
+                    gene_name = g.attributes.get('gene_name', [g.id])[0]
+                    if gene_name and gene_name.upper() == stripped.upper():
+                        return gene_name
+            except Exception:
+                pass
+            # If we can't find parent, return the stripped version
+            return stripped
+        return original_name
+
+    def assign_fusion_gene(self, chrom, pos, window=2000):
+        # Assign the most plausible gene at a breakpoint using per-gene evidence:
+        try:
+            # Use interval tree for fast gene lookups
+            if self.interval_index is not None:
+                genes = self.interval_index.get_genes_at(chrom, pos, window=window)
+            else:
+                genes = list(self.db.region(
+                    region=(chrom, max(1, pos - window), pos + window),
+                    featuretype="gene"
+                ))
+        except Exception:
+            return None
+        if not genes:
+            return None
+        best_gene, best_score = None, float("-inf")
+        for g in genes:
+            attrs  = getattr(g, "attributes", {}) or {}
+            gname  = attrs.get("gene_name", [getattr(g, "id", None)])[0]
+            gtype  = (attrs.get("gene_type", [None])[0]
+                    or attrs.get("gene_biotype", [None])[0]
+                    or attrs.get("transcript_biotype", [None])[0])
+            gstart = int(getattr(g, "start", 0))
+            gend   = int(getattr(g, "end",   0))
+            gstr   = getattr(g, "strand", ".")
+            # --- per-gene exon distances (using cached interval index when available) ---
+            exon_min_dist = None
+            boundary_min_dist = None
+            exonic_hit = False
+            try:
+                # children() is per-gene; much cheaper than region() for each exon window on dense loci
+                exons = self.interval_index.get_exons_of_gene(g) if self.interval_index else list(self.db.children(g, featuretype="exon", order_by="start"))
+                for ex in exons:
+                    es = int(ex.start); ee = int(ex.end)
+                    # distance to exon span
+                    d_span = 0 if (es <= pos <= ee) else min(abs(pos-es), abs(pos-ee))
+                    exon_min_dist = d_span if exon_min_dist is None else min(exon_min_dist, d_span)
+                    # distance to exon boundary
+                    d_bound = min(abs(pos-es), abs(pos-ee))
+                    boundary_min_dist = d_bound if boundary_min_dist is None else min(boundary_min_dist, d_bound)
+                    if es <= pos <= ee:
+                        exonic_hit = True
+            except Exception:
+                # fallback to body distance if exon enumeration fails
+                exon_min_dist = None
+                boundary_min_dist = None
+                exonic_hit = False
+            # distance to gene body (if pos is outside)
+            body_dist = 0
+            if not (gstart <= pos <= gend):
+                body_dist = min(abs(pos - gstart), abs(pos - gend))
+            # --- scoring ---
+            score = 0.0
+            # 1) hard evidence first
+            if exonic_hit:
+                score += 200.0
+            if boundary_min_dist is not None:
+                score += max(0.0, 80.0 - min(boundary_min_dist, 200))  # closer boundary → higher
+            if exon_min_dist is not None:
+                score += max(0.0, 40.0 - min(exon_min_dist, 500))
+            # 2) gene body proximity (weak)
+            if body_dist:
+                score += max(0.0, 20.0 - min(body_dist, 2000) / 100.0)
+            # 3) biotype weighting
+            if gtype == "protein_coding":
+                score += 60.0
+            elif gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
+                        "sense_intronic", "sense_overlapping", "unprocessed_pseudogene",
+                        "transcribed_unprocessed_pseudogene", "pseudogene"):
+                score -= 40.0
+            elif gtype and "pseudogene" in gtype:
+                score -= 40.0
+            # 4) gentle preference for longer exon span (more likely real coding gene)
+            try:
+                # sum exon lengths (per gene) cheaply
+                exon_len_sum = 0
+                exons = self.interval_index.get_exons_of_gene(g) if self.interval_index else list(self.db.children(g, featuretype="exon", order_by="start"))
+                for ex in exons:
+                    exon_len_sum += int(ex.end) - int(ex.start) + 1
+                score += min(exon_len_sum / 1e4, 10.0)  # cap at +10
+            except Exception:
+                pass
+            # Final tie-breakers: closer boundary first, then coding, then lexicographic name
+            tie = (
+                score,
+                -1 * (boundary_min_dist if boundary_min_dist is not None else 10**9),
+                0 if gtype == "protein_coding" else 1,
+                gname or getattr(g, "id", "")
+            )
+            if score > best_score or (score == best_score and tie > (best_score,)):
+                best_score = score
+                best_gene  = gname or getattr(g, "id", None)
+        return best_gene
 
     def detect_softclip(self, read):
         # Detect large soft-clips (>=50 bp) on either end of the read.
         # Returns (clip_side, clip_len) or (None, 0) if no significant clip.
         cigartuples = getattr(read, "cigartuples", None)
         clip_side, clip_len = None, 0
-
         if cigartuples:
             # Leading soft-clip
             if len(cigartuples) > 0 and cigartuples[0][0] == 4 and cigartuples[0][1] >= 50:
@@ -172,19 +425,46 @@ class FusionDetector:
         except Exception:
             return None
 
-    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):        
-        c1 = self.canonical_locus_name(context1)
-        c2 = self.canonical_locus_name(context2)
-        fusion_key = "--".join(sorted([c1, c2]))
+    def _safe_gene_token(self, g):
+        # Convert None/empty to 'intergenic'
+        if not g or (isinstance(g, str) and not g.strip()):
+            return "intergenic"
+        return str(g)
+
+    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
+        # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
+        if self.has_antisense_suffix(context1) or self.has_antisense_suffix(context2):
+            return
+        left = self._safe_gene_token(context1)
+        right = self._safe_gene_token(context2)
+
+        # Avoid sorted() on mixed types; both are now strings.
+        fusion_key = "--".join(sorted([left, right]))
+
         self.fusion_candidates[fusion_key].add(read_name)
         bp = (chrom1, int(pos1), chrom2, int(pos2))
         self.fusion_breakpoints[fusion_key][bp] += 1
-        # also maintain supporting_reads set for quick access
-        meta = self.fusion_metadata.setdefault(fusion_key, {"supporting_reads": set(), "consensus_bp": None,
-                                                            "left_gene": None, "right_gene": None, "support": 0})
+
+        meta = self.fusion_metadata.setdefault(
+            fusion_key,
+            {"supporting_reads": set(), "consensus_bp": None,
+            "left_gene": None, "right_gene": None, "support": 0}
+        )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
-        # consensus_bp will be calculated later in build_metadata()
+
+    def normalize_gene_label(self, gene):
+        # Normalize any gene identifier to a canonical gene symbol string.
+        if not gene:
+            return "intergenic"
+        # Resolve ENSG / IDs → symbol if possible
+        gene = self.resolve_gene_name(gene)
+        # Collapse antisense / divergent
+        gene = self.canonical_locus_name(gene)
+        # Safety net
+        if gene is None or gene.startswith("ENSG"):
+            return "intergenic"
+        return gene
 
     def build_metadata(self, min_support=1):
         # Compute consensus breakpoint and gene names for all fusion keys,
@@ -203,10 +483,14 @@ class FusionDetector:
             meta["consensus_bp"] = consensus_bp
             left_chr, left_pos, right_chr, right_pos = consensus_bp
             # Normalize possible Ensembl / RP11 ids to gene symbols when possible
-            left_ctx = self.get_context(left_chr, left_pos)
-            right_ctx = self.get_context(right_chr, right_pos)
-            meta["left_gene"] = self.resolve_gene_name(left_ctx)
-            meta["right_gene"] = self.resolve_gene_name(right_ctx)
+            left_gene  = self.normalize_gene_label(
+                self.assign_fusion_gene(left_chr, left_pos)
+            )
+            right_gene = self.normalize_gene_label(
+                self.assign_fusion_gene(right_chr, right_pos)
+            )
+            meta["left_gene"]  = left_gene
+            meta["right_gene"] = right_gene
 
     def cluster_breakpoints(self, bp_counts, window=100):
         # bp_counts: dict[(chr1,pos1,chr2,pos2)] -> count
@@ -247,7 +531,6 @@ class FusionDetector:
             return None
         (c1, c2), (p1, p2, total) = best_pair, best_cons
         return (c1, p1, c2, p2), total
-
 
     def parse_sa_entries(self, sa_tag):
         entries = []
@@ -328,13 +611,12 @@ class FusionDetector:
             sa_chr, (right_pos // jitter_window))
         if key in seen_pairs:
             return
-        left_context = self.get_context(left_chr, left_pos)
-        right_context = self.get_context(sa_chr, right_pos)
-        left_context  = self.canonical_locus_name(left_context)
-        right_context = self.canonical_locus_name(right_context)
-        if left_context != right_context:
-            self.record_fusion(left_context, right_context, read.query_name,
-                            left_chr, left_pos, sa_chr, right_pos)
+        left_gene = self.assign_fusion_gene(left_chr, left_pos)
+        right_gene = self.assign_fusion_gene(sa_chr, right_pos)
+        left_gene = self.canonical_locus_name(left_gene)
+        right_gene = self.canonical_locus_name(right_gene)
+        if isinstance(left_gene, str) and isinstance(right_gene, str) and left_gene != right_gene:
+            self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos)
             seen_pairs.add(key)
 
     def detect_fusions(self,
@@ -387,11 +669,15 @@ class FusionDetector:
                     if key in seen_pairs:
                         continue
                     seen_pairs.add(key)
-                    left_context = self.get_context(left_chr, left_pos)
-                    right_context = self.get_context(sa_chr, right_pos)
-                    if left_context != right_context:
-                        self.record_fusion(left_context, right_context, read.query_name,
-                                        left_chr, left_pos, sa_chr, right_pos)
+                    left_gene  = self.normalize_gene_label(self.assign_fusion_gene(left_chr, left_pos))
+                    right_gene = self.normalize_gene_label(self.assign_fusion_gene(sa_chr,  right_pos)) 
+                    if left_gene == "intergenic" or right_gene == "intergenic":
+                       continue
+                    if left_gene != right_gene:
+                        self.record_fusion(
+                            left_gene, right_gene, read.query_name,
+                            left_chr, left_pos, sa_chr, right_pos
+                        )
                         sa_used = True
             do_realign = False
             if clip_side and clip_len >= min_softclip_len:
@@ -487,46 +773,37 @@ class FusionDetector:
             logger.debug(f"Failed to realign fusion transcript: {str(e)}")
             return []
 
-    @lru_cache(maxsize=200000)
-    def _get_nearby_exons(self, chrom, start, end):
-        # Cached query for exons in a region
+    def check_gene_exon_boundary(self, gene_name, chrom, pos, delta=50):
+        # find the gene feature by name, get its exons, and check |pos - exon boundary| <= delta
         try:
-            return tuple(list(self.db.region(region=(chrom, start, end), featuretype='exon')))
-        except Exception:
-            return ()
-
-    def check_exon_boundary_proximity(self, c1, p1, c2, p2, delta=100):
-        # Check if both breakpoints are within delta bp of exon boundaries.
-        try:
-            # Check left breakpoint proximity to exons
-            left_exons = self._get_nearby_exons(c1, max(1, p1 - delta), p1 + delta)
-            left_valid = False
-            for exon in left_exons:
-                # Check if breakpoint is near exon start or end
-                if abs(p1 - int(exon.start)) <= delta or abs(p1 - int(exon.end)) <= delta:
-                    left_valid = True
-                    break
-            # Check right breakpoint proximity to exons
-            right_exons = self._get_nearby_exons(c2, max(1, p2 - delta), p2 + delta)
-            right_valid = False
-            for exon in right_exons:
-                # Check if breakpoint is near exon start or end
-                if abs(p2 - int(exon.start)) <= delta or abs(p2 - int(exon.end)) <= delta:
-                    right_valid = True
-                    break
-            if not left_valid and not right_valid:
-                return False, f"Both breakpoints >±{delta}bp from exon boundaries"
-            elif not left_valid:
-                return False, f"Left breakpoint {c1}:{p1} >±{delta}bp from exon boundary"
-            elif not right_valid:
-                return False, f"Right breakpoint {c2}:{p2} >±{delta}bp from exon boundary"
-            return True, ""
+            # Resolve to a gene feature
+            g = None
+            try:
+                g = self.db[gene_name]  # if name==id
+            except Exception:
+                # fallback: search genes in small window and match by gene_name attribute
+                # Use interval tree if available
+                genes = []
+                if self.interval_index is not None:
+                    genes = self.interval_index.get_genes_at(chrom, pos, window=2000)
+                else:
+                    for cand in self.db.region(region=(chrom, max(1, pos-2000), pos+2000), featuretype="gene"):
+                        genes.append(cand)
+                for cand in genes:
+                    if cand.attributes.get("gene_name", [""])[0] == gene_name:
+                        g = cand; break
+            if g is None:  # give benefit of doubt
+                return True, ""
+            exons = self.interval_index.get_exons_of_gene(g) if self.interval_index else list(self.db.children(g, featuretype="exon", order_by="start"))
+            for ex in exons:
+                if abs(pos - int(ex.start)) <= delta or abs(pos - int(ex.end)) <= delta:
+                    return True, ""
+            return False, f"{gene_name} breakpoint {chrom}:{pos} >±{delta}bp from its exon boundary"
         except Exception as e:
-            logger.debug(f"Exon boundary check failed at {c1}:{p1}--{c2}:{p2}: {str(e)}")
-            return False, f"Exon boundary check failed: {str(e)}"
+            return False, f"Exon boundary check failed: {e}"
 
     def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
-                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
+                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=False,
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
         for fusion_key, meta in self.fusion_metadata.items():
@@ -538,7 +815,6 @@ class FusionDetector:
                 flags["reasons"].append(f"Low support ({support} < {min_support})")
                 meta.update(flags)
                 continue
-
             # consensus via clustering
             cons = self.cluster_breakpoints(bp_counts, window=window)
             if not cons:
@@ -557,7 +833,22 @@ class FusionDetector:
             self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
                                                    g1_name, r1, g2_name, r2,
                                                    require_gene_names, require_exon_boundary,
-                                                   allow_cis_sage, max_intra_chr_distance)
+                                                   allow_cis_sage, max_intra_chr_distance) 
+            if flags["is_valid"] and require_exon_boundary:
+                left_gene  = meta.get("left_gene")
+                right_gene = meta.get("right_gene")
+
+                okL, whyL = self.check_gene_exon_boundary(left_gene,  c1, p1, delta=50)
+                okR, whyR = self.check_gene_exon_boundary(right_gene, c2, p2, delta=50)
+
+                if not okL or not okR:
+                    flags["is_valid"] = False
+                    # Append specific reasons (only non-empty strings)
+                    reasons = []
+                    if whyL: reasons.append(whyL)
+                    if whyR: reasons.append(whyR)
+                    if reasons:
+                        flags["reasons"].append("; ".join(reasons))
 
             # skip reconstruction for mitochondrial candidates and invalid ones
             if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
@@ -603,6 +894,15 @@ class FusionDetector:
         # Resolve Ensembl/RP11 ids to gene symbols when possible, but keep region type fallback
         resolved_left = self.resolve_gene_name(g1_name) if g1_name else r1
         resolved_right = self.resolve_gene_name(g2_name) if g2_name else r2
+        # Normalize gene names: strip antisense suffixes and try to find parent genes
+        if resolved_left:
+            resolved_left = self.normalize_and_resolve_gene_name(c1, p1, resolved_left, window=500)
+        if resolved_right:
+            resolved_right = self.normalize_and_resolve_gene_name(c2, p2, resolved_right, window=500)
+        # Check if either gene still has antisense suffix - if so, mark as invalid
+        if self.has_antisense_suffix(resolved_left) or self.has_antisense_suffix(resolved_right):
+            flags["is_valid"] = False
+            flags["reasons"].append(f"Antisense/regulatory genes: {resolved_left} -- {resolved_right}")
         meta["left_gene"] = resolved_left
         meta["right_gene"] = resolved_right
 
@@ -620,12 +920,11 @@ class FusionDetector:
                     meta.setdefault("notes", []).append(f"Right gene resolved to nearby coding {nearby}")
         except Exception:
             pass
-
         # classify
         if g1_name and g2_name:
             # compare resolved gene symbols for intragenic check
-            g1 = self.canonical_locus_name(self.resolve_gene_name(g1_name))
-            g2 = self.canonical_locus_name(self.resolve_gene_name(g2_name))
+            g1 = meta["left_gene"]
+            g2 = meta["right_gene"]
             if g1 == g2:
                 flags["class"] = "intragenic"
                 flags["is_valid"] = False
@@ -642,12 +941,6 @@ class FusionDetector:
         if require_gene_names and not (g1_name and g2_name):
             flags["is_valid"] = False
             flags["reasons"].append("Missing gene name on one side")
-        # exon boundary proximity filter: ±30 bp of exon junctions
-        if require_exon_boundary:
-            exon_valid, exon_reason = self.check_exon_boundary_proximity(c1, p1, c2, p2, delta=30)
-            if not exon_valid:
-                flags["is_valid"] = False
-                flags["reasons"].append(exon_reason)
 
     def _attempt_reconstruction_and_realignment(self, meta, flags, c1, p1, c2, p2):
         # Try to reconstruct fusion transcript and realign; update meta/flags accordingly.
@@ -678,9 +971,13 @@ class FusionDetector:
     def _find_nearby_protein_coding(self, chrom, pos, window=500):
         # Search for a nearby protein-coding gene within +/- window and return its gene_name if found.
         try:
-            start = max(1, pos - window)
-            end = pos + window
-            genes = list(self.db.region(region=(chrom, start, end), featuretype='gene'))
+            # Use interval tree if available for faster lookups
+            if self.interval_index is not None:
+                genes = self.interval_index.get_genes_at(chrom, pos, window=window)
+            else:
+                start = max(1, pos - window)
+                end = pos + window
+                genes = list(self.db.region(region=(chrom, start, end), featuretype='gene'))
             for g in genes:
                 # check common biotype attribute keys
                 attrs = g.attributes if hasattr(g, 'attributes') else {}
@@ -711,7 +1008,7 @@ class FusionDetector:
         if meta.get("class") == "intergenic":
             penalties += 0.1
         conf = max(0.0, min(1.0, support + recon + realign - penalties))
-        return conf  
+        return conf
 
     def canonical_locus_name(self, gene_name):
         # Collapse antisense / divergent transcript names to the canonical locus name.
@@ -720,7 +1017,6 @@ class FusionDetector:
         # Strip common antisense / divergent suffixes
         collapsed = ANTISENSE_SUFFIX_RE.sub("", gene_name)
         return collapsed
-
 
     def report(self, output_path="fusion_candidates.tsv", min_support=2,
             include_classes=("canonical","cis-SAGe"),
@@ -738,12 +1034,15 @@ class FusionDetector:
                 if not meta.get("consensus_bp"):
                     continue
                 left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
-                left_gene = self.resolve_gene_name(meta.get("left_gene") or self.get_context(left_chr, left_pos))
-                right_gene = self.resolve_gene_name(meta.get("right_gene") or self.get_context(right_chr, right_pos))
-                # Skip intragenic fusions (same gene on both sides)
+                left_gene  = self._safe_gene_token(meta.get("left_gene"))
+                left_gene  = meta["left_gene"]
+                right_gene = meta["right_gene"]
+                # Skip if collapse makes them equal
                 if left_gene == right_gene:
                     continue
-                # Create fusion name using resolved gene names
+                # Skip if either gene has antisense/regulatory suffix
+                if self.has_antisense_suffix(left_gene) or self.has_antisense_suffix(right_gene):
+                    continue
                 fusion_name = f"{left_gene}-{right_gene}"
                 reasons = ";".join(meta.get("reasons", []))
                 f.write(f"{left_gene}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t{meta.get('is_valid')}\t{reasons}\n")
