@@ -415,9 +415,23 @@ class FusionDetector:
                 total += length
         return total
 
-    def realign_clipped_seq(self, seq):
+    @lru_cache(maxsize=10000)
+    def _cached_aligner_map(self, seq):
+        # Cache aligner.map() results for identical sequences to avoid expensive re-alignment
         try:
-            for hit in self.aligner.map(seq):
+            hits = tuple(self.aligner.map(seq))
+            return hits
+        except Exception:
+            return ()
+
+    def realign_clipped_seq(self, seq):
+        # Realign a clipped sequence using the aligner.
+        # Uses LRU cache to avoid re-aligning identical sequences.
+        if not seq or not self.aligner:
+            return None
+        try:
+            hits = self._cached_aligner_map(seq)
+            for hit in hits:
                 hit_len = (getattr(hit, "r_en", None) - getattr(hit, "r_st", None)) if getattr(hit, "r_en", None) else getattr(hit, "mlen", None) or getattr(hit, "alen", None) or 0
                 if hit_len and hit_len >= 50:
                     return hit  # first good hit
@@ -467,11 +481,22 @@ class FusionDetector:
         return gene
 
     def build_metadata(self, min_support=1):
-        # Compute consensus breakpoint and gene names for all fusion keys,
+        # Compute consensus breakpoint and gene names for all fusion keys.
+        # Resolve gene names ONCE per fusion key after clustering, not per-read.
         for fusion_key, reads in self.fusion_candidates.items():
             support = len(reads)
-            meta = self.fusion_metadata.setdefault(fusion_key, {"supporting_reads": set(), "consensus_bp": None,
-                                                                "left_gene": None, "right_gene": None, "support": 0})
+            meta = self.fusion_metadata.setdefault(
+                fusion_key,
+                {
+                    "supporting_reads": set(),
+                    "consensus_bp": None,
+                    "left_gene": None,
+                    "right_gene": None,
+                    "support": 0,
+                    "raw_left_gene": None,
+                    "raw_right_gene": None,
+                }
+            )
             meta["supporting_reads"].update(reads)
             meta["support"] = len(meta["supporting_reads"])
             if meta["support"] < min_support:
@@ -479,17 +504,24 @@ class FusionDetector:
             bp_counts = self.fusion_breakpoints.get(fusion_key, {})
             if not bp_counts:
                 continue
-            consensus_bp, _ = max(bp_counts.items(), key=lambda item: item[1])
+            # Use clustering to find stable consensus breakpoint
+            consensus_result = self.cluster_breakpoints(bp_counts, window=100)
+            if not consensus_result:
+                continue
+            consensus_bp, clustered_support = consensus_result
             meta["consensus_bp"] = consensus_bp
+            meta["support"] = clustered_support
             left_chr, left_pos, right_chr, right_pos = consensus_bp
-            # Normalize possible Ensembl / RP11 ids to gene symbols when possible
-            left_gene  = self.normalize_gene_label(
-                self.assign_fusion_gene(left_chr, left_pos)
-            )
-            right_gene = self.normalize_gene_label(
-                self.assign_fusion_gene(right_chr, right_pos)
-            )
-            meta["left_gene"]  = left_gene
+            # Resolve gene names ONCE per fusion key (not per-read, not per-call)
+            # Store both raw assigned genes and normalized names
+            raw_left = self.assign_fusion_gene(left_chr, left_pos)
+            raw_right = self.assign_fusion_gene(right_chr, right_pos)
+            meta["raw_left_gene"] = raw_left
+            meta["raw_right_gene"] = raw_right
+            # Resolve Ensembl/RP11 IDs to gene symbols
+            left_gene = self.normalize_gene_label(raw_left) if raw_left else "intergenic"
+            right_gene = self.normalize_gene_label(raw_right) if raw_right else "intergenic"
+            meta["left_gene"] = left_gene
             meta["right_gene"] = right_gene
 
     def cluster_breakpoints(self, bp_counts, window=100):
@@ -613,9 +645,8 @@ class FusionDetector:
             return
         left_gene = self.assign_fusion_gene(left_chr, left_pos)
         right_gene = self.assign_fusion_gene(sa_chr, right_pos)
-        left_gene = self.canonical_locus_name(left_gene)
-        right_gene = self.canonical_locus_name(right_gene)
-        if isinstance(left_gene, str) and isinstance(right_gene, str) and left_gene != right_gene:
+        # Store raw genes without normalization - defer to build_metadata
+        if left_gene is not None and right_gene is not None and left_gene != right_gene:
             self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos)
             seen_pairs.add(key)
 
@@ -624,8 +655,7 @@ class FusionDetector:
                     min_al_len_sa=40,
                     min_sa_mapq=10,
                     min_softclip_len=40,
-                    jitter_window=25,
-                    realign_when_sa_present=True):
+                    jitter_window=25):
         bam = pysam.AlignmentFile(self.bam_path, "rb")
         for read in bam:
             if read.is_unmapped or read.is_secondary or read.is_supplementary:
@@ -669,23 +699,22 @@ class FusionDetector:
                     if key in seen_pairs:
                         continue
                     seen_pairs.add(key)
-                    left_gene  = self.normalize_gene_label(self.assign_fusion_gene(left_chr, left_pos))
-                    right_gene = self.normalize_gene_label(self.assign_fusion_gene(sa_chr,  right_pos)) 
-                    if left_gene == "intergenic" or right_gene == "intergenic":
-                       continue
+                    # Store raw assigned genes (no normalization yet - defer to build_metadata)
+                    left_gene  = self.assign_fusion_gene(left_chr, left_pos)
+                    right_gene = self.assign_fusion_gene(sa_chr,  right_pos)
+                    if left_gene is None or right_gene is None:
+                        continue
                     if left_gene != right_gene:
                         self.record_fusion(
                             left_gene, right_gene, read.query_name,
                             left_chr, left_pos, sa_chr, right_pos
                         )
                         sa_used = True
-            do_realign = False
-            if clip_side and clip_len >= min_softclip_len:
-                if not sa_used:
-                    do_realign = True
-                elif realign_when_sa_present:
-                    do_realign = True
-            if do_realign:
+            # Only realign soft-clips if:
+            # 1. No SA tag was processed successfully (not sa_used)
+            # 2. Soft-clip is long enough (clip_len >= min_softclip_len)
+            # This avoids redundant expensive realignment when SA tag already covers the junction
+            if clip_side and clip_len >= min_softclip_len and not sa_used:
                 self.realign_softclip(read, clip_side, clip_len,
                                             seen_pairs,
                                             jitter_window=jitter_window,
@@ -808,23 +837,19 @@ class FusionDetector:
         self.build_metadata(min_support=min_support)
         for fusion_key, meta in self.fusion_metadata.items():
             support = meta.get("support", 0)
-            bp_counts = self.fusion_breakpoints.get(fusion_key, {})
             flags = {"is_valid": True, "reasons": [], "class": "canonical"}
-            if support < min_support or not bp_counts:
+            if support < min_support:
                 flags["is_valid"] = False
                 flags["reasons"].append(f"Low support ({support} < {min_support})")
                 meta.update(flags)
                 continue
-            # consensus via clustering
-            cons = self.cluster_breakpoints(bp_counts, window=window)
-            if not cons:
+            # Consensus breakpoint already computed in build_metadata - no need to re-cluster
+            consensus_bp = meta.get("consensus_bp")
+            if not consensus_bp:
                 flags["is_valid"] = False
                 flags["reasons"].append("No stable breakpoint cluster")
                 meta.update(flags)
                 continue
-            consensus_bp, clustered_support = cons
-            meta["consensus_bp"] = consensus_bp
-            meta["support"] = clustered_support
 
             # perform classification and basic filtering
             c1, p1, c2, p2 = consensus_bp
