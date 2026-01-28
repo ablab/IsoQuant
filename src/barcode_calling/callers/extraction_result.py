@@ -176,7 +176,7 @@ class ExtractionResult:
                     continue
                 detected_element = self.detected_results[ElementType.PolyT.name]
                 res_str += "\t%d\t%d" % (detected_element.start, detected_element.end)
-            elif el.element_type.needs_only_coordinates():
+            elif el.element_type.is_constant():
                 if el.element_name not in self.detected_results:
                     res_str += "\t-1\t-1"
                     continue
