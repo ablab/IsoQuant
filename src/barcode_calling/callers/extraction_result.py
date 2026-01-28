@@ -116,6 +116,28 @@ class ExtractionResult:
         """Check if a valid barcode was detected."""
         return self.get_barcode() != self.NOSEQ
 
+    def has_barcode(self) -> bool:
+        """Check if a barcode was detected (alias for is_valid())."""
+        return self.get_barcode() != self.NOSEQ
+
+    def has_umi(self) -> bool:
+        """Check if a valid UMI was detected."""
+        return self.get_umi() != self.NOSEQ
+
+    def get_barcode_score(self) -> int:
+        """
+        Get the best barcode alignment score.
+
+        Returns the maximum score from all barcode elements, or -1 if none detected.
+        """
+        max_score = -1
+        for el_name in self._barcode_elements:
+            if el_name in self.detected_results:
+                detected = self.detected_results[el_name]
+                if detected.score > max_score:
+                    max_score = detected.score
+        return max_score
+
     def update_coordinates(self, delta: int) -> None:
         """
         Shift all genomic coordinates by delta.
@@ -164,12 +186,42 @@ class ExtractionResult:
         """Set the detected strand."""
         self.strand = strand
 
-    def __str__(self) -> str:
-        """Format result as TSV line."""
-        res_str = "%s\t%s" % (self.read_id, self.strand)
+    def _get_supplementary_elements(self) -> List[str]:
+        """Get list of element names that are not barcode or UMI elements."""
+        supplementary = []
+        barcode_umi_set = set(self._barcode_elements + self._umi_elements)
         for el in self.molecule_structure:
             if el.element_type == ElementType.cDNA:
                 continue
+            if el.element_name not in barcode_umi_set:
+                supplementary.append(el.element_name)
+        return supplementary
+
+    def __str__(self) -> str:
+        """
+        Format result as TSV line in standard format.
+
+        Format: read_id, barcode, UMI, BC_score, valid_UMI, strand, [supplementary elements]
+        This matches the format expected by the rest of the IsoQuant pipeline.
+        """
+        # Standard fields: read_id, barcode, UMI, BC_score, valid_UMI, strand
+        res_str = "%s\t%s\t%s\t%d\t%s\t%s" % (
+            self.read_id,
+            self.get_barcode(),
+            self.get_umi(),
+            self.get_barcode_score(),
+            self.has_umi(),
+            self.strand
+        )
+
+        # Supplementary elements (non-barcode, non-UMI)
+        for el in self.molecule_structure:
+            if el.element_type == ElementType.cDNA:
+                continue
+            # Skip barcode and UMI elements (already printed above)
+            if el.element_name in self._barcode_elements or el.element_name in self._umi_elements:
+                continue
+
             if el.element_type == ElementType.PolyT:
                 if ElementType.PolyT.name not in self.detected_results:
                     res_str += "\t-1\t-1"
@@ -192,25 +244,59 @@ class ExtractionResult:
         return res_str
 
     def header(self) -> str:
-        """Get TSV header for result output."""
-        return self.molecule_structure.header()
+        """
+        Get TSV header for result output in standard format.
+
+        Format: #read_id, barcode, UMI, BC_score, valid_UMI, strand, [supplementary elements]
+        """
+        # Standard header fields
+        header = "#read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
+
+        # Supplementary elements (non-barcode, non-UMI)
+        for el in self.molecule_structure:
+            if el.element_type == ElementType.cDNA:
+                continue
+            # Skip barcode and UMI elements (already in standard header)
+            if el.element_name in self._barcode_elements or el.element_name in self._umi_elements:
+                continue
+
+            if el.element_type == ElementType.PolyT:
+                header += "\tpolyT_start\tpolyT_end"
+            elif el.element_type.needs_only_coordinates():
+                header += "\t%s_start\t%s_end" % (el.element_name, el.element_name)
+            elif el.element_type.needs_sequence_extraction() or el.element_type.needs_correction():
+                header += "\t%s_start\t%s_end\t%s_seq" % (el.element_name, el.element_name, el.element_name)
+        return header
 
     # TODO: add simple serialization
 
 
 class ReadStats:
+    """Statistics tracker for ExtractionResult objects."""
+
     def __init__(self):
         self.read_count = 0
+        self.bc_count = 0
+        self.umi_count = 0
         self.pattern_counts = defaultdict(int)
 
-    def add_read(self, barcode_detection_result):
+    def add_read(self, barcode_detection_result: ExtractionResult) -> None:
+        """Add an ExtractionResult to statistics."""
         self.read_count += 1
+        # Count valid barcodes and UMIs
+        if barcode_detection_result.has_barcode():
+            self.bc_count += 1
+        if barcode_detection_result.has_umi():
+            self.umi_count += 1
+        # Count individual detected elements
         for el in barcode_detection_result.detected_results:
             if barcode_detection_result.detected_results[el].start != -1:
                 self.pattern_counts[el] += 1
 
-    def __str__(self):
-        human_readable_str =  ("Total reads:\t%d\n" % self.read_count)
+    def __str__(self) -> str:
+        human_readable_str = "Total reads:\t%d\n" % self.read_count
+        human_readable_str += "Barcode detected:\t%d\n" % self.bc_count
+        human_readable_str += "UMI detected:\t%d\n" % self.umi_count
         for a in self.pattern_counts:
             human_readable_str += "%s:\t%d\n" % (a, self.pattern_counts[a])
         return human_readable_str
