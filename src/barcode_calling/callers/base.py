@@ -38,6 +38,7 @@ class BarcodeDetectionResult:
     Base class for barcode detection results.
 
     Stores detected barcode, UMI, and quality scores for a single read.
+    Implements the BarcodeResult protocol.
     """
 
     NOSEQ = "*"  # Sentinel for missing/undetected sequence
@@ -56,19 +57,43 @@ class BarcodeDetectionResult:
             strand: Detected strand ('+', '-', or '.')
         """
         self.read_id: str = read_id
-        self.barcode: str = barcode
-        if not self.barcode:
-            self.barcode = BarcodeDetectionResult.NOSEQ
-        self.UMI: str = UMI
-        if not self.UMI:
-            self.UMI = BarcodeDetectionResult.NOSEQ
+        self._barcode: str = barcode if barcode else BarcodeDetectionResult.NOSEQ
+        self._umi: str = UMI if UMI else BarcodeDetectionResult.NOSEQ
         self.BC_score: int = BC_score
         self.UMI_good: bool = UMI_good
         self.strand: str = strand
 
+    # Primary getters (preferred interface)
+    def get_barcode(self) -> str:
+        """Get the detected barcode sequence."""
+        return self._barcode
+
+    def get_umi(self) -> str:
+        """Get the detected UMI sequence."""
+        return self._umi
+
+    # Backward-compatible property accessors
+    @property
+    def barcode(self) -> str:
+        """Barcode sequence. Prefer get_barcode() for new code."""
+        return self._barcode
+
+    @barcode.setter
+    def barcode(self, value: str) -> None:
+        self._barcode = value if value else BarcodeDetectionResult.NOSEQ
+
+    @property
+    def UMI(self) -> str:
+        """UMI sequence. Prefer get_umi() for new code."""
+        return self._umi
+
+    @UMI.setter
+    def UMI(self, value: str) -> None:
+        self._umi = value if value else BarcodeDetectionResult.NOSEQ
+
     def is_valid(self) -> bool:
         """Check if a valid barcode was detected."""
-        return self.barcode != BarcodeDetectionResult.NOSEQ
+        return self._barcode != BarcodeDetectionResult.NOSEQ
 
     def update_coordinates(self, delta: int) -> None:
         """
@@ -114,12 +139,16 @@ class BarcodeDetectionResult:
 
     def __str__(self) -> str:
         """Format result as TSV line."""
-        return "%s\t%s\t%s\t%d\t%s\t%s" % (self.read_id, self.barcode, self.UMI,
+        return "%s\t%s\t%s\t%d\t%s\t%s" % (self.read_id, self._barcode, self._umi,
                                            self.BC_score, self.UMI_good, self.strand)
 
-    @staticmethod
-    def header() -> str:
+    def header(self) -> str:
         """Get TSV header for result output."""
+        return BarcodeDetectionResult._header()
+
+    @staticmethod
+    def _header() -> str:
+        """Static header for class-level access."""
         return "#read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
 
 
@@ -156,9 +185,6 @@ class LinkerBarcodeDetectionResult(BarcodeDetectionResult):
         self.linker_end: int = linker_end
         self.polyT: int = polyT
 
-    def is_valid(self) -> bool:
-        return self.barcode != BarcodeDetectionResult.NOSEQ
-
     def update_coordinates(self, delta: int) -> None:
         self.primer = increase_if_valid(self.primer, delta)
         self.linker_start = increase_if_valid(self.linker_start, delta)
@@ -184,16 +210,18 @@ class LinkerBarcodeDetectionResult(BarcodeDetectionResult):
             attr.append("Linker detected")
         return attr
 
-    def set_strand(self, strand: str) -> None:
-        self.strand = strand
-
     def __str__(self) -> str:
         return (BarcodeDetectionResult.__str__(self) +
                 "\t%d\t%d\t%d\t%d" % (self.polyT, self.primer, self.linker_start, self.linker_end))
 
+    def header(self) -> str:
+        """Get TSV header for result output."""
+        return LinkerBarcodeDetectionResult._header()
+
     @staticmethod
-    def header() -> str:
-        return BarcodeDetectionResult.header() + "\tpolyT_start\tprimer_end\tlinker_start\tlinker_end"
+    def _header() -> str:
+        """Static header for class-level access."""
+        return BarcodeDetectionResult._header() + "\tpolyT_start\tprimer_end\tlinker_start\tlinker_end"
 
 
 class TSOBarcodeDetectionResult(LinkerBarcodeDetectionResult):
@@ -228,9 +256,14 @@ class TSOBarcodeDetectionResult(LinkerBarcodeDetectionResult):
             attr.append("TSO detected")
         return attr
 
+    def header(self) -> str:
+        """Get TSV header for result output."""
+        return TSOBarcodeDetectionResult._header()
+
     @staticmethod
-    def header() -> str:
-        return LinkerBarcodeDetectionResult.header() + "\tTSO5"
+    def _header() -> str:
+        """Static header for class-level access."""
+        return LinkerBarcodeDetectionResult._header() + "\tTSO5"
 
 
 class TenXBarcodeDetectionResult(BarcodeDetectionResult):
@@ -243,9 +276,6 @@ class TenXBarcodeDetectionResult(BarcodeDetectionResult):
         BarcodeDetectionResult.__init__(self, read_id, barcode, UMI, BC_score, UMI_good, strand)
         self.r1: int = r1
         self.polyT: int = polyT
-
-    def is_valid(self) -> bool:
-        return self.barcode != BarcodeDetectionResult.NOSEQ
 
     def update_coordinates(self, delta: int) -> None:
         self.r1 = increase_if_valid(self.r1, delta)
@@ -266,23 +296,28 @@ class TenXBarcodeDetectionResult(BarcodeDetectionResult):
             attr.append("R1 detected")
         return attr
 
-    def set_strand(self, strand: str) -> None:
-        self.strand = strand
-
     def __str__(self) -> str:
         return (BarcodeDetectionResult.__str__(self) +
                 "\t%d\t%d" % (self.polyT, self.r1))
 
+    def header(self) -> str:
+        """Get TSV header for result output."""
+        return TenXBarcodeDetectionResult._header()
+
     @staticmethod
-    def header() -> str:
-        return BarcodeDetectionResult.header() + "\tpolyT_start\tR1_end"
+    def _header() -> str:
+        """Static header for class-level access."""
+        return BarcodeDetectionResult._header() + "\tpolyT_start\tR1_end"
 
 
 class SplittingBarcodeDetectionResult:
     """Result container for read splitting modes (multiple barcodes per read)."""
 
+    NOSEQ = BarcodeDetectionResult.NOSEQ  # For consistency with protocol
+
     def __init__(self, read_id: str):
         self.read_id: str = read_id
+        self.strand: str = "."  # For protocol compatibility
         self.detected_patterns: List[TSOBarcodeDetectionResult] = []
 
     def append(self, barcode_detection_result: TSOBarcodeDetectionResult) -> None:
@@ -296,7 +331,7 @@ class SplittingBarcodeDetectionResult:
             return
         barcoded_results = []
         for r in self.detected_patterns:
-            if r.barcode != BarcodeDetectionResult.NOSEQ:
+            if r.is_valid():
                 barcoded_results.append(r)
 
         if not barcoded_results:
@@ -304,9 +339,55 @@ class SplittingBarcodeDetectionResult:
         else:
             self.detected_patterns = barcoded_results
 
-    @staticmethod
-    def header() -> str:
-        return TSOBarcodeDetectionResult.header()
+    def get_barcode(self) -> str:
+        """Get barcode from first valid pattern, or NOSEQ if none."""
+        for r in self.detected_patterns:
+            if r.is_valid():
+                return r.get_barcode()
+        return self.NOSEQ
+
+    def get_umi(self) -> str:
+        """Get UMI from first valid pattern, or NOSEQ if none."""
+        for r in self.detected_patterns:
+            if r.is_valid():
+                return r.get_umi()
+        return self.NOSEQ
+
+    def is_valid(self) -> bool:
+        """Check if any pattern has a valid barcode."""
+        return any(r.is_valid() for r in self.detected_patterns)
+
+    def set_strand(self, strand: str) -> None:
+        """Set strand for all patterns."""
+        self.strand = strand
+        for r in self.detected_patterns:
+            r.set_strand(strand)
+
+    def update_coordinates(self, delta: int) -> None:
+        """Update coordinates for all patterns."""
+        for r in self.detected_patterns:
+            r.update_coordinates(delta)
+
+    def more_informative_than(self, other: 'SplittingBarcodeDetectionResult') -> bool:
+        """Compare by number of valid patterns."""
+        self_valid = sum(1 for r in self.detected_patterns if r.is_valid())
+        other_valid = sum(1 for r in other.detected_patterns if r.is_valid())
+        return self_valid > other_valid
+
+    def get_additional_attributes(self) -> List[str]:
+        """Get combined attributes from all patterns."""
+        attrs = set()
+        for r in self.detected_patterns:
+            attrs.update(r.get_additional_attributes())
+        return list(attrs)
+
+    def __str__(self) -> str:
+        """Format all patterns as TSV lines."""
+        return "\n".join(str(r) for r in self.detected_patterns)
+
+    def header(self) -> str:
+        """Get TSV header for result output."""
+        return TSOBarcodeDetectionResult._header()
 
 
 class ReadStats:
