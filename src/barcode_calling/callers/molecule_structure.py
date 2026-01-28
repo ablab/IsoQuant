@@ -32,8 +32,14 @@ class ElementType(Enum):
     def needs_sequence_extraction(self):
         return self == ElementType.VAR_ANY
 
-    def needs_only_coordinates(self):
-        return self in (ElementType.CONST, ElementType.VAR_ANY_SEPARATOR, ElementType.VAR_ANY_NON_T_SEPARATOR)
+    def is_base_separator(self):
+        return self in (ElementType.VAR_ANY_SEPARATOR, ElementType.VAR_ANY_NON_T_SEPARATOR)
+
+    def is_variable(self):
+        return self in (ElementType.VAR_ANY, ElementType.VAR_LIST, ElementType.VAR_FILE)
+
+    def is_constant(self):
+        return self == ElementType.CONST
 
 
 class MoleculeElement:
@@ -78,9 +84,6 @@ class MoleculeElement:
         else:
             logger.critical("Wrong element type %s" % element_type)
             sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-
-    def is_variable(self):
-        return self.element_type in {ElementType.VAR_ANY, ElementType.VAR_LIST, ElementType.VAR_FILE}
 
 
 class MoleculeStructure:
@@ -155,7 +158,7 @@ class MoleculeStructure:
             if el.element_type == ElementType.cDNA: continue
             if el.element_type == ElementType.PolyT:
                 header += "\tpolyT_start\tpolyT_end"
-            elif el.element_type.needs_only_coordinates():
+            elif el.element_type.is_constant():
                 header += "\t%s_start\t%s_end" % (el.element_name, el.element_name)
             elif el.element_type.needs_sequence_extraction() or el.element_type.needs_correction():
                 if el.element_name in self.elements_to_concatenate.keys():
