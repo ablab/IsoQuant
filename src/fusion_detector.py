@@ -376,6 +376,67 @@ class FusionDetector:
                 best_gene  = gname or getattr(g, "id", None)
         return best_gene
 
+    def _passes_read_filters(self, read, min_al_len_primary, min_sa_mapq):
+        # Check if read passes basic quality filters.
+        # Returns (passes, clip_side, clip_len).
+        if read.is_unmapped or read.is_secondary or read.is_supplementary:
+            return False, None, 0
+        prim_al_len = self.compute_aligned_length(read)
+        if prim_al_len < min_al_len_primary:
+            return False, None, 0
+        prim_mapq = getattr(read, "mapping_quality", 0)
+        if prim_mapq < min_sa_mapq:
+            return False, None, 0
+        clip_side, clip_len = self.detect_softclip(read)
+        return True, clip_side, clip_len
+
+    def _filter_sa_entries(self, sa_entries, min_al_len_sa, min_sa_mapq):
+        # Filter & prioritize SA entries by mapq and aligned length.
+        # Returns list of (chr, pos, strand, cigar, mapq, nm, al_len) tuples.
+        filtered = []
+        for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm) in sa_entries:
+            if sa_pos is None or sa_cigar is None:
+                continue
+            sa_al_len = self.aligned_len_from_cigarstring(sa_cigar)
+            if sa_al_len < min_al_len_sa or sa_mapq < min_sa_mapq:
+                continue
+            filtered.append((sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len))
+        # Keep top-N by sa_mapq or aligned length to limit work
+        if len(filtered) > 3:
+            filtered.sort(key=lambda x: (x[4], x[6]), reverse=True)
+            filtered = filtered[:3]
+        return filtered
+
+    def _process_sa_entries(self, read, sa_entries, clip_side, jitter_window, min_sa_mapq):
+        # Process all SA entries from a read and record fusion candidates.
+        # Returns True if at least one fusion was recorded, False otherwise.
+        seen_pairs = set()
+        sa_used = False
+        for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len) in sa_entries:
+            # Estimate breakpoints with clip guidance
+            left_chr, left_pos, right_chr, right_pos = self.estimate_breakpoint(
+                read, sa_pos, clip_side=clip_side, sa_cigar=sa_cigar
+            )
+            if left_pos is None or right_pos is None:
+                continue
+            key = (left_chr, (left_pos // jitter_window),
+                sa_chr, (right_pos // jitter_window))
+            if key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            # Store raw assigned genes (no normalization yet - defer to build_metadata)
+            left_gene = self.assign_fusion_gene(left_chr, left_pos)
+            right_gene = self.assign_fusion_gene(sa_chr, right_pos)
+            if left_gene is None or right_gene is None:
+                continue
+            if left_gene != right_gene:
+                self.record_fusion(
+                    left_gene, right_gene, read.query_name,
+                    left_chr, left_pos, sa_chr, right_pos
+                )
+                sa_used = True
+        return sa_used
+
     def detect_softclip(self, read):
         # Detect large soft-clips (>=50 bp) on either end of the read.
         # Returns (clip_side, clip_len) or (None, 0) if no significant clip.
@@ -505,7 +566,9 @@ class FusionDetector:
             if not bp_counts:
                 continue
             # Use clustering to find stable consensus breakpoint
-            consensus_result = self.cluster_breakpoints(bp_counts, window=100)
+            # Use larger window (5000 bp) to cluster nearby variants from different reads
+            # Finer resolution (25 bp) happens later in validate_candidates if needed
+            consensus_result = self.cluster_breakpoints(bp_counts, window=2000)
             if not consensus_result:
                 continue
             consensus_bp, clustered_support = consensus_result
@@ -654,71 +717,38 @@ class FusionDetector:
                     min_al_len_primary=50,
                     min_al_len_sa=40,
                     min_sa_mapq=10,
-                    min_softclip_len=40,
-                    jitter_window=25):
+                    min_softclip_len=30,
+                    jitter_window=50):
+        # Main fusion detection entry point. Processes all reads in BAM file.
         bam = pysam.AlignmentFile(self.bam_path, "rb")
         for read in bam:
-            if read.is_unmapped or read.is_secondary or read.is_supplementary:
+            # Filter reads by quality and alignment length
+            passes, clip_side, clip_len = self._passes_read_filters(
+                read, min_al_len_primary, min_sa_mapq
+            )
+            if not passes:
                 continue
-            prim_al_len = self.compute_aligned_length(read)
-            if prim_al_len < min_al_len_primary:
-                continue
-            prim_mapq = getattr(read, "mapping_quality", 0)
-            if prim_mapq < min_sa_mapq:
-                continue
-            clip_side, clip_len = self.detect_softclip(read)
+            # Extract and filter SA entries
             sa_entries = []
             if read.has_tag("SA"):
                 sa_entries = self.parse_sa_entries(read.get_tag("SA"))
-            seen_pairs = set()
+            # Process SA entries to find fusions
             sa_used = False
             if sa_entries:
-                # Filter & prioritize SA entries by mapq and aligned length
-                filtered = []
-                for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm) in sa_entries:
-                    if sa_pos is None or sa_cigar is None:
-                        continue
-                    sa_al_len = self.aligned_len_from_cigarstring(sa_cigar)
-                    if sa_al_len < min_al_len_sa or sa_mapq < min_sa_mapq:
-                        continue
-                    filtered.append((sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len))
-                # keep top-N by sa_mapq or aligned length to limit work
-                if len(filtered) > 3:
-                    filtered.sort(key=lambda x: (x[4], x[6]), reverse=True)
-                    filtered = filtered[:3]
-
-                for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len) in filtered:
-                    # Estimate breakpoints with clip guidance
-                    left_chr, left_pos, right_chr, right_pos = self.estimate_breakpoint(
-                        read, sa_pos, clip_side=clip_side, sa_cigar=sa_cigar
-                    )
-                    if left_pos is None or right_pos is None:
-                        continue
-                    key = (left_chr, (left_pos // jitter_window),
-                        sa_chr, (right_pos // jitter_window))
-                    if key in seen_pairs:
-                        continue
-                    seen_pairs.add(key)
-                    # Store raw assigned genes (no normalization yet - defer to build_metadata)
-                    left_gene  = self.assign_fusion_gene(left_chr, left_pos)
-                    right_gene = self.assign_fusion_gene(sa_chr,  right_pos)
-                    if left_gene is None or right_gene is None:
-                        continue
-                    if left_gene != right_gene:
-                        self.record_fusion(
-                            left_gene, right_gene, read.query_name,
-                            left_chr, left_pos, sa_chr, right_pos
-                        )
-                        sa_used = True
-            # Only realign soft-clips if:
-            # 1. No SA tag was processed successfully (not sa_used)
-            # 2. Soft-clip is long enough (clip_len >= min_softclip_len)
-            # This avoids redundant expensive realignment when SA tag already covers the junction
-            if clip_side and clip_len >= min_softclip_len and not sa_used:
-                self.realign_softclip(read, clip_side, clip_len,
-                                            seen_pairs,
-                                            jitter_window=jitter_window,
-                                            min_sa_mapq=min_sa_mapq)
+                filtered = self._filter_sa_entries(
+                    sa_entries, min_al_len_sa, min_sa_mapq
+                )
+                sa_used = self._process_sa_entries(
+                    read, filtered, clip_side, jitter_window, min_sa_mapq
+                )
+            if clip_side and clip_len >= min_softclip_len:
+                seen_pairs = set()  # Local scope for this read's softclip realignment
+                self.realign_softclip(
+                    read, clip_side, clip_len,
+                    seen_pairs,
+                    jitter_window=jitter_window,
+                    min_sa_mapq=min_sa_mapq
+                )
         bam.close()
 
     def reconstruct_fusion_transcript(self, c1, p1, c2, p2, exon_padding=100):
@@ -769,7 +799,6 @@ class FusionDetector:
             if not hits:
                 logger.debug("No raw alignment hits for fusion transcript")
                 return []
-
             good_hits = []
             for h in hits:
                 # Support various mappy attribute names (q_st/q_en or qstart/qend or query_start/query_end)
@@ -778,7 +807,6 @@ class FusionDetector:
                 if q_st is None or q_en is None:
                     q_st = getattr(h, 'qstart', None) or getattr(h, 'query_start', None)
                     q_en = getattr(h, 'qend', None) or getattr(h, 'query_end', None)
-
                 # Fallback to reported match/aligned lengths
                 match_len = None
                 if q_st is not None and q_en is not None:
@@ -788,14 +816,10 @@ class FusionDetector:
                         match_len = None
                 if not match_len:
                     match_len = getattr(h, 'mlen', None) or getattr(h, 'alen', None) or 0
-
                 mapq = getattr(h, 'mapq', 0) or getattr(h, 'mapq', 0)
-
                 logger.debug(f"Raw hit: q_st={q_st} q_en={q_en} match_len={match_len} mapq={mapq} ctg={getattr(h,'ctg',None)} r_st={getattr(h,'r_st',None)} r_en={getattr(h,'r_en',None)}")
-
                 if match_len >= min_match_len and mapq >= min_mapq:
                     good_hits.append(h)
-
             logger.debug(f"Filtered {len(good_hits)} good hits out of {len(hits)} raw hits for fusion transcript")
             return good_hits
         except Exception as e:
@@ -832,7 +856,7 @@ class FusionDetector:
             return False, f"Exon boundary check failed: {e}"
 
     def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
-                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=False,
+                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
         for fusion_key, meta in self.fusion_metadata.items():
@@ -862,10 +886,8 @@ class FusionDetector:
             if flags["is_valid"] and require_exon_boundary:
                 left_gene  = meta.get("left_gene")
                 right_gene = meta.get("right_gene")
-
                 okL, whyL = self.check_gene_exon_boundary(left_gene,  c1, p1, delta=50)
                 okR, whyR = self.check_gene_exon_boundary(right_gene, c2, p2, delta=50)
-
                 if not okL or not okR:
                     flags["is_valid"] = False
                     # Append specific reasons (only non-empty strings)
@@ -1059,7 +1081,6 @@ class FusionDetector:
                 if not meta.get("consensus_bp"):
                     continue
                 left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
-                left_gene  = self._safe_gene_token(meta.get("left_gene"))
                 left_gene  = meta["left_gene"]
                 right_gene = meta["right_gene"]
                 # Skip if collapse makes them equal
