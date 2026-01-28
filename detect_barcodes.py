@@ -263,7 +263,9 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None
     return output_file, out_fasta, counter
 
 
-def prepare_barcodes(args):
+def create_barcode_caller(args):
+    logger.info("Creating barcode detector for mode %s" % args.mode.name + (", min_score=%d" % args.min_score if args.min_score else ""))
+
     if args.mode == IsoQuantMode.custom_sc:
         if not args.molecule:
             logger.critical("Custom single-cell/spatial mode requires molecule description to be provided via --molecule")
@@ -271,8 +273,10 @@ def prepare_barcodes(args):
         if not os.path.isfile(args.molecule):
             logger.critical("Molecule file %s does not exist" % args.molecule)
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+        if args.min_score:
+            logger.warning("Custom single-cell/spatial mode does not support --min-score, ignoring")
 
-        return MoleculeStructure(open(args.molecule))
+        return BARCODE_CALLING_MODES[args.mode](MoleculeStructure(open(args.molecule)))
 
     logger.info("Using barcodes from %s" % ", ".join(args.barcodes))
     barcode_files = len(args.barcodes)
@@ -294,15 +298,16 @@ def prepare_barcodes(args):
             for i, bc in enumerate(barcodes):
                 logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
-    return barcodes
 
-
-def process_single_thread(args):
-    logger.info("Preparing barcodes indices")
-    barcodes = prepare_barcodes(args)
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
     if args.min_score:
         barcode_detector.min_score = args.min_score
+
+    return barcode_detector
+
+
+def process_single_thread(args):
+    barcode_detector = create_barcode_caller(args)
 
     # args.input, args.output_tsv are always lists
     # args.out_fasta is a list or None
@@ -443,7 +448,7 @@ def process_in_parallel(args):
     out_fastas = args.out_fasta if args.out_fasta else [None] * len(args.input)
 
     # Prepare barcodes once for all files
-    barcodes = prepare_barcodes(args)
+    barcodes = create_barcode_caller(args)
 
     for idx, (input_file, output_tsv, out_fasta) in enumerate(zip(args.input, args.output_tsv, out_fastas)):
         if len(args.input) > 1:
