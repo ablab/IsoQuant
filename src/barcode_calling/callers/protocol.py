@@ -86,6 +86,29 @@ class BarcodeResult(Protocol):
         """
         ...
 
+    def has_barcode(self) -> bool:
+        """
+        Check if a barcode was detected (alias for is_valid()).
+
+        Used by ReadStats for counting detected barcodes.
+
+        Returns:
+            bool: True if barcode was detected.
+        """
+        ...
+
+    def has_umi(self) -> bool:
+        """
+        Check if a valid UMI was detected.
+
+        Returns True if get_umi() returns something other than NOSEQ.
+        Used by ReadStats for counting detected UMIs.
+
+        Returns:
+            bool: True if UMI was detected.
+        """
+        ...
+
     def set_strand(self, strand: str) -> None:
         """
         Set the detected strand orientation.

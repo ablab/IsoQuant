@@ -95,6 +95,14 @@ class BarcodeDetectionResult:
         """Check if a valid barcode was detected."""
         return self._barcode != BarcodeDetectionResult.NOSEQ
 
+    def has_barcode(self) -> bool:
+        """Check if a barcode was detected (alias for is_valid())."""
+        return self._barcode != BarcodeDetectionResult.NOSEQ
+
+    def has_umi(self) -> bool:
+        """Check if a valid UMI was detected."""
+        return self._umi != BarcodeDetectionResult.NOSEQ
+
     def update_coordinates(self, delta: int) -> None:
         """
         Shift all genomic coordinates by delta.
@@ -126,12 +134,9 @@ class BarcodeDetectionResult:
         Get list of detected additional features (primer, linker, etc.).
 
         Returns:
-            List of detected feature names
-
-        Raises:
-            NotImplementedError: Must be implemented by subclasses
+            List of detected feature names. Empty list for base class.
         """
-        raise NotImplementedError()
+        return []
 
     def set_strand(self, strand: str) -> None:
         """Set the detected strand."""
@@ -357,6 +362,14 @@ class SplittingBarcodeDetectionResult:
         """Check if any pattern has a valid barcode."""
         return any(r.is_valid() for r in self.detected_patterns)
 
+    def has_barcode(self) -> bool:
+        """Check if any pattern has a valid barcode."""
+        return any(r.has_barcode() for r in self.detected_patterns)
+
+    def has_umi(self) -> bool:
+        """Check if any pattern has a valid UMI."""
+        return any(r.has_umi() for r in self.detected_patterns)
+
     def set_strand(self, strand: str) -> None:
         """Set strand for all patterns."""
         self.strand = strand
@@ -405,23 +418,23 @@ class ReadStats:
         self.umi_count: int = 0
         self.additional_attributes_counts: Dict[str, int] = defaultdict(int)
 
-    def add_read(self, barcode_detection_result: BarcodeDetectionResult) -> None:
+    def add_read(self, barcode_detection_result) -> None:
         """
         Add a read result to statistics.
 
         Args:
-            barcode_detection_result: Detection result to accumulate
+            barcode_detection_result: Detection result to accumulate (implements BarcodeResult protocol)
         """
         self.read_count += 1
         # Count detected features (primer, linker, etc.)
         for a in barcode_detection_result.get_additional_attributes():
             self.additional_attributes_counts[a] += 1
         # Count valid barcode
-#        if barcode_detection_result.barcode != BarcodeDetectionResult.NOSEQ:
-#            self.bc_count += 1
+        if barcode_detection_result.has_barcode():
+            self.bc_count += 1
         # Count valid UMI
-#        if barcode_detection_result.UMI_good:
-#            self.umi_count += 1
+        if barcode_detection_result.has_umi():
+            self.umi_count += 1
 
     def add_custom_stats(self, stat_name: str, val: int) -> None:
         """
