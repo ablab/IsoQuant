@@ -118,9 +118,23 @@ class KmerIndexer:
             yield kmer
 
     # [start, end]
-    def get_occurrences_substr(self, sequence, start, end, max_hits=0, min_kmers=1, hits_delta=1):
-        barcode_counts = defaultdict(int)
-        barcode_positions = defaultdict(list)
+    def get_occurrences_substr(self, sequence, start, end, max_hits=0, min_kmers=1, hits_delta=1) -> List[Tuple[str, int, List[int]]]:
+        """
+        Find indexed sequences with shared k-mers.
+
+        Args:
+            sequence: Query sequence to search
+            max_hits: Maximum number of results (0 = unlimited)
+            min_kmers: Minimum shared k-mers required
+            hits_delta: Include results within this many k-mers of top hit
+            ignore_equal: Skip exact matches
+
+        Returns:
+            List of (sequence, shared_kmer_count, kmer_positions) tuples,
+            sorted by shared k-mer count (descending)
+        """
+        barcode_counts: DefaultDict[int, int] = defaultdict(int)
+        barcode_positions: DefaultDict[int, List[int]] = defaultdict(list)
 
         for pos, kmer in enumerate(self._get_kmers_substr(sequence, start, end)):
             for i in self.index[kmer]:
@@ -135,15 +149,16 @@ class KmerIndexer:
             result.append((self.seq_list[i], count, barcode_positions[i]))
 
         if not result:
-            return {}
+            return []
 
         top_hits = max(result, key=lambda x: x[1])[1]
         result = filter(lambda x: x[1] >= top_hits - hits_delta, result)
-        result = sorted(result, reverse=True, key=lambda x: x[1])
+        result = list(sorted(result, reverse=True, key=lambda x: x[1]))
 
         if max_hits == 0:
-            return {x[0]:x for x in result}
-        return {x[0]:x for x in list(result)[:max_hits]}
+            return result
+        return result[:max_hits]
+
 
 class ArrayKmerIndexer:
     """
