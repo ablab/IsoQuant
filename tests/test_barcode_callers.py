@@ -100,7 +100,8 @@ class TestBarcodeDetectionResult:
 
     def test_header(self):
         """Test TSV header."""
-        header = BarcodeDetectionResult.header()
+        # header() is now an instance method, use _header() for static access
+        header = BarcodeDetectionResult._header()
         assert "#read_id" in header
         assert "barcode" in header
         assert "UMI" in header
@@ -407,6 +408,7 @@ class TestReadStats:
         result = LinkerBarcodeDetectionResult(
             "read_001",
             barcode="ACTG",
+            UMI="GGGGGGGG",  # Need actual UMI for has_umi() to return True
             UMI_good=True,
             polyT=100
         )
@@ -458,7 +460,8 @@ class TestReadStats:
     def test_str_format(self):
         """Test string formatting."""
         stats = ReadStats()
-        result = LinkerBarcodeDetectionResult("read_001", barcode="ACTG", UMI_good=True)
+        # Need actual UMI for has_umi() to return True
+        result = LinkerBarcodeDetectionResult("read_001", barcode="ACTG", UMI="GGGGGGGG", UMI_good=True)
         stats.add_read(result)
 
         output = str(stats)
