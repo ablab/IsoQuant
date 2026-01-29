@@ -228,7 +228,7 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
         return None, None
     leftover_bases = len(pattern) - pattern_end - 1
     skipped_bases = pattern_start
-    return start_pos - skipped_bases, end_pos + leftover_bases
+    return max(0, start_pos - skipped_bases), min(end_pos + leftover_bases, len(sequence) - 1)
 
 
 def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences: list,
