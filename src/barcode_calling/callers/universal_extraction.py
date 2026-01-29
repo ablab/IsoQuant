@@ -344,7 +344,8 @@ class UniversalSingleMoleculeExtractor:
 
             search_start = current_search_start
             search_end = len(sequence) if polyt_start == -1 else polyt_start + 1
-            element_occurrences = self.index_dict[el.element_name].get_occurrences_substr(sequence, search_start,
+            element_occurrences = self.index_dict[el.element_name].get_occurrences_substr(sequence,
+                                                                                          search_start,
                                                                                           search_end)
             if not first_element_detected:
                 min_score = int(el.element_length * self.MIN_SCORE_COEFF_TERMMINAL)
@@ -361,6 +362,7 @@ class UniversalSingleMoleculeExtractor:
                                                                 min_score=min_score,
                                                                 start_delta=start_delta,
                                                                 end_delta=self.TERMINAL_MATCH_DELTA)
+
 
             if element_start is not None:
                 current_search_start = element_end
