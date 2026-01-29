@@ -312,6 +312,111 @@ UMI\tVAR_ANY\t12
         assert MoleculeStructure.DUPL_DELIM == "/"
 
 
+class TestMoleculeStructureBarcodeUMI:
+    """Test barcode/UMI element identification."""
+
+    def test_barcode_elements_single(self):
+        """Test single barcode element identification."""
+        mdf_content = """Barcode:UMI:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC
+UMI\tVAR_ANY\t10
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.barcode_elements == ["Barcode"]
+
+    def test_umi_elements_single(self):
+        """Test single UMI element identification."""
+        mdf_content = """Barcode:UMI:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC
+UMI\tVAR_ANY\t10
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.umi_elements == ["UMI"]
+
+    def test_barcode_elements_multiple(self):
+        """Test multiple barcode elements identification."""
+        mdf_content = """barcode1:barcode2:UMI:cDNA
+barcode1\tVAR_LIST\tAAAA,CCCC
+barcode2\tVAR_LIST\tGGGG,TTTT
+UMI\tVAR_ANY\t10
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.barcode_elements == ["barcode1", "barcode2"]
+
+    def test_umi_elements_multiple(self):
+        """Test multiple UMI elements identification."""
+        mdf_content = """Barcode:UMI1:UMI2:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC
+UMI1\tVAR_ANY\t6
+UMI2\tVAR_ANY\t6
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.umi_elements == ["UMI1", "UMI2"]
+
+    def test_barcode_case_insensitive(self):
+        """Test that barcode prefix is case-insensitive."""
+        mdf_content = """BARCODE:Barcode2:barcode3:cDNA
+BARCODE\tVAR_LIST\tAAAA,CCCC
+Barcode2\tVAR_LIST\tGGGG,TTTT
+barcode3\tVAR_LIST\tACGT,TGCA
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert len(structure.barcode_elements) == 3
+        assert "BARCODE" in structure.barcode_elements
+        assert "Barcode2" in structure.barcode_elements
+        assert "barcode3" in structure.barcode_elements
+
+    def test_umi_case_insensitive(self):
+        """Test that UMI prefix is case-insensitive."""
+        mdf_content = """Barcode:UMI:umi2:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC
+UMI\tVAR_ANY\t6
+umi2\tVAR_ANY\t6
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert len(structure.umi_elements) == 2
+        assert "UMI" in structure.umi_elements
+        assert "umi2" in structure.umi_elements
+
+    def test_no_barcode_elements(self):
+        """Test structure with no barcode elements."""
+        mdf_content = """R1:UMI:cDNA
+R1\tCONST\tACGT
+UMI\tVAR_ANY\t10
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.barcode_elements == []
+
+    def test_no_umi_elements(self):
+        """Test structure with no UMI elements."""
+        mdf_content = """Barcode:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.umi_elements == []
+
+    def test_from_element_list_identifies_barcodes(self):
+        """Test that from_element_list also identifies barcode/UMI elements."""
+        elements = [
+            MoleculeElement("Barcode", ElementType.VAR_LIST, "AAAA,CCCC"),
+            MoleculeElement("UMI", ElementType.VAR_ANY, "10"),
+            MoleculeElement("cDNA", ElementType.cDNA)
+        ]
+
+        structure = MoleculeStructure.from_element_list(elements)
+
+        assert structure.barcode_elements == ["Barcode"]
+        assert structure.umi_elements == ["UMI"]
+
+
 class TestMoleculeStructureEdgeCases:
     """Test edge cases and error handling."""
 
