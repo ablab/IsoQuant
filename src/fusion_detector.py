@@ -354,6 +354,12 @@ class FusionDetector:
         return sum(l for op, l in cigartuples if op in (0, 7, 8))
 
     def aligned_len_from_cigarstring(self, cigar):
+        # Use cached parser to avoid re-running regex for identical CIGAR strings
+        return self._cached_aligned_len_from_cigarstring(cigar)
+
+    @staticmethod
+    @lru_cache(maxsize=50000)
+    def _cached_aligned_len_from_cigarstring(cigar):
         if not cigar:
             return 0
         total = 0
@@ -374,7 +380,6 @@ class FusionDetector:
 
     def realign_clipped_seq(self, seq):
         # Realign a clipped sequence using the aligner.
-        # Uses LRU cache to avoid re-aligning identical sequences.
         if not seq or not self.aligner:
             return None
         try:
@@ -399,8 +404,6 @@ class FusionDetector:
             return
         left = self._safe_gene_token(context1)
         right = self._safe_gene_token(context2)
-
-        # Avoid sorted() on mixed types; both are now strings.
         fusion_key = "--".join(sorted([left, right]))
 
         self.fusion_candidates[fusion_key].add(read_name)
@@ -430,7 +433,6 @@ class FusionDetector:
 
     def build_metadata(self, min_support=1):
         # Compute consensus breakpoint and gene names for all fusion keys.
-        # Resolve gene names ONCE per fusion key after clustering, not per-read.
         for fusion_key, reads in self.fusion_candidates.items():
             support = len(reads)
             meta = self.fusion_metadata.setdefault(
@@ -453,8 +455,6 @@ class FusionDetector:
             if not bp_counts:
                 continue
             # Use clustering to find stable consensus breakpoint
-            # Use larger window (5000 bp) to cluster nearby variants from different reads
-            # Finer resolution (25 bp) happens later in validate_candidates if needed
             consensus_result = self.cluster_breakpoints(bp_counts, window=2000)
             if not consensus_result:
                 continue
@@ -462,7 +462,7 @@ class FusionDetector:
             meta["consensus_bp"] = consensus_bp
             meta["support"] = clustered_support
             left_chr, left_pos, right_chr, right_pos = consensus_bp
-            # Resolve gene names ONCE per fusion key (not per-read, not per-call)
+            # Resolve gene names ONCE per fusion key
             # Store both raw assigned genes and normalized names
             raw_left = self.assign_fusion_gene(left_chr, left_pos)
             raw_right = self.assign_fusion_gene(right_chr, right_pos)
@@ -474,7 +474,7 @@ class FusionDetector:
             meta["left_gene"] = left_gene
             meta["right_gene"] = right_gene
 
-    def cluster_breakpoints(self, bp_counts, window=100):
+    def cluster_breakpoints(self, bp_counts, window):
         # bp_counts: dict[(chr1,pos1,chr2,pos2)] -> count
         # Group by chr pairs, then cluster positions by window
         from collections import defaultdict
@@ -927,7 +927,7 @@ class FusionDetector:
             return None
 
     def confidence(self, meta, flags=None):
-        # Start from clustered support normalized 
+        # Start from clustered support normalized
         support = min(meta.get("support", 0), 10) / 10.0
         # Reconstruction bonus
         recon = 0.2 if meta.get("reconstruction_ok") else 0.0
@@ -970,6 +970,9 @@ class FusionDetector:
                 left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
                 left_gene  = meta["left_gene"]
                 right_gene = meta["right_gene"]
+                # Exclude mitochondrial fusion candidates from report
+                if self._is_mitochondrial_candidate(left_chr, right_chr, left_gene, right_gene):
+                    continue
                 # Skip if collapse makes them equal
                 if left_gene == right_gene:
                     continue
