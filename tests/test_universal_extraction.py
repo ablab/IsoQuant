@@ -370,15 +370,17 @@ class TestExtractionResult:
         assert "strand" in header
 
     def test_get_additional_attributes(self):
-        """Test getting additional attributes."""
+        """Test getting additional attributes excludes barcode/UMI elements."""
         structure = create_simple_structure()
         detected = create_detected_elements()
 
         result = ExtractionResult(structure, "read_001", "+", detected)
         attrs = result.get_additional_attributes()
 
-        assert "Barcode detected" in attrs
-        assert "UMI detected" in attrs
+        # Barcode and UMI are excluded (tracked separately by ReadStats)
+        assert "Barcode detected" not in attrs
+        assert "UMI detected" not in attrs
+        # Supplementary elements are included
         assert "PolyT detected" in attrs
 
     def test_noseq_constant(self):
