@@ -119,6 +119,20 @@ class UniversalSingleMoleculeExtractor:
     def concatenate_elements(self, detected_results):
         pass
 
+    def correct_element(self, element: MoleculeElement, sequence: str, potential_start: int, potential_end: int) -> DetectedElement:
+        potential_seq = sequence[potential_start:potential_end + 1]
+        matching_sequences = self.index_dict[element.element_name].get_occurrences(potential_seq)
+        corrected_seq, seq_score, seq_start, seq_end = \
+            find_candidate_with_max_score_ssw(matching_sequences, potential_seq,
+                                              min_score=self.min_scores[element.element_name])
+
+        if corrected_seq is not None:
+            read_seq_start = potential_start + seq_start
+            read_seq_end = potential_start + seq_end - 1
+            return DetectedElement(read_seq_start, read_seq_end, seq_score, corrected_seq)
+        else:
+            return DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+
     def extract_variable_elements5(self, detected_elements, sequence):
         first_detected_const_element = None
         for i, el in enumerate(self.molecule_structure):
@@ -153,19 +167,10 @@ class UniversalSingleMoleculeExtractor:
                                                                      seq=sequence[potential_start:potential_end + 1])
 
             elif el.element_name in self.elements_to_correct:
-                potential_seq = sequence[potential_start:potential_end + 1]
-                matching_sequences = self.index_dict[el.element_name].get_occurrences(potential_seq)
-                corrected_seq, seq_score, seq_start, seq_end = \
-                    find_candidate_with_max_score_ssw(matching_sequences, potential_seq, min_score=self.min_scores[el.element_name])
-
-                if corrected_seq is not None:
-                    read_seq_start = potential_start + seq_start
-                    read_seq_end = potential_start + seq_end - 1
-                    current_pos = read_seq_start - 1
-                    detected_elements[el.element_name] = DetectedElement(read_seq_start, read_seq_end, seq_score,
-                                                                         corrected_seq)
-                else:
-                    detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+                detected_element = self.correct_element(el, sequence, potential_start, potential_end)
+                if detected_element.start != -1:
+                    current_pos = detected_element.start - 1
+                detected_elements[el.element_name] = detected_element
 
         current_pos = detected_elements[
                           self.molecule_structure.ordered_elements[first_detected_const_element].element_name].end + 1
@@ -207,20 +212,10 @@ class UniversalSingleMoleculeExtractor:
                                                                              potential_start:potential_end + 1])
 
                 elif el.element_name in self.elements_to_correct:
-                    potential_seq = sequence[potential_start:potential_end + 1]
-                    matching_sequences = self.index_dict[el.element_name].get_occurrences(potential_seq)
-                    corrected_seq, seq_score, seq_start, seq_end = \
-                        find_candidate_with_max_score_ssw(matching_sequences, potential_seq,
-                                                          min_score=self.min_scores[el.element_name])
-
-                    if corrected_seq is not None:
-                        read_seq_start = potential_start + seq_start
-                        read_seq_end = potential_start + seq_end - 1
-                        current_pos = read_seq_end + 1
-                        detected_elements[el.element_name] = DetectedElement(read_seq_start, read_seq_end, seq_score,
-                                                                             corrected_seq)
-                    else:
-                        detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+                    detected_element = self.correct_element(el, sequence, potential_start, potential_end)
+                    if detected_element.end != -1:
+                        current_pos = detected_element.end + 1
+                    detected_elements[el.element_name] = detected_element
             else:
                 detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
 
@@ -260,19 +255,10 @@ class UniversalSingleMoleculeExtractor:
                                                                      seq=sequence[potential_start:potential_end + 1])
 
             elif el.element_name in self.elements_to_correct:
-                potential_seq = sequence[potential_start:potential_end + 1]
-                matching_sequences = self.index_dict[el.element_name].get_occurrences(potential_seq)
-                corrected_seq, seq_score, seq_start, seq_end = \
-                    find_candidate_with_max_score_ssw(matching_sequences, potential_seq, min_score=self.min_scores[el.element_name])
-
-                if corrected_seq is not None:
-                    read_seq_start = potential_start + seq_start
-                    read_seq_end = potential_start + seq_end - 1
-                    current_pos = read_seq_end + 1
-                    detected_elements[el.element_name] = DetectedElement(read_seq_start, read_seq_end, seq_score,
-                                                                         corrected_seq)
-                else:
-                    detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+                detected_element = self.correct_element(el, sequence, potential_start, potential_end)
+                if detected_element.end != -1:
+                    current_pos = detected_element.end + 1
+                detected_elements[el.element_name] = detected_element
 
         current_pos = detected_elements[
                           self.molecule_structure.ordered_elements[last_detected_const_element].element_name].start - 1
@@ -314,20 +300,11 @@ class UniversalSingleMoleculeExtractor:
                                                                              potential_start:potential_end + 1])
 
                 elif el.element_name in self.elements_to_correct:
-                    potential_seq = sequence[potential_start:potential_end + 1]
-                    matching_sequences = self.index_dict[el.element_name].get_occurrences(potential_seq)
-                    corrected_seq, seq_score, seq_start, seq_end = \
-                        find_candidate_with_max_score_ssw(matching_sequences, potential_seq,
-                                                          min_score=self.min_scores[el.element_name])
+                    detected_element = self.correct_element(el, sequence, potential_start, potential_end)
+                    if detected_element.start != -1:
+                        current_pos = detected_element.start - 1
+                    detected_elements[el.element_name] = detected_element
 
-                    if corrected_seq is not None:
-                        read_seq_start = potential_start + seq_start
-                        read_seq_end = potential_start + seq_end - 1
-                        current_pos = read_seq_start - 1
-                        detected_elements[el.element_name] = DetectedElement(read_seq_start, read_seq_end, seq_score,
-                                                                             corrected_seq)
-                    else:
-                        detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
             else:
                 detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
 
