@@ -7,7 +7,7 @@
 import logging
 import sys
 from enum import unique, Enum
-from typing import Iterator
+from typing import Iterator, List
 
 from ...error_codes import IsoQuantExitCode
 from ..common import load_barcodes
@@ -87,13 +87,25 @@ class MoleculeElement:
 
 
 class MoleculeStructure:
+    """
+    Defines the structure of a molecule for barcode/UMI extraction.
+
+    Parses molecule definition files (MDF) and identifies which elements
+    are barcodes and UMIs based on naming convention:
+    - Elements with prefix "barcode" (case-insensitive) are barcodes
+    - Elements with prefix "umi" (case-insensitive) are UMIs
+    """
+
     CONCAT_DELIM = "|"
     DUPL_DELIM = "/"
 
     def __init__(self, str_iterator):
-        self.ordered_elements: list[MoleculeElement] = []
+        self.ordered_elements: List[MoleculeElement] = []
         self.elements_to_concatenate = {}
         self.duplicated_elements = {}
+        # Barcode/UMI element names identified by naming convention
+        self._barcode_elements: List[str] = []
+        self._umi_elements: List[str] = []
 
         l = next(str_iterator)
         elements = list(map(lambda x: x.strip(), l.strip().split(':')))
@@ -141,10 +153,44 @@ class MoleculeStructure:
                     sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
                 self.duplicated_elements[el] = v[0]
 
+        self._identify_barcode_umi_elements()
+
+    def _identify_barcode_umi_elements(self) -> None:
+        """
+        Identify barcode/UMI elements by naming convention.
+
+        Elements with prefix "barcode" (case-insensitive) are barcodes.
+        Elements with prefix "umi" (case-insensitive) are UMIs.
+        """
+        self._barcode_elements = []
+        self._umi_elements = []
+        for el in self.ordered_elements:
+            name_lower = el.element_name.lower()
+            if name_lower.startswith("barcode"):
+                self._barcode_elements.append(el.element_name)
+            elif name_lower.startswith("umi"):
+                self._umi_elements.append(el.element_name)
+
+    @property
+    def barcode_elements(self) -> List[str]:
+        """Get list of barcode element names (identified by 'barcode' prefix)."""
+        return self._barcode_elements
+
+    @property
+    def umi_elements(self) -> List[str]:
+        """Get list of UMI element names (identified by 'umi' prefix)."""
+        return self._umi_elements
+
     @classmethod
     def from_element_list(cls, element_list):
+        """Create MoleculeStructure from a list of MoleculeElement objects."""
         ms = cls.__new__(cls)
         ms.ordered_elements = element_list
+        ms.elements_to_concatenate = {}
+        ms.duplicated_elements = {}
+        ms._barcode_elements = []
+        ms._umi_elements = []
+        ms._identify_barcode_umi_elements()
         return ms
 
     def __iter__(self) -> Iterator[MoleculeElement]:

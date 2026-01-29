@@ -62,19 +62,16 @@ class ExtractionResult:
         self.read_id = read_id
         self.strand = strand
         self.detected_results = detected_results
-        # Cache barcode/UMI element names for efficiency
-        self._barcode_elements: List[str] = []
-        self._umi_elements: List[str] = []
-        self._identify_barcode_umi_elements()
 
-    def _identify_barcode_umi_elements(self) -> None:
-        """Identify barcode/UMI elements by naming convention."""
-        for el in self.molecule_structure:
-            name_lower = el.element_name.lower()
-            if name_lower.startswith("barcode"):
-                self._barcode_elements.append(el.element_name)
-            elif name_lower.startswith("umi"):
-                self._umi_elements.append(el.element_name)
+    @property
+    def _barcode_elements(self) -> List[str]:
+        """Get barcode element names from molecule structure."""
+        return self.molecule_structure.barcode_elements
+
+    @property
+    def _umi_elements(self) -> List[str]:
+        """Get UMI element names from molecule structure."""
+        return self.molecule_structure.umi_elements
 
     def get_barcode(self) -> str:
         """
