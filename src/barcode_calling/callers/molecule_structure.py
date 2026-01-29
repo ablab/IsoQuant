@@ -201,22 +201,3 @@ class MoleculeStructure:
         for e in self.ordered_elements:
             yield e
 
-    def header(self):
-        printed_elements = set()
-        header = "#read_id\tstrand"
-        for el in self.ordered_elements:
-            if el.element_type == ElementType.cDNA: continue
-            if el.element_type == ElementType.PolyT:
-                header += "\tpolyT_start\tpolyT_end"
-            elif el.element_type.is_constant():
-                header += "\t%s_start\t%s_end" % (el.element_name, el.element_name)
-            elif el.element_type.needs_sequence_extraction() or el.element_type.needs_correction():
-                if el.element_name in self.elements_to_concatenate.keys():
-                    if self.elements_to_concatenate[el.element_name] in printed_elements:
-                        continue
-                    printed_elements.add(self.elements_to_concatenate[el.element_name])
-                    header += "\t%s_start\t%s_end\t%s_sequence" % (el.element_name, el.element_name,
-                                                                   self.elements_to_concatenate[el.element_name])
-                else:
-                    header += "\t%s_start\t%s_end\t%s_sequence" % (el.element_name, el.element_name, el.element_name)
-        return header
