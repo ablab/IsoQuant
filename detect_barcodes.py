@@ -401,8 +401,7 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
                                                           chunk,
                                                           tmp_barcode_file,
                                                           chunk_counter,
-                                                          tmp_fasta_file,
-                                                          min_score))
+                                                          tmp_fasta_file))
                         chunk_counter += 1
                     except StopIteration:
                         reads_left = False
