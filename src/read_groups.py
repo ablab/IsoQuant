@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2020-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -8,9 +8,12 @@
 import logging
 import gzip
 import os
+import sys
+
 import pysam
 from collections import defaultdict
 
+from .error_codes import IsoQuantExitCode
 from .table_splitter import split_read_table_parallel
 
 
@@ -23,7 +26,7 @@ class AbstractReadGrouper:
     def __init__(self):
         self.read_groups = set()
 
-    def get_group_id(self, alignment, filename=None):
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
         raise NotImplementedError()
 
 
@@ -32,7 +35,7 @@ class DefaultReadGrouper(AbstractReadGrouper):
         AbstractReadGrouper.__init__(self)
         self.read_groups = {self.default_group_id}
 
-    def get_group_id(self, alignment, filename=None):
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
         return self.default_group_id
 
 
@@ -41,7 +44,7 @@ class AlignmentTagReadGrouper(AbstractReadGrouper):
         AbstractReadGrouper.__init__(self)
         self.tag = tag
 
-    def get_group_id(self, alignment, filename=None):
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
         try:
             tag_value = alignment.get_tag(self.tag)
         except KeyError:
@@ -57,7 +60,7 @@ class ReadIdSplitReadGrouper(AbstractReadGrouper):
         AbstractReadGrouper.__init__(self)
         self.delim = delim
 
-    def get_group_id(self, alignment, filename=None):
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
         read_id = alignment.query_name
         values = read_id.split(self.delim)
         if len(values) == 1:
@@ -82,7 +85,7 @@ class FileNameGrouper(AbstractReadGrouper):
                 for f in lib:
                     self.readable_names_dict[f] = readable_name
 
-    def get_group_id(self, alignment, filename=None):
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
         if filename in self.readable_names_dict:
             self.read_groups.add(self.readable_names_dict[filename])
             return self.readable_names_dict[filename]
@@ -93,59 +96,80 @@ class FileNameGrouper(AbstractReadGrouper):
         return filename
 
 
-# TODO: remove barocde table, use assignment.barcode
+def parse_barcode2spot_spec(spec: str):
+    """
+    Parse barcode2spot specification string.
+
+    Format: file.tsv or file.tsv:barcode_col:spot_cols
+    - file.tsv           -> (file.tsv, 0, [1])
+    - file.tsv:0:1       -> (file.tsv, 0, [1])
+    - file.tsv:0:1,2,3   -> (file.tsv, 0, [1, 2, 3])
+
+    Args:
+        spec: barcode2spot specification string
+
+    Returns:
+        Tuple of (filename, barcode_column_index, spot_column_indices)
+    """
+    parts = spec.split(':')
+    filename = parts[0]
+    barcode_col = int(parts[1]) if len(parts) > 1 else 0
+    if len(parts) > 2:
+        spot_cols = [int(x) for x in parts[2].split(',')]
+    else:
+        spot_cols = [1]  # Default: column 1
+    return filename, barcode_col, spot_cols
+
+
 class BarcodeSpotGrouper(AbstractReadGrouper):
-    """Grouper that maps reads to spots/cell types via barcodes"""
-    def __init__(self, barcode_file, barcode2spot_files):
+    """Grouper that uses a single column from shared barcode-to-spot data."""
+    def __init__(self, shared_data: 'SharedTableData', column_index: int):
         """
         Initialize barcode-to-spot grouper.
 
         Args:
-            barcode_file: Path to split barcode file for chromosome (read_id -> barcode, umi)
-            barcode2spot_files: List of TSV files mapping barcode -> spot/cell type
+            shared_data: SharedTableData instance (barcode in col 0, spots in cols 1-N)
+            column_index: Index within the loaded columns (0-based)
         """
         AbstractReadGrouper.__init__(self)
-        logger.debug(f"Reading barcodes from {barcode_file}")
+        self.shared_data = shared_data
+        self.column_index = column_index
 
-        # Load barcode dict: read_id -> (barcode, umi)
-        self.read_to_barcode = {}
-        if os.path.exists(barcode_file):
-            for line in open(barcode_file):
-                if line.startswith("#"):
-                    continue
-                parts = line.split()
-                if len(parts) >= 2:
-                    # Store just the barcode (second column)
-                    self.read_to_barcode[parts[0]] = parts[1]
-
-        # Load barcode2spot mapping: barcode -> spot/cell type
-        self.barcode_to_spot = {}
-        for barcode2spot_file in barcode2spot_files:
-            logger.debug(f"Reading barcode-to-spot mapping from {barcode2spot_file}")
-            self.barcode_to_spot.update(load_table(barcode2spot_file, 0, 1, '\t'))
-
-        logger.info(f"Loaded {len(self.read_to_barcode)} read-barcode mappings and "
-                   f"{len(self.barcode_to_spot)} barcode-spot mappings")
-
-    def get_group_id(self, alignment, filename=None):
-        """Map read to spot via barcode"""
-        read_id = alignment.query_name
-
-        # Look up barcode for this read
-        if read_id not in self.read_to_barcode:
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
+        """Map read to spot via barcode from read_assignment (not alignment.query_name)"""
+        if read_assignment is None or read_assignment.barcode is None:
             self.read_groups.add(self.default_group_id)
             return self.default_group_id
 
-        barcode = self.read_to_barcode[read_id]
-
-        # Look up spot for this barcode
-        if barcode not in self.barcode_to_spot:
+        barcode = read_assignment.barcode
+        if barcode not in self.shared_data.read_map:
             self.read_groups.add(self.default_group_id)
             return self.default_group_id
 
-        spot = self.barcode_to_spot[barcode]
+        values = self.shared_data.read_map[barcode]
+        if self.column_index >= len(values):
+            self.read_groups.add(self.default_group_id)
+            return self.default_group_id
+
+        spot = values[self.column_index]
         self.read_groups.add(spot)
         return spot
+
+
+class BarcodeGrouper(AbstractReadGrouper):
+    """Grouper that uses barcode directly from read_assignment"""
+    def __init__(self):
+        AbstractReadGrouper.__init__(self)
+
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
+        """Return barcode as group ID"""
+        if read_assignment is None or read_assignment.barcode is None:
+            self.read_groups.add(self.default_group_id)
+            return self.default_group_id
+
+        barcode = read_assignment.barcode
+        self.read_groups.add(barcode)
+        return barcode
 
 
 class SharedTableData:
@@ -194,7 +218,7 @@ class ReadTableGrouper(AbstractReadGrouper):
         self.shared_data = shared_data
         self.column_index = column_index
 
-    def get_group_id(self, alignment, filename=None):
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
         """Returns the group ID for this column"""
         if alignment.query_name not in self.shared_data.read_map:
             self.read_groups.add(self.default_group_id)
@@ -219,11 +243,11 @@ class MultiReadGrouper:
         self.groupers = groupers
         self.read_groups = [set() for _ in groupers]
 
-    def get_group_id(self, alignment, filename=None):
+    def get_group_id(self, alignment, read_assignment=None, filename=None):
         """Returns a list of group IDs from all groupers"""
         group_ids = []
         for i, grouper in enumerate(self.groupers):
-            gid = grouper.get_group_id(alignment, filename)
+            gid = grouper.get_group_id(alignment, read_assignment, filename)
             group_ids.append(gid)
             self.read_groups[i].add(gid)
         return group_ids
@@ -326,24 +350,38 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
     if values[0] == "file_name":
         return FileNameGrouper(args, sample)
     elif values[0] == 'barcode_spot':
-        # Format: barcode_spot:file1.tsv or just use --barcode2spot files
-        if len(values) >= 2:
-            # Explicit file(s) specified
-            barcode2spot_files = values[1:]
-        elif hasattr(args, 'barcode2spot') and args.barcode2spot:
-            # Use --barcode2spot files
-            barcode2spot_files = args.barcode2spot
-        else:
-            logger.critical("barcode_spot grouping requires --barcode2spot or explicit file specification")
-            return None
+        # Always uses --barcode2spot (single argument)
+        if not hasattr(args, 'barcode2spot') or not args.barcode2spot:
+            logger.critical("barcode_spot grouping requires --barcode2spot")
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
-        # Get split barcode file for this chromosome
         if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
             logger.critical("barcode_spot grouping requires barcoded reads (use --barcoded_reads)")
-            return None
-        # FIXME
-        barcode_file = sample.barcodes_split_reads + "_" + chr_id
-        return BarcodeSpotGrouper(barcode_file, barcode2spot_files)
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
+
+        # Parse barcode2spot spec
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+
+        # Load shared data using SharedTableData
+        shared_data = SharedTableData(filename, read_id_column_index=barcode_col,
+                                      group_id_column_indices=spot_cols, delim='\t')
+
+        if shared_data.num_columns == 1:
+            # Single column - return single grouper (backward compatible)
+            return BarcodeSpotGrouper(shared_data, column_index=0)
+        else:
+            # Multiple columns - return list of groupers sharing same data
+            groupers = []
+            for col_idx in range(shared_data.num_columns):
+                groupers.append(BarcodeSpotGrouper(shared_data, column_index=col_idx))
+            return groupers
+    elif values[0] == 'barcode':
+        # Direct barcode grouping - uses barcode from read_assignment
+        if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
+            logger.critical("barcode grouping requires barcoded reads (use --barcoded_reads)")
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
+
+        return BarcodeGrouper()
     elif values[0] == 'tag':
         if len(values) < 2:
             return AlignmentTagReadGrouper(tag="RG")
@@ -355,7 +393,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
         # group_cols can be comma-separated like "1,2,3"
         if len(values) < 2:
             logger.critical("group specification %s is too short, specifiy at least a file name" % spec_string)
-            return None
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
         read_id_column_index = int(values[2]) if len(values) > 2 else 0
         delim = values[4] if len(values) > 4 else '\t'
@@ -388,7 +426,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             return ReadTableGrouper(shared_data, 0)
     else:
         logger.critical("Unsupported read grouping option: %s" % values[0])
-        return None
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
 
 def create_read_grouper(args, sample, chr_id):
@@ -470,7 +508,17 @@ def get_grouping_pool_types(args) -> dict:
             pool_types[grouper_index] = 'file_name'
             grouper_index += 1
         elif spec_type == 'barcode_spot':
-            pool_types[grouper_index] = 'barcode_spot'
+            if hasattr(args, 'barcode2spot') and args.barcode2spot:
+                _, _, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+                for col_idx in range(len(spot_cols)):
+                    pool_types[grouper_index] = f'barcode_spot:{col_idx}'
+                    grouper_index += 1
+            else:
+                pool_types[grouper_index] = 'barcode_spot'
+                grouper_index += 1
+        elif spec_type == 'barcode':
+            # Barcode grouper uses the barcode pool (loaded per-chromosome)
+            pool_types[grouper_index] = 'barcode'
             grouper_index += 1
         elif spec_type in ['tag', 'read_id']:
             # BAM tags and read_id suffixes are discovered dynamically
@@ -530,7 +578,17 @@ def get_grouping_strategy_names(args) -> list:
         if spec_type == "file_name":
             strategy_names.append("file_name")
         elif spec_type == 'barcode_spot':
-            strategy_names.append("barcode_spot")
+            if hasattr(args, 'barcode2spot') and args.barcode2spot:
+                _, _, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+                if len(spot_cols) == 1:
+                    strategy_names.append("barcode_spot")
+                else:
+                    for col_idx in range(len(spot_cols)):
+                        strategy_names.append(f"barcode_spot_col{col_idx}")
+            else:
+                strategy_names.append("barcode_spot")
+        elif spec_type == 'barcode':
+            strategy_names.append("barcode")
         elif spec_type == 'tag':
             tag_name = values[1] if len(values) > 1 else "RG"
             strategy_names.append(f"tag_{tag_name}")

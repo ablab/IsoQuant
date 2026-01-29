@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2025 University of Helsinki
+# Copyright (c) 2025-2026 University of Helsinki
 # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
@@ -31,8 +31,15 @@ Implementation Details:
 - Per-worker pools ensure no sharing/locking between parallel workers
 """
 
+import os
+import glob
+import re
 import logging
-from typing import Optional, List, Dict
+from typing import List, Dict
+
+from .read_groups import AbstractReadGrouper, get_grouping_pool_types
+from .assignment_loader import load_genedb
+from .serialization import write_int, write_string, read_int, read_string
 
 logger = logging.getLogger('IsoQuant')
 
@@ -132,7 +139,7 @@ class StringPoolManager:
         self.read_group_tsv_pools: Dict[str, StringPool] = {}  # pool_key -> pool (static, from TSV files)
         self.read_group_dynamic_pools: Dict[int, StringPool] = {}  # spec_index -> pool (dynamic, for tag/read_id)
         self.file_name_pool = StringPool()  # For file_name grouping (static)
-        self.barcode_spot_pool = StringPool()  # For barcode_spot grouping (static)
+        self.barcode_spot_pools: Dict[int, StringPool] = {}  # For barcode_spot grouping (multi-column support)
 
         # Mapping from group spec index to pool type ('file_name', 'barcode_spot', 'tsv:N', 'dynamic')
         self.group_spec_pool_types: Dict[int, str] = {}
@@ -214,11 +221,11 @@ class StringPoolManager:
         Uses same logic as FileNameGrouper: uses readable_names_dict (labels)
         if available, otherwise uses basename without extension.
         Pool is built in sorted order for deterministic IDs across workers.
+        Also includes 'NA' for reads without filename info.
 
         Args:
             sample: Sample object with file_list and readable_names_dict attributes
         """
-        import os
         # Collect all file names first
         file_names = set()
 
@@ -239,42 +246,55 @@ class StringPoolManager:
             self.file_name_pool.add(name)
         logger.debug(f"File name pool: {len(self.file_name_pool)} unique readable names")
 
-    def build_barcode_spot_pool(self, barcode2spot_files: List[str]):
+    def build_barcode_spot_pool(self, barcode2spot_spec: str, column_index: int = 0,
+                                 file_column: int = 1):
         """
-        Build barcode-to-spot pool from mapping files.
+        Build barcode-to-spot pool for a specific column.
 
         Pool is built in sorted order for deterministic IDs across workers.
+        Also includes 'NA' for reads without barcode mapping.
 
         Args:
-            barcode2spot_files: List of TSV files mapping barcode -> spot/cell_type
+            barcode2spot_spec: barcode2spot spec (may include :col:cols suffix)
+            column_index: 0-based pool index (for storage in barcode_spot_pools dict)
+            file_column: Actual file column to read (from parsed spec)
         """
-        # Collect all spots first
+        # Extract filename from spec
+        bc2spot_file = barcode2spot_spec.split(':')[0]
+
+        # Collect all spots for this column
         spots = set()
-        for bc2spot_file in barcode2spot_files:
-            with open(bc2spot_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue
-                    parts = line.split('\t')
-                    if len(parts) >= 2:
-                        spots.add(parts[1])
-        # Add in sorted order for deterministic IDs
+        with open(bc2spot_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.split('\t')
+                if len(parts) > file_column:
+                    spots.add(parts[file_column])
+
+        # Add default group ID for reads without barcode mapping
+        spots.add(AbstractReadGrouper.default_group_id)
+
+        # Create and populate pool
+        pool = StringPool()
         for spot in sorted(spots):
-            self.barcode_spot_pool.add(spot)
-        logger.debug(f"Barcode spot pool: {len(self.barcode_spot_pool)} unique spots")
+            pool.add(spot)
+
+        self.barcode_spot_pools[column_index] = pool
+        logger.debug(f"Barcode spot pool (col {column_index}): {len(pool)} unique spots")
 
     def load_barcode_pool(self, barcode_file: str):
         """
         Load barcode pool from split barcode file.
 
         Pool is built in sorted order for deterministic IDs across workers.
+        Also includes 'NA' for reads without barcode.
 
         Args:
             barcode_file: Path to split barcode file for chromosome
                          Format: read_id\tbarcode\tumi
         """
-        import os
         if not os.path.exists(barcode_file):
             logger.debug(f"Barcode file not found: {barcode_file}")
             return
@@ -292,6 +312,9 @@ class StringPoolManager:
                     barcodes.add(parts[1])
                 if len(parts) >= 3 and parts[2]:
                     umis.add(parts[2])
+
+        # Add default group ID for reads without barcode
+        barcodes.add(AbstractReadGrouper.default_group_id)
 
         # Add in sorted order for deterministic IDs
         for barcode in sorted(barcodes):
@@ -314,14 +337,12 @@ class StringPoolManager:
             col_index: Column index to read group values from (1-based, default 1)
             delimiter: Field delimiter (from file spec, defaults to tab)
         """
-        import os
         if not os.path.exists(read_group_file):
             logger.debug(f"Read group file not found: {read_group_file}")
             return
 
         # Collect all group values first
         # Always include 'NA' (default group ID) in case some reads are not in the TSV file
-        from .read_groups import AbstractReadGrouper
         group_values = {AbstractReadGrouper.default_group_id}
         with open(read_group_file, 'r') as f:
             for line in f:
@@ -370,8 +391,20 @@ class StringPoolManager:
 
         if pool_type == 'file_name':
             return self.file_name_pool
+        elif pool_type.startswith('barcode_spot:'):
+            # Multi-column barcode_spot: 'barcode_spot:COL_INDEX'
+            col_idx = int(pool_type.split(':')[1])
+            if col_idx in self.barcode_spot_pools:
+                return self.barcode_spot_pools[col_idx]
+            return self._get_or_create_dynamic_pool(spec_index)
         elif pool_type == 'barcode_spot':
-            return self.barcode_spot_pool
+            # Legacy single-column (use column 0, first spot column)
+            if 0 in self.barcode_spot_pools:
+                return self.barcode_spot_pools[0]
+            return self._get_or_create_dynamic_pool(spec_index)
+        elif pool_type == 'barcode':
+            # Use barcode pool for direct barcode grouping
+            return self.barcode_pool
         elif pool_type.startswith('tsv:'):
             # Extract pool_key from 'tsv:SPEC_INDEX:COL_INDEX:DELIMITER'
             # pool_key format is 'SPEC_INDEX:COL_INDEX'
@@ -463,7 +496,6 @@ class StringPoolManager:
                 for each string:
                     string (length-prefixed)
         """
-        from .serialization import write_int, write_string
 
         # Only serialize non-empty dynamic pools
         non_empty_pools = {idx: pool for idx, pool in self.read_group_dynamic_pools.items()
@@ -484,8 +516,6 @@ class StringPoolManager:
 
         Rebuilds pools with same ID mappings as when serialized.
         """
-        from .serialization import read_int, read_string
-
         num_specs = read_int(infile)
         for _ in range(num_specs):
             spec_index = read_int(infile)
@@ -510,7 +540,8 @@ class StringPoolManager:
         lines.append(f"  Barcodes: {len(self.barcode_pool)}")
         lines.append(f"  UMIs: {len(self.umi_pool)}")
         lines.append(f"  File names: {len(self.file_name_pool)}")
-        lines.append(f"  Barcode spots: {len(self.barcode_spot_pool)}")
+        total_spots = sum(len(p) for p in self.barcode_spot_pools.values())
+        lines.append(f"  Barcode spots: {total_spots} (across {len(self.barcode_spot_pools)} pools)")
         for spec_idx, pool in self.read_group_dynamic_pools.items():
             lines.append(f"  Read group dynamic (spec {spec_idx}): {len(pool)}")
         for spec_idx, pool in self.read_group_tsv_pools.items():
@@ -536,10 +567,6 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
     Returns:
         StringPoolManager with pools configured
     """
-    import glob
-    import re
-    from .read_groups import get_grouping_pool_types
-    from .assignment_loader import load_genedb
 
     string_pools = StringPoolManager()
 
@@ -561,10 +588,14 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
     if any(pt == 'file_name' for pt in pool_types.values()):
         string_pools.build_file_name_pool(sample)
 
-    # Build barcode_spot pool if needed
-    if any(pt == 'barcode_spot' for pt in pool_types.values()):
+    # Build barcode_spot pools if needed (supports multi-column)
+    if any(pt == 'barcode_spot' or pt.startswith('barcode_spot:') for pt in pool_types.values()):
         if args.barcode2spot:
-            string_pools.build_barcode_spot_pool(args.barcode2spot)
+            from .read_groups import parse_barcode2spot_spec
+            filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+            for col_idx, file_col in enumerate(spot_cols):
+                string_pools.build_barcode_spot_pool(args.barcode2spot, column_index=col_idx,
+                                                      file_column=file_col)
 
     # Load per-chromosome pools if requested
     if chr_id:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2019-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -145,8 +145,8 @@ def parse_args(cmd_args=None, namespace=None):
                                        "file:FILE:READ_COL:GROUP_COL(S):DELIM (TSV file, use comma-separated columns for multi-column grouping, e.g., file:table.tsv:0:1,2,3), "
                                        "read_id:DELIM (read ID suffix), "
                                        "file_name (original filename), "
-                                       "barcode_spot[:FILE] (map barcodes to spots/cell types using --barcode2spot or explicit file); "
-                                       "example: --read_group tag:CB file_name barcode_spot")
+                                       "barcode_spot (map barcodes to spots/cell types using --barcode2spot), "
+                                       "barcode (group by barcode from --barcoded_reads)")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
                                    help="reuse read assignments (binary format)", default=None)
@@ -167,16 +167,17 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
                                         "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
     add_additional_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
-                                   help='file with barcode whitelist for barcode calling')
+                                   help='file(s) with barcode whitelist for barcode calling')
     add_additional_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
-                                   help='TSV file with barcoded reads; barcodes will be called automatically if not provided')
+                                   help='TSV file(s) with barcoded reads; barcodes will be called automatically if not provided')
     # TODO: add UMI column, support various formats
     add_additional_option_to_group(sc_args_group, "--barcode_column", type=str,
                                    help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
                                    default=1)
-    # TODO: add multiple columns
-    add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str, nargs='+',
-                                   help='TSV file barcode to cell type / spot id information')
+    add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str,
+                                   help='TSV file mapping barcode to cell type / spot id. '
+                                        'Format: file.tsv or file.tsv:barcode_col:spot_cols '
+                                        '(e.g., file.tsv:0:1,2,3 for multiple spot columns)')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
@@ -579,7 +580,45 @@ def check_input_params(args):
     return True
 
 
+def check_bam_file(bam_path: str, check_index: bool = True):
+    """Check BAM file exists and optionally has index."""
+    if not os.path.isfile(bam_path):
+        logger.critical("BAM file " + bam_path + " does not exist")
+        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+    if check_index:
+        bamfile_in = pysam.AlignmentFile(bam_path, "rb")
+        if not bamfile_in.has_index():
+            logger.critical("BAM file " + bam_path + " is not indexed, run samtools sort and samtools index")
+            sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
+        bamfile_in.close()
+
+
+def check_file_exists(file_path: str, description: str):
+    """Check that a file exists, exit with error if not."""
+    if not os.path.isfile(file_path):
+        logger.critical(f"{description} {file_path} does not exist")
+        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
+
+def extract_read_group_file_path(spec: str):
+    """
+    Extract file path from read_group spec if it's a file-based spec.
+
+    Returns file path for 'file:path:...' specs, None otherwise.
+    """
+    parts = spec.split(":")
+    if len(parts) >= 2 and parts[0] == 'file':
+        return parts[1]
+    return None
+
+
 def check_input_files(args):
+    # Check reference genome
+    if args.reference and not os.path.isfile(args.reference):
+        logger.critical("Reference genome " + args.reference + " does not exist")
+        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
+    # Check input reads (BAM/FASTQ/save files)
     for sample in args.input_data.samples:
         for lib in sample.file_list:
             for in_file in lib:
@@ -592,19 +631,44 @@ def check_input_files(args):
                     logger.critical("Input file " + in_file + " does not exist")
                     sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
                 if args.input_data.input_type == InputDataType.bam:
-                    bamfile_in = pysam.AlignmentFile(in_file, "rb")
-                    if not bamfile_in.has_index():
-                        logger.critical("BAM file " + in_file + " is not indexed, run samtools sort and samtools index")
-                        sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
-                    bamfile_in.close()
+                    check_bam_file(in_file, check_index=True)
+
+        # Check Illumina BAM files
         if sample.illumina_bam is not None:
             for illumina in sample.illumina_bam:
-                bamfile_in = pysam.AlignmentFile(illumina, "rb")
-                if not bamfile_in.has_index():
-                    logger.critical("BAM file " + illumina + " is not indexed, run samtools sort and samtools index")
-                    sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
-                bamfile_in.close()
+                check_bam_file(illumina, check_index=True)
 
+    # Check barcoded reads files (from args, not sample - sample.barcoded_reads is set later)
+    if hasattr(args, 'barcoded_reads') and args.barcoded_reads:
+        if isinstance(args.barcoded_reads, list):
+            for bc_file in args.barcoded_reads:
+                check_file_exists(bc_file, "Barcoded reads file")
+        else:
+            check_file_exists(args.barcoded_reads, "Barcoded reads file")
+
+    # Check barcode whitelist files
+    if hasattr(args, 'barcode_whitelist') and args.barcode_whitelist:
+        for wl_file in args.barcode_whitelist:
+            check_file_exists(wl_file, "Barcode whitelist file")
+
+    # Check barcode2spot file (parse spec to extract filename)
+    if hasattr(args, 'barcode2spot') and args.barcode2spot:
+        from src.read_groups import parse_barcode2spot_spec
+        bc2spot_file, _, _ = parse_barcode2spot_spec(args.barcode2spot)
+        check_file_exists(bc2spot_file, "Barcode to spot mapping file")
+
+    # Check read_group file specs
+    if hasattr(args, 'read_group') and args.read_group:
+        for spec in args.read_group:
+            file_path = extract_read_group_file_path(spec)
+            if file_path:
+                check_file_exists(file_path, "Read group file")
+
+    # Check junction BED file
+    if hasattr(args, 'junc_bed_file') and args.junc_bed_file:
+        check_file_exists(args.junc_bed_file, "Junction BED file")
+
+    # Check CAGE file (currently not supported)
     if args.cage is not None:
         logger.critical("CAGE data is not supported yet")
         sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
@@ -612,6 +676,7 @@ def check_input_files(args):
             logger.critical("Bed file with CAGE peaks " + args.cage + " does not exist")
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
+    # Check gene database
     if args.genedb is not None:
         if not os.path.isfile(args.genedb):
             logger.critical("Gene database " + args.genedb + " does not exist")
@@ -619,6 +684,7 @@ def check_input_files(args):
     else:
         args.no_junc_bed = True
 
+    # Check read assignments
     if args.read_assignments is not None:
         for r in args.read_assignments:
             if not glob.glob(r + "*"):
@@ -704,6 +770,13 @@ def set_data_dependent_options(args):
             # Read grouping specified, ensure file_name is included
             if "file_name" not in args.read_group:
                 args.read_group.append("file_name")
+
+    # Automatically add barcode_spot grouping when --barcode2spot is set
+    if hasattr(args, 'barcode2spot') and args.barcode2spot:
+        if args.read_group is None:
+            args.read_group = ["barcode_spot"]
+        elif "barcode_spot" not in args.read_group:
+            args.read_group.append("barcode_spot")
 
 
 def set_matching_options(args):

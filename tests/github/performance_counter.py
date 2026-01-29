@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 ############################################################################
-# Copyright (c) 2023 University of Helsinki
+# Copyright (c) 2023-2026 University of Helsinki
 # # All Rights Reserved
 # See file LICENSE for details.
 # Author: Andrey Prjibelski

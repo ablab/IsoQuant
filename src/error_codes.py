@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2024 University of Helsinki
+# Copyright (c) 2024-2026 University of Helsinki
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################

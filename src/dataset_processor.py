@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2019-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -38,6 +38,7 @@ from .transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
 from .table_splitter import split_read_table_parallel
 from .assignment_aggregator import ReadAssignmentAggregator
+from .string_pools import setup_string_pools
 from .parallel_workers import (
     collect_reads_in_parallel,
     construct_models_in_parallel,
@@ -148,11 +149,14 @@ class DatasetProcessor:
             prepare_read_groups(self.args, sample)
             open(fname, "w").close()
 
+        # Initialize for later cleanup (after process_assigned_reads)
+        split_barcodes_dict = {}
+        barcode_split_done = None
+
         if self.args.mode.needs_pcr_deduplication():
             if self.args.barcoded_reads:
                 sample.barcoded_reads = self.args.barcoded_reads
 
-            split_barcodes_dict = {}
             for chr_id in self.get_chr_list():
                 split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
             barcode_split_done = split_barcodes_lock_filename(sample)
@@ -180,12 +184,6 @@ class DatasetProcessor:
 
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
-        if self.args.mode.needs_pcr_deduplication():
-            # move clean-up somewhere else
-            for bc_split_file in split_barcodes_dict.values():
-                os.remove(bc_split_file)
-            os.remove(barcode_split_done)
-
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_assignments, polya_found, polya_fraction * 100.0))
@@ -207,6 +205,15 @@ class DatasetProcessor:
             self.args.polya_requirement_strategy)
 
         self.process_assigned_reads(sample, saves_file)
+
+        # Clean up split barcode files after all processing is done
+        if split_barcodes_dict:
+            for bc_split_file in split_barcodes_dict.values():
+                if os.path.exists(bc_split_file):
+                    os.remove(bc_split_file)
+        if barcode_split_done and os.path.exists(barcode_split_done):
+            os.remove(barcode_split_done)
+
         logger.info("Processed experiment " + sample.prefix)
 
     def keep_only_defined_chromosomes(self, chr_set: set):
@@ -362,8 +369,15 @@ class DatasetProcessor:
         logger.info("Transcript models construction is turned %s" %
                     ("off" if self.args.no_model_construction else "on"))
 
+        # Build string pools for the merge phase (to convert group names <-> IDs)
+        # This must match the pools used by parallel workers
+        string_pools = None
+        if self.args.read_group:
+            string_pools = setup_string_pools(self.args, sample, chr_ids, chr_id=None,
+                                              load_barcode_pool=False, load_tsv_pools=False)
+
         # set up aggregators and outputs
-        aggregator = ReadAssignmentAggregator(self.args, sample, self.all_read_groups, gzipped=self.args.gzipped,
+        aggregator = ReadAssignmentAggregator(self.args, sample, string_pools, gzipped=self.args.gzipped,
                                              grouping_strategy_names=self.grouping_strategy_names)
         transcript_stat_counter = EnumStats()
 
@@ -556,9 +570,10 @@ class DatasetProcessor:
 
     def split_read_barcode_table(self, sample, split_barcodes_file_names):
         logger.info("Splitting read barcode table")
-        # TODO: untrusted UMIs and third party format, both can be done by passing parsing function instead of columns
+        # Supports both IsoQuant's 6-column format and third-party 3-column format
+        # Only columns 0, 1, 2 (read_id, barcode, umi) are required and preserved
         split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
-                                  read_column=0, group_columns=(1, 2, 3, 4), delim='\t')
+                                  read_column=0, group_columns=(1, 2), delim='\t')
         logger.info("Read barcode table was split")
 
 

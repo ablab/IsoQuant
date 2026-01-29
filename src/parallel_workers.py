@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2019-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -195,15 +195,20 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
 
 
 def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, read_groups):
+    from .read_groups import get_grouping_pool_types
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
     # Derive read_group_file prefix from saves_prefix
     read_group_file_prefix = read_group_file_from_saves(saves_prefix)
 
+    # Check if barcode pool is needed for any grouper
+    pool_types = get_grouping_pool_types(args)
+    needs_barcode_pool = any(pt == 'barcode' for pt in pool_types.values())
+
     # Build string pools for memory optimization
     string_pools = setup_string_pools(args, sample, chr_ids, chr_id,
-                                      load_barcode_pool=False, load_tsv_pools=True,
+                                      load_barcode_pool=needs_barcode_pool, load_tsv_pools=True,
                                       read_group_file_prefix=read_group_file_prefix)
 
     # Load dynamic pools (for read groups from BAM tags/read IDs)
@@ -226,7 +231,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
         os.remove(lock_file)
 
     grouping_strategy_names = get_grouping_strategy_names(args)
-    aggregator = ReadAssignmentAggregator(args, sample, read_groups, loader.genedb, chr_id,
+    aggregator = ReadAssignmentAggregator(args, sample, string_pools, loader.genedb, chr_id,
                                          grouping_strategy_names=grouping_strategy_names)
 
     transcript_stat_counter = EnumStats()
@@ -317,8 +322,19 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
     logger.info("Filtering PCR duplicates for chromosome " + chr_id)
     barcode_feature_table = {}
     if args.barcode2spot:
-        for barcode2spot_file in args.barcode2spot:
-            barcode_feature_table.update(load_table(barcode2spot_file, 0, 1, '\t'))
+        from .read_groups import parse_barcode2spot_spec
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
+        with open(filename, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.split('\t')
+                if len(parts) > barcode_col:
+                    barcode = parts[barcode_col]
+                    # Extract only the specified spot columns
+                    cell_types = [parts[col] for col in spot_cols if col < len(parts)]
+                    barcode_feature_table[barcode] = cell_types
 
     # Build string pools for memory optimization
     # Barcode pool is critical: ReadAssignments were serialized with barcode_id values
