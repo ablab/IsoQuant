@@ -1,0 +1,354 @@
+############################################################################
+# Copyright (c) 2025-2026 University of Helsinki
+# All Rights Reserved
+# See file LICENSE for details.
+############################################################################
+
+"""
+Tests for molecule structure parsing and element types.
+
+Tests the universal barcode calling infrastructure:
+- ElementType enum and its method classification
+- MoleculeElement initialization for different element types
+- MoleculeStructure parsing from MDF format
+"""
+
+import os
+import pytest
+from io import StringIO
+
+from src.barcode_calling.callers.molecule_structure import (
+    ElementType,
+    MoleculeElement,
+    MoleculeStructure
+)
+
+# Test data directory
+TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "universal_data")
+
+
+class TestElementType:
+    """Test ElementType enum methods."""
+
+    def test_needs_correction_var_file(self):
+        """VAR_FILE elements need barcode correction."""
+        assert ElementType.VAR_FILE.needs_correction() is True
+
+    def test_needs_correction_var_list(self):
+        """VAR_LIST elements need barcode correction."""
+        assert ElementType.VAR_LIST.needs_correction() is True
+
+    def test_needs_correction_var_any(self):
+        """VAR_ANY elements do NOT need correction."""
+        assert ElementType.VAR_ANY.needs_correction() is False
+
+    def test_needs_correction_const(self):
+        """CONST elements do NOT need correction."""
+        assert ElementType.CONST.needs_correction() is False
+
+    def test_needs_sequence_extraction_var_any(self):
+        """VAR_ANY elements need sequence extraction."""
+        assert ElementType.VAR_ANY.needs_sequence_extraction() is True
+
+    def test_needs_sequence_extraction_var_file(self):
+        """VAR_FILE elements do NOT need sequence extraction (they get corrected)."""
+        assert ElementType.VAR_FILE.needs_sequence_extraction() is False
+
+    def test_needs_sequence_extraction_const(self):
+        """CONST elements do NOT need sequence extraction."""
+        assert ElementType.CONST.needs_sequence_extraction() is False
+
+    def test_is_constant_const(self):
+        """CONST is a constant element."""
+        assert ElementType.CONST.is_constant() is True
+
+    def test_is_constant_var_any(self):
+        """VAR_ANY is NOT a constant element."""
+        assert ElementType.VAR_ANY.is_constant() is False
+
+    def test_is_constant_polyt(self):
+        """PolyT is NOT a constant element."""
+        assert ElementType.PolyT.is_constant() is False
+
+    def test_is_variable_var_any(self):
+        """VAR_ANY is a variable element."""
+        assert ElementType.VAR_ANY.is_variable() is True
+
+    def test_is_variable_var_list(self):
+        """VAR_LIST is a variable element."""
+        assert ElementType.VAR_LIST.is_variable() is True
+
+    def test_is_variable_var_file(self):
+        """VAR_FILE is a variable element."""
+        assert ElementType.VAR_FILE.is_variable() is True
+
+    def test_is_variable_const(self):
+        """CONST is NOT a variable element."""
+        assert ElementType.CONST.is_variable() is False
+
+    def test_is_variable_polyt(self):
+        """PolyT is NOT a variable element."""
+        assert ElementType.PolyT.is_variable() is False
+
+    def test_is_base_separator_var_any_separator(self):
+        """VAR_ANY_SEPARATOR is a separator."""
+        assert ElementType.VAR_ANY_SEPARATOR.is_base_separator() is True
+
+    def test_is_base_separator_var_any_non_t_separator(self):
+        """VAR_ANY_NON_T_SEPARATOR is a separator."""
+        assert ElementType.VAR_ANY_NON_T_SEPARATOR.is_base_separator() is True
+
+    def test_is_base_separator_var_any(self):
+        """VAR_ANY is NOT a separator."""
+        assert ElementType.VAR_ANY.is_base_separator() is False
+
+
+class TestMoleculeElement:
+    """Test MoleculeElement initialization."""
+
+    def test_init_polyt(self):
+        """Test PolyT element initialization."""
+        element = MoleculeElement("PolyT", ElementType.PolyT)
+
+        assert element.element_name == "PolyT"
+        assert element.element_type == ElementType.PolyT
+        assert element.element_value is None
+        assert element.element_length == -1
+
+    def test_init_cdna(self):
+        """Test cDNA element initialization."""
+        element = MoleculeElement("cDNA", ElementType.cDNA)
+
+        assert element.element_name == "cDNA"
+        assert element.element_type == ElementType.cDNA
+        assert element.element_value is None
+        assert element.element_length == -1
+
+    def test_init_const(self):
+        """Test CONST element initialization."""
+        sequence = "CTACACGACGCTCTTCCGATCT"
+        element = MoleculeElement("R1", ElementType.CONST, sequence)
+
+        assert element.element_name == "R1"
+        assert element.element_type == ElementType.CONST
+        assert element.element_value == sequence
+        assert element.element_length == len(sequence)
+
+    def test_init_var_list(self):
+        """Test VAR_LIST element initialization."""
+        barcodes = "AAAA,CCCC,GGGG,TTTT"
+        element = MoleculeElement("Barcode", ElementType.VAR_LIST, barcodes)
+
+        assert element.element_name == "Barcode"
+        assert element.element_type == ElementType.VAR_LIST
+        assert element.element_value == ["AAAA", "CCCC", "GGGG", "TTTT"]
+        assert element.element_length == 4  # Length of first barcode
+
+    def test_init_var_any(self):
+        """Test VAR_ANY element initialization."""
+        element = MoleculeElement("UMI", ElementType.VAR_ANY, "12")
+
+        assert element.element_name == "UMI"
+        assert element.element_type == ElementType.VAR_ANY
+        assert element.element_value is None
+        assert element.element_length == 12
+
+    def test_init_var_file(self):
+        """Test VAR_FILE element initialization with real file."""
+        barcode_file = os.path.join(TEST_DATA_DIR, "barcodes_small.tsv")
+        element = MoleculeElement("Barcode", ElementType.VAR_FILE, barcode_file)
+
+        assert element.element_name == "Barcode"
+        assert element.element_type == ElementType.VAR_FILE
+        assert len(element.element_value) == 8  # 8 barcodes in test file
+        assert element.element_length == 16  # 16bp barcodes
+
+    def test_init_var_any_separator(self):
+        """Test VAR_ANY_SEPARATOR element initialization."""
+        element = MoleculeElement("Sep", ElementType.VAR_ANY_SEPARATOR, "5")
+
+        assert element.element_name == "Sep"
+        assert element.element_type == ElementType.VAR_ANY_SEPARATOR
+        assert element.element_value is None
+        assert element.element_length == 5
+
+
+class TestMoleculeStructure:
+    """Test MoleculeStructure parsing."""
+
+    def test_parse_simple_structure(self):
+        """Test parsing simple molecule structure."""
+        mdf_content = """Barcode:UMI:PolyT:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC,GGGG
+UMI\tVAR_ANY\t10
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        elements = list(structure)
+        assert len(elements) == 4
+
+        assert elements[0].element_name == "Barcode"
+        assert elements[0].element_type == ElementType.VAR_LIST
+
+        assert elements[1].element_name == "UMI"
+        assert elements[1].element_type == ElementType.VAR_ANY
+
+        assert elements[2].element_name == "PolyT"
+        assert elements[2].element_type == ElementType.PolyT
+
+        assert elements[3].element_name == "cDNA"
+        assert elements[3].element_type == ElementType.cDNA
+
+    def test_parse_with_const(self):
+        """Test parsing structure with constant element."""
+        mdf_content = """R1:Barcode:UMI:PolyT:cDNA
+R1\tCONST\tCTACACGACGCTCTTCCGATCT
+Barcode\tVAR_LIST\tAAAA,CCCC,GGGG
+UMI\tVAR_ANY\t12
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        elements = list(structure)
+        assert len(elements) == 5
+
+        assert elements[0].element_name == "R1"
+        assert elements[0].element_type == ElementType.CONST
+        assert elements[0].element_value == "CTACACGACGCTCTTCCGATCT"
+
+    def test_parse_from_file_simple(self):
+        """Test parsing simple.mdf file."""
+        mdf_path = os.path.join(TEST_DATA_DIR, "simple.mdf")
+
+        with open(mdf_path) as f:
+            structure = MoleculeStructure(f)
+
+        elements = list(structure)
+
+        # Simple.mdf: Barcode:UMI:PolyT:cDNA
+        assert len(elements) == 4
+        assert elements[0].element_name == "Barcode"
+        assert elements[0].element_type == ElementType.VAR_LIST
+        assert elements[1].element_name == "UMI"
+        assert elements[1].element_type == ElementType.VAR_ANY
+        assert elements[1].element_length == 10
+
+    def test_parse_from_file_10x(self):
+        """Test parsing 10x-like structure.
+
+        Uses inline definition to avoid relative path issues with VAR_FILE.
+        """
+        # Use inline definition to avoid file path issues
+        mdf_content = """R1:Barcode:UMI:PolyT:cDNA:TSO
+R1\tCONST\tCTACACGACGCTCTTCCGATCT
+Barcode\tVAR_LIST\tATCCTTAGTGTTTGTC,CTTAGGAGTGGTTAGC,TGAGGGCCAACGTGCT
+UMI\tVAR_ANY\t12
+TSO\tCONST\tCCCATGTACTCTGCGTTGATACCACTGCTT
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        elements = list(structure)
+
+        # R1:Barcode:UMI:PolyT:cDNA:TSO
+        assert len(elements) == 6
+        assert elements[0].element_name == "R1"
+        assert elements[0].element_type == ElementType.CONST
+        assert elements[1].element_name == "Barcode"
+        assert elements[1].element_type == ElementType.VAR_LIST
+
+    def test_iteration(self):
+        """Test iterating over structure elements."""
+        mdf_content = """Barcode:UMI:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC
+UMI\tVAR_ANY\t8
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        names = [el.element_name for el in structure]
+        assert names == ["Barcode", "UMI", "cDNA"]
+
+    def test_header_generation(self):
+        """Test TSV header generation."""
+        mdf_content = """R1:Barcode:UMI:PolyT:cDNA
+R1\tCONST\tCTACACGACGCTCTTCCGATCT
+Barcode\tVAR_LIST\tAAAA,CCCC,GGGG
+UMI\tVAR_ANY\t12
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        header = structure.header()
+
+        assert "#read_id" in header
+        assert "strand" in header
+        assert "R1_start" in header
+        assert "R1_end" in header
+        assert "Barcode_start" in header
+        assert "Barcode_end" in header
+        assert "Barcode_sequence" in header
+        assert "UMI_start" in header
+        assert "UMI_end" in header
+        assert "UMI_sequence" in header
+        assert "polyT_start" in header
+        assert "polyT_end" in header
+
+    def test_from_element_list(self):
+        """Test creating structure from element list."""
+        elements = [
+            MoleculeElement("Barcode", ElementType.VAR_LIST, "AAAA,CCCC"),
+            MoleculeElement("UMI", ElementType.VAR_ANY, "10"),
+            MoleculeElement("cDNA", ElementType.cDNA)
+        ]
+
+        structure = MoleculeStructure.from_element_list(elements)
+
+        assert len(list(structure)) == 3
+        assert list(structure)[0].element_name == "Barcode"
+
+    def test_concat_delimiter(self):
+        """Test concatenation delimiter constant."""
+        assert MoleculeStructure.CONCAT_DELIM == "|"
+
+    def test_dupl_delimiter(self):
+        """Test duplication delimiter constant."""
+        assert MoleculeStructure.DUPL_DELIM == "/"
+
+
+class TestMoleculeStructureEdgeCases:
+    """Test edge cases and error handling."""
+
+    def test_element_order_preserved(self):
+        """Test that element order from header line is preserved."""
+        mdf_content = """cDNA:UMI:Barcode:PolyT
+Barcode\tVAR_LIST\tAAAA,CCCC
+UMI\tVAR_ANY\t8
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        names = [el.element_name for el in structure]
+        # Order should match header line, not definition order
+        assert names == ["cDNA", "UMI", "Barcode", "PolyT"]
+
+    def test_whitespace_handling(self):
+        """Test that whitespace in MDF is handled correctly."""
+        mdf_content = """  Barcode : UMI : cDNA
+Barcode    VAR_LIST    AAAA,CCCC
+UMI        VAR_ANY     8
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        elements = list(structure)
+        assert len(elements) == 3
+
+    def test_multiple_var_list_barcodes(self):
+        """Test VAR_LIST with many barcodes."""
+        barcodes = ",".join(["ACGT" * 4] * 100)  # 100 barcodes
+        mdf_content = f"""Barcode:cDNA
+Barcode\tVAR_LIST\t{barcodes}
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        elements = list(structure)
+        assert len(elements[0].element_value) == 100
+
+
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])
