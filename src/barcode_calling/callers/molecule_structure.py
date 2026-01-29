@@ -41,6 +41,10 @@ class ElementType(Enum):
     def is_constant(self):
         return self == ElementType.CONST
 
+    def needs_only_coordinates(self):
+        """Return True if element only needs start/end coordinates (no sequence extraction)."""
+        return self.is_constant()
+
 
 class MoleculeElement:
     def __init__(self, element_name: str, element_type: ElementType, element_value_1 = None, element_value_2 = None):

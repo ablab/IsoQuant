@@ -172,12 +172,17 @@ class ExtractionResult:
 
     def get_additional_attributes(self) -> List[str]:
         """
-        Get list of detected additional features.
+        Get list of detected supplementary features (excluding barcode/UMI).
+
+        Barcode and UMI elements are excluded because they are already
+        tracked by ReadStats.bc_count and ReadStats.umi_count respectively.
 
         Returns:
             List of detected element names with " detected" suffix.
         """
-        return ["%s detected" % el_name for el_name, d in self.detected_results.items() if d.start != -1]
+        barcode_umi_set = set(self._barcode_elements + self._umi_elements)
+        return ["%s detected" % el_name for el_name, d in self.detected_results.items()
+                if d.start != -1 and el_name not in barcode_umi_set]
 
     def set_strand(self, strand: str) -> None:
         """Set the detected strand."""

@@ -247,13 +247,12 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None, min_score=None):
+def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None):
     output_file += "_" + str(num)
     if out_fasta:
         out_fasta += "_" + str(num)
     counter = 0
-    if min_score:
-        barcode_detector.min_score = min_score
+
     barcode_caller = BarcodeCaller(output_file, barcode_detector, output_sequences=out_fasta)
     counter += barcode_caller.process_chunk(read_chunk)
     read_chunk.clear()
@@ -325,7 +324,7 @@ def process_single_thread(args):
     logger.info("Finished barcode calling")
 
 
-def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcodes):
+def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcode_detector):
     """Process a single file in parallel (internal helper function)."""
     logger.info("Processing " + input_file)
     fname, outer_ext = os.path.splitext(os.path.basename(input_file))
@@ -355,13 +354,6 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
         tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
     os.makedirs(tmp_dir)
 
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
-    logger.info("Barcode caller created")
-
-    min_score = None
-    if args.min_score:
-        min_score = args.min_score
-
     tmp_barcode_file = os.path.join(tmp_dir, "bc")
     tmp_fasta_file = os.path.join(tmp_dir, "subreads") if out_fasta else None
     chunk_counter = 0
@@ -382,8 +374,7 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
                                               chunk,
                                               tmp_barcode_file,
                                               chunk_counter,
-                                              tmp_fasta_file,
-                                              min_score))
+                                              tmp_fasta_file))
             chunk_counter += 1
             if chunk_counter >= args.threads:
                 break
@@ -418,7 +409,7 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
 
     with open(output_tsv, "w") as final_output_tsv:
         final_output_fasta = open(out_fasta, "w") if out_fasta else None
-        header = BARCODE_CALLING_MODES[args.mode].header()
+        header = barcode_detector.header()
         final_output_tsv.write(header + "\n")
         stat_dict = defaultdict(int)
         for tmp_file, tmp_fasta in output_files:
@@ -446,14 +437,12 @@ def process_in_parallel(args):
     # args.input, args.output_tsv are always lists
     # args.out_fasta is a list or None
     out_fastas = args.out_fasta if args.out_fasta else [None] * len(args.input)
-
-    # Prepare barcodes once for all files
-    barcodes = create_barcode_caller(args)
+    barcode_detector = create_barcode_caller(args)
 
     for idx, (input_file, output_tsv, out_fasta) in enumerate(zip(args.input, args.output_tsv, out_fastas)):
         if len(args.input) > 1:
             logger.info("Processing file %d/%d: %s" % (idx + 1, len(args.input), input_file))
-        _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcodes)
+        _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcode_detector)
 
     logger.info("Finished barcode calling")
 

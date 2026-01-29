@@ -52,7 +52,7 @@ class UniversalSingleMoleculeExtractor:
                                                                max(6, int(el.element_length / 2) - 2))
             elif el.element_type.needs_sequence_extraction():
                 self.elements_to_extract.add(el.element_name)
-            elif el.element_type.needs_sequence_extraction():
+            elif el.element_type.needs_correction():
                 if self.correct_sequences:
                     self.index_dict[el.element_name] = self.prepare_barcode_index(el)
                     # FIXME: min score should be based on the length of the barcode and their sparcity
@@ -78,7 +78,10 @@ class UniversalSingleMoleculeExtractor:
         return ExtractionResult
 
     def header(self):
-        return self.molecule_structure.header()
+        """Get header matching ExtractionResult output format."""
+        # Create a dummy result to get the correct header format
+        dummy_result = ExtractionResult(self.molecule_structure, "", ".", {})
+        return dummy_result.header()
 
     def find_barcode_umi(self, read_id, sequence):
         detected_elements_fwd = self._find_patterns_fwd(read_id, sequence)
