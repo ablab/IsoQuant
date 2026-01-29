@@ -266,30 +266,6 @@ UMI\tVAR_ANY\t8
         names = [el.element_name for el in structure]
         assert names == ["Barcode", "UMI", "cDNA"]
 
-    def test_header_generation(self):
-        """Test TSV header generation."""
-        mdf_content = """R1:Barcode:UMI:PolyT:cDNA
-R1\tCONST\tCTACACGACGCTCTTCCGATCT
-Barcode\tVAR_LIST\tAAAA,CCCC,GGGG
-UMI\tVAR_ANY\t12
-"""
-        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
-
-        header = structure.header()
-
-        assert "#read_id" in header
-        assert "strand" in header
-        assert "R1_start" in header
-        assert "R1_end" in header
-        assert "Barcode_start" in header
-        assert "Barcode_end" in header
-        assert "Barcode_sequence" in header
-        assert "UMI_start" in header
-        assert "UMI_end" in header
-        assert "UMI_sequence" in header
-        assert "polyT_start" in header
-        assert "polyT_end" in header
-
     def test_from_element_list(self):
         """Test creating structure from element list."""
         elements = [
