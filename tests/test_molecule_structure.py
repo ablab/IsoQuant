@@ -532,5 +532,100 @@ Barcode|3\tVAR_LIST\tAAAA,CCCC\t4
             MoleculeStructure(iter(mdf_content.strip().split('\n')))
 
 
+class TestDuplicatedElements:
+    """Test duplicated element parsing and identification."""
+
+    def test_parse_duplicated_elements(self):
+        """Test parsing MDF with duplicated barcode parts."""
+        mdf_content = """Barcode/1:Barcode/2:UMI:PolyT:cDNA
+Barcode/1\tVAR_LIST\tAAAACCCC,GGGGTTTT
+Barcode/2\tVAR_LIST\tAAAACCCC,GGGGTTTT
+UMI\tVAR_ANY\t8
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert len(structure.ordered_elements) == 5
+        assert "Barcode/1" in structure.duplicated_elements
+        assert "Barcode/2" in structure.duplicated_elements
+        assert structure.duplicated_elements["Barcode/1"] == ("Barcode", 1)
+        assert structure.duplicated_elements["Barcode/2"] == ("Barcode", 2)
+
+    def test_duplicated_elements_counts(self):
+        """Test that duplicated_elements_counts has correct base name and count."""
+        mdf_content = """Barcode/1:Barcode/2:cDNA
+Barcode/1\tVAR_LIST\tAAAACCCC,GGGGTTTT
+Barcode/2\tVAR_LIST\tAAAACCCC,GGGGTTTT
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert "Barcode" in structure.duplicated_elements_counts
+        assert structure.duplicated_elements_counts["Barcode"] == 2
+
+    def test_duplicated_three_parts(self):
+        """Test three-part duplicated element."""
+        mdf_content = """Barcode/1:Barcode/2:Barcode/3:cDNA
+Barcode/1\tVAR_LIST\tAAAACCCC,GGGGTTTT
+Barcode/2\tVAR_LIST\tAAAACCCC,GGGGTTTT
+Barcode/3\tVAR_LIST\tAAAACCCC,GGGGTTTT
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.duplicated_elements_counts["Barcode"] == 3
+
+    def test_duplicated_barcode_umi_identification(self):
+        """Test that duplicated barcode elements are identified by base name."""
+        mdf_content = """Barcode/1:Barcode/2:UMI:cDNA
+Barcode/1\tVAR_LIST\tAAAACCCC,GGGGTTTT
+Barcode/2\tVAR_LIST\tAAAACCCC,GGGGTTTT
+UMI\tVAR_ANY\t8
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        # Base name "Barcode" should be in barcode_elements, not "Barcode/1", "Barcode/2"
+        assert structure.barcode_elements == ["Barcode"]
+        assert "Barcode/1" not in structure.barcode_elements
+        assert "Barcode/2" not in structure.barcode_elements
+        assert structure.umi_elements == ["UMI"]
+
+    def test_duplicated_umi_identification(self):
+        """Test that duplicated UMI elements are identified by base name."""
+        mdf_content = """Barcode:UMI/1:UMI/2:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC
+UMI/1\tVAR_ANY\t8
+UMI/2\tVAR_ANY\t8
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.barcode_elements == ["Barcode"]
+        assert structure.umi_elements == ["UMI"]
+
+    def test_duplicated_elements_must_be_variable(self):
+        """Test that non-variable duplicated elements are rejected."""
+        mdf_content = """Adapter/1:Adapter/2:cDNA
+Adapter/1\tCONST\tACGT
+Adapter/2\tCONST\tACGT
+"""
+        with pytest.raises(SystemExit):
+            MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+    def test_duplicated_nonconsecutive_indices_rejected(self):
+        """Test that non-consecutive indices (e.g., 1 and 3) are rejected."""
+        mdf_content = """Barcode/1:Barcode/3:cDNA
+Barcode/1\tVAR_LIST\tAAAA,CCCC
+Barcode/3\tVAR_LIST\tAAAA,CCCC
+"""
+        with pytest.raises(SystemExit):
+            MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+    def test_duplicated_different_types_rejected(self):
+        """Test that duplicated elements with different types are rejected."""
+        mdf_content = """Barcode/1:Barcode/2:cDNA
+Barcode/1\tVAR_LIST\tAAAA,CCCC
+Barcode/2\tVAR_ANY\t4
+"""
+        with pytest.raises(SystemExit):
+            MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
