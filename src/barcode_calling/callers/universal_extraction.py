@@ -56,6 +56,9 @@ class UniversalSingleMoleculeExtractor:
                 if el.element_name in self.molecule_structure.elements_to_concatenate:
                     # Concatenated parts: skip individual index, handled after loop
                     pass
+                elif el.element_name in self.molecule_structure.duplicated_elements:
+                    # Duplicated parts: skip individual index, handled after loop
+                    pass
                 elif self.correct_sequences:
                     self.index_dict[el.element_name] = self.prepare_barcode_index(el)
                     # FIXME: min score should be based on the length of the barcode and their sparcity
@@ -81,6 +84,21 @@ class UniversalSingleMoleculeExtractor:
                     k = max(6, int(total_length / 2) - 2)
                     self.index_dict[base_name] = KmerIndexer(barcode_list, k)
                     self.min_scores[base_name] = total_length - 2
+
+        # Build one index per duplicated base element using the full whitelist
+        if self.correct_sequences:
+            for base_name, count in self.molecule_structure.duplicated_elements_counts.items():
+                first_part_el = None
+                for el in self.molecule_structure:
+                    if el.element_name in self.molecule_structure.duplicated_elements:
+                        if self.molecule_structure.duplicated_elements[el.element_name][0] == base_name:
+                            first_part_el = el
+                            break
+                if first_part_el is not None and first_part_el.element_value is not None:
+                    barcode_list = first_part_el.element_value
+                    k = max(6, int(first_part_el.element_length / 2) - 2)
+                    self.index_dict[base_name] = KmerIndexer(barcode_list, k)
+                    self.min_scores[base_name] = first_part_el.element_length - 2
 
         if not self.has_cdna:
             logger.critical("Molecule must include a cDNA")
@@ -136,7 +154,7 @@ class UniversalSingleMoleculeExtractor:
         self.extract_variable_elements5(sequence, detected_elements, concat_element_storage, dupl_element_storage)
         self.extract_variable_elements3(sequence, detected_elements, concat_element_storage, dupl_element_storage)
         self.process_concatenated_elements(concat_element_storage, detected_elements, sequence)
-        self.process_duplicated_elements(dupl_element_storage, detected_elements)
+        self.process_duplicated_elements(dupl_element_storage, detected_elements, sequence)
         logger.debug("== end read id %s ==" % read_id)
         return detected_elements
 
@@ -168,8 +186,79 @@ class UniversalSingleMoleculeExtractor:
                 detected_results[base_name] = DetectedElement(
                     parts[0][0], parts[-1][1], 0, concatenated_seq)
 
-    def process_duplicated_elements(self, duplicated_element_storage, detected_results):
-        pass
+    def process_duplicated_elements(self, duplicated_element_storage, detected_results, sequence):
+        for base_name, parts in duplicated_element_storage.items():
+            # Extract sequences for detected parts
+            part_seqs = []
+            part_coords = []
+            for start, end in parts:
+                if start != -1:
+                    part_seqs.append(sequence[start:end + 1])
+                    part_coords.append((start, end))
+                else:
+                    part_seqs.append(None)
+                    part_coords.append((-1, -1))
+
+            detected_seqs = [s for s in part_seqs if s is not None]
+            if not detected_seqs:
+                detected_results[base_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+                continue
+
+            # Use first detected copy's coordinates for reporting
+            first_detected_idx = next(i for i, s in enumerate(part_seqs) if s is not None)
+
+            if self.correct_sequences and base_name in self.index_dict:
+                # Correct each copy independently
+                corrected = []
+                for seq in part_seqs:
+                    if seq is None:
+                        corrected.append((None, -1))
+                        continue
+                    matching = self.index_dict[base_name].get_occurrences(seq)
+                    corrected_seq, score, _, _ = find_candidate_with_max_score_ssw(
+                        matching, seq, min_score=self.min_scores[base_name])
+                    corrected.append((corrected_seq, score))
+
+                successful = [(seq, score) for seq, score in corrected if seq is not None]
+
+                if not successful:
+                    # Neither copy corrected
+                    detected_results[base_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+                elif len(successful) == 1:
+                    # One succeeded
+                    seq, score = successful[0]
+                    detected_results[base_name] = DetectedElement(
+                        part_coords[first_detected_idx][0],
+                        part_coords[first_detected_idx][1],
+                        score, seq)
+                else:
+                    # Multiple succeeded - check agreement
+                    unique_seqs = set(seq for seq, _ in successful)
+                    if len(unique_seqs) == 1:
+                        # All agree
+                        best_score = max(score for _, score in successful)
+                        detected_results[base_name] = DetectedElement(
+                            part_coords[first_detected_idx][0],
+                            part_coords[first_detected_idx][1],
+                            best_score, successful[0][0])
+                    else:
+                        # Copies disagree after correction
+                        detected_results[base_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+            else:
+                # No correction: compare raw sequences
+                if len(set(detected_seqs)) == 1:
+                    # All match
+                    detected_results[base_name] = DetectedElement(
+                        part_coords[first_detected_idx][0],
+                        part_coords[first_detected_idx][1],
+                        0, detected_seqs[0])
+                else:
+                    # Differ: report all comma-separated
+                    comma_sep = ",".join(detected_seqs)
+                    detected_results[base_name] = DetectedElement(
+                        part_coords[first_detected_idx][0],
+                        part_coords[first_detected_idx][1],
+                        0, comma_sep)
 
     def correct_element(self, element: MoleculeElement, sequence: str, potential_start: int, potential_end: int) -> DetectedElement:
         potential_seq = sequence[potential_start:potential_end + 1]

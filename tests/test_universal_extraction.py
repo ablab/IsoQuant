@@ -880,5 +880,225 @@ UMI\tVAR_ANY\t8
         assert "PolyT detected" in attrs
 
 
+class TestDuplicatedElementProcessing:
+    """Test duplicated element extraction and processing (majority vote)."""
+
+    def _create_dupl_structure(self):
+        """Create structure with duplicated barcode: Barcode/1:Barcode/2:UMI:PolyT:cDNA"""
+        mdf_content = """Barcode/1:Barcode/2:UMI:PolyT:cDNA
+Barcode/1\tVAR_LIST\tAAAACCCC,GGGGTTTT,ACGTACGT
+Barcode/2\tVAR_LIST\tAAAACCCC,GGGGTTTT,ACGTACGT
+UMI\tVAR_ANY\t8
+"""
+        return MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+    def test_dupl_structure_barcode_elements(self):
+        """Test that duplicated barcode is identified by base name."""
+        structure = self._create_dupl_structure()
+        assert structure.barcode_elements == ["Barcode"]
+        assert structure.umi_elements == ["UMI"]
+
+    def test_dupl_structure_counts(self):
+        """Test duplicated elements counts."""
+        structure = self._create_dupl_structure()
+        assert structure.duplicated_elements_counts["Barcode"] == 2
+
+    def test_dupl_extractor_init(self):
+        """Test extractor initialization with duplicated elements."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Should have one index for the base name "Barcode", not individual parts
+        assert "Barcode" in extractor.index_dict
+        assert "Barcode/1" not in extractor.index_dict
+        assert "Barcode/2" not in extractor.index_dict
+
+    def test_dupl_extractor_header(self):
+        """Test header output for duplicated elements."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+        header = extractor.header()
+
+        assert "barcode" in header
+        assert "UMI" in header
+        # Should NOT contain individual duplicated part names
+        assert "Barcode/1" not in header
+        assert "Barcode/2" not in header
+
+    def test_process_duplicated_both_agree(self):
+        """Test process_duplicated_elements when both copies correct to the same barcode."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Both copies have AAAACCCC (exact match to whitelist)
+        sequence = "XXXXXXXXXX" + "AAAACCCC" + "XXXXXXXX" + "AAAACCCC" + "XXXXXXXX"
+        dupl_storage = {"Barcode": [(10, 17), (26, 33)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        result = detected_results["Barcode"]
+        assert result.seq == "AAAACCCC"
+        assert result.start == 10
+        assert result.end == 17
+
+    def test_process_duplicated_one_succeeds(self):
+        """Test process_duplicated_elements when one copy corrects, other fails."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Copy 1: AAAACCCC (exact match), Copy 2: totally wrong sequence
+        sequence = "XXXXXXXXXX" + "AAAACCCC" + "XXXXXXXX" + "NNNNNNNN" + "XXXXXXXX"
+        dupl_storage = {"Barcode": [(10, 17), (26, 33)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        result = detected_results["Barcode"]
+        assert result.seq == "AAAACCCC"
+
+    def test_process_duplicated_both_fail(self):
+        """Test process_duplicated_elements when neither copy corrects."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Both copies have garbage sequences that don't match any whitelist entry
+        sequence = "XXXXXXXXXX" + "NNNNNNNN" + "XXXXXXXX" + "NNNNNNNN" + "XXXXXXXX"
+        dupl_storage = {"Barcode": [(10, 17), (26, 33)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        assert detected_results["Barcode"].seq == ExtractionResult.NOSEQ
+        assert detected_results["Barcode"].start == -1
+
+    def test_process_duplicated_disagree(self):
+        """Test process_duplicated_elements when copies correct to different barcodes."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Copy 1: AAAACCCC, Copy 2: GGGGTTTT (both valid but different)
+        sequence = "XXXXXXXXXX" + "AAAACCCC" + "XXXXXXXX" + "GGGGTTTT" + "XXXXXXXX"
+        dupl_storage = {"Barcode": [(10, 17), (26, 33)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        assert detected_results["Barcode"].seq == ExtractionResult.NOSEQ
+        assert detected_results["Barcode"].start == -1
+
+    def test_process_duplicated_none_detected(self):
+        """Test process_duplicated_elements when no copies are detected."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        dupl_storage = {"Barcode": [(-1, -1), (-1, -1)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, "AAAA" * 20)
+
+        assert "Barcode" in detected_results
+        assert detected_results["Barcode"].seq == ExtractionResult.NOSEQ
+        assert detected_results["Barcode"].start == -1
+
+    def test_process_duplicated_one_detected(self):
+        """Test process_duplicated_elements when only one copy is detected."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Only copy 1 detected with AAAACCCC
+        sequence = "XXXXXXXXXX" + "AAAACCCC" + "XXXXXXXXXXXXXXXX"
+        dupl_storage = {"Barcode": [(10, 17), (-1, -1)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        result = detected_results["Barcode"]
+        assert result.seq == "AAAACCCC"
+        assert result.start == 10
+
+    def test_process_duplicated_no_correction_match(self):
+        """Test process_duplicated_elements without correction when copies match."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+        extractor.correct_sequences = False
+
+        sequence = "XXXXXXXXXX" + "ACGTACGT" + "XXXXXXXX" + "ACGTACGT" + "XXXXXXXX"
+        dupl_storage = {"Barcode": [(10, 17), (26, 33)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        result = detected_results["Barcode"]
+        assert result.seq == "ACGTACGT"
+        assert result.start == 10
+
+    def test_process_duplicated_no_correction_differ(self):
+        """Test process_duplicated_elements without correction when copies differ."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+        extractor.correct_sequences = False
+
+        sequence = "XXXXXXXXXX" + "ACGTACGT" + "XXXXXXXX" + "TGCATGCA" + "XXXXXXXX"
+        dupl_storage = {"Barcode": [(10, 17), (26, 33)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        result = detected_results["Barcode"]
+        # Should be comma-separated when they differ
+        assert result.seq == "ACGTACGT,TGCATGCA"
+        assert result.start == 10
+
+    def test_process_duplicated_no_correction_one_detected(self):
+        """Test process_duplicated_elements without correction, one copy detected."""
+        structure = self._create_dupl_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+        extractor.correct_sequences = False
+
+        sequence = "XXXXXXXXXX" + "ACGTACGT" + "XXXXXXXXXXXXXXXX"
+        dupl_storage = {"Barcode": [(10, 17), (-1, -1)]}
+        detected_results = {}
+
+        extractor.process_duplicated_elements(dupl_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        result = detected_results["Barcode"]
+        assert result.seq == "ACGTACGT"
+        assert result.start == 10
+
+    def test_dupl_extraction_result_get_barcode(self):
+        """Test ExtractionResult.get_barcode() with duplicated element result."""
+        structure = self._create_dupl_structure()
+        detected = {"Barcode": DetectedElement(10, 17, 14, "AAAACCCC")}
+        result = ExtractionResult(structure, "read_001", "+", detected)
+
+        assert result.get_barcode() == "AAAACCCC"
+        assert result.has_barcode() is True
+        assert result.is_valid() is True
+
+    def test_dupl_additional_attributes_exclude_barcode(self):
+        """Test that duplicated barcode is excluded from additional attributes."""
+        structure = self._create_dupl_structure()
+        detected = {
+            "Barcode": DetectedElement(10, 17, 14, "AAAACCCC"),
+            "PolyT": DetectedElement(26, 40, 0)
+        }
+        result = ExtractionResult(structure, "read_001", "+", detected)
+        attrs = result.get_additional_attributes()
+
+        assert "Barcode detected" not in attrs
+        assert "Barcode/1 detected" not in attrs
+        assert "Barcode/2 detected" not in attrs
+        assert "PolyT detected" in attrs
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
