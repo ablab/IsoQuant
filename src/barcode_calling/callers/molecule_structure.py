@@ -8,6 +8,7 @@ import logging
 import sys
 from enum import unique, Enum
 from typing import Iterator, List
+from collections import defaultdict
 
 from ...error_codes import IsoQuantExitCode
 from ..common import load_barcodes
@@ -106,7 +107,9 @@ class MoleculeStructure:
     def __init__(self, str_iterator):
         self.ordered_elements: List[MoleculeElement] = []
         self.elements_to_concatenate = {}
+        self.concatenated_elements_counts = {}
         self.duplicated_elements = {}
+        self.duplicated_elements_counts = {}
         # Barcode/UMI element names identified by naming convention
         self._barcode_elements: List[str] = []
         self._umi_elements: List[str] = []
@@ -152,7 +155,12 @@ class MoleculeStructure:
                 if len(v) != 2:
                     logger.critical("Incorrect concatenated element %s" % el)
                     sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-                self.elements_to_concatenate[el] = v[0]
+                try:
+                    self.elements_to_concatenate[el] = (v[0], int(v[1]))
+                except ValueError:
+                    logger.critical("Incorrectly specified index for concatenated element %s: %s" % (el, v[1]))
+                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+
             elif self.DUPL_DELIM in el:
                 if not (element_type.needs_sequence_extraction() or element_type.needs_correction()):
                     logger.critical("Concatenated elements must be variable (fix element %s)" % el)
@@ -161,9 +169,28 @@ class MoleculeStructure:
                 if len(v) != 2:
                     logger.critical("Incorrect duplicated element %s" % el)
                     sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-                self.duplicated_elements[el] = v[0]
+                try:
+                    self.duplicated_elements[el] = (v[0], int(v[1]))
+                except ValueError:
+                    logger.critical("Incorrectly specified index for duplicated element %s: %s" % (el, v[1]))
+                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
+        self.concatenated_elements_counts = self._check_indices(self.elements_to_concatenate)
+        self.duplicated_elements_counts = self._check_indices(self.duplicated_elements)
         self._identify_barcode_umi_elements()
+
+    def _check_indices(self, element_dict):
+        # check for consecutive indices
+        index_dict = defaultdict(list)
+        for el in element_dict:
+            index_dict[self.elements_to_concatenate[el][0]].append(self.elements_to_concatenate[el][1])
+
+        for el in index_dict:
+            if sorted(index_dict[el]) != list(range(1, len(index_dict[el]) + 1)):
+                logger.critical("Concatenated elements must be consecutive from 1 to %d (fix element %s, indices: %s)" % (len(index_dict[el]), el, str(index_dict[el])))
+                sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+
+        return {el : len(val) for el, val in element_dict.items()}
 
     def _identify_barcode_umi_elements(self) -> None:
         """

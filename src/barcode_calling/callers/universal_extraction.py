@@ -111,12 +111,19 @@ class UniversalSingleMoleculeExtractor:
         logger.debug("PolyT %d" % polyt_start)
 
         self.detect_const_elements(sequence, polyt_start, polyt_end, detected_elements)
-        self.extract_variable_elements5(detected_elements, sequence)
-        self.extract_variable_elements3(detected_elements, sequence)
+        concat_element_storage = {}
+        dupl_element_storage = {}
+        self.extract_variable_elements5(sequence, detected_elements, concat_element_storage, dupl_element_storage)
+        self.extract_variable_elements3(sequence, detected_elements, concat_element_storage, dupl_element_storage)
+        self.process_concatenated_elements(concat_element_storage, detected_elements)
+        self.process_duplicated_elements(dupl_element_storage, detected_elements)
         logger.debug("== end read id %s ==" % read_id)
         return detected_elements
 
-    def concatenate_elements(self, detected_results):
+    def process_concatenated_elements(self, concatenated_element_storage, detected_results):
+        pass
+
+    def process_duplicated_elements(self, duplicated_element_storage, detected_results):
         pass
 
     def correct_element(self, element: MoleculeElement, sequence: str, potential_start: int, potential_end: int) -> DetectedElement:
@@ -125,7 +132,6 @@ class UniversalSingleMoleculeExtractor:
         corrected_seq, seq_score, seq_start, seq_end = \
             find_candidate_with_max_score_ssw(matching_sequences, potential_seq,
                                               min_score=self.min_scores[element.element_name])
-
         if corrected_seq is not None:
             read_seq_start = potential_start + seq_start
             read_seq_end = potential_start + seq_end - 1
@@ -133,7 +139,79 @@ class UniversalSingleMoleculeExtractor:
         else:
             return DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
 
-    def extract_variable_elements5(self, detected_elements, sequence):
+    def _backup_concatenated_element(self, element, potential_start, potential_end, element_storage):
+        concatenated_element_base_name, concatenated_element_index \
+            = self.molecule_structure.elements_to_concatenate[element.element_name]
+        if concatenated_element_base_name not in element_storage:
+            # initialize the list of empty concatenated elements for the first time
+            element_storage[concatenated_element_base_name] = [(-1, -1) for _ in range(
+                len(self.molecule_structure.concatenated_elements_counts[concatenated_element_base_name]))]
+        element_storage[concatenated_element_base_name][concatenated_element_index] = (potential_start, potential_end)
+
+    def _backup_duplicated_element(self, element, potential_start, potential_end, element_storage):
+        concatenated_element_base_name, concatenated_element_index \
+            = self.molecule_structure.elements_to_concatenate[element.element_name]
+        if concatenated_element_base_name not in element_storage:
+            # initialize the list of empty concatenated elements for the first time
+            element_storage[concatenated_element_base_name] = [(-1, -1) for _ in range(
+                len(self.molecule_structure.concatenated_elements_counts[concatenated_element_base_name]))]
+        element_storage[concatenated_element_base_name][concatenated_element_index] = (potential_start, potential_end)
+
+    def _detect_variable_element(self, el, sequence, potential_start, potential_end,
+                                 detected_elements, concat_element_storage, dupl_element_storage,
+                                 len_diff_threshold=None):
+        potential_len = potential_end - potential_start + 1
+        if len_diff_threshold is None or abs(potential_len - el.element_length) <= len_diff_threshold * el.element_length:
+            if el.element_name in self.molecule_structure.elements_to_concatenate:
+                self._backup_concatenated_element(el, potential_start, potential_end, concat_element_storage)
+                return potential_start, potential_end
+
+            if el.element_name in self.molecule_structure.duplicated_elements:
+                self._backup_duplicated_element(el, potential_start, potential_end, dupl_element_storage)
+                return potential_start, potential_end
+
+            if el.element_name in self.elements_to_extract:
+                detected_elements[el.element_name] = DetectedElement(potential_start, potential_end, 0,
+                                                                     seq=sequence[potential_start:potential_end + 1])
+
+            elif el.element_name in self.elements_to_correct:
+                detected_element = self.correct_element(el, sequence, potential_start, potential_end)
+                if detected_element.start != -1:
+                    detected_elements[el.element_name] = detected_element
+                    return detected_element.start, detected_element.end
+        else:
+            detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+
+        return potential_start, potential_end
+
+    def _detect_potential_start(self, element, element_index, potential_end, detected_elements):
+        if element_index == 0:
+            potential_start = potential_end - element.element_length + 1
+        else:
+            prev_el = self.molecule_structure.ordered_elements[element_index - 1]
+            if prev_el.element_name in detected_elements:
+                potential_start = detected_elements[prev_el].end + 1
+            else:
+                potential_start = potential_end - element.element_length + 1
+        if potential_start < 0:
+            potential_start = 0
+
+        return potential_start
+
+    def _detect_potential_end(self, sequence, element, element_index, potential_start, detected_elements):
+        if element_index + 1 == len(self.molecule_structure.ordered_elements):
+            potential_end = potential_start + element.element_length - 1
+        else:
+            next_el = self.molecule_structure.ordered_elements[element_index + 1]
+            if next_el.element_name in detected_elements:
+                potential_end = detected_elements[next_el.element_name].start - 1
+            else:
+                potential_end = potential_start + element.element_length - 1
+        if potential_end >= len(sequence):
+            potential_end = len(sequence) - 1
+        return potential_end
+
+    def extract_variable_elements5(self, sequence, detected_elements, concat_element_storage, dupl_element_storage):
         first_detected_const_element = None
         for i, el in enumerate(self.molecule_structure):
             if el.element_type == ElementType.cDNA:
@@ -161,18 +239,9 @@ class UniversalSingleMoleculeExtractor:
             potential_start = potential_end - el.element_length + 1
             if potential_start < 0: break
 
-            current_pos = potential_start - 1
-            if el.element_name in self.elements_to_extract:
-                # TODO: for concatenated elements, store them in a separate dict and extract/correct them only when all of them are found
-                # TODO: more or less the same for duplicated elements, except the procedure is different
-                detected_elements[el.element_name] = DetectedElement(potential_start, potential_end, 0,
-                                                                     seq=sequence[potential_start:potential_end + 1])
-
-            elif el.element_name in self.elements_to_correct:
-                detected_element = self.correct_element(el, sequence, potential_start, potential_end)
-                if detected_element.start != -1:
-                    current_pos = detected_element.start - 1
-                detected_elements[el.element_name] = detected_element
+            el_start, _ = self._detect_variable_element(el, sequence, potential_start, potential_end,
+                                                        detected_elements, concat_element_storage, dupl_element_storage)
+            current_pos = el_start - 1
 
         current_pos = detected_elements[
                           self.molecule_structure.ordered_elements[first_detected_const_element].element_name].end + 1
@@ -194,35 +263,15 @@ class UniversalSingleMoleculeExtractor:
                 continue
 
             potential_start = current_pos
-            if i + 1 == len(self.molecule_structure.ordered_elements):
-                potential_end = potential_start + el.element_length - 1
-            else:
-                next_el = self.molecule_structure.ordered_elements[i + 1]
-                if next_el.element_name in detected_elements:
-                    potential_end = detected_elements[next_el.element_name].start - 1
-                else:
-                    potential_end = potential_start + el.element_length - 1
-            if potential_end >= len(sequence):
-                potential_end = len(sequence) - 1
+            potential_end = self._detect_potential_end(sequence, el, i, potential_start, detected_elements)
 
-            potential_len = potential_end - potential_start + 1
-            current_pos = potential_end + 1
-            if abs(potential_len - el.element_length) <= self.MAX_LEN_DIFF * el.element_length:
-                if el.element_name in self.elements_to_extract:
-                    detected_elements[el.element_name] = DetectedElement(potential_start, potential_end, 0,
-                                                                         seq=sequence[
-                                                                             potential_start:potential_end + 1])
-
-                elif el.element_name in self.elements_to_correct:
-                    detected_element = self.correct_element(el, sequence, potential_start, potential_end)
-                    if detected_element.end != -1:
-                        current_pos = detected_element.end + 1
-                    detected_elements[el.element_name] = detected_element
-            else:
-                detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+            _, el_end = self._detect_variable_element(el, sequence, potential_start, potential_end,
+                                                      detected_elements, concat_element_storage, dupl_element_storage,
+                                                      len_diff_threshold=self.MAX_LEN_DIFF)
+            current_pos = el_end + 1
 
 
-    def extract_variable_elements3(self, detected_elements, sequence):
+    def extract_variable_elements3(self, sequence, detected_elements, concat_element_storage, dupl_element_storage):
         last_detected_const_element = None
         for i in range(len(self.molecule_structure.ordered_elements) - 1, -1, -1):
             el = self.molecule_structure.ordered_elements[i]
@@ -250,17 +299,10 @@ class UniversalSingleMoleculeExtractor:
             potential_start = current_pos
             potential_end = potential_start + el.element_length - 1
             if potential_end >= len(sequence): break
-            current_pos = potential_end + 1
 
-            if el.element_name in self.elements_to_extract:
-                detected_elements[el.element_name] = DetectedElement(potential_start, potential_end, 0,
-                                                                     seq=sequence[potential_start:potential_end + 1])
-
-            elif el.element_name in self.elements_to_correct:
-                detected_element = self.correct_element(el, sequence, potential_start, potential_end)
-                if detected_element.end != -1:
-                    current_pos = detected_element.end + 1
-                detected_elements[el.element_name] = detected_element
+            _, el_end = self._detect_variable_element(el, sequence, potential_start, potential_end,
+                                                      detected_elements, concat_element_storage, dupl_element_storage)
+            current_pos = el_end + 1
 
         current_pos = detected_elements[
                           self.molecule_structure.ordered_elements[last_detected_const_element].element_name].start - 1
@@ -282,34 +324,12 @@ class UniversalSingleMoleculeExtractor:
                 continue
 
             potential_end = current_pos
-            if i == 0:
-                potential_start = potential_end - el.element_length + 1
-            else:
-                prev_el = self.molecule_structure.ordered_elements[i - 1]
-                if prev_el.element_name in detected_elements:
-                    potential_start = detected_elements[prev_el].end + 1
-                else:
-                    potential_start = potential_end - el.element_length + 1
-            if potential_start < 0:
-                potential_start = 0
+            potential_start = self._detect_potential_start(el, i, potential_end, detected_elements)
 
-            potential_len = potential_end - potential_start + 1
-            current_pos = potential_start - 1
-            if abs(potential_len - el.element_length) <= self.MAX_LEN_DIFF * el.element_length:
-                if el.element_name in self.elements_to_extract:
-                    detected_elements[el.element_name] = DetectedElement(potential_start, potential_end, 0,
-                                                                         seq=sequence[
-                                                                             potential_start:potential_end + 1])
-
-                elif el.element_name in self.elements_to_correct:
-                    detected_element = self.correct_element(el, sequence, potential_start, potential_end)
-                    if detected_element.start != -1:
-                        current_pos = detected_element.start - 1
-                    detected_elements[el.element_name] = detected_element
-
-            else:
-                detected_elements[el.element_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
-
+            el_start, _ = self._detect_variable_element(el, sequence, potential_start, potential_end,
+                                                        detected_elements, concat_element_storage, dupl_element_storage,
+                                                        len_diff_threshold=self.MAX_LEN_DIFF)
+            current_pos = el_start - 1
 
     def detect_const_elements(self, sequence, polyt_start, polyt_end, detected_elements):
         # searching left of cDNA
