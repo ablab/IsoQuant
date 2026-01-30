@@ -53,7 +53,10 @@ class UniversalSingleMoleculeExtractor:
             elif el.element_type.needs_sequence_extraction():
                 self.elements_to_extract.add(el.element_name)
             elif el.element_type.needs_correction():
-                if self.correct_sequences:
+                if el.element_name in self.molecule_structure.elements_to_concatenate:
+                    # Concatenated parts: skip individual index, handled after loop
+                    pass
+                elif self.correct_sequences:
                     self.index_dict[el.element_name] = self.prepare_barcode_index(el)
                     # FIXME: min score should be based on the length of the barcode and their sparcity
                     # e.g. find a way to estimate min_score so that error rate does not exceed 1%
@@ -61,6 +64,23 @@ class UniversalSingleMoleculeExtractor:
                     self.elements_to_correct.add(el.element_name)
                 else:
                     self.elements_to_extract.add(el.element_name)
+
+        # Build one index per concatenated base element using the full whitelist
+        if self.correct_sequences:
+            for base_name, count in self.molecule_structure.concatenated_elements_counts.items():
+                first_part_el = None
+                total_length = 0
+                for el in self.molecule_structure:
+                    if el.element_name in self.molecule_structure.elements_to_concatenate:
+                        if self.molecule_structure.elements_to_concatenate[el.element_name][0] == base_name:
+                            if first_part_el is None:
+                                first_part_el = el
+                            total_length += el.element_length
+                if first_part_el is not None and first_part_el.element_value is not None:
+                    barcode_list = first_part_el.element_value
+                    k = max(6, int(total_length / 2) - 2)
+                    self.index_dict[base_name] = KmerIndexer(barcode_list, k)
+                    self.min_scores[base_name] = total_length - 2
 
         if not self.has_cdna:
             logger.critical("Molecule must include a cDNA")
@@ -115,13 +135,38 @@ class UniversalSingleMoleculeExtractor:
         dupl_element_storage = {}
         self.extract_variable_elements5(sequence, detected_elements, concat_element_storage, dupl_element_storage)
         self.extract_variable_elements3(sequence, detected_elements, concat_element_storage, dupl_element_storage)
-        self.process_concatenated_elements(concat_element_storage, detected_elements)
+        self.process_concatenated_elements(concat_element_storage, detected_elements, sequence)
         self.process_duplicated_elements(dupl_element_storage, detected_elements)
         logger.debug("== end read id %s ==" % read_id)
         return detected_elements
 
-    def process_concatenated_elements(self, concatenated_element_storage, detected_results):
-        pass
+    def process_concatenated_elements(self, concatenated_element_storage, detected_results, sequence):
+        for base_name, parts in concatenated_element_storage.items():
+            # Check all parts were detected
+            if any(start == -1 for start, end in parts):
+                detected_results[base_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+                continue
+
+            # Concatenate sequences from all parts
+            concatenated_seq = ""
+            for start, end in parts:
+                concatenated_seq += sequence[start:end + 1]
+
+            # If correction is enabled and an index exists, correct against the whitelist
+            if self.correct_sequences and base_name in self.index_dict:
+                matching_sequences = self.index_dict[base_name].get_occurrences(concatenated_seq)
+                corrected_seq, seq_score, _, _ = find_candidate_with_max_score_ssw(
+                    matching_sequences, concatenated_seq,
+                    min_score=self.min_scores[base_name])
+                if corrected_seq is not None:
+                    detected_results[base_name] = DetectedElement(
+                        parts[0][0], parts[-1][1], seq_score, corrected_seq)
+                else:
+                    detected_results[base_name] = DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
+            else:
+                # No correction: just store the raw concatenated sequence
+                detected_results[base_name] = DetectedElement(
+                    parts[0][0], parts[-1][1], 0, concatenated_seq)
 
     def process_duplicated_elements(self, duplicated_element_storage, detected_results):
         pass
@@ -140,22 +185,20 @@ class UniversalSingleMoleculeExtractor:
             return DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ)
 
     def _backup_concatenated_element(self, element, potential_start, potential_end, element_storage):
-        concatenated_element_base_name, concatenated_element_index \
-            = self.molecule_structure.elements_to_concatenate[element.element_name]
-        if concatenated_element_base_name not in element_storage:
-            # initialize the list of empty concatenated elements for the first time
-            element_storage[concatenated_element_base_name] = [(-1, -1) for _ in range(
-                len(self.molecule_structure.concatenated_elements_counts[concatenated_element_base_name]))]
-        element_storage[concatenated_element_base_name][concatenated_element_index] = (potential_start, potential_end)
+        base_name, part_index = self.molecule_structure.elements_to_concatenate[element.element_name]
+        if base_name not in element_storage:
+            element_storage[base_name] = [(-1, -1) for _ in range(
+                self.molecule_structure.concatenated_elements_counts[base_name])]
+        # part_index is 1-based in MDF, convert to 0-based
+        element_storage[base_name][part_index - 1] = (potential_start, potential_end)
 
     def _backup_duplicated_element(self, element, potential_start, potential_end, element_storage):
-        concatenated_element_base_name, concatenated_element_index \
-            = self.molecule_structure.elements_to_concatenate[element.element_name]
-        if concatenated_element_base_name not in element_storage:
-            # initialize the list of empty concatenated elements for the first time
-            element_storage[concatenated_element_base_name] = [(-1, -1) for _ in range(
-                len(self.molecule_structure.concatenated_elements_counts[concatenated_element_base_name]))]
-        element_storage[concatenated_element_base_name][concatenated_element_index] = (potential_start, potential_end)
+        base_name, part_index = self.molecule_structure.duplicated_elements[element.element_name]
+        if base_name not in element_storage:
+            element_storage[base_name] = [(-1, -1) for _ in range(
+                self.molecule_structure.duplicated_elements_counts[base_name])]
+        # part_index is 1-based in MDF, convert to 0-based
+        element_storage[base_name][part_index - 1] = (potential_start, potential_end)
 
     def _detect_variable_element(self, el, sequence, potential_start, potential_end,
                                  detected_elements, concat_element_storage, dupl_element_storage,

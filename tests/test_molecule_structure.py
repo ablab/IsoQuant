@@ -431,5 +431,106 @@ Barcode\tVAR_LIST\t{barcodes}
         assert len(elements[0].element_value) == 100
 
 
+class TestConcatenatedElements:
+    """Test concatenated element parsing and identification."""
+
+    def test_parse_concatenated_elements(self):
+        """Test parsing MDF with concatenated barcode parts."""
+        mdf_content = """Barcode|1:Barcode|2:UMI:PolyT:cDNA
+Barcode|1\tVAR_LIST\tAAAACCCC,GGGGTTTT\t4
+Barcode|2\tVAR_LIST\tAAAACCCC,GGGGTTTT\t4
+UMI\tVAR_ANY\t8
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert len(structure.ordered_elements) == 5
+        assert "Barcode|1" in structure.elements_to_concatenate
+        assert "Barcode|2" in structure.elements_to_concatenate
+        assert structure.elements_to_concatenate["Barcode|1"] == ("Barcode", 1)
+        assert structure.elements_to_concatenate["Barcode|2"] == ("Barcode", 2)
+
+    def test_concatenated_elements_counts(self):
+        """Test that concatenated_elements_counts has correct base name and count."""
+        mdf_content = """Barcode|1:Barcode|2:cDNA
+Barcode|1\tVAR_LIST\tAAAACCCC,GGGGTTTT\t4
+Barcode|2\tVAR_LIST\tAAAACCCC,GGGGTTTT\t4
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert "Barcode" in structure.concatenated_elements_counts
+        assert structure.concatenated_elements_counts["Barcode"] == 2
+
+    def test_concatenated_three_parts(self):
+        """Test three-part concatenated element."""
+        mdf_content = """Barcode|1:Barcode|2:Barcode|3:cDNA
+Barcode|1\tVAR_LIST\tAAAACCCCGGGG,TTTTAAAACCCC\t4
+Barcode|2\tVAR_LIST\tAAAACCCCGGGG,TTTTAAAACCCC\t4
+Barcode|3\tVAR_LIST\tAAAACCCCGGGG,TTTTAAAACCCC\t4
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.concatenated_elements_counts["Barcode"] == 3
+
+    def test_concatenated_barcode_umi_identification(self):
+        """Test that concatenated barcode elements are identified by base name."""
+        mdf_content = """Barcode|1:Barcode|2:UMI:cDNA
+Barcode|1\tVAR_LIST\tAAAACCCC,GGGGTTTT\t4
+Barcode|2\tVAR_LIST\tAAAACCCC,GGGGTTTT\t4
+UMI\tVAR_ANY\t8
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        # Base name "Barcode" should be in barcode_elements, not "Barcode|1", "Barcode|2"
+        assert structure.barcode_elements == ["Barcode"]
+        assert "Barcode|1" not in structure.barcode_elements
+        assert "Barcode|2" not in structure.barcode_elements
+        assert structure.umi_elements == ["UMI"]
+
+    def test_concatenated_umi_identification(self):
+        """Test that concatenated UMI elements are identified by base name."""
+        mdf_content = """Barcode:UMI|1:UMI|2:cDNA
+Barcode\tVAR_LIST\tAAAA,CCCC
+UMI|1\tVAR_ANY\t4
+UMI|2\tVAR_ANY\t4
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        assert structure.barcode_elements == ["Barcode"]
+        assert structure.umi_elements == ["UMI"]
+
+    def test_concatenated_explicit_length(self):
+        """Test that explicit length (4th field) is correctly parsed for concatenated parts."""
+        mdf_content = """Barcode|1:Barcode|2:cDNA
+Barcode|1\tVAR_LIST\tAAAACCCC,GGGGTTTT\t4
+Barcode|2\tVAR_LIST\tAAAACCCC,GGGGTTTT\t4
+"""
+        structure = MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+        # Each part should have length 4, not the full barcode length 8
+        for el in structure:
+            if el.element_name == "Barcode|1":
+                assert el.element_length == 4
+            elif el.element_name == "Barcode|2":
+                assert el.element_length == 4
+
+    def test_concatenated_elements_must_be_variable(self):
+        """Test that non-variable concatenated elements are rejected."""
+        mdf_content = """Adapter|1:Adapter|2:cDNA
+Adapter|1\tCONST\tACGT
+Adapter|2\tCONST\tTGCA
+"""
+        with pytest.raises(SystemExit):
+            MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+    def test_concatenated_nonconsecutive_indices_rejected(self):
+        """Test that non-consecutive indices (e.g., 1 and 3) are rejected."""
+        mdf_content = """Barcode|1:Barcode|3:cDNA
+Barcode|1\tVAR_LIST\tAAAA,CCCC\t4
+Barcode|3\tVAR_LIST\tAAAA,CCCC\t4
+"""
+        with pytest.raises(SystemExit):
+            MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
