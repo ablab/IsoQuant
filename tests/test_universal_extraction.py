@@ -725,5 +725,160 @@ class TestIntegration:
             assert result.read_id in [r[0] for r in reads]
 
 
+class TestConcatenatedElementProcessing:
+    """Test concatenated element extraction and processing."""
+
+    def _create_concat_structure(self):
+        """Create structure with concatenated barcode: Barcode|1:Barcode|2:UMI:PolyT:cDNA"""
+        # Use 8bp barcodes split into two 4bp parts
+        mdf_content = """Barcode|1:Barcode|2:UMI:PolyT:cDNA
+Barcode|1\tVAR_LIST\tAAAACCCC,GGGGTTTT,ACGTACGT\t4
+Barcode|2\tVAR_LIST\tAAAACCCC,GGGGTTTT,ACGTACGT\t4
+UMI\tVAR_ANY\t8
+"""
+        return MoleculeStructure(iter(mdf_content.strip().split('\n')))
+
+    def test_concat_structure_barcode_elements(self):
+        """Test that concatenated barcode is identified by base name."""
+        structure = self._create_concat_structure()
+        assert structure.barcode_elements == ["Barcode"]
+        assert structure.umi_elements == ["UMI"]
+
+    def test_concat_structure_counts(self):
+        """Test concatenated elements counts."""
+        structure = self._create_concat_structure()
+        assert structure.concatenated_elements_counts["Barcode"] == 2
+
+    def test_concat_extractor_init(self):
+        """Test extractor initialization with concatenated elements."""
+        structure = self._create_concat_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Should have one index for the base name "Barcode", not individual parts
+        assert "Barcode" in extractor.index_dict
+        assert "Barcode|1" not in extractor.index_dict
+        assert "Barcode|2" not in extractor.index_dict
+
+    def test_concat_extractor_header(self):
+        """Test header output for concatenated elements."""
+        structure = self._create_concat_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+        header = extractor.header()
+
+        # Header should have standard fields, not individual parts
+        assert "barcode" in header
+        assert "UMI" in header
+        # Should NOT contain individual concatenated part names
+        assert "Barcode|1" not in header
+        assert "Barcode|2" not in header
+
+    def test_process_concatenated_elements_all_detected(self):
+        """Test process_concatenated_elements when all parts are found."""
+        structure = self._create_concat_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Simulate detected parts: AAAA at [10,13] and CCCC at [14,17]
+        sequence = "XXXXXXXXXX" + "AAAA" + "CCCC" + "XXXXXXXX"
+        concat_storage = {"Barcode": [(10, 13), (14, 17)]}
+        detected_results = {}
+
+        extractor.process_concatenated_elements(concat_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        result = detected_results["Barcode"]
+        # Should find corrected match for "AAAACCCC" in whitelist
+        assert result.seq == "AAAACCCC"
+        assert result.start == 10
+        assert result.end == 17
+
+    def test_process_concatenated_elements_missing_part(self):
+        """Test process_concatenated_elements when a part is missing."""
+        structure = self._create_concat_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+
+        # Part 2 not detected (start=-1)
+        concat_storage = {"Barcode": [(10, 13), (-1, -1)]}
+        detected_results = {}
+
+        extractor.process_concatenated_elements(concat_storage, detected_results, "AAAA" * 10)
+
+        assert "Barcode" in detected_results
+        assert detected_results["Barcode"].seq == ExtractionResult.NOSEQ
+        assert detected_results["Barcode"].start == -1
+
+    def test_process_concatenated_no_correction(self):
+        """Test process_concatenated_elements without correction (raw concatenation)."""
+        structure = self._create_concat_structure()
+        extractor = UniversalSingleMoleculeExtractor(structure)
+        extractor.correct_sequences = False
+
+        sequence = "XXXXXXXXXX" + "ACGT" + "TGCA" + "XXXXXXXX"
+        concat_storage = {"Barcode": [(10, 13), (14, 17)]}
+        detected_results = {}
+
+        extractor.process_concatenated_elements(concat_storage, detected_results, sequence)
+
+        assert "Barcode" in detected_results
+        result = detected_results["Barcode"]
+        # Without correction, raw concatenated sequence is stored
+        assert result.seq == "ACGTTGCA"
+        assert result.start == 10
+        assert result.end == 17
+
+    def test_concat_extraction_result_get_barcode(self):
+        """Test ExtractionResult.get_barcode() with concatenated element result."""
+        structure = self._create_concat_structure()
+        detected = {"Barcode": DetectedElement(10, 17, 14, "AAAACCCC")}
+        result = ExtractionResult(structure, "read_001", "+", detected)
+
+        assert result.get_barcode() == "AAAACCCC"
+        assert result.has_barcode() is True
+        assert result.is_valid() is True
+
+    def test_concat_extraction_result_str_format(self):
+        """Test ExtractionResult __str__ output with concatenated elements."""
+        structure = self._create_concat_structure()
+        detected = {
+            "Barcode": DetectedElement(10, 17, 14, "AAAACCCC"),
+            "UMI": DetectedElement(18, 25, 0, "ACGTACGT"),
+            "PolyT": DetectedElement(26, 40, 0)
+        }
+        result = ExtractionResult(structure, "read_001", "+", detected)
+        output = str(result)
+
+        fields = output.split('\t')
+        assert fields[0] == "read_001"
+        assert fields[1] == "AAAACCCC"       # barcode
+        assert fields[2] == "ACGTACGT"       # UMI
+        # Should NOT contain individual part names
+
+    def test_concat_extraction_result_no_barcode(self):
+        """Test ExtractionResult when concatenated barcode correction fails."""
+        structure = self._create_concat_structure()
+        detected = {
+            "Barcode": DetectedElement(-1, -1, -1, ExtractionResult.NOSEQ),
+            "UMI": DetectedElement(18, 25, 0, "ACGTACGT")
+        }
+        result = ExtractionResult(structure, "read_001", "+", detected)
+
+        assert result.get_barcode() == ExtractionResult.NOSEQ
+        assert result.has_barcode() is False
+
+    def test_concat_additional_attributes_exclude_barcode(self):
+        """Test that concatenated barcode is excluded from additional attributes."""
+        structure = self._create_concat_structure()
+        detected = {
+            "Barcode": DetectedElement(10, 17, 14, "AAAACCCC"),
+            "PolyT": DetectedElement(26, 40, 0)
+        }
+        result = ExtractionResult(structure, "read_001", "+", detected)
+        attrs = result.get_additional_attributes()
+
+        assert "Barcode detected" not in attrs
+        assert "Barcode|1 detected" not in attrs
+        assert "Barcode|2 detected" not in attrs
+        assert "PolyT detected" in attrs
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

@@ -189,11 +189,15 @@ class ExtractionResult:
         self.strand = strand
 
     def _get_supplementary_elements(self) -> List[str]:
-        """Get list of element names that are not barcode or UMI elements."""
+        """Get list of element names that are not barcode, UMI, or concatenated/duplicated parts."""
         supplementary = []
         barcode_umi_set = set(self._barcode_elements + self._umi_elements)
         for el in self.molecule_structure:
             if el.element_type == ElementType.cDNA:
+                continue
+            if el.element_name in self.molecule_structure.elements_to_concatenate:
+                continue
+            if el.element_name in self.molecule_structure.duplicated_elements:
                 continue
             if el.element_name not in barcode_umi_set:
                 supplementary.append(el.element_name)
@@ -217,11 +221,17 @@ class ExtractionResult:
         )
 
         # Supplementary elements (non-barcode, non-UMI)
+        barcode_umi_set = set(self._barcode_elements + self._umi_elements)
         for el in self.molecule_structure:
             if el.element_type == ElementType.cDNA:
                 continue
+            # Skip concatenated/duplicated parts (data lives under base name)
+            if el.element_name in self.molecule_structure.elements_to_concatenate:
+                continue
+            if el.element_name in self.molecule_structure.duplicated_elements:
+                continue
             # Skip barcode and UMI elements (already printed above)
-            if el.element_name in self._barcode_elements or el.element_name in self._umi_elements:
+            if el.element_name in barcode_umi_set:
                 continue
 
             if el.element_type == ElementType.PolyT:
@@ -255,11 +265,17 @@ class ExtractionResult:
         header = "#read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
 
         # Supplementary elements (non-barcode, non-UMI)
+        barcode_umi_set = set(self._barcode_elements + self._umi_elements)
         for el in self.molecule_structure:
             if el.element_type == ElementType.cDNA:
                 continue
+            # Skip concatenated/duplicated parts (data lives under base name)
+            if el.element_name in self.molecule_structure.elements_to_concatenate:
+                continue
+            if el.element_name in self.molecule_structure.duplicated_elements:
+                continue
             # Skip barcode and UMI elements (already in standard header)
-            if el.element_name in self._barcode_elements or el.element_name in self._umi_elements:
+            if el.element_name in barcode_umi_set:
                 continue
 
             if el.element_type == ElementType.PolyT:

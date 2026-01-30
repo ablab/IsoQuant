@@ -64,9 +64,9 @@ class MoleculeElement:
                 self.element_length = len(self.element_value[0])
             else:
                 try:
-                    self.element_length = int(element_value_1)
+                    self.element_length = int(element_value_2)
                 except ValueError:
-                    logger.critical("Incorrectly specified length for element %s: %s" % (self.element_name, element_value_1))
+                    logger.critical("Incorrectly specified length for element %s: %s" % (self.element_name, element_value_2))
                     sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
         elif self.element_type == ElementType.VAR_LIST:
             self.element_value = element_value_1.split(',')
@@ -74,10 +74,10 @@ class MoleculeElement:
                 self.element_length = len(self.element_value[0])
             else:
                 try:
-                    self.element_length = int(element_value_1)
+                    self.element_length = int(element_value_2)
                 except ValueError:
                     logger.critical(
-                        "Incorrectly specified length for element %s: %s" % (self.element_name, element_value_1))
+                        "Incorrectly specified length for element %s: %s" % (self.element_name, element_value_2))
                     sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
         elif self.element_type in (ElementType.VAR_ANY, ElementType.VAR_ANY_SEPARATOR, ElementType.VAR_ANY_NON_T_SEPARATOR):
             self.element_value = None
@@ -188,16 +188,18 @@ class MoleculeStructure:
         linked_elements = defaultdict(list)
         for el in self.ordered_elements:
             if el.element_name in element_dict:
-                base_element_name = element_dict[el][0]
+                base_element_name = element_dict[el.element_name][0]
                 linked_elements[base_element_name].append(el)
 
         for element_list in linked_elements.values():
-            if len(set(el.element_value for el in element_list)) != 1:
+            if len(set(el.element_type for el in element_list)) != 1:
                 logger.critical("Linked elements must have the same type (fix elements: %s)" % ", ".join(el.element_name for el in element_list))
                 sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-            if len(set(el.element_value for el in element_list)) != 1:
-                logger.critical("Linked elements must have the same values (fix elements: %s)" % ", ".join(el.element_name for el in element_list))
-                sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+            first_value = element_list[0].element_value
+            for el in element_list[1:]:
+                if el.element_value != first_value:
+                    logger.critical("Linked elements must have the same values (fix elements: %s)" % ", ".join(e.element_name for e in element_list))
+                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
     def _check_indices(self, element_dict):
         # check for consecutive indices
@@ -211,7 +213,7 @@ class MoleculeStructure:
                 logger.critical("Concatenated elements must be consecutive from 1 to %d (fix element %s, indices: %s)" % (len(index_dict[el]), el, str(index_dict[el])))
                 sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
-        return {el : len(val) for el, val in element_dict.items()}
+        return {el: len(val) for el, val in index_dict.items()}
 
     def _identify_barcode_umi_elements(self) -> None:
         """
@@ -219,15 +221,31 @@ class MoleculeStructure:
 
         Elements with prefix "barcode" (case-insensitive) are barcodes.
         Elements with prefix "umi" (case-insensitive) are UMIs.
+
+        For concatenated/duplicated elements (e.g., barcode|1, barcode|2),
+        the base name (e.g., "barcode") is used and deduplicated.
         """
         self._barcode_elements = []
         self._umi_elements = []
+        seen = set()
         for el in self.ordered_elements:
-            name_lower = el.element_name.lower()
+            # For concatenated/duplicated elements, use the base name
+            if el.element_name in self.elements_to_concatenate:
+                name = self.elements_to_concatenate[el.element_name][0]
+            elif el.element_name in self.duplicated_elements:
+                name = self.duplicated_elements[el.element_name][0]
+            else:
+                name = el.element_name
+
+            if name in seen:
+                continue
+            seen.add(name)
+
+            name_lower = name.lower()
             if name_lower.startswith("barcode"):
-                self._barcode_elements.append(el.element_name)
+                self._barcode_elements.append(name)
             elif name_lower.startswith("umi"):
-                self._umi_elements.append(el.element_name)
+                self._umi_elements.append(name)
 
     @property
     def barcode_elements(self) -> List[str]:
