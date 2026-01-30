@@ -145,12 +145,18 @@ class MoleculeStructure:
                 self.ordered_elements.append(MoleculeElement(el, element_type, element_val1, element_val2))
 
             if self.CONCAT_DELIM in el:
+                if not (element_type.needs_sequence_extraction() or element_type.needs_correction()):
+                    logger.critical("Concatenated elements must be variable (fix element %s)" % el)
+                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
                 v = el.split(self.CONCAT_DELIM)
                 if len(v) != 2:
                     logger.critical("Incorrect concatenated element %s" % el)
                     sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
                 self.elements_to_concatenate[el] = v[0]
             elif self.DUPL_DELIM in el:
+                if not (element_type.needs_sequence_extraction() or element_type.needs_correction()):
+                    logger.critical("Concatenated elements must be variable (fix element %s)" % el)
+                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
                 v = el.split(self.DUPL_DELIM)
                 if len(v) != 2:
                     logger.critical("Incorrect duplicated element %s" % el)
