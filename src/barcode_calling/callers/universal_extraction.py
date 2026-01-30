@@ -163,6 +163,8 @@ class UniversalSingleMoleculeExtractor:
 
             current_pos = potential_start - 1
             if el.element_name in self.elements_to_extract:
+                # TODO: for concatenated elements, store them in a separate dict and extract/correct them only when all of them are found
+                # TODO: more or less the same for duplicated elements, except the procedure is different
                 detected_elements[el.element_name] = DetectedElement(potential_start, potential_end, 0,
                                                                      seq=sequence[potential_start:potential_end + 1])
 
