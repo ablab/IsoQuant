@@ -178,6 +178,9 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='TSV file mapping barcode to cell type / spot id. '
                                         'Format: file.tsv or file.tsv:barcode_col:spot_cols '
                                         '(e.g., file.tsv:0:1,2,3 for multiple spot columns)')
+    add_additional_option_to_group(sc_args_group, "--molecule", type=str,
+                                   help='molecule definition file (MDF) for custom_sc mode; '
+                                        'defines molecule structure for universal barcode extraction')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
@@ -531,7 +534,11 @@ def check_input_params(args):
 
     args.umi_length = 0
     if args.mode.needs_barcode_calling():
-        if not args.barcode_whitelist and not args.barcoded_reads:
+        if args.mode == IsoQuantMode.custom_sc:
+            if not args.molecule and not args.barcoded_reads:
+                logger.critical("custom_sc mode requires --molecule or --barcoded_reads")
+                sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
+        elif not args.barcode_whitelist and not args.barcoded_reads:
             logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
                             "barcoded reads" % args.mode.name)
             sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
@@ -606,6 +613,10 @@ def check_input_files(args):
                 check_file_exists(bc_file, "Barcoded reads file")
         else:
             check_file_exists(args.barcoded_reads, "Barcoded reads file")
+
+    # Check molecule definition file
+    if hasattr(args, 'molecule') and args.molecule:
+        check_file_exists(args.molecule, "Molecule definition file")
 
     # Check barcode whitelist files
     if hasattr(args, 'barcode_whitelist') and args.barcode_whitelist:
@@ -958,7 +969,8 @@ def prepare_reference_genome(args):
 
 
 class BarcodeCallingArgs:
-    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads):
+    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
+                 molecule: str | None = None):
         self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
@@ -967,6 +979,7 @@ class BarcodeCallingArgs:
         self.tmp_dir = tmp_dir
         self.threads = threads
         self.min_score = None
+        self.molecule = molecule
 
 
 def call_barcodes(args):
@@ -999,7 +1012,8 @@ def call_barcodes(args):
 
             bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
             bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads)
+                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
+                                         molecule=getattr(args, 'molecule', None))
             # Launching barcode calling in a separate process has the following reason:
             # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
             # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
