@@ -251,6 +251,7 @@ class TSOBarcodeDetectionResult(LinkerBarcodeDetectionResult):
             attr.append("Linker detected")
         if self.tso5 != -1:
             attr.append("TSO detected")
+        return attr
 
     @staticmethod
     def header() -> str:
