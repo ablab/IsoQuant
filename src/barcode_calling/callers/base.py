@@ -147,12 +147,8 @@ class BarcodeDetectionResult:
         return "%s\t%s\t%s\t%d\t%s\t%s" % (self.read_id, self._barcode, self._umi,
                                            self.BC_score, self.UMI_good, self.strand)
 
-    def header(self) -> str:
-        """Get TSV header for result output."""
-        return BarcodeDetectionResult._header()
-
     @staticmethod
-    def _header() -> str:
+    def header() -> str:
         """Static header for class-level access."""
         return "#read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
 
@@ -219,14 +215,10 @@ class LinkerBarcodeDetectionResult(BarcodeDetectionResult):
         return (BarcodeDetectionResult.__str__(self) +
                 "\t%d\t%d\t%d\t%d" % (self.polyT, self.primer, self.linker_start, self.linker_end))
 
-    def header(self) -> str:
-        """Get TSV header for result output."""
-        return LinkerBarcodeDetectionResult._header()
-
     @staticmethod
-    def _header() -> str:
+    def header() -> str:
         """Static header for class-level access."""
-        return BarcodeDetectionResult._header() + "\tpolyT_start\tprimer_end\tlinker_start\tlinker_end"
+        return BarcodeDetectionResult.header() + "\tpolyT_start\tprimer_end\tlinker_start\tlinker_end"
 
 
 class TSOBarcodeDetectionResult(LinkerBarcodeDetectionResult):
@@ -259,16 +251,11 @@ class TSOBarcodeDetectionResult(LinkerBarcodeDetectionResult):
             attr.append("Linker detected")
         if self.tso5 != -1:
             attr.append("TSO detected")
-        return attr
-
-    def header(self) -> str:
-        """Get TSV header for result output."""
-        return TSOBarcodeDetectionResult._header()
 
     @staticmethod
-    def _header() -> str:
+    def header() -> str:
         """Static header for class-level access."""
-        return LinkerBarcodeDetectionResult._header() + "\tTSO5"
+        return LinkerBarcodeDetectionResult.header() + "\tTSO5"
 
 
 class TenXBarcodeDetectionResult(BarcodeDetectionResult):
@@ -305,14 +292,10 @@ class TenXBarcodeDetectionResult(BarcodeDetectionResult):
         return (BarcodeDetectionResult.__str__(self) +
                 "\t%d\t%d" % (self.polyT, self.r1))
 
-    def header(self) -> str:
-        """Get TSV header for result output."""
-        return TenXBarcodeDetectionResult._header()
-
     @staticmethod
-    def _header() -> str:
+    def header() -> str:
         """Static header for class-level access."""
-        return BarcodeDetectionResult._header() + "\tpolyT_start\tR1_end"
+        return BarcodeDetectionResult.header() + "\tpolyT_start\tR1_end"
 
 
 class SplittingBarcodeDetectionResult:
@@ -398,9 +381,10 @@ class SplittingBarcodeDetectionResult:
         """Format all patterns as TSV lines."""
         return "\n".join(str(r) for r in self.detected_patterns)
 
-    def header(self) -> str:
+    @staticmethod
+    def header() -> str:
         """Get TSV header for result output."""
-        return TSOBarcodeDetectionResult._header()
+        return TSOBarcodeDetectionResult.header()
 
 
 class ReadStats:
