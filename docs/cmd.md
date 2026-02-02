@@ -124,43 +124,6 @@ Useful for grouping single-cell/spatial data by cell type or spatial region inst
 **Example**: `--read_group tag:CB file_name barcode_spot` creates multi-level grouping by cell barcode tag, file name, and cell type.
 
 
-### Single-cell and spatial transcriptomics options
-
-**NB! This functionality is not officially released yet, use it at your own risk.**
-
-`--mode` or `-m`
-IsoQuant mode for processing single-cell or spatial transcriptomics data. Available modes:
-
-* `bulk` - standard bulk RNA-seq mode (default)
-* `tenX_v3` - 10x Genomics single-cell 3' gene expression
-* `curio` - Curio Bioscience single-cell
-* `visium_hd` - 10x Genomics Visium HD spatial transcriptomics
-* `visium_5prime` - 10x Genomics Visium 5' spatial transcriptomics
-* `stereoseq` - Stereo-seq spatial transcriptomics (BGI)
-* `stereoseq_nosplit` - Stereo-seq without barcode splitting
-
-Single-cell and spatial modes enable automatic barcode calling and UMI-based deduplication.
-
-`--barcode_whitelist`
-Path to file(s) with barcode whitelist for barcode calling.
-Required for single-cell/spatial modes unless `--barcoded_reads` is provided.
-File should contain one barcode per line.
-
-`--barcoded_reads`
-Path to TSV file(s) with barcoded reads.
-Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
-If not provided, barcodes will be called automatically from raw reads using `--barcode_whitelist`.
-
-`--barcode_column`
-Column index for barcodes in the `--barcoded_reads` file (default: 1).
-Read ID column is 0, barcode column is 1, UMI column is 2.
-
-`--barcode2spot`
-Path to TSV file(s) mapping barcodes to cell types or spatial spots.
-Format: `barcode<TAB>cell_type` (one barcode per line).
-Used with `--read_group barcode_spot` to group counts by cell type/spot instead of individual barcodes.
-Useful for reducing output dimensions from thousands of barcodes to tens of cell types.
-
 ### Output options
 
 `--sqanti_output`
@@ -198,6 +161,53 @@ Useful for reducing output dimensions from thousands of barcodes to tens of cell
 
 `--run_aligner_only`
     Align reads to the reference without running IsoQuant itself.
+
+
+## Single-cell and spatial transcriptomics options
+
+**NB! This feature is experimental and is not part of the official IsoQuant release.**
+
+See [single-cell and spatial transcriptomics](single_cell.md) for a detailed guide on
+supported platforms, examples, molecule definition files, and UMI deduplication.
+
+`--mode` or `-m`
+IsoQuant mode for processing single-cell or spatial transcriptomics data. Available modes:
+
+* `bulk` - standard bulk RNA-seq mode (default)
+* `tenX_v3` - 10x Genomics single-cell 3' gene expression
+* `curio` - Curio Bioscience single-cell
+* `visium_hd` - 10x Genomics Visium HD spatial transcriptomics
+* `visium_5prime` - 10x Genomics Visium 5' spatial transcriptomics
+* `stereoseq` - Stereo-seq spatial transcriptomics (BGI)
+* `stereoseq_nosplit` - Stereo-seq without read splitting
+* `custom_sc` - custom single-cell/spatial mode using a [molecule definition file](single_cell.md#molecule-definition-file-mdf-format)
+
+Single-cell and spatial modes enable automatic barcode calling and UMI-based deduplication.
+
+`--barcode_whitelist`
+Path to file(s) with barcode whitelist for barcode calling.
+Required for single-cell/spatial modes unless `--barcoded_reads` is provided.
+File should contain one barcode per line.
+
+`--barcoded_reads`
+Path to TSV file(s) with pre-called barcoded reads.
+Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
+If provided, IsoQuant skips barcode calling and uses these assignments directly.
+
+`--barcode_column`
+Column index for barcodes in the `--barcoded_reads` file (default: 1).
+Read ID column is 0, barcode column is 1, UMI column is 2.
+
+`--barcode2spot`
+Path to TSV file mapping barcodes to cell types or spatial spots.
+Format: `barcode<TAB>cell_type` (one barcode per line).
+Used with `--read_group barcode_spot` to group counts by cell type/spot instead of individual barcodes.
+
+`--molecule`
+Path to a molecule definition file (MDF) for `custom_sc` mode.
+Defines molecule structure for universal barcode extraction from any platform.
+See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for details.
+
 
 
 ## Algorithm parameters
