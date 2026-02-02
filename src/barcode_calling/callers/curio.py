@@ -337,4 +337,4 @@ class CurioIlluminaDetector:
     @classmethod
     def header(cls):
         return cls.result_type().header()
-    
+
