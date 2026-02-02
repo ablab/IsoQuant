@@ -203,8 +203,9 @@ class StereoBarcodeDetector:
     def result_type():
         return LinkerBarcodeDetectionResult
 
-    def header(self):
-        return self.result_type().header()
+    @classmethod
+    def header(cls):
+        return cls.result_type().header()
 
 
 class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
@@ -493,8 +494,9 @@ class StereoSplittingBarcodeDetector:
     def result_type():
         return SplittingBarcodeDetectionResult
 
-    def header(self):
-        return self.result_type().header()
+    @classmethod
+    def header(cls):
+        return cls.result_type().header()
 
 
 class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector):

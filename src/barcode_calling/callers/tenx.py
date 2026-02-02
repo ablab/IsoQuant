@@ -175,8 +175,10 @@ class TenXBarcodeDetector:
     def result_type():
         return TenXBarcodeDetectionResult
 
-    def header(self):
-        return self.result_type()._header()
+    @classmethod
+    def header(cls):
+        return cls.result_type().header()
+
 
 class VisiumHDBarcodeDetector:
     """Visium HD spatial transcriptomics barcode detector."""
@@ -347,5 +349,6 @@ class VisiumHDBarcodeDetector:
     def result_type():
         return TenXBarcodeDetectionResult
 
-    def header(self):
-        return self.result_type()._header()
+    @classmethod
+    def header(cls):
+        return cls.result_type().header()
