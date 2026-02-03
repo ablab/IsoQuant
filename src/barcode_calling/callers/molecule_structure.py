@@ -119,6 +119,8 @@ class MoleculeStructure:
         element_properties = {}
         for l in str_iterator:
             v = l.strip().split()
+            if not v:
+                continue
             element_name = v[0]
             if element_name in element_properties:
                 logger.critical("Duplicated element name %s" % element_name)
@@ -135,7 +137,7 @@ class MoleculeStructure:
         element_name: str
         for element_name in elements:
             if element_name not in element_properties:
-                if element_name not in ElementType.__dict__:
+                if element_name not in (ElementType.cDNA.name, ElementType.PolyT.name):
                     logger.critical("Molecule element %s was not described in the format file" % element_name)
                     sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
                 element_type = ElementType[element_name]
