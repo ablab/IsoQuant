@@ -1,7 +1,7 @@
 # Barcode calling
 
-IsoQuant includes a built-in barcode calling module (`detect_barcodes.py`) that extracts
-cell barcodes and UMIs from raw long reads. This module supports multiple single-cell and
+IsoQuant includes a built-in barcode calling module (`isoquant_detect_barcodes.py`) that extracts
+ barcodes and UMIs from raw long reads. This module supports multiple single-cell and
 spatial transcriptomics platforms and can also be used as a standalone tool.
 
 See [single-cell and spatial transcriptomics](single_cell.md) for supported platforms,
@@ -18,14 +18,14 @@ The barcode calling module processes each read by:
 5. Extracting the UMI sequence from its expected position
 
 Each read is assigned:
-- A **barcode** (cell identity) corrected against the whitelist, or `*` if no match is found
+- A **barcode** (cell/spot identity) corrected against the whitelist, or `*` if no match is found
 - A **UMI** (unique molecular identifier), or `*` if not detected
 - A **strand** orientation (`+`, `-`, or `.` if unknown)
 - Platform-specific features (polyT position, linker positions, etc.)
 
 ## Integration with IsoQuant
 
-When running IsoQuant with a single-cell or spatial mode (`--mode tenX_v3`, etc.),
+When running IsoQuant with any single-cell or spatial mode, 
 barcode calling is performed automatically as the first pipeline step.
 The barcode detection output is a TSV file with one line per read, which is then used
 throughout the rest of the pipeline for grouping and UMI deduplication.
@@ -35,10 +35,10 @@ use `--barcoded_reads` to skip the barcode calling step.
 
 ## Standalone usage
 
-`detect_barcodes.py` can be run independently from the IsoQuant pipeline:
+`isoquant_detect_barcodes.py` can be run independently:
 
 ```bash
-python detect_barcodes.py \
+python isoquant_detect_barcodes.py \
   --input reads.fastq.gz \
   --barcodes barcode_whitelist.txt \
   --mode tenX_v3 \
@@ -50,7 +50,7 @@ python detect_barcodes.py \
 
 `--input` or `-i` (required)
 
-One or more input read files in FASTQ, FASTA, BAM, or SAM format. Gzipped FASTQ/FASTA files are supported.
+One or more input read files in FASTQ, FASTA or BAM format. Gzipped FASTQ/FASTA files are supported.
 
 `--output` or `-o` (required)
 
@@ -61,19 +61,25 @@ When multiple input files are provided, outputs are numbered: `<prefix>_0.barcod
 
 One or more barcode whitelist files. The number of files depends on the mode:
 
-* 1 file: `tenX_v3`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`
-* 1 or 2 files: `curio`
+* 1 file: `tenX_v3`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio`
 * 2 files: `visium_hd`
 * Not needed for `custom_sc` (barcodes defined in MDF file)
+
+File should contain one barcode sequence per line. 
+More than 1 tab-separated column is allowed, but only the first will be used.
+Supports plain text and gzipped files.
+
+_Note: barcode calling is performed much better if the whitelist contains a small number of barcodes. 
+If you have a subset of barcodes from short-read data, provide them instead of the full whitelist._
 
 `--mode`
 
 Barcode calling mode. Available modes: `tenX_v3`, `curio`, `stereoseq`, `stereoseq_nosplit`,
-`visium_5prime`, `visium_hd`, `custom_sc`. Default: `stereoseq`.
+`visium_5prime`, `visium_hd`, `custom_sc`. 
 
 `--molecule`
-
-Path to a molecule definition file (MDF) for `custom_sc` mode.
+Path to a molecule description format (MDF) file for `custom_sc` mode.
+This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA)ю
 See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for the format specification.
 
 `--threads` or `-t`
@@ -94,7 +100,7 @@ Folder for temporary files during parallel processing.
 
 10x Genomics:
 ```bash
-python detect_barcodes.py \
+python isoquant_detect_barcodes.py \
   -i reads.fastq.gz \
   -b 3M-february-2018.txt.gz \
   --mode tenX_v3 \
@@ -104,7 +110,7 @@ python detect_barcodes.py \
 
 Stereo-seq:
 ```bash
-python detect_barcodes.py \
+python isoquant_detect_barcodes.py \
   -i reads.fastq.gz \
   -b stereo_barcodes.txt \
   --mode stereoseq \
@@ -112,25 +118,16 @@ python detect_barcodes.py \
   -t 16
 ```
 
-Curio with two barcode files:
-```bash
-python detect_barcodes.py \
-  -i reads.fastq.gz \
-  -b left_barcodes.txt right_barcodes.txt \
-  --mode curio \
-  -o results/curio_sample
-```
-
 Custom molecule:
 ```bash
-python detect_barcodes.py \
+python isoquant_detect_barcodes.py \
   -i reads.fastq.gz \
   --mode custom_sc \
   --molecule my_platform.mdf \
   -o results/custom_sample
 ```
 
-## Output format
+## Output
 
 The main output is a TSV file (`*.barcoded_reads.tsv`) with a header line followed by one line per read.
 The columns depend on the platform mode.
@@ -187,7 +184,7 @@ reporting the total number of reads processed, barcodes detected, and UMIs found
 
 Molecule structure (3' to 5'):
 ```
-[R1 primer]---[Barcode (16bp)]---[UMI (12bp)]---[PolyT]---[cDNA]---[TSO]
+[R1 primer] [Barcode (16bp)] [UMI (12bp)] [PolyT] [cDNA] [TSO]
 ```
 
 Requires 1 barcode whitelist file (e.g., the 10x `3M-february-2018.txt.gz`).
@@ -196,7 +193,7 @@ Requires 1 barcode whitelist file (e.g., the 10x `3M-february-2018.txt.gz`).
 
 Molecule structure (3' to 5'):
 ```
-[R1 primer]---[BC_part1 (16bp)]---[separator]---[BC_part2 (15bp)]---[UMI (9bp)]---[PolyT]---[cDNA]---[TSO]
+[R1 primer] [UMI (9bp)] [BC_part1 (15-16bp)] [BC_part2 (14-15bp)] VV [PolyT] [cDNA] [TSO]
 ```
 
 Requires 2 barcode whitelist files (part 1 and part 2).
@@ -206,17 +203,17 @@ The final barcode is the concatenation of both parts.
 
 Molecule structure (3' to 5'):
 ```
-[PCR primer]---[Left BC (8bp)]---[Linker]---[Right BC (6bp)]---[UMI (9bp)]---[PolyT]---[cDNA]
+[PCR primer] [Left BC (8bp)] [Linker] [Right BC (6bp)] [UMI (9bp)] [PolyT] [cDNA]
 ```
 
 The linker sequence anchors the barcode detection.
-Accepts either 1 combined whitelist file (14bp barcodes) or 2 files (8bp left + 6bp right).
+Accepts 1 combined whitelist file (14bp barcodes).
 
 ### Stereo-seq (`stereoseq`, `stereoseq_nosplit`)
 
 Molecule structure (3' to 5'):
 ```
-[Primer]---[Barcode (25bp)]---[Linker]---[UMI (10bp)]---[PolyT]---[cDNA]---[TSO]
+[Primer] [Barcode (25bp)] [Linker] [UMI (10bp)] [PolyT] [cDNA] [TSO]
 ```
 
 - `stereoseq` mode: splits concatenated reads at TSO boundaries, producing a new FASTA with individual subreads

@@ -46,7 +46,7 @@ from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, Grouped
 from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
-from detect_barcodes import process_single_thread, process_in_parallel, get_umi_length
+from isoquant_detect_barcodes import process_single_thread, process_in_parallel, get_umi_length
 
 
 logger = logging.getLogger('IsoQuant')
@@ -167,13 +167,9 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
                                         "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
     add_additional_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
-                                   help='file(s) with barcode whitelist for barcode calling')
+                                   help='file(s) with barcode whitelist(s) for barcode calling')
     add_additional_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
                                    help='TSV file(s) with barcoded reads; barcodes will be called automatically if not provided')
-    # TODO: add UMI column, support various formats
-    add_additional_option_to_group(sc_args_group, "--barcode_column", type=str,
-                                   help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
-                                   default=1)
     add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str,
                                    help='TSV file mapping barcode to cell type / spot id. '
                                         'Format: file.tsv or file.tsv:barcode_col:spot_cols '
