@@ -78,10 +78,11 @@ class ExtractionResult:
         Get the detected barcode sequence.
 
         For molecule structures with multiple barcode elements (e.g., barcode1, barcode2),
-        returns concatenated barcodes using '|' delimiter.
+        returns concatenated barcodes using '|' delimiter only when ALL parts are detected.
+        Returns NOSEQ if any part is missing (partial barcodes are not usable).
 
         Returns:
-            str: Concatenated barcode sequence or NOSEQ if not detected.
+            str: Concatenated barcode sequence or NOSEQ if any part is not detected.
         """
         parts = []
         for el_name in self._barcode_elements:
@@ -89,6 +90,8 @@ class ExtractionResult:
                 detected = self.detected_results[el_name]
                 if detected.seq and detected.seq != self.NOSEQ:
                     parts.append(detected.seq)
+                    continue
+            return self.NOSEQ
         return "|".join(parts) if parts else self.NOSEQ
 
     def get_umi(self) -> str:
@@ -96,21 +99,31 @@ class ExtractionResult:
         Get the detected UMI sequence.
 
         For molecule structures with multiple UMI elements,
-        returns concatenated UMIs using '|' delimiter.
+        returns all parts using '|' delimiter, with NOSEQ ('*') for undetected elements.
 
         Returns:
             str: Concatenated UMI sequence or NOSEQ if not detected.
         """
+        if len(self._umi_elements) <= 1:
+            for el_name in self._umi_elements:
+                if el_name in self.detected_results:
+                    detected = self.detected_results[el_name]
+                    if detected.seq and detected.seq != self.NOSEQ:
+                        return detected.seq
+            return self.NOSEQ
+
         parts = []
         for el_name in self._umi_elements:
             if el_name in self.detected_results:
                 detected = self.detected_results[el_name]
                 if detected.seq and detected.seq != self.NOSEQ:
                     parts.append(detected.seq)
-        return "|".join(parts) if parts else self.NOSEQ
+                    continue
+            parts.append(self.NOSEQ)
+        return "|".join(parts)
 
     def is_valid(self) -> bool:
-        """Check if a valid barcode was detected."""
+        """Check if a valid barcode was detected (all parts must be present)."""
         return self.get_barcode() != self.NOSEQ
 
     def has_barcode(self) -> bool:
@@ -118,7 +131,7 @@ class ExtractionResult:
         return self.get_barcode() != self.NOSEQ
 
     def has_umi(self) -> bool:
-        """Check if a valid UMI was detected."""
+        """Check if any valid UMI was detected."""
         return self.get_umi() != self.NOSEQ
 
     def get_barcode_score(self) -> int:
