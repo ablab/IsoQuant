@@ -384,7 +384,7 @@ Ground truth is extracted from read IDs in format:
                         choices=['tenX_v3', 'visium_hd', 'curio', 'stereo', 'stereo_split'],
                         help='Barcode calling mode')
     parser.add_argument('--input', '-i', required=True,
-                        help='Input barcode TSV file from detect_barcodes.py')
+                        help='Input barcode TSV file from isoquant_detect_barcodes.py')
     parser.add_argument('--output', '-o',
                         help='Output metrics TSV file (default: stdout)')
     parser.add_argument('--barcode_col', type=int, default=1,

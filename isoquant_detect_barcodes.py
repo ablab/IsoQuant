@@ -469,8 +469,7 @@ def parse_args(sys_argv):
     parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
     parser.add_argument("--barcodes", "-b", nargs='+', type=str, help="barcode whitelist(s)", required=False)
     # parser.add_argument("--umi", "-u", type=str, help="potential UMIs, detected de novo if not set")
-    parser.add_argument("--mode", type=str, help="mode to be used", choices=[x.name for x in BARCODE_CALLING_MODES.keys()],
-                        default=IsoQuantMode.stereoseq.name)
+    parser.add_argument("--mode", type=str, help="mode to be used", choices=[x.name for x in BARCODE_CALLING_MODES.keys()])
     parser.add_argument("--molecule", type=str, help="MDF files with molecule description (for custom_sc mode only)")
 
     parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM, SAM",
