@@ -949,7 +949,7 @@ UMI\tVAR_ANY\t8
         extractor = UniversalSingleMoleculeExtractor(structure)
 
         # Copy 1: AAAACCCC (exact match), Copy 2: totally wrong sequence
-        sequence = "XXXXXXXXXX" + "AAAACCCC" + "XXXXXXXX" + "NNNNNNNN" + "XXXXXXXX"
+        sequence = "XXXXXXXXXX" + "AAAACCCC" + "XXXXXXXX" + "TTTTTTTT" + "XXXXXXXX"
         dupl_storage = {"Barcode": [(10, 17), (26, 33)]}
         detected_results = {}
 
@@ -965,7 +965,7 @@ UMI\tVAR_ANY\t8
         extractor = UniversalSingleMoleculeExtractor(structure)
 
         # Both copies have garbage sequences that don't match any whitelist entry
-        sequence = "XXXXXXXXXX" + "NNNNNNNN" + "XXXXXXXX" + "NNNNNNNN" + "XXXXXXXX"
+        sequence = "XXXXXXXXXX" + "TTTTTTTT" + "XXXXXXXX" + "TTTTTTTT" + "XXXXXXXX"
         dupl_storage = {"Barcode": [(10, 17), (26, 33)]}
         detected_results = {}
 
