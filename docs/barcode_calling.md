@@ -86,12 +86,6 @@ See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for the for
 
 Number of threads for parallel processing (default: 16).
 
-`--min_score`
-
-Override the minimum alignment score for barcode matching.
-The scoring system uses +1 for match, -1 for mismatch, -1 for gap open, -1 for gap extension.
-By default, the minimum score is set automatically based on barcode length.
-
 `--tmp_dir`
 
 Folder for temporary files during parallel processing.

@@ -263,7 +263,7 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None
 
 
 def create_barcode_caller(args):
-    logger.info("Creating barcode detector for mode %s" % args.mode.name + (", min_score=%d" % args.min_score if args.min_score else ""))
+    logger.info("Creating barcode detector for mode %s" % args.mode.name)
 
     if args.mode == IsoQuantMode.custom_sc:
         if not args.molecule:
@@ -272,8 +272,6 @@ def create_barcode_caller(args):
         if not os.path.isfile(args.molecule):
             logger.critical("Molecule file %s does not exist" % args.molecule)
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
-        if args.min_score:
-            logger.warning("Custom single-cell/spatial mode does not support --min-score, ignoring")
 
         return BARCODE_CALLING_MODES[args.mode](MoleculeStructure(open(args.molecule)))
 
@@ -299,8 +297,6 @@ def create_barcode_caller(args):
         barcodes = tuple(barcodes)
 
     barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
-    if args.min_score:
-        barcode_detector.min_score = args.min_score
 
     return barcode_detector
 
@@ -476,8 +472,6 @@ def parse_args(sys_argv):
                         required=True)
     parser.add_argument("--threads", "-t", type=int, help="threads to use (16)", default=16)
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
-    parser.add_argument("--min_score", type=int, help="minimal barcode score "
-                                                      "(scoring system is +1, -1, -1, -1)")
     add_hidden_option('--debug', action='store_true', default=False, help='Debug log output.')
 
     args = parser.parse_args(sys_argv)

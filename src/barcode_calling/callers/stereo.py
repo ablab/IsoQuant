@@ -36,13 +36,12 @@ class StereoBarcodeDetector:
     TERMINAL_MATCH_DELTA = 3
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcodes: List[str], min_score: int = 21):
+    def __init__(self, barcodes: List[str]):
         """
         Initialize Stereo-seq detector.
 
         Args:
             barcodes: List of known barcode sequences
-            min_score: Minimum alignment score for barcode matching
         """
         self.main_primer = StereoBarcodeDetector.PC1_PRIMER
         self.pcr_primer_indexer = ArrayKmerIndexer([self.main_primer], kmer_size=6)
@@ -55,8 +54,7 @@ class StereoBarcodeDetector:
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
             logger.info("Indexed %d barcodes" % len(bit_barcodes))
 
-        self.umi_set = None
-        self.min_score = min_score
+        self.min_score = 21
 
     def find_barcode_umi_multiple(self, read_id: str, sequence: str) -> List[LinkerBarcodeDetectionResult]:
         """Find multiple barcodes in a single read."""
@@ -213,8 +211,8 @@ class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
 
     MIN_BARCODES_FOR_SHARED_MEM = 1000000
 
-    def __init__(self, barcodes: List[str], min_score: int = 21):
-        super().__init__([], min_score=min_score)
+    def __init__(self, barcodes: List[str]):
+        super().__init__([])
         # Convert to 2-bit encoding first (memory efficient)
         bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
         self.barcode_count = len(bit_barcodes)
@@ -242,7 +240,7 @@ class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
 
     def __setstate__(self, state):
         self.min_score = state[0]
-        super().__init__([], min_score=self.min_score)
+        super().__init__([])
         self.bit_barcodes = None
         self.barcode_count = state[1]
         if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
@@ -266,13 +264,12 @@ class StereoSplittingBarcodeDetector:
     TERMINAL_MATCH_DELTA = 3
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcodes: List[str], min_score: int = 21):
+    def __init__(self, barcodes: List[str]):
         """
         Initialize splitting detector.
 
         Args:
             barcodes: List of known barcode sequences
-            min_score: Minimum alignment score
         """
         self.main_primer = self.PC1_PRIMER
         self.tso5_indexer = ArrayKmerIndexer([self.TSO5], kmer_size=8)
@@ -285,8 +282,7 @@ class StereoSplittingBarcodeDetector:
             bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
             logger.info("Indexed %d barcodes" % len(bit_barcodes))
-        self.umi_set = None
-        self.min_score = min_score
+        self.min_score = 21
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
         """Find multiple barcodes in a concatenated read."""
@@ -504,8 +500,8 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
 
     MIN_BARCODES_FOR_SHARED_MEM = 1000000
 
-    def __init__(self, barcodes: List[str], min_score: int = 21):
-        super().__init__([], min_score=min_score)
+    def __init__(self, barcodes: List[str]):
+        super().__init__([])
         # Convert to 2-bit encoding first (memory efficient)
         bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
         self.barcode_count = len(bit_barcodes)
@@ -533,7 +529,7 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
 
     def __setstate__(self, state):
         self.min_score = state[0]
-        super().__init__([], min_score=self.min_score)
+        super().__init__([])
         self.bit_barcodes = None
         self.barcode_count = state[1]
         if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
@@ -546,18 +542,17 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
 class SharedMemoryWrapper:
     """Generic wrapper to add shared memory support to any barcode detector."""
 
-    def __init__(self, barcode_detector_class, barcodes: List[str], min_score: int = 21):
+    def __init__(self, barcode_detector_class, barcodes: List[str]):
         """
         Initialize wrapper.
 
         Args:
             barcode_detector_class: Detector class to wrap
             barcodes: List of known barcodes
-            min_score: Minimum alignment score
         """
         self.barcode_detector_class = barcode_detector_class
-        self.min_score = min_score
-        self.barcode_detector = self.barcode_detector_class([], self.min_score)
+        self.barcode_detector = self.barcode_detector_class([])
+        self.min_score = self.barcode_detector.min_score
         # Convert to 2-bit and use shared memory indexer
         barcode_iter = iter(barcodes) if isinstance(barcodes, list) else barcodes
         bit_barcodes = batch_str_to_2bit_chunked(barcode_iter, seq_len=self.barcode_detector_class.BC_LENGTH)
@@ -574,5 +569,6 @@ class SharedMemoryWrapper:
     def __setstate__(self, state):
         self.barcode_detector_class = state[0]
         self.min_score = state[1]
-        self.barcode_detector = self.barcode_detector_class([], self.min_score)
+        self.barcode_detector = self.barcode_detector_class([])
+        self.barcode_detector.min_score = self.min_score
         self.barcode_detector.barcode_indexer = SharedMemoryArray2BitKmerIndexer.from_sharable_info(state[2])

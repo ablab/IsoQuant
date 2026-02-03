@@ -13,11 +13,12 @@ Supports 10x Genomics v3 single-cell and Visium HD spatial platforms.
 import logging
 from typing import List, Optional
 
+from .. import ArrayKmerIndexer, Array2BitKmerIndexer
 from ..indexers import KmerIndexer
 from ..common import (
     find_polyt_start, reverese_complement,
     find_candidate_with_max_score_ssw, find_candidate_with_max_score_ssw_var_len,
-    detect_exact_positions,
+    detect_exact_positions, str_to_2bit,
 )
 from .base import TenXBarcodeDetectionResult
 
@@ -36,7 +37,7 @@ class TenXBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcode_list: List[str], umi_list: Optional[List[str]] = None):
+    def __init__(self, barcode_list: List[str]):
         """
         Initialize 10x detector.
 
@@ -45,15 +46,19 @@ class TenXBarcodeDetector:
             umi_list: Optional list of known UMIs for validation
         """
         self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
-        self.barcode_indexer = KmerIndexer(barcode_list, kmer_size=6)
-        self.umi_set = None
-        if umi_list:
-            self.umi_set = set(umi_list)
-            logger.debug("Loaded %d UMIs" % len(umi_list))
-            self.umi_indexer = KmerIndexer(umi_list, kmer_size=5)
-        self.min_score = 14
-        if len(self.barcode_indexer.seq_list) > 100000:
-            self.min_score = 16
+        if len(barcode_list) <= 100000:
+            self.barcode_indexer = ArrayKmerIndexer(barcode_list, kmer_size=6)
+            self.max_barcodes_hits = 20
+            self.min_matching_kmers = 1
+            self.min_score = 14
+            self.score_diff = 0
+        else:
+            self.barcode_indexer = Array2BitKmerIndexer([str_to_2bit(b) for b in barcode_list], kmer_size=6, seq_len=self.BARCODE_LEN_10X)
+            self.max_barcodes_hits = 10
+            self.min_matching_kmers = 2
+            self.min_score = 15
+            self.score_diff = 1
+
         logger.debug("Min score set to %d" % self.min_score)
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
@@ -121,9 +126,13 @@ class TenXBarcodeDetector:
         barcode_end = r1_end + self.BARCODE_LEN_10X + 1
         potential_barcode = sequence[barcode_start:barcode_end + 1]
         logger.debug("Barcode: %s" % (potential_barcode))
-        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode)
+        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode,
+                                                                 max_hits=self.max_barcodes_hits,
+                                                                 min_kmers=self.min_matching_kmers)
         barcode, bc_score, bc_start, bc_end = \
-            find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode, min_score=self.min_score)
+            find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
+                                              min_score=self.min_score,
+                                              score_diff=self.score_diff)
 
         if barcode is None:
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
@@ -137,18 +146,10 @@ class TenXBarcodeDetector:
         potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
         logger.debug("Potential UMI: %s" % potential_umi)
 
-        umi = None
         good_umi = False
-        if self.umi_set:
-            matching_umis = self.umi_indexer.get_occurrences(potential_umi)
-            umi, umi_score, umi_start, umi_end = \
-                find_candidate_with_max_score_ssw(matching_umis, potential_umi, min_score=7)
-            logger.debug("Found UMI %s %d-%d" % (umi, umi_start, umi_end))
-
-        if not umi:
-            umi = potential_umi
-            if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA:
-                good_umi = True
+        umi = potential_umi
+        if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA:
+            good_umi = True
 
         if not umi:
             return TenXBarcodeDetectionResult(read_id, barcode, BC_score=bc_score, polyT=polyt_start, r1=r1_end)
@@ -205,10 +206,13 @@ class VisiumHDBarcodeDetector:
         self.r1_indexer = KmerIndexer([VisiumHDBarcodeDetector.R1], kmer_size=7)
         self.part1_list = barcode_pair_list[0]
         self.part2_list = barcode_pair_list[1]
-        self.part1_barcode_indexer = KmerIndexer(self.part1_list, kmer_size=7)
-        self.part2_barcode_indexer = KmerIndexer(self.part2_list, kmer_size=7)
-        self.umi_set = None
+
+        self.part1_barcode_indexer = ArrayKmerIndexer(self.part1_list, kmer_size=7)
+        self.part2_barcode_indexer = ArrayKmerIndexer(self.part2_list, kmer_size=7)
+        self.max_barcodes_hits = 20
+        self.min_matching_kmers = 2
         self.min_score = 13
+
         logger.debug("Min score set to %d" % self.min_score)
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:

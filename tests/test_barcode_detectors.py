@@ -93,18 +93,18 @@ class TestStereoBarcodeDetector:
 
     def test_init(self):
         """Test basic initialization."""
-        detector = StereoBarcodeDetector(DUMMY_BARCODES_25, min_score=21)
+        detector = StereoBarcodeDetector(DUMMY_BARCODES_25)
         assert detector.barcode_indexer is not None
         assert detector.min_score == 21
 
     def test_init_empty_barcodes(self):
         """Test initialization with empty barcode list."""
-        detector = StereoBarcodeDetector([], min_score=21)
+        detector = StereoBarcodeDetector([])
         assert detector.barcode_indexer is None
 
     def test_no_match_random_sequence(self):
         """Test that random sequence returns no valid barcode."""
-        detector = StereoBarcodeDetector(DUMMY_BARCODES_25, min_score=21)
+        detector = StereoBarcodeDetector(DUMMY_BARCODES_25)
         result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
 
         assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
@@ -141,7 +141,7 @@ class TestStereoBarcodeDetector:
                     "CATCAAAGGTTCACCGAATCTCCAC",
                     "GTCGCCTTCAACGTATACTGATATA",
                     "ACCAATTAGCAGCCATGGGAACTCC"]
-        detector = StereoBarcodeDetector(barcodes, min_score=21)
+        detector = StereoBarcodeDetector(barcodes)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
         assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
@@ -196,7 +196,7 @@ class TestStereoSplittingBarcodeDetector:
                     "GGGCACATTCCTCAGAAAGCGAAAA",
                     "GGCAGGCCATTAGTTACTCGTCGAG",
                     "CTCCCCTAATCGTTTGTCGGTGGAC"]
-        detector = StereoSplittingBarcodeDetector(barcodes, min_score=21)
+        detector = StereoSplittingBarcodeDetector(barcodes)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
         assert isinstance(result, SplittingBarcodeDetectionResult)
@@ -214,13 +214,13 @@ class TestSharedMemStereoBarcodeDetector:
 
     def test_init(self):
         """Test basic initialization."""
-        detector = SharedMemoryStereoBarcodeDetector(DUMMY_BARCODES_25, min_score=21)
+        detector = SharedMemoryStereoBarcodeDetector(DUMMY_BARCODES_25)
         assert detector.barcode_indexer is not None
         assert detector.min_score == 21
 
     def test_no_match_random_sequence(self):
         """Test that random sequence returns no valid barcode."""
-        detector = SharedMemoryStereoBarcodeDetector(DUMMY_BARCODES_25, min_score=21)
+        detector = SharedMemoryStereoBarcodeDetector(DUMMY_BARCODES_25)
         result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
 
         assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
@@ -266,7 +266,7 @@ class TestSharedMemStereoBarcodeDetector:
                     "CATCAAAGGTTCACCGAATCTCCAC",
                     "GTCGCCTTCAACGTATACTGATATA",
                     "ACCAATTAGCAGCCATGGGAACTCC"]
-        detector = SharedMemoryStereoBarcodeDetector(barcodes, min_score=21)
+        detector = SharedMemoryStereoBarcodeDetector(barcodes)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
         assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
@@ -289,7 +289,7 @@ class TestSharedMemStereoBarcodeDetector:
                     "CATCAAAGGTTCACCGAATCTCCAC",
                     "GTCGCCTTCAACGTATACTGATATA",
                     "ACCAATTAGCAGCCATGGGAACTCC"]
-        detector = SharedMemoryStereoBarcodeDetector(barcodes, min_score=21)
+        detector = SharedMemoryStereoBarcodeDetector(barcodes)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
         assert isinstance(result, (LinkerBarcodeDetectionResult, TSOBarcodeDetectionResult))
@@ -338,7 +338,7 @@ class TestSharedMemStereoSplittingBarcodeDetector:
                     "GGGCACATTCCTCAGAAAGCGAAAA",
                     "GGCAGGCCATTAGTTACTCGTCGAG",
                     "CTCCCCTAATCGTTTGTCGGTGGAC"]
-        detector = SharedMemoryStereoSplittingBarcodeDetector(barcodes, min_score=21)
+        detector = SharedMemoryStereoSplittingBarcodeDetector(barcodes)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
         assert isinstance(result, SplittingBarcodeDetectionResult)
@@ -370,7 +370,7 @@ class TestSharedMemStereoSplittingBarcodeDetector:
                     "GGGCACATTCCTCAGAAAGCGAAAA",
                     "GGCAGGCCATTAGTTACTCGTCGAG",
                     "CTCCCCTAATCGTTTGTCGGTGGAC"]
-        detector = SharedMemoryStereoSplittingBarcodeDetector(barcodes, min_score=21)
+        detector = SharedMemoryStereoSplittingBarcodeDetector(barcodes)
         result = detector.find_barcode_umi("test_read", read_sequence)
 
         assert isinstance(result, SplittingBarcodeDetectionResult)
@@ -399,7 +399,7 @@ class TestTenXBarcodeDetector:
         """Test that min_score increases for large whitelists."""
         large_barcodes = [f"ACTG{i:012d}"[:16] for i in range(100001)]
         detector = TenXBarcodeDetector(large_barcodes)
-        assert detector.min_score == 16
+        assert detector.min_score == 15
 
     def test_no_match_random_sequence(self):
         """Test that random sequence returns no valid barcode."""
@@ -567,20 +567,20 @@ class TestCurioBarcodeDetector:
 
     def test_init_joint_barcodes(self):
         """Test initialization with joint barcode list."""
-        detector = CurioBarcodeDetector(DUMMY_BARCODES_14, min_score=13)
+        detector = CurioBarcodeDetector(DUMMY_BARCODES_14)
         assert detector.barcode_indexer is not None
         assert detector.min_score == 13
 
     def test_init_split_barcodes(self):
         """Test initialization with separate left/right barcode lists."""
         barcode_tuple = (DUMMY_BARCODES_8, DUMMY_BARCODES_6)
-        detector = CurioBarcodeDetector(barcode_tuple, min_score=13)
+        detector = CurioBarcodeDetector(barcode_tuple)
         # Should have 3*3 = 9 combined barcodes
         assert len(detector.barcode_indexer.seq_list) == 9
 
     def test_no_match_random_sequence(self):
         """Test that random sequence returns no valid barcode."""
-        detector = CurioBarcodeDetector(DUMMY_BARCODES_14, min_score=13)
+        detector = CurioBarcodeDetector(DUMMY_BARCODES_14)
         result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
 
         assert isinstance(result, LinkerBarcodeDetectionResult)
@@ -637,13 +637,13 @@ class TestCurioIlluminaDetector:
 
     def test_init(self):
         """Test basic initialization."""
-        detector = CurioIlluminaDetector(DUMMY_BARCODES_14, min_score=14)
+        detector = CurioIlluminaDetector(DUMMY_BARCODES_14)
         assert detector.barcode_indexer is not None
         assert detector.min_score == 14
 
     def test_no_match_random_sequence(self):
         """Test that random sequence returns no valid barcode."""
-        detector = CurioIlluminaDetector(DUMMY_BARCODES_14, min_score=14)
+        detector = CurioIlluminaDetector(DUMMY_BARCODES_14)
         result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
 
         assert isinstance(result, LinkerBarcodeDetectionResult)
