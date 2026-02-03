@@ -5,11 +5,13 @@
 ############################################################################
 
 import logging
+import math
 import sys
 
+from ..indexers import ArrayKmerIndexer, Array2BitKmerIndexer, Dict2BitKmerIndexer, KmerIndexer
+from ..common import batch_str_to_2bit
 from ...error_codes import IsoQuantExitCode
 from .extraction_result import DetectedElement, ExtractionResult
-from ..indexers.base import KmerIndexer
 from ..common import find_polyt, reverese_complement, detect_exact_positions, find_candidate_with_max_score_ssw
 from .molecule_structure import ElementType, MoleculeStructure, MoleculeElement
 
@@ -21,6 +23,9 @@ class UniversalSingleMoleculeExtractor:
     MIN_SCORE_COEFF_TERMMINAL = 0.5
     TERMINAL_MATCH_DELTA = 3
     MAX_LEN_DIFF = 0.25
+    DEFAULT_ERROR_RATE = 0.03 # rought estimate for modern nanopore, doesn't matter that much
+    MAX_HITS = 10
+    SCORE_DIFF = 1
 
     def __init__(self, molecule_structure: MoleculeStructure):
         self.correct_sequences = True
@@ -60,10 +65,7 @@ class UniversalSingleMoleculeExtractor:
                     # Duplicated parts: skip individual index, handled after loop
                     pass
                 elif self.correct_sequences:
-                    self.index_dict[el.element_name] = self.prepare_barcode_index(el)
-                    # FIXME: min score should be based on the length of the barcode and their sparcity
-                    # e.g. find a way to estimate min_score so that error rate does not exceed 1%
-                    self.min_scores[el.element_name] = el.element_length - 2
+                    self.prepare_barcode_index_for_element(el)
                     self.elements_to_correct.add(el.element_name)
                 else:
                     self.elements_to_extract.add(el.element_name)
@@ -81,9 +83,7 @@ class UniversalSingleMoleculeExtractor:
                             total_length += el.element_length
                 if first_part_el is not None and first_part_el.element_value is not None:
                     barcode_list = first_part_el.element_value
-                    k = max(6, int(total_length / 2) - 2)
-                    self.index_dict[base_name] = KmerIndexer(barcode_list, k)
-                    self.min_scores[base_name] = total_length - 2
+                    self.prepare_barcode_index(base_name, barcode_list, total_length)
 
         # Build one index per duplicated base element using the full whitelist
         if self.correct_sequences:
@@ -96,21 +96,46 @@ class UniversalSingleMoleculeExtractor:
                             break
                 if first_part_el is not None and first_part_el.element_value is not None:
                     barcode_list = first_part_el.element_value
-                    k = max(6, int(first_part_el.element_length / 2) - 2)
-                    self.index_dict[base_name] = KmerIndexer(barcode_list, k)
-                    self.min_scores[base_name] = first_part_el.element_length - 2
+                    self.prepare_barcode_index(base_name, barcode_list, first_part_el.element_length)
 
         if not self.has_cdna:
             logger.critical("Molecule must include a cDNA")
             sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
-    def prepare_barcode_index(self, element: MoleculeElement):
-        if element.element_type not in (ElementType.VAR_LIST, ElementType.VAR_FILE):
-            return None
-        barcode_list = element.element_value
+    def prepare_barcode_index(self, base_name, barcode_list, barcode_length):
+        barcode_count = len(barcode_list)
+        error_rate = self.DEFAULT_ERROR_RATE
+        barcode_sparsity = math.pow(4, barcode_length) / barcode_count
+        filling_edit_distance = math.ceil(math.log(barcode_sparsity, 8 * barcode_length))
+        error_probability = math.pow(1 - error_rate, barcode_length - filling_edit_distance) * math.pow(error_rate, filling_edit_distance) * math.comb(barcode_length, filling_edit_distance)
+        density = barcode_count * math.pow(8 * barcode_length, filling_edit_distance) / math.pow(4, barcode_length)
+        if error_probability > 0.01 or density > 1:
+            filling_edit_distance -= 1
 
-        # TODO: use optimal indices for long barocde lists
-        return KmerIndexer(barcode_list, max(6, int(element.element_length / 2) - 2))
+        if filling_edit_distance == 0:
+            self.min_scores[base_name] = barcode_length - 1
+        self.min_scores[base_name] = barcode_length - filling_edit_distance
+
+        if barcode_count > 1000000:
+            logger.warning("The number of barcodes for element %s is too large: %d, barcode calling may take substantial amount of time and RAM", (base_name, barcode_count))
+
+        kmer_size = min(max(6, int(barcode_length / 2) - 1), 15)
+        if kmer_size <= 8:
+            if barcode_count < 100000:
+                self.index_dict[base_name] = ArrayKmerIndexer(barcode_list, kmer_size)
+            else:
+                self.index_dict[base_name] = Array2BitKmerIndexer(batch_str_to_2bit(barcode_list), kmer_size)
+        else:
+            if barcode_count < 100000:
+                self.index_dict[base_name] = KmerIndexer(barcode_list, kmer_size)
+            else:
+                self.index_dict[base_name] = Dict2BitKmerIndexer(batch_str_to_2bit(barcode_list), kmer_size)
+
+    def prepare_barcode_index_for_element(self, element: MoleculeElement):
+        if element.element_type not in (ElementType.VAR_LIST, ElementType.VAR_FILE):
+            return
+        barcode_list = element.element_value
+        self.prepare_barcode_index(element.element_name, barcode_list, element.element_length)
 
     def result_type(self):
         return ExtractionResult
@@ -172,10 +197,10 @@ class UniversalSingleMoleculeExtractor:
 
             # If correction is enabled and an index exists, correct against the whitelist
             if self.correct_sequences and base_name in self.index_dict:
-                matching_sequences = self.index_dict[base_name].get_occurrences(concatenated_seq)
+                matching_sequences = self.index_dict[base_name].get_occurrences(concatenated_seq, max_hits=self.MAX_HITS)
                 corrected_seq, seq_score, _, _ = find_candidate_with_max_score_ssw(
                     matching_sequences, concatenated_seq,
-                    min_score=self.min_scores[base_name])
+                    min_score=self.min_scores[base_name], score_diff=self.SCORE_DIFF)
                 if corrected_seq is not None:
                     detected_results[base_name] = DetectedElement(
                         parts[0][0], parts[-1][1], seq_score, corrected_seq)
@@ -214,9 +239,9 @@ class UniversalSingleMoleculeExtractor:
                     if seq is None:
                         corrected.append((None, -1))
                         continue
-                    matching = self.index_dict[base_name].get_occurrences(seq)
+                    matching = self.index_dict[base_name].get_occurrences(seq, max_hits=self.MAX_HITS)
                     corrected_seq, score, _, _ = find_candidate_with_max_score_ssw(
-                        matching, seq, min_score=self.min_scores[base_name])
+                        matching, seq, min_score=self.min_scores[base_name], score_diff=self.SCORE_DIFF)
                     corrected.append((corrected_seq, score))
 
                 successful = [(seq, score) for seq, score in corrected if seq is not None]
@@ -262,10 +287,10 @@ class UniversalSingleMoleculeExtractor:
 
     def correct_element(self, element: MoleculeElement, sequence: str, potential_start: int, potential_end: int) -> DetectedElement:
         potential_seq = sequence[potential_start:potential_end + 1]
-        matching_sequences = self.index_dict[element.element_name].get_occurrences(potential_seq)
+        matching_sequences = self.index_dict[element.element_name].get_occurrences(potential_seq, max_hits=self.MAX_HITS)
         corrected_seq, seq_score, seq_start, seq_end = \
             find_candidate_with_max_score_ssw(matching_sequences, potential_seq,
-                                              min_score=self.min_scores[element.element_name])
+                                              min_score=self.min_scores[element.element_name], score_diff=self.SCORE_DIFF)
         if corrected_seq is not None:
             read_seq_start = potential_start + seq_start
             read_seq_end = potential_start + seq_end - 1
