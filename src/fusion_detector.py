@@ -238,9 +238,9 @@ class FusionDetector:
             elif gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
                         "sense_intronic", "sense_overlapping", "unprocessed_pseudogene",
                         "transcribed_unprocessed_pseudogene", "pseudogene"):
-                score -= 40.0
+                score -= 10.0
             elif gtype and "pseudogene" in gtype:
-                score -= 40.0
+                score -= 15.0
             # 4) gentle preference for longer exon span (more likely real coding gene)
             try:
                 # sum exon lengths (per gene) cheaply
@@ -302,24 +302,24 @@ class FusionDetector:
         for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len) in sa_entries:
             # Estimate breakpoints with clip guidance
             left_chr, left_pos, right_chr, right_pos = self.estimate_breakpoint(
-                read, sa_pos, clip_side=clip_side, sa_cigar=sa_cigar
+                read, sa_pos, clip_side=clip_side, sa_cigar=sa_cigar, sa_chr=sa_chr, sa_strand=sa_strand
             )
             if left_pos is None or right_pos is None:
                 continue
-            key = (left_chr, (left_pos // jitter_window),
-                sa_chr, (right_pos // jitter_window))
+            c1, p1, c2, p2 = self._canon_pair(left_chr, left_pos, right_chr, right_pos)
+            key = (c1, p1 // jitter_window, c2, p2 // jitter_window)
             if key in seen_pairs:
                 continue
             seen_pairs.add(key)
             # Store raw assigned genes (no normalization yet - defer to build_metadata)
             left_gene = self.assign_fusion_gene(left_chr, left_pos)
-            right_gene = self.assign_fusion_gene(sa_chr, right_pos)
+            right_gene = self.assign_fusion_gene(right_chr, right_pos)
             if left_gene is None or right_gene is None:
                 continue
             if left_gene != right_gene:
                 self.record_fusion(
                     left_gene, right_gene, read.query_name,
-                    left_chr, left_pos, sa_chr, right_pos
+                    left_chr, left_pos, right_chr, right_pos
                 )
                 sa_used = True
         return sa_used
@@ -398,6 +398,12 @@ class FusionDetector:
             return "intergenic"
         return str(g)
 
+    def _canon_pair(self, c1, p1, c2, p2):
+        # Return a canonical (chrom,pos) pair ordering to keep keys consistent.
+        if (c2, p2) < (c1, p1):  # lexicographic compare
+            return (c2, p2, c1, p1)
+        return (c1, p1, c2, p2)
+
     def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
         # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
         if self.has_antisense_suffix(context1) or self.has_antisense_suffix(context2):
@@ -407,6 +413,8 @@ class FusionDetector:
         fusion_key = "--".join(sorted([left, right]))
 
         self.fusion_candidates[fusion_key].add(read_name)
+        c1, p1, c2, p2 = self._canon_pair(chrom1, int(pos1), chrom2, int(pos2))
+        bp = (c1, p1, c2, p2)
         bp = (chrom1, int(pos1), chrom2, int(pos2))
         self.fusion_breakpoints[fusion_key][bp] += 1
 
@@ -540,31 +548,64 @@ class FusionDetector:
             entries.append((chrom, pos, strand, cigar, mapq, nm))
         return entries
 
-    def estimate_breakpoint(self, read, sa_pos, clip_side=None, sa_cigar=None):
+    def estimate_breakpoint(self, read, sa_pos, clip_side=None, sa_cigar=None,
+                            sa_chr=None, sa_strand=None, sa_end_pos=None):
+        # sa_pos:  1-based start on reference (if you pass it)
+        # sa_end_pos: 1-based end on reference (pass r_en as 1-based end when available)
         left_chr = read.reference_name
         prim_start = self.safe_reference_start(read)
-        prim_end = (read.reference_end if read.reference_end is not None else None)
-        if prim_end is not None:
-            prim_end = int(prim_end)
+        prim_end   = int(read.reference_end) if read.reference_end is not None else None
+
+        # anchor on primary by clip side first (as you already do)
         if clip_side == "right" and prim_end is not None:
             left_pos = prim_end
         elif clip_side == "left" and prim_start is not None:
             left_pos = prim_start
         else:
-            # No strong clip cue -> choose the side with larger aligned block; default to end
             left_pos = prim_end if prim_end is not None else prim_start
-        right_chr = read.reference_name
-        right_pos = sa_pos
-        if sa_cigar:
-            sa_al_len = self.aligned_len_from_cigarstring(sa_cigar)
-            # If primary clip was 'left', SA likely anchors the right side near its end; otherwise near its start
-            if clip_side == "left" and sa_pos is not None and sa_al_len:
-                right_pos = sa_pos + sa_al_len  # approximate SA end (1-based)
-            else:
-                right_pos = sa_pos  # SA start
 
-        return (left_chr, int(left_pos) if left_pos is not None else None,
-                right_chr, int(right_pos) if right_pos is not None else None)
+        right_chr = sa_chr if sa_chr is not None else read.reference_name
+
+        # Pick right_pos robustly:
+        # Prefer explicit sa_end_pos when provided; otherwise, fall back to sa_pos +/- cigar heuristic
+        right_pos = None
+        if sa_end_pos is not None and sa_pos is not None:
+            # choose the nearer end to the clip side
+            # if clip was left, the SA part corresponds to the tail end on the other locus
+            right_pos = sa_end_pos if clip_side == "left" else sa_pos
+        else:
+            # legacy heuristic
+            right_pos = sa_pos
+            if sa_cigar:
+                sa_al_len = self.aligned_len_from_cigarstring(sa_cigar)
+                if clip_side == "left" and sa_pos is not None and sa_al_len:
+                    right_pos = sa_pos + sa_al_len
+        # Strand normalization
+        prim_rev = read.is_reverse
+        if sa_strand in ('+','-'):
+            sa_rev = (sa_strand == '-')
+        elif isinstance(sa_strand, int):
+            sa_rev = (sa_strand == -1)
+        else:
+            sa_rev = None  # unknown → don't force swaps below
+
+        # Ordering:
+        #  - If SA strand known: enforce consistent 5'→3' with minimal swapping.
+        #  - If unknown: only enforce lexicographic canonicalization at record time, not here.
+        if (right_pos is not None) and (left_pos is not None):
+            if sa_rev is not None:
+                if prim_rev != sa_rev:
+                    # opposite orientation: keep left_pos as anchored by clip; don't do a second sort here
+                    pass
+                else:
+                    # same orientation: ensure genomic increasing order (same-chr only)
+                    if left_chr == right_chr and left_pos > right_pos:
+                        left_pos, right_pos = right_pos, left_pos
+
+        return (left_chr,
+                int(left_pos) if left_pos is not None else None,
+                right_chr,
+                int(right_pos) if right_pos is not None else None)
 
     def realign_softclip(self, read, clip_side, clip_len,
                                 seen_pairs, jitter_window=25,
@@ -581,23 +622,40 @@ class FusionDetector:
             return
         sa_chr = getattr(best_hit, "ctg", None)
         sa_pos = getattr(best_hit, "r_st", None)
+        # normalize mappy strand (1 -> '+', -1 -> '-')
+        hit_strand = getattr(best_hit, "strand", 1)
+        sa_strand = '-' if hit_strand == -1 else '+'
         if sa_chr is None or sa_pos is None:
             return
-        sa_pos = int(sa_pos) + 1  # convert to 1-based
+        sa_chr   = getattr(best_hit, "ctg", None)
+        sa_r_st  = getattr(best_hit, "r_st", None)  # 0-based
+        sa_r_en  = getattr(best_hit, "r_en", None)  # 0-based end (exclusive)
+        hit_str  = getattr(best_hit, "strand", 1)   # 1 or -1
+        sa_strand = '-' if hit_str == -1 else '+'
+        if sa_chr is None or sa_r_st is None or sa_r_en is None:
+            return
+        # Convert to 1-based coordinates
+        sa_st_1b = int(sa_r_st) + 1
+        sa_en_1b = int(sa_r_en)   # mappy r_en is 0-based exclusive → already 1-based end
         left_chr, left_pos, right_chr, right_pos = self.estimate_breakpoint(
-            read, sa_pos, clip_side=clip_side, sa_cigar=None
+            read, sa_pos=sa_st_1b,
+                sa_end_pos=sa_en_1b,
+                clip_side=clip_side,
+                sa_cigar=None,
+                sa_chr=sa_chr,
+                sa_strand=sa_strand
         )
         if left_pos is None or right_pos is None:
             return
-        key = (left_chr, (left_pos // jitter_window),
-            sa_chr, (right_pos // jitter_window))
+        c1, p1, c2, p2 = self._canon_pair(left_chr, left_pos, right_chr, right_pos)
+        key = (c1, p1 // jitter_window, c2, p2 // jitter_window)
         if key in seen_pairs:
             return
         left_gene = self.assign_fusion_gene(left_chr, left_pos)
-        right_gene = self.assign_fusion_gene(sa_chr, right_pos)
+        right_gene = self.assign_fusion_gene(right_chr, right_pos)
         # Store raw genes without normalization - defer to build_metadata
         if left_gene is not None and right_gene is not None and left_gene != right_gene:
-            self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos)
+            self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, right_chr, right_pos)
             seen_pairs.add(key)
 
     def detect_fusions(self,
@@ -628,7 +686,7 @@ class FusionDetector:
                 sa_used = self._process_sa_entries(
                     read, filtered, clip_side, jitter_window, min_sa_mapq
                 )
-            if clip_side and clip_len >= min_softclip_len:
+            if clip_side and clip_len >= min_softclip_len: # and not sa_used (enabling this improves precision, lowers sensitivity)
                 seen_pairs = set()  # Local scope for this read's softclip realignment
                 self.realign_softclip(
                     read, clip_side, clip_len,
@@ -775,6 +833,7 @@ class FusionDetector:
                 right_gene = meta.get("right_gene")
                 okL, whyL = self.check_gene_exon_boundary(left_gene,  c1, p1, delta=50)
                 okR, whyR = self.check_gene_exon_boundary(right_gene, c2, p2, delta=50)
+                '''
                 if not okL or not okR:
                     flags["is_valid"] = False
                     # Append specific reasons (only non-empty strings)
@@ -783,7 +842,7 @@ class FusionDetector:
                     if whyR: reasons.append(whyR)
                     if reasons:
                         flags["reasons"].append("; ".join(reasons))
-
+                '''
             # skip reconstruction for mitochondrial candidates and invalid ones
             if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
                 self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)
