@@ -100,8 +100,8 @@ class TestBarcodeDetectionResult:
 
     def test_header(self):
         """Test TSV header."""
-        # header() is now an instance method, use _header() for static access
-        header = BarcodeDetectionResult._header()
+        # header() is a static method
+        header = BarcodeDetectionResult.header()
         assert "#read_id" in header
         assert "barcode" in header
         assert "UMI" in header

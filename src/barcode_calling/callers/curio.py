@@ -13,10 +13,11 @@ Curio platform uses double barcodes split by a linker sequence.
 import logging
 from typing import List, Optional
 
+from ..indexers import Array2BitKmerIndexer
 from ..indexers import KmerIndexer, ArrayKmerIndexer
 from ..common import (
     find_polyt_start, reverese_complement,
-    find_candidate_with_max_score_ssw, detect_exact_positions,
+    find_candidate_with_max_score_ssw, detect_exact_positions, str_to_2bit,
 )
 from .base import LinkerBarcodeDetectionResult
 
@@ -41,8 +42,7 @@ class CurioBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcode_list: List[str], umi_list: Optional[List[str]] = None,
-                 min_score: int = 13):
+    def __init__(self, barcode_list: List[str]):
         """
         Initialize Curio barcode detector.
 
@@ -61,13 +61,15 @@ class CurioBarcodeDetector:
                     joint_barcode_list.append(b1 + b2)
         else:
             joint_barcode_list = barcode_list
-        self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=6)
-        self.umi_set = None
-        if umi_list:
-            self.umi_set = set(umi_list)
-            logger.debug("Loaded %d UMIs" % len(umi_list))
-            self.umi_indexer = KmerIndexer(umi_list, kmer_size=5)
-        self.min_score = min_score
+        if len(joint_barcode_list) <= 100000:
+            self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=6)
+            self.max_barcodes_hits = 20
+            self.min_matching_kmers = 1
+        else:
+            self.barcode_indexer = Array2BitKmerIndexer([str_to_2bit(b) for b in joint_barcode_list], kmer_size=6, seq_len=self.BC_LENGTH)
+            self.max_barcodes_hits = 10
+            self.min_matching_kmers = 2
+        self.min_score = 13
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> LinkerBarcodeDetectionResult:
         """
@@ -149,7 +151,9 @@ class CurioBarcodeDetector:
         barcode_end = linker_end + self.RIGHT_BC_LENGTH + 1
         potential_barcode = sequence[barcode_start:linker_start] + sequence[linker_end + 1:barcode_end + 1]
         logger.debug("Barcode: %s" % (potential_barcode))
-        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode)
+        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode,
+                                                                 max_hits=self.max_barcodes_hits,
+                                                                 min_kmers=self.min_matching_kmers)
         barcode, bc_score, bc_start, bc_end = \
             find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode, min_score=self.min_score)
 
@@ -167,19 +171,11 @@ class CurioBarcodeDetector:
         potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
         logger.debug("Potential UMI: %s" % potential_umi)
 
-        umi = None
         good_umi = False
-        if self.umi_set:
-            matching_umis = self.umi_indexer.get_occurrences(potential_umi)
-            umi, umi_score, umi_start, umi_end = \
-                find_candidate_with_max_score_ssw(matching_umis, potential_umi, min_score=7)
-            logger.debug("Found UMI %s %d-%d" % (umi, umi_start, umi_end))
-
-        if not umi:
-            umi = potential_umi
-            if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA and \
-                    all(x != "T" for x in umi[-self.NON_T_UMI_BASES:]):
-                good_umi = True
+        umi = potential_umi
+        if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA and \
+                all(x != "T" for x in umi[-self.NON_T_UMI_BASES:]):
+            good_umi = True
 
         if not umi:
             return LinkerBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
@@ -219,8 +215,7 @@ class CurioIlluminaDetector:
     TERMINAL_MATCH_DELTA = 1
     STRICT_TERMINAL_MATCH_DELTA = 0
 
-    def __init__(self, joint_barcode_list: List[str], umi_list: Optional[List[str]] = None,
-                 min_score: int = 14):
+    def __init__(self, joint_barcode_list: List[str]):
         """
         Initialize Illumina Curio detector.
 
@@ -231,13 +226,15 @@ class CurioIlluminaDetector:
         """
         self.pcr_primer_indexer = KmerIndexer([CurioBarcodeDetector.PCR_PRIMER], kmer_size=6)
         self.linker_indexer = KmerIndexer([CurioBarcodeDetector.LINKER], kmer_size=5)
-        self.barcode_indexer = KmerIndexer(joint_barcode_list, kmer_size=5)
-        self.umi_set = None
-        if umi_list:
-            self.umi_set = set(umi_list)
-            logger.debug("Loaded %d UMIs" % len(umi_list))
-            self.umi_indexer = KmerIndexer(umi_list, kmer_size=5)
-        self.min_score = min_score
+        if len(joint_barcode_list) <= 100000:
+            self.barcode_indexer = ArrayKmerIndexer(joint_barcode_list, kmer_size=5)
+            self.max_barcodes_hits = 20
+            self.min_matching_kmers = 2
+        else:
+            self.barcode_indexer = Array2BitKmerIndexer([str_to_2bit(b) for b in joint_barcode_list], kmer_size=5, seq_len=self.BC_LENGTH)
+            self.max_barcodes_hits = 10
+            self.min_matching_kmers = 2
+        self.min_score = 14
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> LinkerBarcodeDetectionResult:
         """Detect barcode and UMI."""
@@ -289,7 +286,9 @@ class CurioIlluminaDetector:
         logger.debug("Barcode: %s" % (potential_barcode))
         if len(potential_barcode) < self.MIN_BC_LEN:
             return LinkerBarcodeDetectionResult(read_id, linker_start=linker_start, linker_end=linker_end)
-        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode)
+        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode,
+                                                                 max_hits=self.max_barcodes_hits,
+                                                                 min_kmers=self.min_matching_kmers)
         barcode, bc_score, bc_start, bc_end = \
             find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
                                               min_score=len(potential_barcode) - 1, score_diff=self.SCORE_DIFF)
@@ -308,19 +307,11 @@ class CurioIlluminaDetector:
         potential_umi = sequence[potential_umi_start:min(potential_umi_end + 1, len(sequence))]
         logger.debug("Potential UMI: %s" % potential_umi)
 
-        umi = None
         good_umi = False
-        if self.umi_set:
-            matching_umis = self.umi_indexer.get_occurrences(potential_umi)
-            umi, umi_score, umi_start, umi_end = \
-                find_candidate_with_max_score_ssw(matching_umis, potential_umi, min_score=7)
-            logger.debug("Found UMI %s %d-%d" % (umi, umi_start, umi_end))
-
-        if not umi:
-            umi = potential_umi
-            if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA and \
-                    all(x != "T" for x in umi[-self.NON_T_UMI_BASES:]):
-                good_umi = True
+        umi = potential_umi
+        if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA and \
+                all(x != "T" for x in umi[-self.NON_T_UMI_BASES:]):
+            good_umi = True
 
         if not umi:
             return LinkerBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,

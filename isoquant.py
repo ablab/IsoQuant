@@ -974,7 +974,6 @@ class BarcodeCallingArgs:
         self.out_fasta = out_fasta  # Can be a single filename (str), list of filenames, or None
         self.tmp_dir = tmp_dir
         self.threads = threads
-        self.min_score = None
         self.molecule = molecule
 
 
