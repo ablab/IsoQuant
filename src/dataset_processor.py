@@ -497,7 +497,8 @@ class DatasetProcessor:
                        IsoQuantMode.curio: [3],
                        IsoQuantMode.visium_hd: [4],
                        IsoQuantMode.stereoseq: [4],
-                       IsoQuantMode.stereoseq_nosplit: [4]}
+                       IsoQuantMode.stereoseq_nosplit: [4],
+                       IsoQuantMode.custom_sc: [4]}
 
         for i, edit_distance in enumerate(umi_ed_dict[self.args.mode]):
             logger.info("Filtering PCR duplicates with edit distance %d" % edit_distance)
