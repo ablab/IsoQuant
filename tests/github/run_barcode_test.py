@@ -139,6 +139,11 @@ def run_detect_barcodes(args, config_dict):
         barcode_files = fix_paths(config_file, config_dict["barcodes"])
         detect_command.extend(["--barcodes"] + barcode_files)
 
+    # Add molecule description file (for custom_sc mode)
+    if "molecule" in config_dict:
+        molecule_file = fix_path(config_file, config_dict["molecule"])
+        detect_command.extend(["--molecule", molecule_file])
+
     # Add optional parameters
     if "threads" in config_dict:
         detect_command.extend(["-t", config_dict["threads"]])
