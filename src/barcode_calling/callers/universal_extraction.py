@@ -103,6 +103,15 @@ class UniversalSingleMoleculeExtractor:
             sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
     def prepare_barcode_index(self, base_name, barcode_list, barcode_length):
+        # Check whether all barcodes have the same length
+        barcode_lengths = set(len(b) for b in barcode_list)
+        variable_length = len(barcode_lengths) > 1
+        if variable_length:
+            logger.warning("Barcodes for element %s have variable lengths (%s), "
+                           "performance may be suboptimal" %
+                           (base_name, ", ".join(str(l) for l in sorted(barcode_lengths))))
+            barcode_length = min(barcode_lengths)
+
         barcode_count = len(barcode_list)
         error_rate = self.DEFAULT_ERROR_RATE
         barcode_sparsity = math.pow(4, barcode_length) / barcode_count
@@ -115,19 +124,22 @@ class UniversalSingleMoleculeExtractor:
         if filling_edit_distance == 0:
             self.min_scores[base_name] = barcode_length - 1
         self.min_scores[base_name] = barcode_length - filling_edit_distance
+        if variable_length:
+            self.min_scores[base_name] = max(self.min_scores[base_name] - 1, 0)
+        logger.info("Minimal score for element %s is set to %d" % (base_name, self.min_scores[base_name]))
 
         if barcode_count > 1000000:
             logger.warning("The number of barcodes for element %s is too large: %d, barcode calling may take substantial amount of time and RAM", (base_name, barcode_count))
 
         kmer_size = min(max(6, int(barcode_length / 2) - 1), 15)
         if kmer_size <= 8:
-            if barcode_count < 100000:
+            if barcode_count < 100000 or variable_length:
                 self.index_dict[base_name] = ArrayKmerIndexer(barcode_list, kmer_size)
             else:
                 self.index_dict[base_name] = Array2BitKmerIndexer(batch_str_to_2bit(barcode_list, barcode_length),
                                                                   kmer_size, seq_len=barcode_length)
         else:
-            if barcode_count < 100000:
+            if barcode_count < 100000 or variable_length:
                 self.index_dict[base_name] = KmerIndexer(barcode_list, kmer_size)
             else:
                 self.index_dict[base_name] = Dict2BitKmerIndexer(batch_str_to_2bit(barcode_list, barcode_length),
