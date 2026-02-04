@@ -144,13 +144,16 @@ An MDF file has two parts:
 | `CONST` | Constant/known sequence (primer, linker, TSO)                                 | Sequence                 |
 | `VAR_FILE` | Variable sequence matched against a whitelist file                            | Path to TSV file         |
 | `VAR_LIST` | Variable sequence matched against an inline list                              | Comma-separated sequences |
-| `VAR_ANY` | Variable-length sequence extracted as-is                                      | Length (integer)         |
+| `VAR_ANY` | Variable fixed-length sequence extracted as-is                                | Length (integer)         |
 | `VAR_ANY_SEPARATOR` | Fixed-length variable separator sequence (not extracted)                      | Length (integer)        |
 | `VAR_ANY_NON_T_SEPARATOR` | Fixed-length variable separator sequence without T nucleoties (not extracted) | Length (integer)         |
 | `PolyT` | PolyT tail                                                                    | (none)                   |
 | `cDNA` | cDNA region                                                                   | (none)                   |
 
 At the moment, only a single `cDNA` and a single `PolyT` are supported. 
+
+Variable elements are expected to have a fixed length (`VAR_FILE` and `VAR_LIST`).
+Using variable-length barcodes may result in suboptimal performance.
 
 ### Barcode and UMI identification
 
