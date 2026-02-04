@@ -281,7 +281,7 @@ def str_to_2bit(seq):
     return kmer_idx
 
 
-def batch_str_to_2bit(barcodes, seq_len=25):
+def batch_str_to_2bit(barcodes, seq_len):
     """
     Convert a list/iterator of barcode strings to 2-bit encoded integers.
 
@@ -338,7 +338,7 @@ def batch_str_to_2bit(barcodes, seq_len=25):
     return result
 
 
-def batch_str_to_2bit_chunked(barcode_iterator, seq_len=25, chunk_size=50_000_000):
+def batch_str_to_2bit_chunked(barcode_iterator, seq_len, chunk_size=50_000_000):
     """
     Convert barcodes to 2-bit encoding in memory-efficient chunks.
 

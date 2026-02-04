@@ -303,7 +303,7 @@ class TestBatchStrTo2Bit:
     def test_empty_input(self):
         """Test empty input returns empty array."""
         import numpy as np
-        result = batch_str_to_2bit([])
+        result = batch_str_to_2bit([], 25)
         assert len(result) == 0
         assert result.dtype == np.uint64
 
@@ -361,7 +361,7 @@ class TestBatchStrTo2BitChunked:
     def test_empty_input(self):
         """Test empty iterator returns empty array."""
         import numpy as np
-        result = batch_str_to_2bit_chunked(iter([]))
+        result = batch_str_to_2bit_chunked(iter([]), 25)
         assert len(result) == 0
         assert result.dtype == np.uint64
 

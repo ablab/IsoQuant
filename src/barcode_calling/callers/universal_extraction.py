@@ -124,12 +124,14 @@ class UniversalSingleMoleculeExtractor:
             if barcode_count < 100000:
                 self.index_dict[base_name] = ArrayKmerIndexer(barcode_list, kmer_size)
             else:
-                self.index_dict[base_name] = Array2BitKmerIndexer(batch_str_to_2bit(barcode_list), kmer_size, seq_len=barcode_length)
+                self.index_dict[base_name] = Array2BitKmerIndexer(batch_str_to_2bit(barcode_list, barcode_length),
+                                                                  kmer_size, seq_len=barcode_length)
         else:
             if barcode_count < 100000:
                 self.index_dict[base_name] = KmerIndexer(barcode_list, kmer_size)
             else:
-                self.index_dict[base_name] = Dict2BitKmerIndexer(batch_str_to_2bit(barcode_list), kmer_size, seq_len=barcode_length)
+                self.index_dict[base_name] = Dict2BitKmerIndexer(batch_str_to_2bit(barcode_list, barcode_length),
+                                                                 kmer_size, seq_len=barcode_length)
         logger.info("Indexed %d barcodes for element %s" % (barcode_count, base_name))
 
     def prepare_barcode_index_for_element(self, element: MoleculeElement):
