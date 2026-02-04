@@ -125,7 +125,7 @@ class UniversalSingleMoleculeExtractor:
             self.min_scores[base_name] = barcode_length - 1
         self.min_scores[base_name] = barcode_length - filling_edit_distance
         if variable_length:
-            self.min_scores[base_name] = max(self.min_scores[base_name] - 1, 0)
+            self.min_scores[base_name] = min(self.min_scores[base_name] + 1, barcode_length)
         logger.info("Minimal score for element %s is set to %d" % (base_name, self.min_scores[base_name]))
 
         if barcode_count > 1000000:
