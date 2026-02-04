@@ -348,6 +348,8 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
         tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
     if args.tmp_dir:
         tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
+    else:
+        tmp_dir = os.path.join(os.path.dirname(args.output), tmp_dir)
     os.makedirs(tmp_dir)
 
     tmp_barcode_file = os.path.join(tmp_dir, "bc")
