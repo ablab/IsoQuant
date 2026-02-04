@@ -26,7 +26,7 @@ class Dict2BitKmerIndexer:
     Best for medium to large barcode sets.
     """
 
-    def __init__(self, known_bit_seqs: Iterable[int], kmer_size: int = 6, seq_len: int = 25):
+    def __init__(self, known_bit_seqs: Iterable[int], kmer_size: int, seq_len: int):
         """
         Initialize k-mer index with 2-bit encoded sequences.
 
@@ -131,7 +131,7 @@ class Array2BitKmerIndexer:
     Best for large barcode sets (e.g., single-cell whitelists).
     """
 
-    def __init__(self, known_bin_seq: Iterable[int], kmer_size: int = 12, seq_len: int = 25):
+    def __init__(self, known_bin_seq: Iterable[int], kmer_size: int, seq_len: int):
         """
         Initialize 2-bit k-mer index.
 
