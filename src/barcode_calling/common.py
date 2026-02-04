@@ -8,7 +8,7 @@ import os
 import sys
 import logging
 import gzip
-import numpy as np
+import numpy
 from ssw import AlignmentMgr
 
 from ..error_codes import IsoQuantExitCode
@@ -28,11 +28,11 @@ if NUMBA_AVAILABLE:
     @njit(cache=True, parallel=True)
     def _compute_2bit_numba(encoded, shifts, n_barcodes, seq_len):
         """Numba JIT-compiled 2-bit encoding computation with parallel execution."""
-        result = np.zeros(n_barcodes, dtype=np.uint64)
+        result = numpy.zeros(n_barcodes, dtype=numpy.uint64)
         for i in prange(n_barcodes):
-            val = np.uint64(0)
+            val = numpy.uint64(0)
             for pos in range(seq_len):
-                val |= np.uint64(encoded[i, pos]) << shifts[pos]
+                val |= numpy.uint64(encoded[i, pos]) << shifts[pos]
             result[i] = val
         return result
 
@@ -296,7 +296,7 @@ def batch_str_to_2bit(barcodes, seq_len):
         numpy.ndarray of uint64 containing 2-bit encoded barcodes
     """
     # Convert iterator to list if needed, reading in chunks to show progress
-    if not isinstance(barcodes, (list, np.ndarray)):
+    if not isinstance(barcodes, (list, numpy.ndarray)):
         logger.info("Loading barcodes from iterator...")
         barcode_list = []
         chunk_size = 10_000_000
@@ -309,30 +309,30 @@ def batch_str_to_2bit(barcodes, seq_len):
 
     n_barcodes = len(barcodes)
     if n_barcodes == 0:
-        return np.array([], dtype=np.uint64)
+        return numpy.array([], dtype=numpy.uint64)
 
     logger.info("Converting %d barcodes to 2-bit encoding..." % n_barcodes)
 
     # Fast path: join all barcodes into single string, convert to bytes at once
     # This avoids Python loop overhead for encode()
     all_bytes = ''.join(barcodes).encode('ascii')
-    byte_array = np.frombuffer(all_bytes, dtype=np.uint8).reshape(n_barcodes, seq_len)
+    byte_array = numpy.frombuffer(all_bytes, dtype=numpy.uint8).reshape(n_barcodes, seq_len)
 
     # Apply the encoding: (ord(char) & 6) >> 1
     # A=65 -> 0, C=67 -> 1, T=84 -> 2, G=71 -> 3
     encoded = (byte_array & 6) >> 1
 
     # Compute bit shifts for each position (highest position = leftmost)
-    shifts = np.arange(seq_len - 1, -1, -1, dtype=np.uint64) * 2
+    shifts = numpy.arange(seq_len - 1, -1, -1, dtype=numpy.uint64) * 2
 
     # Compute 2-bit encoding - use Numba if available for parallel execution
     if NUMBA_AVAILABLE:
         result = _compute_2bit_numba(encoded, shifts, n_barcodes, seq_len)
     else:
         # Fallback: vectorized NumPy loop
-        result = np.zeros(n_barcodes, dtype=np.uint64)
+        result = numpy.zeros(n_barcodes, dtype=numpy.uint64)
         for pos in range(seq_len):
-            result |= encoded[:, pos].astype(np.uint64) << shifts[pos]
+            result |= encoded[:, pos].astype(numpy.uint64) << shifts[pos]
 
     logger.info("Barcode conversion complete")
     return result
@@ -378,33 +378,33 @@ def batch_str_to_2bit_chunked(barcode_iterator, seq_len, chunk_size=50_000_000):
     logger.info("Barcode conversion complete: %d barcodes" % total_processed)
 
     if not all_results:
-        return np.array([], dtype=np.uint64)
-    return np.concatenate(all_results)
+        return numpy.array([], dtype=numpy.uint64)
+    return numpy.concatenate(all_results)
 
 
 def _convert_chunk_to_2bit(barcodes, seq_len):
     """Convert a chunk of barcodes to 2-bit encoding (internal helper)."""
     n_barcodes = len(barcodes)
     if n_barcodes == 0:
-        return np.array([], dtype=np.uint64)
+        return numpy.array([], dtype=numpy.uint64)
 
     # Fast path: join all barcodes into single string, convert to bytes at once
     all_bytes = ''.join(barcodes).encode('ascii')
-    byte_array = np.frombuffer(all_bytes, dtype=np.uint8).reshape(n_barcodes, seq_len)
+    byte_array = numpy.frombuffer(all_bytes, dtype=numpy.uint8).reshape(n_barcodes, seq_len)
 
     # Apply encoding: (ord(char) & 6) >> 1
     encoded = (byte_array & 6) >> 1
 
     # Compute shifts
-    shifts = np.arange(seq_len - 1, -1, -1, dtype=np.uint64) * 2
+    shifts = numpy.arange(seq_len - 1, -1, -1, dtype=numpy.uint64) * 2
 
     # Compute result - use Numba if available for parallel execution
     if NUMBA_AVAILABLE:
         result = _compute_2bit_numba(encoded, shifts, n_barcodes, seq_len)
     else:
-        result = np.zeros(n_barcodes, dtype=np.uint64)
+        result = numpy.zeros(n_barcodes, dtype=numpy.uint64)
         for pos in range(seq_len):
-            result |= encoded[:, pos].astype(np.uint64) << shifts[pos]
+            result |= encoded[:, pos].astype(numpy.uint64) << shifts[pos]
 
     return result
 
