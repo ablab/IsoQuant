@@ -462,7 +462,8 @@ class UMIFilter:
 
                     exon_blocks = read_assignment.corrected_exons
                     barcode = read_assignment.barcode
-                    umi = read_assignment.umi
+                    if barcode == '*' or not barcode:
+                        barcode = None
                     spliced = len(exon_blocks) > 1
                     barcoded = barcode is not None
 
