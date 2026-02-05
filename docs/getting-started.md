@@ -19,10 +19,10 @@
 
     For example, using the toy data provided within this repository,
 
-        ./isoquant.py --reference tests/toy_data/MAPT.Mouse.reference.fasta \
-        --genedb tests/toy_data/MAPT.Mouse.genedb.gtf \
-        --fastq tests/toy_data/MAPT.Mouse.ONT.simulated.fastq \
-        --data_type nanopore -o toy_data_out
+        ./isoquant.py --fastq /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.ont.sim.fq.gz \
+        --reference /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.fa.gz \
+        --genedb /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.gtf.gz \
+        --data_type nanopore --complete_genedb -p TEST_DATA --output isoquant_test 
 
 
 * To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:

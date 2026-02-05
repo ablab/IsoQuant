@@ -1082,16 +1082,18 @@ def run_pipeline(args):
 # Test mode is triggered by --test option
 class TestMode(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        out_dir = 'isoquant_test'
-        if os.path.exists(out_dir):
-            shutil.rmtree(out_dir)
+        self.out_dir = 'isoquant_test'
+        if os.path.exists(self.out_dir):
+            shutil.rmtree(self.out_dir)
         source_dir = os.path.dirname(os.path.realpath(__file__))
-        options = ['--output', out_dir, '--threads', '2',
+        options = ['--output', self.out_dir, '--threads', '2',
                    '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
                    '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
                    '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
                    '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force', '-p', 'TEST_DATA']
         print('=== Running in test mode === ')
+        print("Running IsoQuant in test mode with the following options:")
+        print(' '.join(options))
         print('Any other option is ignored ')
         main(options)
         if self._check_log():
@@ -1101,9 +1103,9 @@ class TestMode(argparse.Action):
             sys.exit(IsoQuantExitCode.TEST_FAILED)
         parser.exit()
 
-    @staticmethod
-    def _check_log():
-        with open('isoquant_test/isoquant.log', 'r') as f:
+
+    def _check_log(self):
+        with open(os.path.join(self.out_dir, 'isoquant.log'), 'r') as f:
             log = f.read()
 
         correct_results = ['total assignments 4', 'polyA tail detected in 2', 'unique: 1', 'known: 2', 'Processed 1 experiment']
