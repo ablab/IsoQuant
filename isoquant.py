@@ -46,7 +46,7 @@ from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, Grouped
 from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
-from isoquant_detect_barcodes import process_single_thread, process_in_parallel, get_umi_length
+from src.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
 
 
 logger = logging.getLogger('IsoQuant')

@@ -56,6 +56,16 @@ from .callers import (
 # Utilities
 from .common import str_to_2bit, bit_to_str, find_polyt_start, batch_str_to_2bit, batch_str_to_2bit_chunked
 
+# Barcode detection pipeline functions
+from .detect_barcodes import (
+    process_single_thread,
+    process_in_parallel,
+    get_umi_length,
+    create_barcode_caller,
+    BARCODE_CALLING_MODES,
+    BARCODE_FILES_REQUIRED,
+)
+
 __all__ = [
     # Indexers
     'KmerIndexer',
@@ -93,4 +103,11 @@ __all__ = [
     'find_polyt_start',
     'batch_str_to_2bit',
     'batch_str_to_2bit_chunked',
+    # Detection pipeline
+    'process_single_thread',
+    'process_in_parallel',
+    'get_umi_length',
+    'create_barcode_caller',
+    'BARCODE_CALLING_MODES',
+    'BARCODE_FILES_REQUIRED',
 ]
