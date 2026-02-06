@@ -27,6 +27,8 @@ class FusionDetector:
         except Exception:
             self.aligner = None
         self.fusion_metadata = {}
+        # store per-read assigned raw gene pairs for each fusion key: {fusion_key: {read_name: (left,right)}}
+        self.fusion_assigned_pairs = defaultdict(dict)
         # cache for resolved names: id_or_symbol -> gene_symbol (if found)
         self._resolved_name_cache = {}
         # Build interval tree index for fast coordinate-to-gene/exon mapping
@@ -447,6 +449,11 @@ class FusionDetector:
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
+        # store the raw assigned pair for this read so we don't need to re-run assignment later
+        try:
+            self.fusion_assigned_pairs[fusion_key][read_name] = (context1, context2)
+        except Exception:
+            pass
 
     def normalize_gene_label(self, gene):
         # Normalize any gene identifier to a canonical gene symbol string.
@@ -475,6 +482,7 @@ class FusionDetector:
                     "support": 0,
                     "raw_left_gene": None,
                     "raw_right_gene": None,
+                    "confidence": 0.0,
                 }
             )
             meta["supporting_reads"].update(reads)
@@ -492,15 +500,49 @@ class FusionDetector:
             meta["consensus_bp"] = consensus_bp
             meta["support"] = clustered_support
             left_chr, left_pos, right_chr, right_pos = consensus_bp
-            # Resolve gene names ONCE per fusion key
-            # Store both raw assigned genes and normalized names
-            raw_left = self.assign_fusion_gene(left_chr, left_pos)
-            raw_right = self.assign_fusion_gene(right_chr, right_pos)
+            # Compute early confidence based on support to decide reassignment strategy
+            early_confidence = self._compute_early_confidence(meta["support"])
+            meta["confidence"] = early_confidence
+            # Determine raw assigned genes from per-read assignments collected earlier
+            assigned = self.fusion_assigned_pairs.get(fusion_key, {})
+            # Count raw assignments among supporting reads
+            from collections import defaultdict as _dd
+            left_counts = _dd(int)
+            right_counts = _dd(int)
+            for r in meta["supporting_reads"]:
+                if r in assigned:
+                    lpair, rpair = assigned[r]
+                    if lpair:
+                        left_counts[lpair] += 1
+                    if rpair:
+                        right_counts[rpair] += 1
+            def _pick_most_common(d):
+                if not d:
+                    return None
+                # sort by count desc, then lexicographically for stable tie-break
+                return sorted(d.items(), key=lambda x: (-x[1], x[0]))[0][0]
+            raw_left = _pick_most_common(left_counts)
+            raw_right = _pick_most_common(right_counts)
+            # Fallback (rare) — if no per-read assignments are present, fall back to assignment at consensus
+            if raw_left is None:
+                raw_left = self.assign_fusion_gene(left_chr, left_pos)
+            if raw_right is None:
+                raw_right = self.assign_fusion_gene(right_chr, right_pos)
+            # Store original per-read assignments
             meta["raw_left_gene"] = raw_left
             meta["raw_right_gene"] = raw_right
-            # Resolve Ensembl/RP11 IDs to gene symbols
-            left_gene = self.normalize_gene_label(raw_left) if raw_left else "intergenic"
-            right_gene = self.normalize_gene_label(raw_right) if raw_right else "intergenic"
+            # Confidence-based reassignment: if confidence > 0.6, trust per-read; otherwise reassign at consensus
+            if early_confidence > 0.6:
+                # High confidence in per-read assignments; use them directly
+                left_gene = raw_left
+                right_gene = raw_right
+            else:
+                # Low confidence; reassign at consensus breakpoint for better accuracy
+                left_gene = self.assign_fusion_gene(left_chr, left_pos)
+                right_gene = self.assign_fusion_gene(right_chr, right_pos)
+            # Normalize gene labels for reporting/filters
+            left_gene = self.normalize_gene_label(left_gene) if left_gene else "intergenic"
+            right_gene = self.normalize_gene_label(right_gene) if right_gene else "intergenic"
             meta["left_gene"] = left_gene
             meta["right_gene"] = right_gene
 
@@ -572,7 +614,7 @@ class FusionDetector:
 
     def estimate_breakpoint(self, read, sa_pos, clip_side=None, sa_cigar=None):
         left_chr = read.reference_name
-        prim_start = self.safe_reference_start(read)
+        prim_start = self.safe_reference_start(read) 
         prim_end = (read.reference_end if read.reference_end is not None else None)
         if prim_end is not None:
             prim_end = int(prim_end)
@@ -827,6 +869,7 @@ class FusionDetector:
                 flags["is_valid"] = False
                 flags["reasons"].append("cis-SAGe disallowed by policy")
 
+            # Compute full confidence (includes reconstruction/realignment bonuses)
             conf = self.confidence(meta, flags)
             meta["confidence"] = conf
             # convert very low-confidence to invalid
@@ -939,7 +982,13 @@ class FusionDetector:
         except Exception:
             return None
 
+    def _compute_early_confidence(self, support_count):
+        # Early confidence based only on support (before reconstruction/validation)
+        # Used in build_metadata to decide gene reassignment strategy
+        return min(support_count, 10) / 10.0
+
     def confidence(self, meta, flags=None):
+        # Full confidence computation including reconstruction/realignment bonuses
         # Start from clustered support normalized
         support = min(meta.get("support", 0), 10) / 10.0
         # Reconstruction bonus
