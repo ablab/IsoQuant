@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" width="480" height="120">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;600&amp;display=swap');
+    </style>
+  </defs>
+  
+  <!-- Text: IsoQuant baseline at y=88 -->
+  <!-- IBM Plex Sans 600 at 52px: cap height ~37px, so top of I ≈ 88-37 = 51, bottom = 88 -->
+  <!-- 3 rows in 37px height: each row center at 51+6=57, 51+18.5=69.5, 51+31=82 -->
+  <!-- Exon height: 6px -->
+  
+  <text x="128" y="88" font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif" font-weight="600" font-size="52" fill="black" letter-spacing="-1.5">I<tspan>so</tspan><tspan font-weight="300">Quant</tspan></text>
+
+  <!-- Isoform diagram: right edge at ~126 (flush with I) -->
+  <g>
+    <!-- Isoform 1: 4 exons, full length -->
+    <line x1="42" y1="54.5" x2="124" y2="54.5" stroke="black" stroke-width="1" stroke-opacity="0.3"/>
+    <rect x="42" y="51.5" width="20" height="6" rx="1.5" fill="black"/>
+    <rect x="74" y="51.5" width="18" height="6" rx="1.5" fill="black"/>
+    <rect x="104" y="51.5" width="20" height="6" rx="1.5" fill="black"/>
+    
+    <!-- Isoform 2: 3 exons, skipped middle -->
+    <line x1="42" y1="69.5" x2="124" y2="69.5" stroke="black" stroke-width="1" stroke-opacity="0.3"/>
+    <rect x="42" y="66.5" width="16" height="6" rx="1.5" fill="black"/>
+    <rect x="104" y="66.5" width="20" height="6" rx="1.5" fill="black"/>
+    
+    <!-- Isoform 3: 3 exons, alt 3' -->
+    <line x1="62" y1="85" x2="120" y2="85" stroke="black" stroke-width="1" stroke-opacity="0.3"/>
+    <rect x="62" y="82" width="20" height="6" rx="1.5" fill="black"/>
+    <rect x="110" y="82" width="14" height="6" rx="1.5" fill="black"/>
+  </g>
+</svg>
