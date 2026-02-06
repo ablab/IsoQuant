@@ -9,7 +9,7 @@
 
 <img src="docs/isoquant_logo.png" width="300" alt="IsoQuant">
 
-[Full IsoQuant documentation can found here](https://ablab.github.io/IsoQuant/).
+[Full IsoQuant documentation can be found here](https://ablab.github.io/IsoQuant/).
 Information in this README is given only for convenience and is not a full user manual.
 
 Current version: see `VERSION` file.
@@ -22,19 +22,19 @@ Current version: see `VERSION` file.
 ## About IsoQuant
 
 IsoQuant is a tool for the genome-based analysis of long RNA reads, such as PacBio or
-Oxford Nanopores. IsoQuant allows to reconstruct and quantify transcript models with
+Oxford Nanopores. IsoQuant allows reconstructing and quantifying transcript models with
 high precision and decent recall. If the reference annotation is given, IsoQuant also
 assigns reads to the annotated isoforms based on their intron and exon structure.
-IsoQuant further performs annotated gene, isoform, exon and intron quantification.
-If reads are grouped (e.g. according to cell type), counts are reported according to the provided grouping.
+IsoQuant further performs annotated gene, isoform, exon, and intron quantification.
+If reads are grouped (e.g. according to a cell type), counts are reported according to the provided grouping.
 
-Latest IsoQuant version can be downloaded from [github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
+The latest IsoQuant version can be downloaded from [github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
 
 Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
 
 ## Supported sequencing data
 
-IsoQuant support all kinds of long RNA data:
+IsoQuant supports all kinds of long RNA data:
 * PacBio CCS
 * ONT dRNA / ONT cDNA
 * Assembled / corrected transcript sequences
@@ -51,7 +51,7 @@ used to discover transcript models or compute abundances.
 
 Reference genome is mandatory and should be provided in multi-FASTA format (can be gzipped).
 
-Reference gene annotation is not mandatory, but is likely to increase precision and recall.
+Reference gene annotation is not mandatory but is likely to increase precision and recall.
 It can be provided in GFF/GTF format (can be gzipped).
 
 Pre-constructed `minimap2` index can also be provided to reduce mapping time.
@@ -60,7 +60,7 @@ Pre-constructed `minimap2` index can also be provided to reduce mapping time.
 ## Citation
 The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
 
-To try IsoQuant you can use the data that was used in the publication [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
+To try IsoQuant, you can use the data that was used in the publication [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
 
 
 ## Feedback and bug reports
@@ -84,7 +84,7 @@ You can leave your comments and bug reports at our [GitHub repository tracker](h
 
         isoquant.py --test
 
-*   To run IsoQuant on raw FASTQ/FASTA files use the following command
+*   To run IsoQuant on raw FASTQ/FASTA files, use the following command
 
         isoquant.py --reference /PATH/TO/reference_genome.fasta \
         --genedb /PATH/TO/gene_annotation.gtf \
