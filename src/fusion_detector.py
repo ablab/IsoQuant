@@ -434,6 +434,9 @@ class FusionDetector:
         # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
         if self.has_antisense_suffix(context1) or self.has_antisense_suffix(context2):
             return
+        # Skip fusions with intergenic partners
+        if context1 == "intergenic" or context2 == "intergenic":
+            return
         left = self._safe_gene_token(context1)
         right = self._safe_gene_token(context2)
         fusion_key = "--".join(sorted([left, right]))
@@ -1032,6 +1035,9 @@ class FusionDetector:
                 left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
                 left_gene  = meta["left_gene"]
                 right_gene = meta["right_gene"]
+                # Exclude intergenic fusions (no true positives)
+                if left_gene == "intergenic" or right_gene == "intergenic":
+                    continue
                 # Exclude mitochondrial fusion candidates from report
                 if self._is_mitochondrial_candidate(left_chr, right_chr, left_gene, right_gene):
                     continue
