@@ -47,7 +47,7 @@ from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
 from src.fusion_detector import FusionDetector
-from detect_barcodes import process_single_thread, process_in_parallel, get_umi_length
+from src.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
 
 logger = logging.getLogger('IsoQuant')
 
@@ -167,17 +167,16 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
                                         "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
     add_additional_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
-                                   help='file(s) with barcode whitelist for barcode calling')
+                                   help='file(s) with barcode whitelist(s) for barcode calling')
     add_additional_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
                                    help='TSV file(s) with barcoded reads; barcodes will be called automatically if not provided')
-    # TODO: add UMI column, support various formats
-    add_additional_option_to_group(sc_args_group, "--barcode_column", type=str,
-                                   help='column with barcodes in barcoded_reads file, default=1; read id column is 0',
-                                   default=1)
     add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str,
                                    help='TSV file mapping barcode to cell type / spot id. '
                                         'Format: file.tsv or file.tsv:barcode_col:spot_cols '
                                         '(e.g., file.tsv:0:1,2,3 for multiple spot columns)')
+    add_additional_option_to_group(sc_args_group, "--molecule", type=str,
+                                   help='molecule definition file (MDF) for custom_sc mode; '
+                                        'defines molecule structure for universal barcode extraction')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
@@ -570,7 +569,11 @@ def check_input_params(args):
 
     args.umi_length = 0
     if args.mode.needs_barcode_calling():
-        if not args.barcode_whitelist and not args.barcoded_reads:
+        if args.mode == IsoQuantMode.custom_sc:
+            if not args.molecule and not args.barcoded_reads:
+                logger.critical("custom_sc mode requires --molecule or --barcoded_reads")
+                sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
+        elif not args.barcode_whitelist and not args.barcoded_reads:
             logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
                             "barcoded reads" % args.mode.name)
             sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
@@ -645,6 +648,10 @@ def check_input_files(args):
                 check_file_exists(bc_file, "Barcoded reads file")
         else:
             check_file_exists(args.barcoded_reads, "Barcoded reads file")
+
+    # Check molecule definition file
+    if hasattr(args, 'molecule') and args.molecule:
+        check_file_exists(args.molecule, "Molecule definition file")
 
     # Check barcode whitelist files
     if hasattr(args, 'barcode_whitelist') and args.barcode_whitelist:
@@ -997,7 +1004,8 @@ def prepare_reference_genome(args):
 
 
 class BarcodeCallingArgs:
-    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads):
+    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
+                 molecule: str | None = None):
         self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
@@ -1005,7 +1013,7 @@ class BarcodeCallingArgs:
         self.out_fasta = out_fasta  # Can be a single filename (str), list of filenames, or None
         self.tmp_dir = tmp_dir
         self.threads = threads
-        self.min_score = None
+        self.molecule = molecule
 
 
 def call_barcodes(args):
@@ -1038,7 +1046,8 @@ def call_barcodes(args):
 
             bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
             bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads)
+                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
+                                         molecule=getattr(args, 'molecule', None))
             # Launching barcode calling in a separate process has the following reason:
             # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
             # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
@@ -1119,16 +1128,18 @@ def run_pipeline(args):
 # Test mode is triggered by --test option
 class TestMode(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        out_dir = 'isoquant_test'
-        if os.path.exists(out_dir):
-            shutil.rmtree(out_dir)
+        self.out_dir = 'isoquant_test'
+        if os.path.exists(self.out_dir):
+            shutil.rmtree(self.out_dir)
         source_dir = os.path.dirname(os.path.realpath(__file__))
-        options = ['--output', out_dir, '--threads', '2',
+        options = ['--output', self.out_dir, '--threads', '2',
                    '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
                    '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
                    '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
                    '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force', '-p', 'TEST_DATA']
         print('=== Running in test mode === ')
+        print("Running IsoQuant in test mode with the following options:")
+        print(' '.join(options))
         print('Any other option is ignored ')
         main(options)
         if self._check_log():
@@ -1138,9 +1149,9 @@ class TestMode(argparse.Action):
             sys.exit(IsoQuantExitCode.TEST_FAILED)
         parser.exit()
 
-    @staticmethod
-    def _check_log():
-        with open('isoquant_test/isoquant.log', 'r') as f:
+
+    def _check_log(self):
+        with open(os.path.join(self.out_dir, 'isoquant.log'), 'r') as f:
             log = f.read()
 
         correct_results = ['total assignments 4', 'polyA tail detected in 2', 'unique: 1', 'known: 2', 'Processed 1 experiment']

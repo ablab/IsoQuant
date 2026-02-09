@@ -16,6 +16,7 @@ class IsoQuantMode(Enum):
     stereoseq = 5
     visium_hd = 6
     visium_5prime = 7
+    custom_sc = 10
 
     def needs_barcode_calling(self):
         return self in [IsoQuantMode.tenX_v3,
@@ -23,7 +24,8 @@ class IsoQuantMode(Enum):
                         IsoQuantMode.stereoseq_nosplit,
                         IsoQuantMode.stereoseq,
                         IsoQuantMode.visium_hd,
-                        IsoQuantMode.visium_5prime]
+                        IsoQuantMode.visium_5prime,
+                        IsoQuantMode.custom_sc]
 
     def needs_pcr_deduplication(self):
         return self in [IsoQuantMode.tenX_v3,
@@ -31,7 +33,8 @@ class IsoQuantMode(Enum):
                         IsoQuantMode.stereoseq_nosplit,
                         IsoQuantMode.stereoseq,
                         IsoQuantMode.visium_hd,
-                        IsoQuantMode.visium_5prime]
+                        IsoQuantMode.visium_5prime,
+                        IsoQuantMode.custom_sc]
 
     def produces_new_fasta(self):
         return self in [IsoQuantMode.stereoseq]

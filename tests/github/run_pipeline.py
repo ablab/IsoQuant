@@ -31,6 +31,7 @@ RT_QUANTIFICATION_KNOWN = "quantification_known"
 RT_QUANTIFICATION_NOVEL = "quantification_novel"
 RT_QUANTIFICATION_GENES = "quantification_genes"
 RT_PERFORMANCE = "performance"
+RT_ALLINFO = "allinfo"
 
 
 log = logging.getLogger('GitHubRunner')
@@ -433,6 +434,78 @@ def run_performance_assessment(args, config_dict):
     return exit_code
 
 
+def run_allinfo_quality(args, config_dict):
+    log.info('== Running allinfo quality assessment ==')
+    config_file = args.config_file
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    isoquant_dir = os.path.join(source_dir, "../../")
+
+    run_name = config_dict["name"]
+    label = config_dict["label"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)
+    internal_output_dir = os.path.join(output_folder, label)
+
+    # Edit distance from config or default (3 for 10x/curio, 4 for stereo/visium_hd)
+    edit_distance = int(config_dict.get("edit_distance", "3"))
+    allinfo_file = os.path.join(internal_output_dir, "%s.UMI_filtered.ED%d.allinfo" % (label, edit_distance))
+    stats_file = os.path.join(internal_output_dir, "%s.UMI_filtered.ED%d.stats.tsv" % (label, edit_distance))
+
+    # Support gzipped allinfo
+    if not os.path.exists(allinfo_file) and os.path.exists(allinfo_file + ".gz"):
+        allinfo_file = allinfo_file + ".gz"
+
+    if not os.path.exists(allinfo_file):
+        log.error("Allinfo file not found: %s" % allinfo_file)
+        return -5
+    if not os.path.exists(stats_file):
+        log.error("Stats file not found: %s" % stats_file)
+        return -5
+
+    quality_report = os.path.join(output_folder, "allinfo_quality_report.tsv")
+
+    qa_command = ["python3", os.path.join(isoquant_dir, "misc/assess_allinfo_quality.py"),
+                  "--allinfo", allinfo_file, "--stats", stats_file,
+                  "--output", quality_report]
+
+    log.info("Running: %s" % " ".join(qa_command))
+    result = subprocess.run(qa_command)
+    if result.returncode != 0:
+        log.error("Allinfo QA script failed with code %d" % result.returncode)
+        return -11
+
+    # Compare against etalon if provided
+    if "etalon_allinfo" not in config_dict:
+        return 0
+
+    etalon_file = fix_path(config_file, config_dict["etalon_allinfo"])
+    if not os.path.exists(etalon_file):
+        log.error("Etalon file not found: %s" % etalon_file)
+        return -35
+
+    etalon_dict = load_tsv_config(etalon_file)
+    quality_dict = load_tsv_config(quality_report)
+
+    exit_code = 0
+    tolerance = float(config_dict.get("tolerance", "0.01"))
+    new_etalon_path = os.path.join(output_folder, "new_allinfo_etalon.tsv")
+    with open(new_etalon_path, "w") as new_etalon_outf:
+        for metric_name, val_str in quality_dict.items():
+            new_etalon_outf.write("%s\t%s\n" % (metric_name, val_str))
+
+    for metric_name, etalon_val_str in etalon_dict.items():
+        etalon_val = float(etalon_val_str)
+        if metric_name not in quality_dict:
+            log.error("Metric %s not found in quality report" % metric_name)
+            exit_code = -36
+            continue
+        output_val = float(quality_dict[metric_name])
+        err = check_value(etalon_val, output_val, metric_name, tolerance)
+        if err != 0:
+            exit_code = err
+
+    return exit_code
+
+
 def check_output_files(out_dir, label, file_list):
     missing_files = []
     internal_output_dir = os.path.join(out_dir, label)
@@ -488,6 +561,8 @@ def main():
         err_codes.append(run_quantification(args, config_dict, "gene"))
     if RT_PERFORMANCE in run_types:
         err_codes.append(run_performance_assessment(args, config_dict))
+    if RT_ALLINFO in run_types:
+        err_codes.append(run_allinfo_quality(args, config_dict))
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()

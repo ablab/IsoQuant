@@ -103,7 +103,9 @@ def load_barcode_dict(sample, chr_id):
                     continue
                 parts = line.strip().split('\t')
                 if len(parts) >= 3:
-                    barcode = parts[1] if parts[1] else None
+                    barcode = parts[1]
+                    if barcode == '*' or not barcode:
+                        continue
                     umi = parts[2] if parts[2] else None
                     barcode_dict[parts[0]] = (barcode, umi)
             logger.debug("Loaded %d barcodes" % len(barcode_dict))

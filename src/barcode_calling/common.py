@@ -4,10 +4,15 @@
 # See file LICENSE for details.
 ############################################################################
 import copy
+import os
+import sys
 import logging
-
-import numpy as np
+import gzip
+import numpy
 from ssw import AlignmentMgr
+
+from ..error_codes import IsoQuantExitCode
+
 
 logger = logging.getLogger('IsoQuant')
 
@@ -23,11 +28,11 @@ if NUMBA_AVAILABLE:
     @njit(cache=True, parallel=True)
     def _compute_2bit_numba(encoded, shifts, n_barcodes, seq_len):
         """Numba JIT-compiled 2-bit encoding computation with parallel execution."""
-        result = np.zeros(n_barcodes, dtype=np.uint64)
+        result = numpy.zeros(n_barcodes, dtype=numpy.uint64)
         for i in prange(n_barcodes):
-            val = np.uint64(0)
+            val = numpy.uint64(0)
             for pos in range(seq_len):
-                val |= np.uint64(encoded[i, pos]) << shifts[pos]
+                val |= numpy.uint64(encoded[i, pos]) << shifts[pos]
             result[i] = val
         return result
 
@@ -54,6 +59,48 @@ def find_polyt_start(seq, window_size = 16, polya_fraction = 0.75):
         return -1
 
     return i + max(0, seq[i:].find('TTTT'))
+
+
+def find_polyt(seq, window_size = 16, polya_fraction = 0.75):
+    polyA_count = int(window_size * polya_fraction)
+
+    if len(seq) < window_size:
+        return -1, -1
+    i = 0
+    a_count = seq[0:window_size].count('T')
+    while i < len(seq) - window_size:
+        if a_count >= polyA_count:
+            break
+        first_base_a = seq[i] == 'T'
+        new_base_a = i + window_size < len(seq) and seq[i + window_size] == 'T'
+        if first_base_a and not new_base_a:
+            a_count -= 1
+        elif not first_base_a and new_base_a:
+            a_count += 1
+        i += 1
+
+    if i >= len(seq) - window_size:
+        return -1, -1
+    polyt_start = i + max(0, seq[i:].find('TTTT'))
+
+    while i < len(seq) - window_size:
+        if a_count < polyA_count:
+            break
+        first_base_a = seq[i] == 'T'
+        new_base_a = i + window_size < len(seq) and seq[i + window_size] == 'T'
+        if first_base_a and not new_base_a:
+            a_count -= 1
+        elif not first_base_a and new_base_a:
+            a_count += 1
+        i += 1
+
+    if i >= len(seq) - window_size:
+        polyt_end = len(seq) - 1
+    else:
+        last_t_pos = seq[i:i + window_size].rfind('TTTT')
+        polyt_end = i + window_size - 1 if last_t_pos == -1 else i + last_t_pos + 4
+
+    return polyt_start, polyt_end
 
 
 base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', " ": " "}
@@ -181,7 +228,7 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
         return None, None
     leftover_bases = len(pattern) - pattern_end - 1
     skipped_bases = pattern_start
-    return start_pos - skipped_bases, end_pos + leftover_bases
+    return max(0, start_pos - skipped_bases), min(end_pos + leftover_bases, len(sequence) - 1)
 
 
 def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences: list,
@@ -234,7 +281,7 @@ def str_to_2bit(seq):
     return kmer_idx
 
 
-def batch_str_to_2bit(barcodes, seq_len=25):
+def batch_str_to_2bit(barcodes, seq_len):
     """
     Convert a list/iterator of barcode strings to 2-bit encoded integers.
 
@@ -249,7 +296,7 @@ def batch_str_to_2bit(barcodes, seq_len=25):
         numpy.ndarray of uint64 containing 2-bit encoded barcodes
     """
     # Convert iterator to list if needed, reading in chunks to show progress
-    if not isinstance(barcodes, (list, np.ndarray)):
+    if not isinstance(barcodes, (list, numpy.ndarray)):
         logger.info("Loading barcodes from iterator...")
         barcode_list = []
         chunk_size = 10_000_000
@@ -262,36 +309,36 @@ def batch_str_to_2bit(barcodes, seq_len=25):
 
     n_barcodes = len(barcodes)
     if n_barcodes == 0:
-        return np.array([], dtype=np.uint64)
+        return numpy.array([], dtype=numpy.uint64)
 
     logger.info("Converting %d barcodes to 2-bit encoding..." % n_barcodes)
 
     # Fast path: join all barcodes into single string, convert to bytes at once
     # This avoids Python loop overhead for encode()
     all_bytes = ''.join(barcodes).encode('ascii')
-    byte_array = np.frombuffer(all_bytes, dtype=np.uint8).reshape(n_barcodes, seq_len)
+    byte_array = numpy.frombuffer(all_bytes, dtype=numpy.uint8).reshape(n_barcodes, seq_len)
 
     # Apply the encoding: (ord(char) & 6) >> 1
     # A=65 -> 0, C=67 -> 1, T=84 -> 2, G=71 -> 3
     encoded = (byte_array & 6) >> 1
 
     # Compute bit shifts for each position (highest position = leftmost)
-    shifts = np.arange(seq_len - 1, -1, -1, dtype=np.uint64) * 2
+    shifts = numpy.arange(seq_len - 1, -1, -1, dtype=numpy.uint64) * 2
 
     # Compute 2-bit encoding - use Numba if available for parallel execution
     if NUMBA_AVAILABLE:
         result = _compute_2bit_numba(encoded, shifts, n_barcodes, seq_len)
     else:
         # Fallback: vectorized NumPy loop
-        result = np.zeros(n_barcodes, dtype=np.uint64)
+        result = numpy.zeros(n_barcodes, dtype=numpy.uint64)
         for pos in range(seq_len):
-            result |= encoded[:, pos].astype(np.uint64) << shifts[pos]
+            result |= encoded[:, pos].astype(numpy.uint64) << shifts[pos]
 
     logger.info("Barcode conversion complete")
     return result
 
 
-def batch_str_to_2bit_chunked(barcode_iterator, seq_len=25, chunk_size=50_000_000):
+def batch_str_to_2bit_chunked(barcode_iterator, seq_len, chunk_size=50_000_000):
     """
     Convert barcodes to 2-bit encoding in memory-efficient chunks.
 
@@ -331,33 +378,33 @@ def batch_str_to_2bit_chunked(barcode_iterator, seq_len=25, chunk_size=50_000_00
     logger.info("Barcode conversion complete: %d barcodes" % total_processed)
 
     if not all_results:
-        return np.array([], dtype=np.uint64)
-    return np.concatenate(all_results)
+        return numpy.array([], dtype=numpy.uint64)
+    return numpy.concatenate(all_results)
 
 
 def _convert_chunk_to_2bit(barcodes, seq_len):
     """Convert a chunk of barcodes to 2-bit encoding (internal helper)."""
     n_barcodes = len(barcodes)
     if n_barcodes == 0:
-        return np.array([], dtype=np.uint64)
+        return numpy.array([], dtype=numpy.uint64)
 
     # Fast path: join all barcodes into single string, convert to bytes at once
     all_bytes = ''.join(barcodes).encode('ascii')
-    byte_array = np.frombuffer(all_bytes, dtype=np.uint8).reshape(n_barcodes, seq_len)
+    byte_array = numpy.frombuffer(all_bytes, dtype=numpy.uint8).reshape(n_barcodes, seq_len)
 
     # Apply encoding: (ord(char) & 6) >> 1
     encoded = (byte_array & 6) >> 1
 
     # Compute shifts
-    shifts = np.arange(seq_len - 1, -1, -1, dtype=np.uint64) * 2
+    shifts = numpy.arange(seq_len - 1, -1, -1, dtype=numpy.uint64) * 2
 
     # Compute result - use Numba if available for parallel execution
     if NUMBA_AVAILABLE:
         result = _compute_2bit_numba(encoded, shifts, n_barcodes, seq_len)
     else:
-        result = np.zeros(n_barcodes, dtype=np.uint64)
+        result = numpy.zeros(n_barcodes, dtype=numpy.uint64)
         for pos in range(seq_len):
-            result |= encoded[:, pos].astype(np.uint64) << shifts[pos]
+            result |= encoded[:, pos].astype(numpy.uint64) << shifts[pos]
 
     return result
 
@@ -369,3 +416,36 @@ def bit_to_str(seq, seq_len):
     for i in range(seq_len):
         str_seq += BIN2NUCL[(seq >> ((seq_len - i - 1) * 2)) & 3]
     return str_seq
+
+
+
+def load_h5_barcodes_bit(h5_file_path, dataset_name='bpMatrix_1'):
+    raise NotImplementedError()
+    import h5py
+    barcode_list = []
+    with h5py.File(h5_file_path, 'r') as h5_file:
+        dataset = numpy.array(h5_file[dataset_name])
+        for row in dataset:
+            for col in row:
+                barcode_list.append(bit_to_str(int(col[0])))
+    return barcode_list
+
+
+def load_barcodes(inf, needs_iterator=False):
+    if not os.path.isfile(inf):
+        logger.critical("Barcode file '%s' does not exist.", inf)
+        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
+    if inf.endswith("h5") or inf.endswith("hdf5"):
+        return load_h5_barcodes_bit(inf)
+
+    if inf.endswith("gz") or inf.endswith("gzip"):
+        handle = gzip.open(inf, "rt")
+    else:
+        handle = open(inf, "r")
+
+    barcode_iterator = iter(l.strip().split()[0] for l in handle)
+    if needs_iterator:
+        return barcode_iterator
+
+    return list(barcode_iterator)

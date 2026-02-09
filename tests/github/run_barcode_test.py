@@ -8,7 +8,7 @@
 """
 Test runner for barcode calling quality assessment.
 
-Takes a configuration file as input, runs detect_barcodes.py on simulated data,
+Takes a configuration file as input, runs isoquant_detect_barcodes.py on simulated data,
 then runs quality assessment and compares results against etalon values.
 
 Usage:
@@ -91,7 +91,7 @@ def parse_args():
     parser.add_argument("--output", "-o", type=str,
                         help="Output directory (overrides config)")
     parser.add_argument("--additional_options", "-a", type=str,
-                        help="Additional options for detect_barcodes.py")
+                        help="Additional options for isoquant_detect_barcodes.py")
     parser.add_argument("--debug", "-d", action="store_true",
                         help="Enable debug output")
 
@@ -99,13 +99,13 @@ def parse_args():
 
 
 def run_detect_barcodes(args, config_dict):
-    """Run detect_barcodes.py with configuration options."""
+    """Run isoquant_detect_barcodes.py with configuration options."""
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
     config_file = args.config_file
 
     run_name = config_dict["name"]
-    # detect_barcodes.py uses -o as a file prefix, not a directory
+    # isoquant_detect_barcodes.py uses -o as a file prefix, not a directory
     # Output will be: {output_folder}/{run_name}.barcoded_reads.tsv
     output_folder = args.output if args.output else config_dict["output"]
     output_prefix = os.path.join(output_folder, run_name)
@@ -113,11 +113,11 @@ def run_detect_barcodes(args, config_dict):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    log.info('== Running detect_barcodes.py ==')
+    log.info('== Running isoquant_detect_barcodes.py ==')
 
     # Build command
     detect_command = [
-        "python3", os.path.join(isoquant_dir, "detect_barcodes.py"),
+        "python3", os.path.join(isoquant_dir, "isoquant_detect_barcodes.py"),
         "-o", output_prefix,
         "--mode", config_dict["mode"]
     ]
@@ -139,6 +139,11 @@ def run_detect_barcodes(args, config_dict):
         barcode_files = fix_paths(config_file, config_dict["barcodes"])
         detect_command.extend(["--barcodes"] + barcode_files)
 
+    # Add molecule description file (for custom_sc mode)
+    if "molecule" in config_dict:
+        molecule_file = fix_path(config_file, config_dict["molecule"])
+        detect_command.extend(["--molecule", molecule_file])
+
     # Add optional parameters
     if "threads" in config_dict:
         detect_command.extend(["-t", config_dict["threads"]])
@@ -156,7 +161,7 @@ def run_detect_barcodes(args, config_dict):
     result = subprocess.run(detect_command)
 
     if result.returncode != 0:
-        log.error("detect_barcodes.py exited with non-zero status: %d" % result.returncode)
+        log.error("isoquant_detect_barcodes.py exited with non-zero status: %d" % result.returncode)
         return -11
 
     return 0
@@ -173,7 +178,7 @@ def run_barcode_quality(args, config_dict):
     output_prefix = os.path.join(output_folder, run_name)
 
     # Find barcode output file
-    # detect_barcodes.py outputs: {prefix}.barcoded_reads.tsv
+    # isoquant_detect_barcodes.py outputs: {prefix}.barcoded_reads.tsv
     barcode_output = output_prefix + ".barcoded_reads.tsv"
     if not os.path.exists(barcode_output):
         barcode_output = output_prefix + ".barcoded_reads.tsv.gz"

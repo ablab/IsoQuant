@@ -1,58 +1,67 @@
-#!/usr/bin/env python3
-#
 ############################################################################
 # Copyright (c) 2023-2026 University of Helsinki
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
+
+"""
+Core barcode detection functionality.
+
+This module contains the main barcode calling logic used by both
+isoquant_detect_barcodes.py (standalone CLI) and isoquant.py (integrated pipeline).
+"""
+
 import concurrent.futures
 import gc
+import gzip
+import logging
 import multiprocessing
 import os
 import random
-import sys
-import argparse
-import gzip
-from traceback import print_exc
 import shutil
+import sys
 from collections import defaultdict
-import numpy
+
 import pysam
 from Bio import SeqIO, Seq, SeqRecord
-import logging
 
-from src.modes import IsoQuantMode
-from src.error_codes import IsoQuantExitCode
-from src.barcode_calling.common import bit_to_str, reverese_complement
-from src.barcode_calling import (
+from ..modes import IsoQuantMode
+from ..error_codes import IsoQuantExitCode
+from .common import reverese_complement, load_barcodes
+from . import (
     TenXBarcodeDetector,
     CurioBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
     ReadStats,
     VisiumHDBarcodeDetector,
+    UniversalSingleMoleculeExtractor,
+    MoleculeStructure
 )
 
 logger = logging.getLogger('IsoQuant')
 
-
 READ_CHUNK_SIZE = 100000
 
-BARCODE_CALLING_MODES = {IsoQuantMode.tenX_v3: TenXBarcodeDetector,
-                         IsoQuantMode.curio: CurioBarcodeDetector,
-                         IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
-                         IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
-                         IsoQuantMode.visium_5prime: TenXBarcodeDetector,
-                         IsoQuantMode.visium_hd: VisiumHDBarcodeDetector
-                         }
+BARCODE_CALLING_MODES = {
+    IsoQuantMode.tenX_v3: TenXBarcodeDetector,
+    IsoQuantMode.curio: CurioBarcodeDetector,
+    IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
+    IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    IsoQuantMode.visium_5prime: TenXBarcodeDetector,
+    IsoQuantMode.visium_hd: VisiumHDBarcodeDetector,
+    IsoQuantMode.custom_sc: UniversalSingleMoleculeExtractor
+}
 
-BARCODE_FILES_REQUIRED = {IsoQuantMode.tenX_v3: [1],
-                          IsoQuantMode.curio: [1, 2],
-                          IsoQuantMode.stereoseq_nosplit: [1],
-                          IsoQuantMode.stereoseq: [1],
-                          IsoQuantMode.visium_5prime: [1],
-                          IsoQuantMode.visium_hd: [2]
-                          }
+BARCODE_FILES_REQUIRED = {
+    IsoQuantMode.tenX_v3: [1],
+    IsoQuantMode.curio: [1, 2],
+    IsoQuantMode.stereoseq_nosplit: [1],
+    IsoQuantMode.stereoseq: [1],
+    IsoQuantMode.visium_5prime: [1],
+    IsoQuantMode.visium_hd: [2],
+    IsoQuantMode.custom_sc: [0]
+}
 
 
 def stats_file_name(file_name):
@@ -108,7 +117,7 @@ class BarcodeCaller:
             self.output_sequences_file = open(self.output_sequences, "w")
             self.process_function = self._process_read_split
         if header:
-            self.output_file.write(barcode_detector.result_type().header() + "\n")
+            self.output_file.write(barcode_detector.header() + "\n")
         self.read_stat = ReadStats()
 
     def get_stats(self):
@@ -202,13 +211,13 @@ class BarcodeCaller:
                 seq_records.append(SeqRecord.SeqRecord(seq=Seq.Seq(new_read_seq), id=r.read_id, description=""))
 
         self.read_stat.add_custom_stats("Splits", len(barcode_result.detected_patterns))
-        # self.read_stat.add_custom_stats("Splits %d %s" % (len(barcode_result.detected_patterns), "".join(list(sorted(strands)))), 1)
         if self.output_sequences_file:
             SeqIO.write(seq_records, self.output_sequences_file, "fasta")
 
     def _process_read_normal(self, read_id, read_sequence):
         logger.debug("==== %s ====" % read_id)
-        if read_sequence is None: return
+        if read_sequence is None:
+            return
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
 
         self.output_file.write("%s\n" % str(barcode_result))
@@ -244,13 +253,12 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None, min_score=None):
+def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None):
     output_file += "_" + str(num)
     if out_fasta:
         out_fasta += "_" + str(num)
     counter = 0
-    if min_score:
-        barcode_detector.min_score = min_score
+
     barcode_caller = BarcodeCaller(output_file, barcode_detector, output_sequences=out_fasta)
     counter += barcode_caller.process_chunk(read_chunk)
     read_chunk.clear()
@@ -260,13 +268,26 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None
     return output_file, out_fasta, counter
 
 
-def prepare_barcodes(args):
+def create_barcode_caller(args):
+    logger.info("Creating barcode detector for mode %s" % args.mode.name)
+
+    if args.mode == IsoQuantMode.custom_sc:
+        if not args.molecule:
+            logger.critical("Custom single-cell/spatial mode requires molecule description to be provided via --molecule")
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+        if not os.path.isfile(args.molecule):
+            logger.critical("Molecule file %s does not exist" % args.molecule)
+            sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
+        return BARCODE_CALLING_MODES[args.mode](MoleculeStructure(open(args.molecule)))
+
     logger.info("Using barcodes from %s" % ", ".join(args.barcodes))
     barcode_files = len(args.barcodes)
     if barcode_files not in BARCODE_FILES_REQUIRED[args.mode]:
         logger.critical("Barcode calling mode %s requires %s files, %d provided" %
                         (args.mode.name, " or ".join([str(x) for x in BARCODE_FILES_REQUIRED[args.mode]]), barcode_files))
         sys.exit(IsoQuantExitCode.BARCODE_FILE_COUNT_MISMATCH)
+
     barcodes = []
     for bc in args.barcodes:
         barcodes.append(load_barcodes(bc, needs_iterator=args.mode.needs_barcode_iterator()))
@@ -280,15 +301,14 @@ def prepare_barcodes(args):
             for i, bc in enumerate(barcodes):
                 logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
-    return barcodes
+
+    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+
+    return barcode_detector
 
 
 def process_single_thread(args):
-    logger.info("Preparing barcodes indices")
-    barcodes = prepare_barcodes(args)
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
-    if args.min_score:
-        barcode_detector.min_score = args.min_score
+    barcode_detector = create_barcode_caller(args)
 
     # args.input, args.output_tsv are always lists
     # args.out_fasta is a list or None
@@ -306,7 +326,7 @@ def process_single_thread(args):
     logger.info("Finished barcode calling")
 
 
-def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcodes):
+def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcode_detector):
     """Process a single file in parallel (internal helper function)."""
     logger.info("Processing " + input_file)
     fname, outer_ext = os.path.splitext(os.path.basename(input_file))
@@ -334,14 +354,9 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
         tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
     if args.tmp_dir:
         tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
+    else:
+        tmp_dir = os.path.join(os.path.dirname(args.output), tmp_dir)
     os.makedirs(tmp_dir)
-
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
-    logger.info("Barcode caller created")
-
-    min_score = None
-    if args.min_score:
-        min_score = args.min_score
 
     tmp_barcode_file = os.path.join(tmp_dir, "bc")
     tmp_fasta_file = os.path.join(tmp_dir, "subreads") if out_fasta else None
@@ -363,8 +378,7 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
                                               chunk,
                                               tmp_barcode_file,
                                               chunk_counter,
-                                              tmp_fasta_file,
-                                              min_score))
+                                              tmp_fasta_file))
             chunk_counter += 1
             if chunk_counter >= args.threads:
                 break
@@ -391,15 +405,14 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
                                                           chunk,
                                                           tmp_barcode_file,
                                                           chunk_counter,
-                                                          tmp_fasta_file,
-                                                          min_score))
+                                                          tmp_fasta_file))
                         chunk_counter += 1
                     except StopIteration:
                         reads_left = False
 
     with open(output_tsv, "w") as final_output_tsv:
         final_output_fasta = open(out_fasta, "w") if out_fasta else None
-        header = BARCODE_CALLING_MODES[args.mode].result_type().header()
+        header = barcode_detector.header()
         final_output_tsv.write(header + "\n")
         stat_dict = defaultdict(int)
         for tmp_file, tmp_fasta in output_files:
@@ -427,125 +440,11 @@ def process_in_parallel(args):
     # args.input, args.output_tsv are always lists
     # args.out_fasta is a list or None
     out_fastas = args.out_fasta if args.out_fasta else [None] * len(args.input)
-
-    # Prepare barcodes once for all files
-    barcodes = prepare_barcodes(args)
+    barcode_detector = create_barcode_caller(args)
 
     for idx, (input_file, output_tsv, out_fasta) in enumerate(zip(args.input, args.output_tsv, out_fastas)):
         if len(args.input) > 1:
             logger.info("Processing file %d/%d: %s" % (idx + 1, len(args.input), input_file))
-        _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcodes)
+        _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcode_detector)
 
     logger.info("Finished barcode calling")
-
-
-def load_barcodes(inf, needs_iterator=False):
-    if inf.endswith("h5") or inf.endswith("hdf5"):
-        return load_h5_barcodes_bit(inf)
-
-    if inf.endswith("gz") or inf.endswith("gzip"):
-        handle = gzip.open(inf, "rt")
-    else:
-        handle = open(inf, "r")
-
-    barcode_iterator = iter(l.strip().split()[0] for l in handle)
-    if needs_iterator:
-        return barcode_iterator
-
-    return [b for b in barcode_iterator]
-
-
-def load_h5_barcodes_bit(h5_file_path, dataset_name='bpMatrix_1'):
-    raise NotImplementedError()
-    import h5py
-    barcode_list = []
-    with h5py.File(h5_file_path, 'r') as h5_file:
-        dataset = numpy.array(h5_file[dataset_name])
-        for row in dataset:
-            for col in row:
-                barcode_list.append(bit_to_str(int(col[0])))
-    return barcode_list
-
-
-def set_logger(logger_instance, args):
-    logger_instance.setLevel(logging.INFO)
-    if args.debug:
-        logger_instance.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
-    if args.debug:
-        ch.setLevel(logging.DEBUG)
-
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    ch.setFormatter(formatter)
-    logger_instance.addHandler(ch)
-
-
-def parse_args(sys_argv):
-    def add_hidden_option(*args, **kwargs):  # show command only with --full-help
-        kwargs['help'] = argparse.SUPPRESS
-        parser.add_argument(*args, **kwargs)
-
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
-    parser.add_argument("--barcodes", "-b", nargs='+', type=str, help="barcode whitelist(s)", required=False)
-    # parser.add_argument("--umi", "-u", type=str, help="potential UMIs, detected de novo if not set")
-    parser.add_argument("--mode", type=str, help="mode to be used", choices=[x.name for x in BARCODE_CALLING_MODES.keys()],
-                        default=IsoQuantMode.stereoseq.name)
-    parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM, SAM",
-                        required=True)
-    parser.add_argument("--threads", "-t", type=int, help="threads to use (16)", default=16)
-    parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
-    parser.add_argument("--min_score", type=int, help="minimal barcode score "
-                                                      "(scoring system is +1, -1, -1, -1)")
-    add_hidden_option('--debug', action='store_true', default=False, help='Debug log output.')
-
-    args = parser.parse_args(sys_argv)
-    args.mode = IsoQuantMode[args.mode]
-    args.out_fasta = None
-    args.output_tsv = None
-    return args
-
-
-def check_args(args):
-    """Set up output file lists based on input files."""
-    # args.input is always a list (nargs='+')
-    num_files = len(args.input)
-
-    if args.output_tsv is None:
-        if num_files == 1:
-            args.output_tsv = [args.output + ".barcoded_reads.tsv"]
-        else:
-            args.output_tsv = [args.output + "_%d.barcoded_reads.tsv" % i for i in range(num_files)]
-
-    if args.out_fasta is None and args.mode.produces_new_fasta():
-        if num_files == 1:
-            args.out_fasta = [args.output + ".split_reads.fasta"]
-        else:
-            args.out_fasta = [args.output + "_%d.split_reads.fasta" % i for i in range(num_files)]
-
-
-def main(sys_argv):
-    args = parse_args(sys_argv)
-    set_logger(logger, args)
-    check_args(args)
-
-    out_dir = os.path.dirname(args.output)
-    if out_dir and not os.path.exists(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
-
-    if args.threads == 1 or args.mode.enforces_single_thread():
-        process_single_thread(args)
-    else:
-        process_in_parallel(args)
-
-
-if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
-    try:
-        main(sys.argv[1:])
-    except SystemExit:
-        raise
-    except:
-        print_exc()
-        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

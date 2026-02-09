@@ -133,10 +133,11 @@ class DatasetProcessor:
                                          len(sample.file_list) > 1 and
                                          self.args.read_group is not None and
                                          "file_name" in self.args.read_group)
-        if sample.use_technical_replicas:
-            logger.info("Technical replicas filtering enabled: novel transcripts must be confirmed by at least 2 files")
-        elif len(sample.file_list) > 1 and not self.args.use_replicas:
-            logger.info("Technical replicas filtering disabled by --use_replicas false")
+        if not self.args.no_model_construction:
+            if sample.use_technical_replicas:
+                logger.info("Technical replicas filtering enabled: novel transcripts must be confirmed by at least 2 files")
+            elif len(sample.file_list) > 1 and not self.args.use_replicas:
+                logger.info("Technical replicas filtering disabled by --use_replicas false")
 
         # Initialize all_read_groups as list of sets (one per grouping strategy)
         self.all_read_groups = [set() for _ in self.grouping_strategy_names]
@@ -496,7 +497,8 @@ class DatasetProcessor:
                        IsoQuantMode.curio: [3],
                        IsoQuantMode.visium_hd: [4],
                        IsoQuantMode.stereoseq: [4],
-                       IsoQuantMode.stereoseq_nosplit: [4]}
+                       IsoQuantMode.stereoseq_nosplit: [4],
+                       IsoQuantMode.custom_sc: [4]}
 
         for i, edit_distance in enumerate(umi_ed_dict[self.args.mode]):
             logger.info("Filtering PCR duplicates with edit distance %d" % edit_distance)

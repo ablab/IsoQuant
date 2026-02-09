@@ -196,12 +196,14 @@ class FusionDetector:
         # 3) biotype weighting
         if gtype == "protein_coding":
             score += 60.0
-        elif gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
-                    "sense_intronic", "sense_overlapping", "unprocessed_pseudogene",
-                    "transcribed_unprocessed_pseudogene", "pseudogene"):
-            score -= 40.0
-        elif gtype and "pseudogene" in gtype:
-            score -= 40.0
+        else:
+            # Penalize any pseudogene annotations 
+            if gtype and "pseudogene" in gtype.lower():
+                score -= 90.0
+            # Mild penalty for various non-coding/ambiguous biotypes
+            elif gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
+                        "sense_intronic", "sense_overlapping", "transcribed_unprocessed_pseudogene"):
+                score -= 15.0
         # 4) gentle preference for longer exon span (more likely real coding gene)
         try:
             # sum exon lengths (per gene) cheaply
@@ -468,7 +470,7 @@ class FusionDetector:
         gene = self.canonical_locus_name(gene)
         # Safety net
         if gene is None or gene.startswith("ENSG"):
-            return "intergenic"   
+            return "intergenic"
         return gene
 
     def build_metadata(self, min_support=1):
@@ -543,7 +545,29 @@ class FusionDetector:
                 # Low confidence; reassign at consensus breakpoint for better accuracy
                 left_gene = self.assign_fusion_gene(left_chr, left_pos)
                 right_gene = self.assign_fusion_gene(right_chr, right_pos)
-            # Normalize gene labels for reporting/filters
+            # --- add right after raw_left/raw_right and early_confidence are computed ---
+            if fusion_key in ("NR4A1--MRRFP1", "NR4A1--MRRF", "ADAT1-KARS1", "ADAT1-KARS1P1"):
+                print("[TRACE] fusion_key:", fusion_key)
+                print("  support:", meta["support"], "early_confidence:", early_confidence)
+                print("  raw_left:", raw_left, "raw_right:", raw_right)
+                # counts
+                from collections import defaultdict as _dd
+                left_counts = _dd(int); right_counts = _dd(int)
+                for r in meta["supporting_reads"]:
+                    if r in assigned:
+                        lpair, rpair = assigned[r]
+                        if lpair: left_counts[lpair] += 1
+                        if rpair: right_counts[rpair] += 1
+                print("  left_counts:", dict(left_counts))
+                print("  right_counts:", dict(right_counts))
+                # what would consensus reassignment choose?
+                if meta.get("consensus_bp"):
+                    c1, p1, c2, p2 = meta["consensus_bp"]
+                    print("  consensus_bp:", meta["consensus_bp"])
+                    print("  assign_fusion_gene@consensus left:", self.assign_fusion_gene(c1, p1))
+                    print("  assign_fusion_gene@consensus right:", self.assign_fusion_gene(c2, p2))
+            
+                        # Normalize gene labels for reporting/filters
             left_gene = self.normalize_gene_label(left_gene) if left_gene else "intergenic"
             right_gene = self.normalize_gene_label(right_gene) if right_gene else "intergenic"
             meta["left_gene"] = left_gene

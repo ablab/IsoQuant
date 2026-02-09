@@ -1,5 +1,16 @@
 # IsoQuant changelog
 
+## IsoQuant 3.11.0, 5 February 2026
+
+- `--read_group` now supports multiple read grouping strategies. 
+You can now simultaneously group counts by samples, BAM tags, read attributes provided in separate TSV files or within read ids themselves.  
+
+- New `--large_output` option to control which large output files are generated.
+
+- Significant performance optimizations.
+
+- Experimental release of the single-cell/spatial IsoQuant pipeline. Official release will follow soon.
+
 ## IsoQuant 3.10.0, 21 October 2025
 
 - New `--unmapped_bam` option for providing unmapped BAM files typical for PacBio CSS data.
@@ -15,8 +26,8 @@
 Use `--use_secondary` to process secondary alignments.
 
 - New options that force IsoQuant to use only a faction of reads in high-coverage loci.
-Significantly improves running time and RAM consumption, but affects gene/isoform counts. 
-New default behaviour only affects small chromosomes and scaffolds (<500kbp).
+Significantly improves running time and RAM consumption but affects gene/isoform counts. 
+This new default behaviour only affects small chromosomes and scaffolds (<500kbp).
 
     In some cases, high-coverage regions take too much time to process due to extreme number of mapped reads,
 especially `chrM` (up to 10x longer compared to normal chromosomes). However, using only a fraction of these
@@ -26,7 +37,7 @@ reads is enough to obtain reliable results.
   - `--max_coverage_small_chr` (default value is 1 million);
   - `--max_coverage_normal_chr` (default value is infinity, so usual chromosomes are not affected by default even if some genes have extreme coverage).
 
-- New option `--discard_chr` to discard a list chromosomes from the analysis.
+- New option `--discard_chr` to discard a list of chromosomes from the analysis.
 
 ## IsoQuant 3.8.0, 8 September 2025
 

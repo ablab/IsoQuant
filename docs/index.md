@@ -1,4 +1,6 @@
-# About IsoQuant
+
+
+<img src="isoquant_logo.png" width="400" alt="IsoQuant">
 
 IsoQuant is a tool for the genome-based analysis of long RNA reads, such as PacBio or
 Oxford Nanopores. IsoQuant allows to reconstruct and quantify transcript models with

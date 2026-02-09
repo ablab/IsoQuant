@@ -9,10 +9,12 @@ nav:
     - Ways of providing input data: input.md
     - Command line options: cmd.md
     - Examples: examples.md
+    - Single-cell analysis: single_cell.md
   - IsoQuant output:
      - Output files: output.md
      - File formats: formats.md
      - Assignment classification: classification.md
+  - Barcode calling: barcode_calling.md
   - Visualization: visualization.md
   - Citation: citation.md
   - Feedback: feedback.md
