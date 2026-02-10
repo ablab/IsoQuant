@@ -966,7 +966,7 @@ def prepare_reference_genome(args):
 
 class BarcodeCallingArgs:
     def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
-                 molecule: str | None = None):
+                 molecule: str = None):
         self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
