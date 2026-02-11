@@ -7,17 +7,22 @@
 ############################################################################
 
 import sys
+import os
 import argparse
 from collections import defaultdict
-from enum import Enum, unique
 from traceback import print_exc
 import pandas
 import logging
 import gzip
 import gffutils
 
-from .error_codes import IsoQuantExitCode
-from .file_naming import mtx_matrix_file, mtx_features_file, mtx_barcodes_file
+try:
+    from .error_codes import IsoQuantExitCode
+    from .file_naming import mtx_matrix_file, mtx_features_file, mtx_barcodes_file
+except ImportError:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from error_codes import IsoQuantExitCode
+    from file_naming import mtx_matrix_file, mtx_features_file, mtx_barcodes_file
 
 
 GROUP_COUNT_CUTOFF = 100
@@ -77,7 +82,7 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
         logger.error("Unexpected number of columns in %s: %d" % (input_linear_counts, cols))
         return
     
-    df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1,
+    df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1, keep_default_na=False,
                          names=['gene_id', 'group_id', 'count'],
                          dtype={'gene_id': str, 'group_id': str, 'count': float})
     unique_genes = list(sorted(df['gene_id'].unique()))
