@@ -1,5 +1,11 @@
 # IsoQuant changelog
 
+## IsoQuant 3.11.1, 11 February 2027
+
+- Fix Python 3.8 compatibility.
+
+- Fix MTX conversion.
+
 ## IsoQuant 3.11.0, 5 February 2026
 
 - `--read_group` now supports multiple read grouping strategies. 
