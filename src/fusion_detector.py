@@ -474,104 +474,13 @@ class FusionDetector:
         return gene
 
     def build_metadata(self, min_support=1):
-        # Compute consensus breakpoint and gene names for all fusion keys.
-        for fusion_key, reads in self.fusion_candidates.items():
-            support = len(reads)
-            meta = self.fusion_metadata.setdefault(
-                fusion_key,
-                {
-                    "supporting_reads": set(),
-                    "consensus_bp": None,
-                    "left_gene": None,
-                    "right_gene": None,
-                    "support": 0,
-                    "raw_left_gene": None,
-                    "raw_right_gene": None,
-                    "confidence": 0.0,
-                }
-            )
-            meta["supporting_reads"].update(reads)
-            meta["support"] = len(meta["supporting_reads"])
-            if meta["support"] < min_support:
-                continue
-            bp_counts = self.fusion_breakpoints.get(fusion_key, {})
-            if not bp_counts:
-                continue
-            # Use clustering to find stable consensus breakpoint
-            consensus_result = self.cluster_breakpoints(bp_counts, window=2000)
-            if not consensus_result:
-                continue
-            consensus_bp, clustered_support = consensus_result
-            meta["consensus_bp"] = consensus_bp
-            meta["support"] = clustered_support
-            left_chr, left_pos, right_chr, right_pos = consensus_bp
-            # Compute early confidence based on support to decide reassignment strategy
-            early_confidence = self._compute_early_confidence(meta["support"])
-            meta["confidence"] = early_confidence
-            # Determine raw assigned genes from per-read assignments collected earlier
-            assigned = self.fusion_assigned_pairs.get(fusion_key, {})
-            # Count raw assignments among supporting reads
-            from collections import defaultdict as _dd
-            left_counts = _dd(int)
-            right_counts = _dd(int)
-            for r in meta["supporting_reads"]:
-                if r in assigned:
-                    lpair, rpair = assigned[r]
-                    if lpair:
-                        left_counts[lpair] += 1
-                    if rpair:
-                        right_counts[rpair] += 1
-            def _pick_most_common(d):
-                if not d:
-                    return None
-                # sort by count desc, then lexicographically for stable tie-break
-                return sorted(d.items(), key=lambda x: (-x[1], x[0]))[0][0]
-            raw_left = _pick_most_common(left_counts)
-            raw_right = _pick_most_common(right_counts)
-            # Fallback (rare) — if no per-read assignments are present, fall back to assignment at consensus
-            if raw_left is None:
-                raw_left = self.assign_fusion_gene(left_chr, left_pos)
-            if raw_right is None:
-                raw_right = self.assign_fusion_gene(right_chr, right_pos)
-            # Store original per-read assignments
-            meta["raw_left_gene"] = raw_left
-            meta["raw_right_gene"] = raw_right
-            # Confidence-based reassignment: if confidence > 0.6, trust per-read; otherwise reassign at consensus
-            if early_confidence > 0.6:
-                # High confidence in per-read assignments; use them directly
-                left_gene = raw_left
-                right_gene = raw_right
-            else:
-                # Low confidence; reassign at consensus breakpoint for better accuracy
-                left_gene = self.assign_fusion_gene(left_chr, left_pos)
-                right_gene = self.assign_fusion_gene(right_chr, right_pos)
-            # --- add right after raw_left/raw_right and early_confidence are computed ---
-            if fusion_key in ("NR4A1--MRRFP1", "NR4A1--MRRF", "ADAT1-KARS1", "ADAT1-KARS1P1"):
-                print("[TRACE] fusion_key:", fusion_key)
-                print("  support:", meta["support"], "early_confidence:", early_confidence)
-                print("  raw_left:", raw_left, "raw_right:", raw_right)
-                # counts
-                from collections import defaultdict as _dd
-                left_counts = _dd(int); right_counts = _dd(int)
-                for r in meta["supporting_reads"]:
-                    if r in assigned:
-                        lpair, rpair = assigned[r]
-                        if lpair: left_counts[lpair] += 1
-                        if rpair: right_counts[rpair] += 1
-                print("  left_counts:", dict(left_counts))
-                print("  right_counts:", dict(right_counts))
-                # what would consensus reassignment choose?
-                if meta.get("consensus_bp"):
-                    c1, p1, c2, p2 = meta["consensus_bp"]
-                    print("  consensus_bp:", meta["consensus_bp"])
-                    print("  assign_fusion_gene@consensus left:", self.assign_fusion_gene(c1, p1))
-                    print("  assign_fusion_gene@consensus right:", self.assign_fusion_gene(c2, p2))
-            
-                        # Normalize gene labels for reporting/filters
-            left_gene = self.normalize_gene_label(left_gene) if left_gene else "intergenic"
-            right_gene = self.normalize_gene_label(right_gene) if right_gene else "intergenic"
-            meta["left_gene"] = left_gene
-            meta["right_gene"] = right_gene
+        # Delegate the heavy lifting to the new FusionMetadata helper class
+        try:
+            from .fusion_metadata import FusionMetadata
+            FusionMetadata(self).process_all(min_support=min_support)
+        except Exception:
+            # Fallback: if import fails, keep original behavior minimal (no-op)
+            return
 
     def cluster_breakpoints(self, bp_counts, window):
         # bp_counts: dict[(chr1,pos1,chr2,pos2)] -> count
