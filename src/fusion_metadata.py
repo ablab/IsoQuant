@@ -33,14 +33,22 @@ class FusionMetadata:
             meta["raw_left_gene"] = raw_left
             meta["raw_right_gene"] = raw_right
 
+            # Check if raw genes are "bad" (pseudogene, ncRNA, etc.) BEFORE confidence decision
+            # If a raw gene is bad, skip it in favor of consensus assignment, even if confidence > 0.6
+            raw_left_is_bad = self._is_bad_gene(raw_left, left_chr, left_pos)
+            raw_right_is_bad = self._is_bad_gene(raw_right, right_chr, right_pos)
+
+            # Confidence-based gene selection WITH bad-gene override
             if early_confidence > 0.6:
-                left_gene = raw_left
-                right_gene = raw_right
+                # High confidence: prefer raw genes, BUT replace if they are bad
+                left_gene = self.detector.assign_fusion_gene(left_chr, left_pos) if raw_left_is_bad else raw_left
+                right_gene = self.detector.assign_fusion_gene(right_chr, right_pos) if raw_right_is_bad else raw_right
             else:
+                # Low confidence: always use consensus assignment
                 left_gene = self.detector.assign_fusion_gene(left_chr, left_pos)
                 right_gene = self.detector.assign_fusion_gene(right_chr, right_pos)
 
-            # Normalize pseudogene / noncoding raw assignments
+            # Final normalization: handle any remaining bad genes from consensus assignment
             left_gene = self._replace_bad_gene_if_needed(left_gene, left_chr, left_pos, meta)
             right_gene = self._replace_bad_gene_if_needed(right_gene, right_chr, right_pos, meta)
 
@@ -48,6 +56,16 @@ class FusionMetadata:
             right_gene = self.detector.normalize_gene_label(right_gene) if right_gene else "intergenic"
             meta["left_gene"] = left_gene
             meta["right_gene"] = right_gene
+
+            # Store biotypes for reporting, passing coordinates for symbol resolution
+            meta["left_biotype"] = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
+            meta["right_biotype"] = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
+
+            # FINAL VALIDATION: If either final gene is still bad (pseudogene, ncRNA, etc.),
+            # mark the entire fusion as invalid to prevent false-alt duplicates in output
+            if self._is_bad_gene(left_gene, left_chr, left_pos) or self._is_bad_gene(right_gene, right_chr, right_pos):
+                meta["is_valid"] = False
+                meta["reason_invalid"] = f"Left or right gene is pseudogene/ncRNA: {left_gene} / {right_gene}"
 
     def _ensure_meta(self, fusion_key):
         return self.detector.fusion_metadata.setdefault(
@@ -85,32 +103,18 @@ class FusionMetadata:
             return None
         return sorted(counts_dict.items(), key=lambda x: (-x[1], x[0]))[0][0]
 
-    def _is_bad_gene(self, gene_name):
+    def _is_bad_gene(self, gene_name, chrom=None, pos=None):
+        # Check if a gene is "bad" (pseudogene, ncRNA, etc.) using detector's method
+        # which handles HGNC symbol resolution with coordinate fallback
         if not gene_name:
             return False
         try:
-            g = self.detector.db[gene_name]
-            attrs = getattr(g, 'attributes', {}) or {}
-            biotype = (
-                attrs.get('gene_type', [None])[0]
-                or attrs.get('gene_biotype', [None])[0]
-                or attrs.get('transcript_biotype', [None])[0]
-            )
-            if biotype is None:
-                return False
-            biotype = biotype.lower()
-            bad_types = (
-                'pseudogene', 'processed_pseudogene', 'unprocessed_pseudogene',
-                'transcribed_unitary_pseudogene', 'polymorphic_pseudogene', 'unitary_pseudogene',
-                'lncrna', 'lincRNA', 'antisense', 'sense_intronic', 'sense_overlapping',
-                'snrna', 'mirna'
-            )
-            return any(bt in biotype for bt in bad_types)
+            return self.detector.is_bad_gene(gene_name, chrom=chrom, pos=pos)
         except Exception:
             return False
 
     def _replace_bad_gene_if_needed(self, gene, chrom, pos, meta):
-        if self._is_bad_gene(gene):
+        if self._is_bad_gene(gene, chrom, pos):
             replacement = self.detector._find_nearby_protein_coding(chrom, pos, window=500)
             if replacement:
                 meta.setdefault('notes', []).append(f"Replaced pseudogene/ncRNA {gene} → {replacement} at consensus")

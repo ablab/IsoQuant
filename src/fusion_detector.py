@@ -31,6 +31,8 @@ class FusionDetector:
         self.fusion_assigned_pairs = defaultdict(dict)
         # cache for resolved names: id_or_symbol -> gene_symbol (if found)
         self._resolved_name_cache = {}
+        # cache for symbol -> biotype mapping (built on-demand)
+        self._symbol_biotype_cache = {}
         # Build interval tree index for fast coordinate-to-gene/exon mapping
         logger.info("Initializing genomic interval index for efficient database queries...")
         if IntervalTree is not None:
@@ -39,7 +41,7 @@ class FusionDetector:
             logger.warning("intervaltree not available; falling back to gffutils queries")
             self.interval_index = None
         self.debug = False
-        self.debug_sink = None  
+        self.debug_sink = None
 
 
     def safe_reference_start(self, read):
@@ -282,13 +284,14 @@ class FusionDetector:
             # optional: gene length as a gentle preference (cap to avoid domination)
             glen = max(1, gend - gstart + 1)
             # build a stable key; higher is better for earlier elements
+            # CRITICAL: protein_coding must come EARLY to prevent pseudogenes from winning based on proximity
             key = (
-                score,                           # 1) main score
-                bool(exonic_hit),                # 2) prefer exonic
-                -bnd,                            # 3) nearer exon boundary
-                -exd,                            # 4) nearer exon span
-                -bod,                            # 5) nearer gene body
-                1 if gtype == "protein_coding" else 0,  # 6) prefer coding
+                1 if gtype == "protein_coding" else 0,  # 1) PRIORITY: protein-coding must come first
+                score,                           # 2) main score (including biotype penalties)
+                bool(exonic_hit),                # 3) prefer exonic
+                -bnd,                            # 4) nearer exon boundary
+                -exd,                            # 5) nearer exon span
+                -bod,                            # 6) nearer gene body
                 -min(glen, 500000),              # 7) gentle preference for longer locus
                 gname or getattr(g, "id", "")    # 8) deterministic
             )
@@ -950,12 +953,99 @@ class FusionDetector:
         collapsed = Antisense_suffix.sub("", gene_name)
         return collapsed
 
+    def _build_symbol_biotype_index(self):
+        # One-time index construction: map HGNC symbols to biotypes using all genes in db
+        # This is called lazily when first needed
+        if self._symbol_biotype_cache:
+            return  # already built
+        logger.debug("Building symbol → biotype index from genedb...")
+        try:
+            for gene in self.db.features_of_type('gene'):
+                attrs = getattr(gene, 'attributes', {}) or {}
+                gene_name = attrs.get('gene_name', [None])[0]
+                if not gene_name:
+                    continue
+                # Extract biotype
+                biotype = (
+                    attrs.get('gene_type', [None])[0]
+                    or attrs.get('gene_biotype', [None])[0]
+                    or attrs.get('transcript_biotype', [None])[0]
+                )
+                if biotype:
+                    self._symbol_biotype_cache[gene_name] = biotype
+        except Exception as e:
+            logger.warning(f"Failed to build symbol→biotype index: {e}")
+
+    def _get_gene_biotype_by_symbol_or_coords(self, gene_symbol, chrom=None, pos=None):
+        # Resolve HGNC symbol to biotype using two strategies:
+        # 1) Direct lookup in symbol cache (built on-demand)
+        # 2) If cache miss, query genes at (chrom, pos) and match by gene_name attribute
+        if not gene_symbol:
+            return None
+        # Strategy 1: Check symbol cache first
+        if not self._symbol_biotype_cache:
+            self._build_symbol_biotype_index()
+        if gene_symbol in self._symbol_biotype_cache:
+            return self._symbol_biotype_cache[gene_symbol]
+        # Strategy 2: Use consensus coordinates if available
+        if chrom is not None and pos is not None:
+            try:
+                if self.interval_index is not None:
+                    genes = self.interval_index.get_genes_at(chrom, pos, window=2000)
+                else:
+                    genes = list(self.db.region(
+                        region=(chrom, max(1, pos - 2000), pos + 2000),
+                        featuretype='gene'
+                    ))
+                for g in genes:
+                    attrs = getattr(g, 'attributes', {}) or {}
+                    g_name = attrs.get('gene_name', [None])[0]
+                    # Match by symbol
+                    if g_name and g_name.upper() == gene_symbol.upper():
+                        biotype = (
+                            attrs.get('gene_type', [None])[0]
+                            or attrs.get('gene_biotype', [None])[0]
+                            or attrs.get('transcript_biotype', [None])[0]
+                        )
+                        if biotype:
+                            # Cache for future lookups
+                            self._symbol_biotype_cache[gene_symbol] = biotype
+                            return biotype
+            except Exception as e:
+                logger.debug(f"Failed to query genes at {chrom}:{pos} for symbol {gene_symbol}: {e}")
+        return None
+
+    def get_gene_biotype(self, gene_name, chrom=None, pos=None):
+        # Retrieve the biotype (gene_type or gene_biotype) for a given gene name.
+        # If gene_name is an HGNC symbol (not found as direct key), uses coordinates to match.
+        # Returns biotype string or None if not found.
+        if not gene_name:
+            return None
+        return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
+
+    def is_bad_gene(self, gene_name, chrom=None, pos=None):
+        # Check if a gene is "bad" (pseudogene, ncRNA, etc.) based on its biotype.
+        # Uses HGNC symbol with coordinate-based fallback if needed.
+        if not gene_name:
+            return False
+        biotype = self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
+        if biotype is None:
+            return False
+        biotype_lower = biotype.lower()
+        bad_types = (
+            'pseudogene', 'processed_pseudogene', 'unprocessed_pseudogene',
+            'transcribed_unitary_pseudogene', 'polymorphic_pseudogene', 'unitary_pseudogene',
+            'lncrna', 'lincrna', 'antisense', 'sense_intronic', 'sense_overlapping',
+            'snrna', 'mirna'
+        )
+        return any(bt in biotype_lower for bt in bad_types)
+
     def report(self, output_path="fusion_candidates.tsv", min_support=2,
             include_classes=("canonical","cis-SAGe"),
             min_confidence=0.3, only_valid=False):
         self.validate_candidates(min_support=min_support)
         with open(output_path, "w") as f:
-            f.write("LeftGene\tRawLeftGene\tLeftChromosome\tLeftBreakpoint\tRightGene\tRawRightGene\tRightChromosome\tRightBreakpoint\tSupportingReads\tFusionName\tClass\tValid\tReasons\n")
+            f.write("LeftGene\tLeftBiotype\tRawLeftGene\tLeftChromosome\tLeftBreakpoint\tRightGene\tRightBiotype\tRawRightGene\tRightChromosome\tRightBreakpoint\tSupportingReads\tFusionName\tClass\tValid\tReasons\n")
             for fusion_key, meta in sorted(self.fusion_metadata.items(), key=lambda x: -x[1].get("support", 0)):
                 if meta.get("confidence", 0) < min_confidence:
                     continue
@@ -984,4 +1074,6 @@ class FusionDetector:
                 reasons = ";".join(meta.get("reasons", []))
                 raw_left = meta.get("raw_left_gene")
                 raw_right = meta.get("raw_right_gene")
-                f.write(f"{left_gene}\t{raw_left}\t{left_chr}\t{left_pos}\t{right_gene}\t{raw_right}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t{meta.get('is_valid')}\t{reasons}\n")
+                left_biotype = meta.get("left_biotype", "unknown")
+                right_biotype = meta.get("right_biotype", "unknown")
+                f.write(f"{left_gene}\t{left_biotype}\t{raw_left}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_biotype}\t{raw_right}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t{meta.get('is_valid')}\t{reasons}\n")
