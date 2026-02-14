@@ -120,7 +120,8 @@ class UMIFilter:
     """
 
     def __init__(self, umi_length: int = 0, edit_distance: int = 3, disregard_length_diff: bool = True,
-                 only_unique_assignments: bool = False, only_spliced_reads: bool = False):
+                 only_unique_assignments: bool = False, only_spliced_reads: bool = False,
+                 barcode_remap: Optional[Dict[str, str]] = None):
         """
         Initialize UMI filter.
 
@@ -130,12 +131,14 @@ class UMIFilter:
             disregard_length_diff: Whether to ignore length differences in edit distance calculation
             only_unique_assignments: Only process uniquely assigned reads
             only_spliced_reads: Only process spliced reads
+            barcode_remap: Optional mapping from barcode to spot ID for spot-level dedup
         """
         self.umi_length = umi_length
         self.max_edit_distance = edit_distance
         self.disregard_length_diff = disregard_length_diff
         self.only_unique_assignments = only_unique_assignments
         self.only_spliced_reads = only_spliced_reads
+        self.barcode_remap = barcode_remap
 
         self.selected_reads: Set[str] = set()
         self.stats: Dict[str, int] = defaultdict(int)
@@ -539,7 +542,10 @@ class UMIFilter:
                     # Add to gene-barcode dict using gene from first isoform match
                     if read_assignment.isoform_matches:
                         gene_id = read_assignment.isoform_matches[0].assigned_gene
-                        gene_barcode_dict[gene_id][barcode].append(read_assignment)
+                        grouping_key = barcode
+                        if self.barcode_remap and barcode in self.barcode_remap:
+                            grouping_key = self.barcode_remap[barcode]
+                        gene_barcode_dict[gene_id][grouping_key].append(read_assignment)
 
                 # Process chunk
                 processed_read_count, processed_spliced_count = self._process_chunk(

@@ -146,6 +146,7 @@ def parse_args(cmd_args=None, namespace=None):
                                        "read_id:DELIM (read ID suffix), "
                                        "file_name (original filename), "
                                        "barcode_spot (map barcodes to spots/cell types using --barcode2spot), "
+                                       "barcode_barcode (map barcodes to spots using --barcode2barcode), "
                                        "barcode (group by barcode from --barcoded_reads)")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
@@ -174,6 +175,9 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='TSV file mapping barcode to cell type / spot id. '
                                         'Format: file.tsv or file.tsv:barcode_col:spot_cols '
                                         '(e.g., file.tsv:0:1,2,3 for multiple spot columns)')
+    add_additional_option_to_group(sc_args_group, "--barcode2barcode", type=str,
+                                   help='TSV file mapping barcode to spot IDs for UMI deduplication; '
+                                        'format: file.tsv or file.tsv:barcode_col:spot_cols')
     add_additional_option_to_group(sc_args_group, "--molecule", type=str,
                                    help='molecule definition file (MDF) for custom_sc mode; '
                                         'defines molecule structure for universal barcode extraction')
@@ -624,6 +628,12 @@ def check_input_files(args):
         from src.read_groups import parse_barcode2spot_spec
         bc2spot_file, _, _ = parse_barcode2spot_spec(args.barcode2spot)
         check_file_exists(bc2spot_file, "Barcode to spot mapping file")
+
+    # Check barcode2barcode file (parse spec to extract filename)
+    if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
+        from src.read_groups import parse_barcode2spot_spec
+        bc2bc_file, _, _ = parse_barcode2spot_spec(args.barcode2barcode)
+        check_file_exists(bc2bc_file, "Barcode to barcode mapping file")
 
     # Check read_group file specs
     if hasattr(args, 'read_group') and args.read_group:

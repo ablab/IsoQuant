@@ -568,6 +568,99 @@ class DatasetProcessor:
             for f in files_to_remove:
                 os.remove(f)
 
+        # Barcode2barcode spot-based UMI dedup rounds
+        if hasattr(self.args, 'barcode2barcode') and self.args.barcode2barcode:
+            from .read_groups import parse_barcode2spot_spec, load_barcode2barcode_mapping
+            filename, barcode_col, spot_cols = parse_barcode2spot_spec(self.args.barcode2barcode)
+            full_mapping = load_barcode2barcode_mapping(filename, barcode_col, spot_cols)
+
+            for col_idx in range(len(spot_cols)):
+                barcode_remap = {bc: spots[col_idx] for bc, spots in full_mapping.items()
+                                 if col_idx < len(spots) and spots[col_idx]}
+
+                bc2bc_prefix = umi_barcode2barcode_prefix(sample.out_umi_filtered_done, col_idx)
+                bc2bc_lock = umi_barcode2barcode_global_lock(sample.out_umi_filtered_done, col_idx)
+
+                if os.path.exists(bc2bc_lock):
+                    if self.args.resume:
+                        logger.info("Barcode2barcode column %d UMI filtering detected, skipping" % col_idx)
+                        continue
+                    os.remove(bc2bc_lock)
+
+                for edit_distance in umi_ed_dict[self.args.mode]:
+                    logger.info("Filtering UMIs for barcode2barcode column %d with edit distance %d"
+                                % (col_idx, edit_distance))
+
+                    umi_ed_filtering_done = umi_filtered_lock_file_name(bc2bc_prefix, "", edit_distance)
+                    if os.path.exists(umi_ed_filtering_done):
+                        if self.args.resume:
+                            logger.info("Filtering was done previously, skipping")
+                            continue
+                        os.remove(umi_ed_filtering_done)
+
+                    output_prefix = umi_output_prefix(
+                        sample.out_umi_filtered + ".barcode_barcode_col%d" % col_idx, edit_distance)
+                    logger.info("Results will be saved to %s" % output_prefix)
+
+                    umi_gen = (
+                        filter_umis_in_parallel,
+                        itertools.repeat(sample),
+                        self.get_chr_list(),
+                        itertools.repeat(self.get_chr_list()),
+                        itertools.repeat(self.args),
+                        itertools.repeat(edit_distance),
+                        itertools.repeat(False),
+                        itertools.repeat(barcode_remap),
+                        itertools.repeat(bc2bc_prefix),
+                    )
+
+                    if self.args.threads > 1:
+                        gc.collect()
+                        mp_context = multiprocessing.get_context('fork')
+                        with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context) as proc:
+                            results = proc.map(*umi_gen, chunksize=1)
+                    else:
+                        results = map(*umi_gen)
+
+                    stat_dict = defaultdict(int)
+                    files_to_remove = []
+                    save_allinfo = large_output_enabled(self.args, "allinfo")
+                    if save_allinfo:
+                        allinfo_fname = output_prefix + ".allinfo"
+                        if self.args.gzipped:
+                            allinfo_fname += ".gz"
+                            allinfo_outf = gzip.open(allinfo_fname, "wt")
+                        else:
+                            allinfo_outf = open(allinfo_fname, "w")
+
+                    for all_info_file_name, stats_output_file_name, umi_filter_done in results:
+                        if save_allinfo:
+                            shutil.copyfileobj(open(all_info_file_name, "r"), allinfo_outf)
+                        for l in open(stats_output_file_name, "r"):
+                            v = l.strip().split("\t")
+                            if len(v) != 2:
+                                continue
+                            stat_dict[v[0]] += int(v[1])
+                        files_to_remove.append(all_info_file_name)
+                        files_to_remove.append(stats_output_file_name)
+                        files_to_remove.append(umi_filter_done)
+
+                    if save_allinfo:
+                        allinfo_outf.close()
+
+                    logger.info("Barcode2barcode column %d PCR duplicates filtered with edit distance %d:" %
+                                (col_idx, edit_distance))
+                    with open(output_prefix + ".stats.tsv", "w") as outf:
+                        for k, v in stat_dict.items():
+                            logger.info("  %s: %d" % (k, v))
+                            outf.write("%s\t%d\n" % (k, v))
+
+                    open(umi_ed_filtering_done, "w").close()
+                    for f in files_to_remove:
+                        os.remove(f)
+
+                open(bc2bc_lock, "w").close()
+
         open(umi_filtering_done, "w").close()
 
     def split_read_barcode_table(self, sample, split_barcodes_file_names):

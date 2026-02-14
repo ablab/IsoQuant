@@ -375,6 +375,27 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             for col_idx in range(shared_data.num_columns):
                 groupers.append(BarcodeSpotGrouper(shared_data, column_index=col_idx))
             return groupers
+    elif values[0] == 'barcode_barcode':
+        # Uses --barcode2barcode (identical logic to barcode_spot but with different arg)
+        if not hasattr(args, 'barcode2barcode') or not args.barcode2barcode:
+            logger.critical("barcode_barcode grouping requires --barcode2barcode")
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
+
+        if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
+            logger.critical("barcode_barcode grouping requires barcoded reads (use --barcoded_reads)")
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
+
+        filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2barcode)
+        shared_data = SharedTableData(filename, read_id_column_index=barcode_col,
+                                      group_id_column_indices=spot_cols, delim='\t')
+
+        if shared_data.num_columns == 1:
+            return BarcodeSpotGrouper(shared_data, column_index=0)
+        else:
+            groupers = []
+            for col_idx in range(shared_data.num_columns):
+                groupers.append(BarcodeSpotGrouper(shared_data, column_index=col_idx))
+            return groupers
     elif values[0] == 'barcode':
         # Direct barcode grouping - uses barcode from read_assignment
         if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
@@ -516,6 +537,15 @@ def get_grouping_pool_types(args) -> dict:
             else:
                 pool_types[grouper_index] = 'barcode_spot'
                 grouper_index += 1
+        elif spec_type == 'barcode_barcode':
+            if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
+                _, _, spot_cols = parse_barcode2spot_spec(args.barcode2barcode)
+                for col_idx in range(len(spot_cols)):
+                    pool_types[grouper_index] = f'barcode_barcode:{col_idx}'
+                    grouper_index += 1
+            else:
+                pool_types[grouper_index] = 'barcode_barcode'
+                grouper_index += 1
         elif spec_type == 'barcode':
             # Barcode grouper uses the barcode pool (loaded per-chromosome)
             pool_types[grouper_index] = 'barcode'
@@ -587,6 +617,16 @@ def get_grouping_strategy_names(args) -> list:
                         strategy_names.append(f"barcode_spot_col{col_idx}")
             else:
                 strategy_names.append("barcode_spot")
+        elif spec_type == 'barcode_barcode':
+            if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
+                _, _, spot_cols = parse_barcode2spot_spec(args.barcode2barcode)
+                if len(spot_cols) == 1:
+                    strategy_names.append("barcode_barcode")
+                else:
+                    for col_idx in range(len(spot_cols)):
+                        strategy_names.append(f"barcode_barcode_col{col_idx}")
+            else:
+                strategy_names.append("barcode_barcode")
         elif spec_type == 'barcode':
             strategy_names.append("barcode")
         elif spec_type == 'tag':
@@ -678,4 +718,20 @@ def load_multicolumn_table(table_tsv_file, read_id_column_index, group_id_column
 
     if warn_count > 0:
         logger.warning("Total number of malformed lines in %s: %d" % (table_tsv_file, warn_count))
+    handle.close()
     return read_map
+
+
+def load_barcode2barcode_mapping(filename: str, barcode_col: int, spot_cols: list) -> dict:
+    """
+    Load barcode2barcode mapping file.
+
+    Args:
+        filename: Path to TSV file
+        barcode_col: Column index for barcode
+        spot_cols: List of column indices for spot IDs
+
+    Returns:
+        Dict mapping barcode -> list of spot values (one per column)
+    """
+    return load_multicolumn_table(filename, barcode_col, spot_cols, '\t')

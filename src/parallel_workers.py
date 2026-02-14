@@ -310,11 +310,13 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     return aggregator.read_stat_counter, transcript_stat_counter
 
 
-def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output_filtered_reads=False):
+def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output_filtered_reads=False,
+                            barcode_remap=None, output_prefix_override=None):
     transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
-    umi_filtered_done = umi_filtered_lock_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
-    all_info_file_name = allinfo_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
-    stats_output_file_name = allinfo_stats_file_name(sample.out_umi_filtered_done, chr_id, edit_distance)
+    out_prefix = output_prefix_override if output_prefix_override else sample.out_umi_filtered_done
+    umi_filtered_done = umi_filtered_lock_file_name(out_prefix, chr_id, edit_distance)
+    all_info_file_name = allinfo_file_name(out_prefix, chr_id, edit_distance)
+    stats_output_file_name = allinfo_stats_file_name(out_prefix, chr_id, edit_distance)
 
     if os.path.exists(umi_filtered_done):
         if args.resume:
@@ -347,7 +349,10 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
     # Load dynamic pools (for read groups from BAM tags/read IDs)
     load_dynamic_pools(string_pools, sample.get_dynamic_pools_file(chr_id))
 
-    umi_filter = UMIFilter(args.umi_length, edit_distance)
+    # When using barcode_remap (spot-based dedup), never produce filtered reads
+    if barcode_remap:
+        output_filtered_reads = False
+    umi_filter = UMIFilter(args.umi_length, edit_distance, barcode_remap=barcode_remap)
     filtered_reads = sample.get_filtered_reads_file(chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(chr_id, sample.out_raw_file,
                                   transcript_type_dict,
