@@ -54,7 +54,7 @@ class StereoBarcodeDetector:
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
             logger.info("Indexed %d barcodes" % len(bit_barcodes))
 
-        self.min_score = 21
+        self.min_score = 22
 
     def find_barcode_umi_multiple(self, read_id: str, sequence: str) -> List[LinkerBarcodeDetectionResult]:
         """Find multiple barcodes in a single read."""
@@ -282,7 +282,7 @@ class StereoSplittingBarcodeDetector:
             bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
             logger.info("Indexed %d barcodes" % len(bit_barcodes))
-        self.min_score = 21
+        self.min_score = 22
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
         """Find multiple barcodes in a concatenated read."""
