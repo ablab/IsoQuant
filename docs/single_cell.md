@@ -227,6 +227,28 @@ The representative read is selected based on:
 2. More exons
 3. Longer transcript alignment
 
+### Spot-level UMI deduplication
+
+For spatial transcriptomics at higher resolution than the capture spots
+(e.g. Visium HD 2um barcodes mapping to 8um or 16um spots), use
+`--barcode2barcode` to deduplicate UMIs at the spot level:
+
+```bash
+isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
+  --fastq reads.fastq.gz --data_type nanopore \
+  --mode visium_hd --barcode_whitelist part1.txt part2.txt \
+  --barcode2barcode barcode2spot.tsv:0:1,2 \
+  -o visium_output
+```
+
+For Visium HD, generate the mapping file from per-part coordinate files:
+
+```bash
+python misc/prepare_visium_spot_ids.py part1_to_y.tsv part2_to_x.tsv -o barcode2spot.tsv
+```
+
+See `python misc/prepare_visium_spot_ids.py --help` for custom prefix/delimiter options.
+
 ## Output
 
 ### Count matrices

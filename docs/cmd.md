@@ -121,6 +121,10 @@ where `FILE` is the file path, `READ_COL` is column with read ids (default: 0),
 Set barcode-to-spot mapping via `--barcode2spot` option.
 Useful for grouping single-cell/spatial data by cell type or spatial region instead of individual barcodes.
 
+ * `barcode_barcode` - group by spot-level barcode mapping for UMI deduplication.
+Set barcode-to-spot mapping via `--barcode2barcode` option.
+Multiple barcodes mapping to the same spot are grouped together.
+
 * `barcode` - groups reads by cell barcode.
 When the number of barcodes is large, grouping counts by individual barcodes may take a long time.
 It is recommended to use `--barcode2spot` file instead.
@@ -216,6 +220,18 @@ However, you can specify one or more columns via colon symbol (similar to `--rea
 
 When `--barcode2spot` is set, `--read_group barcode_spot` will be set automatically
 to group counts by cell type, spatial regions, or other provided properties.
+
+`--barcode2barcode`
+Path to TSV file mapping barcodes to spot IDs for spot-level UMI deduplication.
+When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
+this option groups them together during UMI deduplication, collapsing duplicates across the entire spot.
+
+Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
+When multiple spot columns are provided, a separate UMI dedup round is performed for each column.
+
+When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
+
+For Visium HD composite barcodes, use `misc/prepare_visium_spot_ids.py` to generate the mapping file.
 
 `--molecule`
 Path to a molecule description file (MDF) for `custom_sc` mode.
