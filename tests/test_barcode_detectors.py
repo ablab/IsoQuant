@@ -95,7 +95,7 @@ class TestStereoBarcodeDetector:
         """Test basic initialization."""
         detector = StereoBarcodeDetector(DUMMY_BARCODES_25)
         assert detector.barcode_indexer is not None
-        assert detector.min_score == 21
+        assert detector.min_score == 22
 
     def test_init_empty_barcodes(self):
         """Test initialization with empty barcode list."""
@@ -216,7 +216,7 @@ class TestSharedMemStereoBarcodeDetector:
         """Test basic initialization."""
         detector = SharedMemoryStereoBarcodeDetector(DUMMY_BARCODES_25)
         assert detector.barcode_indexer is not None
-        assert detector.min_score == 21
+        assert detector.min_score == 22
 
     def test_no_match_random_sequence(self):
         """Test that random sequence returns no valid barcode."""
