@@ -7,7 +7,6 @@ import logging
 from functools import lru_cache
 from intervaltree import IntervalTree
 from .genomic_interval_index import GenomicIntervalIndex
-# from .debug_sink import DebugCollector
 
 logger = logging.getLogger('IsoQuant')
 Antisense_suffix = re.compile(r"-(AS\d+|DT|DIVERGENT|NAT)$", re.IGNORECASE)
@@ -42,7 +41,6 @@ class FusionDetector:
             self.interval_index = None
         self.debug = False
         self.debug_sink = None
-
 
     def safe_reference_start(self, read):
         try:
@@ -611,11 +609,11 @@ class FusionDetector:
             self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos)
 
     def detect_fusions(self,
-                         min_al_len_primary=50,
-                         min_al_len_sa=40,
-                         min_sa_mapq=10,
-                         min_softclip_len=30,
-                         jitter_window=50):
+                    min_al_len_primary=50,
+                    min_al_len_sa=40,
+                    min_sa_mapq=10,
+                    min_softclip_len=30,
+                    jitter_window=50):
         # Main fusion detection entry point. Processes all reads in BAM file.
         bam = pysam.AlignmentFile(self.bam_path, "rb")
         for read in bam:
@@ -631,7 +629,6 @@ class FusionDetector:
                 sa_entries = self.parse_sa_entries(read.get_tag("SA"))
             # Process SA entries to find fusions
             sa_used = False
-            sa_good = False
             if sa_entries:
                 filtered = self._filter_sa_entries(
                     sa_entries, min_al_len_sa, min_sa_mapq
@@ -639,13 +636,7 @@ class FusionDetector:
                 sa_used = self._process_sa_entries(
                     read, filtered, clip_side, jitter_window, min_sa_mapq
                 )
-                # Strategy 3: if SA produced a 'good' (coding) partner, skip soft-clip rescue
-                if filtered:
-                    sa_good = self._sa_has_good_partner(
-                        read, filtered, clip_side, min_al_len_sa, min_sa_mapq
-                    )
-            # Run soft-clip rescue only if SA was not used OR SA does not look good
-            if clip_side and clip_len >= min_softclip_len and (not sa_used or not sa_good):
+            if clip_side and clip_len >= min_softclip_len:
                 seen_pairs = set()  # Local scope for this read's softclip realignment
                 self.realign_softclip(
                     read, clip_side, clip_len,
@@ -654,40 +645,6 @@ class FusionDetector:
                     min_sa_mapq=min_sa_mapq
                 )
         bam.close()
-
-    def _sa_has_good_partner(self, read, filtered_sa, clip_side,
-                           min_al_len_sa, min_sa_mapq):
-        if not filtered_sa:
-            return False
-        has_is_bad = hasattr(self, "is_bad_gene") and callable(getattr(self, "is_bad_gene"))
-        for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len) in filtered_sa:
-            # Basic SA quality gates (consistent with _filter_sa_entries)
-            if sa_al_len < min_al_len_sa or sa_mapq < min_sa_mapq:
-                continue
-            # Approximate breakpoints as in _process_sa_entries
-            _, _, right_chr, right_pos = self.estimate_breakpoint(
-                read, sa_pos, clip_side=clip_side, sa_cigar=sa_cigar
-            )
-            if right_chr is None or right_pos is None:
-                continue
-            right_gene = self.assign_fusion_gene(right_chr, right_pos)
-            if not right_gene:
-                continue
-            # Decide if this is a 'good' (non-pseudogene/ncRNA) partner
-            if has_is_bad:
-                is_bad = self.is_bad_gene(right_gene, right_chr, right_pos)
-            else:
-                bt = self.get_gene_biotype(right_gene, right_chr, right_pos)
-                btl = (bt or "").lower()
-                is_bad = any(x in btl for x in (
-                    "pseudogene", "processed_pseudogene", "unprocessed_pseudogene",
-                    "transcribed_unitary_pseudogene", "polymorphic_pseudogene", "unitary_pseudogene",
-                    "lncrna", "lincrna", "antisense", "sense_intronic", "sense_overlapping",
-                    "snrna", "mirna", "processed_transcript"
-                ))
-            if not is_bad:
-                return True
-        return False
 
     def reconstruct_fusion_transcript(self, c1, p1, c2, p2, exon_padding=100):
         # Returns (sequence, left_exons, right_exons) or (None, None, None) on failure.
@@ -793,89 +750,7 @@ class FusionDetector:
         except Exception as e:
             return False, f"Exon boundary check failed: {e}"
 
-    def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
-                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
-                        max_intra_chr_distance=None):
-        # Build/refresh metadata first
-        self.build_metadata(min_support=min_support)
-
-        for fusion_key, meta in self.fusion_metadata.items():
-            support = meta.get("support", 0)
-
-            # Start from any prior decisions recorded in FusionMetadata
-            flags = {
-                "is_valid": meta.get("is_valid", True),
-                "reasons": list(meta.get("reasons", [])),
-                "class": meta.get("class", "canonical"),
-            }
-            if meta.get("reason_invalid"):
-                flags["is_valid"] = False
-                flags["reasons"].append(meta["reason_invalid"])
-
-            # Support threshold
-            if support < min_support:
-                flags["is_valid"] = False
-                flags["reasons"].append(f"Low support ({support} < {min_support})")
-                meta.update(flags)
-                continue
-            # Consensus breakpoint already computed in build_metadata
-            consensus_bp = meta.get("consensus_bp")
-            if not consensus_bp:
-                flags["is_valid"] = False
-                flags["reasons"].append("No stable breakpoint cluster")
-                meta.update(flags)
-                continue
-            # perform classification and basic filtering
-            c1, p1, c2, p2 = consensus_bp
-            g1_name, r1 = self._context_query(c1, p1)
-            g2_name, r2 = self._context_query(c2, p2)
-            self._apply_classification_and_filters(
-                meta, flags, c1, p1, c2, p2,
-                g1_name, r1, g2_name, r2,
-                require_gene_names, require_exon_boundary,
-                allow_cis_sage, max_intra_chr_distance
-            )
-            # If either final-side biotype is pseudogene/ncRNA, mark invalid
-            # (FusionMetadata already attempts replacement; this is a final safety check.)
-            if self._meta_has_pseudogene_partner(meta):
-                flags["is_valid"] = False
-                flags["reasons"].append("Pseudogene/ncRNA partner")
-
-            # Exon boundary checks (only if still considered valid so far)
-            if flags["is_valid"] and require_exon_boundary:
-                issues = self._exon_boundary_issues(meta, c1, p1, c2, p2)
-                if issues:
-                    flags["is_valid"] = False
-                    flags["reasons"].append("; ".join(issues))
-
-            # skip reconstruction for mitochondrial candidates and invalid ones
-            if flags["is_valid"] and not self._is_mitochondrial_candidate(
-                c1, c2, meta.get("left_gene"), meta.get("right_gene")
-            ):
-                self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)
-            else:
-                if flags["is_valid"] and self._is_mitochondrial_candidate(
-                    c1, c2, meta.get("left_gene"), meta.get("right_gene")
-                ):
-                    flags["is_valid"] = False
-                    flags["reasons"].append("Mitochondrial fusion candidate filtered out")
-
-            # cis-SAGe policy enforcement
-            if flags["class"] == "cis-SAGe" and not allow_cis_sage:
-                flags["is_valid"] = False
-                flags["reasons"].append("cis-SAGe disallowed by policy")
-
-            # Compute full confidence (includes reconstruction/realignment bonuses)
-            conf = self.confidence(meta, flags)
-            meta["confidence"] = conf
-
-            # convert very low-confidence to invalid
-            if conf < 0.20 and meta.get("support", 0) < 2 and flags["is_valid"]:
-                flags["is_valid"] = False
-                flags["reasons"].append("Low confidence")
-
-            # Write flags back without clobbering earlier info
-            meta.update(flags)
+    # validate_candidates moved to FusionMetadata
 
     def _is_mitochondrial_candidate(self, c1, c2, left_gene, right_gene):
         # Return True if either side appears mitochondrial by chromosome or gene name.
@@ -894,8 +769,8 @@ class FusionDetector:
 
     def _apply_classification_and_filters(self, meta, flags, c1, p1, c2, p2,
                                           g1_name, r1, g2_name, r2,
-                                          require_gene_names, require_exon_boundary,
-                                          allow_cis_sage, max_intra_chr_distance):
+                                          require_gene_names, 
+                                          max_intra_chr_distance):
         try:
             if isinstance(meta.get("left_gene"), str) and (meta["left_gene"].startswith("RP11") or meta["left_gene"].upper().startswith("ENS")):
                 nearby = self._find_nearby_protein_coding(c1, p1, window=1000)
@@ -1131,14 +1006,79 @@ class FusionDetector:
             'lncrna', 'lincrna', 'antisense', 'sense_intronic', 'sense_overlapping',
             'snrna', 'mirna'
         )
-        return any(bt in biotype_lower for bt in bad_types)  
+        return any(bt in biotype_lower for bt in bad_types)
+
+    def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
+                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
+                        max_intra_chr_distance=None):
+        self.build_metadata(min_support=min_support)
+        for fusion_key, meta in self.fusion_metadata.items():
+            support = meta.get("support", 0)
+            flags = {"is_valid": True, "reasons": [], "class": "canonical"}
+            if support < min_support:
+                flags["is_valid"] = False
+                flags["reasons"].append(f"Low support ({support} < {min_support})")
+                meta.update(flags)
+                continue
+            # Consensus breakpoint already computed in build_metadata - no need to re-cluster
+            consensus_bp = meta.get("consensus_bp")
+            if not consensus_bp:
+                flags["is_valid"] = False
+                flags["reasons"].append("No stable breakpoint cluster")
+                meta.update(flags)
+                continue
+
+            # perform classification and basic filtering
+            c1, p1, c2, p2 = consensus_bp
+            g1_name, r1 = self._context_query(c1, p1)
+            g2_name, r2 = self._context_query(c2, p2)
+            self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
+                                                   g1_name, r1, g2_name, r2,
+                                                   require_gene_names, max_intra_chr_distance) 
+            if flags["is_valid"] and require_exon_boundary:
+                left_gene  = meta.get("left_gene")
+                right_gene = meta.get("right_gene")
+                okL, whyL = self.check_gene_exon_boundary(left_gene,  c1, p1, delta=50)
+                okR, whyR = self.check_gene_exon_boundary(right_gene, c2, p2, delta=50)
+                if not okL or not okR:
+                    flags["is_valid"] = False
+                    # Append specific reasons (only non-empty strings)
+                    reasons = []
+                    if whyL: reasons.append(whyL)
+                    if whyR: reasons.append(whyR)
+                    if reasons:
+                        flags["reasons"].append("; ".join(reasons))
+
+            # skip reconstruction for mitochondrial candidates and invalid ones
+            if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
+                self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)
+            else:
+                if flags["is_valid"] and self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
+                    flags["is_valid"] = False
+                    flags["reasons"].append("Mitochondrial fusion candidate filtered out")
+
+            # cis-SAGe policy enforcement
+            if flags["class"] == "cis-SAGe" and not allow_cis_sage:
+                flags["is_valid"] = False
+                flags["reasons"].append("cis-SAGe disallowed by policy")
+
+            # Compute full confidence (includes reconstruction/realignment bonuses)
+            conf = self.confidence(meta, flags)
+            meta["confidence"] = conf
+            # convert very low-confidence to invalid
+            if conf < 0.20 and meta.get("support", 0) < 2 and flags["is_valid"]:
+                flags["is_valid"] = False
+                flags["reasons"].append("Low confidence")
+            meta.update(flags)
 
     def report(self, output_path="fusion_candidates.tsv", min_support=2,
             include_classes=("canonical","cis-SAGe"),
             min_confidence=0.3, only_valid=False):
         self.validate_candidates(min_support=min_support)
         with open(output_path, "w") as f:
-            f.write("LeftGene\tLeftBiotype\tRawLeftGene\tLeftChromosome\tLeftBreakpoint\tRightGene\tRightBiotype\tRawRightGene\tRightChromosome\tRightBreakpoint\tSupportingReads\tFusionName\tClass\tValid\tReasons\n")
+            f.write("LeftGene\tLeftBiotype\tRawLeftGene\tLeftChromosome\tLeftBreakpoint\t"
+                    "RightGene\tRightBiotype\tRawRightGene\tRightChromosome\tRightBreakpoint\t"
+                    "SupportingReads\tFusionName\tClass\tValid\tReasons\n")
             for fusion_key, meta in sorted(self.fusion_metadata.items(), key=lambda x: -x[1].get("support", 0)):
                 if meta.get("confidence", 0) < min_confidence:
                     continue
@@ -1169,4 +1109,8 @@ class FusionDetector:
                 raw_right = meta.get("raw_right_gene")
                 left_biotype = meta.get("left_biotype", "unknown")
                 right_biotype = meta.get("right_biotype", "unknown")
-                f.write(f"{left_gene}\t{left_biotype}\t{raw_left}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_biotype}\t{raw_right}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t{meta.get('is_valid')}\t{reasons}\n")
+                if self.is_bad_gene(left_gene,  left_chr,  left_pos) or self.is_bad_gene(right_gene, right_chr, right_pos):
+                    continue
+                f.write(f"{left_gene}\t{left_biotype}\t{raw_left}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_biotype}\t"
+                        "{raw_right}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
+                        "{meta.get('is_valid')}\t{reasons}\n")
