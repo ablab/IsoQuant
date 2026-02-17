@@ -1112,5 +1112,5 @@ class FusionDetector:
                 if self.is_bad_gene(left_gene,  left_chr,  left_pos) or self.is_bad_gene(right_gene, right_chr, right_pos):
                     continue
                 f.write(f"{left_gene}\t{left_biotype}\t{raw_left}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_biotype}\t"
-                        "{raw_right}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
-                        "{meta.get('is_valid')}\t{reasons}\n")
+                        f"{raw_right}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
+                        f"{meta.get('is_valid')}\t{reasons}\n")
