@@ -268,6 +268,10 @@ Grouped counts can also be converted after the run using `src/convert_grouped_co
 Use `--read_group` to control how reads are grouped for quantification.
 Multiple grouping strategies can be combined (space-separated), producing separate count tables for each.
 
+In single-cell/spatial modes, IsoQuant automatically adds `--read_group barcode`
+if no barcode-related grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
+Use `--read_group none` to disable automatic grouping.
+
 The most common use-cases for single-cell/spatial data are grouping by barcode property (cell type, spot):
 
 `--read_group barcode_spot` (requires `--barcode2spot`)

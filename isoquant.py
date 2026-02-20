@@ -410,6 +410,12 @@ def check_and_load_args(args, parser):
         parser.print_usage()
         sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
 
+    # Validate --read_group none
+    if args.read_group:
+        if "none" in args.read_group and len(args.read_group) > 1:
+            logger.error("--read_group 'none' cannot be combined with other values")
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+
     # Validate --large_output values
     if args.large_output:
         if "none" in args.large_output and len(args.large_output) > 1:
@@ -739,6 +745,11 @@ def set_data_dependent_options(args):
     args.resolve_ambiguous = 'monoexon_and_fsm' if args.fl_data else 'default'
     args.requires_polya_for_construction = False
 
+    # Handle --read_group none: disable all auto-added groupings
+    if args.read_group is not None and "none" in args.read_group:
+        args.read_group = None
+        return
+
     # Automatically add file_name grouping when multiple files are present
     if args.input_data.has_replicas():
         if args.read_group is None:
@@ -755,6 +766,19 @@ def set_data_dependent_options(args):
             args.read_group = ["barcode_spot"]
         elif "barcode_spot" not in args.read_group:
             args.read_group.append("barcode_spot")
+
+    # In SC modes, auto-add barcode grouping if no barcode-related grouping is set
+    if args.mode.needs_barcode_calling():
+        barcode_groupings = {"barcode", "barcode_spot", "barcode_barcode"}
+        has_barcode_grouping = (args.read_group is not None and
+                                any(rg in barcode_groupings for rg in args.read_group))
+        if not has_barcode_grouping:
+            if args.read_group is None:
+                args.read_group = ["barcode"]
+            else:
+                args.read_group.append("barcode")
+            logger.info("Single-cell/spatial mode: automatically adding '--read_group barcode'. "
+                        "Use '--read_group none' to disable.")
 
 
 def set_matching_options(args):
