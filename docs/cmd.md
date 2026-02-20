@@ -128,8 +128,15 @@ Multiple barcodes mapping to the same spot are grouped together.
 * `barcode` - groups reads by cell barcode.
 When the number of barcodes is large, grouping counts by individual barcodes may take a long time.
 It is recommended to use `--barcode2spot` file instead.
+In single-cell/spatial modes, `barcode` grouping is added automatically if no barcode-related
+grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
 
-**Example**: `--read_group tag:RG file_name barcode_spot` creates multi-level grouping by read group tag, 
+* `none` - disable all automatic read grouping.
+By default, IsoQuant automatically adds grouping in certain cases
+(e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
+Use `--read_group none` to suppress this and produce only bulk counts.
+
+**Example**: `--read_group tag:RG file_name barcode_spot` creates multi-level grouping by read group tag,
 original file name, and barcode property (e.g. cell type).
 
 
