@@ -279,7 +279,7 @@ class VisiumHDBarcodeDetector:
             barcode1_start = r1_end + self.UMI_LEN_VIS + 1
             barcode1_end = barcode1_start + self.BARCODE1_LEN_VIS - 1
             potential_barcode1 = sequence[barcode1_start:barcode1_end + 1]
-            matching_barcodes1 = self.part1_barcode_indexer.get_occurrences(potential_barcode1)
+            matching_barcodes1 = self.part1_barcode_indexer.get_occurrences(potential_barcode1, max_hits=self.max_barcodes_hits)
             barcode1, bc1_score, bc1_start, bc1_end = \
                 find_candidate_with_max_score_ssw_var_len(matching_barcodes1, potential_barcode1, min_score=self.min_score)
             logger.debug("Barcode 1: %s, %s" % (potential_barcode1, barcode1))
@@ -288,7 +288,7 @@ class VisiumHDBarcodeDetector:
             barcode2_start = real_bc1_end + 1
             barcode2_end = barcode2_start + self.BARCODE2_LEN_VIS - 1
             potential_barcode2 = sequence[barcode2_start:barcode2_end + 1]
-            matching_barcodes2 = self.part2_barcode_indexer.get_occurrences(potential_barcode2)
+            matching_barcodes2 = self.part2_barcode_indexer.get_occurrences(potential_barcode2, max_hits=self.max_barcodes_hits)
             barcode2, bc2_score, bc2_start, bc2_end = \
                 find_candidate_with_max_score_ssw_var_len(matching_barcodes2, potential_barcode2, min_score=self.min_score)
             logger.debug("Barcode 2: %s, %s" % (potential_barcode2, barcode2))
@@ -302,7 +302,7 @@ class VisiumHDBarcodeDetector:
         barcode2_end = polyt_start - 1 - self.SEPARATOR_BASES
         barcode2_start = barcode2_end - self.BARCODE2_LEN_VIS + 1
         potential_barcode2 = sequence[barcode2_start:barcode2_end + 1]
-        matching_barcodes2 = self.part2_barcode_indexer.get_occurrences(potential_barcode2)
+        matching_barcodes2 = self.part2_barcode_indexer.get_occurrences(potential_barcode2, max_hits=self.max_barcodes_hits)
         barcode2, bc2_score, bc2_start, bc2_end = \
             find_candidate_with_max_score_ssw_var_len(matching_barcodes2, potential_barcode2, min_score=self.min_score)
         logger.debug("Barcode 2: %s, %s" % (potential_barcode2, barcode2))
@@ -311,7 +311,7 @@ class VisiumHDBarcodeDetector:
         barcode1_end = real_bc2_start - 1
         barcode1_start = barcode1_end - self.BARCODE1_LEN_VIS + 1
         potential_barcode1 = sequence[barcode1_start:barcode1_end + 1]
-        matching_barcodes1 = self.part1_barcode_indexer.get_occurrences(potential_barcode1)
+        matching_barcodes1 = self.part1_barcode_indexer.get_occurrences(potential_barcode1, max_hits=self.max_barcodes_hits)
         barcode1, bc1_score, bc1_start, bc1_end = \
             find_candidate_with_max_score_ssw_var_len(matching_barcodes1, potential_barcode1, min_score=self.min_score)
         logger.debug("Barcode 1: %s, %s" % (potential_barcode1, barcode1))
