@@ -185,6 +185,15 @@ class DatasetProcessor:
 
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
+        # Warn if large barcode count with per-barcode grouping
+        if "barcode" in self.grouping_strategy_names:
+            barcode_idx = self.grouping_strategy_names.index("barcode")
+            barcode_count = len(self.all_read_groups[barcode_idx])
+            if barcode_count > 10000:
+                logger.warning("Large number of barcodes detected (%d). Per-barcode grouping may consume "
+                               "substantial RAM. Consider using '--barcode2spot' to group barcodes by "
+                               "cell type or spatial region.", barcode_count)
+
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_assignments, polya_found, polya_fraction * 100.0))
