@@ -1,0 +1,1431 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="examples.html">
+      
+      
+        <link rel="next" href="output.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+    
+    
+      
+        <title>Single-cell analysis - IsoQuant</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#single-cell-and-spatial-transcriptomics" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="index.html" title="IsoQuant" class="md-header__button md-logo" aria-label="IsoQuant" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            IsoQuant
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Single-cell analysis
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="index.html" title="IsoQuant" class="md-nav__button md-logo" aria-label="IsoQuant" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    IsoQuant
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="getting-started.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running IsoQuant
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Running IsoQuant
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="input.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ways of providing input data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cmd.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single-cell analysis
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="single_cell.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single-cell analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported platforms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-line-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command line options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#molecule-description-format-mdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Molecule description format (MDF)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Molecule description format (MDF)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#element-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Element types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#barcode-and-umi-identification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Barcode and UMI identification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linked-elements-for-multi-part-barcodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linked elements for multi-part barcodes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#umi-deduplication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UMI deduplication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#count-matrices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Count matrices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grouping-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grouping reads
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IsoQuant output
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IsoQuant output
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="output.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="formats.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="classification.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assignment classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="barcode_calling.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Barcode calling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="visualization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="citation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="feedback.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feedback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported platforms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-line-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command line options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#molecule-description-format-mdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Molecule description format (MDF)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Molecule description format (MDF)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#element-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Element types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#barcode-and-umi-identification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Barcode and UMI identification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linked-elements-for-multi-part-barcodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linked elements for multi-part barcodes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#umi-deduplication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UMI deduplication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#count-matrices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Count matrices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grouping-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grouping reads
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="single-cell-and-spatial-transcriptomics">Single-cell and spatial transcriptomics</h1>
+<p><strong>NB! This feature is experimental and is not part of the official IsoQuant release.</strong></p>
+<p>IsoQuant supports single-cell and spatial transcriptomics data from multiple platforms.
+When a single-cell or spatial mode is selected, IsoQuant automatically performs
+barcode calling and UMI-based PCR deduplication as part of the pipeline.</p>
+<h2 id="overview">Overview</h2>
+<p>The single-cell/spatial pipeline extends the standard bulk pipeline with these additional steps:</p>
+<ol>
+<li><strong>Barcode calling</strong> -- extract cell/spot barcodes and UMIs from raw reads</li>
+<li><strong>Standard IsoQuant processing</strong> -- alignment, read-to-isoform assignment</li>
+<li><strong>UMI deduplication</strong> -- remove PCR/RT duplicates within each barcode group</li>
+<li><strong>Grouped quantification</strong> -- produce per-cell/per-spot count matrices</li>
+</ol>
+<p>Note: UMI deduplication relies on read-to-gene assignment. Reads that are not assigned to any gene are discarded.
+Hence, novel gene discovery will not be performed in single-cell/spatial mode. 
+We recommend using <code>bulk</code> mode for novel gene and transcript discovery.</p>
+<p>Barcode calling is handled by the built-in <a href="barcode_calling.html">barcode calling module</a>,
+which can also be used as a standalone tool.</p>
+<h2 id="supported-platforms">Supported platforms</h2>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Platform</th>
+<th>Barcode whitelist files</th>
+<th>UMI length</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tenX_v3</code></td>
+<td>10x Genomics 3' v3</td>
+<td>1</td>
+<td>12</td>
+<td>Single 16bp barcode</td>
+</tr>
+<tr>
+<td><code>visium_5prime</code></td>
+<td>10x Genomics Visium 5'</td>
+<td>1</td>
+<td>12</td>
+<td>Same detector as tenX_v3</td>
+</tr>
+<tr>
+<td><code>visium_hd</code></td>
+<td>10x Genomics Visium HD</td>
+<td>2</td>
+<td>9</td>
+<td>Two barcodes (15/16bp + 14/15bp)</td>
+</tr>
+<tr>
+<td><code>curio</code></td>
+<td>Curio Bioscience</td>
+<td>1</td>
+<td>9</td>
+<td>Double barcode (8bp + 6bp) with linker</td>
+</tr>
+<tr>
+<td><code>stereoseq</code></td>
+<td>Stereo-seq</td>
+<td>1</td>
+<td>10</td>
+<td>25bp barcode, read splitting mode</td>
+</tr>
+<tr>
+<td><code>stereoseq_nosplit</code></td>
+<td>Stereo-seq</td>
+<td>1</td>
+<td>10</td>
+<td>25bp barcode, no read splitting</td>
+</tr>
+<tr>
+<td><code>custom_sc</code></td>
+<td>Any platform</td>
+<td>0 (uses MDF)</td>
+<td>varies</td>
+<td>User-defined molecule structure via <a href="#molecule-definition-file-mdf-format">MDF file</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="quick-start-examples">Quick start examples</h2>
+<p>10x Genomics single-cell:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>isoquant.py<span class="w"> </span>--reference<span class="w"> </span>genome.fa<span class="w"> </span>--genedb<span class="w"> </span>genes.gtf<span class="w"> </span>--complete_genedb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--fastq<span class="w"> </span>reads.fastq.gz<span class="w"> </span>--data_type<span class="w"> </span>nanopore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--mode<span class="w"> </span>tenX_v3<span class="w"> </span>--barcode_whitelist<span class="w"> </span>3M-february-2018.txt.gz<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>-o<span class="w"> </span>sc_output
+</span></code></pre></div></p>
+<p>Stereo-seq spatial:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>isoquant.py<span class="w"> </span>--reference<span class="w"> </span>genome.fa<span class="w"> </span>--genedb<span class="w"> </span>genes.gtf<span class="w"> </span>--complete_genedb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--fastq<span class="w"> </span>reads.fastq.gz<span class="w"> </span>--data_type<span class="w"> </span>nanopore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--mode<span class="w"> </span>stereoseq<span class="w"> </span>--barcode_whitelist<span class="w"> </span>barcodes.txt<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>-o<span class="w"> </span>stereo_output
+</span></code></pre></div></p>
+<p>Custom platform with molecule definition file:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>isoquant.py<span class="w"> </span>--reference<span class="w"> </span>genome.fa<span class="w"> </span>--genedb<span class="w"> </span>genes.gtf<span class="w"> </span>--complete_genedb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--fastq<span class="w"> </span>reads.fastq.gz<span class="w"> </span>--data_type<span class="w"> </span>nanopore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--mode<span class="w"> </span>custom_sc<span class="w"> </span>--molecule<span class="w"> </span>molecule_definition.mdf<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>-o<span class="w"> </span>custom_output
+</span></code></pre></div></p>
+<p>Pre-called barcodes (skip barcode calling):
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>isoquant.py<span class="w"> </span>--reference<span class="w"> </span>genome.fa<span class="w"> </span>--genedb<span class="w"> </span>genes.gtf<span class="w"> </span>--complete_genedb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--bam<span class="w"> </span>aligned.bam<span class="w"> </span>--data_type<span class="w"> </span>nanopore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--mode<span class="w"> </span>tenX_v3<span class="w"> </span>--barcoded_reads<span class="w"> </span>barcodes.tsv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>-o<span class="w"> </span>sc_output
+</span></code></pre></div></p>
+<h2 id="command-line-options">Command line options</h2>
+<p><code>--mode</code> or <code>-m</code></p>
+<p>IsoQuant processing mode. Available modes:</p>
+<ul>
+<li><code>bulk</code> -- standard bulk RNA-seq mode (default)</li>
+<li><code>tenX_v3</code> -- 10x Genomics single-cell 3' gene expression</li>
+<li><code>curio</code> -- Curio Bioscience single-cell</li>
+<li><code>visium_hd</code> -- 10x Genomics Visium HD spatial transcriptomics</li>
+<li><code>visium_5prime</code> -- 10x Genomics Visium 5' spatial transcriptomics</li>
+<li><code>stereoseq</code> -- Stereo-seq spatial transcriptomics (BGI), with read splitting</li>
+<li><code>stereoseq_nosplit</code> -- Stereo-seq without read splitting</li>
+<li><code>custom_sc</code> -- custom single-cell/spatial mode using a molecule definition file (MDF)</li>
+</ul>
+<p>All modes except <code>bulk</code> enable automatic barcode calling and UMI-based deduplication.</p>
+<p><code>--barcode_whitelist</code>
+Path to file(s) with barcode whitelist(s) for barcode calling.
+Required for single-cell/spatial modes unless <code>--barcoded_reads</code> is provided.</p>
+<p>File should contain one barcode sequence per line. 
+More than 1 tab-separated column is allowed, but only the first will be used.
+Supports plain text and gzipped files.</p>
+<p><em>Notes:</em>
+- Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
+If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
+- IsoQuant will not perform per-barcode quantification automatically, use <code>--read_group barcode</code> to group reads by barcode.</p>
+<p>The number of whitelist files depends on the mode:</p>
+<ul>
+<li>1 file: <code>tenX_v3</code>, <code>visium_5prime</code>, <code>stereoseq</code>, <code>stereoseq_nosplit</code>, <code>curio</code> (combined 14bp barcodes)</li>
+<li>2 files: <code>visium_hd</code> (part 1 and part 2 barcode lists)</li>
+<li>Not needed: <code>custom_sc</code> (barcode lists are specified inside the MDF file)</li>
+</ul>
+<p><code>--barcoded_reads</code>
+Path to TSV file(s) with pre-called barcoded reads.
+Format: <code>read_id&lt;TAB&gt;barcode&lt;TAB&gt;umi</code> (one read per line).
+If provided, IsoQuant skips barcode calling and uses these assignments directly.
+More than 3 columns are allowed, but only the first 3 will be used.</p>
+<p><em>Notes:</em>
+- IsoQuant does not read barcodes or UMIs from BAM file tags;
+- IsoQuant will not perform per-barcode quantification automatically, use <code>--read_group barcode</code> to group reads by barcode.</p>
+<p><code>--barcode2spot</code>
+Path to TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
+By default, barcode is in the first column, cell type in the second.
+However, you can specify one or more columns via colon symbol (similar to <code>--read_group</code>): 
+<code>file.tsv:barcode_column:spot_column(s)</code> (e.g., <code>cell_types.tsv:0:1,2,3</code> for multiple barcode properties).</p>
+<p>When <code>--barcode2spot</code> is set, <code>--read_group barcode_spot</code> will be set automatically
+to group counts by cell type, spatial regions, or other provided properties.</p>
+<p><code>--molecule</code>
+Path to a molecule description format (MDF) file for <code>custom_sc</code> mode.
+This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA)
+and allows IsoQuant to process reads from any single-cell or spatial platform.
+See the <a href="#molecule-definition-file-mdf-format">MDF format</a> section below for details.</p>
+<h2 id="molecule-description-format-mdf">Molecule description format (MDF)</h2>
+<p>The MDF format allows users to describe the structure of their sequencing molecule
+so that IsoQuant can extract barcodes and UMIs from any platform.
+The molecule is described in the 3' to 5' direction (primer end first, cDNA last).</p>
+<p>An MDF file has two parts:</p>
+<ol>
+<li><strong>Header line</strong>: colon-separated list of element names defining the order of elements on the molecule (3' to 5').</li>
+<li><strong>Element definitions</strong>: one line per element, tab-separated: <code>name  type  value  [length]</code>.</li>
+</ol>
+<h3 id="element-types">Element types</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Description</th>
+<th>Value field</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CONST</code></td>
+<td>Constant/known sequence (primer, linker, TSO)</td>
+<td>Sequence</td>
+</tr>
+<tr>
+<td><code>VAR_FILE</code></td>
+<td>Variable sequence matched against a whitelist file</td>
+<td>Path to TSV file</td>
+</tr>
+<tr>
+<td><code>VAR_LIST</code></td>
+<td>Variable sequence matched against an inline list</td>
+<td>Comma-separated sequences</td>
+</tr>
+<tr>
+<td><code>VAR_ANY</code></td>
+<td>Variable fixed-length sequence extracted as-is</td>
+<td>Length (integer)</td>
+</tr>
+<tr>
+<td><code>VAR_ANY_SEPARATOR</code></td>
+<td>Fixed-length variable separator sequence (not extracted)</td>
+<td>Length (integer)</td>
+</tr>
+<tr>
+<td><code>VAR_ANY_NON_T_SEPARATOR</code></td>
+<td>Fixed-length variable separator sequence without T nucleoties (not extracted)</td>
+<td>Length (integer)</td>
+</tr>
+<tr>
+<td><code>PolyT</code></td>
+<td>PolyT tail</td>
+<td>(none)</td>
+</tr>
+<tr>
+<td><code>cDNA</code></td>
+<td>cDNA region</td>
+<td>(none)</td>
+</tr>
+</tbody>
+</table>
+<p>At the moment, only a single <code>cDNA</code> and a single <code>PolyT</code> are supported. </p>
+<p>Variable elements are expected to have a fixed length (<code>VAR_FILE</code> and <code>VAR_LIST</code>).
+Using variable-length barcodes may result in suboptimal performance.</p>
+<h3 id="barcode-and-umi-identification">Barcode and UMI identification</h3>
+<p>Elements are identified as barcodes or UMIs by their name prefix (case-insensitive):
+- Names starting with <code>barcode</code> are treated as barcode elements (e.g., <code>Barcode</code>, <code>barcode1</code>)
+- Names starting with <code>umi</code> are treated as UMI elements (e.g., <code>UMI</code>, <code>umi1</code>)</p>
+<p>When multiple barcode (or UMI) elements are present, their sequences are concatenated
+in the order they appear.</p>
+<h3 id="examples">Examples</h3>
+<p><strong>10x 3' single-cell v3</strong>:
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>R1:Barcode:UMI:PolyT:cDNA:TSO
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>R1        CONST      CTACACGACGCTCTTCCGATCT
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>Barcode   VAR_FILE   barcodes.tsv
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>UMI       VAR_ANY    12
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
+</span></code></pre></div></p>
+<p><strong>10x 3' single-cell v3</strong> (inline barcodes):
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>R1:Barcode:UMI:PolyT:cDNA:TSO
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>R1        CONST      CTACACGACGCTCTTCCGATCT
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Barcode   VAR_FILE   AAACCCGGGTTTAAAC,TTTGGGCCCAAATTTG,GGGGAAAACCCCTTTT
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>UMI       VAR_ANY    12
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
+</span></code></pre></div></p>
+<h3 id="linked-elements-for-multi-part-barcodes">Linked elements for multi-part barcodes</h3>
+<p>When a barcode is split into multiple parts in the molecule, use linked element notation.
+All linked parts must be of the same variable type and reference the same whitelist.
+Parts are numbered consecutively starting from 1.</p>
+<p><strong>Concatenated</strong> (<code>|</code>): parts of the barcode separated by other elements.
+Parts are extracted independently, then concatenated and corrected as one sequence against the full whitelist.
+Such structure appears in, for example, Curio Bioscience single-cell protocol:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>PCR_PRIMER:Barcode|1:Linker:Barcode|2:UMI:PolyT:cDNA
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>PCR_PRIMER  TACACGACGCTCTTCCGATCT
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>Barcode|1   VAR_FILE   barcodes.tsv   8
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>Linker      CONST      TCTTCAGCGTTCCCGAGA
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>Barcode|2   VAR_FILE   barcodes.tsv   6
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>UMI         VAR_ANY    9
+</span></code></pre></div>
+<p><strong>Duplicated</strong> (<code>/</code>): multiple redundant copies of the same barcode in the molecule.
+Each copy is corrected independently against the whitelist;
+a majority vote determines the final barcode.
+For example:
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>PCR_PRIMER:Barcode/1:UMI:PolyT:cDNA:Barcode/2:TSO
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>PCR_PRIMER  TACACGACGCTCTTCCGATCT
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>Barcode/1   VAR_FILE   barcodes.tsv   16
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>Barcode/2   VAR_FILE   barcodes.tsv   16
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>UMI         VAR_ANY    12
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
+</span></code></pre></div></p>
+<h2 id="umi-deduplication">UMI deduplication</h2>
+<p>All single-cell and spatial modes perform UMI-based PCR deduplication after isoform assignment.
+Within each cell barcode and gene, reads with similar UMIs (similarity criteria depends on the UMI length)
+are collapsed into a single representative read.</p>
+<p>The representative read is selected based on:
+1. Unique isoform assignment over ambiguous
+2. More exons
+3. Longer transcript alignment</p>
+<h2 id="output">Output</h2>
+<h3 id="count-matrices">Count matrices</h3>
+<p>Single-cell/spatial modes produce grouped count matrices in addition to the standard IsoQuant output.
+Use <code>--counts_format</code> to control the output format:</p>
+<ul>
+<li><code>default</code> -- automatic selection: matrix format for small numbers of groups (&lt;=100), MTX for larger datasets</li>
+<li><code>matrix</code> -- standard matrix format with genes/transcripts as rows and barcodes as columns</li>
+<li><code>mtx</code> -- Matrix Market (MTX) format compatible with Seurat and Scanpy</li>
+<li><code>none</code> -- no conversion (only internal linear format is produced)</li>
+</ul>
+<p>Grouped counts can also be converted after the run using <code>src/convert_grouped_counts.py</code>.</p>
+<h3 id="grouping-reads">Grouping reads</h3>
+<p>Use <code>--read_group</code> to control how reads are grouped for quantification.
+Multiple grouping strategies can be combined (space-separated), producing separate count tables for each.</p>
+<p>The most common use-cases for single-cell/spatial data are grouping by barcode property (cell type, spot):</p>
+<p><code>--read_group barcode_spot</code> (requires <code>--barcode2spot</code>)</p>
+<p>or grouping by individual barcode (not recommended for datasets with many barcodes):</p>
+<p><code>--read_group barcode file_name</code></p>
+<p>See the <a href="cmd.html#other-input-options">read grouping options</a> for the full list of grouping strategies.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

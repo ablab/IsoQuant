@@ -1,0 +1,1009 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="single_cell.html">
+      
+      
+        <link rel="next" href="formats.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+    
+    
+      
+        <title>Output files - IsoQuant</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#isoquant-output-files" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="index.html" title="IsoQuant" class="md-header__button md-logo" aria-label="IsoQuant" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            IsoQuant
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Output files
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="index.html" title="IsoQuant" class="md-nav__button md-logo" aria-label="IsoQuant" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    IsoQuant
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="getting-started.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running IsoQuant
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Running IsoQuant
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="input.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ways of providing input data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cmd.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="single_cell.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single-cell analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IsoQuant output
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IsoQuant output
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output files
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="output.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reference-based-analysis-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference-based analysis output
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reference-based analysis output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-grouped-counts-in-linear-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default grouped counts in linear format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other formats
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transcript-discovery-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript discovery output
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="formats.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="classification.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assignment classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="barcode_calling.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Barcode calling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="visualization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="citation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="feedback.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feedback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reference-based-analysis-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference-based analysis output
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reference-based analysis output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-grouped-counts-in-linear-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default grouped counts in linear format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other formats
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transcript-discovery-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript discovery output
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="isoquant-output-files">IsoQuant output files</h1>
+<p>IsoQuant output files will be stored in <code>&lt;output_dir&gt;</code>, which is set by the user.
+If the output directory was not specified the files are stored in <code>isoquant_output</code>.</p>
+<p>IsoQuant consists of two stages, which generate its own output:
+1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isofrom assignment,
+splice site correction and abundance quantification for reference genes/transcripts.
+2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.</p>
+<h2 id="reference-based-analysis-output">Reference-based analysis output</h2>
+<p><em>Will be produced only if a reference gene annotation is provided.</em></p>
+<ul>
+<li><code>SAMPLE_ID.read_assignments.tsv.gz</code> - TSV file with read to isoform assignments (gzipped by default);</li>
+<li><code>SAMPLE_ID.corrected_reads.bed.gz</code> - BED file with corrected read alignments (gzipped by default);</li>
+<li><code>SAMPLE_ID.transcript_counts.tsv</code> - TSV file with raw read counts for reference transcript;</li>
+<li><code>SAMPLE_ID.gene_counts.tsv</code> - TSV file with raw read counts for reference genes;</li>
+<li><code>SAMPLE_ID.transcript_tpm.tsv</code> - TSV file with reference transcript expression in TPM;</li>
+<li><code>SAMPLE_ID.gene_tpm.tsv</code> - TSV file with reference gene expression in TPM;</li>
+</ul>
+<p>If <code>--sqanti_output</code> is set, IsoQuant will produce output in <a href="https://github.com/ConesaLab/SQANTI3">SQANTI</a>-like format:</p>
+<ul>
+<li><code>SAMPLE_ID.novel_vs_known.SQANTI-like.tsv</code> - discovered novel transcripts vs reference transcripts (similar, but not identical to SQANTI <code>classification.txt</code>);</li>
+</ul>
+<p>If <code>--count_exons</code> is set, exon and intron counts will be produced:</p>
+<ul>
+<li><code>SAMPLE_ID.exon_counts.tsv</code> - reference exon inclusion/exclusion read counts;</li>
+<li><code>SAMPLE_ID.intron_counts.tsv</code> - reference intron inclusion/exclusion read counts;</li>
+</ul>
+<p>If <code>--read_group</code> is set or multiple files are provided, the per-group expression values for reference features will be also computed:</p>
+<h4 id="default-grouped-counts-in-linear-format">Default grouped counts in linear format</h4>
+<ul>
+<li><code>SAMPLE_ID.gene_grouped_counts.linear.tsv</code></li>
+<li><code>SAMPLE_ID.transcript_grouped_counts.linear.tsv</code></li>
+<li><code>SAMPLE_ID.exon_grouped_counts.tsv</code></li>
+<li><code>SAMPLE_ID.intron_grouped_counts.tsv</code></li>
+</ul>
+<p>Note, that grouped counts can be converted to any format using <code>src/convert_grouped_counts.py</code>.</p>
+<h4 id="other-formats">Other formats</h4>
+<p>By default, IsoQuant converts grouped counts with small number of groups/samples (&lt;=100) to standard matrix format; 
+larger matrices (e.g. for single-cell experiments) will be saved to MTX.
+See <a href="cmd.html#specific-output-options">options</a> for details.</p>
+<ul>
+<li><code>SAMPLE_ID.gene_grouped_counts.tsv</code> - grouped gene counts in standard matrix format;</li>
+<li><code>SAMPLE_ID.transcript_grouped_counts.tsv</code> - grouped transcript counts in standard matrix format;</li>
+<li><code>SAMPLE_ID.gene_grouped_tpm.tsv</code> - grouped gene TPM values in standard matrix format;</li>
+<li>
+<p><code>SAMPLE_ID.transcript_grouped_tpm.tsv</code> - grouped TPM values counts in standard matrix format;</p>
+</li>
+<li>
+<p><code>SAMPLE_ID.gene_grouped_counts.matrix.mtx</code>, <code>SAMPLE_ID.gene_grouped_counts.features.tsv</code>, <code>SAMPLE_ID.gene_grouped_counts.barcodes.tsv</code> - grouped gene counts in Seurat-compatible MTX format;</p>
+</li>
+<li><code>SAMPLE_ID.transcript_grouped_counts.matrix.mtx</code>, <code>SAMPLE_ID.transcript_grouped_counts.features.tsv</code>, <code>SAMPLE_ID.transcript_grouped_counts.barcodes.tsv</code> - grouped transcript counts in Seurat-compatible MTX format;</li>
+<li><code>SAMPLE_ID.gene_grouped_tpm.matrix.mtx</code>, <code>SAMPLE_ID.gene_grouped_tpm.features.tsv</code>, <code>SAMPLE_ID.gene_grouped_tpm.barcodes.tsv</code> - grouped gene TPM values in Seurat-compatible MTX format;</li>
+<li><code>SAMPLE_ID.transcript_grouped_tpm.matrix.mtx</code>, <code>SAMPLE_ID.transcript_grouped_tpm.features.tsv</code>, <code>SAMPLE_ID.transcript_grouped_tpm.barcodes.tsv</code> - grouped transcript TPM values in Seurat-compatible MTX format;</li>
+</ul>
+<h2 id="transcript-discovery-output">Transcript discovery output</h2>
+<p><em>Will not be produced if <code>--no_model_construction</code> is set.</em></p>
+<p>File names typically contain <code>transcript_model</code> in their name.</p>
+<ul>
+<li><code>SAMPLE_ID.transcript_models.gtf</code> - GTF file with discovered expressed transcript (both known and novel transcripts);</li>
+<li><code>SAMPLE_ID.transcript_model_reads.tsv.gz</code> - TSV file indicating which reads contributed to transcript models (gzipped by default);</li>
+<li><code>SAMPLE_ID.discovered_transcript_counts.tsv</code> - raw read counts for discovered transcript models (corresponds to <code>SAMPLE_ID.transcript_models.gtf</code>);</li>
+<li><code>SAMPLE_ID.discovered_gene_counts.tsv</code> - raw read counts for discovered genes (corresponds to <code>SAMPLE_ID.transcript_models.gtf</code>);</li>
+<li><code>SAMPLE_ID.discovered_transcript_tpm.tsv</code> - expression of discovered transcripts models in TPM (corresponds to <code>SAMPLE_ID.transcript_models.gtf</code>);</li>
+<li><code>SAMPLE_ID.discovered_gene_tpm.tsv</code> - expression of discovered genes in TPM (corresponds to <code>SAMPLE_ID.transcript_models.gtf</code>);</li>
+<li><code>SAMPLE_ID.extended_annotation.gtf</code> - GTF file with the entire reference annotation plus all discovered novel transcripts;</li>
+</ul>
+<p>If <code>--read_group</code> is set, the per-group counts for discovered transcripts will be also computed:</p>
+<ul>
+<li><code>SAMPLE_ID.discovered_transcript_grouped_counts.linear.tsv</code></li>
+<li><code>SAMPLE_ID.discovered_gene_grouped_counts.linear.tsv</code></li>
+</ul>
+<p>Similarly to the reference-based counts, these counts are converted to other formats as described <a href="#other-formats">above</a>.</p>
+<p>If multiple experiments are provided, aggregated expression matrices will be placed in <code>&lt;output_dir&gt;</code>:</p>
+<ul>
+<li><code>combined_gene_counts.tsv</code></li>
+<li><code>combined_gene_tpm.tsv</code></li>
+<li><code>combined_transcript_counts.tsv</code></li>
+<li><code>combined_transcript_tpm.tsv</code></li>
+</ul>
+<p>Additionally, an <code>isoquant.log</code> log file will be saved to the output directory.  </p>
+<p>If raw reads were provided, BAM file(s) will be stored in <code>&lt;output_dir&gt;/&lt;SAMPLE_ID&gt;/aux/</code>.<br />
+In case <code>--keep_tmp</code> option was specified this directory will also contain temporary files.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1608 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="input.html">
+      
+      
+        <link rel="next" href="examples.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+    
+    
+      
+        <title>Command line options - IsoQuant</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#isoquant-command-line-options" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="index.html" title="IsoQuant" class="md-header__button md-logo" aria-label="IsoQuant" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            IsoQuant
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Command line options
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="index.html" title="IsoQuant" class="md-nav__button md-logo" aria-label="IsoQuant" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    IsoQuant
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="getting-started.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running IsoQuant
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Running IsoQuant
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="input.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ways of providing input data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line options
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="cmd.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#basic-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#input-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Input options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#providing-input-reads-via-command-line-option" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providing input reads via command line option:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#providing-input-reads-via-yaml-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providing input reads via YAML configuration file:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-input-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other input options:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#single-cell-and-spatial-transcriptomics-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-cell and spatial transcriptomics options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#algorithm-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Algorithm parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Algorithm parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quantification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quantification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-to-isoform-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read to isoform matching:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-alignment-correction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read alignment correction:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transcript-model-construction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript model construction:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hidden-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hidden options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hidden options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aligner-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aligner settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read filtering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#specific-output-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specific output options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="single_cell.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single-cell analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IsoQuant output
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IsoQuant output
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="output.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="formats.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="classification.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assignment classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="barcode_calling.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Barcode calling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="visualization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="citation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="feedback.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feedback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#basic-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#input-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Input options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#providing-input-reads-via-command-line-option" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providing input reads via command line option:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#providing-input-reads-via-yaml-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providing input reads via YAML configuration file:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-input-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other input options:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#single-cell-and-spatial-transcriptomics-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-cell and spatial transcriptomics options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#algorithm-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Algorithm parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Algorithm parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quantification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quantification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-to-isoform-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read to isoform matching:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-alignment-correction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read alignment correction:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transcript-model-construction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript model construction:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hidden-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hidden options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hidden options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aligner-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aligner settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read filtering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#specific-output-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specific output options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="isoquant-command-line-options">IsoQuant command line options</h1>
+<h2 id="basic-options">Basic options</h2>
+<p><code>--output</code> (or <code>-o</code>)
+    Output folder, will be created automatically.</p>
+<p>Note: if your output folder is located on a shared disk, use <code>--genedb_output</code> for storing
+reference annotation database.</p>
+<p><code>--help</code> (or <code>-h</code>)
+    Prints help message.</p>
+<p><code>--full_help</code>
+    Prints all available options (including hidden ones).</p>
+<p><code>--test</code>
+    Runs IsoQuant on the toy data set.   </p>
+<h2 id="input-options">Input options</h2>
+<p><code>--data_type</code> or <code>-d</code>
+    Type of data to process, supported values are:  <code>pacbio_ccs</code> (same as <code>pacbio</code>), <code>nanopore</code> (same as <code>ont</code>)
+and  <code>assembly</code> (same as <code>transcripts</code>). This option affects the algorithm parameters.</p>
+<p>Note, that for novel mono-exonic transcripts are not reported for ONT data by default, use <code>--report_novel_unspliced true</code>.</p>
+<p><code>--reference</code> or <code>-r</code>
+    Reference genome in FASTA format (can be gzipped), required even when BAM files are provided.</p>
+<p><code>--index</code>
+    Reference genome index for the specified aligner (<code>minimap2</code> by default),
+can be provided only when raw reads are used as an input (constructed automatically if not set).</p>
+<p><code>--genedb</code> or <code>-g</code>
+    Gene database in gffutils database format or GTF/GFF format (can be gzipped).
+If you use official gene annotations we recommend to set <code>--complete_genedb</code> option.</p>
+<p><code>--complete_genedb</code>
+    Set this flag if gene annotation contains transcript and gene meta-features.
+Use this flag when providing official annotations, e.g. GENCODE.
+This option will set <code>disable_infer_transcripts</code> and <code>disable_infer_genes</code> gffutils options,
+which dramatically speeds up gene database conversion (see more <a href="https://daler.github.io/gffutils/autodocs/gffutils.create.create_db.html">here</a>).</p>
+<h3 id="providing-input-reads-via-command-line-option">Providing input reads via command line option:</h3>
+<p><code>--fastq</code>
+    Input FASTQ/FASTA file(s), can be gzipped;  a single GTF will be generated for all files. If multiple files are provided,
+expression tables with "per-file" columns will be computed. See more about <a href="input.html">input data</a>.</p>
+<p><code>--unmapped_bam</code>
+    Unmapped BAM file(s); a single GTF will be generated for all files. If multiple files are provided,
+expression tables with "per-file" columns will be computed. See more about <a href="input.html">input data</a>.</p>
+<p><code>--bam</code>
+    Sorted and indexed BAM file(s); a single GTF will be generated for all files. If multiple files are provided,
+expression tables with "per-file" columns will be computed. See more about <a href="input.html">input data</a>.</p>
+<h3 id="providing-input-reads-via-yaml-configuration-file">Providing input reads via YAML configuration file:</h3>
+<p><code>--yaml</code>
+    Path to dataset description file in <a href="https://www.redhat.com/en/topics/automation/what-is-yaml">YAML</a> format. The file should contain a list with <code>data format</code> property,
+which can be <code>fastq</code> or <code>bam</code> and an individual entry for experiment.
+Each experiment is represented as set of parameters (e.g. in curly brackets):
+- <code>name</code> - experiment name, string (optional);
+- <code>long read files</code> - a list of paths to long read files matching the specified format;
+- <code>lables</code> - a list labels for long read files for expression table (optional, must be equal to the number of long read files)
+- <code>illumina bam</code> - a list of paths to short read BAM files for splice site correction (optional).</p>
+<p>All paths should be either absolute or relative to the YAML file.
+See more in <a href="examples.html">examples</a>.</p>
+<h3 id="other-input-options">Other input options:</h3>
+<p><code>--stranded</code>
+    Reads strandness type, supported values are: <code>forward</code>, <code>reverse</code>, <code>none</code>.</p>
+<p><code>--fl_data</code>
+    Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.</p>
+<p><code>--polya_trimmed</code>
+    Indicate that reads were poly-A trimmed. Possible values are:
+- <code>none</code>: poly-A tails were not trimmed and will be detected automatically based on reads sequences (default);
+- <code>stranded</code>: reads that have an assigned strand (based on splice sites and assigned gene) will be marked 
+as having a poly-A tail on the 3' end;
+- <code>all</code>: all reads will be considered to be poly-A-trimmed and will be marked as 
+having a poly-A tail on the 3'; read direction will be based on the alignment strand flag. 
+Thus, when using this options, make sure read sequences are properly oriented, i.e. match the original mRNA strand.
+Use this option at your own risk.</p>
+<p><code>--prefix</code> or <code>-p</code>
+    Prefix for all output files and sub-folder name. <code>OUT</code> if not set.</p>
+<p><code>--labels</code> or <code>-l</code>
+    Sets space-separated sample names. Make sure that the number of labels is equal to the number of files.
+Input file names are used as labels if not set.</p>
+<p><code>--read_group</code>
+ Sets one or more ways to group feature counts (e.g. by cell type, file name, BAM tag or barcode).
+ Multiple grouping strategies can be combined (space-separated).
+ Available grouping options:</p>
+<ul>
+<li>
+<p><code>file_name</code> - groups reads by their original file names (or file name labels) within an experiment.
+This option makes sense when multiple files are provided.
+If multiple BAM/FASTQ files are provided and <code>--read_group</code> option is not set, IsoQuant will set <code>--read_group file_name</code>
+by default.</p>
+</li>
+<li>
+<p><code>tag:TAG</code> - groups reads by BAM file read tag, where <code>TAG</code> is the tag name
+(e.g. <code>tag:RG</code> uses <code>RG</code> tag values as groups, commonly used for read group information).
+q</p>
+</li>
+<li>
+<p><code>read_id:DELIM</code> - groups reads by read name suffix, where <code>DELIM</code> is the
+symbol/string by which the read id will be split
+(e.g. if <code>DELIM</code> is <code>_</code>, for read <code>m54158_180727_042959_59310706_ccs_NEU</code> the group will be <code>NEU</code>).</p>
+</li>
+<li>
+<p><code>file:FILE:READ_COL:GROUP_COL(S):DELIM</code> - uses additional TSV file with group information for every read,
+where <code>FILE</code> is the file path, <code>READ_COL</code> is column with read ids (default: 0),
+<code>GROUP_COL(S)</code> is column(s) with group ids (default: 1; use comma-separated columns for multi-column grouping, e.g., <code>1,2,3</code>),
+<code>DELIM</code> is separator symbol (default: tab). File can be gzipped.</p>
+</li>
+<li>
+<p><code>barcode_spot</code> - group by barcode properties, such as spots/cell types.
+Set barcode-to-spot mapping via <code>--barcode2spot</code> option.
+Useful for grouping single-cell/spatial data by cell type or spatial region instead of individual barcodes.</p>
+</li>
+<li>
+<p><code>barcode</code> - groups reads by cell barcode.
+When the number of barcodes is large, grouping counts by individual barcodes may take a long time.
+It is recommended to use <code>--barcode2spot</code> file instead.</p>
+</li>
+</ul>
+<p><strong>Example</strong>: <code>--read_group tag:RG file_name barcode_spot</code> creates multi-level grouping by read group tag, 
+original file name, and barcode property (e.g. cell type).</p>
+<h3 id="output-options">Output options</h3>
+<p><code>--sqanti_output</code>
+    Produce comparison between novel and known transcripts in SQANTI-like format.
+    Will take effect only when reference annotation is provided.</p>
+<p><code>--check_canonical</code>
+    Report whether read or constructed transcript model contains non-canonical splice junction (requires more time).</p>
+<p><code>--count_exons</code>
+    Perform exon and intron counting in addition to gene and transcript counting.
+    Will take effect only when reference annotation is provided.</p>
+<p><code>--bam_tags</code>
+    Comma separated list of BAM tags that will be imported into <code>read_assignments.tsv</code>.</p>
+<h2 id="pipeline-options">Pipeline options</h2>
+<p><code>--resume</code>
+    Resume a previously unfinished run. Output folder with previous run must be specified.
+    Allowed options are <code>--threads</code> and <code>--debug</code>, other options cannot be changed.
+    IsoQuant will run from the beginning if the output folder does not contain the previous run.</p>
+<p><code>--force</code>
+    force to overwrite the folder with previous run.</p>
+<p><code>--threads</code> or <code>-t</code>
+    Number of threads to use, 16 by default.</p>
+<p><code>--clean_start</code>
+    Do not use previously generated gene database, genome indices or BAM files, run pipeline from the very beginning (will take more time).</p>
+<p><code>--no_model_construction</code>
+    Do not report transcript models, run read assignment and quantification of reference features only.</p>
+<p><code>--run_aligner_only</code>
+    Align reads to the reference without running IsoQuant itself.</p>
+<h2 id="single-cell-and-spatial-transcriptomics-options">Single-cell and spatial transcriptomics options</h2>
+<p><strong>NB! This feature is experimental and is not part of the official IsoQuant release.</strong></p>
+<p>See <a href="single_cell.html">single-cell and spatial transcriptomics</a> for a detailed guide on
+supported platforms, examples, molecule description format, and UMI deduplication.</p>
+<p><code>--mode</code> or <code>-m</code>
+IsoQuant mode for processing single-cell or spatial transcriptomics data. Available modes:</p>
+<ul>
+<li><code>bulk</code> - standard bulk RNA-seq mode (default)</li>
+<li><code>tenX_v3</code> - 10x Genomics single-cell 3' gene expression</li>
+<li><code>visium_5prime</code> - 10x Genomics Visium 5' spatial transcriptomics</li>
+<li><code>visium_hd</code> - 10x Genomics Visium HD spatial transcriptomics</li>
+<li><code>curio</code> - Curio Bioscience spatial data</li>
+<li><code>stereoseq</code> - Stereo-seq spatial data</li>
+<li><code>stereoseq_nosplit</code> - Stereo-seq without read splitting</li>
+<li><code>custom_sc</code> - custom single-cell/spatial mode using a <a href="single_cell.html#molecule-definition-file-mdf-format">molecule definition file</a></li>
+</ul>
+<p>Single-cell and spatial modes enable automatic barcode calling and UMI-based deduplication.</p>
+<p><code>--barcode_whitelist</code>
+Path to file(s) with barcode whitelist(s) for barcode calling.
+Required for single-cell/spatial modes unless <code>--barcoded_reads</code> is provided.</p>
+<p>File should contain one barcode sequence per line. 
+More than 1 tab-separated column is allowed, but only the first will be used.
+Supports plain text and gzipped files.</p>
+<p><em>Notes:</em>
+- Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
+If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
+- IsoQuant will not perform per-barcode quantification automatically, use <code>--read_group barcode</code> to group reads by barcode.</p>
+<p><code>--barcoded_reads</code>
+Path to TSV file(s) with pre-called barcoded reads.
+Format: <code>read_id&lt;TAB&gt;barcode&lt;TAB&gt;umi</code> (one read per line).
+If provided, IsoQuant skips barcode calling and uses these assignments directly.
+More than 3 columns are allowed, but only the first 3 will be used.</p>
+<p><em>Notes:</em>
+- IsoQuant does not read barcodes or UMIs from BAM file tags;
+- IsoQuant will not perform per-barcode quantification automatically, use <code>--read_group barcode</code> to group reads by barcode.</p>
+<p><code>--barcode2spot</code>
+Path to TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
+By default, barcode is in the first column, cell type in the second.
+However, you can specify one or more columns via colon symbol (similar to <code>--read_group</code>): 
+<code>file.tsv:barcode_column:spot_column(s)</code> (e.g., <code>cell_types.tsv:0:1,2,3</code> for multiple barcode properties).</p>
+<p>When <code>--barcode2spot</code> is set, <code>--read_group barcode_spot</code> will be set automatically
+to group counts by cell type, spatial regions, or other provided properties.</p>
+<p><code>--molecule</code>
+Path to a molecule description file (MDF) for <code>custom_sc</code> mode.
+Defines molecule structure for universal barcode extraction from any platform.
+See <a href="single_cell.html#molecule-definition-file-mdf-format">MDF format</a> for details.</p>
+<h2 id="algorithm-parameters">Algorithm parameters</h2>
+<h3 id="quantification">Quantification</h3>
+<p><code>--transcript_quantification</code> Transcript quantification strategy;
+<code>--gene_quantification</code> Gene quantification strategy;</p>
+<p>Available options for quantification:</p>
+<ul>
+<li><code>unique_only</code> - use only reads that are uniquely assigned and consistent with a transcript/gene
+(i.e. flagged as unique/unique_minor_difference), default fot transcript quantification;</li>
+<li><code>with_ambiguous</code> - in addition to unique reads, ambiguously assigned consistent reads are split between features with equal weights 
+(e.g. 1/2 when a read is assigned to 2 features simultaneously);</li>
+<li><code>unique_splicing_consistent</code> - uses uniquely assigned reads that do not contradict annotated splice sites
+(i.e. flagged as unique/unique_minor_difference or inconsistent_non_intronic), default for gene quantification;</li>
+<li><code>unique_inconsistent</code> - uses uniquely assigned reads allowing any kind of inconsistency;</li>
+<li><code>all</code> - all of the above.</li>
+</ul>
+<h3 id="read-to-isoform-matching">Read to isoform matching:</h3>
+<p><code>--matching_strategy</code> A preset of parameters for read-to-isoform matching algorithm, should be one of:</p>
+<ul>
+<li><code>exact</code> - delta = 0, all minor errors are treated as inconsistencies;  </li>
+<li><code>precise</code> - delta = 4, only minor alignment errors are allowed, default for PacBio data;  </li>
+<li><code>default</code> - delta = 6, alignment errors typical for Nanopore reads are allowed, short novel introns are treated as deletions;   </li>
+<li><code>loose</code> - delta = 12, even more serious inconsistencies are ignored, ambiguity is resolved based on nucleotide similarity.</li>
+</ul>
+<p>Matching strategy is chosen automatically based on specified data type.
+However, the parameters will be overridden if the matching strategy is set manually.</p>
+<h3 id="read-alignment-correction">Read alignment correction:</h3>
+<p><code>--splice_correction_strategy</code> A preset of parameters for read alignment correction algorithms, should be one of:</p>
+<ul>
+<li><code>none</code> - no correction is applied;  </li>
+<li><code>default_pacbio</code> - optimal settings for PacBio CCS reads;</li>
+<li><code>default_ont</code> - optimal settings for ONT reads;</li>
+<li><code>conservative_ont</code> - conservative settings for ONT reads, only incorrect splice junction and skipped exons are fixed;</li>
+<li><code>assembly</code> - optimal settings for a transcriptome assembly;    </li>
+<li><code>all</code> - correct all discovered minor inconsistencies, may result in overcorrection.</li>
+</ul>
+<p>This option is chosen automatically based on specified data type, but will be overridden if set manually.</p>
+<h3 id="transcript-model-construction">Transcript model construction:</h3>
+<p><code>--model_construction_strategy</code> A preset of parameters for transcript model construction algorithm, should be one of</p>
+<ul>
+<li><code>reliable</code> - only the most abundant and reliable transcripts are reported, precise, but not sensitive;  </li>
+<li><code>default_pacbio</code> - optimal settings for PacBio CCS reads;</li>
+<li><code>sensitive_pacbio</code> - sensitive settings for PacBio CCS reads, more transcripts are reported possibly at a cost of precision;</li>
+<li><code>fl_pacbio</code> - optimal settings for full-length PacBio CCS reads, will be used if <code>--data_type pacbio_ccs</code> and <code>--fl_data</code> options are set;</li>
+<li><code>default_ont</code> - optimal settings for ONT reads, novel mono-exonic transcripts are not reported (use <code>--report_novel_unspliced true</code>);</li>
+<li><code>sensitive_ont</code> - sensitive settings for ONT reads, more transcripts are reported possibly at a cost of precision (including novel mono-exonic isoforms);</li>
+<li><code>assembly</code> - optimal settings for a transcriptome assembly: input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not considered;    </li>
+<li><code>all</code> - reports almost all novel transcripts, loses precision in favor to recall.</li>
+</ul>
+<p>This option is chosen automatically based on specified data type, but will be overridden if set manually.</p>
+<p><code>--report_novel_unspliced</code> Report novel mono-exonic transcripts (set <code>true</code> or <code>false</code>).
+The default value is <code>false</code> for Nanopore data and <code>true</code> for other data types.
+The main explanation that some aligners report a lot of false unspliced alignments
+for ONT reads.</p>
+<p><code>--report_canonical</code>
+    Strategy for reporting novel transcripts based on canonical splice sites, should be one of:</p>
+<ul>
+<li><code>auto</code> - automatic selection based on the data type and model construction strategy (default); </li>
+<li><code>only_canonical</code> - report novel transcripts, which contain only canonical splice sites;</li>
+<li><code>only_stranded</code> - report novel transcripts, for which the strand can be unambiguously derived using splice sites and 
+presence of a polyA tail, allowing some splice sites to be non-canonical;</li>
+<li><code>all</code> -- report all transcript model regardless of their splice sites.</li>
+</ul>
+<p><code>--polya_requirement</code> Strategy for using polyA tails during transcript model construction, should be one of:</p>
+<ul>
+<li><code>auto</code> - default behaviour: polyA tails are required if at least 70% of the reads have polyA tail; 
+polyA tails are always required for 1/2-exon transcripts when using ONT data (this is caused by elevated number of false 1/2-exonic alignments reported by minimap2); </li>
+<li><code>never</code> - polyA tails are never required; use this option <strong>at your own risk</strong> as it may noticeably increase false discovery rate, especially for ONT data;</li>
+<li><code>always</code> - reported transcripts are always required to have polyA support in the reads.</li>
+</ul>
+<p>Note, that polyA tails are always required for reporting novel unspliced isoforms. </p>
+<h2 id="hidden-options">Hidden options</h2>
+<p>Options below are shown only with <code>--full_help</code> option.
+We recommend <em>not</em> to modify these options unless you are clearly aware of their effect.</p>
+<h4 id="pipeline-settings">Pipeline settings</h4>
+<p><code>--no_gzip</code>
+    Do not compress large output files.</p>
+<p><code>--no_gtf_check</code>
+    Do not perform input GTF checks.</p>
+<p><code>--process_only_chr</code>
+    A list of chromosomes to process during the analysis. All other chromosomes will be ignored.</p>
+<p><code>--discard_chr</code>
+    A list of chromosomes to skip during the analysis. Has no effect when <code>--process_only_chr</code> is used.</p>
+<p><code>--delta</code>
+    Delta for inexact splice junction comparison, chosen automatically based on data type (e.g. 4bp for PacBio, 6pb for ONT).</p>
+<p><code>--genedb_output</code>
+    If your output folder is located on a shared storage (e.g. NFS share), use this option to set another path
+    for storing the annotation database, because SQLite database cannot be created on a shared disks.
+    The folder will be created automatically.</p>
+<p><code>--high_memory</code>
+    Cache read alignments instead for making several passes over a BAM file, noticeably increases RAM usage,
+    but may improve running time when disk I/O is relatively slow.</p>
+<h4 id="aligner-settings">Aligner settings</h4>
+<p><code>--aligner</code>
+    Force to use this alignment method, can be <code>starlong</code> or <code>minimap2</code>; <code>minimap2</code> is currently used as default. Make sure the specified aligner is in the <code>$PATH</code> variable.</p>
+<p><code>--no_junc_bed</code>
+    Do not use gene annotation for read mapping.</p>
+<p><code>--junc_bed_file</code>
+    Annotation in BED12 format produced by <code>paftools.js gff2bed</code> (can be found in <code>minimap2</code>), will be created automatically if not given.</p>
+<p><code>--indexing_options</code>
+    Additional options that will be passed to the indexing command.</p>
+<p><code>--mapping_options</code>
+    Additional options that will be passed to the aligner.</p>
+<h4 id="read-filtering">Read filtering</h4>
+<p><code>--use_secondary</code>
+    Use secondary alignments. This will result in longer processing time, but might recover some reads, whose primary 
+alignments are located on an incorrect gene.</p>
+<p><code>--no_secondary</code>
+    Deprecated, secondary alignments are not used by default (option is kept for user convenience).</p>
+<p><code>--min_mapq</code>
+    Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).</p>
+<p><code>--inconsistent_mapq_cutoff</code>
+    Filers out inconsistent alignments with MAPQ less than this value (works when the reference annotation is provided, default is 5).</p>
+<p><code>--simple_alignments_mapq_cutoff</code>
+    Filers out alignments with 1 or 2 exons and MAPQ less than this value (works only in annotation-free mode, default is 1).</p>
+<p><code>--max_coverage_small_chr</code>
+    Process only a fraction of reads for high-coverage loci on small chromosomes, e.g. mitochondrial (default value is 1000000).
+    Using this cut-off may significantly improve running time and RAM. Set to -1 to turn the off this filtering.
+    The fraction of reads is defined as <code>1 / ceil(max_coverage_small_chr / max_coverage)</code>.</p>
+<p><code>--max_coverage_normal_chr</code>
+    Process only a fraction of reads for high-coverage loci on usual chromosomes (default value is -1 = infinity).
+    Using this cut-off may improve running time and RAM.
+    The fraction of reads is defined as <code>1 / ceil(max_coverage_normal_chr / max_coverage)</code>.</p>
+<h4 id="specific-output-options">Specific output options</h4>
+<p><code>--normalization_method</code>
+    Method for normalizing non-grouped counts into TPMs:
+* <code>none</code> - do not perform TPM normalization;
+* <code>simple</code> - standard method, scale factor equals to 1 million divided by the counts sum (default);
+* <code>usable_reads</code> - includes all reads assigned to a feature including the ones that were filtered out
+during quantification (i.e. inconsistent or ambiguous);
+scale factor equals to 1 million divided by the number of all assigned reads.
+In this case the sum of all gene/transcript TPMs may not add up to 1 million.
+Experiments with simulated data show that this method could give more accurate estimations.
+However, normalization method does not affect correlation/relative proportions.</p>
+<p><code>--counts_format</code>
+    By default, IsoQuant outputs counts in internal linear format (see <a href="formats.html#expression-table-format">formats</a> and <a href="output.html#default-feature-counts-in-linear-format">output</a>).
+    Use this option to convert grouped counts to other format(s). You can provide a list with the following values:</p>
+<ul>
+<li><code>matrix</code> - standard matrix format with genes as rows and groups as columns;</li>
+<li><code>mtx</code> - MTX format compatible with Seurat;</li>
+<li><code>default</code> - with small number of groups/samples (&lt;=100), counts will be converted to standard matrix;
+larger matrices (e.g. for single-cell experiments) will be saved to MTX (default).</li>
+<li><code>none</code> - no convertion.</li>
+</ul>
+<p>Note, that grouped counts can be converted to any format using <code>src/convert_grouped_counts.py</code>.</p>
+<p><code>--large_output</code>
+    Controls which large per-read output files are generated.
+    By default, only <code>read_assignments</code> and <code>allinfo</code> (for single-cell/spatial modes) are generated.
+    Accepts a space-separated list of the following values:</p>
+<ul>
+<li><code>read_assignments</code> - TSV file with read-to-isoform assignments (<code>*.read_assignments.tsv</code>);</li>
+<li><code>corrected_bed</code> - BED file with corrected read exon coordinates (<code>*.corrected_reads.bed</code>);</li>
+<li><code>read2transcripts</code> - TSV file mapping reads to discovered transcript models (<code>*.transcript_model_reads.tsv</code>);</li>
+<li><code>allinfo</code> - detailed UMI filtering information for single-cell/spatial modes (<code>*.allinfo</code>);</li>
+<li><code>none</code> - do not generate any large output files.</li>
+</ul>
+<p>Example usage:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Generate all large output files</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>isoquant.py<span class="w"> </span>--large_output<span class="w"> </span>read_assignments<span class="w"> </span>corrected_bed<span class="w"> </span>read2transcripts<span class="w"> </span>allinfo<span class="w"> </span>...
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Disable all large output files</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>isoquant.py<span class="w"> </span>--large_output<span class="w"> </span>none<span class="w"> </span>...
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Default behavior (read_assignments and allinfo only)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>isoquant.py<span class="w"> </span>...
+</span></code></pre></div></p>
+<p>Note: large output files are gzipped by default unless <code>--no_gzip</code> is specified.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1057 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="output.html">
+      
+      
+        <link rel="next" href="classification.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+    
+    
+      
+        <title>File formats - IsoQuant</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#output-file-formats" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="index.html" title="IsoQuant" class="md-header__button md-logo" aria-label="IsoQuant" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            IsoQuant
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              File formats
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="index.html" title="IsoQuant" class="md-nav__button md-logo" aria-label="IsoQuant" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    IsoQuant
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="getting-started.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running IsoQuant
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Running IsoQuant
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="input.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ways of providing input data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cmd.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="single_cell.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single-cell analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IsoQuant output
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IsoQuant output
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="output.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File formats
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="formats.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#read-to-isoform-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read to isoform assignment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#expression-table-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expression table format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exon-and-intron-count-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exon and intron count format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transcript-models-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript models format
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="classification.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assignment classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="barcode_calling.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Barcode calling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="visualization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="citation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="feedback.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feedback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#read-to-isoform-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read to isoform assignment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#expression-table-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expression table format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exon-and-intron-count-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exon and intron count format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transcript-models-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript models format
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="output-file-formats">Output file formats</h1>
+<p>Although most output files include headers that describe the data, a brief explanation of the output files is provided below.</p>
+<h2 id="read-to-isoform-assignment">Read to isoform assignment</h2>
+<p>Tab-separated values, the columns are:</p>
+<ul>
+<li><code>read_id</code> - read id;</li>
+<li><code>chr</code> - chromosome id;</li>
+<li><code>strand</code> - strand of the assigned isoform (not to be confused with read mapping strand);</li>
+<li><code>isoform_id</code> - isoform id to which the read was assigned;</li>
+<li><code>gene_id</code> - gene id to which the read was assigned;</li>
+<li><code>assignment_type</code> - assignment type, can be:<ul>
+<li><code>unique</code> - reads was unambiguously assigned to a single known isoform;</li>
+<li><code>unique_minor_difference</code> - read was assigned uniquely but has alignment artifacts;</li>
+<li><code>inconsistent</code> - read was matched with inconsistencies, closest match(es) are reported;</li>
+<li><code>inconsistent_non_intronic</code> - read was matched with inconsistencies, which do not affect intron chain (e.g. olly TSS/TES);</li>
+<li><code>inconsistent_ambiguous</code>  - read was matched with inconsistencies equally well to two or more isoforms;</li>
+<li><code>ambiguous</code> - read was assigned to multiple isoforms equally well;</li>
+<li><code>noninfomative</code> - reads is intronic or has an insignificant overlap with a known gene;</li>
+<li><code>intergenic</code> - read is intergenic.</li>
+</ul>
+</li>
+<li><code>assignment_events</code> - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by <code>+</code> symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible events are (see graphical representation below):<ul>
+<li>consistent events:<ul>
+<li><code>none</code> / <code>.</code> / <code>undefined</code> - no special event detected;</li>
+<li><code>mono_exon_match</code> mono-exonic read matched to mono-exonic transcript;</li>
+<li><code>fsm</code> - full splice match;</li>
+<li><code>ism_5/3</code> - incomplete splice match, truncated on 5'/3' side;</li>
+<li><code>ism_internal</code> - incomplete splice match, truncated on both sides;</li>
+<li><code>mono_exonic</code> - mono-exonic read matching spliced isoform;</li>
+<li><code>tss_match</code> / <code>tss_match_precise</code> - 5' read is located less than 50 / <code>delta</code> bases from the TSS of the assigned isoform</li>
+<li><code>tes_match</code> / <code>tes_match_precise</code> - 3' read is located less than 50 / <code>delta</code> bases from the TES of the assigned isoform (can be reported without detecting polyA sites)</li>
+</ul>
+</li>
+<li>alignment artifacts:<ul>
+<li><code>intron_shift</code> - intron that seems to be shifted due to misalignment (typical for Nanopores);</li>
+<li><code>exon_misalignment</code> - short exon that seems to be missed due to misalignment  (typical for Nanopores);</li>
+<li><code>fake_terminal_exon_5/3</code> - short terminal exon at 5'/3' end that looks like an alignment artifact (typical for Nanopores);  </li>
+<li><code>terminal_exon_misalignment_5/3</code> - missed reference short terminal exon;</li>
+<li><code>exon_elongation_5/3</code> - minor exon extension at 5'/3' end (not exceeding 30bp);</li>
+<li><code>fake_micro_intron_retention</code> - short annotated introns are often missed by the aligners and thus are not considered as intron retention;</li>
+</ul>
+</li>
+<li>intron retentions:<ul>
+<li><code>intron_retention</code> - intron retention;</li>
+<li><code>unspliced_intron_retention</code>  - intron retention by mono-exonic read;</li>
+<li><code>incomplete_intron_retention_5/3</code> - terminal exon at 5'/3' end partially covers adjacent intron;</li>
+</ul>
+</li>
+<li>significant inconsistencies (each type end with <code>_known</code> if <em>all</em> resulting read introns are annotated and <code>_novel</code> otherwise):<ul>
+<li><code>major_exon_elongation_5/3</code> - significant exon extension at 5'/3' end (exceeding 30bp);</li>
+<li><code>extra_intron_5/3</code> - additional intron on the 5'/3' end of the isoform;</li>
+<li><code>extra_intron</code> - read contains additional intron in the middle of exon;</li>
+<li><code>alt_donor_site</code> - read contains alternative donor site;</li>
+<li><code>alt_acceptor_site</code> - read contains alternative annotated acceptor site;</li>
+<li><code>intron_migration</code> - read contains alternative annotated intron of approximately the same length as in the isoform;</li>
+<li><code>intron_alternation</code> - read contains alternative intron, which doesn't fall intro any of the categories above;</li>
+<li><code>mutually_exclusive_exons</code> - read contains different exon(s) of the same total length comparing to the isoform;</li>
+<li><code>exon_skipping</code> - read skips exon(s) comparing to the isoform;</li>
+<li><code>exon_merge</code> - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon;</li>
+<li><code>exon_gain</code> - read contains additional exon(s) comparing to the isoform;</li>
+<li><code>exon_detach</code> - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length;</li>
+<li><code>terminal_exon_shift</code> - read has alternative terminal exon;   </li>
+<li><code>alternative_structure</code> - reads has different intron chain that does not fall into any of categories above;</li>
+</ul>
+</li>
+<li>alternative transcription start / end (reported when poly-A tails are present):<ul>
+<li><code>alternative_polya_site</code> - read has alternative polyadenylation site;</li>
+<li><code>internal_polya_site</code> - poly-A tail detected but seems to be originated from A-rich intronic region;</li>
+<li><code>correct_polya_site</code> - poly-A site matches reference transcript end;</li>
+<li><code>aligned_polya_tail</code> - poly-A tail aligns to the reference;  </li>
+<li><code>alternative_tss</code> - alternative transcription start site.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>exons</code> - list of coordinates for normalized read exons (1-based, indels and polyA exons are excluded);</li>
+<li><code>additional</code> - field for supplementary information, which may include:<ul>
+<li><code>gene_assignment</code> - Gene assignment classification; possible values are the same as for transcript classification.</li>
+<li><code>PolyA</code> - True if poly-A tail is detected;</li>
+<li><code>Canonical</code> - True if all read introns are canonical, Unspliced is used for mono-exon reads; (use <code>--check_canonical</code>);</li>
+<li><code>Classification</code> - SQANTI-like assignment classification.</li>
+</ul>
+</li>
+</ul>
+<p>Note, that a single read may occur more than once if assigned ambiguously.</p>
+<h2 id="expression-table-format">Expression table format</h2>
+<p>Non-grouped counts/TPM values are stored in a simple TSV file, the columns are:</p>
+<ul>
+<li><code>feature_id</code> - genomic feature ID;</li>
+<li><code>TPM</code> or <code>count</code> - expression value (float).</li>
+</ul>
+<p>Grouped counts are stored in linear format by default - a TSV file with 3 columns:</p>
+<ul>
+<li><code>feature_id</code> - genomic feature ID;</li>
+<li><code>group_id</code> - group name;</li>
+<li><code>count</code> - read count of the feature in this group. </li>
+</ul>
+<p>By default, IsoQuant converts grouped counts with small number of groups/samples (&lt;=100) to standard matrix format; 
+larger matrices (e.g. for single-cell experiments) will be saved to MTX format, which is compatible with the Seurat package.
+In standard matrix rows represent features, columns represent groups. While being more human-readable, 
+this file make take substantial disk space when the number of groups is large.
+In MTX format, <code>.matrix.mtx</code> represents counts, <code>.features.tsv</code> contains the feature list and 
+<code>.barcodes.tsv</code> contains group list (typically, barcodes are used as groups in single-cell and spatial experiments).
+See <a href="cmd.html#specific-output-options">options</a> to tune your output.</p>
+<h2 id="exon-and-intron-count-format">Exon and intron count format</h2>
+<p>Tab-separated values, the columns are:</p>
+<ul>
+<li><code>chr</code> - chromosome ID;</li>
+<li><code>start</code> - feature leftmost 1-based positions;</li>
+<li><code>end</code> - feature rightmost 1-based positions;</li>
+<li><code>strand</code> - feature strand;</li>
+<li><code>flags</code> - symbolic feature flags, can contain the following characters:<ul>
+<li><code>X</code> - terminal feature;</li>
+<li><code>I</code> - internal feature;</li>
+<li><code>T</code> - feature appears as both terminal and internal in different isoforms;</li>
+<li><code>S</code> - feature has similar positions to some other feature;</li>
+<li><code>C</code> - feature is contained in another feature;</li>
+<li><code>U</code> - unique feature, appears only in a single known isoform;</li>
+<li><code>M</code> - feature appears in multiple different genes.</li>
+</ul>
+</li>
+<li><code>gene_ids</code> - list if gene ids feature belong to;</li>
+<li><code>group_id</code> - read group if provided (NA by default);</li>
+<li><code>include_counts</code> - number of reads that include this feature;</li>
+<li><code>exclude_counts</code> - number of reads that span, but do not include this feature;</li>
+</ul>
+<h2 id="transcript-models-format">Transcript models format</h2>
+<p>Constructed transcript models are stored in usual <a href="https://www.ensembl.org/info/website/upload/gff.html">GTF format</a>.
+Contains <code>exon</code>, <code>transcript</code> and <code>gene</code> features.</p>
+<p>Known genes and transcripts are reposted with their reference IDs. 
+Novel genes IDs have format <code>novel_gene_XXX_###</code> and novel transcript IDs are formatted as <code>transcript###.XXX.TYPE</code>,
+where <code>###</code> is the unique number (not necessarily consecutive), <code>XXX</code> is the chromosome name and TYPE can be one of the following:</p>
+<ul>
+<li>nic - novel in catalog, new transcript that contains only annotated introns;</li>
+<li>nnic - novel not in catalog, new transcript that contains unannotated introns.</li>
+</ul>
+<p>Each exon also has a unique ID stored in <code>exon_id</code> attribute.</p>
+<p>In addition, each transcript contains <code>canonical</code> property if <code>--check_canonical</code> is set.</p>
+<p>If <code>--sqanti_output</code> option is set, each novel transcript also has a <code>similar_reference_id</code> field containing ID of
+a most similar reference isoform and <code>alternatives</code> attribute, which indicates the exact differences between
+this novel transcript and the similar reference transcript.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["content.code.copy"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
