@@ -28,6 +28,7 @@ Detectors:
     SharedMemoryStereoSplittingBarcodeDetector: Stereo-seq splitting with shared memory
     SharedMemoryWrapper: Generic shared memory wrapper
     TenXBarcodeDetector: 10x Genomics v3 detector
+    TenXv2BarcodeDetector: 10x Genomics v2 detector
     VisiumHDBarcodeDetector: Visium HD detector
     UniversalSingleMoleculeExtractor: Universal barcode detector for custom molecules
 """
@@ -64,6 +65,7 @@ from .stereo import (
 
 from .tenx import (
     TenXBarcodeDetector,
+    TenXv2BarcodeDetector,
     VisiumHDBarcodeDetector,
 )
 
@@ -95,6 +97,7 @@ __all__ = [
     'SharedMemoryWrapper',
     # 10x detectors
     'TenXBarcodeDetector',
+    'TenXv2BarcodeDetector',
     'VisiumHDBarcodeDetector',
     # Universal extraction
     'MoleculeStructure',

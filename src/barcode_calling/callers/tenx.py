@@ -181,6 +181,15 @@ class TenXBarcodeDetector:
         return cls.result_type().header()
 
 
+class TenXv2BarcodeDetector(TenXBarcodeDetector):
+    """TenX v2 barcode detector."""
+    UMI_LEN = 10
+
+    def __init__(self, barcode_list: List[str]):
+        """Initialize TenX v2 detector."""
+        super().__init__(barcode_list)
+
+
 class VisiumHDBarcodeDetector:
     """Visium HD spatial transcriptomics barcode detector."""
 

@@ -11,15 +11,17 @@ from enum import Enum, unique
 class IsoQuantMode(Enum):
     bulk = 1
     tenX_v3 = 2
+    tenX_v2 = 22
     curio = 3
     stereoseq_nosplit = 4
     stereoseq = 5
-    visium_hd = 6
+    visium_hd = 61
     visium_5prime = 7
     custom_sc = 10
 
     def needs_barcode_calling(self):
         return self in [IsoQuantMode.tenX_v3,
+                        IsoQuantMode.tenX_v2,
                         IsoQuantMode.curio,
                         IsoQuantMode.stereoseq_nosplit,
                         IsoQuantMode.stereoseq,
@@ -29,6 +31,7 @@ class IsoQuantMode(Enum):
 
     def needs_pcr_deduplication(self):
         return self in [IsoQuantMode.tenX_v3,
+                        IsoQuantMode.tenX_v2,
                         IsoQuantMode.curio,
                         IsoQuantMode.stereoseq_nosplit,
                         IsoQuantMode.stereoseq,

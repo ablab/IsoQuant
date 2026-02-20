@@ -30,6 +30,7 @@ from ..error_codes import IsoQuantExitCode
 from .common import reverese_complement, load_barcodes
 from . import (
     TenXBarcodeDetector,
+    TenXv2BarcodeDetector,
     CurioBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
@@ -45,6 +46,7 @@ READ_CHUNK_SIZE = 100000
 
 BARCODE_CALLING_MODES = {
     IsoQuantMode.tenX_v3: TenXBarcodeDetector,
+    IsoQuantMode.tenX_v2: TenXv2BarcodeDetector,
     IsoQuantMode.curio: CurioBarcodeDetector,
     IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
