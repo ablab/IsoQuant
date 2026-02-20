@@ -94,8 +94,10 @@ File should contain one barcode sequence per line.
 More than 1 tab-separated column is allowed, but only the first will be used.
 Supports plain text and gzipped files.
 
-Note: barcode calling is performed much better if the whitelist contains a small number of barcodes. 
-If you have a subset of barcodes from short-read data, provide them instead of the full whitelist.
+_Notes:_
+- Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
+If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
+- IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
 
 The number of whitelist files depends on the mode:
 
@@ -109,7 +111,10 @@ Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
 If provided, IsoQuant skips barcode calling and uses these assignments directly.
 More than 3 columns are allowed, but only the first 3 will be used.
 
-Note! IsoQuant does not read barcodes or UMIs from BAM file tags.
+_Notes:_
+- IsoQuant does not read barcodes or UMIs from BAM file tags;
+- IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
+
 
 `--barcode2spot`
 Path to TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
