@@ -47,6 +47,7 @@ from src.input_data_storage import InputDataStorage, InputDataType
 from src.multimap_resolver import MultimapResolvingStrategy
 from src.stats import combine_counts
 from src.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
+from src.common import setup_worker_logging, _get_log_params
 
 
 logger = logging.getLogger('IsoQuant')
@@ -676,38 +677,17 @@ def create_output_dirs(args):
             os.makedirs(sample_aux_dir)
 
 
-def set_logger(args, logger_instance):
-    if "debug" not in args.__dict__ or not args.debug:
-        output_level = logging.INFO
-    else:
-        output_level = logging.DEBUG
-
-    logger_instance.setLevel(output_level)
+def set_logger(args):
+    output_level = logging.DEBUG if args.__dict__.get('debug') else logging.INFO
     log_file = os.path.join(args.output, "isoquant.log")
     if os.path.exists(log_file):
         old_log_file = os.path.join(args.output, "isoquant.log.old")
         with open(old_log_file, "a") as olf:
             olf.write("\n")
             shutil.copyfileobj(open(log_file, "r"), olf)
-
-    f = open(log_file, "w")
-    f.write("Command line: " + args._cmd_line + '\n')
-    f.close()
-    fh = logging.FileHandler(log_file)
-    fh.set_name("isoquant_file_log")
-    fh.setLevel(output_level)
-    ch = logging.StreamHandler(sys.stdout)
-    ch.set_name("isoquant_screen_log")
-    ch.setLevel(logging.INFO)
-
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-    if all(fh.get_name() != h.get_name() for h in logger_instance.handlers):
-        logger_instance.addHandler(fh)
-    if all(ch.get_name() != h.get_name() for h in logger_instance.handlers):
-        logger_instance.addHandler(ch)
-
+    with open(log_file, "w") as f:
+        f.write("Command line: " + args._cmd_line + '\n')
+    setup_worker_logging(log_file, output_level)
     logger.info("Running IsoQuant version " + args._version)
 
 
@@ -1013,7 +993,10 @@ def call_barcodes(args):
             # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
             # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
             # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
-            with ProcessPoolExecutor(max_workers=1) as proc:
+            log_file, log_level = _get_log_params()
+            with ProcessPoolExecutor(max_workers=1,
+                                     initializer=setup_worker_logging,
+                                     initargs=(log_file, log_level)) as proc:
                 logger.info("Detecting barcodes for %d file(s)" % len(input_files))
                 if bc_threads == 1:
                     future_res = proc.submit(process_single_thread, bc_args)
@@ -1117,7 +1100,7 @@ def main(cmd_args):
     if not cmd_args:
         parser.print_usage()
         sys.exit(IsoQuantExitCode.SUCCESS)
-    set_logger(args, logger)
+    set_logger(args)
     args = check_and_load_args(args, parser)
     create_output_dirs(args)
     set_additional_params(args)

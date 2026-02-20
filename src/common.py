@@ -9,11 +9,51 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import math
 from collections import defaultdict
 from enum import Enum
 
 logger = logging.getLogger('IsoQuant')
+
+
+def _get_log_params():
+    """Return (log_file, log_level) from the current IsoQuant logger configuration."""
+    w = logging.getLogger('IsoQuant')
+    log_level = w.level or logging.INFO
+    log_file = None
+    for h in w.handlers:
+        if hasattr(h, 'baseFilename'):
+            log_file = h.baseFilename
+            break
+    return log_file, log_level
+
+
+def setup_worker_logging(log_file, log_level):
+    """Initialize IsoQuant logging in a worker process.
+
+    Must be passed as the 'initializer' argument to every ProcessPoolExecutor.
+    Works for both 'fork' (clears broken inherited handlers) and 'spawn'
+    (creates handlers from scratch). Python 3.14 changed the default start
+    method from 'fork' to 'spawn' on Linux, and also changed _at_fork_reinit
+    behaviour so inherited handlers can break even with explicit fork.
+    """
+    w = logging.getLogger('IsoQuant')
+    for h in w.handlers[:]:
+        w.removeHandler(h)
+    w.setLevel(log_level)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    if log_file:
+        fh = logging.FileHandler(log_file, mode='a')
+        fh.set_name("isoquant_file_log")
+        fh.setLevel(log_level)
+        fh.setFormatter(formatter)
+        w.addHandler(fh)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.set_name("isoquant_screen_log")
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    w.addHandler(ch)
 
 
 class CigarEvent(Enum):
