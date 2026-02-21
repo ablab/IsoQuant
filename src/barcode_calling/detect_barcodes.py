@@ -58,6 +58,7 @@ BARCODE_CALLING_MODES = {
 
 BARCODE_FILES_REQUIRED = {
     IsoQuantMode.tenX_v3: [1],
+    IsoQuantMode.tenX_v2: [1],
     IsoQuantMode.curio: [1, 2],
     IsoQuantMode.stereoseq_nosplit: [1],
     IsoQuantMode.stereoseq: [1],

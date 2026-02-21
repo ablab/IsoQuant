@@ -23,7 +23,6 @@ from src.error_codes import IsoQuantExitCode
 from src.barcode_calling.detect_barcodes import (
     process_single_thread,
     process_in_parallel,
-    get_umi_length,
     BARCODE_CALLING_MODES,
 )
 
