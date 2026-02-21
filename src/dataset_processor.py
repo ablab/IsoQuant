@@ -22,7 +22,7 @@ import pysam
 from pyfaidx import Fasta
 
 from .modes import IsoQuantMode
-from .common import proper_plural_form, large_output_enabled
+from .common import proper_plural_form, large_output_enabled, setup_worker_logging, _get_log_params
 from .error_codes import IsoQuantExitCode
 from .serialization import *
 from .stats import EnumStats
@@ -319,7 +319,10 @@ class DatasetProcessor:
             # Clean up parent memory before spawning workers
             gc.collect()
             mp_context = multiprocessing.get_context('fork')
-            with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context) as proc:
+            log_file, log_level = _get_log_params()
+            with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context,
+                                     initializer=setup_worker_logging,
+                                     initargs=(log_file, log_level)) as proc:
                 results = proc.map(*read_gen, chunksize=1)
         else:
             results = map(*read_gen)
@@ -427,7 +430,10 @@ class DatasetProcessor:
             # Clean up parent memory before spawning workers
             gc.collect()
             mp_context = multiprocessing.get_context('fork')
-            with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context) as proc:
+            log_file, log_level = _get_log_params()
+            with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context,
+                                     initializer=setup_worker_logging,
+                                     initargs=(log_file, log_level)) as proc:
                 results = proc.map(*model_gen, chunksize=1)
         else:
             results = map(*model_gen)
@@ -527,7 +533,10 @@ class DatasetProcessor:
                 # Clean up parent memory before spawning workers
                 gc.collect()
                 mp_context = multiprocessing.get_context('fork')
-                with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context) as proc:
+                log_file, log_level = _get_log_params()
+                with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context,
+                                         initializer=setup_worker_logging,
+                                         initargs=(log_file, log_level)) as proc:
                     results = proc.map(*umi_gen, chunksize=1)
             else:
                 results = map(*umi_gen)

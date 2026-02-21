@@ -15,6 +15,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import pysam
 
+from .common import setup_worker_logging, _get_log_params
 
 logger = logging.getLogger('IsoQuant')
 
@@ -268,7 +269,10 @@ def split_read_table_parallel(sample, input_tsvs, split_reads_file_names, num_th
     # Clean up parent memory before spawning workers
     gc.collect()
     mp_context = multiprocessing.get_context('spawn')
-    with ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context) as executor:
+    log_file, log_level = _get_log_params()
+    with ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context,
+                             initializer=setup_worker_logging,
+                             initargs=(log_file, log_level)) as executor:
         futures = []
         for worker_id, my_chrs in enumerate(chr_assignments):
             future = executor.submit(

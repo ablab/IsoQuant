@@ -27,9 +27,11 @@ from Bio import SeqIO, Seq, SeqRecord
 
 from ..modes import IsoQuantMode
 from ..error_codes import IsoQuantExitCode
+from ..common import setup_worker_logging, _get_log_params
 from .common import reverese_complement, load_barcodes
 from . import (
     TenXBarcodeDetector,
+    TenXv2BarcodeDetector,
     CurioBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
@@ -45,6 +47,7 @@ READ_CHUNK_SIZE = 100000
 
 BARCODE_CALLING_MODES = {
     IsoQuantMode.tenX_v3: TenXBarcodeDetector,
+    IsoQuantMode.tenX_v2: TenXv2BarcodeDetector,
     IsoQuantMode.curio: CurioBarcodeDetector,
     IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
@@ -367,8 +370,14 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
     # Clean up parent memory before spawning workers
     gc.collect()
     mp_context = multiprocessing.get_context('spawn')
+    log_file, log_level = _get_log_params()
     # max_tasks_per_child requires Python 3.11+
-    executor_kwargs = {'max_workers': args.threads, 'mp_context': mp_context}
+    executor_kwargs = {
+        'max_workers': args.threads,
+        'mp_context': mp_context,
+        'initializer': setup_worker_logging,
+        'initargs': (log_file, log_level),
+    }
     if sys.version_info >= (3, 11):
         executor_kwargs['max_tasks_per_child'] = 20
     with concurrent.futures.ProcessPoolExecutor(**executor_kwargs) as proc:

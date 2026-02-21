@@ -48,6 +48,7 @@ from .callers import (
     SharedMemoryStereoSplittingBarcodeDetector,
     SharedMemoryWrapper,
     TenXBarcodeDetector,
+    TenXv2BarcodeDetector,
     VisiumHDBarcodeDetector,
     UniversalSingleMoleculeExtractor,
     MoleculeStructure
@@ -93,6 +94,7 @@ __all__ = [
     'SharedMemoryWrapper',
     # 10x detectors
     'TenXBarcodeDetector',
+    'TenXv2BarcodeDetector',
     'VisiumHDBarcodeDetector',
     # universal calling
     'UniversalSingleMoleculeExtractor',
