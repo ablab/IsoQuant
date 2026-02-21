@@ -40,7 +40,6 @@ class FusionDetector:
             logger.warning("intervaltree not available; falling back to gffutils queries")
             self.interval_index = None
         self.debug = False
-        self.debug_sink = None
 
     def safe_reference_start(self, read):
         try:
@@ -216,7 +215,7 @@ class FusionDetector:
             pass
         return score
     
-    def assign_fusion_gene(self, chrom, pos, window=2000):
+    def assign_fusion_gene(self, chrom, pos, window=1000):
         try:
             if self.interval_index is not None:
                 genes = self.interval_index.get_genes_at(chrom, pos, window=window)
@@ -733,9 +732,9 @@ class FusionDetector:
                 # Use interval tree if available
                 genes = []
                 if self.interval_index is not None:
-                    genes = self.interval_index.get_genes_at(chrom, pos, window=2000)
+                    genes = self.interval_index.get_genes_at(chrom, pos, window=1000)
                 else:
-                    for cand in self.db.region(region=(chrom, max(1, pos-2000), pos+2000), featuretype="gene"):
+                    for cand in self.db.region(region=(chrom, max(1, pos-1000), pos+1000), featuretype="gene"):
                         genes.append(cand)
                 for cand in genes:
                     if cand.attributes.get("gene_name", [""])[0] == gene_name:
@@ -749,8 +748,6 @@ class FusionDetector:
             return False, f"{gene_name} breakpoint {chrom}:{pos} >±{delta}bp from its exon boundary"
         except Exception as e:
             return False, f"Exon boundary check failed: {e}"
-
-    # validate_candidates moved to FusionMetadata
 
     def _is_mitochondrial_candidate(self, c1, c2, left_gene, right_gene):
         # Return True if either side appears mitochondrial by chromosome or gene name.
@@ -1008,6 +1005,195 @@ class FusionDetector:
         )
         return any(bt in biotype_lower for bt in bad_types)
 
+    def merge_nearly_identical(self, distance_threshold=10000):
+        # Merge nearly identical fusion candidates that likely represent the same true fusion.
+        left_gene_index = defaultdict(list)
+        right_gene_index = defaultdict(list)
+        for fusion_key, meta in self.fusion_metadata.items():
+            consensus_bp = meta.get("consensus_bp")
+            if not consensus_bp:
+                continue
+            left_chr, left_pos, right_chr, right_pos = consensus_bp
+            left_gene = meta.get("left_gene")
+            right_gene = meta.get("right_gene")
+            if not left_gene or not right_gene:
+                continue
+            # Index by left_gene: store (fusion_key, right_gene, right_chr, right_pos)
+            left_gene_index[left_gene].append((fusion_key, right_gene, right_chr, right_pos))
+            # Index by right_gene: store (fusion_key, left_gene, left_chr, left_pos)
+            right_gene_index[right_gene].append((fusion_key, left_gene, left_chr, left_pos))
+        fusions_to_discard = set()
+        # Check for pairs sharing left_gene
+        for left_gene, entries in left_gene_index.items():
+            if len(entries) < 2:
+                continue
+            for i in range(len(entries)):
+                for j in range(i + 1, len(entries)):
+                    if fusions_to_discard & {entries[i][0], entries[j][0]}:
+                        # Skip if either fusion already marked for discard
+                        continue
+                    fusion_key_i, right_gene_i, right_chr_i, right_pos_i = entries[i]
+                    fusion_key_j, right_gene_j, right_chr_j, right_pos_j = entries[j]
+                    # Different right genes?
+                    if right_gene_i == right_gene_j:
+                        continue
+                    # Same chromosome and within distance threshold?
+                    if right_chr_i != right_chr_j:
+                        continue
+                    distance = abs(right_pos_i - right_pos_j)
+                    if distance > distance_threshold:
+                        continue
+                    # Score both right genes at their respective positions
+                    logger.debug(f"Merging candidates: {fusion_key_i} vs {fusion_key_j} "
+                               f"(shared left={left_gene}, distance={distance}bp)")
+                    score_i = self._score_gene_at_position(right_gene_i, right_chr_i, right_pos_i)
+                    score_j = self._score_gene_at_position(right_gene_j, right_chr_j, right_pos_j)
+                    # Keep the one with higher score, discard the other
+                    if score_i >= score_j:
+                        self._merge_fusion_candidates(fusion_key_i, fusion_key_j)
+                        fusions_to_discard.add(fusion_key_j)
+                    else:
+                        self._merge_fusion_candidates(fusion_key_j, fusion_key_i)
+                        fusions_to_discard.add(fusion_key_i)
+        # Check for pairs sharing right_gene
+        for right_gene, entries in right_gene_index.items():
+            if len(entries) < 2:
+                continue
+            for i in range(len(entries)):
+                for j in range(i + 1, len(entries)):
+                    if fusions_to_discard & {entries[i][0], entries[j][0]}:
+                        # Skip if either fusion already marked for discard
+                        continue
+                    fusion_key_i, left_gene_i, left_chr_i, left_pos_i = entries[i]
+                    fusion_key_j, left_gene_j, left_chr_j, left_pos_j = entries[j]
+                    # Different left genes?
+                    if left_gene_i == left_gene_j:
+                        continue
+                    # Same chromosome and within distance threshold?
+                    if left_chr_i != left_chr_j:
+                        continue
+                    distance = abs(left_pos_i - left_pos_j)
+                    if distance > distance_threshold:
+                        continue
+                    # Score both left genes at their respective positions
+                    logger.debug(f"Merging candidates: {fusion_key_i} vs {fusion_key_j} "
+                               f"(shared right={right_gene}, distance={distance}bp)")
+                    score_i = self._score_gene_at_position(left_gene_i, left_chr_i, left_pos_i)
+                    score_j = self._score_gene_at_position(left_gene_j, left_chr_j, left_pos_j)
+                    # Keep the one with higher score, discard the other
+                    if score_i >= score_j:
+                        self._merge_fusion_candidates(fusion_key_i, fusion_key_j)
+                        fusions_to_discard.add(fusion_key_j)
+                    else:
+                        self._merge_fusion_candidates(fusion_key_j, fusion_key_i)
+                        fusions_to_discard.add(fusion_key_i)
+        # Remove discarded fusions from metadata and candidates
+        for fusion_key in fusions_to_discard:
+            logger.info(f"Discarding low-quality fusion candidate: {fusion_key}")
+            if fusion_key in self.fusion_metadata:
+                del self.fusion_metadata[fusion_key]
+            if fusion_key in self.fusion_candidates:
+                del self.fusion_candidates[fusion_key]
+            if fusion_key in self.fusion_breakpoints:
+                del self.fusion_breakpoints[fusion_key]
+            if fusion_key in self.fusion_assigned_pairs:
+                del self.fusion_assigned_pairs[fusion_key]
+
+    def _score_gene_at_position(self, gene_name, chrom, pos):
+        """
+        Score a gene at a specific genomic position.
+        Returns a numeric score; higher is better.
+        """
+        try:
+            # Try to get gene feature from database by name or ID
+            gene_features = list(self.db.region(
+                region=(chrom, max(1, pos - 500), pos + 500),
+                featuretype="gene"
+            ))
+            if not gene_features:
+                return 0.0
+            # Find the gene matching our name (approximately)
+            best_gene = None
+            for g in gene_features:
+                attrs = getattr(g, "attributes", {}) or {}
+                gname = attrs.get("gene_name", [getattr(g, "id", None)])[0]
+                if gname == gene_name:
+                    best_gene = g
+                    break
+            if not best_gene:
+                # Fallback: use the first (closest) gene
+                best_gene = gene_features[0]
+            # Get gene boundaries
+            gstart = int(best_gene.start)
+            gend = int(best_gene.end)
+            # Compute metrics for scoring
+            exon_features = list(self.db.children(best_gene, featuretype="exon", order_by="start"))
+            exons = [(int(e.start), int(e.end)) for e in exon_features]
+            # Check if position is exonic
+            exonic_hit = any(estart <= pos <= eend for estart, eend in exons)
+            # Compute minimum distance to exon boundaries
+            boundary_min_dist = None
+            if exons:
+                boundary_distances = []
+                for estart, eend in exons:
+                    boundary_distances.append(abs(pos - estart))
+                    boundary_distances.append(abs(pos - eend))
+                boundary_min_dist = min(boundary_distances)
+            # Compute minimum distance to exon starts/ends (not start/end of exons)
+            exon_min_dist = None
+            if exons:
+                exon_distances = []
+                for estart, eend in exons:
+                    exon_distances.append(abs(pos - estart))
+                    exon_distances.append(abs(pos - eend))
+                exon_min_dist = min(exon_distances)
+            # Compute body distance (distance to gene body if outside)
+            body_dist = 0
+            if pos < gstart:
+                body_dist = gstart - pos
+            elif pos > gend:
+                body_dist = pos - gend
+            # Compute the score using existing scoring method
+            score = self._compute_fusion_gene_score(
+                best_gene, pos,
+                exon_min_dist=exon_min_dist,
+                boundary_min_dist=boundary_min_dist,
+                exonic_hit=exonic_hit,
+                body_dist=body_dist,
+                gstart=gstart,
+                gend=gend
+            )
+            return score
+        except Exception as e:
+            logger.debug(f"Error scoring gene {gene_name} at {chrom}:{pos}: {e}")
+            return 0.0
+
+    def _merge_fusion_candidates(self, keep_fusion_key, discard_fusion_key):
+        """
+        Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key.
+        """
+        # Merge supporting reads
+        if discard_fusion_key in self.fusion_candidates:
+            keep_reads = self.fusion_candidates.get(keep_fusion_key, set())
+            discard_reads = self.fusion_candidates[discard_fusion_key]
+            keep_reads.update(discard_reads)
+            self.fusion_candidates[keep_fusion_key] = keep_reads
+        # Merge breakpoint counts
+        if discard_fusion_key in self.fusion_breakpoints:
+            keep_bps = self.fusion_breakpoints.get(keep_fusion_key, {})
+            discard_bps = self.fusion_breakpoints[discard_fusion_key]
+            for bp, count in discard_bps.items():
+                keep_bps[bp] = keep_bps.get(bp, 0) + count
+            self.fusion_breakpoints[keep_fusion_key] = keep_bps
+        # Update metadata with merged read count
+        if keep_fusion_key in self.fusion_metadata:
+            meta = self.fusion_metadata[keep_fusion_key]
+            if discard_fusion_key in self.fusion_metadata:
+                discard_meta = self.fusion_metadata[discard_fusion_key]
+                if "supporting_reads" in meta and "supporting_reads" in discard_meta:
+                    meta["supporting_reads"].update(discard_meta["supporting_reads"])
+                    meta["support"] = len(meta["supporting_reads"])
+
     def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
                         require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
                         max_intra_chr_distance=None):
@@ -1071,10 +1257,12 @@ class FusionDetector:
                 flags["reasons"].append("Low confidence")
             meta.update(flags)
 
+
     def report(self, output_path="fusion_candidates.tsv", min_support=2,
             include_classes=("canonical","cis-SAGe"),
             min_confidence=0.3, only_valid=False):
         self.validate_candidates(min_support=min_support)
+        self.merge_nearly_identical()
         with open(output_path, "w") as f:
             f.write("LeftGene\tLeftBiotype\tRawLeftGene\tLeftChromosome\tLeftBreakpoint\t"
                     "RightGene\tRightBiotype\tRawRightGene\tRightChromosome\tRightBreakpoint\t"
