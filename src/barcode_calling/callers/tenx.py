@@ -47,6 +47,7 @@ class TenXBarcodeDetector:
         """
         self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
         if len(barcode_list) <= 100000:
+            self.small_barcode_indexer = None
             self.barcode_indexer = ArrayKmerIndexer(barcode_list, kmer_size=6)
             self.max_barcodes_hits = 20
             self.min_matching_kmers = 1
@@ -137,13 +138,14 @@ class TenXBarcodeDetector:
                                               score_diff=self.score_diff)
 
         if barcode is None:
-            matching_barcodes = self.small_barcode_indexer.get_occurrences(potential_barcode,
-                                                                           max_hits=self.max_barcodes_hits,
-                                                                           min_kmers=self.min_matching_kmers)
-            barcode, bc_score, bc_start, bc_end = \
-                find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
-                                                  min_score=self.min_score,
-                                                  score_diff=self.score_diff)
+            if self.small_barcode_indexer is not None:
+                matching_barcodes = self.small_barcode_indexer.get_occurrences(potential_barcode,
+                                                                               max_hits=self.max_barcodes_hits,
+                                                                               min_kmers=self.min_matching_kmers)
+                barcode, bc_score, bc_start, bc_end = \
+                    find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
+                                                      min_score=self.min_score,
+                                                      score_diff=self.score_diff)
             if barcode is None:
                 return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
         logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
