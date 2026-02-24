@@ -136,6 +136,7 @@ class UniversalSingleMoleculeExtractor:
             if barcode_count < 100000 or variable_length:
                 self.index_dict[base_name] = ArrayKmerIndexer(barcode_list, kmer_size)
             else:
+                kmer_size += 1
                 self.index_dict[base_name] = Array2BitKmerIndexer(batch_str_to_2bit(barcode_list, barcode_length),
                                                                   kmer_size, seq_len=barcode_length)
         else:
