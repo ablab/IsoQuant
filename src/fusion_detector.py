@@ -174,9 +174,61 @@ class FusionDetector:
             return stripped
         return original_name
 
-    def _compute_fusion_gene_score(self, g, pos, exon_min_dist, boundary_min_dist, exonic_hit, body_dist, gstart, gend):
-        attrs  = getattr(g, "attributes", {}) or {}
-        gtype  = (attrs.get("gene_type", [None])[0]
+    def _compute_gene_score(self, target, pos, chrom=None, exon_min_dist=None, 
+                            boundary_min_dist=None, exonic_hit=None, body_dist=None, 
+                            gstart=None, gend=None):
+        # Determine mode: lookup or pre-computed
+        if isinstance(target, str):
+            # Lookup mode: target is a gene name string
+            gene_name = target
+            if chrom is None:
+                raise ValueError("chrom required when target is a gene name")
+            try:
+                gene_features = list(self.db.region(
+                    region=(chrom, max(1, pos - 500), pos + 500),
+                    featuretype="gene"
+                ))
+                if not gene_features:
+                    return 0.0
+                # Find gene by name
+                g = None
+                for gf in gene_features:
+                    attrs = getattr(gf, "attributes", {}) or {}
+                    gname = attrs.get("gene_name", [getattr(gf, "id", None)])[0]
+                    if gname == gene_name:
+                        g = gf
+                        break
+                if not g:
+                    # Fallback to closest gene
+                    g = gene_features[0]
+                gstart = int(g.start)
+                gend = int(g.end)
+                # Compute distance metrics
+                exon_features = list(self.db.children(g, featuretype="exon", order_by="start"))
+                exons = [(int(e.start), int(e.end)) for e in exon_features]
+                exonic_hit = any(es <= pos <= ee for es, ee in exons)
+                distances = []
+                for es, ee in exons:
+                    distances.append(abs(pos - es))
+                    distances.append(abs(pos - ee))
+                exon_min_dist = min(distances) if distances else None
+                boundary_min_dist = exon_min_dist  # Same metric, used with different thresholds
+                body_dist = 0
+                if pos < gstart:
+                    body_dist = gstart - pos
+                elif pos > gend:
+                    body_dist = pos - gend
+            except Exception as e:
+                logger.debug(f"Error scoring gene {gene_name} at {chrom}:{pos}: {e}")
+                return 0.0
+        else:
+            # Pre-computed mode: target is a gene feature object
+            g = target
+            if gstart is None or gend is None:
+                raise ValueError("gstart and gend required for pre-computed mode")
+        # Compute score from metrics
+        attrs = getattr(g, "attributes", {}) or {}
+        gtype = (attrs.get("gene_type", [None])[0]
                 or attrs.get("gene_biotype", [None])[0]
                 or attrs.get("transcript_biotype", [None])[0])
         score = 0.0
@@ -192,20 +244,21 @@ class FusionDetector:
         # 2) gene body proximity (weak)
         if body_dist:
             score += max(0.0, 20.0 - min(body_dist, 2000) / 100.0)
+
         # 3) biotype weighting
         if gtype == "protein_coding":
             score += 60.0
         else:
-            # Penalize any pseudogene annotations 
+            # Penalize any pseudogene annotations
             if gtype and "pseudogene" in gtype.lower():
                 score -= 90.0
             # Mild penalty for various non-coding/ambiguous biotypes
             elif gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
                         "sense_intronic", "sense_overlapping", "transcribed_unprocessed_pseudogene"):
                 score -= 15.0
+
         # 4) gentle preference for longer exon span (more likely real coding gene)
         try:
-            # sum exon lengths (per gene) cheaply
             exon_len_sum = 0
             exons = self.interval_index.get_exons_of_gene(g) if self.interval_index else list(self.db.children(g, featuretype="exon", order_by="start"))
             for ex in exons:
@@ -213,8 +266,9 @@ class FusionDetector:
             score += min(exon_len_sum / 1e4, 10.0)  # cap at +10
         except Exception:
             pass
+
         return score
-    
+
     def assign_fusion_gene(self, chrom, pos, window=1000):
         try:
             if self.interval_index is not None:
@@ -229,17 +283,71 @@ class FusionDetector:
         if not genes:
             return None
         INF = 10**9
+        # FAST PATH: Collect genes where pos is inside an exon
+        exonic_genes = []
+        for g in genes:
+            attrs = getattr(g, "attributes", {}) or {}
+            gname = attrs.get("gene_name", [getattr(g, "id", None)])[0]
+            gtype = (attrs.get("gene_type", [None])[0]
+                    or attrs.get("gene_biotype", [None])[0]
+                    or attrs.get("transcript_biotype", [None])[0])
+            gstart = int(getattr(g, "start", 0))
+            gend = int(getattr(g, "end", 0))
+            # Check if position is exonic
+            try:
+                exons = (self.interval_index.get_exons_of_gene(g)
+                        if self.interval_index
+                        else list(self.db.children(g, featuretype="exon", order_by="start")))
+                exonic_hit = any(int(ex.start) <= pos <= int(ex.end) for ex in exons)
+                if exonic_hit:
+                    exonic_genes.append((g, gname, gtype, gstart, gend, exons))
+            except Exception:
+                pass
+
+        # If we found exonic genes, use only those (fast path)
+        if exonic_genes:
+            if len(exonic_genes) == 1:
+                # Fast return: only one exonic gene
+                return exonic_genes[0][1]
+            # Multiple exonic genes: pick best using scoring
+            best_gene = None
+            best_key = None
+            for g, gname, gtype, gstart, gend, exons in exonic_genes:
+                body_dist = 0  # Inside gene body by definition
+                # Compute boundary distances to all exon boundaries
+                boundary_distances = [min(abs(pos - int(ex.start)), abs(pos - int(ex.end))) for ex in exons]
+                boundary_min_dist = min(boundary_distances) if boundary_distances else 0
+                exon_min_dist = 0  # Inside exon by definition
+                score = self._compute_gene_score(
+                    g, pos, exon_min_dist=exon_min_dist, boundary_min_dist=boundary_min_dist, 
+                    exonic_hit=True, body_dist=body_dist, gstart=gstart, gend=gend
+                )
+                glen = max(1, gend - gstart + 1)
+                key = (
+                    1 if gtype == "protein_coding" else 0,  # 1) PRIORITY: protein-coding first
+                    score,                                   # 2) main score
+                    True,                                    # 3) exonic_hit is always True here
+                    -boundary_min_dist,                      # 4) nearer exon boundary
+                    0,                                       # 5) -exon_min_dist (always 0)
+                    0,                                       # 6) -body_dist (always 0)
+                    -min(glen, 500000),                      # 7) gentle preference for longer locus
+                    gname or getattr(g, "id", "")            # 8) deterministic
+                )
+                if best_key is None or key > best_key:
+                    best_key = key
+                    best_gene = gname or getattr(g, "id", None)
+            return best_gene
+        # SLOW PATH: No exonic hits; use original logic with boundary distances
         best_gene = None
-        best_key  = None  # tuple key for lexicographic comparison
+        best_key = None
         for g in genes:
             attrs  = getattr(g, "attributes", {}) or {}
             gname  = attrs.get("gene_name", [getattr(g, "id", None)])[0]
             gtype  = (attrs.get("gene_type", [None])[0]
-                or attrs.get("gene_biotype", [None])[0]
-                or attrs.get("transcript_biotype", [None])[0])
+                    or attrs.get("gene_biotype", [None])[0]
+                    or attrs.get("transcript_biotype", [None])[0])
             gstart = int(getattr(g, "start", 0))
             gend   = int(getattr(g, "end",   0))
-            # gstr = getattr(g, "strand", ".")  # currently unused here
 
             # --- exon distances ---
             exon_min_dist = None
@@ -271,8 +379,9 @@ class FusionDetector:
             else:
                 body_dist = min(abs(pos - gstart), abs(pos - gend))
             # compute score with your refactored function
-            score = self._compute_fusion_gene_score(
-                g, pos, exon_min_dist, boundary_min_dist, exonic_hit, body_dist, gstart, gend
+            score = self._compute_gene_score(
+                g, pos, exon_min_dist=exon_min_dist, boundary_min_dist=boundary_min_dist, 
+                exonic_hit=exonic_hit, body_dist=body_dist, gstart=gstart, gend=gend
             )
             # normalize None distances
             bnd = boundary_min_dist if boundary_min_dist is not None else INF
@@ -720,7 +829,7 @@ class FusionDetector:
             logger.debug(f"Failed to realign fusion transcript: {str(e)}")
             return []
 
-    def check_gene_exon_boundary(self, gene_name, chrom, pos, delta=50):
+    def check_gene_exon_boundary(self, gene_name, chrom, pos, delta):
         # find the gene feature by name, get its exons, and check |pos - exon boundary| <= delta
         try:
             # Resolve to a gene feature
@@ -902,22 +1011,6 @@ class FusionDetector:
             return False
         return False
 
-    def _exon_boundary_issues(self, meta, c1, p1, c2, p2):
-        # Return list of human-readable exon-boundary issue strings (empty if none)
-        issues = []
-        left_gene = meta.get("left_gene")
-        right_gene = meta.get("right_gene")
-        try:
-            okL, whyL = self.check_gene_exon_boundary(left_gene, c1, p1, delta=50)
-            okR, whyR = self.check_gene_exon_boundary(right_gene, c2, p2, delta=50)
-            if not okL and whyL:
-                issues.append(whyL)
-            if not okR and whyR:
-                issues.append(whyR)
-        except Exception:
-            issues.append("Exon boundary check failed")
-        return issues
-
     def _build_symbol_biotype_index(self):
         # One-time index construction: map HGNC symbols to biotypes using all genes in db
         # This is called lazily when first needed
@@ -1046,8 +1139,8 @@ class FusionDetector:
                     # Score both right genes at their respective positions
                     logger.debug(f"Merging candidates: {fusion_key_i} vs {fusion_key_j} "
                                f"(shared left={left_gene}, distance={distance}bp)")
-                    score_i = self._score_gene_at_position(right_gene_i, right_chr_i, right_pos_i)
-                    score_j = self._score_gene_at_position(right_gene_j, right_chr_j, right_pos_j)
+                    score_i = self._compute_gene_score(right_gene_i, right_pos_i, chrom=right_chr_i)
+                    score_j = self._compute_gene_score(right_gene_j, right_pos_j, chrom=right_chr_j)
                     # Keep the one with higher score, discard the other
                     if score_i >= score_j:
                         self._merge_fusion_candidates(fusion_key_i, fusion_key_j)
@@ -1078,8 +1171,8 @@ class FusionDetector:
                     # Score both left genes at their respective positions
                     logger.debug(f"Merging candidates: {fusion_key_i} vs {fusion_key_j} "
                                f"(shared right={right_gene}, distance={distance}bp)")
-                    score_i = self._score_gene_at_position(left_gene_i, left_chr_i, left_pos_i)
-                    score_j = self._score_gene_at_position(left_gene_j, left_chr_j, left_pos_j)
+                    score_i = self._compute_gene_score(left_gene_i, left_pos_i, chrom=left_chr_i)
+                    score_j = self._compute_gene_score(left_gene_j, left_pos_j, chrom=left_chr_j)
                     # Keep the one with higher score, discard the other
                     if score_i >= score_j:
                         self._merge_fusion_candidates(fusion_key_i, fusion_key_j)
@@ -1099,80 +1192,8 @@ class FusionDetector:
             if fusion_key in self.fusion_assigned_pairs:
                 del self.fusion_assigned_pairs[fusion_key]
 
-    def _score_gene_at_position(self, gene_name, chrom, pos):
-        """
-        Score a gene at a specific genomic position.
-        Returns a numeric score; higher is better.
-        """
-        try:
-            # Try to get gene feature from database by name or ID
-            gene_features = list(self.db.region(
-                region=(chrom, max(1, pos - 500), pos + 500),
-                featuretype="gene"
-            ))
-            if not gene_features:
-                return 0.0
-            # Find the gene matching our name (approximately)
-            best_gene = None
-            for g in gene_features:
-                attrs = getattr(g, "attributes", {}) or {}
-                gname = attrs.get("gene_name", [getattr(g, "id", None)])[0]
-                if gname == gene_name:
-                    best_gene = g
-                    break
-            if not best_gene:
-                # Fallback: use the first (closest) gene
-                best_gene = gene_features[0]
-            # Get gene boundaries
-            gstart = int(best_gene.start)
-            gend = int(best_gene.end)
-            # Compute metrics for scoring
-            exon_features = list(self.db.children(best_gene, featuretype="exon", order_by="start"))
-            exons = [(int(e.start), int(e.end)) for e in exon_features]
-            # Check if position is exonic
-            exonic_hit = any(estart <= pos <= eend for estart, eend in exons)
-            # Compute minimum distance to exon boundaries
-            boundary_min_dist = None
-            if exons:
-                boundary_distances = []
-                for estart, eend in exons:
-                    boundary_distances.append(abs(pos - estart))
-                    boundary_distances.append(abs(pos - eend))
-                boundary_min_dist = min(boundary_distances)
-            # Compute minimum distance to exon starts/ends (not start/end of exons)
-            exon_min_dist = None
-            if exons:
-                exon_distances = []
-                for estart, eend in exons:
-                    exon_distances.append(abs(pos - estart))
-                    exon_distances.append(abs(pos - eend))
-                exon_min_dist = min(exon_distances)
-            # Compute body distance (distance to gene body if outside)
-            body_dist = 0
-            if pos < gstart:
-                body_dist = gstart - pos
-            elif pos > gend:
-                body_dist = pos - gend
-            # Compute the score using existing scoring method
-            score = self._compute_fusion_gene_score(
-                best_gene, pos,
-                exon_min_dist=exon_min_dist,
-                boundary_min_dist=boundary_min_dist,
-                exonic_hit=exonic_hit,
-                body_dist=body_dist,
-                gstart=gstart,
-                gend=gend
-            )
-            return score
-        except Exception as e:
-            logger.debug(f"Error scoring gene {gene_name} at {chrom}:{pos}: {e}")
-            return 0.0
-
     def _merge_fusion_candidates(self, keep_fusion_key, discard_fusion_key):
-        """
-        Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key.
-        """
-        # Merge supporting reads
+        # Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key.
         if discard_fusion_key in self.fusion_candidates:
             keep_reads = self.fusion_candidates.get(keep_fusion_key, set())
             discard_reads = self.fusion_candidates[discard_fusion_key]
@@ -1224,8 +1245,8 @@ class FusionDetector:
             if flags["is_valid"] and require_exon_boundary:
                 left_gene  = meta.get("left_gene")
                 right_gene = meta.get("right_gene")
-                okL, whyL = self.check_gene_exon_boundary(left_gene,  c1, p1, delta=50)
-                okR, whyR = self.check_gene_exon_boundary(right_gene, c2, p2, delta=50)
+                okL, whyL = self.check_gene_exon_boundary(left_gene,  c1, p1, delta=200)
+                okR, whyR = self.check_gene_exon_boundary(right_gene, c2, p2, delta=200)
                 if not okL or not okR:
                     flags["is_valid"] = False
                     # Append specific reasons (only non-empty strings)
@@ -1256,7 +1277,6 @@ class FusionDetector:
                 flags["is_valid"] = False
                 flags["reasons"].append("Low confidence")
             meta.update(flags)
-
 
     def report(self, output_path="fusion_candidates.tsv", min_support=2,
             include_classes=("canonical","cis-SAGe"),
