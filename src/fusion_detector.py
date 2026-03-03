@@ -1215,11 +1215,77 @@ class FusionDetector:
                     meta["supporting_reads"].update(discard_meta["supporting_reads"])
                     meta["support"] = len(meta["supporting_reads"])
 
+    def is_ribosomal_or_histone_gene(self, gene_name):
+        """Check if a gene is ribosomal or histone-related based on name patterns."""
+        if not gene_name or not isinstance(gene_name, str):
+            return False
+        gene_upper = gene_name.upper()
+        # Ribosomal protein genes: RPL*, RPS*, RPLP*
+        # Histone genes: HIST*, H1*, H2A*, H2B*, H3*, H4*
+        rib_hist_patterns = ('RPL', 'RPS', 'RPLP', 'HIST', 'H1', 'H2A', 'H2B', 'H3', 'H4')
+        return any(gene_upper.startswith(p) for p in rib_hist_patterns)
+
+    def apply_frequency_filters(self):
+        # Filter out multicopy artifacts based on gene frequency within the sample.
+        if not self.fusion_metadata:
+            return
+        # Count gene frequencies across all fusions
+        left_gene_count = defaultdict(int)
+        right_gene_count = defaultdict(int)
+        for fusion_key, meta in self.fusion_metadata.items():
+            left_gene = meta.get("left_gene")
+            right_gene = meta.get("right_gene")
+            if left_gene and left_gene != "intergenic":
+                left_gene_count[left_gene] += 1
+            if right_gene and right_gene != "intergenic":
+                right_gene_count[right_gene] += 1
+        # Mark fusions with high-frequency genes as artifacts
+        for fusion_key, meta in self.fusion_metadata.items():
+            if meta.get("is_valid") == False:
+                # Already marked invalid, skip
+                continue
+            left_gene = meta.get("left_gene")
+            right_gene = meta.get("right_gene")
+            artifact_reasons = []
+            # Check left gene frequency
+            if left_gene and left_gene != "intergenic":
+                is_rib_hist = self.is_ribosomal_or_histone_gene(left_gene)
+                # lower threshold for ribosomal protein artifacts
+                threshold = 2 if is_rib_hist else 4
+                count = left_gene_count.get(left_gene, 0)
+                if count > threshold:
+                    artifact_reasons.append(
+                        f"Left gene '{left_gene}' appears {count} times "
+                        f"(threshold={threshold} for {'ribosomal/histone' if is_rib_hist else 'other'} genes)"
+                    )
+            # Check right gene frequency
+            if right_gene and right_gene != "intergenic":
+                is_rib_hist = self.is_ribosomal_or_histone_gene(right_gene)
+                threshold = 2 if is_rib_hist else 4
+                count = right_gene_count.get(right_gene, 0)
+                if count > threshold:
+                    artifact_reasons.append(
+                        f"Right gene '{right_gene}' appears {count} times "
+                        f"(threshold={threshold} for {'ribosomal/histone' if is_rib_hist else 'other'} genes)"
+                    )
+            # Mark as artifact if any gene exceeds threshold
+            if artifact_reasons:
+                meta["is_valid"] = False
+                if "reasons" not in meta:
+                    meta["reasons"] = []
+                meta["reasons"].extend(artifact_reasons)
+
     def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
                         require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
+        # Apply frequency-based filtering for multicopy artifacts after metadata building
+        self.apply_frequency_filters()
         for fusion_key, meta in self.fusion_metadata.items():
+            # Check if already marked invalid by frequency filter
+            if meta.get("is_valid") == False:
+                # Keep existing reasons, skip to next
+                continue
             support = meta.get("support", 0)
             flags = {"is_valid": True, "reasons": [], "class": "canonical"}
             if support < min_support:
