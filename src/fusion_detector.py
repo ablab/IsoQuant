@@ -638,43 +638,71 @@ class FusionDetector:
             return
 
     def cluster_breakpoints(self, bp_counts, window):
-        # bp_counts: dict[(chr1,pos1,chr2,pos2)] -> count
-        # Group by chr pairs, then cluster positions by window
+        if not bp_counts:
+            return None
+        # Group by chrom pair
         from collections import defaultdict
-        clusters = defaultdict(list)
-        for (c1,p1,c2,p2), cnt in bp_counts.items():
-            key = (c1, c2)
-            clusters[key].append((p1, p2, cnt))
-        def cluster_positions(items):
-            items = sorted(items)
-            current = [items[0]]
-            clustered = []
-            for itm in items[1:]:
-                if abs(itm[0]-current[-1][0]) <= window and abs(itm[1]-current[-1][1]) <= window:
-                    current.append(itm)
-                else:
-                    clustered.append(current)
-                    current = [itm]
-            clustered.append(current)
-            # pick the cluster with largest total count
-            best = max(clustered, key=lambda cl: sum(x[2] for x in cl))
-            # consensus: weighted median
-            import numpy as np
-            p1s = np.array([x[0] for x in best]); w = np.array([x[2] for x in best])
-            p2s = np.array([x[1] for x in best])
-            cons_p1 = int(np.average(p1s, weights=w))
-            cons_p2 = int(np.average(p2s, weights=w))
-            total = int(np.sum(w))
-            return cons_p1, cons_p2, total
-        # choose the chr pair with max clustered support
-        best_pair, best_cons = None, (None,None,0)
-        for key, items in clusters.items():
-            c_p1, c_p2, total = cluster_positions(items)
-            if total > best_cons[2]:
-                best_pair, best_cons = key, (c_p1, c_p2, total)
+        by_pair = defaultdict(list)
+        for (c1, p1, c2, p2), w in bp_counts.items():
+            by_pair[(c1, c2)].append((p1, p2, w))
+        def best_window(items, w):
+            # Sort by p1; we’ll apply a sliding window on p1, and inside it on p2
+            items.sort(key=lambda x: x[0])  # sort by p1
+            best_total = 0
+            best_p1 = 0
+            best_p2 = 0
+            n = len(items)
+            j = 0
+            sum_w = 0
+            # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
+            # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
+            # To avoid O(n log n) per step, we sort the current slice by p2 only when window expands a lot,
+            # but in practice m is small; a simpler approach: rebuild a local sorted-by-p2 list for [j..i].
+            # This is acceptable because typical m per pair is not huge.
+            for i in range(n):
+                p1_i, p2_i, wi = items[i]
+                # Expand p1-window
+                sum_w += wi
+                # Shrink from left until p1-range <= w
+                while p1_i - items[j][0] > w:
+                    sum_w -= items[j][2]
+                    j += 1
+                # Now consider only slice items[j:i+1]; build p2-sorted view (small slice)
+                slice_view = items[j:i+1]
+                slice_view.sort(key=lambda x: x[1])  # sort by p2
+                # Secondary sliding window on p2
+                k = 0
+                cur_sum = 0
+                for t in range(len(slice_view)):
+                    cur_sum += slice_view[t][2]
+                    while slice_view[t][1] - slice_view[k][1] > w:
+                        cur_sum -= slice_view[k][2]
+                        k += 1
+                    if cur_sum > best_total:
+                        # Weighted mean p1/p2 for current p2-window [k..t]
+                        s_w = 0
+                        s_p1 = 0
+                        s_p2 = 0
+                        for x in slice_view[k:t+1]:
+                            s_w += x[2]
+                            s_p1 += x[0] * x[2]
+                            s_p2 += x[1] * x[2]
+                        best_total = s_w
+                        best_p1 = s_p1 // s_w
+                        best_p2 = s_p2 // s_w
+            return best_p1, best_p2, best_total
+        best_pair = None
+        best = (None, None, 0)
+        for pair, items in by_pair.items():
+            c_p1, c_p2, total = best_window(items, window)
+            if total > best[2]:
+                best_pair = pair
+                best = (c_p1, c_p2, total)
+
         if best_pair is None:
             return None
-        (c1, c2), (p1, p2, total) = best_pair, best_cons
+        (c1, c2) = best_pair
+        (p1, p2, total) = best
         return (c1, p1, c2, p2), total
 
     def parse_sa_entries(self, sa_tag):
@@ -1206,8 +1234,6 @@ class FusionDetector:
                 del self.fusion_candidates[fusion_key]
             if fusion_key in self.fusion_breakpoints:
                 del self.fusion_breakpoints[fusion_key]
-            if fusion_key in self.fusion_assigned_pairs:
-                del self.fusion_assigned_pairs[fusion_key]
 
     def _merge_fusion_candidates(self, keep_fusion_key, discard_fusion_key):
         # Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key.
@@ -1296,6 +1322,7 @@ class FusionDetector:
                         require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
+        self.fusion_assigned_pairs.clear()
         # Apply frequency-based filtering for multicopy artifacts after metadata building
         self.apply_frequency_filters()
         for fusion_key, meta in self.fusion_metadata.items():
