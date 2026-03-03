@@ -32,6 +32,8 @@ class FusionDetector:
         self._resolved_name_cache = {}
         # cache for symbol -> biotype mapping (built on-demand)
         self._symbol_biotype_cache = {}
+        # cache for exons by gene_id: {gene_id: [(start, end), ...]}
+        self.exon_cache = {}
         # Build interval tree index for fast coordinate-to-gene/exon mapping
         logger.info("Initializing genomic interval index for efficient database queries...")
         if IntervalTree is not None:
@@ -39,6 +41,8 @@ class FusionDetector:
         else:
             logger.warning("intervaltree not available; falling back to gffutils queries")
             self.interval_index = None
+        # Build exon cache upfront for efficient assign_fusion_gene lookups
+        self._build_exon_cache()
         self.debug = False
 
     def safe_reference_start(self, read):
@@ -54,6 +58,46 @@ class FusionDetector:
             return self.aligned_len_from_cigarstring(getattr(read, "cigarstring", None))
         except Exception:
             return 0
+
+    def _build_exon_cache(self):
+        # Pre-build exon cache for all genes to avoid repeated DB queries during fusion gene assignment
+        if self.exon_cache:
+            return  # Already built
+        logger.debug("Building exon cache from genedb...")
+        try:
+            for gene in self.db.features_of_type('gene'):
+                gene_id = getattr(gene, 'id', None)
+                if not gene_id:
+                    continue
+                try:
+                    exons = list(self.db.children(gene, featuretype='exon', order_by='start'))
+                    if exons:
+                        self.exon_cache[gene_id] = [(int(ex.start), int(ex.end)) for ex in exons]
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Failed to build exon cache: {e}")
+
+    def _get_cached_exons(self, gene):
+        """
+        Retrieve exons for a gene, preferring cached version.
+        Returns list of (start, end) tuples or empty list if not found.
+        """
+        gene_id = getattr(gene, 'id', None)
+        if not gene_id:
+            return []
+        # Check cache first
+        if gene_id in self.exon_cache:
+            return self.exon_cache[gene_id]
+        # Fall back to DB if not cached (shouldn't happen after _build_exon_cache)
+        try:
+            exons = list(self.db.children(gene, featuretype='exon', order_by='start'))
+            exon_list = [(int(ex.start), int(ex.end)) for ex in exons]
+            # Cache for future use
+            self.exon_cache[gene_id] = exon_list
+            return exon_list
+        except Exception:
+            return []
 
     @lru_cache(maxsize=200000)
     def _context_query(self, chrom, pos):
@@ -203,9 +247,8 @@ class FusionDetector:
                     g = gene_features[0]
                 gstart = int(g.start)
                 gend = int(g.end)
-                # Compute distance metrics
-                exon_features = list(self.db.children(g, featuretype="exon", order_by="start"))
-                exons = [(int(e.start), int(e.end)) for e in exon_features]
+                # Compute distance metrics (use cached exons)
+                exons = self._get_cached_exons(g)
                 exonic_hit = any(es <= pos <= ee for es, ee in exons)
                 distances = []
                 for es, ee in exons:
@@ -260,24 +303,29 @@ class FusionDetector:
         # 4) gentle preference for longer exon span (more likely real coding gene)
         try:
             exon_len_sum = 0
-            exons = self.interval_index.get_exons_of_gene(g) if self.interval_index else list(self.db.children(g, featuretype="exon", order_by="start"))
-            for ex in exons:
-                exon_len_sum += int(ex.end) - int(ex.start) + 1
+            exons = self._get_cached_exons(g)
+            # exons is list of (start, end) tuples
+            for ex_start, ex_end in exons:
+                exon_len_sum += ex_end - ex_start + 1
             score += min(exon_len_sum / 1e4, 10.0)  # cap at +10
         except Exception:
             pass
 
         return score
 
+    
+    @lru_cache(maxsize=500000)
+    def assign_fusion_gene_cached(self, chrom, pos):
+        return self.assign_fusion_gene(chrom, pos)
+
+
     def assign_fusion_gene(self, chrom, pos, window=1000):
+        # Requires IntervalTree for efficient gene querying
+        if self.interval_index is None:
+            logger.warning("IntervalTree not available; assign_fusion_gene requires it for efficiency")
+            return None
         try:
-            if self.interval_index is not None:
-                genes = self.interval_index.get_genes_at(chrom, pos, window=window)
-            else:
-                genes = list(self.db.region(
-                    region=(chrom, max(1, pos - window), pos + window),
-                    featuretype="gene"
-                ))
+            genes = self.interval_index.get_genes_at(chrom, pos, window=window)
         except Exception:
             return None
         if not genes:
@@ -293,12 +341,11 @@ class FusionDetector:
                     or attrs.get("transcript_biotype", [None])[0])
             gstart = int(getattr(g, "start", 0))
             gend = int(getattr(g, "end", 0))
-            # Check if position is exonic
+            # Check if position is exonic (use cached exons)
             try:
-                exons = (self.interval_index.get_exons_of_gene(g)
-                        if self.interval_index
-                        else list(self.db.children(g, featuretype="exon", order_by="start")))
-                exonic_hit = any(int(ex.start) <= pos <= int(ex.end) for ex in exons)
+                exons = self._get_cached_exons(g)
+                # exons is now a list of (start, end) tuples
+                exonic_hit = any(start <= pos <= end for start, end in exons)
                 if exonic_hit:
                     exonic_genes.append((g, gname, gtype, gstart, gend, exons))
             except Exception:
@@ -315,7 +362,8 @@ class FusionDetector:
             for g, gname, gtype, gstart, gend, exons in exonic_genes:
                 body_dist = 0  # Inside gene body by definition
                 # Compute boundary distances to all exon boundaries
-                boundary_distances = [min(abs(pos - int(ex.start)), abs(pos - int(ex.end))) for ex in exons]
+                # exons is list of (start, end) tuples
+                boundary_distances = [min(abs(pos - start), abs(pos - end)) for start, end in exons]
                 boundary_min_dist = min(boundary_distances) if boundary_distances else 0
                 exon_min_dist = 0  # Inside exon by definition
                 score = self._compute_gene_score(
@@ -349,16 +397,14 @@ class FusionDetector:
             gstart = int(getattr(g, "start", 0))
             gend   = int(getattr(g, "end",   0))
 
-            # --- exon distances ---
+            # --- exon distances (using cached exons) ---
             exon_min_dist = None
             boundary_min_dist = None
             exonic_hit = False
             try:
-                exons = (self.interval_index.get_exons_of_gene(g)
-                        if self.interval_index
-                        else list(self.db.children(g, featuretype="exon", order_by="start")))
-                for ex in exons:
-                    es = int(ex.start); ee = int(ex.end)
+                exons = self._get_cached_exons(g)
+                # exons is now a list of (start, end) tuples
+                for es, ee in exons:
                     # span distance
                     if es <= pos <= ee:
                         d_span = 0
@@ -455,8 +501,8 @@ class FusionDetector:
                 continue
             seen_pairs.add(key)
             # Store raw assigned genes (no normalization yet - defer to build_metadata)
-            left_gene = self.assign_fusion_gene(left_chr, left_pos)
-            right_gene = self.assign_fusion_gene(sa_chr, right_pos)
+            left_gene = self.assign_fusion_gene_cached(left_chr, left_pos)
+            right_gene = self.assign_fusion_gene_cached(sa_chr, right_pos)
             if left_gene is None or right_gene is None:
                 continue
             if left_gene != right_gene:
@@ -710,8 +756,8 @@ class FusionDetector:
             sa_chr, (right_pos // jitter_window))
         if key in seen_pairs:
             return
-        left_gene = self.assign_fusion_gene(left_chr, left_pos)
-        right_gene = self.assign_fusion_gene(sa_chr, right_pos)
+        left_gene = self.assign_fusion_gene_cached(left_chr, left_pos)
+        right_gene = self.assign_fusion_gene_cached(sa_chr, right_pos)
         # Store raw genes without normalization - defer to build_metadata
         if left_gene is not None and right_gene is not None and left_gene != right_gene:
             self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos)
@@ -828,35 +874,6 @@ class FusionDetector:
         except Exception as e:
             logger.debug(f"Failed to realign fusion transcript: {str(e)}")
             return []
-
-    def check_gene_exon_boundary(self, gene_name, chrom, pos, delta):
-        # find the gene feature by name, get its exons, and check |pos - exon boundary| <= delta
-        try:
-            # Resolve to a gene feature
-            g = None
-            try:
-                g = self.db[gene_name]  # if name==id
-            except Exception:
-                # fallback: search genes in small window and match by gene_name attribute
-                # Use interval tree if available
-                genes = []
-                if self.interval_index is not None:
-                    genes = self.interval_index.get_genes_at(chrom, pos, window=1000)
-                else:
-                    for cand in self.db.region(region=(chrom, max(1, pos-1000), pos+1000), featuretype="gene"):
-                        genes.append(cand)
-                for cand in genes:
-                    if cand.attributes.get("gene_name", [""])[0] == gene_name:
-                        g = cand; break
-            if g is None:  # give benefit of doubt
-                return True, ""
-            exons = self.interval_index.get_exons_of_gene(g) if self.interval_index else list(self.db.children(g, featuretype="exon", order_by="start"))
-            for ex in exons:
-                if abs(pos - int(ex.start)) <= delta or abs(pos - int(ex.end)) <= delta:
-                    return True, ""
-            return False, f"{gene_name} breakpoint {chrom}:{pos} >±{delta}bp from its exon boundary"
-        except Exception as e:
-            return False, f"Exon boundary check failed: {e}"
 
     def _is_mitochondrial_candidate(self, c1, c2, left_gene, right_gene):
         # Return True if either side appears mitochondrial by chromosome or gene name.
@@ -1216,7 +1233,7 @@ class FusionDetector:
                     meta["support"] = len(meta["supporting_reads"])
 
     def is_ribosomal_or_histone_gene(self, gene_name):
-        """Check if a gene is ribosomal or histone-related based on name patterns."""
+        # Check if a gene is ribosomal or histone-related based on name patterns.
         if not gene_name or not isinstance(gene_name, str):
             return False
         gene_upper = gene_name.upper()
@@ -1308,21 +1325,7 @@ class FusionDetector:
             self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
                                                    g1_name, r1, g2_name, r2,
                                                    require_gene_names, max_intra_chr_distance) 
-            if flags["is_valid"] and require_exon_boundary:
-                left_gene  = meta.get("left_gene")
-                right_gene = meta.get("right_gene")
-                okL, whyL = self.check_gene_exon_boundary(left_gene,  c1, p1, delta=200)
-                okR, whyR = self.check_gene_exon_boundary(right_gene, c2, p2, delta=200)
-                if not okL or not okR:
-                    flags["is_valid"] = False
-                    # Append specific reasons (only non-empty strings)
-                    reasons = []
-                    if whyL: reasons.append(whyL)
-                    if whyR: reasons.append(whyR)
-                    if reasons:
-                        flags["reasons"].append("; ".join(reasons))
-
-            # skip reconstruction for mitochondrial candidates and invalid ones
+                # skip reconstruction for mitochondrial candidates and invalid ones
             if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
                 self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)
             else:

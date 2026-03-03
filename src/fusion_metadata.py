@@ -120,3 +120,39 @@ class FusionMetadata:
                 meta.setdefault('notes', []).append(f"Replaced pseudogene/ncRNA {gene} → {replacement} at consensus")
                 return replacement
         return gene
+
+    def build_exon_boundaries_for_genes(self, gene_names):
+        # Build a dict mapping gene names to their exon boundary positions.
+        boundaries_dict = {}
+        for gene_name in gene_names:
+            if not gene_name or gene_name == "intergenic":
+                continue
+            # Try to find the gene
+            try:
+                g = self.detector.db[gene_name]
+            except Exception:
+                # Try to find by gene_name attribute
+                try:
+                    genes = list(self.detector.db.features_of_type('gene'))
+                    g = None
+                    for gene in genes:
+                        if gene.attributes.get('gene_name', [None])[0] == gene_name:
+                            g = gene
+                            break
+                    if g is None:
+                        continue
+                except Exception:
+                    continue
+            # Get exons and extract boundary positions
+            try:
+                exons = self.detector._get_cached_exons(g)
+                boundaries = []
+                for ex_start, ex_end in exons:
+                    boundaries.append(ex_start)
+                    boundaries.append(ex_end)
+                if boundaries:
+                    boundaries_dict[gene_name] = boundaries
+            except Exception:
+                pass
+        return boundaries_dict
+
