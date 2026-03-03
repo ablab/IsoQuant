@@ -9,6 +9,7 @@ import sys
 import logging
 import gzip
 import numpy
+import math
 from ssw import AlignmentMgr
 
 from ..error_codes import IsoQuantExitCode
@@ -449,3 +450,11 @@ def load_barcodes(inf, needs_iterator=False):
         return barcode_iterator
 
     return list(barcode_iterator)
+
+
+def find_optimal_kmer_size(bc_len, bc_count, min_k=6, max_k=14, kmer_density=50):
+    k = min_k
+    while bc_count * (bc_len - k + 1)  * (bc_len - k + 1) > math.pow(4, k) * kmer_density:
+        k += 1
+
+    return min(k, max_k)
