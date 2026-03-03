@@ -12,7 +12,13 @@ from ..indexers import ArrayKmerIndexer, Array2BitKmerIndexer, Dict2BitKmerIndex
 from ..common import batch_str_to_2bit
 from ...error_codes import IsoQuantExitCode
 from .extraction_result import DetectedElement, ExtractionResult
-from ..common import find_polyt, reverese_complement, detect_exact_positions, find_candidate_with_max_score_ssw
+from ..common import (
+    find_polyt,
+    reverese_complement,
+    detect_exact_positions,
+    find_candidate_with_max_score_ssw,
+    find_optimal_kmer_size,
+)
 from .molecule_structure import ElementType, MoleculeStructure, MoleculeElement
 
 logger = logging.getLogger('IsoQuant')
@@ -129,14 +135,14 @@ class UniversalSingleMoleculeExtractor:
         logger.info("Minimal score for element %s is set to %d" % (base_name, self.min_scores[base_name]))
 
         if barcode_count > 1000000:
-            logger.warning("The number of barcodes for element %s is too large: %d, barcode calling may take substantial amount of time and RAM", (base_name, barcode_count))
+            logger.warning("The number of barcodes for element %s is large: %d, barcode calling may take substantial amount of time and RAM", (base_name, barcode_count))
+            logger.warning("We suggest to use a sub-list of barcodes derived from short-read analysis whenever possible")
 
-        kmer_size = min(max(6, int(barcode_length / 2) - 1), 15)
+        kmer_size = find_optimal_kmer_size(barcode_count, barcode_length)
         if kmer_size <= 8:
             if barcode_count < 100000 or variable_length:
                 self.index_dict[base_name] = ArrayKmerIndexer(barcode_list, kmer_size)
             else:
-                kmer_size += 1
                 self.index_dict[base_name] = Array2BitKmerIndexer(batch_str_to_2bit(barcode_list, barcode_length),
                                                                   kmer_size, seq_len=barcode_length)
         else:
@@ -145,7 +151,7 @@ class UniversalSingleMoleculeExtractor:
             else:
                 self.index_dict[base_name] = Dict2BitKmerIndexer(batch_str_to_2bit(barcode_list, barcode_length),
                                                                  kmer_size, seq_len=barcode_length)
-        logger.info("Indexed %d barcodes for element %s" % (barcode_count, base_name))
+        logger.info("Indexed %d barcodes for element %s of length %d with k-mer size %d" % (barcode_count, base_name, barcode_length, kmer_size))
 
     def prepare_barcode_index_for_element(self, element: MoleculeElement):
         if element.element_type not in (ElementType.VAR_LIST, ElementType.VAR_FILE):
