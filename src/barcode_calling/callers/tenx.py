@@ -49,6 +49,10 @@ class TenXBarcodeDetector:
         self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
         bc_length = len(barcode_list[0])
         bc_count = len(barcode_list)
+        if bc_count > 1000000:
+            logger.warning("The number of barcodes is large: barcode calling may take substantial amount of time and RAM, and affect the accuracy")
+            logger.warning("We suggest to use a sub-list of barcodes derived from short-read analysis whenever possible")
+
         self.k = find_optimal_kmer_size(bc_length, bc_count)
         if len(barcode_list) <= 100000:
             self.barcode_indexer = ArrayKmerIndexer(barcode_list, kmer_size=self.k)
