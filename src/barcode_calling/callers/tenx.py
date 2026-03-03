@@ -64,7 +64,7 @@ class TenXBarcodeDetector:
             self.min_score = 15
             self.score_diff = 1
 
-        logger.info("Indexed %d barcodes of length %d in %d k-mers" % (len(barcode_list), bc_length, self.k))
+        logger.info("Indexed %d barcodes of length %d with k-mer size %d" % (len(barcode_list), bc_length, self.k))
         logger.info("Minimal alignment score set to %d" % self.min_score)
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
