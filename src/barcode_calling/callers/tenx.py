@@ -65,7 +65,7 @@ class TenXBarcodeDetector:
             self.barcode_indexer = Array2BitKmerIndexer(barcode_bit_list, kmer_size=self.k, seq_len=self.BARCODE_LEN_10X)
             self.max_barcodes_hits = 10
             self.min_matching_kmers = 2
-            self.min_score = 15
+            self.min_score = 16
             self.score_diff = 1
 
         logger.info("Indexed %d barcodes of length %d with k-mer size %d" % (len(barcode_list), bc_length, self.k))
