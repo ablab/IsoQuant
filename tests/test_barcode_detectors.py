@@ -399,7 +399,7 @@ class TestTenXBarcodeDetector:
         """Test that min_score increases for large whitelists."""
         large_barcodes = [f"ACTG{i:012d}"[:16] for i in range(100001)]
         detector = TenXBarcodeDetector(large_barcodes)
-        assert detector.min_score == 15
+        assert detector.min_score == 16
 
     def test_no_match_random_sequence(self):
         """Test that random sequence returns no valid barcode."""
