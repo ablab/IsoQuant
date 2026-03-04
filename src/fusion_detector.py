@@ -60,12 +60,17 @@ class FusionDetector:
             return 0
 
     def _build_exon_cache(self):
-        # Pre-build exon cache for all genes to avoid repeated DB queries during fusion gene assignment
+        # Pre-build exon cache for all genes to avoid repeated DB queries during fusion gene assignment.
         if self.exon_cache:
             return  # Already built
         logger.debug("Building exon cache from genedb...")
         try:
-            for gene in self.db.features_of_type('gene'):
+            # Use interval tree to iterate genes if available (more efficient than db.features_of_type)
+            if self.interval_index is not None:
+                genes = self.interval_index.get_all_genes()
+            else:
+                genes = list(self.db.features_of_type('gene'))
+            for gene in genes:
                 gene_id = getattr(gene, 'id', None)
                 if not gene_id:
                     continue
@@ -79,10 +84,7 @@ class FusionDetector:
             logger.warning(f"Failed to build exon cache: {e}")
 
     def _get_cached_exons(self, gene):
-        """
-        Retrieve exons for a gene, preferring cached version.
-        Returns list of (start, end) tuples or empty list if not found.
-        """
+        # Retrieve exons for a gene, preferring cached version.
         gene_id = getattr(gene, 'id', None)
         if not gene_id:
             return []
@@ -313,11 +315,9 @@ class FusionDetector:
 
         return score
 
-    
     @lru_cache(maxsize=500000)
     def assign_fusion_gene_cached(self, chrom, pos):
         return self.assign_fusion_gene(chrom, pos)
-
 
     def assign_fusion_gene(self, chrom, pos, window=1000):
         # Requires IntervalTree for efficient gene querying
@@ -656,9 +656,6 @@ class FusionDetector:
             sum_w = 0
             # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
             # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
-            # To avoid O(n log n) per step, we sort the current slice by p2 only when window expands a lot,
-            # but in practice m is small; a simpler approach: rebuild a local sorted-by-p2 list for [j..i].
-            # This is acceptable because typical m per pair is not huge.
             for i in range(n):
                 p1_i, p2_i, wi = items[i]
                 # Expand p1-window
@@ -1063,7 +1060,12 @@ class FusionDetector:
             return  # already built
         logger.debug("Building symbol → biotype index from genedb...")
         try:
-            for gene in self.db.features_of_type('gene'):
+            # Use interval tree to iterate genes if available (more efficient)
+            if self.interval_index is not None:
+                genes = self.interval_index.get_all_genes()
+            else:
+                genes = list(self.db.features_of_type('gene'))
+            for gene in genes:
                 attrs = getattr(gene, 'attributes', {}) or {}
                 gene_name = attrs.get('gene_name', [None])[0]
                 if not gene_name:

@@ -127,22 +127,29 @@ class FusionMetadata:
         for gene_name in gene_names:
             if not gene_name or gene_name == "intergenic":
                 continue
-            # Try to find the gene
+            # Try to find the gene using interval tree (if available)
+            g = None
             try:
+                # First, try direct DB lookup by ID
                 g = self.detector.db[gene_name]
             except Exception:
-                # Try to find by gene_name attribute
-                try:
-                    genes = list(self.detector.db.features_of_type('gene'))
-                    g = None
-                    for gene in genes:
-                        if gene.attributes.get('gene_name', [None])[0] == gene_name:
-                            g = gene
-                            break
-                    if g is None:
-                        continue
-                except Exception:
-                    continue
+                # If not found by ID, search by gene_name attribute via interval tree
+                if self.detector.interval_index is not None:
+                    matching = self.detector.interval_index.find_genes_by_name(gene_name)
+                    if matching:
+                        g = matching[0]  # Use first match
+                else:
+                    # Fallback to DB search if no interval tree
+                    try:
+                        genes = list(self.detector.db.features_of_type('gene'))
+                        for gene in genes:
+                            if gene.attributes.get('gene_name', [None])[0] == gene_name:
+                                g = gene
+                                break
+                    except Exception:
+                        pass
+            if g is None:
+                continue
             # Get exons and extract boundary positions
             try:
                 exons = self.detector._get_cached_exons(g)

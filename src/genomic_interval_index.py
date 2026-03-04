@@ -111,8 +111,36 @@ class GenomicIntervalIndex:
         return exons
 
     def get_exons_of_gene(self, gene_feature):
-        """Get all exons for a specific gene feature."""
+        # Get all exons for a specific gene feature.
         try:
             return list(self.db.children(gene_feature, featuretype="exon", order_by="start"))
         except Exception:
             return []
+
+    def get_all_genes(self):
+        # Iterate through all genes in the indexed database via interval trees.
+        genes = []
+        for chrom, tree in self.gene_trees.items():
+            for interval in tree:
+                try:
+                    gene_id = interval.data
+                    gene = self.db[gene_id]
+                    genes.append(gene)
+                except Exception:
+                    pass
+        return genes
+
+    def find_genes_by_name(self, gene_name):
+        # Find all genes with matching gene_name attribute.
+        matching_genes = []
+        for chrom, tree in self.gene_trees.items():
+            for interval in tree:
+                try:
+                    gene_id = interval.data
+                    gene = self.db[gene_id]
+                    attrs = getattr(gene, 'attributes', {}) or {}
+                    if attrs.get('gene_name', [None])[0] == gene_name:
+                        matching_genes.append(gene)
+                except Exception:
+                    pass
+        return matching_genes
