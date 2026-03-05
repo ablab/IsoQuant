@@ -422,7 +422,8 @@ def check_and_load_args(args, parser):
 
 
 def load_previous_run(args):
-    logger.info("Loading parameters of the previous run, all arguments will be ignored")
+    logger.info("Loading parameters from the previous run")
+    logger.error("Only --output/--threads/--debug/--high_memory are compatible with --resume option")
     unpickler = pickle.Unpickler(open(args.param_file, "rb"), fix_imports=False)
     loaded_args = unpickler.load()
 
