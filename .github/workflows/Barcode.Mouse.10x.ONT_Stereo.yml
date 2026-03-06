@@ -1,4 +1,4 @@
-name: Barcode Mouse 10x ONT Stereo
+name: Barcode Mouse 10x ONT 3.8% error rate
 
 on:
   workflow_dispatch:
