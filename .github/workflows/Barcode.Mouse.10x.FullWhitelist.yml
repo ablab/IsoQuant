@@ -66,6 +66,7 @@ jobs:
           fetch-depth: 1
 
       - name: 'Mouse 10x v3 3M full whitelist'
+        if: always()
         shell: bash
         env:
           STEP_NAME: Mouse.10x.v3.3M.full
@@ -75,6 +76,7 @@ jobs:
 
       - name: 'Mouse 10x v2 737K full whitelist'
         shell: bash
+        if: always()
         env:
           STEP_NAME: Mouse.10x.v2.737K.full
         run: |

@@ -67,6 +67,7 @@ jobs:
 
       - name: 'Custom SC StereoSeq small (KmerIndexer)'
         shell: bash
+        if: always()
         env:
           STEP_NAME: Mouse.StereoSeq.custom_sc.small
         run: |
@@ -75,6 +76,7 @@ jobs:
 
       - name: 'Custom SC StereoSeq large (Dict2BitKmerIndexer)'
         shell: bash
+        if: always()
         env:
           STEP_NAME: Mouse.StereoSeq.custom_sc.large
         run: |

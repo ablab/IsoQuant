@@ -66,6 +66,7 @@ jobs:
           fetch-depth: 1
 
       - name: 'Human Curio ONT'
+        if: always()
         shell: bash
         env:
           STEP_NAME: Human.Curio.A0079_044.ONT.curio_model

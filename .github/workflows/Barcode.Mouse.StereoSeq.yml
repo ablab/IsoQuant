@@ -66,6 +66,7 @@ jobs:
           fetch-depth: 1
 
       - name: 'Mouse StereoSeq'
+        if: always()
         shell: bash
         env:
           STEP_NAME: Mouse.StereoSeq.D04620C2.10M

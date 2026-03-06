@@ -66,6 +66,7 @@ jobs:
           fetch-depth: 1
 
       - name: 'Mouse Visium HD'
+        if: always()
         shell: bash
         env:
           STEP_NAME: Mouse.VisiumHD.v1.s1.sep.10M.correct_struct

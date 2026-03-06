@@ -66,6 +66,7 @@ jobs:
           fetch-depth: 1
 
       - name: 'Custom SC Curio small (ArrayKmerIndexer)'
+        if: always()
         shell: bash
         env:
           STEP_NAME: Human.Curio.custom_sc.small
@@ -74,6 +75,7 @@ jobs:
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
 
       - name: 'Custom SC Curio large (Array2BitKmerIndexer)'
+        if: always()
         shell: bash
         env:
           STEP_NAME: Human.Curio.custom_sc.large
