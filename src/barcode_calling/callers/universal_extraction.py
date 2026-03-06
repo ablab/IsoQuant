@@ -138,7 +138,7 @@ class UniversalSingleMoleculeExtractor:
             logger.warning("The number of barcodes for element %s is large: %d, barcode calling may take substantial amount of time and RAM", (base_name, barcode_count))
             logger.warning("We suggest to use a sub-list of barcodes derived from short-read analysis whenever possible")
 
-        kmer_size = find_optimal_kmer_size(barcode_count, barcode_length)
+        kmer_size = find_optimal_kmer_size(barcode_length, barcode_count)
         if kmer_size <= 8:
             if barcode_count < 100000 or variable_length:
                 self.index_dict[base_name] = ArrayKmerIndexer(barcode_list, kmer_size)
