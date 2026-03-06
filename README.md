@@ -74,13 +74,14 @@ You can leave your comments and bug reports at our [GitHub repository tracker](h
 
 *   Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
 
-*   IsoQuant can be downloaded from [github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda:
+*   IsoQuant can be downloaded from [github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda (typically takes a few minutes):
 
-        conda create -c conda-forge -c bioconda -n isoquant python=3.8 isoquant
+        conda create -c conda-forge -c bioconda -n isoquant python=3.12 isoquant
 
 *   If installing manually, you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
+All required Python libraries can be installed via `pip install -r requirements.txt`.
 
-*   Verify your installation by running:
+*   Verify your installation by running (typically takes less than 1 minute):
 
         isoquant.py --test
 
