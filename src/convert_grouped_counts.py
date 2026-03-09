@@ -41,7 +41,8 @@ def set_logger(logger_instance):
 
 
 def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_dict=None,
-                      gzipped=False, feature_type='gene', convert_to_tpm=False, usable_reads_per_group=None):
+                      gzipped=False, feature_type='gene', convert_to_tpm=False, usable_reads_per_group=None,
+                      max_groups: int = 0):
     logger.info("Converting %s to full matrix" % input_linear_counts)
     cols = len(open(input_linear_counts).readline().strip().split('\t'))
     if cols != 3:
@@ -56,13 +57,19 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
     normalization_factors = {g: 1.0 for g in df['group_id'].unique()} if not convert_to_tpm \
         else get_normalization_factors(df, usable_reads_per_group)
 
+    num_groups = len(count_matrix.columns)
+    if max_groups > 0 and num_groups > max_groups:
+        logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
+                     "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
+        return
+
     output_file_path += ".tsv"
     output_file_path += ".gz" if gzipped else ""
     with gzip.open(output_file_path, 'wt') if gzipped else open(output_file_path, 'w') as outfile:
         # Write the header with group_ids
         columns = list(sorted(count_matrix.columns))
-        if len(columns) > GROUP_COUNT_CUTOFF:
-            logger.warning("You have %d groups in your matrix, conversion might take a lot of time and the output file can be very large" % len(columns))
+        if num_groups > GROUP_COUNT_CUTOFF:
+            logger.warning("You have %d groups in your matrix, conversion might take a lot of time and the output file can be very large" % num_groups)
         outfile.write(feature_type + '_id\t' + '\t'.join(columns) + '\n')
 
         # Iterate over the DataFrame and write rows to the file
