@@ -154,7 +154,7 @@ class DatasetProcessor:
         split_barcodes_dict = {}
         barcode_split_done = None
 
-        if self.args.mode.needs_pcr_deduplication():
+        if self.args.mode.needs_pcr_deduplication() and not getattr(self.args, 'barcoded_bam', False):
             if self.args.barcoded_reads:
                 sample.barcoded_reads = self.args.barcoded_reads
 

@@ -202,7 +202,7 @@ Single-cell and spatial modes enable automatic barcode calling and UMI-based ded
 
 `--barcode_whitelist`
 Path to file(s) with barcode whitelist(s) for barcode calling.
-Required for single-cell/spatial modes unless `--barcoded_reads` is provided.
+Required for single-cell/spatial modes unless `--barcoded_reads` or `--barcoded_bam` is provided.
 
 File should contain one barcode sequence per line. 
 More than 1 tab-separated column is allowed, but only the first will be used.
@@ -219,9 +219,15 @@ Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
 If provided, IsoQuant skips barcode calling and uses these assignments directly.
 More than 3 columns are allowed, but only the first 3 will be used.
 
-_Notes:_
-- IsoQuant does not read barcodes or UMIs from BAM file tags;
-- IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
+Note: IsoQuant will perform per-barcode quantification automatically.
+
+
+`--barcoded_bam`
+Extract barcodes and UMIs from BAM tags instead of calling barcodes.
+Uses `CB` (cell barcode) and `UB` (UMI) tags by default (standard 10x Genomics / cellranger tags).
+Mutually exclusive with `--barcode_whitelist` and `--barcoded_reads`.
+
+Note: IsoQuant will perform per-barcode quantification automatically.
 
 `--barcode2spot`
 Path to TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
