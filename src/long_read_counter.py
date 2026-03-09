@@ -454,19 +454,22 @@ class AssignedFeatureCounter(AbstractCounter):
 
         num_groups = self._get_num_groups()
         counts_format = {GroupedOutputFormat[f] for f in args.counts_format}
-        if (GroupedOutputFormat.matrix in counts_format or
-                (GroupedOutputFormat.default in counts_format and num_groups <= GROUP_COUNT_CUTOFF)):
-            convert_to_matrix(self.output_file, self.output_counts_prefix)
+        explicit_matrix = GroupedOutputFormat.matrix in counts_format
+        default_format = GroupedOutputFormat.default in counts_format
+        if explicit_matrix or default_format:
+            max_groups = GROUP_COUNT_CUTOFF if default_format and not explicit_matrix else 0
+            convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups)
             if normalization_method != NormalizationMethod.none:
                 reads_for_tpm = None
                 if normalization_method == NormalizationMethod.usable_reads:
                     reads_for_tpm = {self._get_group_name(group_id): self.reads_for_tpm[group_id]
                                      for group_id in range(num_groups)}
                 convert_to_matrix(self.output_file, self.output_tpm_prefix,
-                                  convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
+                                  convert_to_tpm=True, usable_reads_per_group=reads_for_tpm,
+                                  max_groups=max_groups)
 
         if (GroupedOutputFormat.mtx in counts_format or
-                (GroupedOutputFormat.default in counts_format and num_groups > GROUP_COUNT_CUTOFF)):
+                (default_format and num_groups > GROUP_COUNT_CUTOFF)):
             convert_to_mtx(self.output_file, self.output_counts_prefix)
             if normalization_method != NormalizationMethod.none:
                 reads_for_tpm = None
