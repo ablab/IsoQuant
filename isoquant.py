@@ -179,6 +179,8 @@ def parse_args(cmd_args=None, namespace=None):
                       help='BAM tag for cell barcode (default: CB)')
     add_hidden_option("--umi_tag", type=str, default="UB",
                       help='BAM tag for UMI (default: UB)')
+    add_hidden_option("--strip_barcode_suffix", action='store_true', default=False,
+                      help='remove suffix after dash from barcodes (e.g. ACGT-1 -> ACGT)')
     add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str,
                                    help='TSV file mapping barcode to cell type / spot id. '
                                         'Format: file.tsv or file.tsv:barcode_col:spot_cols '
