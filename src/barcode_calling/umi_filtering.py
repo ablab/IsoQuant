@@ -545,6 +545,7 @@ class UMIFilter:
                         grouping_key = barcode
                         if self.barcode_remap and barcode in self.barcode_remap:
                             grouping_key = self.barcode_remap[barcode]
+                            read_assignment.barcode = grouping_key
                         gene_barcode_dict[gene_id][grouping_key].append(read_assignment)
 
                 # Process chunk
