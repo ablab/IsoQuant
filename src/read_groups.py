@@ -355,8 +355,8 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             logger.critical("barcode_spot grouping requires --barcode2spot")
             sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
-        if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
-            logger.critical("barcode_spot grouping requires barcoded reads (use --barcoded_reads)")
+        if (not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads) and not getattr(args, 'barcoded_bam', False):
+            logger.critical("barcode_spot grouping requires barcoded reads (use --barcoded_reads or --barcoded_bam)")
             sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
         # Parse barcode2spot spec
@@ -381,8 +381,8 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             logger.critical("barcode_barcode grouping requires --barcode2barcode")
             sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
-        if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
-            logger.critical("barcode_barcode grouping requires barcoded reads (use --barcoded_reads)")
+        if (not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads) and not getattr(args, 'barcoded_bam', False):
+            logger.critical("barcode_barcode grouping requires barcoded reads (use --barcoded_reads or --barcoded_bam)")
             sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
         filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2barcode)
@@ -398,8 +398,8 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             return groupers
     elif values[0] == 'barcode':
         # Direct barcode grouping - uses barcode from read_assignment
-        if not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads:
-            logger.critical("barcode grouping requires barcoded reads (use --barcoded_reads)")
+        if (not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads) and not getattr(args, 'barcoded_bam', False):
+            logger.critical("barcode grouping requires barcoded reads (use --barcoded_reads or --barcoded_bam)")
             sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
 
         return BarcodeGrouper()

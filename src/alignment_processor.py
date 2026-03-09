@@ -247,7 +247,8 @@ class AlignmentCollector:
                  barcode_dict=None,
                  small_chr_max_coverage=1000000,
                  usual_gene_max_coverage=-1,
-                 string_pools=None):
+                 string_pools=None,
+                 barcode_tag: str = None, umi_tag: str = None):
         self.chr_id = chr_id
         self.bam_pairs = bam_pairs
         self.params = params
@@ -262,6 +263,8 @@ class AlignmentCollector:
         self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
         self.barcode_dict = barcode_dict # read_id -> (barcode, umi)
+        self.barcode_tag = barcode_tag
+        self.umi_tag = umi_tag
         self.small_chr_max_coverage = small_chr_max_coverage
         self.usual_gene_max_coverage = usual_gene_max_coverage
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
@@ -396,6 +399,9 @@ class AlignmentCollector:
             # Populate barcode and UMI first (needed by some groupers)
             if read_id in self.barcode_dict:
                 read_assignment.barcode, read_assignment.umi = self.barcode_dict[read_id]
+            elif self.barcode_tag and alignment.has_tag(self.barcode_tag):
+                read_assignment.barcode = alignment.get_tag(self.barcode_tag)
+                read_assignment.umi = alignment.get_tag(self.umi_tag) if alignment.has_tag(self.umi_tag) else None
             # Get group ID(s) - pass read_assignment for groupers that need barcode
             group_ids = self.read_groupper.get_group_id(alignment, read_assignment, self.bam_merger.bam_pairs[bam_index][1])
             # Ensure read_group is always a list
@@ -467,6 +473,9 @@ class AlignmentCollector:
             # Populate barcode and UMI first (needed by some groupers)
             if read_id in self.barcode_dict:
                 read_assignment.barcode, read_assignment.umi = self.barcode_dict[read_id]
+            elif self.barcode_tag and alignment.has_tag(self.barcode_tag):
+                read_assignment.barcode = alignment.get_tag(self.barcode_tag)
+                read_assignment.umi = alignment.get_tag(self.umi_tag) if alignment.has_tag(self.umi_tag) else None
             # Get group ID(s) - pass read_assignment for groupers that need barcode
             group_ids = self.read_groupper.get_group_id(alignment, read_assignment, self.bam_merger.bam_pairs[bam_index][1])
             # Ensure read_group is always a list

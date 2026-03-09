@@ -168,10 +168,14 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     # Load barcode dict for this chromosome if available
     barcode_dict = load_barcode_dict(sample, chr_id)
 
+    barcode_tag = args.barcode_tag if getattr(args, 'barcoded_bam', False) else None
+    umi_tag = args.umi_tag if getattr(args, 'barcoded_bam', False) else None
+
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
         AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper,
-                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr, string_pools)
+                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr, string_pools,
+                           barcode_tag=barcode_tag, umi_tag=umi_tag)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)

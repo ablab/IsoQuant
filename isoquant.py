@@ -172,6 +172,13 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='file(s) with barcode whitelist(s) for barcode calling')
     add_additional_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
                                    help='TSV file(s) with barcoded reads; barcodes will be called automatically if not provided')
+    add_additional_option_to_group(sc_args_group, "--barcoded_bam", action='store_true', default=False,
+                                   help='extract barcodes and UMIs from BAM tags (CB/UB by default); '
+                                        'bypasses barcode calling')
+    add_hidden_option("--barcode_tag", type=str, default="CB",
+                      help='BAM tag for cell barcode (default: CB)')
+    add_hidden_option("--umi_tag", type=str, default="UB",
+                      help='BAM tag for UMI (default: UB)')
     add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str,
                                    help='TSV file mapping barcode to cell type / spot id. '
                                         'Format: file.tsv or file.tsv:barcode_col:spot_cols '
@@ -542,18 +549,33 @@ def check_input_params(args):
 
     args.umi_length = 0
     if args.mode.needs_barcode_calling():
+        barcode_sources = sum([bool(args.barcode_whitelist), bool(args.barcoded_reads), bool(args.barcoded_bam)])
+        if barcode_sources > 1:
+            logger.critical("Options --barcode_whitelist, --barcoded_reads, and --barcoded_bam are mutually exclusive")
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
         if args.mode == IsoQuantMode.custom_sc:
-            if not args.molecule and not args.barcoded_reads:
-                logger.critical("custom_sc mode requires --molecule or --barcoded_reads")
+            if not args.molecule and not args.barcoded_reads and not args.barcoded_bam:
+                logger.critical("custom_sc mode requires --molecule, --barcoded_reads, or --barcoded_bam")
                 sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
-        elif not args.barcode_whitelist and not args.barcoded_reads:
-            logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist or file with "
-                            "barcoded reads" % args.mode.name)
+        elif not args.barcode_whitelist and not args.barcoded_reads and not args.barcoded_bam:
+            logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist, "
+                            "file with barcoded reads, or --barcoded_bam" % args.mode.name)
             sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
-        args.umi_length = get_umi_length(args.mode)
+        if args.barcoded_bam:
+            args.umi_length = _detect_umi_length_from_bam(args.input_data.samples[0].file_list[0][0], args.umi_tag)
+        else:
+            args.umi_length = get_umi_length(args.mode)
 
     check_input_files(args)
     return True
+
+
+def _detect_umi_length_from_bam(bam_path: str, umi_tag: str) -> int:
+    with pysam.AlignmentFile(bam_path, "rb") as bam:
+        for read in bam:
+            if read.has_tag(umi_tag):
+                return len(read.get_tag(umi_tag))
+    return 0
 
 
 def check_bam_file(bam_path: str, check_index: bool = True):
@@ -993,32 +1015,38 @@ class BarcodeCallingArgs:
 
 
 def call_barcodes(args):
-    if not args.barcoded_reads:
-        for sample in args.input_data.samples:
-            # Collect all input files for this sample
-            input_files = [files[0] for files in sample.file_list]
-            output_barcodes_list = [sample.barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
-            barcodes_done_list = [sample.barcodes_done + "_%d.tsv" % i for i in range(len(input_files))]
+    if args.barcoded_bam:
+        logger.info("Barcodes will be extracted from BAM tags (%s/%s)" % (args.barcode_tag, args.umi_tag))
+        return
+    if args.barcoded_reads:
+        # TODO barcoded files via YAML
+        args.input_data.samples[0].barcoded_reads = args.barcoded_reads
+        return
+    for sample in args.input_data.samples:
+        # Collect all input files for this sample
+        input_files = [files[0] for files in sample.file_list]
+        output_barcodes_list = [sample.barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
+        barcodes_done_list = [sample.barcodes_done + "_%d.tsv" % i for i in range(len(input_files))]
 
-            output_fasta_list = None
-            new_reads = []
+        output_fasta_list = None
+        new_reads = []
+        if args.mode.produces_new_fasta():
+            output_fasta_list = [sample.split_reads_fasta + "_%d.fa" % i for i in range(len(input_files))]
+            new_reads = [[fasta] for fasta in output_fasta_list]
+
+        # Check if all files were already processed during resume
+        all_done = all(os.path.exists(done) for done in barcodes_done_list)
+        if all_done and args.resume:
+            logger.info("Barcodes were called during the previous run, skipping")
+            sample.barcoded_reads.extend(output_barcodes_list)
             if args.mode.produces_new_fasta():
-                output_fasta_list = [sample.split_reads_fasta + "_%d.fa" % i for i in range(len(input_files))]
-                new_reads = [[fasta] for fasta in output_fasta_list]
+                sample.file_list = new_reads
+            continue
 
-            # Check if all files were already processed during resume
-            all_done = all(os.path.exists(done) for done in barcodes_done_list)
-            if all_done and args.resume:
-                logger.info("Barcodes were called during the previous run, skipping")
-                sample.barcoded_reads.extend(output_barcodes_list)
-                if args.mode.produces_new_fasta():
-                    sample.file_list = new_reads
-                continue
-
-            # Remove existing done markers
-            for barcodes_done in barcodes_done_list:
-                if os.path.exists(barcodes_done):
-                    os.remove(barcodes_done)
+        # Remove existing done markers
+        for barcodes_done in barcodes_done_list:
+            if os.path.exists(barcodes_done):
+                os.remove(barcodes_done)
 
             bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
             bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
@@ -1038,23 +1066,20 @@ def call_barcodes(args):
                 else:
                     future_res = proc.submit(process_in_parallel, bc_args)
 
-                concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
-                if future_res.exception() is not None:
-                    raise future_res.exception()
+            concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
+            if future_res.exception() is not None:
+                raise future_res.exception()
 
-            # Mark all files as done and add to barcoded_reads
-            for i, (input_file, output_barcodes, barcodes_done) in enumerate(zip(input_files, output_barcodes_list, barcodes_done_list)):
-                sample.barcoded_reads.append(output_barcodes)
-                open(barcodes_done, "w").close()
-                logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
+        # Mark all files as done and add to barcoded_reads
+        for i, (input_file, output_barcodes, barcodes_done) in enumerate(zip(input_files, output_barcodes_list, barcodes_done_list)):
+            sample.barcoded_reads.append(output_barcodes)
+            open(barcodes_done, "w").close()
+            logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
 
-            if args.mode.produces_new_fasta():
-                logger.info("Reads were split during barcode calling")
-                logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
-                sample.file_list = new_reads
-    else:
-        # TODO barcoded files via YAML
-        args.input_data.samples[0].barcoded_reads = args.barcoded_reads
+        if args.mode.produces_new_fasta():
+            logger.info("Reads were split during barcode calling")
+            logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
+            sample.file_list = new_reads
 
 
 def run_pipeline(args):
