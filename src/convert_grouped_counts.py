@@ -42,12 +42,17 @@ def set_logger(logger_instance):
 
 def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_dict=None,
                       gzipped=False, feature_type='gene', convert_to_tpm=False, usable_reads_per_group=None,
-                      max_groups: int = 0):
+                      max_groups: int = 0) -> int:
+    """Convert linear counts to full matrix format.
+
+    Returns:
+        Number of groups found in the input file, or 0 on error.
+    """
     logger.info("Converting %s to full matrix" % input_linear_counts)
     cols = len(open(input_linear_counts).readline().strip().split('\t'))
     if cols != 3:
         logger.error("Unexpected number of columns in %s: %d" % (input_linear_counts, cols))
-        return
+        return 0
 
     df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1, keep_default_na=False,
                          names=['gene_id', 'group_id', 'count'],
@@ -61,7 +66,7 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
     if max_groups > 0 and num_groups > max_groups:
         logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
                      "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
-        return
+        return num_groups
 
     output_file_path += ".tsv"
     output_file_path += ".gz" if gzipped else ""
@@ -79,6 +84,7 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
             gene_name = gene_id if feature_id_to_name_dict is None else feature_id_to_name_dict.get(gene_id, gene_id)
             outfile.write(gene_name + '\t' + '\t'.join(values) + '\n')
     logger.info("Matrix was saved to %s" % output_file_path)
+    return num_groups
 
 
 def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=None,
