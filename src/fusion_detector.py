@@ -7,6 +7,7 @@ import logging
 from functools import lru_cache
 from intervaltree import IntervalTree
 from .genomic_interval_index import GenomicIntervalIndex
+from .fusion_validator import FusionValidator
 
 logger = logging.getLogger('IsoQuant')
 Antisense_suffix = re.compile(r"-(AS\d+|DT|DIVERGENT|NAT)$", re.IGNORECASE)
@@ -1009,59 +1010,6 @@ class FusionDetector:
         # Used in build_metadata to decide gene reassignment strategy
         return min(support_count, 10) / 10.0
 
-    def is_driver_gene(self, gene):
-        driver_genes = {
-        "BCR", "ABL1", "RUNX1", "RUNX1T1", "PML", "RARA", "ETV6",
-        "NUP98", "NUP214", "KMT2A", "MLLT3", "EWSR1", "ERG",
-        "FGFR1", "RET", "ROS1", "ALK", "TMPRSS2", "FLI1",
-        "MYH11", "CBFB"
-        }
-        return gene in driver_genes
-
-    def is_multicopy_artifact_family(self, gene):
-        prefixes = ("RPL","RPS","MRPL","MRPS","H1-","H2A","H2B","H3-","H4-",
-                    "HIST1","HIST2","HIST3","HLA-","MICA","MICB","KRT","KRT",
-                    "OR","ZNF","DEFA","DEFB","IGH","IGK","IGL","TRAV","TRBV","TRGV","TRDV",
-                    "MUC","AMY","CYP")
-        g = gene.upper()
-        return g.startswith(prefixes)
-
-    def calculate_exon_boundary_bonus(self, meta, candidate):
-        bL = meta.get("left_min_exon_boundary_delta")   # pre-compute & store
-        bR = meta.get("right_min_exon_boundary_delta")
-        boundary_bonus = 0.0
-        if isinstance(bL, int):
-            boundary_bonus += max(0.0, min(0.20, (200 - min(bL, 200)) / 200.0 * 0.20))
-        if isinstance(bR, int):
-            boundary_bonus += max(0.0, min(0.20, (200 - min(bR, 200)) / 200.0 * 0.20))
-        boundary_bonus = min(boundary_bonus, 0.25)
-        return boundary_bonus
-
-    def confidence(self, meta, flags=None):
-        # Full confidence computation including reconstruction/realignment bonuses
-        # Start from clustered support normalized
-        support = min(meta.get("support", 0), 10) / 10.0
-        # Reconstruction bonus
-        recon = 0.2 if meta.get("reconstruction_ok") else 0.0
-        # Realignment bonus: scale by number of hits and MAPQ
-        hits = meta.get("realignment_hits", 0)
-        mapq = meta.get("best_hit_mapq", 0)
-        realign = min(hits, 3) * 0.1 + min(mapq, 30) / 300.0
-        # Exon boundary bonus
-        boundary_bonus = self.calculate_exon_boundary_bonus(meta, None)
-        # Driver gene bonus vs artifact penalty
-        priors = 0.0
-        left = meta.get("left_gene")
-        right = meta.get("right_gene")
-        if left and right:
-            if self.is_multicopy_artifact_family(left) or self.is_multicopy_artifact_family(right):
-                priors -= 0.25
-            if self.is_driver_gene(left) or self.is_driver_gene(right):
-                priors += 0.10
-        penalties = 0.0
-        conf = max(0.0, min(1.0, support + recon + realign + boundary_bonus + priors))
-        return conf
-
     def canonical_locus_name(self, gene_name):
         # Collapse antisense / divergent transcript names to the canonical locus name.
         if not gene_name:
@@ -1069,23 +1017,6 @@ class FusionDetector:
         # Strip common antisense / divergent suffixes
         collapsed = Antisense_suffix.sub("", gene_name)
         return collapsed
-
-    def _meta_has_pseudogene_partner(self, meta):
-        # Return True if either consensus-assigned partner is a pseudogene/ncRNA
-        consensus = meta.get("consensus_bp")
-        if not consensus:
-            return False
-        c1, p1, c2, p2 = consensus
-        left = meta.get("left_gene")
-        right = meta.get("right_gene")
-        try:
-            if self.is_bad_gene(left, c1, p1):
-                return True
-            if self.is_bad_gene(right, c2, p2):
-                return True
-        except Exception:
-            return False
-        return False
 
     def _build_symbol_biotype_index(self):
         # One-time index construction: map HGNC symbols to biotypes using all genes in db
@@ -1161,23 +1092,6 @@ class FusionDetector:
         if not gene_name:
             return None
         return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
-
-    def is_bad_gene(self, gene_name, chrom=None, pos=None):
-        # Check if a gene is "bad" (pseudogene, ncRNA, etc.) based on its biotype.
-        # Uses HGNC symbol with coordinate-based fallback if needed.
-        if not gene_name:
-            return False
-        biotype = self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
-        if biotype is None:
-            return False
-        biotype_lower = biotype.lower()
-        bad_types = (
-            'pseudogene', 'processed_pseudogene', 'unprocessed_pseudogene',
-            'transcribed_unitary_pseudogene', 'polymorphic_pseudogene', 'unitary_pseudogene',
-            'lncrna', 'lincrna', 'antisense', 'sense_intronic', 'sense_overlapping',
-            'snrna', 'mirna'
-        )
-        return any(bt in biotype_lower for bt in bad_types)
 
     def _merge_fully_identical(self):
         # Detect and merge fully identical fusions (same genes AND same consensus breakpoints).
@@ -1322,111 +1236,15 @@ class FusionDetector:
                     meta["supporting_reads"].update(discard_meta["supporting_reads"])
                     meta["support"] = len(meta["supporting_reads"])
 
-    def is_ribosomal_or_histone_gene(self, gene_name):
-        # Check if a gene is ribosomal or histone-related based on name patterns.
-        if not gene_name or not isinstance(gene_name, str):
-            return False
-        gene_upper = gene_name.upper()
-        # Ribosomal protein genes: RPL*, RPS*, RPLP*
-        # Histone genes: HIST*, H1*, H2A*, H2B*, H3*, H4*
-        rib_hist_patterns = ('RPL', 'RPS', 'RPLP', 'HIST', 'H1', 'H2A', 'H2B', 'H3', 'H4')
-        return any(gene_upper.startswith(p) for p in rib_hist_patterns)
-
-    def _filter_non_coding_genes(self):
-        # Drop fusions involving any non-protein-coding partner gene.
-        # This filter is applied after breakpoint clustering and gene assignment.
-        # Removes fusions with non-protein-coding partners completely from all data structures.
-        fusions_to_discard = []
-        for fusion_key, meta in list(self.fusion_metadata.items()):
-            left_gene = meta.get("left_gene")
-            right_gene = meta.get("right_gene")
-            left_chr, left_pos = None, None
-            right_chr, right_pos = None, None
-            consensus_bp = meta.get("consensus_bp")
-            if consensus_bp:
-                left_chr, left_pos, right_chr, right_pos = consensus_bp
-            # Get biotypes for both genes
-            left_biotype = self.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
-            right_biotype = self.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
-            # Discard if either partner is non-protein-coding (or unknown/not found)
-            left_is_coding = left_biotype == "protein_coding"
-            right_is_coding = right_biotype == "protein_coding"
-            if not left_is_coding or not right_is_coding:
-                reason = []
-                if not left_is_coding:
-                    reason.append(f"Left gene {left_gene} is non-coding (biotype: {left_biotype})")
-                if not right_is_coding:
-                    reason.append(f"Right gene {right_gene} is non-coding (biotype: {right_biotype})")
-                logger.info(f"Discarding non-coding fusion: {fusion_key} - {'; '.join(reason)}")
-                fusions_to_discard.append(fusion_key)
-        # Remove all discarded fusions from data structures
-        for fusion_key in fusions_to_discard:
-            if fusion_key in self.fusion_metadata:
-                del self.fusion_metadata[fusion_key]
-            if fusion_key in self.fusion_candidates:
-                del self.fusion_candidates[fusion_key]
-            if fusion_key in self.fusion_breakpoints:
-                del self.fusion_breakpoints[fusion_key]
-
-    def apply_frequency_filters(self):
-        # Filter out multicopy artifacts based on gene frequency within the sample.
-        if not self.fusion_metadata:
-            return
-        # Count gene frequencies across all fusions
-        left_gene_count = defaultdict(int)
-        right_gene_count = defaultdict(int)
-        for fusion_key, meta in self.fusion_metadata.items():
-            left_gene = meta.get("left_gene")
-            right_gene = meta.get("right_gene")
-            if left_gene and left_gene != "intergenic":
-                left_gene_count[left_gene] += 1
-            if right_gene and right_gene != "intergenic":
-                right_gene_count[right_gene] += 1
-        # Mark fusions with high-frequency genes as artifacts
-        for fusion_key, meta in self.fusion_metadata.items():
-            if meta.get("is_valid") == False:
-                # Already marked invalid, skip
-                continue
-            left_gene = meta.get("left_gene")
-            right_gene = meta.get("right_gene")
-            artifact_reasons = []
-            # Check left gene frequency
-            if left_gene and left_gene != "intergenic":
-                is_rib_hist = self.is_ribosomal_or_histone_gene(left_gene)
-                # lower threshold for ribosomal protein artifacts
-                threshold = 2 if is_rib_hist else 4
-                count = left_gene_count.get(left_gene, 0)
-                if count > threshold:
-                    artifact_reasons.append(
-                        f"Left gene '{left_gene}' appears {count} times "
-                        f"(threshold={threshold} for {'ribosomal/histone' if is_rib_hist else 'other'} genes)"
-                    )
-            # Check right gene frequency
-            if right_gene and right_gene != "intergenic":
-                is_rib_hist = self.is_ribosomal_or_histone_gene(right_gene)
-                threshold = 2 if is_rib_hist else 4
-                count = right_gene_count.get(right_gene, 0)
-                if count > threshold:
-                    artifact_reasons.append(
-                        f"Right gene '{right_gene}' appears {count} times "
-                        f"(threshold={threshold} for {'ribosomal/histone' if is_rib_hist else 'other'} genes)"
-                    )
-            # Mark as artifact if any gene exceeds threshold
-            if artifact_reasons:
-                meta["is_valid"] = False
-                if "reasons" not in meta:
-                    meta["reasons"] = []
-                meta["reasons"].extend(artifact_reasons)
-
     def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
                         require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
         self.fusion_assigned_pairs.clear()
-        # Filter out fusions with non-protein-coding partner genes early
-        self._filter_non_coding_genes()
-        # Apply frequency-based filtering for multicopy artifacts after metadata building
-        self.apply_frequency_filters()
+        # Delegate validation and filtering to FusionValidator
+        validator = FusionValidator(self)
+        validator.filter_non_coding_genes()
+        validator.apply_frequency_filters()
         for fusion_key, meta in self.fusion_metadata.items():
             # Check if already marked invalid by frequency filter
             if meta.get("is_valid") == False:
@@ -1468,10 +1286,10 @@ class FusionDetector:
                 flags["reasons"].append("cis-SAGe disallowed by policy")
 
             # Compute full confidence (includes reconstruction/realignment bonuses)
-            conf = self.confidence(meta, flags)
+            conf = validator.confidence(meta, flags)
             meta["confidence"] = conf
             # convert very low-confidence to invalid
-            if conf < 0.20 and meta.get("support", 0) < 2 and flags["is_valid"]:
+            if conf < 0.30 and meta.get("support", 0) < 2 and flags["is_valid"]:
                 flags["is_valid"] = False
                 flags["reasons"].append("Low confidence")
             meta.update(flags)
@@ -1480,7 +1298,8 @@ class FusionDetector:
                 include_classes=("canonical","cis-SAGe"),
                 min_confidence=0.3, only_valid=False):
             self.validate_candidates(min_support=min_support)
-            self.merge_nearly_identical()
+            validator = FusionValidator(self)
+            validator.merge_nearly_identical()
             with open(output_path, "w") as f:
                 f.write("LeftGene\tLeftBiotype\tRawLeftGene\tLeftChromosome\tLeftBreakpoint\t"
                         "RightGene\tRightBiotype\tRawRightGene\tRightChromosome\tRightBreakpoint\t"
@@ -1497,12 +1316,6 @@ class FusionDetector:
                     left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
                     left_gene  = meta["left_gene"]
                     right_gene = meta["right_gene"]
-                    # Exclude intergenic fusions (no true positives)
-                    if left_gene == "intergenic" or right_gene == "intergenic":
-                        continue
-                    # Exclude mitochondrial fusion candidates from report
-                    if self._is_mitochondrial_candidate(left_chr, right_chr, left_gene, right_gene):
-                        continue
                     # Skip if collapse makes them equal
                     if left_gene == right_gene:
                         continue
@@ -1515,8 +1328,6 @@ class FusionDetector:
                     raw_right = meta.get("raw_right_gene")
                     left_biotype = meta.get("left_biotype", "unknown")
                     right_biotype = meta.get("right_biotype", "unknown")
-                    if self.is_bad_gene(left_gene,  left_chr,  left_pos) or self.is_bad_gene(right_gene, right_chr, right_pos):
-                        continue
                     f.write(f"{left_gene}\t{left_biotype}\t{raw_left}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_biotype}\t"
                             f"{raw_right}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
                             f"{meta.get('is_valid')}\t{meta.get('confidence')}\t{reasons}\n")
