@@ -456,9 +456,10 @@ class AssignedFeatureCounter(AbstractCounter):
         counts_format = {GroupedOutputFormat[f] for f in args.counts_format}
         explicit_matrix = GroupedOutputFormat.matrix in counts_format
         default_format = GroupedOutputFormat.default in counts_format
+        actual_num_groups = num_groups
         if explicit_matrix or default_format:
             max_groups = GROUP_COUNT_CUTOFF if default_format and not explicit_matrix else 0
-            convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups)
+            actual_num_groups = convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups) or num_groups
             if normalization_method != NormalizationMethod.none:
                 reads_for_tpm = None
                 if normalization_method == NormalizationMethod.usable_reads:
@@ -469,7 +470,7 @@ class AssignedFeatureCounter(AbstractCounter):
                                   max_groups=max_groups)
 
         if (GroupedOutputFormat.mtx in counts_format or
-                (default_format and num_groups > GROUP_COUNT_CUTOFF)):
+                (default_format and actual_num_groups > GROUP_COUNT_CUTOFF)):
             convert_to_mtx(self.output_file, self.output_counts_prefix)
             if normalization_method != NormalizationMethod.none:
                 reads_for_tpm = None
