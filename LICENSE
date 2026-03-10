@@ -1,5 +1,5 @@
-IsoQuant: A tool for isoform assignment and quantification for long and barcoded reads
-Copyright (c) 2022-2025 University of Helsinki
+IsoQuant: A tool for isoform assignment, quantification and discovery for long RNA reads
+Copyright (c) 2022-2026 University of Helsinki
 Copyright (c) 2020-2022 Saint Petersburg State University
 
 
@@ -35,9 +35,7 @@ Current contributors:
     Jack Freeman,
     Arina Coroliuc,
     Lieke Michielsen,
-    Careen Foord,
     Alla Mikheenko,
-    Rebecca Pfeil,
     Alexandru Tomescu
     and
     Hagen Tilgner
@@ -45,9 +43,11 @@ Current contributors:
 Also contributed:
 
     Maria Burunducova,
+    Careen Foord,
     Anoushka Joglekar,
     Alexander Smetanin,
     Artyom Kaltovich,
+    Rebecca Pfeil,
     James Webber
 
 
