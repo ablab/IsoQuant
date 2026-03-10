@@ -772,6 +772,13 @@ def set_data_dependent_options(args):
         elif "barcode_spot" not in args.read_group:
             args.read_group.append("barcode_spot")
 
+    # Automatically add barcode_barcode grouping when --barcode2barcode is set
+    if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
+        if args.read_group is None:
+            args.read_group = ["barcode_barcode"]
+        elif "barcode_barcode" not in args.read_group:
+            args.read_group.append("barcode_barcode")
+
     # In SC modes, auto-add barcode grouping if no barcode-related grouping is set
     if args.mode.needs_barcode_calling():
         barcode_groupings = {"barcode", "barcode_spot", "barcode_barcode"}
