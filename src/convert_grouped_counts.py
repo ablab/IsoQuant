@@ -54,6 +54,21 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
         logger.error("Unexpected number of columns in %s: %d" % (input_linear_counts, cols))
         return 0
 
+    # Quick group count check before expensive read+pivot
+    if max_groups > 0:
+        groups = set()
+        with open(input_linear_counts) as f:
+            next(f)  # skip header
+            for line in f:
+                parts = line.split('\t')
+                if len(parts) >= 2:
+                    groups.add(parts[1])
+        num_groups = len(groups)
+        if num_groups > max_groups:
+            logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
+                         "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
+            return num_groups
+
     df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1, keep_default_na=False,
                          names=['gene_id', 'group_id', 'count'],
                          dtype={'gene_id': str, 'group_id': str, 'count': float})
@@ -63,10 +78,6 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
         else get_normalization_factors(df, usable_reads_per_group)
 
     num_groups = len(count_matrix.columns)
-    if max_groups > 0 and num_groups > max_groups:
-        logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
-                     "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
-        return num_groups
 
     output_file_path += ".tsv"
     output_file_path += ".gz" if gzipped else ""
