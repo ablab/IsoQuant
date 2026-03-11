@@ -10,6 +10,8 @@
 
 - Dramatic speed-up for 10x and universal barcode calling on large whitelists.
 
+- Per-barcode counts grouping is now performed automatically if the barcodes are set.
+
 ## IsoQuant 3.11.1, 11 February 2026
 
 - Fix Python 3.8 compatibility.

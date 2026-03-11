@@ -210,7 +210,7 @@ Supports plain text and gzipped files.
 
 _Notes:_
 - Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
-If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
+If you have a subset of barcodes, for example, from short-read data, provide them instead of the full whitelist;
 - IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
 
 `--barcoded_reads`
@@ -226,8 +226,18 @@ Note: IsoQuant will perform per-barcode quantification automatically.
 Extract barcodes and UMIs from BAM tags instead of calling barcodes.
 Uses `CB` (cell barcode) and `UB` (UMI) tags by default (standard 10x Genomics / cellranger tags).
 Mutually exclusive with `--barcode_whitelist` and `--barcoded_reads`.
+This option is a flag, not a way to provide the file (use `--bam` to set the input BAM).
 
 Note: IsoQuant will perform per-barcode quantification automatically.
+
+`--barcode_tag`
+BAM tag for cell barcode (default: CB), requires `--barcoded_bam` flag.
+
+`--umi_tag`
+BAM tag for UMI (default: UB), requires `--barcoded_bam` flag.
+
+`--strip_barcode_suffix`
+Remove suffix after dash from barcodes extracted from BAM tag (e.g. ACGT-1 -> ACGT), requires `--barcoded_bam` flag.
 
 `--barcode2spot`
 Path to TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
@@ -244,7 +254,8 @@ When multiple barcodes map to the same physical spot (e.g. at lower spatial reso
 this option groups them together during UMI deduplication, collapsing duplicates across the entire spot.
 
 Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
-When multiple spot columns are provided, a separate UMI dedup round is performed for each column.
+When multiple spot columns are provided, a separate UMI deduplication round is performed for each column.
+However, only the main (sequence-based) UMI-deduplicated reads will be used for quantification.
 
 When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
 

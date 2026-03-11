@@ -175,12 +175,12 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(sc_args_group, "--barcoded_bam", action='store_true', default=False,
                                    help='extract barcodes and UMIs from BAM tags (CB/UB by default); '
                                         'bypasses barcode calling')
-    add_hidden_option("--barcode_tag", type=str, default="CB",
-                      help='BAM tag for cell barcode (default: CB)')
-    add_hidden_option("--umi_tag", type=str, default="UB",
-                      help='BAM tag for UMI (default: UB)')
-    add_hidden_option("--strip_barcode_suffix", action='store_true', default=False,
-                      help='remove suffix after dash from barcodes (e.g. ACGT-1 -> ACGT)')
+    add_additional_option_to_group(sc_args_group, "--barcode_tag", type=str, default="CB",
+                                   help='BAM tag for cell barcode (default: CB)')
+    add_additional_option_to_group(sc_args_group, "--umi_tag", type=str, default="UB",
+                                   help='BAM tag for UMI (default: UB)')
+    add_additional_option_to_group(sc_args_group, "--strip_barcode_suffix", action='store_true', default=False,
+                                   help='remove suffix after dash from barcodes extracted from BAM tag (e.g. ACGT-1 -> ACGT)')
     add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str,
                                    help='TSV file mapping barcode to cell type / spot id. '
                                         'Format: file.tsv or file.tsv:barcode_col:spot_cols '

@@ -95,8 +95,7 @@ See [options](cmd.md#specific-output-options) to tune your output.
 
 ## UMI filtering allinfo format
 
-**Important: this is an internal format subject to change without notice.
-It is provided for debugging and advanced analysis only. Do not build downstream pipelines that depend on this format.**
+**Important: this is an internal format subject to change without notice.**
 
 Produced in single-cell/spatial modes when `--large_output allinfo` is enabled (enabled by default).
 The file `SAMPLE_ID.UMI_filtered.ED{N}.allinfo[.gz]` contains one line per read that survived UMI deduplication.
