@@ -344,9 +344,9 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def format_header(self, all_groups, value_name="count"):
         if self.ignore_read_groups:
-            return "#feature_id\t%s\n" % value_name
+            return "feature_id\t%s\n" % value_name
         else:
-            return "#feature_id\t" + "\t".join(all_groups) + "\n"
+            return "feature_id\t" + "\t".join(all_groups) + "\n"
 
     def add_confirmed_features(self, features):
         self.confirmed_features.update(features)
@@ -403,7 +403,7 @@ class AssignedFeatureCounter(AbstractCounter):
 
     def dump_grouped(self, all_features):
         with self.get_output_file_handler() as output_file:
-            output_file.write("#feature_id\tgroup_id\tcount\n")
+            output_file.write("feature_id\tgroup_id\tcount\n")
             for feature_id in all_features:
                 row_count = 0
                 for group_id in self.feature_counter[feature_id].data.keys():
@@ -511,7 +511,7 @@ def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalizati
     with open(counts_file_name, "r") as f:
         for line in f:
             if line.startswith('_'): continue
-            if line.startswith('#'): continue
+            if line.startswith('feature_id\t'): continue
             fs = line.rstrip().split('\t')
             total_counts += float(fs[1])
 
@@ -531,7 +531,7 @@ def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalizati
         with open(counts_file_name) as f:
             for line in f:
                 if line.startswith('_'): break
-                if line.startswith('#'):
+                if line.startswith('feature_id\t'):
                     outf.write(line.replace("count", "TPM"))
                     continue
                 fs = line.rstrip().split('\t')
