@@ -275,7 +275,7 @@ class ExtractionResult:
         Format: #read_id, barcode, UMI, BC_score, valid_UMI, strand, [supplementary elements]
         """
         # Standard header fields
-        header = "#read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
+        header = "read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
 
         # Supplementary elements (non-barcode, non-UMI)
         barcode_umi_set = set(self._barcode_elements + self._umi_elements)

@@ -150,7 +150,7 @@ class BarcodeDetectionResult:
     @staticmethod
     def header() -> str:
         """Static header for class-level access."""
-        return "#read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
+        return "read_id\tbarcode\tUMI\tBC_score\tvalid_UMI\tstrand"
 
 
 class LinkerBarcodeDetectionResult(BarcodeDetectionResult):
