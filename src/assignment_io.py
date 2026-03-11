@@ -252,7 +252,7 @@ class QuickTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
 class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support, additional_header = "", gzipped=False):
         TextFileAssignmentPrinter.__init__(self, output_file_name, params, gzipped=gzipped)
-        self.header = "#read_id\tchr\tstrand\tisoform_id\tgene_id" \
+        self.header = "read_id\tchr\tstrand\tisoform_id\tgene_id" \
                       "\tassignment_type\tassignment_events\texons\tadditional_info\tgroups\n"
         self.output_file.write(additional_header)
         self.output_file.write(self.header)
@@ -391,7 +391,7 @@ class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
 class SqantiTSVPrinter(TextFileAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support):
         TextFileAssignmentPrinter.__init__(self, output_file_name, params)
-        self.header = '#isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
+        self.header = 'isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
                       '\tassociated_gene\tassociated_transcript\tref_length\tref_exons\tdiff_to_TSS\tdiff_to_TTS' \
                       '\tdiff_to_gene_TSS\tdiff_to_gene_TTS\tsubcategory\tRTS_stage\tall_canonical' \
                       '\tmin_sample_cov\tmin_cov\tmin_cov_pos\tsd_cov\tFL' \

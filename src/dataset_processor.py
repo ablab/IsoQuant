@@ -457,7 +457,7 @@ class DatasetProcessor:
 
         self.merge_assignments(sample, aggregator, chr_ids)
         if self.args.sqanti_output:
-            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, aggregator.t2t_sqanti_printer.output_file, copy_header=False)
+            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, aggregator.t2t_sqanti_printer.output_file, copy_header=False, header_lines=1)
         self.finalize(aggregator)
 
         if not self.args.no_model_construction:
@@ -708,7 +708,7 @@ class DatasetProcessor:
     def merge_assignments(self, sample, aggregator, chr_ids):
         if self.args.genedb and aggregator.basic_printer:
             merge_files(sample.out_assigned_tsv, sample.prefix, chr_ids,
-                        aggregator.basic_printer.output_file, copy_header=False)
+                        aggregator.basic_printer.output_file, copy_header=False, header_lines=3)
         if aggregator.corrected_bed_printer:
             merge_files(sample.out_corrected_bed, sample.prefix, chr_ids,
                         aggregator.corrected_bed_printer.output_file, copy_header=False)
