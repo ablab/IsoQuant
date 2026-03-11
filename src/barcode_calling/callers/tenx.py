@@ -21,9 +21,51 @@ from ..common import (
     detect_exact_positions, str_to_2bit,
     find_optimal_kmer_size,
 )
-from .base import TenXBarcodeDetectionResult
+from .base import BarcodeDetectionResult, TenXBarcodeDetectionResult
 
 logger = logging.getLogger('IsoQuant')
+
+
+class DualBarcodeResult(TenXBarcodeDetectionResult):
+    """Wrapper that holds barcode detection results from both read orientations.
+
+    Delegates standard interface (is_valid, get_barcode, etc.) to the best result,
+    but also exposes both fwd and rev results for analysis.
+    """
+
+    def __init__(self, fwd_result: TenXBarcodeDetectionResult, rev_result: TenXBarcodeDetectionResult):
+        self.fwd_result: TenXBarcodeDetectionResult = fwd_result
+        self.rev_result: TenXBarcodeDetectionResult = rev_result
+        if fwd_result.more_informative_than(rev_result):
+            best = fwd_result
+            self.other_result = rev_result
+        else:
+            best = rev_result
+            self.other_result = fwd_result
+        super().__init__(best.read_id, best.get_barcode(), best.get_umi(),
+                         best.BC_score, best.UMI_good, best.strand,
+                         best.polyT, best.r1)
+
+    @property
+    def both_valid(self) -> bool:
+        return self.fwd_result.is_valid() and self.rev_result.is_valid()
+
+    @property
+    def same_barcode(self) -> bool:
+        return self.both_valid and self.fwd_result.get_barcode() == self.rev_result.get_barcode()
+
+    def __str__(self) -> str:
+        other = self.other_result
+        return (super().__str__() +
+                "\t%s\t%s\t%d\t%s\t%d\t%d" % (
+                    other.get_barcode(), other.get_umi(),
+                    other.BC_score, other.strand,
+                    other.polyT, other.r1))
+
+    @staticmethod
+    def header() -> str:
+        return (TenXBarcodeDetectionResult.header() +
+                "\tside2_barcode\tside2_UMI\tside2_BC_score\tside2_strand\tside2_polyT\tside2_R1")
 
 
 class TenXBarcodeDetector:
@@ -71,31 +113,30 @@ class TenXBarcodeDetector:
         logger.info("Indexed %d barcodes of length %d with k-mer size %d" % (len(barcode_list), bc_length, self.k))
         logger.info("Minimal alignment score set to %d" % self.min_score)
 
-    def find_barcode_umi(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
+    def find_barcode_umi(self, read_id: str, sequence: str) -> DualBarcodeResult:
         """
-        Detect barcode and UMI in a read sequence.
+        Detect barcode and UMI in both orientations of a read sequence.
+
+        Always runs detection on both forward and reverse-complement strands
+        to analyze concatenated cDNA with barcodes on both sides.
 
         Args:
             read_id: Read identifier
             sequence: Read sequence
 
         Returns:
-            Detection result with barcode, UMI, and feature positions
+            DualBarcodeResult with results from both orientations
         """
         read_result = self._find_barcode_umi_fwd(read_id, sequence)
         if read_result.polyT != -1:
             read_result.set_strand("+")
-        if read_result.is_valid():
-            return read_result
 
         rev_seq = reverese_complement(sequence)
         read_rev_result = self._find_barcode_umi_fwd(read_id, rev_seq)
         if read_rev_result.polyT != -1:
             read_rev_result.set_strand("-")
-        if read_rev_result.is_valid():
-            return read_rev_result
 
-        return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
+        return DualBarcodeResult(read_result, read_rev_result)
 
     def _find_barcode_umi_fwd(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         polyt_start = find_polyt_start(sequence)
@@ -185,7 +226,7 @@ class TenXBarcodeDetector:
 
     @staticmethod
     def result_type():
-        return TenXBarcodeDetectionResult
+        return DualBarcodeResult
 
     @classmethod
     def header(cls):

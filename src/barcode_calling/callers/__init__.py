@@ -64,6 +64,7 @@ from .stereo import (
 )
 
 from .tenx import (
+    DualBarcodeResult,
     TenXBarcodeDetector,
     TenXv2BarcodeDetector,
     VisiumHDBarcodeDetector,
@@ -96,6 +97,7 @@ __all__ = [
     'SharedMemoryStereoSplittingBarcodeDetector',
     'SharedMemoryWrapper',
     # 10x detectors
+    'DualBarcodeResult',
     'TenXBarcodeDetector',
     'TenXv2BarcodeDetector',
     'VisiumHDBarcodeDetector',

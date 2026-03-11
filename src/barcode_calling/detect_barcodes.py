@@ -40,6 +40,7 @@ from . import (
     UniversalSingleMoleculeExtractor,
     MoleculeStructure
 )
+from .callers.tenx import DualBarcodeResult
 
 logger = logging.getLogger('IsoQuant')
 
@@ -226,6 +227,13 @@ class BarcodeCaller:
 
         self.output_file.write("%s\n" % str(barcode_result))
         self.read_stat.add_read(barcode_result)
+        if isinstance(barcode_result, DualBarcodeResult):
+            if barcode_result.both_valid:
+                self.read_stat.add_custom_stats("Both sides valid", 1)
+                if barcode_result.same_barcode:
+                    self.read_stat.add_custom_stats("Same barcode both sides", 1)
+                else:
+                    self.read_stat.add_custom_stats("Different barcode both sides", 1)
 
     def process_chunk(self, read_chunk):
         counter = 0
