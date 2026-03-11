@@ -83,6 +83,9 @@ def parse_args(cmd_args=None, namespace=None):
             kwargs['help'] = argparse.SUPPRESS
         other_options.add_argument(*args, **kwargs)
 
+    def add_option_to_group(opt_group, *args, **kwargs):  # show command only with --full-help
+        opt_group.add_argument(*args, **kwargs)
+
     def add_additional_option_to_group(opt_group, *args, **kwargs):  # show command only with --full-help
         if not show_full_help:
             kwargs['help'] = argparse.SUPPRESS
