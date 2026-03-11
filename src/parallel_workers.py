@@ -189,6 +189,10 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
     # Save dynamic pools if they have data (for read groups from BAM tags/read IDs)
     save_dynamic_pools(string_pools, sample.get_dynamic_pools_file(chr_id))
 
+    # Save barcode/UMI pools for --barcoded_bam mode (pools built on-the-fly from BAM tags)
+    if getattr(args, 'barcoded_bam', False) and len(string_pools.barcode_pool) > 0:
+        string_pools.save_barcode_umi_pools(sample.get_barcode_pools_file(chr_id))
+
     processed_reads_manager.finalize(chr_id)
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()

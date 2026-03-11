@@ -103,6 +103,11 @@ class SampleData:
         from .file_naming import dynamic_pools_file_name
         return dynamic_pools_file_name(self.out_raw_file, chr_id)
 
+    def get_barcode_pools_file(self, chr_id: str) -> str:
+        """Get path to barcode/UMI pools for a chromosome (--barcoded_bam mode)."""
+        from .file_naming import barcode_pools_file_name
+        return barcode_pools_file_name(self.out_raw_file, chr_id)
+
     def get_collected_lock_file(self, chr_id: str) -> str:
         """Get path to lock file indicating reads collected for a chromosome."""
         from .file_naming import reads_collected_lock_file_name

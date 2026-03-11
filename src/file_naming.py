@@ -83,6 +83,11 @@ def dynamic_pools_file_name(out_raw_file: str, chr_id: str):
     return out_raw_file + "_dynamic_pools_" + convert_chr_id_to_file_name_str(chr_id)
 
 
+def barcode_pools_file_name(out_raw_file: str, chr_id: str):
+    """File name for per-chromosome barcode/UMI pools (for --barcoded_bam mode)."""
+    return out_raw_file + "_barcode_pools_" + convert_chr_id_to_file_name_str(chr_id)
+
+
 # Read collection auxiliary files
 
 def read_groups_file_name(save_file: str):
