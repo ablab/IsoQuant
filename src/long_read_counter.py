@@ -505,7 +505,7 @@ def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalizati
     with open(counts_file_name, "r") as f:
         for line in f:
             if line.startswith('_'): continue
-            if line.startswith('feature_id\tgroup_id'): continue
+            if line.startswith('feature_id\tcount'): continue
             fs = line.rstrip().split('\t')
             total_counts += float(fs[1])
 
@@ -525,7 +525,7 @@ def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalizati
         with open(counts_file_name) as f:
             for line in f:
                 if line.startswith('_'): break
-                if line.startswith('#'):
+                if line.startswith('feature_id\tcount'):
                     outf.write(line.replace("count", "TPM"))
                     continue
                 fs = line.rstrip().split('\t')
