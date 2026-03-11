@@ -20,15 +20,18 @@ def merge_file_list(fname, label, chr_ids):
     return [rreplace(fname, label, f"{label}_{chr_id}") for chr_id in chr_ids]
 
 
-def merge_files(file_name, label, chr_ids, merged_file_handler, copy_header=True):
+def merge_files(file_name, label, chr_ids, merged_file_handler, copy_header=True, header_lines=None):
     file_names = merge_file_list(file_name, label, chr_ids)
     file_names.sort(key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)])
     for i, file_name in enumerate(file_names):
         if not os.path.exists(file_name): continue
-        header_count = 0
-        with open(file_name, 'r') as f:
-            while f.readline().startswith("#"):
-                header_count += 1
+        if header_lines is not None:
+            header_count = header_lines
+        else:
+            header_count = 0
+            with open(file_name, 'r') as f:
+                while f.readline().startswith("#"):
+                    header_count += 1
         with open(file_name, 'rt') as f:
             if not (copy_header and i == 0):
                 for j in range(header_count):
@@ -41,7 +44,7 @@ def merge_files(file_name, label, chr_ids, merged_file_handler, copy_header=True
 def merge_counts(counter, label, chr_ids, unaligned_reads=0):
     file_name = counter.output_counts_file_name
     merged_file_handler = counter.get_output_file_handler()
-    merge_files(file_name, label, chr_ids, merged_file_handler)
+    merge_files(file_name, label, chr_ids, merged_file_handler, header_lines=1)
 
     if counter.usable_file_name:
         for f in merge_file_list(counter.usable_file_name, label, chr_ids):
