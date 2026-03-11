@@ -459,15 +459,21 @@ class AssignedFeatureCounter(AbstractCounter):
         actual_num_groups = num_groups
         if explicit_matrix or default_format:
             max_groups = GROUP_COUNT_CUTOFF if default_format and not explicit_matrix else 0
-            actual_num_groups = convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups) or num_groups
-            if normalization_method != NormalizationMethod.none:
-                reads_for_tpm = None
-                if normalization_method == NormalizationMethod.usable_reads:
-                    reads_for_tpm = {self._get_group_name(group_id): self.reads_for_tpm[group_id]
-                                     for group_id in range(num_groups)}
-                convert_to_matrix(self.output_file, self.output_tpm_prefix,
-                                  convert_to_tpm=True, usable_reads_per_group=reads_for_tpm,
-                                  max_groups=max_groups)
+            # When pool count is reliable (string_pools available), skip without reading the file
+            pool_reliable = self.string_pools is not None
+            if pool_reliable and max_groups > 0 and num_groups > max_groups:
+                logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
+                            "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
+            else:
+                actual_num_groups = convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups) or num_groups
+                if normalization_method != NormalizationMethod.none:
+                    reads_for_tpm = None
+                    if normalization_method == NormalizationMethod.usable_reads:
+                        reads_for_tpm = {self._get_group_name(group_id): self.reads_for_tpm[group_id]
+                                         for group_id in range(num_groups)}
+                    convert_to_matrix(self.output_file, self.output_tpm_prefix,
+                                      convert_to_tpm=True, usable_reads_per_group=reads_for_tpm,
+                                      max_groups=max_groups)
 
         if (GroupedOutputFormat.mtx in counts_format or
                 (default_format and actual_num_groups > GROUP_COUNT_CUTOFF)):
