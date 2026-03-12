@@ -276,22 +276,30 @@ class VisiumHDBarcodeDetector:
 
         logger.debug("Min score set to %d" % self.min_score)
 
-    def find_barcode_umi(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
-        """Detect barcode and UMI in a read sequence."""
+    def find_barcode_umi(self, read_id: str, sequence: str) -> DualBarcodeResult:
+        """
+        Detect barcode and UMI in both orientations of a read sequence.
+
+        Always runs detection on both forward and reverse-complement strands
+        to analyze concatenated cDNA with barcodes on both sides.
+
+        Args:
+            read_id: Read identifier
+            sequence: Read sequence
+
+        Returns:
+            DualBarcodeResult with results from both orientations
+        """
         read_result = self._find_barcode_umi_fwd(read_id, sequence)
         if read_result.polyT != -1:
             read_result.set_strand("+")
-        if read_result.is_valid():
-            return read_result
 
         rev_seq = reverese_complement(sequence)
         read_rev_result = self._find_barcode_umi_fwd(read_id, rev_seq)
         if read_rev_result.polyT != -1:
             read_rev_result.set_strand("-")
-        if read_rev_result.is_valid():
-            return read_rev_result
 
-        return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
+        return DualBarcodeResult(read_result, read_rev_result)
 
     def _find_barcode_umi_fwd(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         logger.debug("===== " + read_id)
@@ -412,7 +420,7 @@ class VisiumHDBarcodeDetector:
 
     @staticmethod
     def result_type():
-        return TenXBarcodeDetectionResult
+        return DualBarcodeResult
 
     @classmethod
     def header(cls):
