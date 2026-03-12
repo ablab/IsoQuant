@@ -480,6 +480,25 @@ class DatasetProcessor:
             aggregator.transcript_model_global_counter.finalize(self.args)
             aggregator.gene_model_global_counter.finalize(self.args)
 
+        self._cleanup_per_chr_temp_files(sample, chr_ids)
+
+    def _cleanup_per_chr_temp_files(self, sample, chr_ids: list):
+        """Remove any remaining per-chromosome temporary files after merging.
+
+        During parallel processing, per-chr files are created and then merged.
+        Normally merge_files() removes them, but files from disabled output types
+        (e.g. corrected_bed, read2transcripts not in --large_output) or from
+        previous runs with different options may remain. This catch-all cleanup
+        removes them.
+        """
+        if self.args.keep_tmp:
+            return
+        for chr_id in chr_ids:
+            chr_prefix = sample.get_chr_prefix(chr_id)
+            pattern = os.path.join(sample.out_dir, chr_prefix + ".*")
+            for f in glob.glob(pattern):
+                os.remove(f)
+
     def finalize(self, aggregator):
         if aggregator.basic_printer:
             logger.info("Read assignments are stored in " + aggregator.basic_printer.output_file_name +
