@@ -1,6 +1,18 @@
 # IsoQuant changelog
 
-## IsoQuant 3.11.1, 11 February 2027
+## IsoQuant 3.12.0, 11 March 2026
+
+- Fix Python 3.14 compatibility.
+
+- Add `--barcoded_bam` option for reading barcodes and UMIs directly from a input BAM.
+
+- Add `--barcode2barcode` option for Visium HD data processing.
+
+- Dramatic speed-up for 10x and universal barcode calling on large whitelists.
+
+- Per-barcode counts grouping is now performed automatically if the barcodes are set.
+
+## IsoQuant 3.11.1, 11 February 2026
 
 - Fix Python 3.8 compatibility.
 
@@ -28,7 +40,7 @@ You can now simultaneously group counts by samples, BAM tags, read attributes pr
 
 ## IsoQuant 3.9.0, 1 October 2025
 
-- Secondary alignments are not used by default from now on. It significantly improves running time and RAM consumption, but barely affects the results' quality.
+- Secondary alignments are not used by default from now on. It significantly improves running time and RAM consumption but barely affects the results' quality.
 Use `--use_secondary` to process secondary alignments.
 
 - New options that force IsoQuant to use only a faction of reads in high-coverage loci.
@@ -70,7 +82,7 @@ Only overlapping chromosome names are used if inconsistent.
 ## IsoQuant 3.7.0, 16 May 2025
 
 - Optimized grouped counts output. By default, all counts are stored in linear format, which saves time and disk space.
-Matrices with small number of columns are automatically converted to usual matrix in TSV format, 
+Matrices with a small number of columns are automatically converted to a usual matrix in TSV format, 
 larger matrices typical for single-cell and spatial data are converted to MTX format.
 See `--counts_format` paramter for options. It is also possible to convert counts after IsoQuant is finished using `src/convert_grouped_counts.py`.
 Fixes issues mentioned in [#248](https://github.com/ablab/IsoQuant/issues/248).
@@ -87,7 +99,7 @@ Fixes [#284](https://github.com/ablab/IsoQuant/issues/284)
 
 - Use only gene-assigned reads for exon counting, fixes [#283](https://github.com/ablab/IsoQuant/issues/283).
 
-- Fixed rare serialization bug [#304](https://github.com/ablab/IsoQuant/issues/304).
+- Fixed a rare serialization bug [#304](https://github.com/ablab/IsoQuant/issues/304).
 
 ## IsoQuant 3.6.3, 13 January 2025
 
@@ -109,7 +121,7 @@ Fixes [#284](https://github.com/ablab/IsoQuant/issues/284)
 ## IsoQuant 3.6.0, 13 September 2024
 
 - Fixed duplicated `noninformative` and `intergenic` reads assignments.
-As a results, fixed duplicated novel transcripts [#236](https://github.com/ablab/IsoQuant/issues/236).
+As a result, fixed duplicated novel transcripts [#236](https://github.com/ablab/IsoQuant/issues/236).
 
 ## IsoQuant 3.5.2, 3 September 2024
 
@@ -132,7 +144,7 @@ As a results, fixed duplicated novel transcripts [#236](https://github.com/ablab
 
 - New visualization software developed by [@jackfreeman88](https://github.com/jackfreeman88). See more [here](https://ablab.github.io/IsoQuant/visualization.html).
 
-- Dramatically reduced RAM consumption for grouped counts, about 10-20x decrease on datasets with large number of groups.
+- Dramatically reduced RAM consumption for grouped counts, about 10-20x decrease on datasets with the large number of groups.
   Important fix for single-cell data processing. Should fix [#189](https://github.com/ablab/IsoQuant/issues/189).
 
 - Fixed [#195](https://github.com/ablab/IsoQuant/issues/195): output GTF contained very similar isoforms and estimated their expression as 0.
@@ -150,7 +162,7 @@ the reference annotation and from 230GB down to 6GB in the reference-free mode.
 Running time in the default mode increased by approximately 20-25%.
 When using `--high_memory` option, running time remains the same as in 3.4.1,
 RAM consumption in the reference-based mode is 46GB, and 36GB in the reference-free mode.
-Note, that in general RAM consumption depends on the particular data being used and the number of threads.
+Note that in general RAM consumption depends on the particular data being used and the number of threads.
 
 In brief, in 3.4.0 and 3.4.1 inadequate RAM consumption was caused by
 [this commit](https://github.com/ablab/IsoQuant/commit/557e5834d0503587b918a0eedf3ff5cee3253141).
@@ -180,7 +192,7 @@ Major novelties and improvements:
 
 - Added support for Illumina reads for spliced alignment correction (thanks to [@rkpfeil](https://github.com/rkpfeil)).
 
-- Added support YAML files (thanks to [@rkpfeil](https://github.com/rkpfeil)). Old options `--bam_list` and `--fastq_list` are still availble, but deprecated since this version.
+- Added support for YAML files (thanks to [@rkpfeil](https://github.com/rkpfeil)). Old options `--bam_list` and `--fastq_list` are still availble, but deprecated since this version.
 
 Transcript discovery and GTF processing:
 

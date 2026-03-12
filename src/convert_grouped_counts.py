@@ -41,12 +41,33 @@ def set_logger(logger_instance):
 
 
 def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_dict=None,
-                      gzipped=False, feature_type='gene', convert_to_tpm=False, usable_reads_per_group=None):
+                      gzipped=False, feature_type='gene', convert_to_tpm=False, usable_reads_per_group=None,
+                      max_groups: int = 0) -> int:
+    """Convert linear counts to full matrix format.
+
+    Returns:
+        Number of groups found in the input file, or 0 on error.
+    """
     logger.info("Converting %s to full matrix" % input_linear_counts)
     cols = len(open(input_linear_counts).readline().strip().split('\t'))
     if cols != 3:
         logger.error("Unexpected number of columns in %s: %d" % (input_linear_counts, cols))
-        return
+        return 0
+
+    # Quick group count check before expensive read+pivot
+    if max_groups > 0:
+        groups = set()
+        with open(input_linear_counts) as f:
+            next(f)  # skip header
+            for line in f:
+                parts = line.split('\t')
+                if len(parts) >= 2:
+                    groups.add(parts[1])
+        num_groups = len(groups)
+        if num_groups > max_groups:
+            logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
+                         "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
+            return num_groups
 
     df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1, keep_default_na=False,
                          names=['gene_id', 'group_id', 'count'],
@@ -56,13 +77,15 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
     normalization_factors = {g: 1.0 for g in df['group_id'].unique()} if not convert_to_tpm \
         else get_normalization_factors(df, usable_reads_per_group)
 
+    num_groups = len(count_matrix.columns)
+
     output_file_path += ".tsv"
     output_file_path += ".gz" if gzipped else ""
     with gzip.open(output_file_path, 'wt') if gzipped else open(output_file_path, 'w') as outfile:
         # Write the header with group_ids
         columns = list(sorted(count_matrix.columns))
-        if len(columns) > GROUP_COUNT_CUTOFF:
-            logger.warning("You have %d groups in your matrix, conversion might take a lot of time and the output file can be very large" % len(columns))
+        if num_groups > GROUP_COUNT_CUTOFF:
+            logger.warning("You have %d groups in your matrix, conversion might take a lot of time and the output file can be very large" % num_groups)
         outfile.write(feature_type + '_id\t' + '\t'.join(columns) + '\n')
 
         # Iterate over the DataFrame and write rows to the file
@@ -72,6 +95,7 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
             gene_name = gene_id if feature_id_to_name_dict is None else feature_id_to_name_dict.get(gene_id, gene_id)
             outfile.write(gene_name + '\t' + '\t'.join(values) + '\n')
     logger.info("Matrix was saved to %s" % output_file_path)
+    return num_groups
 
 
 def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=None,

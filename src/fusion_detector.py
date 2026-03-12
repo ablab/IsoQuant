@@ -489,8 +489,6 @@ class FusionDetector:
         # Returns True if at least one fusion was recorded, False otherwise.
         seen_pairs = set()
         sa_used = False
-        # Get primary read strand (True = reverse complement, False = forward)
-        primary_strand = "-" if read.is_reverse else "+"
         for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len) in sa_entries:
             # Estimate breakpoints with clip guidance
             left_chr, left_pos, right_chr, right_pos = self.estimate_breakpoint(
@@ -509,11 +507,9 @@ class FusionDetector:
             if left_gene is None or right_gene is None:
                 continue
             if left_gene != right_gene:
-                # Pass strands: primary read strand for left breakpoint, SA strand for right breakpoint
                 self.record_fusion(
                     left_gene, right_gene, read.query_name,
-                    left_chr, left_pos, sa_chr, right_pos,
-                    strand1=primary_strand, strand2=sa_strand
+                    left_chr, left_pos, sa_chr, right_pos
                 )
                 sa_used = True
         return sa_used
@@ -592,7 +588,7 @@ class FusionDetector:
             return "intergenic"
         return str(g)
 
-    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2, strand1="+", strand2="+"):
+    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
         # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
         if self.has_antisense_suffix(context1) or self.has_antisense_suffix(context2):
             return
@@ -601,24 +597,20 @@ class FusionDetector:
             return
         left = self._safe_gene_token(context1)
         right = self._safe_gene_token(context2)
-        fusion_key = "--".join(sorted([left, right]))
+        fusion_key = f"{left}--{right}"
 
         self.fusion_candidates[fusion_key].add(read_name)
-        # Store breakpoint with strand information: (chrom1, pos1, strand1, chrom2, pos2, strand2)
-        bp = (chrom1, int(pos1), strand1, chrom2, int(pos2), strand2)
+        # Store breakpoint without strand information: (chrom1, pos1, chrom2, pos2)
+        bp = (chrom1, int(pos1), chrom2, int(pos2))
         self.fusion_breakpoints[fusion_key][bp] += 1
 
         meta = self.fusion_metadata.setdefault(
             fusion_key,
             {"supporting_reads": set(), "consensus_bp": None,
-            "left_gene": None, "right_gene": None, "support": 0,
-            "strand1": None, "strand2": None, "read_strand_patterns": defaultdict(int)}
+            "left_gene": None, "right_gene": None, "support": 0}
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
-        # Track strand patterns observed in reads
-        strand_pattern = (strand1, strand2)
-        meta["read_strand_patterns"][strand_pattern] += 1
         # store the raw assigned pair for this read so we don't need to re-run assignment later
         try:
             self.fusion_assigned_pairs[fusion_key][read_name] = (context1, context2)
@@ -642,13 +634,14 @@ class FusionDetector:
         # Apply early filtering to drop non-protein-coding fusions BEFORE breakpoint clustering
         validator = FusionValidator(self)
         validator.filter_raw_non_coding_genes()
-        
-        # Delegate the heavy lifting to the new FusionMetadata helper class
+
         try:
             from .fusion_metadata import FusionMetadata
             FusionMetadata(self).process_all(min_support=min_support)
-        except Exception:
-            # Fallback: if import fails, keep original behavior minimal (no-op)
+        except Exception as e:
+            logger.error(f"Fusion metadata processing failed: {str(e)}")
+            logger.debug("Traceback:", exc_info=True)
+            # Fallback: if processing fails, keep original behavior minimal (no-op)
             return
 
     def cluster_breakpoints(self, bp_counts, window):
@@ -657,32 +650,23 @@ class FusionDetector:
         # Group by chrom pair and collect strand information
         from collections import defaultdict
         by_pair = defaultdict(list)
-        
-        # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
+        # Handle format (c1, p1, c2, p2)
         for bp_tuple, w in bp_counts.items():
-            if len(bp_tuple) == 6:
-                # New format with strands
-                c1, p1, s1, c2, p2, s2 = bp_tuple
-                by_pair[(c1, c2)].append((p1, p2, w, s1, s2))
-            else:
-                # Old format without strands (backward compatibility)
-                c1, p1, c2, p2 = bp_tuple
-                by_pair[(c1, c2)].append((p1, p2, w, "+", "+"))  # Default strands
+            c1, p1, c2, p2 = bp_tuple
+            by_pair[(c1, c2)].append((p1, p2, w))
         def best_window(items, w):
             # Sort by p1; we’ll apply a sliding window on p1, and inside it on p2
             items.sort(key=lambda x: x[0])  # sort by p1
             best_total = 0
             best_p1 = 0
             best_p2 = 0
-            best_s1 = "+"
-            best_s2 = "+"
             n = len(items)
             j = 0
             sum_w = 0
             # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
             # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
             for i in range(n):
-                p1_i, p2_i, wi, s1_i, s2_i = items[i]
+                p1_i, p2_i, wi = items[i]
                 # Expand p1-window
                 sum_w += wi
                 # Shrink from left until p1-range <= w
@@ -705,33 +689,27 @@ class FusionDetector:
                         s_w = 0
                         s_p1 = 0
                         s_p2 = 0
-                        strand_counts = defaultdict(int)  # Count strands
                         for x in slice_view[k:t+1]:
                             s_w += x[2]
                             s_p1 += x[0] * x[2]
                             s_p2 += x[1] * x[2]
-                            strand_counts[(x[3], x[4])] += x[2]
                         best_total = s_w
                         best_p1 = s_p1 // s_w
                         best_p2 = s_p2 // s_w
-                        # Get most common strand pattern
-                        if strand_counts:
-                            best_strands = max(strand_counts.items(), key=lambda x: x[1])
-                            best_s1, best_s2 = best_strands[0]
-            return best_p1, best_p2, best_total, best_s1, best_s2
+            return best_p1, best_p2, best_total
         best_pair = None
-        best = (None, None, 0, "+", "+")
+        best = (None, None, 0)
         for pair, items in by_pair.items():
-            c_p1, c_p2, total, s1, s2 = best_window(items, window)
+            c_p1, c_p2, total = best_window(items, window)
             if total > best[2]:
                 best_pair = pair
-                best = (c_p1, c_p2, total, s1, s2)
+                best = (c_p1, c_p2, total)
 
         if best_pair is None:
             return None
         (c1, c2) = best_pair
-        (p1, p2, total, s1, s2) = best
-        return (c1, p1, s1, c2, p2, s2), total
+        (p1, p2, total) = best
+        return (c1, p1, c2, p2), total
 
     def parse_sa_entries(self, sa_tag):
         entries = []
@@ -825,8 +803,11 @@ class FusionDetector:
                     min_softclip_len=30,
                     jitter_window=50):
         # Main fusion detection entry point. Processes all reads in BAM file.
+        logger.info(f"Starting fusion detection on {self.bam_path}")
         bam = pysam.AlignmentFile(self.bam_path, "rb")
+        processed_reads = 0
         for read in bam:
+            processed_reads += 1
             # Filter reads by quality and alignment length
             passes, clip_side, clip_len = self._passes_read_filters(
                 read, min_al_len_primary, min_sa_mapq
@@ -855,6 +836,8 @@ class FusionDetector:
                     min_sa_mapq=min_sa_mapq
                 )
         bam.close()
+        logger.info(f"Fusion detection complete: processed {processed_reads} reads, found {len(self.fusion_candidates)} fusion keys")
+        logger.info(f"Fusion keys detected: {list(self.fusion_candidates.keys())}")
 
     def reconstruct_fusion_transcript(self, c1, p1, c2, p2, exon_padding=100):
         # Returns (sequence, left_exons, right_exons) or (None, None, None) on failure.
@@ -1086,7 +1069,9 @@ class FusionDetector:
         if not self._symbol_biotype_cache:
             self._build_symbol_biotype_index()
         if gene_symbol in self._symbol_biotype_cache:
-            return self._symbol_biotype_cache[gene_symbol]
+            biotype = self._symbol_biotype_cache[gene_symbol]
+            logger.debug(f"Found biotype for {gene_symbol} in cache: {biotype}")
+            return biotype
         # Strategy 2: Use consensus coordinates if available
         if chrom is not None and pos is not None:
             try:
@@ -1108,11 +1093,13 @@ class FusionDetector:
                             or attrs.get('transcript_biotype', [None])[0]
                         )
                         if biotype:
+                            logger.debug(f"Found biotype for {gene_symbol} by coordinates {chrom}:{pos}: {biotype}")
                             # Cache for future lookups
                             self._symbol_biotype_cache[gene_symbol] = biotype
                             return biotype
             except Exception as e:
                 logger.debug(f"Failed to query genes at {chrom}:{pos} for symbol {gene_symbol}: {e}")
+        logger.debug(f"Could not find biotype for {gene_symbol} (chrom={chrom}, pos={pos}, cache_size={len(self._symbol_biotype_cache)})")
         return None
 
     def get_gene_biotype(self, gene_name, chrom=None, pos=None):
@@ -1185,12 +1172,7 @@ class FusionDetector:
                 continue
 
             # perform classification and basic filtering
-            # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
-            if len(consensus_bp) == 6:
-                c1, p1, s1, c2, p2, s2 = consensus_bp
-            else:
-                c1, p1, c2, p2 = consensus_bp
-                s1, s2 = "+", "+"
+            c1, p1, c2, p2 = consensus_bp
             g1_name, r1 = self._context_query(c1, p1)
             g2_name, r2 = self._context_query(c2, p2)
             self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
@@ -1239,11 +1221,7 @@ class FusionDetector:
                         continue
                     # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
                     consensus_bp = meta["consensus_bp"]
-                    if len(consensus_bp) == 6:
-                        left_chr, left_pos, left_strand, right_chr, right_pos, right_strand = consensus_bp
-                    else:
-                        left_chr, left_pos, right_chr, right_pos = consensus_bp
-                        left_strand, right_strand = "+", "+"
+                    left_chr, left_pos, right_chr, right_pos = consensus_bp
                     left_gene  = meta["left_gene"]
                     right_gene = meta["right_gene"]
                     # Skip if collapse makes them equal

@@ -526,6 +526,28 @@ class StringPoolManager:
                 pool.add(string)  # IDs assigned in order: 0, 1, 2, ...
             self.read_group_dynamic_pools[spec_index] = pool
 
+    def save_barcode_umi_pools(self, filepath: str):
+        """Save barcode and UMI pools to binary file, preserving ID order."""
+        with open(filepath, 'wb') as f:
+            write_int(len(self.barcode_pool), f)
+            for i in range(len(self.barcode_pool)):
+                write_string(self.barcode_pool.get_str(i), f)
+            write_int(len(self.umi_pool), f)
+            for i in range(len(self.umi_pool)):
+                write_string(self.umi_pool.get_str(i), f)
+
+    def load_barcode_umi_pools(self, filepath: str):
+        """Load barcode and UMI pools from binary file, preserving ID order."""
+        if not os.path.exists(filepath):
+            return
+        with open(filepath, 'rb') as f:
+            num_barcodes = read_int(f)
+            for _ in range(num_barcodes):
+                self.barcode_pool.add(read_string(f))
+            num_umis = read_int(f)
+            for _ in range(num_umis):
+                self.umi_pool.add(read_string(f))
+
     def get_stats(self) -> str:
         """
         Get statistics about all pools.
@@ -602,6 +624,9 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
         if load_barcode_pool and sample.barcodes_split_reads:
             barcode_file = sample.get_barcodes_split_file(chr_id)
             string_pools.load_barcode_pool(barcode_file)
+            # For --barcoded_bam mode: load from binary pool file saved during collect phase
+            if len(string_pools.barcode_pool) == 0 and getattr(args, 'barcoded_bam', False):
+                string_pools.load_barcode_umi_pools(sample.get_barcode_pools_file(chr_id))
 
         # Use override if provided, otherwise use sample's read_group_file
         read_group_file = read_group_file_prefix if read_group_file_prefix else sample.read_group_file

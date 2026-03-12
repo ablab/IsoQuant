@@ -12,17 +12,30 @@ class FusionValidator:
         # Drop fusions with non-protein-coding genes at the raw assignment stage.
         fusions_to_discard = set()
         # Check raw assignments: if ANY supporting read has a non-coding partner, drop the fusion
+        logger.info(f"filter_raw_non_coding_genes: Processing {len(self.detector.fusion_assigned_pairs)} fusion keys")
         for fusion_key, read_assignments in self.detector.fusion_assigned_pairs.items():
             if fusion_key not in self.detector.fusion_candidates:
                 # Fusion was already removed, skip
                 continue
+            
+            # Get breakpoint info for this fusion if available
+            left_chr, left_pos, right_chr, right_pos = None, None, None, None
+            bp_counts = self.detector.fusion_breakpoints.get(fusion_key, {})
+            if bp_counts:
+                # Get first breakpoint (or use consensus if clustered)
+                first_bp = next(iter(bp_counts.keys()), None)
+                if first_bp and len(first_bp) == 4:
+                    left_chr, left_pos, right_chr, right_pos = first_bp
+                    logger.debug(f"Got breakpoint for {fusion_key}: {left_chr}:{left_pos} - {right_chr}:{right_pos}")
+            
             # Check all raw assigned gene pairs for this fusion
             has_non_coding = False
             non_coding_reason = None
             for read_name, (left_gene, right_gene) in read_assignments.items():
-                # Get biotypes for the raw assigned genes
-                left_biotype = self.detector.get_gene_biotype(left_gene) if left_gene else None
-                right_biotype = self.detector.get_gene_biotype(right_gene) if right_gene else None
+                # Get biotypes for the raw assigned genes, with coordinates if available
+                left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos) if left_gene else None
+                right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos) if right_gene else None
+                logger.debug(f"  {fusion_key}: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
                 # Check if either is non-protein-coding
                 if left_gene and left_biotype and left_biotype != "protein_coding":
                     has_non_coding = True
@@ -57,11 +70,7 @@ class FusionValidator:
             right_chr, right_pos = None, None
             consensus_bp = meta.get("consensus_bp")
             if consensus_bp:
-                # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
-                if len(consensus_bp) == 6:
-                    left_chr, left_pos, left_strand, right_chr, right_pos, right_strand = consensus_bp
-                else:
-                    left_chr, left_pos, right_chr, right_pos = consensus_bp
+                left_chr, left_pos, right_chr, right_pos = consensus_bp
             # Get biotypes for both genes
             left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
             right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
@@ -289,11 +298,8 @@ class FusionValidator:
             consensus_bp = meta.get("consensus_bp")
             if not consensus_bp:
                 continue
-            # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
-            if len(consensus_bp) == 6:
-                left_chr, left_pos, left_strand, right_chr, right_pos, right_strand = consensus_bp
-            else:
-                left_chr, left_pos, right_chr, right_pos = consensus_bp
+            # Handle format (c1, p1, c2, p2)
+            left_chr, left_pos, right_chr, right_pos = consensus_bp
             left_gene = meta.get("left_gene")
             right_gene = meta.get("right_gene")
             if not left_gene or not right_gene:

@@ -116,14 +116,44 @@ _Notes:_
 - IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
 
 
+`--barcoded_bam`
+Extract barcodes and UMIs from BAM tags instead of calling barcodes.
+Uses `CB` (cell barcode) and `UB` (UMI) tags by default (standard 10x Genomics / cellranger tags).
+Mutually exclusive with `--barcode_whitelist` and `--barcoded_reads`.
+This option is a flag, not a way to provide the file (use `--bam` to set the input BAM).
+
+Note: IsoQuant will perform per-barcode quantification automatically.
+
+`--barcode_tag`
+BAM tag for cell barcode (default: CB), requires `--barcoded_bam` flag.
+
+`--umi_tag`
+BAM tag for UMI (default: UB), requires `--barcoded_bam` flag.
+
+`--strip_barcode_suffix`
+Remove suffix after dash from barcodes extracted from BAM tag (e.g. ACGT-1 -> ACGT), requires `--barcoded_bam` flag.
+
 `--barcode2spot`
-Path to TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
+Path to a TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
 By default, barcode is in the first column, cell type in the second.
 However, you can specify one or more columns via colon symbol (similar to `--read_group`): 
 `file.tsv:barcode_column:spot_column(s)` (e.g., `cell_types.tsv:0:1,2,3` for multiple barcode properties).
 
 When `--barcode2spot` is set, `--read_group barcode_spot` will be set automatically
 to group counts by cell type, spatial regions, or other provided properties.
+
+`--barcode2barcode`
+Path to TSV file mapping barcodes to spot IDs for spot-level UMI deduplication.
+When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
+this option groups them together during UMI deduplication, collapsing duplicates across the entire spot.
+
+Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
+When multiple spot columns are provided, a separate UMI deduplication round is performed for each column.
+However, only the main (sequence-based) UMI-deduplicated reads will be used for quantification.
+
+When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
+
+For Visium HD composite barcodes, use `misc/prepare_visium_spot_ids.py` to generate the mapping file.
 
 `--molecule`
 Path to a molecule description format (MDF) file for `custom_sc` mode.
@@ -232,6 +262,31 @@ The representative read is selected based on:
 2. More exons
 3. Longer transcript alignment
 
+The resulting reads after UMI-deduplication are used for the subsequent analysis such as quantification and
+are stored in an [`.allinfo` file](formats.md#umi-filtering-allinfo-format).
+
+### Spot-level UMI deduplication
+
+For spatial transcriptomics at higher resolution than the capture spots
+(e.g. Visium HD 2um barcodes mapping to 8um or 16um spots), use
+`--barcode2barcode` to deduplicate UMIs at the spot level:
+
+```bash
+isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
+  --fastq reads.fastq.gz --data_type nanopore \
+  --mode visium_hd --barcode_whitelist part1.txt part2.txt \
+  --barcode2barcode barcode2spot.tsv:0:1,2 \
+  -o visium_output
+```
+
+For Visium HD, generate the mapping file from per-part coordinate files:
+
+```bash
+python misc/prepare_visium_spot_ids.py part1_to_y.tsv part2_to_x.tsv -o barcode2spot.tsv
+```
+
+See `python misc/prepare_visium_spot_ids.py --help` for custom prefix/delimiter options.
+
 ## Output
 
 ### Count matrices
@@ -246,14 +301,20 @@ Use `--counts_format` to control the output format:
 
 Grouped counts can also be converted after the run using `src/convert_grouped_counts.py`.
 
-### Grouping reads
+### Grouping сcounts
 
 Use `--read_group` to control how reads are grouped for quantification.
 Multiple grouping strategies can be combined (space-separated), producing separate count tables for each.
 
+In single-cell/spatial modes, IsoQuant automatically adds `--read_group barcode`
+if no barcode-related grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
+Use `--read_group none` to disable automatic grouping.
+
 The most common use-cases for single-cell/spatial data are grouping by barcode property (cell type, spot):
 
 `--read_group barcode_spot` (requires `--barcode2spot`)
+
+`--read_group barcode_barcode` (requires `--barcode2barcode`)
 
 or grouping by individual barcode (not recommended for datasets with many barcodes):
 

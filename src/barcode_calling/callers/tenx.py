@@ -19,6 +19,7 @@ from ..common import (
     find_polyt_start, reverese_complement,
     find_candidate_with_max_score_ssw, find_candidate_with_max_score_ssw_var_len,
     detect_exact_positions, str_to_2bit,
+    find_optimal_kmer_size,
 )
 from .base import TenXBarcodeDetectionResult
 
@@ -46,23 +47,29 @@ class TenXBarcodeDetector:
             umi_list: Optional list of known UMIs for validation
         """
         self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
+        bc_length = len(barcode_list[0])
+        bc_count = len(barcode_list)
+        if bc_count > 1000000:
+            logger.warning("The number of barcodes is large: barcode calling may take substantial amount of time and RAM, and affect the accuracy")
+            logger.warning("We suggest to use a sub-list of barcodes derived from short-read analysis whenever possible")
+
+        self.k = find_optimal_kmer_size(bc_length, bc_count)
         if len(barcode_list) <= 100000:
-            self.small_barcode_indexer = None
-            self.barcode_indexer = ArrayKmerIndexer(barcode_list, kmer_size=6)
+            self.barcode_indexer = ArrayKmerIndexer(barcode_list, kmer_size=self.k)
             self.max_barcodes_hits = 20
             self.min_matching_kmers = 1
             self.min_score = 14
             self.score_diff = 0
         else:
             barcode_bit_list = [str_to_2bit(b) for b in barcode_list]
-            self.barcode_indexer = Array2BitKmerIndexer(barcode_bit_list, kmer_size=10, seq_len=self.BARCODE_LEN_10X)
-            self.small_barcode_indexer = Array2BitKmerIndexer(barcode_bit_list, kmer_size=7, seq_len=self.BARCODE_LEN_10X)
+            self.barcode_indexer = Array2BitKmerIndexer(barcode_bit_list, kmer_size=self.k, seq_len=self.BARCODE_LEN_10X)
             self.max_barcodes_hits = 10
             self.min_matching_kmers = 2
-            self.min_score = 15
+            self.min_score = 16
             self.score_diff = 1
 
-        logger.debug("Min score set to %d" % self.min_score)
+        logger.info("Indexed %d barcodes of length %d with k-mer size %d" % (len(barcode_list), bc_length, self.k))
+        logger.info("Minimal alignment score set to %d" % self.min_score)
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         """
@@ -138,16 +145,8 @@ class TenXBarcodeDetector:
                                               score_diff=self.score_diff)
 
         if barcode is None:
-            if self.small_barcode_indexer is not None:
-                matching_barcodes = self.small_barcode_indexer.get_occurrences(potential_barcode,
-                                                                               max_hits=self.max_barcodes_hits,
-                                                                               min_kmers=self.min_matching_kmers)
-                barcode, bc_score, bc_start, bc_end = \
-                    find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
-                                                      min_score=self.min_score,
-                                                      score_diff=self.score_diff)
-            if barcode is None:
-                return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
+
         logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
         # position of barcode end in the reference: end of potential barcode minus bases to the alignment end
         read_barcode_end = barcode_start + bc_end - 1

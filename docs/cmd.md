@@ -121,11 +121,22 @@ where `FILE` is the file path, `READ_COL` is column with read ids (default: 0),
 Set barcode-to-spot mapping via `--barcode2spot` option.
 Useful for grouping single-cell/spatial data by cell type or spatial region instead of individual barcodes.
 
+ * `barcode_barcode` - group by spot-level barcode mapping for UMI deduplication.
+Set barcode-to-spot mapping via `--barcode2barcode` option.
+Multiple barcodes mapping to the same spot are grouped together.
+
 * `barcode` - groups reads by cell barcode.
 When the number of barcodes is large, grouping counts by individual barcodes may take a long time.
 It is recommended to use `--barcode2spot` file instead.
+In single-cell/spatial modes, `barcode` grouping is added automatically if no barcode-related
+grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
 
-**Example**: `--read_group tag:RG file_name barcode_spot` creates multi-level grouping by read group tag, 
+* `none` - disable all automatic read grouping.
+By default, IsoQuant automatically adds grouping in certain cases
+(e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
+Use `--read_group none` to suppress this and produce only bulk counts.
+
+**Example**: `--read_group tag:RG file_name barcode_spot` creates multi-level grouping by read group tag,
 original file name, and barcode property (e.g. cell type).
 
 
@@ -191,7 +202,7 @@ Single-cell and spatial modes enable automatic barcode calling and UMI-based ded
 
 `--barcode_whitelist`
 Path to file(s) with barcode whitelist(s) for barcode calling.
-Required for single-cell/spatial modes unless `--barcoded_reads` is provided.
+Required for single-cell/spatial modes unless `--barcoded_reads` or `--barcoded_bam` is provided.
 
 File should contain one barcode sequence per line. 
 More than 1 tab-separated column is allowed, but only the first will be used.
@@ -199,7 +210,7 @@ Supports plain text and gzipped files.
 
 _Notes:_
 - Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
-If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
+If you have a subset of barcodes, for example, from short-read data, provide them instead of the full whitelist;
 - IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
 
 `--barcoded_reads`
@@ -208,9 +219,25 @@ Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
 If provided, IsoQuant skips barcode calling and uses these assignments directly.
 More than 3 columns are allowed, but only the first 3 will be used.
 
-_Notes:_
-- IsoQuant does not read barcodes or UMIs from BAM file tags;
-- IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
+Note: IsoQuant will perform per-barcode quantification automatically.
+
+
+`--barcoded_bam`
+Extract barcodes and UMIs from BAM tags instead of calling barcodes.
+Uses `CB` (cell barcode) and `UB` (UMI) tags by default (standard 10x Genomics / cellranger tags).
+Mutually exclusive with `--barcode_whitelist` and `--barcoded_reads`.
+This option is a flag, not a way to provide the file (use `--bam` to set the input BAM).
+
+Note: IsoQuant will perform per-barcode quantification automatically.
+
+`--barcode_tag`
+BAM tag for cell barcode (default: CB), requires `--barcoded_bam` flag.
+
+`--umi_tag`
+BAM tag for UMI (default: UB), requires `--barcoded_bam` flag.
+
+`--strip_barcode_suffix`
+Remove suffix after dash from barcodes extracted from BAM tag (e.g. ACGT-1 -> ACGT), requires `--barcoded_bam` flag.
 
 `--barcode2spot`
 Path to TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
@@ -220,6 +247,19 @@ However, you can specify one or more columns via colon symbol (similar to `--rea
 
 When `--barcode2spot` is set, `--read_group barcode_spot` will be set automatically
 to group counts by cell type, spatial regions, or other provided properties.
+
+`--barcode2barcode`
+Path to TSV file mapping barcodes to spot IDs for spot-level UMI deduplication.
+When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
+this option groups them together during UMI deduplication, collapsing duplicates across the entire spot.
+
+Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
+When multiple spot columns are provided, a separate UMI deduplication round is performed for each column.
+However, only the main (sequence-based) UMI-deduplicated reads will be used for quantification.
+
+When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
+
+For Visium HD composite barcodes, use `misc/prepare_visium_spot_ids.py` to generate the mapping file.
 
 `--molecule`
 Path to a molecule description file (MDF) for `custom_sc` mode.

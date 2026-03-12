@@ -1,15 +1,15 @@
-name: Barcode Mouse Visium HD
+name: SC Mouse 10x barcoded_bam Allinfo
 
 on:
   workflow_dispatch:
   schedule:
-  - cron: '30 3 * * 5'
+  - cron: '0 6 * * 6'
 
 env:
-  LAUNCHER: ${{github.workspace}}/tests/github/run_barcode_test.py
-  CFG_DIR: /abga/work/andreyp/ci_isoquant/data/barcodes
+  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
+  CFG_DIR: /abga/work/andreyp/ci_isoquant/data
   BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
-  OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/barcodes/
+  OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
 
 concurrency:
   group: ${{github.workflow}}
@@ -51,7 +51,7 @@ jobs:
     if: needs.check-changes.outputs.has_changes == 'true'
     runs-on:
       labels: [isoquant]
-    name: 'Running barcode detection QC'
+    name: 'Running SC Mouse 10x barcoded_bam pipeline with allinfo QC'
 
     steps:
       - name: 'Cleanup'
@@ -65,11 +65,10 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 'Mouse Visium HD'
-        if: always()
+      - name: 'SC Mouse 10x barcoded_bam allinfo'
         shell: bash
         env:
-          STEP_NAME: Mouse.VisiumHD.v1.s1.sep.10M.correct_struct
+          STEP_NAME: SC.Mouse.10x.barcoded_bam.allinfo
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}

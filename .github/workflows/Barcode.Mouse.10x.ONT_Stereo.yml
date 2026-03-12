@@ -1,4 +1,4 @@
-name: Barcode Mouse 10x ONT Stereo
+name: Barcode Mouse 10x ONT 3.8% error rate
 
 on:
   workflow_dispatch:
@@ -66,6 +66,7 @@ jobs:
           fetch-depth: 1
 
       - name: 'Mouse 10x ONT Stereo'
+        if: always()
         shell: bash
         env:
           STEP_NAME: Mouse.10x.5k.no_truncation.ONT_Stereo

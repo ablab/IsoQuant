@@ -93,6 +93,32 @@ In MTX format, `.matrix.mtx` represents counts, `.features.tsv` contains the fea
 See [options](cmd.md#specific-output-options) to tune your output.
 
 
+## UMI filtering allinfo format
+
+**Important: this is an internal format subject to change without notice.**
+
+Produced in single-cell/spatial modes when `--large_output allinfo` is enabled (enabled by default).
+The file `SAMPLE_ID.UMI_filtered.ED{N}.allinfo[.gz]` contains one line per read that survived UMI deduplication.
+Tab-separated values, the columns are:
+
+* `read_id` - original read identifier;
+* `gene_id` - assigned gene ID;
+* `cell_type` - cell type or spot ID from barcode-to-spot mapping (`None` if not available);
+* `barcode` - cell barcode sequence;
+* `umi` - UMI sequence;
+* `introns` - semicolon-separated list of intron coordinates in `chr_start_end_strand` format;
+* `TSS` - transcription start site coordinate in `chr_pos_pos_strand` format (`NoTSS` if not detected);
+* `polyA` - poly-A site coordinate in `chr_pos_pos_strand` format (`NoPolyA` if not detected);
+* `exons` - semicolon-separated list of exon coordinates in `chr_start_end_strand` format;
+* `read_type` - assignment category: `known` (unique), `known_ambiguous` (ambiguous), `novel` (inconsistent), or `none`;
+* `intron_count` - number of introns in the read;
+* `transcript_id` - assigned reference transcript ID;
+* `transcript_type` - biotype of the assigned transcript (e.g. `protein_coding`, `lncRNA`).
+
+Coordinate lists use `;%;` as the element separator.
+
+An accompanying `SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` file contains summary statistics of the UMI filtering process.
+
 ## Exon and intron count format
 
 Tab-separated values, the columns are:
