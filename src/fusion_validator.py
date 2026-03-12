@@ -8,6 +8,45 @@ class FusionValidator:
     def __init__(self, detector):
         self.detector = detector
 
+    def filter_raw_non_coding_genes(self):
+        # Drop fusions with non-protein-coding genes at the raw assignment stage.
+        fusions_to_discard = set()
+        # Check raw assignments: if ANY supporting read has a non-coding partner, drop the fusion
+        for fusion_key, read_assignments in self.detector.fusion_assigned_pairs.items():
+            if fusion_key not in self.detector.fusion_candidates:
+                # Fusion was already removed, skip
+                continue
+            # Check all raw assigned gene pairs for this fusion
+            has_non_coding = False
+            non_coding_reason = None
+            for read_name, (left_gene, right_gene) in read_assignments.items():
+                # Get biotypes for the raw assigned genes
+                left_biotype = self.detector.get_gene_biotype(left_gene) if left_gene else None
+                right_biotype = self.detector.get_gene_biotype(right_gene) if right_gene else None
+                # Check if either is non-protein-coding
+                if left_gene and left_biotype and left_biotype != "protein_coding":
+                    has_non_coding = True
+                    non_coding_reason = f"{left_gene}={left_biotype}"
+                    break
+                if right_gene and right_biotype and right_biotype != "protein_coding":
+                    has_non_coding = True
+                    non_coding_reason = f"{right_gene}={right_biotype}"
+                    break
+            if has_non_coding:
+                logger.info(f"Dropping early non-coding fusion: {fusion_key} - {non_coding_reason}")
+                fusions_to_discard.add(fusion_key)
+        # Remove all discarded fusions from data structures
+        for fusion_key in fusions_to_discard:
+            if fusion_key in self.detector.fusion_metadata:
+                del self.detector.fusion_metadata[fusion_key]
+            if fusion_key in self.detector.fusion_candidates:
+                del self.detector.fusion_candidates[fusion_key]
+            if fusion_key in self.detector.fusion_breakpoints:
+                del self.detector.fusion_breakpoints[fusion_key]
+            # Also remove from assigned pairs to avoid re-processing
+            if fusion_key in self.detector.fusion_assigned_pairs:
+                del self.detector.fusion_assigned_pairs[fusion_key]
+
     def filter_non_coding_genes(self):
         # Removes fusions with non-protein-coding partners completely from all data structures.
         fusions_to_discard = []
@@ -18,7 +57,11 @@ class FusionValidator:
             right_chr, right_pos = None, None
             consensus_bp = meta.get("consensus_bp")
             if consensus_bp:
-                left_chr, left_pos, right_chr, right_pos = consensus_bp
+                # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
+                if len(consensus_bp) == 6:
+                    left_chr, left_pos, left_strand, right_chr, right_pos, right_strand = consensus_bp
+                else:
+                    left_chr, left_pos, right_chr, right_pos = consensus_bp
             # Get biotypes for both genes
             left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
             right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
@@ -147,9 +190,9 @@ class FusionValidator:
         right = meta.get("right_gene")
         if left and right:
             if self.is_multicopy_artifact_family(left) or self.is_multicopy_artifact_family(right):
-                priors -= 0.25
+                priors -= 0.30
             if self.is_driver_gene(left) or self.is_driver_gene(right):
-                priors += 0.10
+                priors += 0.20
         conf = max(0.0, min(1.0, support + recon + realign + boundary_bonus + priors))
         return conf
 
@@ -246,7 +289,11 @@ class FusionValidator:
             consensus_bp = meta.get("consensus_bp")
             if not consensus_bp:
                 continue
-            left_chr, left_pos, right_chr, right_pos = consensus_bp
+            # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
+            if len(consensus_bp) == 6:
+                left_chr, left_pos, left_strand, right_chr, right_pos, right_strand = consensus_bp
+            else:
+                left_chr, left_pos, right_chr, right_pos = consensus_bp
             left_gene = meta.get("left_gene")
             right_gene = meta.get("right_gene")
             if not left_gene or not right_gene:
@@ -268,7 +315,7 @@ class FusionValidator:
         self._remove_discarded_fusions(all_discards)
 
     def _merge_fusion_candidates(self, keep_fusion_key, discard_fusion_key):
-        """Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key."""
+        # Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key
         if discard_fusion_key in self.detector.fusion_candidates:
             keep_reads = self.detector.fusion_candidates.get(keep_fusion_key, set())
             discard_reads = self.detector.fusion_candidates[discard_fusion_key]

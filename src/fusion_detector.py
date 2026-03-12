@@ -489,6 +489,8 @@ class FusionDetector:
         # Returns True if at least one fusion was recorded, False otherwise.
         seen_pairs = set()
         sa_used = False
+        # Get primary read strand (True = reverse complement, False = forward)
+        primary_strand = "-" if read.is_reverse else "+"
         for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len) in sa_entries:
             # Estimate breakpoints with clip guidance
             left_chr, left_pos, right_chr, right_pos = self.estimate_breakpoint(
@@ -507,9 +509,11 @@ class FusionDetector:
             if left_gene is None or right_gene is None:
                 continue
             if left_gene != right_gene:
+                # Pass strands: primary read strand for left breakpoint, SA strand for right breakpoint
                 self.record_fusion(
                     left_gene, right_gene, read.query_name,
-                    left_chr, left_pos, sa_chr, right_pos
+                    left_chr, left_pos, sa_chr, right_pos,
+                    strand1=primary_strand, strand2=sa_strand
                 )
                 sa_used = True
         return sa_used
@@ -588,7 +592,7 @@ class FusionDetector:
             return "intergenic"
         return str(g)
 
-    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
+    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2, strand1="+", strand2="+"):
         # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
         if self.has_antisense_suffix(context1) or self.has_antisense_suffix(context2):
             return
@@ -600,16 +604,21 @@ class FusionDetector:
         fusion_key = "--".join(sorted([left, right]))
 
         self.fusion_candidates[fusion_key].add(read_name)
-        bp = (chrom1, int(pos1), chrom2, int(pos2))
+        # Store breakpoint with strand information: (chrom1, pos1, strand1, chrom2, pos2, strand2)
+        bp = (chrom1, int(pos1), strand1, chrom2, int(pos2), strand2)
         self.fusion_breakpoints[fusion_key][bp] += 1
 
         meta = self.fusion_metadata.setdefault(
             fusion_key,
             {"supporting_reads": set(), "consensus_bp": None,
-            "left_gene": None, "right_gene": None, "support": 0}
+            "left_gene": None, "right_gene": None, "support": 0,
+            "strand1": None, "strand2": None, "read_strand_patterns": defaultdict(int)}
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
+        # Track strand patterns observed in reads
+        strand_pattern = (strand1, strand2)
+        meta["read_strand_patterns"][strand_pattern] += 1
         # store the raw assigned pair for this read so we don't need to re-run assignment later
         try:
             self.fusion_assigned_pairs[fusion_key][read_name] = (context1, context2)
@@ -630,6 +639,10 @@ class FusionDetector:
         return gene
 
     def build_metadata(self, min_support=1):
+        # Apply early filtering to drop non-protein-coding fusions BEFORE breakpoint clustering
+        validator = FusionValidator(self)
+        validator.filter_raw_non_coding_genes()
+        
         # Delegate the heavy lifting to the new FusionMetadata helper class
         try:
             from .fusion_metadata import FusionMetadata
@@ -641,24 +654,35 @@ class FusionDetector:
     def cluster_breakpoints(self, bp_counts, window):
         if not bp_counts:
             return None
-        # Group by chrom pair
+        # Group by chrom pair and collect strand information
         from collections import defaultdict
         by_pair = defaultdict(list)
-        for (c1, p1, c2, p2), w in bp_counts.items():
-            by_pair[(c1, c2)].append((p1, p2, w))
+        
+        # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
+        for bp_tuple, w in bp_counts.items():
+            if len(bp_tuple) == 6:
+                # New format with strands
+                c1, p1, s1, c2, p2, s2 = bp_tuple
+                by_pair[(c1, c2)].append((p1, p2, w, s1, s2))
+            else:
+                # Old format without strands (backward compatibility)
+                c1, p1, c2, p2 = bp_tuple
+                by_pair[(c1, c2)].append((p1, p2, w, "+", "+"))  # Default strands
         def best_window(items, w):
             # Sort by p1; we’ll apply a sliding window on p1, and inside it on p2
             items.sort(key=lambda x: x[0])  # sort by p1
             best_total = 0
             best_p1 = 0
             best_p2 = 0
+            best_s1 = "+"
+            best_s2 = "+"
             n = len(items)
             j = 0
             sum_w = 0
             # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
             # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
             for i in range(n):
-                p1_i, p2_i, wi = items[i]
+                p1_i, p2_i, wi, s1_i, s2_i = items[i]
                 # Expand p1-window
                 sum_w += wi
                 # Shrink from left until p1-range <= w
@@ -681,27 +705,33 @@ class FusionDetector:
                         s_w = 0
                         s_p1 = 0
                         s_p2 = 0
+                        strand_counts = defaultdict(int)  # Count strands
                         for x in slice_view[k:t+1]:
                             s_w += x[2]
                             s_p1 += x[0] * x[2]
                             s_p2 += x[1] * x[2]
+                            strand_counts[(x[3], x[4])] += x[2]
                         best_total = s_w
                         best_p1 = s_p1 // s_w
                         best_p2 = s_p2 // s_w
-            return best_p1, best_p2, best_total
+                        # Get most common strand pattern
+                        if strand_counts:
+                            best_strands = max(strand_counts.items(), key=lambda x: x[1])
+                            best_s1, best_s2 = best_strands[0]
+            return best_p1, best_p2, best_total, best_s1, best_s2
         best_pair = None
-        best = (None, None, 0)
+        best = (None, None, 0, "+", "+")
         for pair, items in by_pair.items():
-            c_p1, c_p2, total = best_window(items, window)
+            c_p1, c_p2, total, s1, s2 = best_window(items, window)
             if total > best[2]:
                 best_pair = pair
-                best = (c_p1, c_p2, total)
+                best = (c_p1, c_p2, total, s1, s2)
 
         if best_pair is None:
             return None
         (c1, c2) = best_pair
-        (p1, p2, total) = best
-        return (c1, p1, c2, p2), total
+        (p1, p2, total, s1, s2) = best
+        return (c1, p1, s1, c2, p2, s2), total
 
     def parse_sa_entries(self, sa_tag):
         entries = []
@@ -1093,148 +1123,37 @@ class FusionDetector:
             return None
         return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
 
-    def _merge_fully_identical(self):
-        # Detect and merge fully identical fusions (same genes AND same consensus breakpoints).
-        # This handles exact duplicates that result from processing.
-        bp_to_fusion_keys = defaultdict(list)
-        for fusion_key, meta in self.fusion_metadata.items():
-            consensus_bp = meta.get("consensus_bp")
-            left_gene = meta.get("left_gene")
-            right_gene = meta.get("right_gene")
-            if not consensus_bp or not left_gene or not right_gene:
-                continue
-            # Create a signature: (left_gene, right_gene, consensus_bp)
-            # Note: fusion_key is sorted, so order shouldn't matter, but we verify genes match
-            signature = (left_gene, right_gene, consensus_bp)
-            bp_to_fusion_keys[signature].append(fusion_key)
-        fusions_to_discard = set()
-        for signature, fusion_keys in bp_to_fusion_keys.items():
-            if len(fusion_keys) < 2:
-                continue
-            # Multiple identical fusions found; keep first, merge rest into it
-            keep_key = fusion_keys[0]
-            for discard_key in fusion_keys[1:]:
-                logger.info(f"Merging identical duplicates: {keep_key} ← {discard_key}")
-                self._merge_fusion_candidates(keep_key, discard_key)
-                fusions_to_discard.add(discard_key)
-        return fusions_to_discard
-
-    def _merge_similar_candidates_by_gene(self, shared_gene_index, index_type="left",
-                                           distance_threshold=10000):
-        # Merge similar fusion candidates sharing a gene on one side.
-        # index_type: "left" or "right" indicates which side of the fusion shares the gene.
-        # For "left": index has left_gene -> [(fusion_key, right_gene, right_chr, right_pos), ...]
-        # For "right": index has right_gene -> [(fusion_key, left_gene, left_chr, left_pos), ...]
-        fusions_to_discard = set()
-        for shared_gene, entries in shared_gene_index.items():
-            if len(entries) < 2:
-                continue
-            for i in range(len(entries)):
-                for j in range(i + 1, len(entries)):
-                    if fusions_to_discard & {entries[i][0], entries[j][0]}:
-                        continue  # Skip if either fusion already marked for discard
-                    fusion_key_i, other_gene_i, other_chr_i, other_pos_i = entries[i]
-                    fusion_key_j, other_gene_j, other_chr_j, other_pos_j = entries[j]
-                    # Same chromosome and within distance threshold?
-                    if other_chr_i != other_chr_j:
-                        continue
-                    distance = abs(other_pos_i - other_pos_j)
-                    if distance > distance_threshold:
-                        continue
-                    # If genes are identical and very close (< 1kb), definitely merge as duplicates
-                    if other_gene_i == other_gene_j and distance < 1000:
-                        logger.info(f"Merging near-identical duplicates: {fusion_key_i} ← {fusion_key_j} "
-                                   f"(shared {index_type}={shared_gene}, distance={distance}bp)")
-                        self._merge_fusion_candidates(fusion_key_i, fusion_key_j)
-                        fusions_to_discard.add(fusion_key_j)
-                        continue
-                    # Skip if genes are identical and far apart (different events)
-                    if other_gene_i == other_gene_j:
-                        continue
-                    # Score both genes at their respective positions
-                    side = "right" if index_type == "left" else "left"
-                    logger.debug(f"Merging candidates: {fusion_key_i} vs {fusion_key_j} "
-                               f"(shared {index_type}={shared_gene}, {side} distance={distance}bp)")
-                    score_i = self._compute_gene_score(other_gene_i, other_pos_i, chrom=other_chr_i)
-                    score_j = self._compute_gene_score(other_gene_j, other_pos_j, chrom=other_chr_j)
-                    # Keep the one with higher score, discard the other
-                    if score_i >= score_j:
-                        self._merge_fusion_candidates(fusion_key_i, fusion_key_j)
-                        fusions_to_discard.add(fusion_key_j)
-                    else:
-                        self._merge_fusion_candidates(fusion_key_j, fusion_key_i)
-                        fusions_to_discard.add(fusion_key_i)
-        return fusions_to_discard
-
-    def _remove_discarded_fusions(self, fusions_to_discard):
-        # Remove discarded fusions from all internal data structures.
-        for fusion_key in fusions_to_discard:
-            logger.info(f"Discarding fusion candidate: {fusion_key}")
-            if fusion_key in self.fusion_metadata:
-                del self.fusion_metadata[fusion_key]
-            if fusion_key in self.fusion_candidates:
-                del self.fusion_candidates[fusion_key]
-            if fusion_key in self.fusion_breakpoints:
-                del self.fusion_breakpoints[fusion_key]
-
-    def merge_nearly_identical(self, distance_threshold=10000):
-        # Main entry point: merge fully identical and nearly identical fusion candidates.
-        # Strategy: first merge exact duplicates, then merge nearby variants on shared genes.
-        # distance_threshold is 20kb to catch breakpoint variations from SV complexity.
-        # Step 1: Merge fully identical fusions
-        fully_identical_discards = self._merge_fully_identical()
-        # Step 2: Build indexes for nearly identical fusion detection
-        left_gene_index = defaultdict(list)
-        right_gene_index = defaultdict(list)
-        for fusion_key, meta in self.fusion_metadata.items():
-            if fusion_key in fully_identical_discards:
-                continue  # Skip already-discarded fusions
-            consensus_bp = meta.get("consensus_bp")
-            if not consensus_bp:
-                continue
-            left_chr, left_pos, right_chr, right_pos = consensus_bp
-            left_gene = meta.get("left_gene")
-            right_gene = meta.get("right_gene")
-            if not left_gene or not right_gene:
-                continue
-            # Index by left_gene: store (fusion_key, right_gene, right_chr, right_pos)
-            left_gene_index[left_gene].append((fusion_key, right_gene, right_chr, right_pos))
-            # Index by right_gene: store (fusion_key, left_gene, left_chr, left_pos)
-            right_gene_index[right_gene].append((fusion_key, left_gene, left_chr, left_pos))
-        # Step 3: Merge nearly identical by shared left gene
-        left_gene_discards = self._merge_similar_candidates_by_gene(
-            left_gene_index, index_type="left", distance_threshold=distance_threshold
-        )
-        # Step 4: Merge nearly identical by shared right gene
-        right_gene_discards = self._merge_similar_candidates_by_gene(
-            right_gene_index, index_type="right", distance_threshold=distance_threshold
-        )
-        # Step 5: Remove all discarded fusions
-        all_discards = fully_identical_discards | left_gene_discards | right_gene_discards
-        self._remove_discarded_fusions(all_discards)
-
-    def _merge_fusion_candidates(self, keep_fusion_key, discard_fusion_key):
-        # Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key.
-        if discard_fusion_key in self.fusion_candidates:
-            keep_reads = self.fusion_candidates.get(keep_fusion_key, set())
-            discard_reads = self.fusion_candidates[discard_fusion_key]
-            keep_reads.update(discard_reads)
-            self.fusion_candidates[keep_fusion_key] = keep_reads
-        # Merge breakpoint counts
-        if discard_fusion_key in self.fusion_breakpoints:
-            keep_bps = self.fusion_breakpoints.get(keep_fusion_key, {})
-            discard_bps = self.fusion_breakpoints[discard_fusion_key]
-            for bp, count in discard_bps.items():
-                keep_bps[bp] = keep_bps.get(bp, 0) + count
-            self.fusion_breakpoints[keep_fusion_key] = keep_bps
-        # Update metadata with merged read count
-        if keep_fusion_key in self.fusion_metadata:
-            meta = self.fusion_metadata[keep_fusion_key]
-            if discard_fusion_key in self.fusion_metadata:
-                discard_meta = self.fusion_metadata[discard_fusion_key]
-                if "supporting_reads" in meta and "supporting_reads" in discard_meta:
-                    meta["supporting_reads"].update(discard_meta["supporting_reads"])
-                    meta["support"] = len(meta["supporting_reads"])
+    def get_gene_strand(self, gene_name, chrom=None, pos=None):
+        # Retrieve the strand (+/-) for a given gene name.
+        if not gene_name:
+            return None
+        try:
+            # Try direct lookup by gene ID first
+            try:
+                gene = self.db[gene_name]
+                if gene.featuretype == "gene":
+                    return gene.strand
+            except Exception:
+                pass
+            # If not found and we have coordinates, look up genes at position
+            if chrom and pos:
+                if self.interval_index is not None:
+                    genes = self.interval_index.get_genes_at(chrom, pos, window=500)
+                else:
+                    genes = list(self.db.region(region=(chrom, max(1, pos - 500), pos + 500), featuretype='gene'))
+                for g in genes:
+                    attrs = getattr(g, 'attributes', {}) or {}
+                    gname = attrs.get('gene_name', [None])[0]
+                    if gname == gene_name:
+                        return g.strand
+            # Last resort: search through all genes
+            if self.interval_index is not None:
+                genes = self.interval_index.find_genes_by_name(gene_name)
+                if genes:
+                    return genes[0].strand
+        except Exception:
+            pass
+        return None
 
     def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
                         require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
@@ -1266,7 +1185,12 @@ class FusionDetector:
                 continue
 
             # perform classification and basic filtering
-            c1, p1, c2, p2 = consensus_bp
+            # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
+            if len(consensus_bp) == 6:
+                c1, p1, s1, c2, p2, s2 = consensus_bp
+            else:
+                c1, p1, c2, p2 = consensus_bp
+                s1, s2 = "+", "+"
             g1_name, r1 = self._context_query(c1, p1)
             g2_name, r2 = self._context_query(c2, p2)
             self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
@@ -1313,7 +1237,13 @@ class FusionDetector:
                         continue
                     if not meta.get("consensus_bp"):
                         continue
-                    left_chr, left_pos, right_chr, right_pos = meta["consensus_bp"]
+                    # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
+                    consensus_bp = meta["consensus_bp"]
+                    if len(consensus_bp) == 6:
+                        left_chr, left_pos, left_strand, right_chr, right_pos, right_strand = consensus_bp
+                    else:
+                        left_chr, left_pos, right_chr, right_pos = consensus_bp
+                        left_strand, right_strand = "+", "+"
                     left_gene  = meta["left_gene"]
                     right_gene = meta["right_gene"]
                     # Skip if collapse makes them equal
