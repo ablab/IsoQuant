@@ -132,7 +132,7 @@ def assess_single_barcode_mode(
     # Process input file
     with open(input_file) as f:
         for line in f:
-            if line.startswith('#'):
+            if line.startswith('#') or line.startswith('read_id\t'):
                 continue
 
             cols = line.strip().split('\t')
@@ -237,7 +237,7 @@ def assess_split_barcode_mode(
 
     with open(input_file) as f:
         for line in f:
-            if line.startswith('#'):
+            if line.startswith('#') or line.startswith('read_id\t'):
                 continue
 
             cols = line.strip().split('\t')
