@@ -1,10 +1,12 @@
 # IsoQuant changelog
 
-## IsoQuant 3.12.0, 11 March 2026
+## IsoQuant 3.12.0, 13 March 2026
+
+- TSV output files do not have a `#` in headers for easier downstream processing (thanks to @yinshiyi).
 
 - Fix Python 3.14 compatibility.
 
-- Add `--barcoded_bam` option for reading barcodes and UMIs directly from a input BAM.
+- Add `--barcoded_bam` flag for reading barcodes and UMIs directly from a input BAM.
 
 - Add `--barcode2barcode` option for Visium HD data processing.
 
