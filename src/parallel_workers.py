@@ -99,7 +99,7 @@ def load_barcode_dict(sample, chr_id):
         if os.path.exists(barcode_file):
             logger.debug(f"Loading barcodes from {barcode_file}")
             for line in open(barcode_file):
-                if line.startswith("#"):
+                if line.startswith("#") or line.startswith("read_id\t"):
                     continue
                 parts = line.strip().split('\t')
                 if len(parts) >= 3:
