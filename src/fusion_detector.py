@@ -595,9 +595,15 @@ class FusionDetector:
         # Skip fusions with intergenic partners
         if context1 == "intergenic" or context2 == "intergenic":
             return
-        left = self._safe_gene_token(context1)
-        right = self._safe_gene_token(context2)
-        fusion_key = f"{left}--{right}"
+        left_symbol = self.normalize_gene_label(context1)
+        right_symbol = self.normalize_gene_label(context2)
+
+        left_raw = context1   # original ID (likely ENSG)
+        right_raw = context2
+
+        fusion_key = f"{left_symbol}--{right_symbol}"
+
+        self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
 
         self.fusion_candidates[fusion_key].add(read_name)
         # Store breakpoint without strand information: (chrom1, pos1, chrom2, pos2)

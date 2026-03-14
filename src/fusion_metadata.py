@@ -62,8 +62,8 @@ class FusionMetadata:
             right_gene = self.detector.normalize_gene_label(right_gene) if right_gene else "intergenic"
 
             # Store biotypes for reporting
-            left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
-            right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
+            left_biotype = self.detector.get_gene_biotype(raw_left, chrom=left_chr, pos=left_pos)
+            right_biotype = self.detector.get_gene_biotype(raw_right, chrom=right_chr, pos=right_pos)
             meta["left_gene"] = left_gene
             meta["right_gene"] = right_gene
             meta["left_biotype"] = left_biotype
