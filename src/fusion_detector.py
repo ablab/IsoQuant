@@ -595,6 +595,8 @@ class FusionDetector:
         # Skip fusions with intergenic partners
         if context1 == "intergenic" or context2 == "intergenic":
             return
+        if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
+            return
         left_symbol = self.normalize_gene_label(context1)
         right_symbol = self.normalize_gene_label(context2)
 
@@ -1114,6 +1116,7 @@ class FusionDetector:
         # Returns biotype string or None if not found.
         if not gene_name:
             return None
+        gene_name = self.normalize_gene_label(gene_name)
         return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
 
     def get_gene_strand(self, gene_name, chrom=None, pos=None):

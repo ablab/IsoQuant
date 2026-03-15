@@ -99,7 +99,7 @@ class FusionValidator:
                     reason.append(f"Left {left_gene}={left_biotype}")
                 if not right_is_coding:
                     reason.append(f"Right {right_gene}={right_biotype}")
-                logger.info(f"Discarding non-coding fusion: {fusion_key} - {'; '.join(reason)}")
+                # logger.info(f"Discarding non-coding fusion: {fusion_key} - {'; '.join(reason)}")
                 fusions_to_discard.append(fusion_key)
         # Remove all discarded fusions from data structures
         for fusion_key in fusions_to_discard:

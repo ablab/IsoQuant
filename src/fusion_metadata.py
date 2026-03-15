@@ -10,18 +10,22 @@ class FusionMetadata:
     def process_all(self, min_support=1):
         logger.info(f"FusionMetadata: Processing {len(self.detector.fusion_candidates)} fusion keys with min_support={min_support}")
         for fusion_key, reads in self.detector.fusion_candidates.items():
-            logger.debug(f"FusionMetadata: Processing {fusion_key} with {len(reads)} reads")
-            meta = self._ensure_meta(fusion_key)
-            meta["supporting_reads"].update(reads)
-            meta["support"] = len(meta["supporting_reads"])
-            if meta["support"] < min_support:
+            # Check support gate FIRST before creating metadata
+            support = len(reads)
+            if support < min_support:
                 continue
+            # Check breakpoint gate
             bp_counts = self.detector.fusion_breakpoints.get(fusion_key, {})
             if not bp_counts:
                 continue
+            # Check consensus gate
             consensus_result = self.detector.cluster_breakpoints(bp_counts, window=2000)
             if not consensus_result:
                 continue
+            # All gates passed - only NOW create metadata record
+            meta = self._ensure_meta(fusion_key)
+            meta["supporting_reads"].update(reads)
+            meta["support"] = support
             consensus_bp, clustered_support = consensus_result
             meta["consensus_bp"] = consensus_bp
             meta["support"] = clustered_support
