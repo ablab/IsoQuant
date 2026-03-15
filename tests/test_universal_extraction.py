@@ -362,7 +362,7 @@ class TestExtractionResult:
         result = ExtractionResult(structure, "read_001", "+", detected)
         header = result.header()
 
-        assert "#read_id" in header
+        assert "read_id" in header
         assert "barcode" in header
         assert "UMI" in header
         assert "BC_score" in header
@@ -561,7 +561,7 @@ class TestUniversalSingleMoleculeExtractor:
 
         header = extractor.header()
 
-        assert "#read_id" in header
+        assert "read_id" in header
         assert "strand" in header
 
 

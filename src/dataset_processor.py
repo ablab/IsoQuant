@@ -457,7 +457,7 @@ class DatasetProcessor:
 
         self.merge_assignments(sample, aggregator, chr_ids)
         if self.args.sqanti_output:
-            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, aggregator.t2t_sqanti_printer.output_file, copy_header=False)
+            merge_files(sample.out_t2t_tsv, sample.prefix, chr_ids, aggregator.t2t_sqanti_printer.output_file, copy_header=False, header_lines=1)
         self.finalize(aggregator)
 
         if not self.args.no_model_construction:
@@ -479,6 +479,25 @@ class DatasetProcessor:
                                 counter.output_counts_file_name)
             aggregator.transcript_model_global_counter.finalize(self.args)
             aggregator.gene_model_global_counter.finalize(self.args)
+
+        self._cleanup_per_chr_temp_files(sample, chr_ids)
+
+    def _cleanup_per_chr_temp_files(self, sample, chr_ids: list):
+        """Remove any remaining per-chromosome temporary files after merging.
+
+        During parallel processing, per-chr files are created and then merged.
+        Normally merge_files() removes them, but files from disabled output types
+        (e.g. corrected_bed, read2transcripts not in --large_output) or from
+        previous runs with different options may remain. This catch-all cleanup
+        removes them.
+        """
+        if self.args.keep_tmp:
+            return
+        for chr_id in chr_ids:
+            chr_prefix = sample.get_chr_prefix(chr_id)
+            pattern = os.path.join(sample.out_dir, chr_prefix + ".*")
+            for f in glob.glob(pattern):
+                os.remove(f)
 
     def finalize(self, aggregator):
         if aggregator.basic_printer:
@@ -708,7 +727,7 @@ class DatasetProcessor:
     def merge_assignments(self, sample, aggregator, chr_ids):
         if self.args.genedb and aggregator.basic_printer:
             merge_files(sample.out_assigned_tsv, sample.prefix, chr_ids,
-                        aggregator.basic_printer.output_file, copy_header=False)
+                        aggregator.basic_printer.output_file, copy_header=False, header_lines=3)
         if aggregator.corrected_bed_printer:
             merge_files(sample.out_corrected_bed, sample.prefix, chr_ids,
                         aggregator.corrected_bed_printer.output_file, copy_header=False)

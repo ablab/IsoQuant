@@ -28,7 +28,7 @@ def load_barcoded_reads(barcoded_reads_path: str) -> dict[str, tuple[str, str]]:
     barcode_dict: dict[str, tuple[str, str]] = {}
     with open(barcoded_reads_path) as f:
         for line in f:
-            if line.startswith("#"):
+            if line.startswith("#") or line.startswith("read_id\t"):
                 continue
             tokens = line.strip().split("\t")
             if len(tokens) < 3:

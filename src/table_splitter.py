@@ -179,7 +179,7 @@ def process_table_for_chromosomes(worker_id, input_tsvs, my_chromosomes, bam_fil
 
             try:
                 for line in file_handle:
-                    if line.startswith("#") or not line.strip():
+                    if line.startswith("#") or line.startswith("read_id\t") or not line.strip():
                         continue
 
                     total_reads_processed += 1

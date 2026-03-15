@@ -26,7 +26,7 @@ def parse_args():
 def load_counts(counts_file):
     count_dict = {}
     for l in open(counts_file):
-        if l.startswith("#"):
+        if l.startswith("#") or l.startswith("feature_id\t"):
             continue
         t = l.strip().split()
         if len(t) < 3:

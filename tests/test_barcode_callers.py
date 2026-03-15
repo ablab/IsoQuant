@@ -102,7 +102,7 @@ class TestBarcodeDetectionResult:
         """Test TSV header."""
         # header() is a static method
         header = BarcodeDetectionResult.header()
-        assert "#read_id" in header
+        assert "read_id" in header
         assert "barcode" in header
         assert "UMI" in header
         assert "BC_score" in header

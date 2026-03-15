@@ -52,7 +52,7 @@ class GFFPrinter:
             else:
                 self.out_r2t = open(self.r2t_fname, "w")
             if header:
-                self.out_r2t.write("#read_id\ttranscript_id\n")
+                self.out_r2t.write("read_id\ttranscript_id\n")
 
         self.check_canonical = check_canonical
 

@@ -305,7 +305,7 @@ class StringPoolManager:
         umis = set()
         with open(barcode_file, 'r') as f:
             for line in f:
-                if line.startswith('#'):
+                if line.startswith('#') or line.startswith('read_id\t'):
                     continue
                 parts = line.strip().split('\t')
                 if len(parts) >= 2 and parts[1]:

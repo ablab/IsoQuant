@@ -84,7 +84,7 @@ class CountTranscriptIdSeparator:
         print("Reading counts")
         self.count_dict = defaultdict(float)
         for l in open(gtf_path + ".counts"):
-            if l.startswith("#") or l.startswith("TXNAME"):
+            if l.startswith("#") or l.startswith("TXNAME") or l.startswith("feature_id\t"):
                 continue
             t = l.strip().split()
             tid = t[0]
