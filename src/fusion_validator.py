@@ -17,7 +17,6 @@ class FusionValidator:
             if fusion_key not in self.detector.fusion_candidates:
                 # Fusion was already removed, skip
                 continue
-            
             # Get breakpoint info for this fusion if available
             left_chr, left_pos, right_chr, right_pos = None, None, None, None
             bp_counts = self.detector.fusion_breakpoints.get(fusion_key, {})
@@ -27,7 +26,6 @@ class FusionValidator:
                 if first_bp and len(first_bp) == 4:
                     left_chr, left_pos, right_chr, right_pos = first_bp
                     logger.debug(f"Got breakpoint for {fusion_key}: {left_chr}:{left_pos} - {right_chr}:{right_pos}")
-            
             # Check all raw assigned gene pairs for this fusion
             has_non_coding = False
             non_coding_reason = None
@@ -35,6 +33,24 @@ class FusionValidator:
                 # Get biotypes for the raw assigned genes, with coordinates if available
                 left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos) if left_gene else None
                 right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos) if right_gene else None
+                def _salvage_to_nearby_coding(gene, chrom, pos):
+                    # Only attempt rescue if we have coordinates and the gene is non-coding/unknown
+                    if not gene or chrom is None or pos is None:
+                        return gene, None
+                    biotype = self.detector.get_gene_biotype(gene, chrom=chrom, pos=pos)
+                    if biotype and biotype == "protein_coding":
+                        return gene, biotype
+                    # Try a small window to avoid spurious swaps
+                    nearby = self.detector._find_nearby_protein_coding(chrom, pos, window=500)
+                    if nearby:
+                        return nearby, "protein_coding"
+                    return gene, biotype                
+                left_gene, left_biotype = _salvage_to_nearby_coding(left_gene, left_chr, left_pos)
+                right_gene, right_biotype = _salvage_to_nearby_coding(right_gene, right_chr, right_pos)
+
+                if self.detector.fusion_assigned_pairs.get(fusion_key, {}).get(read_name):
+                    self.detector.fusion_assigned_pairs[fusion_key][read_name] = (left_gene, right_gene)
+
                 logger.debug(f"  {fusion_key}: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
                 # Check if either is non-protein-coding
                 if left_gene and left_biotype and left_biotype != "protein_coding":
