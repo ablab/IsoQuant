@@ -7,10 +7,10 @@
 
 import logging
 from enum import Enum, unique
-from src.common import junctions_from_blocks
-from src.id_policy import SimpleIDDistributor
-from src.serialization import *
-from src.polya_finder import PolyAInfo
+from .common import junctions_from_blocks
+from .id_policy import SimpleIDDistributor
+from .serialization import *
+from .polya_finder import PolyAInfo
 
 logger = logging.getLogger('IsoQuant')
 

@@ -5,7 +5,7 @@
 ############################################################################
 import threading
 
-from src.common import TranscriptNaming
+from .common import TranscriptNaming
 
 
 class SimpleIDDistributor(object):
