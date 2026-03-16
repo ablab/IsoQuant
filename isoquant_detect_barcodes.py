@@ -100,6 +100,17 @@ def main(sys_argv):
         process_in_parallel(args)
 
 
+def main_entry():
+    """Entry point for console_scripts (pip install)."""
+    try:
+        main(sys.argv[1:])
+    except SystemExit:
+        raise
+    except:
+        print_exc()
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)
+
+
 if __name__ == "__main__":
     # stuff only to run when not called via 'import' here
     try:

@@ -336,12 +336,16 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
-    isoquant_version = "3.4.0"
+    isoquant_version = "3.12.0"
     try:
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
             isoquant_version = version_f.readline().strip()
     except FileNotFoundError:
-        pass
+        try:
+            from importlib.metadata import version as _get_version
+            isoquant_version = _get_version("isoquant")
+        except Exception:
+            pass
     parser.add_argument('--version', '-v', action='version', version='IsoQuant ' + isoquant_version)
 
     args = parser.parse_args(cmd_args, namespace)
@@ -1141,10 +1145,18 @@ class TestMode(argparse.Action):
         if os.path.exists(self.out_dir):
             shutil.rmtree(self.out_dir)
         source_dir = os.path.dirname(os.path.realpath(__file__))
+        test_data_dir = os.path.join(source_dir, 'tests', 'simple_data')
+        if not os.path.isdir(test_data_dir):
+            # pip-installed: find test data via tests package location
+            import tests
+            test_data_dir = os.path.join(os.path.dirname(os.path.realpath(tests.__file__)), 'simple_data')
+        if not os.path.isdir(test_data_dir):
+            sys.stderr.write("ERROR: Test data not found. Cannot run in test mode.\n")
+            sys.exit(1)
         options = ['--output', self.out_dir, '--threads', '2',
-                   '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
-                   '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
-                   '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
+                   '--fastq', os.path.join(test_data_dir, 'chr9.4M.ont.sim.fq.gz'),
+                   '--reference', os.path.join(test_data_dir, 'chr9.4M.fa.gz'),
+                   '--genedb', os.path.join(test_data_dir, 'chr9.4M.gtf.gz'),
                    '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force', '-p', 'TEST_DATA']
         print('=== Running in test mode === ')
         print("Running IsoQuant in test mode with the following options:")
@@ -1177,6 +1189,31 @@ def main(cmd_args):
     create_output_dirs(args)
     set_additional_params(args)
     run_pipeline(args)
+
+
+def main_entry():
+    """Entry point for console_scripts (pip install)."""
+    try:
+        main(sys.argv[1:])
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:
+        raise
+    except:
+        if logger.handlers:
+            strout = StringIO()
+            print_exc(file=strout)
+            s = strout.getvalue()
+            if s:
+                logger.critical("IsoQuant failed with the following error, please, submit this issue to "
+                                "https://github.com/ablab/IsoQuant/issues\n" + s)
+            else:
+                print_exc()
+        else:
+            sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
+                             "https://github.com/ablab/IsoQuant/issues\n")
+            print_exc()
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)
 
 
 if __name__ == "__main__":
