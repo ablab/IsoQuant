@@ -247,11 +247,25 @@ class BarcodeCaller:
         # Write all detected patterns
         self.output_file.write("%s\n" % str(barcode_result))
 
-        # Element-level stats from all patterns
+        # Total reads (before splitting)
+        self.read_stat.add_custom_stats("Total reads", 1)
+
+        # Count polyT and R1 detections across all patterns
+        polyt_count = sum(1 for r in barcode_result.detected_patterns if r.polyT != -1)
+        r1_count = sum(1 for r in barcode_result.detected_patterns if r.r1 != -1)
+
+        polyt_label = "Reads with %d polyT" % polyt_count if polyt_count <= 3 else "Reads with 3+ polyT"
+        self.read_stat.add_custom_stats(polyt_label, 1)
+
+        r1_label = "Reads with %d R1" % r1_count if r1_count <= 3 else "Reads with 3+ R1"
+        self.read_stat.add_custom_stats(r1_label, 1)
+
+        # Per-cDNA element stats
+        self.read_stat.add_custom_stats("Total cDNAs", len(barcode_result.detected_patterns))
         for r in barcode_result.detected_patterns:
             self.read_stat.add_read(r)
 
-        # Count valid patterns
+        # Count valid patterns (cDNAs with valid barcode)
         valid_patterns = [r for r in barcode_result.detected_patterns if r.is_valid()]
         n_valid = len(valid_patterns)
 

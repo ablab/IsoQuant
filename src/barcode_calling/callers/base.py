@@ -435,7 +435,7 @@ class ReadStats:
         """Format statistics as human-readable string."""
         human_readable_str = ("Total reads\t%d\nBarcode detected\t%d\nReliable UMI\t%d\n" %
                               (self.read_count, self.bc_count, self.umi_count))
-        for a in self.additional_attributes_counts:
+        for a in sorted(self.additional_attributes_counts):
             human_readable_str += "%s\t%d\n" % (a, self.additional_attributes_counts[a])
         return human_readable_str
 
@@ -444,5 +444,5 @@ class ReadStats:
         yield "Total reads: %d" % self.read_count
         yield "Barcode detected: %d" % self.bc_count
         yield "Reliable UMI: %d" % self.umi_count
-        for a in self.additional_attributes_counts:
+        for a in sorted(self.additional_attributes_counts):
             yield "%s: %d" % (a, self.additional_attributes_counts[a])
