@@ -24,6 +24,8 @@ import logging
 import subprocess
 from traceback import print_exc
 
+import yaml
+
 
 # Run types
 RT_VOID = "void"           # Just run detect_barcodes, no quality check
@@ -64,6 +66,35 @@ def load_tsv_config(config_file):
 
         config_dict[tokens[0]] = tokens[1]
     return config_dict
+
+
+def load_yaml_config(config_file: str) -> tuple[dict, dict]:
+    """Load YAML config file, returning (config_dict, baselines_dict)."""
+    if not os.path.exists(config_file):
+        log.error("Config file %s was not found" % config_file)
+        return {}, {}
+
+    with open(config_file) as f:
+        data = yaml.safe_load(f)
+
+    if data is None:
+        return {}, {}
+
+    baselines = data.pop("baselines", {}) or {}
+    config_dict = {}
+    for k, v in data.items():
+        config_dict[str(k)] = str(v)
+
+    return config_dict, baselines
+
+
+def load_config(config_file: str) -> tuple[dict, dict]:
+    """Load config by extension: .yaml/.yml -> YAML, otherwise -> TSV."""
+    ext = os.path.splitext(config_file)[1].lower()
+    if ext in (".yaml", ".yml"):
+        return load_yaml_config(config_file)
+    else:
+        return load_tsv_config(config_file), {}
 
 
 def fix_path(config_file, path):
@@ -167,7 +198,7 @@ def run_detect_barcodes(args, config_dict):
     return 0
 
 
-def run_barcode_quality(args, config_dict):
+def run_barcode_quality(args, config_dict, baselines=None):
     """Run barcode quality assessment and compare to etalon."""
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
@@ -248,23 +279,31 @@ def run_barcode_quality(args, config_dict):
         return -21
 
     # Check against etalon if provided
-    if "etalon" not in config_dict:
+    if baselines and "barcode" in baselines:
+        pass  # baselines available from YAML
+    elif "etalon" not in config_dict:
         log.info("No etalon file specified, skipping comparison")
         return 0
 
-    return check_against_etalon(config_file, config_dict, output_prefix, quality_report)
+    return check_against_etalon(config_file, config_dict, output_prefix, quality_report, baselines)
 
 
-def check_against_etalon(config_file, config_dict, output_prefix, quality_report):
+def check_against_etalon(config_file, config_dict, output_prefix, quality_report, baselines=None):
     """Compare quality metrics against etalon values."""
     log.info('== Checking quality metrics against etalon ==')
 
-    etalon_file = fix_path(config_file, config_dict["etalon"])
-    if not os.path.exists(etalon_file):
-        log.error("Etalon file not found: %s" % etalon_file)
-        return -22
+    # Get etalon values from YAML baselines or external file
+    if baselines and "barcode" in baselines:
+        etalon_dict = {k: str(v) for k, v in baselines["barcode"].items()}
+    elif "etalon" in config_dict:
+        etalon_file = fix_path(config_file, config_dict["etalon"])
+        if not os.path.exists(etalon_file):
+            log.error("Etalon file not found: %s" % etalon_file)
+            return -22
+        etalon_dict = load_tsv_config(etalon_file)
+    else:
+        return 0
 
-    etalon_dict = load_tsv_config(etalon_file)
     quality_dict = load_tsv_config(quality_report)
 
     exit_code = 0
@@ -373,7 +412,7 @@ def main():
         return -3
 
     log.info("Loading config from %s" % config_file)
-    config_dict = load_tsv_config(config_file)
+    config_dict, baselines = load_config(config_file)
 
     # Check required fields
     required = ["name", "mode"]
@@ -400,7 +439,7 @@ def main():
         log.info("Run type is void, skipping quality assessment")
         err_codes.append(0)
     elif run_type in (RT_SINGLE, RT_STEREO_SPLIT):
-        err_codes.append(run_barcode_quality(args, config_dict))
+        err_codes.append(run_barcode_quality(args, config_dict, baselines))
     else:
         log.error("Unknown run type: %s" % run_type)
         return -5

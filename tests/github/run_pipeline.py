@@ -18,6 +18,8 @@ from traceback import print_exc
 import subprocess
 import logging
 
+import yaml
+
 from error_codes import IsoQuantExitCode
 
 
@@ -67,6 +69,45 @@ def load_tsv_config(config_file):
 
         config_dict[tokens[0]] = tokens[1]
     return config_dict
+
+
+def load_yaml_config(config_file: str) -> tuple[dict, dict]:
+    """Load YAML config file, returning (config_dict, baselines_dict).
+
+    The baselines section is extracted separately; all other keys are
+    returned as a flat string-valued dict (matching load_tsv_config format).
+    """
+    if not os.path.exists(config_file):
+        log.error("Config file %s was not found" % config_file)
+        return {}, {}
+
+    with open(config_file) as f:
+        data = yaml.safe_load(f)
+
+    if data is None:
+        return {}, {}
+
+    baselines = data.pop("baselines", {}) or {}
+    # Convert all values to strings to match TSV config behaviour
+    config_dict = {}
+    for k, v in data.items():
+        config_dict[str(k)] = str(v)
+
+    return config_dict, baselines
+
+
+def load_config(config_file: str) -> tuple[dict, dict]:
+    """Load config by extension: .yaml/.yml -> YAML, otherwise -> TSV.
+
+    Returns (config_dict, baselines_dict).  For TSV configs baselines_dict
+    is empty (baselines are loaded from separate files by each assessment
+    function).
+    """
+    ext = os.path.splitext(config_file)[1].lower()
+    if ext in (".yaml", ".yml"):
+        return load_yaml_config(config_file)
+    else:
+        return load_tsv_config(config_file), {}
 
 
 def fix_paths(config_file, paths):
@@ -208,7 +249,7 @@ def find_bam(output_folder, label):
     return None
 
 
-def     run_assignment_quality(args, config_dict):
+def     run_assignment_quality(args, config_dict, baselines=None):
     log.info('== Running quality assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
@@ -248,11 +289,15 @@ def     run_assignment_quality(args, config_dict):
         log.error("QA exited with non-zero status: %d" % result.returncode)
         return -11
 
-    if "etalon_assignment" not in config_dict:
+    # Get etalon values from YAML baselines or external file
+    if baselines and "assignment" in baselines:
+        etalon_qaulity_dict = {k: str(v) for k, v in baselines["assignment"].items()}
+    elif "etalon_assignment" in config_dict:
+        etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon_assignment"]))
+    else:
         return 0
 
     log.info('== Checking quality metrics ==')
-    etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon_assignment"]))
     quality_report_dict = load_tsv_config(quality_report)
     exit_code = 0
     new_etalon_outf = open(os.path.join(output_folder, "new_assignment_etalon.tsv"), "w")
@@ -280,7 +325,7 @@ def parse_gffcomapre(stats_file):
     return -1, -1
 
 
-def run_transcript_quality(args, config_dict):
+def run_transcript_quality(args, config_dict, baselines=None):
     log.info('== Running quality assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
@@ -305,11 +350,15 @@ def run_transcript_quality(args, config_dict):
         log.error("Transcript evaluation exited with non-zero status: %d" % result.returncode)
         return -21
 
-    if "etalon" not in config_dict:
+    # Get etalon values from YAML baselines or external file
+    if baselines and "transcripts" in baselines:
+        etalon_qaulity_dict = {k: str(v) for k, v in baselines["transcripts"].items()}
+    elif "etalon" in config_dict:
+        etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
+    else:
         return 0
 
     log.info('== Checking quality metrics ==')
-    etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
     exit_code = 0
     new_etalon_outf = open(os.path.join(quality_output, "new_gtf_etalon.tsv"), "w")
     for gtf_type in ['full', 'known', 'novel']:
@@ -332,7 +381,7 @@ def run_transcript_quality(args, config_dict):
     return exit_code
 
 
-def run_quantification(args, config_dict, mode):
+def run_quantification(args, config_dict, mode, baselines=None):
     log.info('== Running quantification assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
@@ -378,16 +427,21 @@ def run_quantification(args, config_dict, mode):
         log.error("Quantification evaluation exited with non-zero status: %d" % result.returncode)
         return -34
 
+    # Get etalon values from YAML baselines or external file
+    baseline_key = "quantification_" + mode
     etalon_to_use = "etalon_quantification_" + mode
-    if etalon_to_use not in config_dict:
+    if baselines and baseline_key in baselines:
+        etalon_quality_dict = {k: str(v) for k, v in baselines[baseline_key].items()}
+    elif etalon_to_use in config_dict:
+        ref_value_files = fix_path(config_file, config_dict[etalon_to_use])
+        if not os.path.exists(ref_value_files):
+            log.error("File %s with etalon metric values was not detected" % ref_value_files)
+            return -35
+        etalon_quality_dict = load_tsv_config(ref_value_files)
+    else:
         return 0
 
     log.info('== Checking quantification metrics ==')
-    ref_value_files = fix_path(config_file, config_dict[etalon_to_use])
-    if not os.path.exists(ref_value_files):
-        log.error("File %s with etalon metric values was not detected" % ref_value_files)
-        return -35
-    etalon_quality_dict = load_tsv_config(ref_value_files)
     real_dict = load_tsv_config(quantification_stats_output)
     exit_code = 0
 
@@ -406,7 +460,7 @@ def run_quantification(args, config_dict, mode):
     return exit_code
 
 
-def run_performance_assessment(args, config_dict):
+def run_performance_assessment(args, config_dict, baselines=None):
     log.info('== Running computational perfromance assessment ==')
     config_file = args.config_file
     name = config_dict["name"]
@@ -415,8 +469,15 @@ def run_performance_assessment(args, config_dict):
     if not os.path.exists(stat_file):
         log.warning("Performance statistics file was not found %s" % stat_file)
 
+    # Get etalon values from YAML baselines or external file
+    if baselines and "performance" in baselines:
+        etalon_qaulity_dict = {k: str(v) for k, v in baselines["performance"].items()}
+    elif "performance_baseline" in config_dict:
+        etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["performance_baseline"]))
+    else:
+        return 0
+
     log.info('== Checking quality metrics ==')
-    etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["performance_baseline"]))
     performance_report_dict = load_tsv_config(stat_file)
     exit_code = 0
     new_etalon_outf = open(os.path.join(output_folder, "new_performance_baseline.tsv"), "w")
@@ -434,7 +495,7 @@ def run_performance_assessment(args, config_dict):
     return exit_code
 
 
-def run_allinfo_quality(args, config_dict):
+def run_allinfo_quality(args, config_dict, baselines=None):
     log.info('== Running allinfo quality assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
@@ -473,16 +534,18 @@ def run_allinfo_quality(args, config_dict):
         log.error("Allinfo QA script failed with code %d" % result.returncode)
         return -11
 
-    # Compare against etalon if provided
-    if "etalon_allinfo" not in config_dict:
+    # Get etalon values from YAML baselines or external file
+    if baselines and "allinfo" in baselines:
+        etalon_dict = {k: str(v) for k, v in baselines["allinfo"].items()}
+    elif "etalon_allinfo" in config_dict:
+        etalon_file = fix_path(config_file, config_dict["etalon_allinfo"])
+        if not os.path.exists(etalon_file):
+            log.error("Etalon file not found: %s" % etalon_file)
+            return -35
+        etalon_dict = load_tsv_config(etalon_file)
+    else:
         return 0
 
-    etalon_file = fix_path(config_file, config_dict["etalon_allinfo"])
-    if not os.path.exists(etalon_file):
-        log.error("Etalon file not found: %s" % etalon_file)
-        return -35
-
-    etalon_dict = load_tsv_config(etalon_file)
     quality_dict = load_tsv_config(quality_report)
 
     exit_code = 0
@@ -532,7 +595,7 @@ def main():
         sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
     log.info("Loading config from %s" % config_file)
-    config_dict = load_tsv_config(config_file)
+    config_dict, baselines = load_config(config_file)
     required = ["output", "name"]
     if "resume" not in config_dict:
         required += ["genome", "datatype"]
@@ -550,19 +613,19 @@ def main():
     if RT_VOID in run_types:
         err_codes.append(0)
     if RT_ASSIGNMENT in run_types:
-        err_codes.append(run_assignment_quality(args, config_dict))
+        err_codes.append(run_assignment_quality(args, config_dict, baselines))
     if RT_TRANSCRIPTS in run_types:
-        err_codes.append(run_transcript_quality(args, config_dict))
+        err_codes.append(run_transcript_quality(args, config_dict, baselines))
     if RT_QUANTIFICATION_KNOWN in run_types:
-        err_codes.append(run_quantification(args, config_dict, "ref"))
+        err_codes.append(run_quantification(args, config_dict, "ref", baselines))
     if RT_QUANTIFICATION_NOVEL in run_types:
-        err_codes.append(run_quantification(args, config_dict, "novel"))
+        err_codes.append(run_quantification(args, config_dict, "novel", baselines))
     if RT_QUANTIFICATION_GENES in run_types:
-        err_codes.append(run_quantification(args, config_dict, "gene"))
+        err_codes.append(run_quantification(args, config_dict, "gene", baselines))
     if RT_PERFORMANCE in run_types:
-        err_codes.append(run_performance_assessment(args, config_dict))
+        err_codes.append(run_performance_assessment(args, config_dict, baselines))
     if RT_ALLINFO in run_types:
-        err_codes.append(run_allinfo_quality(args, config_dict))
+        err_codes.append(run_allinfo_quality(args, config_dict, baselines))
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
