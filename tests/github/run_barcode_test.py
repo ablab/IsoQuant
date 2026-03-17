@@ -68,7 +68,7 @@ def load_tsv_config(config_file):
     return config_dict
 
 
-def load_yaml_config(config_file: str) -> tuple[dict, dict]:
+def load_yaml_config(config_file):
     """Load YAML config file, returning (config_dict, baselines_dict)."""
     if not os.path.exists(config_file):
         log.error("Config file %s was not found" % config_file)
@@ -88,7 +88,7 @@ def load_yaml_config(config_file: str) -> tuple[dict, dict]:
     return config_dict, baselines
 
 
-def load_config(config_file: str) -> tuple[dict, dict]:
+def load_config(config_file):
     """Load config by extension: .yaml/.yml -> YAML, otherwise -> TSV."""
     ext = os.path.splitext(config_file)[1].lower()
     if ext in (".yaml", ".yml"):
