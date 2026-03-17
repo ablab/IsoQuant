@@ -59,7 +59,7 @@ etalon_dict = {"etalon": "gffcompare/new_gtf_etalon.tsv",
 
 # Maps YAML baseline section name -> output file path relative to pipeline output folder
 # ({output}/{branch}/{run_name}/)
-YAML_PIPELINE_BASELINES: dict[str, str] = {
+YAML_PIPELINE_BASELINES = {
     "transcripts": "gffcompare/new_gtf_etalon.tsv",
     "quantification_ref": "ref.quantification.tsv",
     "quantification_novel": "novel.quantification.tsv",
@@ -70,7 +70,7 @@ YAML_PIPELINE_BASELINES: dict[str, str] = {
 }
 
 
-def update_yaml_baselines(config_file: str, run_name: str, base_output_dir: str) -> None:
+def update_yaml_baselines(config_file, run_name, base_output_dir):
     """Update baselines section in a YAML config file from run output.
 
     Args:

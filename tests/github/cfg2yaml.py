@@ -31,7 +31,7 @@ import yaml
 
 
 # Baseline key mappings for pipeline configs
-PIPELINE_BASELINE_KEYS: dict[str, str] = {
+PIPELINE_BASELINE_KEYS = {
     "etalon": "transcripts",
     "etalon_assignment": "assignment",
     "etalon_quantification_ref": "quantification_ref",
@@ -42,14 +42,14 @@ PIPELINE_BASELINE_KEYS: dict[str, str] = {
 }
 
 # Baseline key mappings for barcode configs
-BARCODE_BASELINE_KEYS: dict[str, str] = {
+BARCODE_BASELINE_KEYS = {
     "etalon": "barcode",
 }
 
 
-def load_tsv_config(config_file: str) -> dict[str, str]:
+def load_tsv_config(config_file):
     """Load tab-separated key-value config file."""
-    config_dict: dict[str, str] = {}
+    config_dict = {}
     for line in open(config_file):
         if line.startswith("#"):
             continue
@@ -60,16 +60,16 @@ def load_tsv_config(config_file: str) -> dict[str, str]:
     return config_dict
 
 
-def fix_path(config_file: str, path: str) -> str:
+def fix_path(config_file, path):
     """Convert relative path to absolute using config file directory as base."""
     if path.startswith('/'):
         return path
     return os.path.abspath(os.path.join(os.path.dirname(config_file), path))
 
 
-def load_baseline_file(filepath: str) -> dict[str, float]:
+def load_baseline_file(filepath):
     """Load a baseline TSV file and return as dict of floats."""
-    result: dict[str, float] = {}
+    result = {}
     if not os.path.exists(filepath):
         print("  Warning: baseline file not found: %s" % filepath)
         return result
@@ -86,7 +86,7 @@ def load_baseline_file(filepath: str) -> dict[str, float]:
     return result
 
 
-def detect_barcode_mode(config_dict: dict[str, str]) -> bool:
+def detect_barcode_mode(config_dict):
     """Detect if this is a barcode config based on its keys."""
     barcode_indicators = {"mode", "molecule", "barcodes", "qa_mode", "barcode_col"}
     pipeline_indicators = {"genome", "genedb", "datatype", "reduced_db"}
@@ -100,7 +100,7 @@ def detect_barcode_mode(config_dict: dict[str, str]) -> bool:
     return False
 
 
-def convert_cfg_to_yaml(cfg_path: str, force_barcode: bool = False) -> tuple[str, dict]:
+def convert_cfg_to_yaml(cfg_path, force_barcode=False):
     """Convert a .cfg file to YAML dict.
 
     Returns (yaml_path, yaml_data).
@@ -114,8 +114,8 @@ def convert_cfg_to_yaml(cfg_path: str, force_barcode: bool = False) -> tuple[str
     baseline_keys = BARCODE_BASELINE_KEYS if is_barcode else PIPELINE_BASELINE_KEYS
 
     # Load baselines from external files
-    baselines: dict[str, dict] = {}
-    keys_to_remove: list[str] = []
+    baselines = {}
+    keys_to_remove = []
 
     for cfg_key, yaml_section in baseline_keys.items():
         if cfg_key not in config_dict:
@@ -131,7 +131,7 @@ def convert_cfg_to_yaml(cfg_path: str, force_barcode: bool = False) -> tuple[str
         del config_dict[key]
 
     # Build YAML structure: config keys first, then baselines
-    yaml_data: dict = {}
+    yaml_data = {}
     for k, v in config_dict.items():
         yaml_data[k] = v
 

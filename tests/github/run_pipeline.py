@@ -71,7 +71,7 @@ def load_tsv_config(config_file):
     return config_dict
 
 
-def load_yaml_config(config_file: str) -> tuple[dict, dict]:
+def load_yaml_config(config_file):
     """Load YAML config file, returning (config_dict, baselines_dict).
 
     The baselines section is extracted separately; all other keys are
@@ -96,7 +96,7 @@ def load_yaml_config(config_file: str) -> tuple[dict, dict]:
     return config_dict, baselines
 
 
-def load_config(config_file: str) -> tuple[dict, dict]:
+def load_config(config_file):
     """Load config by extension: .yaml/.yml -> YAML, otherwise -> TSV.
 
     Returns (config_dict, baselines_dict).  For TSV configs baselines_dict
