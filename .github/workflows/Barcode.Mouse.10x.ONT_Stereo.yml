@@ -72,4 +72,4 @@ jobs:
           STEP_NAME: Mouse.10x.5k.no_truncation.ONT_Stereo
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
