@@ -361,7 +361,7 @@ class TestUpdateYamlBaselines(unittest.TestCase):
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
         return path
 
-    def _write_tsv(self, path: str, data: dict[str, float]) -> None:
+    def _write_tsv(self, path: str, data: dict) -> None:
         with open(path, "w") as f:
             for k, v in data.items():
                 f.write("%s\t%.2f\n" % (k, v))
