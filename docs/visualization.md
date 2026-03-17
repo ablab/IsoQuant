@@ -8,7 +8,7 @@ To run the visualization tool, use the following command:
 
 ```bash
 
-python visualize.py <output_directory> --gene_list <gene_list> [options]
+python isoquant_visualize.py <output_directory> --gene_list <gene_list> [options]
 
 ```
 
