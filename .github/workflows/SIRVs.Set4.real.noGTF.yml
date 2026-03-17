@@ -41,7 +41,7 @@ jobs:
           STEP_NAME: SIRVs.Set4.R10.noGTF
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'IsoQuant SIRVs R9.4 no GTF'
         if: always()
@@ -50,4 +50,4 @@ jobs:
           STEP_NAME: SIRVs.Set4.R9.noGTF
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
