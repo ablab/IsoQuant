@@ -59,6 +59,7 @@ def parse_args(sys_argv):
     parser.add_argument("--threads", "-t", type=int, help="threads to use (16)", default=16)
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
     add_hidden_option('--debug', action='store_true', default=False, help='Debug log output.')
+    add_hidden_option('--split_analysis', action='store_true', default=False)
 
     args = parser.parse_args(sys_argv)
     args.mode = IsoQuantMode[args.mode]

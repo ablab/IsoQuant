@@ -21,7 +21,7 @@ from ..common import (
     detect_exact_positions, str_to_2bit,
     find_optimal_kmer_size,
 )
-from .base import BarcodeDetectionResult, TenXBarcodeDetectionResult
+from .base import BarcodeDetectionResult, TenXBarcodeDetectionResult, SplittingBarcodeDetectionResult
 
 logger = logging.getLogger('IsoQuant')
 
@@ -240,6 +240,69 @@ class TenXv2BarcodeDetector(TenXBarcodeDetector):
     def __init__(self, barcode_list: List[str]):
         """Initialize TenX v2 detector."""
         super().__init__(barcode_list)
+
+
+class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
+    """10x detector that finds multiple barcode/polyT/R1 patterns per read for concatenation analysis."""
+
+    MIN_STEP = 100
+    MIN_REMAINING = 50
+
+    def __init__(self, barcode_list: List[str]):
+        super().__init__(barcode_list)
+
+    def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
+        result = SplittingBarcodeDetectionResult(read_id)
+
+        # Search forward strand iteratively
+        self._search_strand(read_id, sequence, "+", result)
+
+        # Search reverse complement strand iteratively
+        rev_seq = reverese_complement(sequence)
+        self._search_strand(read_id, rev_seq, "-", result)
+
+        if result.empty():
+            # Add empty result from forward
+            empty = TenXBarcodeDetectionResult(read_id)
+            result.append(empty)
+
+        return result
+
+    def _search_strand(self, read_id: str, sequence: str, strand: str,
+                       result: SplittingBarcodeDetectionResult) -> None:
+        offset = 0
+        while len(sequence) - offset >= self.MIN_REMAINING:
+            sub_seq = sequence[offset:]
+            r = self._find_barcode_umi_fwd(read_id, sub_seq)
+
+            if r.polyT == -1 and r.r1 == -1:
+                break
+
+            r.update_coordinates(offset)
+            r.set_strand(strand)
+            result.append(r)
+
+            # Advance past the detected pattern
+            # Use polyT + 80 or r1 + 60, whichever is further
+            local_polyt = r.polyT - offset if r.polyT != -1 else -1
+            local_r1 = r.r1 - offset if r.r1 != -1 else -1
+
+            advance = 0
+            if local_polyt != -1:
+                advance = max(advance, local_polyt + 80)
+            if local_r1 != -1:
+                advance = max(advance, local_r1 + 60)
+            advance = max(advance, self.MIN_STEP)
+
+            offset += advance
+
+    @staticmethod
+    def result_type():
+        return SplittingBarcodeDetectionResult
+
+    @classmethod
+    def header(cls):
+        return TenXBarcodeDetectionResult.header()
 
 
 class VisiumHDBarcodeDetector:

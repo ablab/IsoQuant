@@ -32,6 +32,7 @@ from .common import reverese_complement, load_barcodes
 from . import (
     TenXBarcodeDetector,
     TenXv2BarcodeDetector,
+    TenXSplittingBarcodeDetector,
     CurioBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
@@ -121,6 +122,8 @@ class BarcodeCaller:
         if self.output_sequences:
             self.output_sequences_file = open(self.output_sequences, "w")
             self.process_function = self._process_read_split
+        if isinstance(barcode_detector, TenXSplittingBarcodeDetector):
+            self.process_function = self._process_read_tenx_split
         if header:
             self.output_file.write(barcode_detector.header() + "\n")
         self.read_stat = ReadStats()
@@ -235,6 +238,41 @@ class BarcodeCaller:
                 else:
                     self.read_stat.add_custom_stats("Different barcode both sides", 1)
 
+    def _process_read_tenx_split(self, read_id, read_sequence):
+        logger.debug("==== %s ====" % read_id)
+        if read_sequence is None:
+            return
+        barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
+
+        # Write all detected patterns
+        self.output_file.write("%s\n" % str(barcode_result))
+
+        # Element-level stats from all patterns
+        for r in barcode_result.detected_patterns:
+            self.read_stat.add_read(r)
+
+        # Count valid patterns
+        valid_patterns = [r for r in barcode_result.detected_patterns if r.is_valid()]
+        n_valid = len(valid_patterns)
+
+        if n_valid == 0:
+            self.read_stat.add_custom_stats("Reads with 0 valid BC", 1)
+        elif n_valid == 1:
+            self.read_stat.add_custom_stats("Reads with 1 valid BC", 1)
+        elif n_valid == 2:
+            self.read_stat.add_custom_stats("Reads with 2 valid BC", 1)
+            # Orientation stats
+            s1 = valid_patterns[0].strand
+            s2 = valid_patterns[1].strand
+            self.read_stat.add_custom_stats("Orient %s/%s" % (s1, s2), 1)
+            # Barcode comparison
+            if valid_patterns[0].get_barcode() == valid_patterns[1].get_barcode():
+                self.read_stat.add_custom_stats("Same barcode (2 cDNA)", 1)
+            else:
+                self.read_stat.add_custom_stats("Different barcode (2 cDNA)", 1)
+        else:
+            self.read_stat.add_custom_stats("Reads with 3+ valid BC", 1)
+
     def process_chunk(self, read_chunk):
         counter = 0
         for read_id, seq in read_chunk:
@@ -314,7 +352,10 @@ def create_barcode_caller(args):
                 logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
 
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    if args.mode == IsoQuantMode.tenX_v3 and getattr(args, 'split_analysis', False):
+        barcode_detector = TenXSplittingBarcodeDetector(barcodes)
+    else:
+        barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
 
     return barcode_detector
 

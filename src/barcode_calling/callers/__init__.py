@@ -67,6 +67,7 @@ from .tenx import (
     DualBarcodeResult,
     TenXBarcodeDetector,
     TenXv2BarcodeDetector,
+    TenXSplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
 )
 
@@ -100,6 +101,7 @@ __all__ = [
     'DualBarcodeResult',
     'TenXBarcodeDetector',
     'TenXv2BarcodeDetector',
+    'TenXSplittingBarcodeDetector',
     'VisiumHDBarcodeDetector',
     # Universal extraction
     'MoleculeStructure',
