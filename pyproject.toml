@@ -51,12 +51,12 @@ Repository = "https://github.com/ablab/IsoQuant"
 [project.scripts]
 isoquant = "isoquant:main_entry"
 isoquant-detect-barcodes = "isoquant_detect_barcodes:main_entry"
-isoquant-visualize = "visualize:main"
+isoquant-visualize = "isoquant_visualize:main"
 
 [tool.setuptools]
 packages = ["src", "src.barcode_calling", "src.barcode_calling.callers",
             "src.barcode_calling.indexers", "tests"]
-py-modules = ["isoquant", "isoquant_detect_barcodes", "visualize"]
+py-modules = ["isoquant", "isoquant_detect_barcodes", "isoquant_visualize"]
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
