@@ -8,63 +8,77 @@ class FusionValidator:
     def __init__(self, detector):
         self.detector = detector
 
+    def _get_breakpoint_coords(self, fusion_key):
+        # Extract chromosome and position coordinates from the first breakpoint of a fusion.
+        left_chr, left_pos, right_chr, right_pos = None, None, None, None
+        bp_counts = self.detector.fusion_breakpoints.get(fusion_key, {})
+        if bp_counts:
+            first_bp = next(iter(bp_counts.keys()), None)
+            if first_bp and len(first_bp) == 4:
+                left_chr, left_pos, right_chr, right_pos = first_bp
+                logger.debug(f"Got breakpoint for {fusion_key}: {left_chr}:{left_pos} - {right_chr}:{right_pos}")
+        return left_chr, left_pos, right_chr, right_pos
+
+    def _salvage_and_check_gene_pair(self, left_gene, right_gene, left_chr, left_pos, right_chr, right_pos):
+        # Salvage non-coding genes by finding nearby protein-coding alternatives.
+        def _salvage_to_nearby_coding(gene, chrom, pos):
+            # Only attempt rescue if we have coordinates and the gene is non-coding/unknown
+            if not gene or chrom is None or pos is None:
+                return gene, None
+            biotype = self.detector.get_gene_biotype(gene, chrom=chrom, pos=pos)
+            if biotype and biotype == "protein_coding":
+                return gene, biotype
+            # Try a small window to avoid spurious swaps
+            nearby = self.detector._find_nearby_protein_coding(chrom, pos, window=500)
+            if nearby:
+                return nearby, "protein_coding"
+            return gene, biotype
+        left_gene, left_biotype = _salvage_to_nearby_coding(left_gene, left_chr, left_pos)
+        right_gene, right_biotype = _salvage_to_nearby_coding(right_gene, right_chr, right_pos)
+        logger.debug(f"Gene pair after salvage: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
+        # Check if either is still non-protein-coding
+        has_non_coding = False
+        reason = None
+        if left_gene and left_biotype and left_biotype != "protein_coding":
+            has_non_coding = True
+            reason = f"{left_gene}={left_biotype}"
+        elif right_gene and right_biotype and right_biotype != "protein_coding":
+            has_non_coding = True
+            reason = f"{right_gene}={right_biotype}"
+        return left_gene, left_biotype, right_gene, right_biotype, has_non_coding, reason
+
     def filter_raw_non_coding_genes(self):
         # Drop fusions with non-protein-coding genes at the raw assignment stage.
         fusions_to_discard = set()
-        # Check raw assignments: if ANY supporting read has a non-coding partner, drop the fusion
         logger.info(f"filter_raw_non_coding_genes: Processing {len(self.detector.fusion_assigned_pairs)} fusion keys")
         for fusion_key, read_assignments in self.detector.fusion_assigned_pairs.items():
             if fusion_key not in self.detector.fusion_candidates:
-                # Fusion was already removed, skip
                 continue
-            # Get breakpoint info for this fusion if available
-            left_chr, left_pos, right_chr, right_pos = None, None, None, None
-            bp_counts = self.detector.fusion_breakpoints.get(fusion_key, {})
-            if bp_counts:
-                # Get first breakpoint (or use consensus if clustered)
-                first_bp = next(iter(bp_counts.keys()), None)
-                if first_bp and len(first_bp) == 4:
-                    left_chr, left_pos, right_chr, right_pos = first_bp
-                    logger.debug(f"Got breakpoint for {fusion_key}: {left_chr}:{left_pos} - {right_chr}:{right_pos}")
+            # Extract breakpoint coordinates
+            left_chr, left_pos, right_chr, right_pos = self._get_breakpoint_coords(fusion_key)
             # Check all raw assigned gene pairs for this fusion
             has_non_coding = False
             non_coding_reason = None
             for read_name, (left_gene, right_gene) in read_assignments.items():
-                # Get biotypes for the raw assigned genes, with coordinates if available
-                left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos) if left_gene else None
-                right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos) if right_gene else None
-                def _salvage_to_nearby_coding(gene, chrom, pos):
-                    # Only attempt rescue if we have coordinates and the gene is non-coding/unknown
-                    if not gene or chrom is None or pos is None:
-                        return gene, None
-                    biotype = self.detector.get_gene_biotype(gene, chrom=chrom, pos=pos)
-                    if biotype and biotype == "protein_coding":
-                        return gene, biotype
-                    # Try a small window to avoid spurious swaps
-                    nearby = self.detector._find_nearby_protein_coding(chrom, pos, window=500)
-                    if nearby:
-                        return nearby, "protein_coding"
-                    return gene, biotype                
-                left_gene, left_biotype = _salvage_to_nearby_coding(left_gene, left_chr, left_pos)
-                right_gene, right_biotype = _salvage_to_nearby_coding(right_gene, right_chr, right_pos)
-
+                # Salvage genes and check biotypes
+                left_gene, left_biotype, right_gene, right_biotype, is_non_coding, reason = (
+                    self._salvage_and_check_gene_pair(left_gene, right_gene, left_chr, left_pos, right_chr, right_pos)
+                )
+                # Update assignment with salvaged genes
                 if self.detector.fusion_assigned_pairs.get(fusion_key, {}).get(read_name):
                     self.detector.fusion_assigned_pairs[fusion_key][read_name] = (left_gene, right_gene)
-
-                logger.debug(f"  {fusion_key}: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
-                # Check if either is non-protein-coding
-                if left_gene and left_biotype and left_biotype != "protein_coding":
+                if is_non_coding:
                     has_non_coding = True
-                    non_coding_reason = f"{left_gene}={left_biotype}"
-                    break
-                if right_gene and right_biotype and right_biotype != "protein_coding":
-                    has_non_coding = True
-                    non_coding_reason = f"{right_gene}={right_biotype}"
+                    non_coding_reason = reason
                     break
             if has_non_coding:
                 logger.info(f"Dropping early non-coding fusion: {fusion_key} - {non_coding_reason}")
                 fusions_to_discard.add(fusion_key)
         # Remove all discarded fusions from data structures
+        self._remove_discarded_fusions_internal(fusions_to_discard)
+
+    def _remove_discarded_fusions_internal(self, fusions_to_discard):
+        # Remove fusions from all internal data structures.
         for fusion_key in fusions_to_discard:
             if fusion_key in self.detector.fusion_metadata:
                 del self.detector.fusion_metadata[fusion_key]
@@ -72,7 +86,6 @@ class FusionValidator:
                 del self.detector.fusion_candidates[fusion_key]
             if fusion_key in self.detector.fusion_breakpoints:
                 del self.detector.fusion_breakpoints[fusion_key]
-            # Also remove from assigned pairs to avoid re-processing
             if fusion_key in self.detector.fusion_assigned_pairs:
                 del self.detector.fusion_assigned_pairs[fusion_key]
 
@@ -102,13 +115,7 @@ class FusionValidator:
                 # logger.info(f"Discarding non-coding fusion: {fusion_key} - {'; '.join(reason)}")
                 fusions_to_discard.append(fusion_key)
         # Remove all discarded fusions from data structures
-        for fusion_key in fusions_to_discard:
-            if fusion_key in self.detector.fusion_metadata:
-                del self.detector.fusion_metadata[fusion_key]
-            if fusion_key in self.detector.fusion_candidates:
-                del self.detector.fusion_candidates[fusion_key]
-            if fusion_key in self.detector.fusion_breakpoints:
-                del self.detector.fusion_breakpoints[fusion_key]
+        self._remove_discarded_fusions_internal(fusions_to_discard)
 
     def apply_frequency_filters(self):
         # Filter out multicopy artifacts based on gene frequency within the sample.

@@ -72,6 +72,8 @@ class FusionMetadata:
             meta["right_gene"] = right_gene
             meta["left_biotype"] = left_biotype
             meta["right_biotype"] = right_biotype
+            if left_biotype == "protein_coding" and right_biotype == "protein_coding":
+                pass  # no extra 'bad gene' screening needed
 
             # FINAL VALIDATION: If either final gene is still bad (pseudogene, ncRNA, etc.),
             # mark the entire fusion as invalid to prevent false-alt duplicates in output

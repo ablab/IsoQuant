@@ -316,23 +316,18 @@ class FusionDetector:
 
         return score
 
-    @lru_cache(maxsize=500000)
-    def assign_fusion_gene_cached(self, chrom, pos):
-        return self.assign_fusion_gene(chrom, pos)
-
-    def assign_fusion_gene(self, chrom, pos, window=1000):
-        # Requires IntervalTree for efficient gene querying
-        if self.interval_index is None:
-            logger.warning("IntervalTree not available; assign_fusion_gene requires it for efficiency")
-            return None
+    def _get_genes_at(self, chrom, pos, window):
+        # Query genes at location using interval tree or gffutils.
         try:
-            genes = self.interval_index.get_genes_at(chrom, pos, window=window)
+            if self.interval_index is None:
+                logger.warning("IntervalTree not available; assign_fusion_gene requires it for efficiency")
+                return None
+            return self.interval_index.get_genes_at(chrom, pos, window=window)
         except Exception:
             return None
-        if not genes:
-            return None
-        INF = 10**9
-        # FAST PATH: Collect genes where pos is inside an exon
+
+    def _collect_exonic_genes(self, genes, pos):
+        # Return list of genes where pos falls inside an exon.
         exonic_genes = []
         for g in genes:
             attrs = getattr(g, "attributes", {}) or {}
@@ -342,116 +337,120 @@ class FusionDetector:
                     or attrs.get("transcript_biotype", [None])[0])
             gstart = int(getattr(g, "start", 0))
             gend = int(getattr(g, "end", 0))
-            # Check if position is exonic (use cached exons)
             try:
                 exons = self._get_cached_exons(g)
-                # exons is now a list of (start, end) tuples
                 exonic_hit = any(start <= pos <= end for start, end in exons)
                 if exonic_hit:
                     exonic_genes.append((g, gname, gtype, gstart, gend, exons))
             except Exception:
                 pass
+        return exonic_genes
 
-        # If we found exonic genes, use only those (fast path)
-        if exonic_genes:
-            if len(exonic_genes) == 1:
-                # Fast return: only one exonic gene
-                return exonic_genes[0][1]
-            # Multiple exonic genes: pick best using scoring
-            best_gene = None
-            best_key = None
-            for g, gname, gtype, gstart, gend, exons in exonic_genes:
-                body_dist = 0  # Inside gene body by definition
-                # Compute boundary distances to all exon boundaries
-                # exons is list of (start, end) tuples
-                boundary_distances = [min(abs(pos - start), abs(pos - end)) for start, end in exons]
-                boundary_min_dist = min(boundary_distances) if boundary_distances else 0
-                exon_min_dist = 0  # Inside exon by definition
-                score = self._compute_gene_score(
-                    g, pos, exon_min_dist=exon_min_dist, boundary_min_dist=boundary_min_dist, 
-                    exonic_hit=True, body_dist=body_dist, gstart=gstart, gend=gend
-                )
-                glen = max(1, gend - gstart + 1)
-                key = (
-                    1 if gtype == "protein_coding" else 0,  # 1) PRIORITY: protein-coding first
-                    score,                                   # 2) main score
-                    True,                                    # 3) exonic_hit is always True here
-                    -boundary_min_dist,                      # 4) nearer exon boundary
-                    0,                                       # 5) -exon_min_dist (always 0)
-                    0,                                       # 6) -body_dist (always 0)
-                    -min(glen, 500000),                      # 7) gentle preference for longer locus
-                    gname or getattr(g, "id", "")            # 8) deterministic
-                )
-                if best_key is None or key > best_key:
-                    best_key = key
-                    best_gene = gname or getattr(g, "id", None)
-            return best_gene
-        # SLOW PATH: No exonic hits; use original logic with boundary distances
+    def _compute_gene_distances(self, g, pos):
+        # Compute exon and body distances for a gene relative to pos.
+        exon_min_dist = None
+        boundary_min_dist = None
+        exonic_hit = False
+        try:
+            exons = self._get_cached_exons(g)
+            for es, ee in exons:
+                # Distance to exon span
+                if es <= pos <= ee:
+                    d_span = 0
+                    exonic_hit = True
+                else:
+                    d_span = min(abs(pos - es), abs(pos - ee))
+                exon_min_dist = d_span if exon_min_dist is None else min(exon_min_dist, d_span)
+                # Distance to exon boundary
+                d_bound = min(abs(pos - es), abs(pos - ee))
+                boundary_min_dist = d_bound if boundary_min_dist is None else min(boundary_min_dist, d_bound)
+        except Exception:
+            exons = []
+        # Body distance (distance to gene boundaries)
+        gstart = int(getattr(g, "start", 0))
+        gend = int(getattr(g, "end", 0))
+        if gstart <= pos <= gend:
+            body_dist = 0
+        else:
+            body_dist = min(abs(pos - gstart), abs(pos - gend))
+        return exon_min_dist, boundary_min_dist, exonic_hit, body_dist, exons
+
+    def _build_gene_key(self, gtype, score, exonic_hit, boundary_min_dist, exon_min_dist, body_dist, glen, gname):
+        # Build a comparison tuple for gene scoring. Higher tuple = better gene."""
+        INF = 10**9
+        bnd = boundary_min_dist if boundary_min_dist is not None else INF
+        exd = exon_min_dist if exon_min_dist is not None else INF
+        bod = body_dist if body_dist else 0
+        return (
+            1 if gtype == "protein_coding" else 0,  # 1) PRIORITY: protein-coding
+            score,                                   # 2) main score
+            bool(exonic_hit),                        # 3) prefer exonic
+            -bnd,                                    # 4) nearer exon boundary
+            -exd,                                    # 5) nearer exon span
+            -bod,                                    # 6) nearer gene body
+            -min(glen, 500000),                      # 7) gentle preference for longer locus
+            gname or ""                              # 8) deterministic
+        )
+
+    def _score_exonic_genes(self, exonic_genes, pos):
+        # Score multiple exonic genes and return the best one, or single exonic gene.
+        if len(exonic_genes) == 1:
+            return exonic_genes[0][1]  # Fast return for single exonic gene
+        best_gene = None
+        best_key = None
+        for g, gname, gtype, gstart, gend, exons in exonic_genes:
+            boundary_distances = [min(abs(pos - start), abs(pos - end)) for start, end in exons]
+            boundary_min_dist = min(boundary_distances) if boundary_distances else 0
+            score = self._compute_gene_score(
+                g, pos, exon_min_dist=0, boundary_min_dist=boundary_min_dist,
+                exonic_hit=True, body_dist=0, gstart=gstart, gend=gend
+            )
+            glen = max(1, gend - gstart + 1)
+            key = self._build_gene_key(gtype, score, True, boundary_min_dist, 0, 0, glen, gname)
+            if best_key is None or key > best_key:
+                best_key = key
+                best_gene = gname or getattr(g, "id", None)
+        return best_gene
+
+    def _score_intronic_genes(self, genes, pos):
+        # Score intronic/intergenic genes and return the best one.
         best_gene = None
         best_key = None
         for g in genes:
-            attrs  = getattr(g, "attributes", {}) or {}
-            gname  = attrs.get("gene_name", [getattr(g, "id", None)])[0]
-            gtype  = (attrs.get("gene_type", [None])[0]
+            attrs = getattr(g, "attributes", {}) or {}
+            gname = attrs.get("gene_name", [getattr(g, "id", None)])[0]
+            gtype = (attrs.get("gene_type", [None])[0]
                     or attrs.get("gene_biotype", [None])[0]
                     or attrs.get("transcript_biotype", [None])[0])
             gstart = int(getattr(g, "start", 0))
-            gend   = int(getattr(g, "end",   0))
-
-            # --- exon distances (using cached exons) ---
-            exon_min_dist = None
-            boundary_min_dist = None
-            exonic_hit = False
-            try:
-                exons = self._get_cached_exons(g)
-                # exons is now a list of (start, end) tuples
-                for es, ee in exons:
-                    # span distance
-                    if es <= pos <= ee:
-                        d_span = 0
-                        exonic_hit = True
-                    else:
-                        d_span = min(abs(pos-es), abs(pos-ee))
-                    exon_min_dist = d_span if exon_min_dist is None else min(exon_min_dist, d_span)
-                    # boundary distance
-                    d_bound = min(abs(pos-es), abs(pos-ee))
-                    boundary_min_dist = d_bound if boundary_min_dist is None else min(boundary_min_dist, d_bound)
-            except Exception:
-                exon_min_dist = None
-                boundary_min_dist = None
-                exonic_hit = False
-            # body distance if outside gene
-            if gstart <= pos <= gend:
-                body_dist = 0
-            else:
-                body_dist = min(abs(pos - gstart), abs(pos - gend))
-            # compute score with your refactored function
+            gend = int(getattr(g, "end", 0))
+            exon_min_dist, boundary_min_dist, exonic_hit, body_dist, exons = self._compute_gene_distances(g, pos)
             score = self._compute_gene_score(
-                g, pos, exon_min_dist=exon_min_dist, boundary_min_dist=boundary_min_dist, 
+                g, pos, exon_min_dist=exon_min_dist, boundary_min_dist=boundary_min_dist,
                 exonic_hit=exonic_hit, body_dist=body_dist, gstart=gstart, gend=gend
             )
-            # normalize None distances
-            bnd = boundary_min_dist if boundary_min_dist is not None else INF
-            exd = exon_min_dist     if exon_min_dist     is not None else INF
-            bod = body_dist if body_dist else 0
-            # optional: gene length as a gentle preference (cap to avoid domination)
             glen = max(1, gend - gstart + 1)
-            # build a stable key; higher is better for earlier elements
-            # CRITICAL: protein_coding must come EARLY to prevent pseudogenes from winning based on proximity
-            key = (
-                1 if gtype == "protein_coding" else 0,  # 1) PRIORITY: protein-coding must come first
-                score,                           # 2) main score (including biotype penalties)
-                bool(exonic_hit),                # 3) prefer exonic
-                -bnd,                            # 4) nearer exon boundary
-                -exd,                            # 5) nearer exon span
-                -bod,                            # 6) nearer gene body
-                -min(glen, 500000),              # 7) gentle preference for longer locus
-                gname or getattr(g, "id", "")    # 8) deterministic
-            )
+            key = self._build_gene_key(gtype, score, exonic_hit, boundary_min_dist, exon_min_dist, body_dist, glen, gname)
             if best_key is None or key > best_key:
-                best_key  = key
+                best_key = key
                 best_gene = gname or getattr(g, "id", None)
         return best_gene
+
+    def assign_fusion_gene(self, chrom, pos, window=1000):
+        # Assign the best gene at a genomic location using exonic priority and scoring.
+        genes = self._get_genes_at(chrom, pos, window)
+        if not genes:
+            return None
+        # FAST PATH: Try exonic genes first (position inside an exon)
+        exonic_genes = self._collect_exonic_genes(genes, pos)
+        if exonic_genes:
+            return self._score_exonic_genes(exonic_genes, pos)
+        # SLOW PATH: No exonic hits; use intronic/intergenic scoring
+        return self._score_intronic_genes(genes, pos)
+
+    @lru_cache(maxsize=500000)
+    def assign_fusion_gene_cached(self, chrom, pos):
+        return self.assign_fusion_gene(chrom, pos)
 
     def _passes_read_filters(self, read, min_al_len_primary, min_sa_mapq):
         # Check if read passes basic quality filters.
