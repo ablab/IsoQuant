@@ -1,5 +1,9 @@
 # IsoQuant changelog
 
+## IsoQuant 3.12.1, 18 March 2026
+
+- Add pip installation.
+
 ## IsoQuant 3.12.0, 11 March 2026
 
 - Fix Python 3.14 compatibility.
