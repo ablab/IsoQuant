@@ -17,7 +17,7 @@
 
 Installation typically takes no more than a few minutes.
 
-*   If running simply for [the source archive](https://github.com/ablab/IsoQuant/releases/), 
+*   If running simply from [the source archive](https://github.com/ablab/IsoQuant/releases/), 
 you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [biopython](https://biopython.org/), [pyfaidx](https://pypi.org/project/pyfaidx/),
  [ssw-py](https://pypi.org/project/ssw-py/), [editdistance](https://pypi.org/project/editdistance/) and some other common Python libraries to be installed. See `requirements.txt` for details. 
 You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
