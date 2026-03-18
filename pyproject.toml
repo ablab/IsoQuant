@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=64,<75"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,10 +7,10 @@ name = "isoquant"
 dynamic = ["version"]
 description = "Reference-based analysis and quantification of long RNA reads"
 readme = "README.md"
-license = "GPL-2.0-only"
-requires-python = ">=3.8,<3.14"
+license = {text = "GPL-2.0-only"}
+requires-python = ">=3.8"
 authors = [{name = "Andrey Prjibelski"}]
-keywords = ["bioinformatics", "transcriptomics", "long-reads", "nanopore", "pacbio", "isoforms"]
+keywords = ["bioinformatics", "transcriptomics", "long-reads", "nanopore", "pacbio", "isoforms", "single-cell", "spatial"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
