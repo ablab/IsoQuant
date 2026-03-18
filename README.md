@@ -1,5 +1,5 @@
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/isoquant.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/isoquant)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/isoquant)](https://pypi.org/project/isoquant/)
+[![PyPI Downloads](https://img.shields.io/pypi/v/isoquant)](https://pypi.org/project/isoquant/)
 [![Python version](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
