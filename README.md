@@ -1,9 +1,9 @@
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/isoquant.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/isoquant)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/isoquant)](https://pypi.org/project/isoquant/)
 [![Python version](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
- [![PyPI Downloads](https://img.shields.io/pypi/dm/isoquant)](https://pypi.org/project/isoquant/)
 [![UnitTests](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml/badge.svg)](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml)
 [![User manual](https://github.com/ablab/IsoQuant/actions/workflows/docs.yml/badge.svg)](https://ablab.github.io/IsoQuant/)
 
@@ -75,27 +75,45 @@ You can leave your comments and bug reports at our [GitHub repository tracker](h
 
 *   Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
 
-*   IsoQuant can be downloaded from [github.com/ablab/IsoQuant](https://github.com/ablab/IsoQuant) or installed via conda (typically takes a few minutes):
+*   IsoQuant can installed via pip:
+
+        pip install isoquant
+
+*   Via conda (bioconda channel):
 
         conda create -c conda-forge -c bioconda -n isoquant python=3.12 isoquant
 
-*   If installing manually, you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [pybedtools](https://daler.github.io/pybedtools/), [biopython](https://biopython.org/) and some other common Python libraries to be installed. See `requirements.txt` for details. You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
-All required Python libraries can be installed via `pip install -r requirements.txt`.
+*   Or from GitHub:
+
+        git clone https://github.com/ablab/IsoQuant.git 
+        cd IsoQuant
+        git checkout latest
+        pip install -e .
+
+Installation typically takes no more than a few minutes.
+
+*   If running simply for [the source archive](https://github.com/ablab/IsoQuant/releases/), 
+you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [biopython](https://biopython.org/), [pyfaidx](https://pypi.org/project/pyfaidx/),
+ [ssw-py](https://pypi.org/project/ssw-py/), [editdistance](https://pypi.org/project/editdistance/) and some other common Python libraries to be installed. See `requirements.txt` for details. 
+You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
+All required Python libraries can be installed via: 
+
+        pip install -r requirements.txt
 
 *   Verify your installation by running (typically takes less than 1 minute):
 
-        isoquant.py --test
+        isoquant --test
 
 *   To run IsoQuant on raw FASTQ/FASTA files, use the following command
 
-        isoquant.py --reference /PATH/TO/reference_genome.fasta \
+        isoquant --reference /PATH/TO/reference_genome.fasta \
         --genedb /PATH/TO/gene_annotation.gtf \
         --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz \
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
     For example, using the toy data provided within this repository,
 
-        ./isoquant.py --fastq /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.ont.sim.fq.gz \
+        isoquant --fastq /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.ont.sim.fq.gz \
         --reference /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.fa.gz \
         --genedb /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.gtf.gz \
         --data_type nanopore --complete_genedb -p TEST_DATA --output isoquant_test 
@@ -103,14 +121,14 @@ All required Python libraries can be installed via `pip install -r requirements.
 
 * To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
 
-        isoquant.py --reference /PATH/TO/reference_genome.fasta \
+        isoquant --reference /PATH/TO/reference_genome.fasta \
         --genedb /PATH/TO/gene_annotation.gtf \
         --bam /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam \
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
     For example, using the toy data provided within this repository,
 
-        ./isoquant.py --reference tests/toy_data/MAPT.Mouse.reference.fasta \
+        isoquant --reference tests/toy_data/MAPT.Mouse.reference.fasta \
         --genedb tests/toy_data/MAPT.Mouse.genedb.gtf \
         --fastq tests/toy_data/MAPT.Mouse.ONT.simulated.fastq \
         --data_type nanopore -o toy_data_out
@@ -119,7 +137,7 @@ All required Python libraries can be installed via `pip install -r requirements.
 
 * Using reference annotation is optional since version 3.0, you may preform de novo transcript discovery without providing `--genedb` option':
 
-        isoquant.py --reference /PATH/TO/reference_genome.fasta \
+        isoquant --reference /PATH/TO/reference_genome.fasta \
         --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz \
         --data_type (assembly|pacbio|nanopore) -o OUTPUT_FOLDER
 
