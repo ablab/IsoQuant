@@ -3,11 +3,12 @@
 [![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
 [![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
+ [![PyPI Downloads](https://img.shields.io/pypi/dm/isoquant)](https://pypi.org/project/isoquant/)
 [![UnitTests](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml/badge.svg)](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml)
 [![User manual](https://github.com/ablab/IsoQuant/actions/workflows/docs.yml/badge.svg)](https://ablab.github.io/IsoQuant/)
 
 
-<img src="docs/isoquant_logo.png" width="300" alt="IsoQuant">
+<img src="https://raw.githubusercontent.com/ablab/IsoQuant/master/docs/isoquant_logo.png" width="300" alt="IsoQuant">
 
 [Full IsoQuant documentation can be found here](https://ablab.github.io/IsoQuant/).
 Information in this README is given only for convenience and is not a full user manual.
