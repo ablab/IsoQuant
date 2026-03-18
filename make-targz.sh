@@ -36,6 +36,9 @@ cp LICENSE $TARGET_DIR/
 cp changelog.md $TARGET_DIR/
 cp requirements.txt $TARGET_DIR/
 cp CODE_OF_CONDUCT.md $TARGET_DIR/
+cp GPL2.txt $TARGET_DIR/
+cp pyproject.toml $TARGET_DIR/
+cp MANIFEST.in $TARGET_DIR/
 
 tar -pczf $TARGET_DIR.tar.gz $TARGET_DIR
 rm -r $TARGET_DIR
