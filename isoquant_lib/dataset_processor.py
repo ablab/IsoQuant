@@ -513,7 +513,7 @@ class DatasetProcessor:
                     if counter.ignore_read_groups:
                         continue
                     logger.info("Grouped counts are saves to: " + counter.output_counts_file_name)
-            logger.info("Counts can be converted to other formats using src/convert_grouped_counts.py")
+            logger.info("Counts can be converted to other formats using isoquant_lib/convert_grouped_counts.py")
             aggregator.global_counter.finalize(self.args)
 
     def filter_umis(self, sample):

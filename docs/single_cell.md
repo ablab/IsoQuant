@@ -299,7 +299,7 @@ Use `--counts_format` to control the output format:
 * `mtx` -- Matrix Market (MTX) format compatible with Seurat and Scanpy
 * `none` -- no conversion (only internal linear format is produced)
 
-Grouped counts can also be converted after the run using `src/convert_grouped_counts.py`.
+Grouped counts can also be converted after the run using `isoquant_lib/convert_grouped_counts.py`.
 
 ### Grouping сcounts
 

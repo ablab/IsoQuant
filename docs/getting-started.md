@@ -38,9 +38,9 @@ All required Python libraries can be installed via:
 
     For example, using the toy data provided within this repository,
 
-        ./isoquant --fastq /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.ont.sim.fq.gz \
-        --reference /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.fa.gz \
-        --genedb /home/andreyp/ablab/IsoQuant/tests/simple_data/chr9.4M.gtf.gz \
+        ./isoquant --fastq /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.ont.sim.fq.gz \
+        --reference /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.fa.gz \
+        --genedb /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.gtf.gz \
         --data_type nanopore --complete_genedb -p TEST_DATA --output isoquant_test 
 
 
@@ -50,13 +50,6 @@ All required Python libraries can be installed via:
         --genedb /PATH/TO/gene_annotation.gtf \
         --bam /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam \
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
-
-    For example, using the toy data provided within this repository,
-
-        ./isoquant --reference tests/toy_data/MAPT.Mouse.reference.fasta \
-        --genedb tests/toy_data/MAPT.Mouse.genedb.gtf \
-        --fastq tests/toy_data/MAPT.Mouse.ONT.simulated.fastq \
-        --data_type nanopore -o toy_data_out
 
 * If using official annotations containing `gene` and `transcript` features use `--complete_genedb` to save time.
 

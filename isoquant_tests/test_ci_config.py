@@ -14,7 +14,7 @@ import unittest
 
 import yaml
 
-# Add tests/github to path so we can import the modules
+# Add isoquant_tests/github to path so we can import the modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "github"))
 
 from run_pipeline import (
