@@ -8,8 +8,8 @@
 import pytest
 from functools import partial
 
-from src.common import equal_ranges, overlaps_at_least
-from src.long_read_profiles import (
+from isoquant_lib.common import equal_ranges, overlaps_at_least
+from isoquant_lib.long_read_profiles import (
     OverlappingFeaturesProfileConstructor,
     NonOverlappingFeaturesProfileConstructor,
 )

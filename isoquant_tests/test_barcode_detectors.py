@@ -14,7 +14,7 @@ Each detector has:
 """
 
 import pytest
-from src.barcode_calling.callers import (
+from isoquant_lib.barcode_calling.callers import (
     # Stereo-seq
     StereoBarcodeDetector,
     StereoSplittingBarcodeDetector,
@@ -27,7 +27,7 @@ from src.barcode_calling.callers import (
     CurioBarcodeDetector,
     CurioIlluminaDetector,
 )
-from src.barcode_calling.callers.base import (
+from isoquant_lib.barcode_calling.callers.base import (
     SplittingBarcodeDetectionResult,
     TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,

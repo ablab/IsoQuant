@@ -5,8 +5,8 @@
 ############################################################################
 
 import pytest
-from src.barcode_calling.indexers import KmerIndexer, Dict2BitKmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
-from src.barcode_calling.common import str_to_2bit, batch_str_to_2bit
+from isoquant_lib.barcode_calling.indexers import KmerIndexer, Dict2BitKmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
+from isoquant_lib.barcode_calling.common import str_to_2bit, batch_str_to_2bit
 
 
 class TestKmerIndexer:

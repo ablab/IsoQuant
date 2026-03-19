@@ -5,7 +5,7 @@
 ############################################################################
 
 import pytest
-from src.barcode_calling.common import (
+from isoquant_lib.barcode_calling.common import (
     str_to_2bit,
     bit_to_str,
     batch_str_to_2bit,
@@ -262,7 +262,7 @@ class TestNumba2BitEncoding:
     def test_numba_consistency_with_numpy(self):
         """Test that Numba and NumPy fallback produce identical results."""
         import numpy as np
-        from src.barcode_calling.common import NUMBA_AVAILABLE, _convert_chunk_to_2bit
+        from isoquant_lib.barcode_calling.common import NUMBA_AVAILABLE, _convert_chunk_to_2bit
 
         barcodes = [
             "ACTGACTGACTGACTGACTGACTGA",
@@ -283,7 +283,7 @@ class TestNumba2BitEncoding:
 
     def test_numba_available_flag(self):
         """Test that NUMBA_AVAILABLE flag is set correctly."""
-        from src.barcode_calling.common import NUMBA_AVAILABLE
+        from isoquant_lib.barcode_calling.common import NUMBA_AVAILABLE
 
         # Just verify the flag is a boolean
         assert isinstance(NUMBA_AVAILABLE, bool)

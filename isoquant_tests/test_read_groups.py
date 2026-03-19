@@ -7,7 +7,7 @@
 import pytest
 import tempfile
 import os
-from src.read_groups import (
+from isoquant_lib.read_groups import (
     AlignmentTagReadGrouper,
     ReadIdSplitReadGrouper,
     ReadTableGrouper,
@@ -106,7 +106,7 @@ class TestReadTableGrouper:
             temp_file = f.name
 
         try:
-            from src.read_groups import SharedTableData, ReadTableGrouper
+            from isoquant_lib.read_groups import SharedTableData, ReadTableGrouper
 
             # Create shared data with single column
             shared_data = SharedTableData(temp_file,
@@ -132,7 +132,7 @@ class TestReadTableGrouper:
             temp_file = f.name
 
         try:
-            from src.read_groups import SharedTableData, ReadTableGrouper
+            from isoquant_lib.read_groups import SharedTableData, ReadTableGrouper
 
             # Create shared data with single column
             shared_data = SharedTableData(temp_file,
@@ -162,7 +162,7 @@ class TestSharedTableData:
             temp_file = f.name
 
         try:
-            from src.read_groups import SharedTableData, ReadTableGrouper
+            from isoquant_lib.read_groups import SharedTableData, ReadTableGrouper
 
             # Create shared data with 3 group columns (indices 1, 2, 3)
             shared_data = SharedTableData(temp_file,
@@ -209,7 +209,7 @@ class TestSharedTableData:
             temp_file = f.name
 
         try:
-            from src.read_groups import SharedTableData, ReadTableGrouper
+            from isoquant_lib.read_groups import SharedTableData, ReadTableGrouper
 
             shared_data = SharedTableData(temp_file,
                                          read_id_column_index=0,
@@ -246,7 +246,7 @@ class TestParseGroupingSpec:
             f.write("read_002\tcell_B\tspot_2\n")
 
         try:
-            from src.read_groups import parse_grouping_spec, ReadTableGrouper
+            from isoquant_lib.read_groups import parse_grouping_spec, ReadTableGrouper
 
             # Mock args and sample objects
             class MockArgs:
@@ -312,7 +312,7 @@ class TestParseGroupingSpec:
             f.write("read_002\tgroupY\n")
 
         try:
-            from src.read_groups import parse_grouping_spec, ReadTableGrouper
+            from isoquant_lib.read_groups import parse_grouping_spec, ReadTableGrouper
 
             class MockArgs:
                 pass
@@ -358,7 +358,7 @@ class TestParseBarcodeSpotSpec:
 
     def test_default_columns(self):
         """Test parsing spec with default columns."""
-        from src.read_groups import parse_barcode2spot_spec
+        from isoquant_lib.read_groups import parse_barcode2spot_spec
 
         filename, barcode_col, spot_cols = parse_barcode2spot_spec("my_file.tsv")
 
@@ -368,7 +368,7 @@ class TestParseBarcodeSpotSpec:
 
     def test_explicit_single_column(self):
         """Test parsing spec with explicit single column."""
-        from src.read_groups import parse_barcode2spot_spec
+        from isoquant_lib.read_groups import parse_barcode2spot_spec
 
         filename, barcode_col, spot_cols = parse_barcode2spot_spec("my_file.tsv:0:1")
 
@@ -378,7 +378,7 @@ class TestParseBarcodeSpotSpec:
 
     def test_explicit_multiple_columns(self):
         """Test parsing spec with explicit multiple columns."""
-        from src.read_groups import parse_barcode2spot_spec
+        from isoquant_lib.read_groups import parse_barcode2spot_spec
 
         filename, barcode_col, spot_cols = parse_barcode2spot_spec("my_file.tsv:0:1,2,3")
 
@@ -388,7 +388,7 @@ class TestParseBarcodeSpotSpec:
 
     def test_custom_barcode_column(self):
         """Test parsing spec with custom barcode column."""
-        from src.read_groups import parse_barcode2spot_spec
+        from isoquant_lib.read_groups import parse_barcode2spot_spec
 
         filename, barcode_col, spot_cols = parse_barcode2spot_spec("my_file.tsv:2:3,4")
 
@@ -414,7 +414,7 @@ class TestBarcodeSpotGrouper:
             temp_file = f.name
 
         try:
-            from src.read_groups import SharedTableData, BarcodeSpotGrouper
+            from isoquant_lib.read_groups import SharedTableData, BarcodeSpotGrouper
 
             # Create shared data (barcode col 0, spot col 1)
             shared_data = SharedTableData(temp_file,
@@ -445,7 +445,7 @@ class TestBarcodeSpotGrouper:
             temp_file = f.name
 
         try:
-            from src.read_groups import SharedTableData, BarcodeSpotGrouper
+            from isoquant_lib.read_groups import SharedTableData, BarcodeSpotGrouper
 
             shared_data = SharedTableData(temp_file,
                                          read_id_column_index=0,
@@ -470,7 +470,7 @@ class TestBarcodeSpotGrouper:
             temp_file = f.name
 
         try:
-            from src.read_groups import SharedTableData, BarcodeSpotGrouper
+            from isoquant_lib.read_groups import SharedTableData, BarcodeSpotGrouper
 
             shared_data = SharedTableData(temp_file,
                                          read_id_column_index=0,
@@ -496,7 +496,7 @@ class TestBarcodeSpotGrouper:
             temp_file = f.name
 
         try:
-            from src.read_groups import SharedTableData, BarcodeSpotGrouper
+            from isoquant_lib.read_groups import SharedTableData, BarcodeSpotGrouper
 
             # Create shared data with 3 spot columns
             shared_data = SharedTableData(temp_file,

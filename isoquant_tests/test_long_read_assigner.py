@@ -12,22 +12,22 @@ import gffutils
 import os
 from functools import partial
 
-from src.common import equal_ranges, overlaps_at_least
-from src.isoform_assignment import MatchEventSubtype, ReadAssignmentType
-from src.long_read_assigner import (
+from isoquant_lib.common import equal_ranges, overlaps_at_least
+from isoquant_lib.isoform_assignment import MatchEventSubtype, ReadAssignmentType
+from isoquant_lib.long_read_assigner import (
     AmbiguityResolvingMethod,
     IsoformDiff,
     LongReadAssigner,
 )
-from src.long_read_profiles import (
+from isoquant_lib.long_read_profiles import (
     CombinedReadProfiles,
     OverlappingFeaturesProfileConstructor,
     MappedReadProfile,
     NonOverlappingFeaturesProfileConstructor,
 )
-from src.gene_info import GeneInfo
-from src.polya_finder import PolyAInfo
-from src.string_pools import StringPoolManager
+from isoquant_lib.gene_info import GeneInfo
+from isoquant_lib.polya_finder import PolyAInfo
+from isoquant_lib.string_pools import StringPoolManager
 
 
 class Params:

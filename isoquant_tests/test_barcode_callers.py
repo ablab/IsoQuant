@@ -5,7 +5,7 @@
 ############################################################################
 
 import pytest
-from src.barcode_calling.callers import (
+from isoquant_lib.barcode_calling.callers import (
     BarcodeDetectionResult,
     LinkerBarcodeDetectionResult,
     TSOBarcodeDetectionResult,

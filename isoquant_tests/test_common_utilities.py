@@ -9,7 +9,7 @@
 import unittest
 import os
 import tempfile
-from src.common import *
+from isoquant_lib.common import *
 
 
 class TestAdditionalCommon(unittest.TestCase):

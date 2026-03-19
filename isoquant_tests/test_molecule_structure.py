@@ -17,7 +17,7 @@ import os
 import pytest
 from io import StringIO
 
-from src.barcode_calling.callers.molecule_structure import (
+from isoquant_lib.barcode_calling.callers.molecule_structure import (
     ElementType,
     MoleculeElement,
     MoleculeStructure

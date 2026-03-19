@@ -6,8 +6,8 @@
 ############################################################################
 
 import unittest
-from src.common import junctions_from_blocks
-from src.junction_comparator import *
+from isoquant_lib.common import junctions_from_blocks
+from isoquant_lib.junction_comparator import *
 
 
 class TestJunctionComparator(unittest.TestCase):

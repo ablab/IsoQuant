@@ -6,7 +6,7 @@
 ############################################################################
 
 import unittest
-from src.modes import *
+from isoquant_lib.modes import *
 
 
 class TestModes(unittest.TestCase):

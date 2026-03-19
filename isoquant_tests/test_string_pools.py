@@ -7,7 +7,7 @@
 import pytest
 import tempfile
 import os
-from src.string_pools import StringPool, StringPoolManager
+from isoquant_lib.string_pools import StringPool, StringPoolManager
 
 
 class TestStringPool:

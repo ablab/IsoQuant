@@ -8,7 +8,7 @@
 import unittest
 import tempfile
 import os
-from src.stats import EnumStats
+from isoquant_lib.stats import EnumStats
 from enum import Enum
 
 

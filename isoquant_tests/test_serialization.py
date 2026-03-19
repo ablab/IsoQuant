@@ -7,8 +7,8 @@
 
 import pytest
 import io
-from src import serialization
-from src.serialization import *
+from isoquant_lib import serialization
+from isoquant_lib.serialization import *
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@
 import pytest
 import unittest
 
-import src.common as c
+import isoquant_lib.common as c
 
 
 class TestMiscFunction:

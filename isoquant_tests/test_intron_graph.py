@@ -7,10 +7,10 @@
 #
 # import unittest
 # from unittest.mock import Mock
-# from src.intron_graph import *
-# from src.gene_info import GeneInfo
-# from src.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, PolyAInfo
-# from src.common import junctions_from_blocks
+# from isoquant_lib.intron_graph import *
+# from isoquant_lib.gene_info import GeneInfo
+# from isoquant_lib.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, PolyAInfo
+# from isoquant_lib.common import junctions_from_blocks
 #
 #
 # class MockParams:

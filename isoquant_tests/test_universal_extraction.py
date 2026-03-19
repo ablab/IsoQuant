@@ -17,20 +17,20 @@ Tests the universal barcode calling infrastructure:
 import os
 import pytest
 
-from src.barcode_calling.callers.extraction_result import (
+from isoquant_lib.barcode_calling.callers.extraction_result import (
     DetectedElement,
     ExtractionResult,
     ReadStats
 )
-from src.barcode_calling.callers.molecule_structure import (
+from isoquant_lib.barcode_calling.callers.molecule_structure import (
     ElementType,
     MoleculeElement,
     MoleculeStructure
 )
-from src.barcode_calling.callers.universal_extraction import (
+from isoquant_lib.barcode_calling.callers.universal_extraction import (
     UniversalSingleMoleculeExtractor
 )
-from src.barcode_calling.callers.protocol import BarcodeResult
+from isoquant_lib.barcode_calling.callers.protocol import BarcodeResult
 
 # Test data directory
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "universal_data")

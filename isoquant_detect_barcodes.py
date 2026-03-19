@@ -9,7 +9,7 @@
 """
 Standalone barcode detection tool for single-cell and spatial transcriptomics.
 
-This is a CLI wrapper around src.barcode_calling.detect_barcodes.
+This is a CLI wrapper around isoquant_lib.barcode_calling.detect_barcodes.
 """
 
 import argparse
@@ -18,9 +18,9 @@ import os
 import sys
 from traceback import print_exc
 
-from src.modes import IsoQuantMode
-from src.error_codes import IsoQuantExitCode
-from src.barcode_calling.detect_barcodes import (
+from isoquant_lib.modes import IsoQuantMode
+from isoquant_lib.error_codes import IsoQuantExitCode
+from isoquant_lib.barcode_calling.detect_barcodes import (
     process_single_thread,
     process_in_parallel,
     BARCODE_CALLING_MODES,

@@ -6,7 +6,7 @@
 ############################################################################
 
 import unittest
-from src.file_naming import *
+from isoquant_lib.file_naming import *
 
 
 class TestFileNaming(unittest.TestCase):

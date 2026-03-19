@@ -5,11 +5,10 @@ include changelog.md
 include requirements.txt
 include requirements_tests.txt
 
-recursive-include src *.py
-recursive-include tests/simple_data *
-include tests/__init__.py
+recursive-include isoquant_lib *.py
+recursive-include isoquant_lib/test_data *
 
-prune tests/out_*
+prune isoquant_tests/out_*
 prune .claude
 prune .github
 global-exclude __pycache__

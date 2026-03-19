@@ -7,9 +7,9 @@
 
 import pytest
 
-from src.alignment_info import AlignmentInfo
-from src.polya_finder import PolyAFinder
-from src.polya_verification import PolyAFixer
+from isoquant_lib.alignment_info import AlignmentInfo
+from isoquant_lib.polya_finder import PolyAFinder
+from isoquant_lib.polya_verification import PolyAFixer
 
 SEQ1 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
        'GGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGCACTCCAACTGCTGCAAACCG' \

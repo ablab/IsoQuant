@@ -5,14 +5,14 @@
 ############################################################################
 
 import pytest
-from src.barcode_calling.umi_filtering import (
+from isoquant_lib.barcode_calling.umi_filtering import (
     UMIFilter,
     format_read_assignment_for_output,
 
 )
-from src.isoform_assignment import ReadAssignment, ReadAssignmentType
-from src.common import junctions_from_blocks
-from src.string_pools import StringPoolManager
+from isoquant_lib.isoform_assignment import ReadAssignment, ReadAssignmentType
+from isoquant_lib.common import junctions_from_blocks
+from isoquant_lib.string_pools import StringPoolManager
 
 
 class TestFormatReadAssignmentForOutput:

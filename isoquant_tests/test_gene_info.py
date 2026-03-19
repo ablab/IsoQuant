@@ -8,7 +8,7 @@
 import os
 import pytest
 import gffutils
-from src.gene_info import *
+from isoquant_lib.gene_info import *
 
 
 class TestGeneInfo:
@@ -65,7 +65,7 @@ class TestGeneInfo:
         assert gene_info.empty()
 
     def test_from_models(self):
-        from src.gene_info import TranscriptModel
+        from isoquant_lib.gene_info import TranscriptModel
 
         # Create a simple transcript model
         transcript_model = TranscriptModel("chr1", "+", "test_transcript", "test_gene", [(100, 200), (300, 400)], TranscriptModelType.known)
@@ -81,7 +81,7 @@ class TestGeneInfo:
 
     def test_serialization(self):
         import io
-        from src.serialization import write_int, write_string
+        from isoquant_lib.serialization import write_int, write_string
 
         # Create test gene info
         gene_info = GeneInfo([self.gene_db], self.gffutils_db)

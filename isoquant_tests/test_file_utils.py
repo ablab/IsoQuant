@@ -10,7 +10,7 @@ import unittest
 import os
 import shutil
 import tempfile
-from src.file_utils import *
+from isoquant_lib.file_utils import *
 
 
 class TestFileUtils(unittest.TestCase):

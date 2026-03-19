@@ -7,7 +7,7 @@ on:
 
 env:
   RUN_NAME: Mouse.PB_simulated.reduced_db
-  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
+  LAUNCHER: ${{github.workspace}}/isoquant_tests/github/run_pipeline.py
   CFG_DIR: /abga/work/andreyp/ci_isoquant/data
   BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
   OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/

@@ -54,12 +54,12 @@ isoquant-detect-barcodes = "isoquant_detect_barcodes:main_entry"
 isoquant-visualize = "isoquant_visualize:main"
 
 [tool.setuptools]
-packages = ["src", "src.barcode_calling", "src.barcode_calling.callers",
-            "src.barcode_calling.indexers", "tests"]
+packages = ["isoquant_lib", "isoquant_lib.barcode_calling", "isoquant_lib.barcode_calling.callers",
+            "isoquant_lib.barcode_calling.indexers"]
 py-modules = ["isoquant", "isoquant_detect_barcodes", "isoquant_visualize"]
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
 
 [tool.setuptools.package-data]
-tests = ["simple_data/*"]
+isoquant_lib = ["test_data/*"]

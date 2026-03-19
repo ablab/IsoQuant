@@ -11,7 +11,7 @@ from collections import namedtuple
 
 import pytest
 
-from src.common import get_path_to_program
+from isoquant_lib.common import get_path_to_program
 
 
 class TestGetPathToProgram:
