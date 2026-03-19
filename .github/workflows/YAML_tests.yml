@@ -7,7 +7,7 @@ on:
 
 env:
   RUN_NAME: Resume_tests
-  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
+  LAUNCHER: ${{github.workspace}}/isoquant_tests/github/run_pipeline.py
   CFG_DIR: /abga/work/andreyp/ci_isoquant/data
   BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
   OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
@@ -41,7 +41,7 @@ jobs:
           STEP_NAME: YAML1.4SAMPLES.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'YAML file with 2 experiments with 2 samples each'
         if: always()
@@ -50,5 +50,5 @@ jobs:
           STEP_NAME: YAML2.2x2SAMPLES.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 

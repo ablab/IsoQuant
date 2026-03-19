@@ -26,10 +26,10 @@ import pysam
 import gffutils
 import pyfaidx
 
-from src.error_codes import IsoQuantExitCode
-from src.modes import IsoQuantMode, ISOQUANT_MODES
-from src.gtf2db import convert_gtf_to_db
-from src.read_mapper import (
+from isoquant_lib.error_codes import IsoQuantExitCode
+from isoquant_lib.modes import IsoQuantMode, ISOQUANT_MODES
+from isoquant_lib.gtf2db import convert_gtf_to_db
+from isoquant_lib.read_mapper import (
     DATA_TYPE_ALIASES,
     SUPPORTED_STRANDEDNESS,
     SUPPORTED_ALIGNERS,
@@ -38,23 +38,23 @@ from src.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from src.alignment_processor import PolyATrimmed
-from src.dataset_processor import DatasetProcessor, PolyAUsageStrategies
-from src.graph_based_model_construction import StrandnessReportingLevel
-from src.long_read_assigner import AmbiguityResolvingMethod
-from src.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
-from src.input_data_storage import InputDataStorage, InputDataType
-from src.multimap_resolver import MultimapResolvingStrategy
-from src.stats import combine_counts
-from src.fusion_detector import FusionDetector
-from src.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
-from src.common import setup_worker_logging, _get_log_params
+from isoquant_lib.alignment_processor import PolyATrimmed
+from isoquant_lib.dataset_processor import DatasetProcessor, PolyAUsageStrategies
+from isoquant_lib.graph_based_model_construction import StrandnessReportingLevel
+from isoquant_lib.long_read_assigner import AmbiguityResolvingMethod
+from isoquant_lib.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
+from isoquant_lib.input_data_storage import InputDataStorage, InputDataType
+from isoquant_lib.multimap_resolver import MultimapResolvingStrategy
+from isoquant_lib.stats import combine_counts
+from isoquant_lib.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
+from isoquant_lib.common import setup_worker_logging, _get_log_params
+from isoquant_lib.fusion_detector import FusionDetector
+
 
 logger = logging.getLogger('IsoQuant')
 
 # Large output file types for --large_output option
 LARGE_OUTPUT_TYPES = ["read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
-
 
 def bool_str(s):
     s = s.lower()
@@ -340,12 +340,16 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
-    isoquant_version = "3.4.0"
+    isoquant_version = "3.12.0"
     try:
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
             isoquant_version = version_f.readline().strip()
     except FileNotFoundError:
-        pass
+        try:
+            from importlib.metadata import version as _get_version
+            isoquant_version = _get_version("isoquant")
+        except Exception:
+            pass
     parser.add_argument('--version', '-v', action='version', version='IsoQuant ' + isoquant_version)
 
     args = parser.parse_args(cmd_args, namespace)
@@ -699,13 +703,13 @@ def check_input_files(args):
 
     # Check barcode2spot file (parse spec to extract filename)
     if hasattr(args, 'barcode2spot') and args.barcode2spot:
-        from src.read_groups import parse_barcode2spot_spec
+        from isoquant_lib.read_groups import parse_barcode2spot_spec
         bc2spot_file, _, _ = parse_barcode2spot_spec(args.barcode2spot)
         check_file_exists(bc2spot_file, "Barcode to spot mapping file")
 
     # Check barcode2barcode file (parse spec to extract filename)
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
-        from src.read_groups import parse_barcode2spot_spec
+        from isoquant_lib.read_groups import parse_barcode2spot_spec
         bc2bc_file, _, _ = parse_barcode2spot_spec(args.barcode2barcode)
         check_file_exists(bc2bc_file, "Barcode to barcode mapping file")
 
@@ -1187,10 +1191,18 @@ class TestMode(argparse.Action):
         if os.path.exists(self.out_dir):
             shutil.rmtree(self.out_dir)
         source_dir = os.path.dirname(os.path.realpath(__file__))
+        test_data_dir = os.path.join(source_dir, 'isoquant_tests', 'simple_data')
+        if not os.path.isdir(test_data_dir):
+            # pip-installed: find test data via src package
+            import isoquant_lib
+            test_data_dir = os.path.join(os.path.dirname(os.path.realpath(isoquant_lib.__file__)), 'test_data')
+        if not os.path.isdir(test_data_dir):
+            sys.stderr.write("ERROR: Test data not found. Cannot run in test mode.\n")
+            sys.exit(1)
         options = ['--output', self.out_dir, '--threads', '2',
-                   '--fastq', os.path.join(source_dir, 'tests/simple_data/chr9.4M.ont.sim.fq.gz'),
-                   '--reference', os.path.join(source_dir, 'tests/simple_data/chr9.4M.fa.gz'),
-                   '--genedb', os.path.join(source_dir, 'tests/simple_data/chr9.4M.gtf.gz'),
+                   '--fastq', os.path.join(test_data_dir, 'chr9.4M.ont.sim.fq.gz'),
+                   '--reference', os.path.join(test_data_dir, 'chr9.4M.fa.gz'),
+                   '--genedb', os.path.join(test_data_dir, 'chr9.4M.gtf.gz'),
                    '--clean_start', '--data_type', 'nanopore', '--complete_genedb', '--force', '-p', 'TEST_DATA']
         print('=== Running in test mode === ')
         print("Running IsoQuant in test mode with the following options:")
@@ -1223,6 +1235,31 @@ def main(cmd_args):
     create_output_dirs(args)
     set_additional_params(args)
     run_pipeline(args)
+
+
+def main_entry():
+    """Entry point for console_scripts (pip install)."""
+    try:
+        main(sys.argv[1:])
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:
+        raise
+    except:
+        if logger.handlers:
+            strout = StringIO()
+            print_exc(file=strout)
+            s = strout.getvalue()
+            if s:
+                logger.critical("IsoQuant failed with the following error, please, submit this issue to "
+                                "https://github.com/ablab/IsoQuant/issues\n" + s)
+            else:
+                print_exc()
+        else:
+            sys.stderr.write("IsoQuant failed with the following error, please, submit this issue to "
+                             "https://github.com/ablab/IsoQuant/issues\n")
+            print_exc()
+        sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)
 
 
 if __name__ == "__main__":

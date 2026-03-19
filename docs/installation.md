@@ -20,34 +20,50 @@ You will also need
 and some other common Python libraries. 
 The full requirements list can be found in [requirements.txt](https://github.com/ablab/IsoQuant/blob/master/requirements.txt).
 
+## Installing via pip
 
-## Installing from conda
-IsoQuant can be installed with conda:
+Simply run:
+
+```bash
+pip install isoquant
+```
+
+## Installing via conda
+IsoQuant can be installed with conda using the bioconda channel:
+
 ```bash
 conda create -c conda-forge -c bioconda -n isoquant python=3.12 isoquant
 ```
-Typically, conda installation takes a few minutes.
 
 ## Installing from GitHub
-To obtain IsoQuant you can download the repository and install the requirements.  
-Clone IsoQuant repository and switch to the latest release:
+
+To get IsoQuant from GitHub, you can clone the repository:
 ```bash
-git clone https://github.com/ablab/IsoQuant.git
+git clone https://github.com/ablab/IsoQuant.git 
 cd IsoQuant
 git checkout latest
 ```
-Install requirements:
+
+Or download the latest release [here](https://github.com/ablab/IsoQuant/releases).
+
+IsoQuant can then be installed using pip:
+```bash
+pip install -e .
+```
+
+Alternatively, you can install the requirements manually:
 ```bash
 pip install -r requirements.txt
 ```
-Typically, package installation takes a few minutes.
 
-You also need [samtools](http://www.htslib.org/download/) and [minimap2](https://github.com/lh3/minimap2) to be in the `$PATH` variable.
+Add [samtools](http://www.htslib.org/download/) and [minimap2](https://github.com/lh3/minimap2) to the `$PATH` variable and run IsoQuant without intalling it.
+
+Typically, the whole installation takes a few minutes regardless of the method.
 
 ## Verifying your installation
 To verify IsoQuant installation run
 ```bash
-isoquant.py --test
+isoquant --test
 ```
 to run on toy dataset. This should typically take less than 1 minute.  
 

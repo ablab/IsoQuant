@@ -37,7 +37,7 @@ If `--read_group` is set or multiple files are provided, the per-group expressio
 * `SAMPLE_ID.exon_grouped_counts.tsv`
 * `SAMPLE_ID.intron_grouped_counts.tsv`
 
-Note, that grouped counts can be converted to any format using `src/convert_grouped_counts.py`.
+Note, that grouped counts can be converted to any format using `isoquant_lib/convert_grouped_counts.py`.
 
 #### Other formats
 By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 

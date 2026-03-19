@@ -17,8 +17,8 @@ import gffutils
 from Bio import SeqIO
 from collections import defaultdict
 
-from src.common import junctions_from_blocks
-from src.gtf2db import convert_gtf_to_db
+from isoquant_lib.common import junctions_from_blocks
+from isoquant_lib.gtf2db import convert_gtf_to_db
 
 
 logger = logging.getLogger('IsoQuant')

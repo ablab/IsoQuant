@@ -1,5 +1,13 @@
 # IsoQuant changelog
 
+## IsoQuant 3.12.1, 19 March 2026
+
+- Fix package naming.
+
+## IsoQuant 3.12.1, 18 March 2026
+
+- Add pip installation.
+
 ## IsoQuant 3.12.0, 11 March 2026
 
 - Fix Python 3.14 compatibility.
@@ -84,7 +92,7 @@ Only overlapping chromosome names are used if inconsistent.
 - Optimized grouped counts output. By default, all counts are stored in linear format, which saves time and disk space.
 Matrices with a small number of columns are automatically converted to a usual matrix in TSV format, 
 larger matrices typical for single-cell and spatial data are converted to MTX format.
-See `--counts_format` paramter for options. It is also possible to convert counts after IsoQuant is finished using `src/convert_grouped_counts.py`.
+See `--counts_format` paramter for options. It is also possible to convert counts after IsoQuant is finished using `isoquant_lib/convert_grouped_counts.py`.
 Fixes issues mentioned in [#248](https://github.com/ablab/IsoQuant/issues/248).
 
 - Renamed counts related to discovered transcripts and genes to avoid confusion.

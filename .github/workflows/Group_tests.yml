@@ -7,7 +7,7 @@ on:
 
 env:
   RUN_NAME: Resume_tests
-  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
+  LAUNCHER: ${{github.workspace}}/isoquant_tests/github/run_pipeline.py
   CFG_DIR: /abga/work/andreyp/ci_isoquant/data
   BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
   OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
@@ -41,7 +41,7 @@ jobs:
           STEP_NAME: GROUP1.TAG.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Grouping by TSV file'
         if: always()
@@ -50,7 +50,7 @@ jobs:
           STEP_NAME: GROUP2.TSV.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Grouping by read id'
         if: always()
@@ -59,7 +59,7 @@ jobs:
           STEP_NAME: GROUP3.READID.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Grouping by file name'
         if: always()
@@ -68,7 +68,7 @@ jobs:
           STEP_NAME: GROUP4.FILES.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Grouping by CSV file'
         if: always()
@@ -77,7 +77,7 @@ jobs:
           STEP_NAME: GROUP5.CSV.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Default output with 7 groups'
         if: always()
@@ -86,7 +86,7 @@ jobs:
           STEP_NAME: GROUP6.MTX.SIRVs
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Default output with 7 groups'
         if: always()
@@ -95,7 +95,7 @@ jobs:
           STEP_NAME: GROUP6.MTX.SIRVs
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Specific TPM conversion with 7 groups'
         if: always()
@@ -104,7 +104,7 @@ jobs:
           STEP_NAME: GROUP7.MTX_TPM.SIRVs
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Specific TPM conversion with all formats, 7 groups'
         if: always()
@@ -113,7 +113,7 @@ jobs:
           STEP_NAME: GROUP8.MTX_FORMATS.SIRVs
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Default TPM conversion with all formats, 7 groups'
         if: always()
@@ -122,7 +122,7 @@ jobs:
           STEP_NAME: GROUP9.MTX2.SIRVs
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Mixed groups for simulated SIRVs'
         if: always()
@@ -131,7 +131,7 @@ jobs:
           STEP_NAME: GROUP10.MIX.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Mixed groups with duplicates for simulated SIRVs'
         if: always()
@@ -140,7 +140,7 @@ jobs:
           STEP_NAME: GROUP11.MIX.WARN.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Barcode groups for simulated SIRVs'
         if: always()
@@ -149,7 +149,7 @@ jobs:
           STEP_NAME: GROUP12.SC.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
       - name: 'Barcode groups with multiple columns for simulated SIRVs'
         if: always()
@@ -158,4 +158,4 @@ jobs:
           STEP_NAME: GROUP13.SC.SIRVs.R10
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
-          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.cfg -o ${{env.OUTPUT_BASE}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}

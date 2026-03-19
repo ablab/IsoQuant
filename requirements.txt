@@ -1,7 +1,6 @@
 gffutils>=0.10.1
 pandas>=1.0.1
 pysam>=0.15
-packaging
 pyfaidx>=0.7
 ssw-py>=1.0.0
 pyyaml>=5.4
@@ -12,4 +11,3 @@ seaborn>=0.10.0
 editdistance>=0.8.1
 biopython>=1.76
 numba>=0.58
-coverage>=7.6

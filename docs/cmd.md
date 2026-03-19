@@ -454,7 +454,7 @@ However, normalization method does not affect correlation/relative proportions.
 larger matrices (e.g. for single-cell experiments) will be saved to MTX (default).
 * `none` - no convertion.
 
-Note, that grouped counts can be converted to any format using `src/convert_grouped_counts.py`.
+Note, that grouped counts can be converted to any format using `isoquant_lib/convert_grouped_counts.py`.
 
 `--large_output`
     Controls which large per-read output files are generated.
