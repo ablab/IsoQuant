@@ -1,5 +1,9 @@
 # IsoQuant changelog
 
+## IsoQuant 3.12.1, 19 March 2026
+
+- Fix package naming.
+
 ## IsoQuant 3.12.1, 18 March 2026
 
 - Add pip installation.
