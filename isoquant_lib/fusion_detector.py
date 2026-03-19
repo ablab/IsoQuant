@@ -130,56 +130,66 @@ class FusionDetector:
         except Exception:
             return None, "unknown"
 
+    def _get_parent_gene_symbol(self, feature):
+        # Extract gene symbol from a feature, handling gene/transcript/other feature types.
+        if feature.featuretype == 'gene':
+            # For gene features, prefer gene_name attribute
+            return feature.attributes.get('gene_name', [feature.id])[0]
+        # For transcript or other features, try to find parent gene
+        if 'gene_id' in feature.attributes:
+            gid = feature.attributes['gene_id'][0]
+            try:
+                parent = self.db[gid]
+                return parent.attributes.get('gene_name', [parent.id])[0]
+            except Exception:
+                return gid
+        elif 'Parent' in feature.attributes:
+            parent_id = feature.attributes['Parent'][0]
+            try:
+                parent = self.db[parent_id]
+                return parent.attributes.get('gene_name', [parent.id])[0]
+            except Exception:
+                return parent_id
+        else:
+            # Fallback: try to extract gene_name from feature attributes
+            return feature.attributes.get('gene_name', [feature.id])[0] if hasattr(feature, 'attributes') else feature.id
+
+    def _lookup_feature_by_id(self, name_or_id):
+        # Try direct DB lookup by ID. Returns (feature, resolved_name) or (None, original_id).
+        try:
+            feat = self.db[name_or_id]
+            resolved = self._get_parent_gene_symbol(feat)
+            return feat, resolved
+        except Exception:
+            return None, name_or_id
+
+    def _fallback_gene_lookup(self, name_or_id):
+        # Last resort: search for a gene feature with matching ID.
+        try:
+            genes = list(self.db.features_of_type('gene', id=name_or_id))
+            if genes:
+                return genes[0].attributes.get('gene_name', [genes[0].id])[0]
+        except Exception:
+            pass
+        return name_or_id
+
     def resolve_gene_name(self, name_or_id):
-        # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene_name when possible.
-        # If `name_or_id` is already a gene symbol or cannot be resolved, return it unchanged.
+        # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible.
         if not name_or_id:
             return name_or_id
-        # quick cache hit
+        # Quick cache hit
         if name_or_id in self._resolved_name_cache:
             return self._resolved_name_cache[name_or_id]
-        # if looks like an Ensembl or RP11 identifier, try to resolve via genedb
+        # Try direct lookup first
         resolved = name_or_id
         try:
-            # Try direct lookup by id
-            try:
-                feat = self.db[name_or_id]
-            except Exception:
-                feat = None
-            if feat is not None:
-                # If it's a gene, prefer gene_name attribute
-                if feat.featuretype == 'gene':
-                    resolved = feat.attributes.get('gene_name', [feat.id])[0]
-                else:
-                    # For transcript or other features, try to get parent gene id
-                    if 'gene_id' in feat.attributes:
-                        gid = feat.attributes['gene_id'][0]
-                        try:
-                            g = self.db[gid]
-                            resolved = g.attributes.get('gene_name', [g.id])[0]
-                        except Exception:
-                            resolved = gid
-                    elif 'Parent' in feat.attributes:
-                        gid = feat.attributes['Parent'][0]
-                        try:
-                            g = self.db[gid]
-                            resolved = g.attributes.get('gene_name', [g.id])[0]
-                        except Exception:
-                            resolved = gid
-                    else:
-                        # fallback to feature id
-                        resolved = feat.attributes.get('gene_name', [feat.id])[0] if hasattr(feat, 'attributes') else feat.id
-            else:
-                # As a last resort, try to find a gene feature whose id equals the provided id
-                try:
-                    genes = list(self.db.features_of_type('gene', id=name_or_id))
-                    if genes:
-                        resolved = genes[0].attributes.get('gene_name', [genes[0].id])[0]
-                except Exception:
-                    pass
+            feat, resolved = self._lookup_feature_by_id(name_or_id)
+            if feat is None:
+                # If direct lookup failed, try fallback
+                resolved = self._fallback_gene_lookup(name_or_id)
         except Exception:
             resolved = name_or_id
-        # cache and return
+        # Cache and return
         self._resolved_name_cache[name_or_id] = resolved
         return resolved
 
@@ -195,125 +205,129 @@ class FusionDetector:
             return gene_name
         return Antisense_suffix.sub('', gene_name)
 
-    def normalize_and_resolve_gene_name(self, chrom, pos, original_name, window=500):
-        # Normalize gene name: strip antisense suffixes and try to find parent gene
-        if not original_name:
-            return original_name
-        # If has antisense suffix, try to find the parent gene
-        if self.has_antisense_suffix(original_name):
-            stripped = self.strip_antisense_suffix(original_name)
-            # Try to find parent gene without the suffix nearby
-            try:
-                # Use interval tree if available
-                if self.interval_index is not None:
-                    genes = self.interval_index.get_genes_at(chrom, pos, window=window)
-                else:
-                    start = max(1, pos - window)
-                    end = pos + window
-                    genes = list(self.db.region(region=(chrom, start, end), featuretype='gene'))
-                for g in genes:
-                    gene_name = g.attributes.get('gene_name', [g.id])[0]
-                    if gene_name and gene_name.upper() == stripped.upper():
-                        return gene_name
-            except Exception:
-                pass
-            # If we can't find parent, return the stripped version
-            return stripped
-        return original_name
+    def _lookup_gene_by_name(self, gene_name, chrom, pos):
+        # Lookup mode: find gene feature by name at genomic position.
+        # Returns (feature, gstart, gend) or (None, None, None) on failure.
+        try:
+            gene_features = list(self.db.region(
+                region=(chrom, max(1, pos - 500), pos + 500),
+                featuretype="gene"
+            ))
+            if not gene_features:
+                return None, None, None
+            # Find gene by name
+            g = None
+            for gf in gene_features:
+                attrs = getattr(gf, "attributes", {}) or {}
+                gname = attrs.get("gene_name", [getattr(gf, "id", None)])[0]
+                if gname == gene_name:
+                    g = gf
+                    break
+            if not g:
+                # Fallback to closest gene
+                g = gene_features[0]
+            gstart = int(g.start)
+            gend = int(g.end)
+            return g, gstart, gend
+        except Exception as e:
+            logger.debug(f"Error looking up gene {gene_name} at {chrom}:{pos}: {e}")
+            return None, None, None
 
-    def _compute_gene_score(self, target, pos, chrom=None, exon_min_dist=None, 
-                            boundary_min_dist=None, exonic_hit=None, body_dist=None, 
-                            gstart=None, gend=None):
-        # Determine mode: lookup or pre-computed
-        if isinstance(target, str):
-            # Lookup mode: target is a gene name string
-            gene_name = target
-            if chrom is None:
-                raise ValueError("chrom required when target is a gene name")
-            try:
-                gene_features = list(self.db.region(
-                    region=(chrom, max(1, pos - 500), pos + 500),
-                    featuretype="gene"
-                ))
-                if not gene_features:
-                    return 0.0
-                # Find gene by name
-                g = None
-                for gf in gene_features:
-                    attrs = getattr(gf, "attributes", {}) or {}
-                    gname = attrs.get("gene_name", [getattr(gf, "id", None)])[0]
-                    if gname == gene_name:
-                        g = gf
-                        break
-                if not g:
-                    # Fallback to closest gene
-                    g = gene_features[0]
-                gstart = int(g.start)
-                gend = int(g.end)
-                # Compute distance metrics (use cached exons)
-                exons = self._get_cached_exons(g)
-                exonic_hit = any(es <= pos <= ee for es, ee in exons)
-                distances = []
-                for es, ee in exons:
-                    distances.append(abs(pos - es))
-                    distances.append(abs(pos - ee))
-                exon_min_dist = min(distances) if distances else None
-                boundary_min_dist = exon_min_dist  # Same metric, used with different thresholds
-                body_dist = 0
-                if pos < gstart:
-                    body_dist = gstart - pos
-                elif pos > gend:
-                    body_dist = pos - gend
-            except Exception as e:
-                logger.debug(f"Error scoring gene {gene_name} at {chrom}:{pos}: {e}")
-                return 0.0
-        else:
-            # Pre-computed mode: target is a gene feature object
-            g = target
-            if gstart is None or gend is None:
-                raise ValueError("gstart and gend required for pre-computed mode")
-        # Compute score from metrics
-        attrs = getattr(g, "attributes", {}) or {}
-        gtype = (attrs.get("gene_type", [None])[0]
-                or attrs.get("gene_biotype", [None])[0]
-                or attrs.get("transcript_biotype", [None])[0])
+    def _compute_exonic_metrics(self, g, pos):
+        # Compute exon-based distance metrics.
+        try:
+            exons = self._get_cached_exons(g)
+            gstart = int(getattr(g, "start", 0))
+            gend = int(getattr(g, "end", 0))
+            # Determine if position is inside an exon
+            exonic_hit = any(es <= pos <= ee for es, ee in exons)
+            # Compute distances to exon boundaries
+            distances = []
+            for es, ee in exons:
+                distances.append(abs(pos - es))
+                distances.append(abs(pos - ee))
+            exon_min_dist = min(distances) if distances else None
+            boundary_min_dist = exon_min_dist  # Same metric, used with different thresholds
+            # Compute body distance (distance to gene boundaries)
+            body_dist = 0
+            if pos < gstart:
+                body_dist = gstart - pos
+            elif pos > gend:
+                body_dist = pos - gend
+            return exonic_hit, exon_min_dist, boundary_min_dist, body_dist, exons
+        except Exception:
+            return False, None, None, 0, []
+
+    def _score_hard_evidence(self, pos, gstart, gend, exonic_hit, boundary_min_dist, exon_min_dist):
+        # Score based on proximity and exonic hits (hard evidence).
+        # Returns score contribution from location-based metrics.
         score = 0.0
-        # 1) hard evidence first
         if gstart - 3000 <= pos <= gend + 3000:
             score += 50  # near edge bonus
         if exonic_hit:
             score += 200.0
         if boundary_min_dist is not None:
-            score += max(0.0, 80.0 - min(boundary_min_dist, 200))  # closer boundary → higher
+            score += max(0.0, 80.0 - min(boundary_min_dist, 200))
         if exon_min_dist is not None:
             score += max(0.0, 40.0 - min(exon_min_dist, 500))
-        # 2) gene body proximity (weak)
-        if body_dist:
+        # Body proximity (weak signal)
+        if pos < gstart or pos > gend:
+            body_dist = min(abs(pos - gstart), abs(pos - gend))
             score += max(0.0, 20.0 - min(body_dist, 2000) / 100.0)
+        return score
 
-        # 3) biotype weighting
+    def _score_biotype(self, gtype):
+        # Score based on gene biotype.
         if gtype == "protein_coding":
-            score += 60.0
-        else:
-            # Penalize any pseudogene annotations
-            if gtype and "pseudogene" in gtype.lower():
-                score -= 90.0
-            # Mild penalty for various non-coding/ambiguous biotypes
-            elif gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
-                        "sense_intronic", "sense_overlapping", "transcribed_unprocessed_pseudogene"):
-                score -= 15.0
+            return 60.0
+        # Penalize pseudogenes heavily
+        if gtype and "pseudogene" in gtype.lower():
+            return -90.0
+        # Mild penalty for non-coding/ambiguous biotypes
+        if gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
+                     "sense_intronic", "sense_overlapping", "transcribed_unprocessed_pseudogene"):
+            return -15.0
+        return 0.0
 
-        # 4) gentle preference for longer exon span (more likely real coding gene)
+    def _score_exon_span_bonus(self, g):
+        # Score bonus for longer exon span (more likely real coding gene).
         try:
-            exon_len_sum = 0
             exons = self._get_cached_exons(g)
-            # exons is list of (start, end) tuples
-            for ex_start, ex_end in exons:
-                exon_len_sum += ex_end - ex_start + 1
-            score += min(exon_len_sum / 1e4, 10.0)  # cap at +10
+            exon_len_sum = sum(ee - es + 1 for es, ee in exons)
+            return min(exon_len_sum / 1e4, 10.0)  # cap at +10
         except Exception:
-            pass
+            return 0.0
 
+    def _compute_gene_score(self, target, pos, chrom=None, exon_min_dist=None, 
+                            boundary_min_dist=None, exonic_hit=None, body_dist=None, 
+                            gstart=None, gend=None):
+        # Compute composite gene score incorporating multiple factors.
+        # Determine mode and resolve feature + metrics
+        if isinstance(target, str):
+            # Lookup mode: find gene by name at position
+            gene_name = target
+            if chrom is None:
+                raise ValueError("chrom required when target is a gene name")
+            g, gstart, gend = self._lookup_gene_by_name(gene_name, chrom, pos)
+            if g is None:
+                return 0.0
+            # Compute metrics for this gene
+            exonic_hit, exon_min_dist, boundary_min_dist, body_dist, _ = self._compute_exonic_metrics(g, pos)
+        else:
+            # Pre-computed mode: target is already a feature object
+            g = target
+            if gstart is None or gend is None:
+                raise ValueError("gstart and gend required for pre-computed mode")
+        # Extract biotype
+        attrs = getattr(g, "attributes", {}) or {}
+        gtype = (attrs.get("gene_type", [None])[0]
+                or attrs.get("gene_biotype", [None])[0]
+                or attrs.get("transcript_biotype", [None])[0])
+        # Aggregate scores from all components
+        score = 0.0
+        score += self._score_hard_evidence(pos, gstart, gend, exonic_hit, boundary_min_dist, exon_min_dist)
+        score += self._score_biotype(gtype)
+        score += self._score_exon_span_bonus(g)
         return score
 
     def _get_genes_at(self, chrom, pos, window):
@@ -507,12 +521,12 @@ class FusionDetector:
                 continue
             if left_gene != right_gene:
                 # Check soft-clip orientation consistency
-                if self._is_softclip_orientation_valid(read, clip_side, sa_chr, sa_pos):
-                    self.record_fusion(
-                        left_gene, right_gene, read.query_name,
-                        left_chr, left_pos, sa_chr, right_pos
-                    )
-                    sa_used = True
+                # if self._is_softclip_orientation_valid(read, clip_side, sa_chr, sa_pos):
+                self.record_fusion(
+                    left_gene, right_gene, read.query_name,
+                    left_chr, left_pos, sa_chr, right_pos
+                )
+                sa_used = True
         return sa_used
 
     def detect_softclip(self, read):
@@ -878,8 +892,10 @@ class FusionDetector:
                     min_sa_mapq=min_sa_mapq
                 )
         bam.close()
+        '''
         logger.info(f"Fusion detection complete: processed {processed_reads} reads, found {len(self.fusion_candidates)} fusion keys")
         logger.info(f"Fusion keys detected: {list(self.fusion_candidates.keys())}")
+        '''
 
     def reconstruct_fusion_transcript(self, c1, p1, c2, p2, exon_padding=100):
         # Returns (sequence, left_exons, right_exons) or (None, None, None) on failure.
