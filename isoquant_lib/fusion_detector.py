@@ -585,7 +585,7 @@ class FusionDetector:
         except Exception:
             return ()
 
-    def _is_softclip_orientation_valid(self, read, clip_side, sa_chr, sa_pos):    
+    def _is_softclip_orientation_valid(self, read, clip_side, sa_chr, sa_pos):
         # Returns True if soft-clip direction is consistent with an outward-facing
         # Same chromosome required for directional check
         if read.reference_name != sa_chr:
@@ -623,12 +623,29 @@ class FusionDetector:
         try:
             hits = self._cached_aligner_map(seq)
             for hit in hits:
-                hit_len = (getattr(hit, "r_en", None) - getattr(hit, "r_st", None)) if getattr(hit, "r_en", None) else getattr(hit, "mlen", None) or getattr(hit, "alen", None) or 0
+                hit_len = self._get_hit_length(hit)
                 if hit_len and hit_len >= 50:
                     return hit  # first good hit
             return None
         except Exception:
             return None
+
+    def _get_hit_length(self, hit):
+        # Calculate the aligned length from a hit object.
+        r_en = getattr(hit, "r_en", None)
+        if r_en is not None:
+            r_st = getattr(hit, "r_st", None)
+            return r_en - r_st
+        else:
+            mlen = getattr(hit, "mlen", None)
+            if mlen is not None:
+                return mlen
+            else:
+                alen = getattr(hit, "alen", None)
+                if alen is not None:
+                    return alen
+                else:
+                    return 0
 
     def _safe_gene_token(self, g):
         # Convert None/empty to 'intergenic'
@@ -699,6 +716,8 @@ class FusionDetector:
             logger.debug("Traceback:", exc_info=True)
             # Fallback: if processing fails, keep original behavior minimal (no-op)
             return
+        # After metadata is finalized, consolidate duplicate fusions (swapped partners)
+        self.consolidate_duplicate_fusions()
 
     def cluster_breakpoints(self, bp_counts, window):
         if not bp_counts:
@@ -710,53 +729,10 @@ class FusionDetector:
         for bp_tuple, w in bp_counts.items():
             c1, p1, c2, p2 = bp_tuple
             by_pair[(c1, c2)].append((p1, p2, w))
-        def best_window(items, w):
-            # Sort by p1; we’ll apply a sliding window on p1, and inside it on p2
-            items.sort(key=lambda x: x[0])  # sort by p1
-            best_total = 0
-            best_p1 = 0
-            best_p2 = 0
-            n = len(items)
-            j = 0
-            sum_w = 0
-            # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
-            # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
-            for i in range(n):
-                p1_i, p2_i, wi = items[i]
-                # Expand p1-window
-                sum_w += wi
-                # Shrink from left until p1-range <= w
-                while p1_i - items[j][0] > w:
-                    sum_w -= items[j][2]
-                    j += 1
-                # Now consider only slice items[j:i+1]; build p2-sorted view (small slice)
-                slice_view = items[j:i+1]
-                slice_view.sort(key=lambda x: x[1])  # sort by p2
-                # Secondary sliding window on p2
-                k = 0
-                cur_sum = 0
-                for t in range(len(slice_view)):
-                    cur_sum += slice_view[t][2]
-                    while slice_view[t][1] - slice_view[k][1] > w:
-                        cur_sum -= slice_view[k][2]
-                        k += 1
-                    if cur_sum > best_total:
-                        # Weighted mean p1/p2 for current p2-window [k..t]
-                        s_w = 0
-                        s_p1 = 0
-                        s_p2 = 0
-                        for x in slice_view[k:t+1]:
-                            s_w += x[2]
-                            s_p1 += x[0] * x[2]
-                            s_p2 += x[1] * x[2]
-                        best_total = s_w
-                        best_p1 = s_p1 // s_w
-                        best_p2 = s_p2 // s_w
-            return best_p1, best_p2, best_total
         best_pair = None
         best = (None, None, 0)
         for pair, items in by_pair.items():
-            c_p1, c_p2, total = best_window(items, window)
+            c_p1, c_p2, total = self._best_window_for_breakpoints(items, window)
             if total > best[2]:
                 best_pair = pair
                 best = (c_p1, c_p2, total)
@@ -766,6 +742,141 @@ class FusionDetector:
         (c1, c2) = best_pair
         (p1, p2, total) = best
         return (c1, p1, c2, p2), total
+
+    def _best_window_for_breakpoints(self, items, w):
+        # Find the best weighted window of breakpoints using two-pointer sliding window on both dimensions.
+        # Sort by p1; we'll apply a sliding window on p1, and inside it on p2
+        items.sort(key=lambda x: x[0])  # sort by p1
+        best_total = 0
+        best_p1 = 0
+        best_p2 = 0
+        n = len(items)
+        j = 0
+        sum_w = 0
+        # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
+        # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
+        for i in range(n):
+            p1_i, p2_i, wi = items[i]
+            # Expand p1-window
+            sum_w += wi
+            # Shrink from left until p1-range <= w
+            while p1_i - items[j][0] > w:
+                sum_w -= items[j][2]
+                j += 1
+            # Now consider only slice items[j:i+1]; build p2-sorted view (small slice)
+            slice_view = items[j:i+1]
+            slice_view.sort(key=lambda x: x[1])  # sort by p2
+            # Secondary sliding window on p2
+            k = 0
+            cur_sum = 0
+            for t in range(len(slice_view)):
+                cur_sum += slice_view[t][2]
+                while slice_view[t][1] - slice_view[k][1] > w:
+                    cur_sum -= slice_view[k][2]
+                    k += 1
+                if cur_sum > best_total:
+                    # Weighted mean p1/p2 for current p2-window [k..t]
+                    s_w = 0
+                    s_p1 = 0
+                    s_p2 = 0
+                    for x in slice_view[k:t+1]:
+                        s_w += x[2]
+                        s_p1 += x[0] * x[2]
+                        s_p2 += x[1] * x[2]
+                    best_total = s_w
+                    best_p1 = s_p1 // s_w
+                    best_p2 = s_p2 // s_w
+        return best_p1, best_p2, best_total
+
+    def _compute_canonical_fusion_key(self, left_gene, right_gene):
+        # Compute a canonical fusion key from final gene partners.
+        if not left_gene or not right_gene:
+            return None
+        genes = sorted([left_gene, right_gene])
+        return f"{genes[0]}--{genes[1]}"
+
+    def _find_duplicate_fusion_key(self, canonical_key):
+        # Find if a canonical fusion key already exists in fusion_metadata.
+        for existing_key in self.fusion_metadata.keys():
+            existing_canonical = self._compute_canonical_fusion_key(
+                self.fusion_metadata[existing_key].get("left_gene"),
+                self.fusion_metadata[existing_key].get("right_gene")
+            )
+            if existing_canonical == canonical_key:
+                return existing_key
+        return None
+
+    def _merge_fusion_structures(self, keep_key, discard_key):
+        # Merge all internal structures from discard_key into keep_key atomically.
+        logger.info(f"Consolidating duplicate fusion: '{keep_key}' ← '{discard_key}'")
+        # Merge fusion_candidates: union of read sets
+        if discard_key in self.fusion_candidates and keep_key in self.fusion_candidates:
+            self.fusion_candidates[keep_key].update(self.fusion_candidates[discard_key])
+        elif discard_key in self.fusion_candidates:
+            self.fusion_candidates[keep_key] = self.fusion_candidates[discard_key].copy()
+        # Merge fusion_breakpoints: sum of breakpoint counts
+        if discard_key in self.fusion_breakpoints and keep_key in self.fusion_breakpoints:
+            for bp, count in self.fusion_breakpoints[discard_key].items():
+                self.fusion_breakpoints[keep_key][bp] = self.fusion_breakpoints[keep_key].get(bp, 0) + count
+        elif discard_key in self.fusion_breakpoints:
+            self.fusion_breakpoints[keep_key] = self.fusion_breakpoints[discard_key].copy()
+        # Merge fusion_metadata: combine supporting reads and update support count
+        if discard_key in self.fusion_metadata and keep_key in self.fusion_metadata:
+            discard_meta = self.fusion_metadata[discard_key]
+            keep_meta = self.fusion_metadata[keep_key]
+            if "supporting_reads" in discard_meta:
+                keep_meta["supporting_reads"].update(discard_meta["supporting_reads"])
+            keep_meta["support"] = len(keep_meta.get("supporting_reads", set()))
+        elif discard_key in self.fusion_metadata:
+            self.fusion_metadata[keep_key] = self.fusion_metadata[discard_key]
+        # Merge fusion_assigned_pairs: combine read-to-gene-pair mappings
+        if discard_key in self.fusion_assigned_pairs and keep_key in self.fusion_assigned_pairs:
+            self.fusion_assigned_pairs[keep_key].update(self.fusion_assigned_pairs[discard_key])
+        elif discard_key in self.fusion_assigned_pairs:
+            self.fusion_assigned_pairs[keep_key] = self.fusion_assigned_pairs[discard_key].copy()
+        # Remove discard_key from all structures
+        self.fusion_candidates.pop(discard_key, None)
+        self.fusion_breakpoints.pop(discard_key, None)
+        self.fusion_metadata.pop(discard_key, None)
+        self.fusion_assigned_pairs.pop(discard_key, None)
+
+    def consolidate_duplicate_fusions(self):
+        """
+        Consolidate duplicate fusions that differ only by swapped partner order.
+        This handles cases where A--B and B--A are kept as separate fusions.
+        Computes canonical keys and merges duplicates atomically across all structures.
+        """
+        # Map canonical key → original fusion key found in metadata
+        canonical_to_original = {}
+        fusions_to_merge = {}  # canonical_key → list of original keys with this canonical
+        # First pass: identify all canonical keys and find duplicates
+        for fusion_key in list(self.fusion_metadata.keys()):
+            meta = self.fusion_metadata[fusion_key]
+            left_gene = meta.get("left_gene")
+            right_gene = meta.get("right_gene")
+            if not left_gene or not right_gene:
+                # Skip fusions without both genes
+                continue
+            canonical_key = self._compute_canonical_fusion_key(left_gene, right_gene)
+            if canonical_key is None:
+                continue
+            if canonical_key not in canonical_to_original:
+                canonical_to_original[canonical_key] = fusion_key
+                fusions_to_merge[canonical_key] = [fusion_key]
+            else:
+                fusions_to_merge[canonical_key].append(fusion_key)
+        # Second pass: merge all duplicates with same canonical key
+        merged_count = 0
+        for canonical_key, fusion_keys in fusions_to_merge.items():
+            if len(fusion_keys) <= 1:
+                continue  # No duplicates
+            # Keep first, merge all others into it
+            keep_key = fusion_keys[0]
+            for discard_key in fusion_keys[1:]:
+                self._merge_fusion_structures(keep_key, discard_key)
+                merged_count += 1
+        if merged_count > 0:
+            logger.info(f"Consolidated {merged_count} duplicate fusion(s) (swapped partners)")
 
     def parse_sa_entries(self, sa_tag):
         entries = []
