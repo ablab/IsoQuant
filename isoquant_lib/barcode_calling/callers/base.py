@@ -11,7 +11,7 @@ Provides result containers for barcode calling across different platforms.
 """
 
 from collections import defaultdict
-from typing import List, Optional, Dict, Iterable
+from typing import List, Optional, Dict, Iterable, Union
 
 
 def increase_if_valid(val: Optional[int], delta: int) -> Optional[int]:
@@ -253,6 +253,20 @@ class TSOBarcodeDetectionResult(LinkerBarcodeDetectionResult):
             attr.append("TSO detected")
         return attr
 
+    def get_fasta_segment_start(self) -> int:
+        """Start position of the FASTA segment to extract for this molecule."""
+        return max(0, self.primer - 25, self.polyT - 75)
+
+    def get_fasta_segment_end(self, seq_len: int) -> int:
+        """End position of the FASTA segment to extract for this molecule."""
+        if self.tso5 == -1:
+            return seq_len
+        return min(seq_len, self.tso5 + 25)
+
+    def get_tso_position(self) -> int:
+        """Return TSO position for use in require_tso checks."""
+        return self.tso5
+
     @staticmethod
     def header() -> str:
         """Static header for class-level access."""
@@ -299,6 +313,43 @@ class TenXBarcodeDetectionResult(BarcodeDetectionResult):
         return BarcodeDetectionResult.header() + "\tpolyT_start\tR1_end"
 
 
+class TenXSplitBarcodeDetectionResult(TenXBarcodeDetectionResult):
+    """Detection result for 10x split mode — includes TSO position for molecule boundary."""
+
+    def __init__(self, read_id: str, barcode: str = BarcodeDetectionResult.NOSEQ,
+                 UMI: str = BarcodeDetectionResult.NOSEQ,
+                 BC_score: int = -1, UMI_good: bool = False, strand: str = ".",
+                 polyT: int = -1, r1: int = -1, tso: int = -1):
+        TenXBarcodeDetectionResult.__init__(self, read_id, barcode, UMI, BC_score, UMI_good, strand, polyT, r1)
+        self.tso: int = tso
+
+    def update_coordinates(self, delta: int) -> None:
+        TenXBarcodeDetectionResult.update_coordinates(self, delta)
+        if self.tso != -1:
+            self.tso += delta
+
+    def get_fasta_segment_start(self) -> int:
+        """Start position of FASTA segment: just before R1 linker."""
+        return max(0, self.r1 - 10) if self.r1 != -1 else 0
+
+    def get_fasta_segment_end(self, seq_len: int) -> int:
+        """End position of FASTA segment: just past the TSO, or end of read."""
+        if self.tso == -1:
+            return seq_len
+        return min(seq_len, self.tso + 35)
+
+    def get_tso_position(self) -> int:
+        """Return TSO position for use in require_tso checks."""
+        return self.tso
+
+    def __str__(self) -> str:
+        return TenXBarcodeDetectionResult.__str__(self) + "\t%d" % self.tso
+
+    @staticmethod
+    def header() -> str:
+        return TenXBarcodeDetectionResult.header() + "\ttso_start"
+
+
 class SplittingBarcodeDetectionResult:
     """Result container for read splitting modes (multiple barcodes per read)."""
 
@@ -307,9 +358,9 @@ class SplittingBarcodeDetectionResult:
     def __init__(self, read_id: str):
         self.read_id: str = read_id
         self.strand: str = "."  # For protocol compatibility
-        self.detected_patterns: List[TSOBarcodeDetectionResult] = []
+        self.detected_patterns: List[Union[TSOBarcodeDetectionResult, TenXSplitBarcodeDetectionResult]] = []
 
-    def append(self, barcode_detection_result: TSOBarcodeDetectionResult) -> None:
+    def append(self, barcode_detection_result: Union[TSOBarcodeDetectionResult, TenXSplitBarcodeDetectionResult]) -> None:
         self.detected_patterns.append(barcode_detection_result)
 
     def empty(self) -> bool:
