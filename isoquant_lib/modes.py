@@ -12,6 +12,8 @@ class IsoQuantMode(Enum):
     bulk = 1
     tenX_v3 = 2
     tenX_v2 = 22
+    tenX_v3_split = 23
+    tenX_v2_split = 24
     curio = 3
     stereoseq_nosplit = 4
     stereoseq = 5
@@ -22,6 +24,8 @@ class IsoQuantMode(Enum):
     def needs_barcode_calling(self):
         return self in [IsoQuantMode.tenX_v3,
                         IsoQuantMode.tenX_v2,
+                        IsoQuantMode.tenX_v3_split,
+                        IsoQuantMode.tenX_v2_split,
                         IsoQuantMode.curio,
                         IsoQuantMode.stereoseq_nosplit,
                         IsoQuantMode.stereoseq,
@@ -32,6 +36,8 @@ class IsoQuantMode(Enum):
     def needs_pcr_deduplication(self):
         return self in [IsoQuantMode.tenX_v3,
                         IsoQuantMode.tenX_v2,
+                        IsoQuantMode.tenX_v3_split,
+                        IsoQuantMode.tenX_v2_split,
                         IsoQuantMode.curio,
                         IsoQuantMode.stereoseq_nosplit,
                         IsoQuantMode.stereoseq,
@@ -40,7 +46,9 @@ class IsoQuantMode(Enum):
                         IsoQuantMode.custom_sc]
 
     def produces_new_fasta(self):
-        return self in [IsoQuantMode.stereoseq]
+        return self in [IsoQuantMode.stereoseq,
+                        IsoQuantMode.tenX_v3_split,
+                        IsoQuantMode.tenX_v2_split]
 
     def needs_barcode_iterator(self):
         return self in [IsoQuantMode.stereoseq_nosplit, IsoQuantMode.stereoseq]
