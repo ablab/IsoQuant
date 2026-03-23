@@ -469,10 +469,11 @@ See more information [here](output.md#default-grouped-counts-in-linear-format).
 
 `--large_output`
     Controls which large per-read output files are generated.
-    By default, only `read_assignments` and `allinfo` (for single-cell/spatial modes) are generated.
+    By default, only `read_info` is generated — a unified format containing assignments, corrected exon coordinates, and barcode/UMI data.
     Accepts a space-separated list of the following values:
 
-* `read_assignments` - TSV file with read-to-isoform assignments (`*.read_assignments.tsv`);
+* `read_info` - unified per-read information file (`*.read_info.tsv`, default);
+* `read_assignments` - legacy TSV file with read-to-isoform assignments (`*.read_assignments.tsv`);
 * `corrected_bed` - BED file with corrected read exon coordinates (`*.corrected_reads.bed`);
 * `read2transcripts` - TSV file mapping reads to discovered transcript models (`*.transcript_model_reads.tsv`);
 * `allinfo` - detailed UMI filtering information for single-cell/spatial modes (`*.allinfo`);
@@ -480,14 +481,23 @@ See more information [here](output.md#default-grouped-counts-in-linear-format).
 
 Example usage:
 ```bash
+# Generate read_info (default) plus legacy read_assignments
+isoquant.py --large_output read_info read_assignments ...
+
 # Generate all large output files
-isoquant.py --large_output read_assignments corrected_bed read2transcripts allinfo ...
+isoquant.py --large_output read_info read_assignments corrected_bed read2transcripts allinfo ...
 
 # Disable all large output files
 isoquant.py --large_output none ...
 
-# Default behavior (read_assignments and allinfo only)
+# Default behavior (read_info only)
 isoquant.py ...
+```
+
+The `read_info.tsv` format can be converted to legacy formats using the conversion script:
+```bash
+python -m isoquant_lib.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
+python -m isoquant_lib.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
 ```
 
 Note: large output files are gzipped by default unless `--no_gzip` is specified.

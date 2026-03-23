@@ -257,7 +257,14 @@ def     run_assignment_quality(args, config_dict, baselines=None):
 
     label = config_dict["label"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
-    output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
+    # Try read_info (new default), then fall back to read_assignments (legacy)
+    output_tsv = os.path.join(output_folder, "%s/%s.read_info.tsv" % (label, label))
+    tool_preset = "isoquant"
+    if not os.path.exists(output_tsv):
+        output_tsv = os.path.join(output_folder, "%s/%s.read_info.tsv.gz" % (label, label))
+    if not os.path.exists(output_tsv):
+        output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv" % (label, label))
+        tool_preset = "isoquant_legacy"
     if not os.path.exists(output_tsv):
         output_tsv = os.path.join(output_folder, "%s/%s.read_assignments.tsv.gz" % (label, label))
 
@@ -275,7 +282,7 @@ def     run_assignment_quality(args, config_dict, baselines=None):
     quality_report = os.path.join(output_folder, "report.tsv")
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/assess_assignment_quality.py"),
                        "-o", quality_report, "--gene_db", genedb, "--tsv", output_tsv,
-                       "--mapping", bam, "--fasta", reads]
+                       "--tool", tool_preset, "--mapping", bam, "--fasta", reads]
 
     if "qa_options" in config_dict:
         log.info("Appending additional options: %s" % config_dict["qa_options"])
