@@ -501,8 +501,7 @@ class DatasetProcessor:
 
     def finalize(self, aggregator):
         if aggregator.read_info_printer:
-            logger.info("Read info is stored in " + aggregator.read_info_printer.output_file_name +
-                        (".gz" if self.args.gzipped else ""))
+            logger.info("Read info is stored in " + aggregator.read_info_printer.output_file_name)
         if aggregator.basic_printer:
             logger.info("Read assignments are stored in " + aggregator.basic_printer.output_file_name +
                         (".gz" if self.args.gzipped else ""))
