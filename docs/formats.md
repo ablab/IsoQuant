@@ -150,7 +150,7 @@ Coordinate lists use `;%;` as the element separator.
 
 An accompanying `SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` file contains summary statistics of the UMI filtering process.
 
-## Exon and intron count format
+## Exon and splice junction count format
 
 Tab-separated values, the columns are:
 
