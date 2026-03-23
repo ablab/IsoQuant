@@ -12,8 +12,9 @@ splice site correction and abundance quantification for reference genes/transcri
 
 _Will be produced only if a reference gene annotation is provided._
 
-* `SAMPLE_ID.read_assignments.tsv.gz` - TSV file with read to isoform assignments (gzipped by default);
-* `SAMPLE_ID.corrected_reads.bed.gz` - BED file with corrected read alignments (gzipped by default);
+* `SAMPLE_ID.read_info.tsv.gz` - TSV file with unified per-read information including assignments, exon coordinates, and barcode/UMI data (default output, gzipped by default);
+* `SAMPLE_ID.read_assignments.tsv.gz` - legacy TSV file with read to isoform assignments (only with `--large_output read_assignments`);
+* `SAMPLE_ID.corrected_reads.bed.gz` - BED file with corrected read alignments (only with `--large_output corrected_bed`);
 * `SAMPLE_ID.transcript_counts.tsv` - TSV file with raw read counts for reference transcript;
 * `SAMPLE_ID.gene_counts.tsv` - TSV file with raw read counts for reference genes;
 * `SAMPLE_ID.transcript_tpm.tsv` - TSV file with reference transcript expression in TPM;

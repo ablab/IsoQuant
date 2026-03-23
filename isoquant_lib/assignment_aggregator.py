@@ -19,6 +19,7 @@ from .assignment_io import (
     IOSupport,
     BEDPrinter,
     ReadAssignmentCompositePrinter,
+    ReadInfoPrinter,
     SqantiTSVPrinter,
     BasicTSVAssignmentPrinter,
 )
@@ -54,6 +55,12 @@ class ReadAssignmentAggregator:
                                                     print_corrected=True,
                                                     gzipped=gzipped)
             printer_list.append(self.corrected_bed_printer)
+        self.read_info_printer = None
+        if self.args.genedb and large_output_enabled(self.args, "read_info"):
+            read_info_path = sample.get_read_info_tsv_file(chr_id) if chr_id else sample.out_read_info_tsv
+            self.read_info_printer = ReadInfoPrinter(read_info_path, self.args, self.io_support,
+                                                     additional_header=self.common_header, gzipped=gzipped)
+            printer_list.append(self.read_info_printer)
         self.basic_printer = None
         if self.args.genedb and large_output_enabled(self.args, "read_assignments"):
             assigned_tsv_path = sample.get_assigned_tsv_file(chr_id) if chr_id else sample.out_assigned_tsv

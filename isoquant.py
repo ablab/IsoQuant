@@ -53,7 +53,7 @@ from isoquant_lib.common import setup_worker_logging, _get_log_params
 logger = logging.getLogger('IsoQuant')
 
 # Large output file types for --large_output option
-LARGE_OUTPUT_TYPES = ["read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
+LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
 
 
 def bool_str(s):
@@ -275,9 +275,9 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(output_setup_args_group, "--no_gzip", help="do not gzip large output files", dest="gzipped",
                                    action='store_false', default=True)
     add_additional_option_to_group(output_setup_args_group, "--large_output", nargs='*', type=str,
-                                   default=["read_assignments", "allinfo"],
+                                   default=["read_info"],
                                    help="large output files to generate: " + ", ".join(LARGE_OUTPUT_TYPES) +
-                                        " (default: read_assignments allinfo)")
+                                        " (default: read_info)")
     add_additional_option_to_group(output_setup_args_group, "--normalization_method", type=str, choices=[e.name for e in NormalizationMethod],
                                    help="TPM normalization method: simple - conventional normalization using all counted reads;"
                                         "usable_reads - includes all assigned reads;"
