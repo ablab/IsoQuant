@@ -150,7 +150,7 @@ original file name, and barcode property (e.g. cell type).
     Report whether read or constructed transcript model contains non-canonical splice junction (requires more time).
 
 `--count_exons`
-    Perform exon and intron counting in addition to gene and transcript counting.
+    Perform exon and splice junction counting in addition to gene and transcript counting.
     Will take effect only when reference annotation is provided.
 
 `--bam_tags`
