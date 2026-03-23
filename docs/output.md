@@ -25,10 +25,14 @@ If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://gi
 
 * `SAMPLE_ID.novel_vs_known.SQANTI-like.tsv` - discovered novel transcripts vs reference transcripts (similar, but not identical to SQANTI `classification.txt`);
 
-If `--count_exons` is set, exon and intron counts will be produced:
+If `--count_exons` is set, exon and splice junction counts will be produced:
 
 * `SAMPLE_ID.exon_counts.tsv` - reference exon inclusion/exclusion read counts;
-* `SAMPLE_ID.splice_junction_counts.tsv` - reference intron inclusion/exclusion read counts;
+* `SAMPLE_ID.splice_junction_counts.tsv` - reference splice junction inclusion/exclusion read counts;
+
+If `--count_intron_retentions` is set, intron retention counts will be produced:
+
+* `SAMPLE_ID.intron_retention_counts.tsv` - intron retention event counts per reference intron (same format as exon/splice junction counts);
 
 If `--read_group` is set or multiple files are provided, the per-group expression values for reference features will be also computed:
 
