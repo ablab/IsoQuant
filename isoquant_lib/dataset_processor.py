@@ -500,6 +500,9 @@ class DatasetProcessor:
                 os.remove(f)
 
     def finalize(self, aggregator):
+        if aggregator.read_info_printer:
+            logger.info("Read info is stored in " + aggregator.read_info_printer.output_file_name +
+                        (".gz" if self.args.gzipped else ""))
         if aggregator.basic_printer:
             logger.info("Read assignments are stored in " + aggregator.basic_printer.output_file_name +
                         (".gz" if self.args.gzipped else ""))
@@ -727,6 +730,9 @@ class DatasetProcessor:
         return total_assignments, polya_assignments, all_read_groups
 
     def merge_assignments(self, sample, aggregator, chr_ids):
+        if self.args.genedb and aggregator.read_info_printer:
+            merge_files(sample.out_read_info_tsv, sample.prefix, chr_ids,
+                        aggregator.read_info_printer.output_file, copy_header=False, header_lines=3)
         if self.args.genedb and aggregator.basic_printer:
             merge_files(sample.out_assigned_tsv, sample.prefix, chr_ids,
                         aggregator.basic_printer.output_file, copy_header=False, header_lines=3)

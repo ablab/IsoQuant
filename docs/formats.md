@@ -2,7 +2,38 @@
 
 Although most output files include headers that describe the data, a brief explanation of the output files is provided below.
 
-## Read to isoform assignment
+## Read info (default output)
+
+The default per-read output format. Tab-separated values, the columns are:
+
+* `read_id` - read id;
+* `chr` - chromosome id;
+* `strand` - strand of the assigned isoform (not to be confused with read mapping strand);
+* `gene_id` - gene id to which the read was assigned;
+* `gene_assignment_type` - gene-level assignment type;
+* `isoform_id` - isoform id to which the read was assigned;
+* `isoform_assignment_type` - transcript-level assignment type (same values as `assignment_type` below);
+* `assignment_events` - list of detected events (same format as below);
+* `classification` - SQANTI-like classification: `full_splice_match`, `incomplete_splice_match`, `novel_in_catalog`, `novel_not_in_catalog`, `genic`, `antisense`, `fusion`, `intergenic`, `genic_intron`;
+* `exons` - corrected exon coordinates (1-based, Illumina-corrected when available);
+* `polyA` - `True` if poly-A tail is detected, `False` otherwise;
+* `CAGE` - `True`/`False` if CAGE data is provided, `.` otherwise;
+* `canonical` - `True` if all introns are canonical, `Unspliced` for mono-exon reads, `.` if `--check_canonical` is not set;
+* `barcode` - cell barcode (`.` in bulk mode);
+* `umi` - UMI sequence (`.` in bulk mode);
+* `cell_type` - cell type or spot ID (`.` in bulk mode);
+* `groups` - comma-separated read group IDs;
+* `additional` - remaining key=value pairs (BAM tags, transcript_type, etc.).
+
+A single read may occur more than once if assigned ambiguously.
+
+To convert `read_info.tsv` to legacy formats, use the conversion script:
+```
+python -m isoquant_lib.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
+python -m isoquant_lib.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
+```
+
+## Read to isoform assignment (legacy)
 
 Tab-separated values, the columns are:
 

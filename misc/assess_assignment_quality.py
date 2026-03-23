@@ -119,7 +119,8 @@ class MappingData:
 class AssignmentData:
     # read id column, isoform id column, assignment type column
     ParseParams = namedtuple("ParseParams", ("read_id_column", "isoform_id_column", "assignment_type_column"))
-    PRESETS = {'isoquant': ParseParams(0, 3, 5), 'talon': ParseParams(0, 12, 16), 'sqanti': ParseParams(0, 7, 5)}
+    PRESETS = {'isoquant': ParseParams(0, 5, 6), 'isoquant_legacy': ParseParams(0, 3, 5),
+                'talon': ParseParams(0, 12, 16), 'sqanti': ParseParams(0, 7, 5)}
     UNIQUE_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "Known", "ISM", "full-splice_match", "incomplete-splice_match"}
     AMB_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous"}
     ALL_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous", "inconsistent"}
@@ -319,8 +320,8 @@ def parse_args():
     parser.add_argument("--mapping", "-m", type=str, help="mapped sequences (SAM or BAM format)") ## SQANTI2 output
     parser.add_argument("--tsv", "-t", type=str, nargs='+', help="assigned isoforms, max number of files to compare: 2")
     parser.add_argument("--gene_db", "-g", type=str, help="gene database")
-    parser.add_argument("--tool", type=str, choices=['isoquant', 'talon', 'sqanti'], default='isoquant',
-                        help="tool used for generating TSV (isoquant, talon, sqanti)")
+    parser.add_argument("--tool", type=str, choices=['isoquant', 'isoquant_legacy', 'talon', 'sqanti'], default='isoquant',
+                        help="tool used for generating TSV (isoquant for read_info format, isoquant_legacy for read_assignments, talon, sqanti)")
     parser.add_argument("--isoform_id_index", type=int, default=0,
                         help="read id is split by underscore, indicate where isoform id is stored")
 

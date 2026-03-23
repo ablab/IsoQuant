@@ -338,6 +338,132 @@ class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
             self.output_file.write(line)
 
 
+class ReadInfoPrinter(TextFileAssignmentPrinter):
+    """Prints unified read_info format with promoted fields and corrected exon coordinates."""
+
+    HEADER = ("read_id\tchr\tstrand\tgene_id\tgene_assignment_type\tisoform_id\tisoform_assignment_type"
+              "\tassignment_events\tclassification\texons\tpolyA\tCAGE\tcanonical"
+              "\tbarcode\tumi\tcell_type\tgroups\tadditional\n")
+
+    def __init__(self, output_file_name: str, params, io_support, additional_header: str = "", gzipped: bool = False):
+        TextFileAssignmentPrinter.__init__(self, output_file_name, params, gzipped=gzipped)
+        self.output_file.write(additional_header)
+        self.output_file.write(self.HEADER)
+        self.io_support = io_support
+
+    def _get_exons_str(self, read_assignment) -> str:
+        exon_blocks = read_assignment.corrected_exons if read_assignment.corrected_exons else read_assignment.exons
+        if exon_blocks is None:
+            return "."
+        return range_list_to_str(exon_blocks)
+
+    def _get_canonical(self, read_introns, read_assignment, strand: str) -> str:
+        if not self.params.check_canonical or not read_assignment.gene_info or not read_assignment.gene_info.reference_region:
+            return "."
+        if len(read_introns) == 0:
+            return "Unspliced"
+        return str(self.io_support.check_sites_are_canonical(read_introns, read_assignment.gene_info, strand))
+
+    def _get_barcode(self, read_assignment) -> str:
+        b = read_assignment.barcode
+        return b if b else "."
+
+    def _get_umi(self, read_assignment) -> str:
+        u = read_assignment.umi
+        return u if u else "."
+
+    def _get_cell_type(self, read_assignment) -> str:
+        return read_assignment.additional_attributes.get('cell_type', '.')
+
+    def _get_additional(self, read_assignment, exclude_keys: set) -> str:
+        parts = []
+        for attr, val in read_assignment.additional_attributes.items():
+            if attr not in exclude_keys:
+                parts.append("%s=%s;" % (attr, val))
+        return " ".join(parts) if parts else "*"
+
+    def _write_unmatched(self, read_assignment, classification: str = "."):
+        read_introns = junctions_from_blocks(read_assignment.exons) if read_assignment.exons else []
+        strand = read_assignment.strand
+        fields = [
+            read_assignment.read_id,
+            read_assignment.chr_id,
+            strand,
+            ".",                                                        # gene_id
+            read_assignment.gene_assignment_type.name,                  # gene_assignment_type
+            ".",                                                        # isoform_id
+            read_assignment.assignment_type.name,                       # isoform_assignment_type
+            ".",                                                        # assignment_events
+            classification,                                             # classification
+            self._get_exons_str(read_assignment),                       # exons
+            str(read_assignment.polyA_found),                           # polyA
+            str(read_assignment.cage_found) if self.params.cage is not None else ".",  # CAGE
+            self._get_canonical(read_introns, read_assignment, strand), # canonical
+            self._get_barcode(read_assignment),                         # barcode
+            self._get_umi(read_assignment),                             # umi
+            self._get_cell_type(read_assignment),                       # cell_type
+            ",".join(read_assignment.read_group) if read_assignment.read_group else ".",  # groups
+            self._get_additional(read_assignment, {'cell_type'}),       # additional
+        ]
+        self.output_file.write("\t".join(fields) + "\n")
+
+    def add_read_info(self, read_assignment):
+        if read_assignment is None:
+            return
+        if self.assignment_checker is None or not self.assignment_checker.check(read_assignment):
+            return
+        if read_assignment.assignment_type is None:
+            logger.warning("Empty assignment read id %s" % read_assignment.read_id)
+            return
+        if read_assignment.exons is None:
+            logger.warning("Empty combined profile, read id %s, assignment type %s" %
+                           (read_assignment.read_id, str(read_assignment.assignment_type)))
+            return
+
+        read_exons = read_assignment.exons
+        read_introns = junctions_from_blocks(read_exons)
+
+        if not read_assignment.isoform_matches:
+            self._write_unmatched(read_assignment)
+            return
+
+        for m in read_assignment.isoform_matches:
+            if m.assigned_transcript is None:
+                self._write_unmatched(read_assignment, m.match_classification.name)
+                continue
+
+            isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
+            event_string = ",".join([match_subtype_to_str_with_additional_info(
+                x, read_assignment.strand, read_introns, isoform_introns)
+                for x in m.match_subclassifications])
+            strand = read_assignment.strand
+
+            cage_str = str(read_assignment.cage_found) if self.params.cage is not None else "."
+            canonical_str = self._get_canonical(read_introns, read_assignment, strand)
+
+            fields = [
+                read_assignment.read_id,
+                read_assignment.chr_id,
+                strand,
+                m.assigned_gene,                                        # gene_id
+                read_assignment.gene_assignment_type.name,              # gene_assignment_type
+                m.assigned_transcript,                                  # isoform_id
+                read_assignment.assignment_type.name,                   # isoform_assignment_type
+                event_string,                                           # assignment_events
+                m.match_classification.name,                            # classification
+                self._get_exons_str(read_assignment),                   # exons
+                str(read_assignment.polyA_found),                       # polyA
+                cage_str,                                               # CAGE
+                canonical_str,                                          # canonical
+                self._get_barcode(read_assignment),                     # barcode
+                self._get_umi(read_assignment),                         # umi
+                self._get_cell_type(read_assignment),                   # cell_type
+                ",".join(read_assignment.read_group) if read_assignment.read_group else ".",  # groups
+                self._get_additional(read_assignment, {'cell_type'}),   # additional
+            ]
+            self.output_file.write("\t".join(fields) + "\n")
+
+
     """ sqanti output
     
     isoform: the isoform ID. Usually in PB.X.Y format.
