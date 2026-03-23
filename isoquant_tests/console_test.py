@@ -54,7 +54,7 @@ def test_clean_start():
     resulting_files = ["exon_counts.tsv", "exon_grouped_file0_col1_counts.linear.tsv",
                        "exon_grouped_file0_col1_counts.tsv",
                        "gene_counts.tsv", "gene_grouped_file0_col1_counts.tsv",
-                       "intron_counts.tsv", "intron_grouped_file0_col1_counts.linear.tsv",
+                       "splice_junction_counts.tsv", "splice_junction_grouped_file0_col1_counts.linear.tsv",
                        "read_info.tsv.gz",
                        "intron_grouped_file0_col1_counts.tsv",
                        "novel_vs_known.SQANTI-like.tsv",
@@ -111,7 +111,7 @@ def test_with_bam_and_polya():
     sample_folder = os.path.join(out_dir, sample_name)
     assert os.path.isdir(sample_folder)
     resulting_files = ["exon_counts.tsv", "gene_counts.tsv",
-                       "intron_counts.tsv", "read_info.tsv.gz",
+                       "splice_junction_counts.tsv", "read_info.tsv.gz",
                        "novel_vs_known.SQANTI-like.tsv",
                        "transcript_counts.tsv",
                        "discovered_transcript_counts.tsv", "transcript_models.gtf"]

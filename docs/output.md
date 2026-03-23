@@ -28,7 +28,7 @@ If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://gi
 If `--count_exons` is set, exon and intron counts will be produced:
 
 * `SAMPLE_ID.exon_counts.tsv` - reference exon inclusion/exclusion read counts;
-* `SAMPLE_ID.intron_counts.tsv` - reference intron inclusion/exclusion read counts;
+* `SAMPLE_ID.splice_junction_counts.tsv` - reference intron inclusion/exclusion read counts;
 
 If `--read_group` is set or multiple files are provided, the per-group expression values for reference features will be also computed:
 
@@ -36,7 +36,7 @@ If `--read_group` is set or multiple files are provided, the per-group expressio
 * `SAMPLE_ID.gene_grouped_counts.linear.tsv`
 * `SAMPLE_ID.transcript_grouped_counts.linear.tsv`
 * `SAMPLE_ID.exon_grouped_counts.linear.tsv`
-* `SAMPLE_ID.intron_grouped_counts.linear.tsv`
+* `SAMPLE_ID.splice_junction_grouped_counts.linear.tsv`
 
 Note that grouped counts can be converted to any format using `{IsoQuant intsllation folder}/isoquant_lib/convert_grouped_counts.py`.
 The script accepts the following arguments:

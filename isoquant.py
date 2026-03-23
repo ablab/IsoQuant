@@ -269,7 +269,7 @@ def parse_args(cmd_args=None, namespace=None):
                                      help="report whether splice junctions are canonical")
     output_setup_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
                                      action='store_true', default=False)
-    output_setup_args_group.add_argument("--count_exons", help="perform exon and intron counting",
+    output_setup_args_group.add_argument("--count_exons", help="perform exon and splice junction counting",
                                      action='store_true', default=False)
     add_additional_option_to_group(output_setup_args_group,"--bam_tags",
                                    help="comma separated list of BAM tags to be imported to read_assignments.tsv",

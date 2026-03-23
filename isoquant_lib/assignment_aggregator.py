@@ -133,7 +133,7 @@ class ReadAssignmentAggregator:
                 if self.args.count_exons:
                     if chr_id:
                         exon_out_file = sample.get_grouped_counts_file(chr_id, "exon", strategy_name)
-                        intron_out_file = sample.get_grouped_counts_file(chr_id, "intron", strategy_name)
+                        intron_out_file = sample.get_grouped_counts_file(chr_id, "splice_junction", strategy_name)
                     else:
                         exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
                         intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
