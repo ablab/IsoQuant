@@ -9,7 +9,7 @@
 Barcode calling quality assessment for simulated data.
 
 Compares detected barcodes against ground truth embedded in read IDs.
-Supports multiple barcode calling modes: tenX_v3, visium_hd, curio, stereo, stereo_split.
+Supports multiple barcode calling modes: tenX_v3, tenX_v3_split, tenX_v2_split, visium_hd, curio, stereo, stereo_split.
 
 Usage:
     python assess_barcode_quality.py --mode stereo --input barcodes.tsv --output metrics.tsv
@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import re
 import sys
 from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple
@@ -31,11 +32,15 @@ except ImportError:
 # Mode-specific barcode lengths
 MODE_BARCODE_LENGTHS = {
     'tenX_v3': 16,
+    'tenX_v3_split': 16,
+    'tenX_v2_split': 16,
     'visium_hd': 31,  # 16 + 15 (two-part)
     'curio': 14,      # 8 + 6
     'stereo': 25,
     'stereo_split': 25,
 }
+
+SPLIT_MODES = {'stereo_split', 'tenX_v3_split', 'tenX_v2_split'}
 
 
 def get_score_thresholds(barcode_length: int) -> Tuple[int, List[int]]:
@@ -224,15 +229,34 @@ def assess_single_barcode_mode(
     return metrics
 
 
+_NANOSIM_SUFFIX_RE = re.compile(r'_\d+_aligned_')
+
+
+def _strip_nanosim_suffix(read_id: str) -> str:
+    """Remove NanoSim-appended suffix from a read ID.
+
+    NanoSim appends '_{index}_aligned_{position}_...' to template names.
+    This strips everything from '_<digits>_aligned_' onward.
+    """
+    m = _NANOSIM_SUFFIX_RE.search(read_id)
+    return read_id[:m.start()] if m else read_id
+
+
 def assess_split_barcode_mode(
     input_file: str,
     barcode_length: int = 25,
     barcode_col: int = 1
 ) -> Dict[str, float]:
     """
-    Assess barcode calling quality for stereo_split mode (multiple barcodes per read).
+    Assess barcode calling quality for split modes (stereo_split, tenX_v3_split, tenX_v2_split).
+
+    Handles multiple barcode detections per read. Ground truth barcodes are extracted
+    from the template read ID by matching fields of the expected barcode length.
     """
-    # Collect all detections per read
+    # Collect all detections per read.
+    # Use the full read ID (including NanoSim suffix) so each simulated read
+    # is evaluated independently. Ground truth extraction still works because
+    # NanoSim suffix fields don't match the barcode length filter.
     read_detections = defaultdict(list)
 
     with open(input_file) as f:
@@ -244,13 +268,7 @@ def assess_split_barcode_mode(
             if len(cols) <= barcode_col:
                 continue
 
-            # Extract base read ID (remove trailing position info)
-            parts = cols[0].split('_')
-            if len(parts) >= 3:
-                read_id = '_'.join(parts[:-3]) if len(parts) > 6 else cols[0]
-            else:
-                read_id = cols[0]
-
+            read_id = cols[0]
             detected_bc = cols[barcode_col]
             read_detections[read_id].append(detected_bc)
 
@@ -281,7 +299,7 @@ def assess_split_barcode_mode(
         correct_in_read = sum(1 for bc in ground_truth if bc in valid_detections)
         incorrect_in_read = sum(1 for bc in valid_detections if bc not in ground_truth)
 
-        total_assignments += min(len(valid_detections), len(ground_truth))
+        total_assignments += len(valid_detections)
         correct_assignments += correct_in_read
         incorrect_assignments += incorrect_in_read
         excessive_assignments += max(0, len(valid_detections) - len(ground_truth))
@@ -346,7 +364,7 @@ def print_summary(metrics: Dict[str, float], mode: str):
     print(f"\n=== Barcode Quality Assessment ({mode}) ===", file=sys.stderr)
     print(f"Total reads: {metrics.get('total_reads', 0)}", file=sys.stderr)
 
-    if mode != 'stereo_split':
+    if mode not in SPLIT_MODES:
         print(f"Barcoded reads: {metrics.get('barcoded_reads', 0)}", file=sys.stderr)
         print(f"Correct barcodes: {metrics.get('correct_barcodes', 0)}", file=sys.stderr)
         print(f"Precision: {metrics.get('precision', 0):.2f}%", file=sys.stderr)
@@ -370,7 +388,9 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Supported modes:
-  tenX_v3    - 10x Genomics single-cell v3 (16bp barcode)
+  tenX_v3      - 10x Genomics single-cell v3 (16bp barcode)
+  tenX_v3_split - 10x v3 split mode (multiple barcodes per read, 16bp)
+  tenX_v2_split - 10x v2 split mode (multiple barcodes per read, 16bp)
   visium_hd    - Visium HD spatial (16+15bp two-part barcode)
   curio        - Curio spatial (14bp = 8+6 split barcode)
   stereo       - Stereo-seq spatial (25bp barcode)
@@ -381,7 +401,7 @@ Ground truth is extracted from read IDs in format:
         """
     )
     parser.add_argument('--mode', '-m', required=True,
-                        choices=['tenX_v3', 'visium_hd', 'curio', 'stereo', 'stereo_split'],
+                        choices=list(MODE_BARCODE_LENGTHS.keys()),
                         help='Barcode calling mode')
     parser.add_argument('--input', '-i', required=True,
                         help='Input barcode TSV file from isoquant_detect_barcodes.py')
@@ -418,7 +438,7 @@ def main():
     min_score = args.min_score if args.min_score >= 0 else None
 
     # Run assessment
-    if args.mode == 'stereo_split':
+    if args.mode in SPLIT_MODES:
         metrics = assess_split_barcode_mode(
             args.input,
             barcode_length=barcode_length,
