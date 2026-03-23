@@ -10,6 +10,7 @@ from collections import defaultdict, OrderedDict
 from enum import Enum, unique
 
 from .isoform_assignment import (
+    MatchEventSubtype,
     ReadAssignmentType,
 )
 from .gene_info import FeatureInfo
@@ -680,4 +681,55 @@ class IntronCounter(ProfileFeatureCounter):
             group_id = read_assignment.read_group_ids[self.group_index]
         self.add_read_info_from_profile(read_assignment.intron_gene_profile, read_assignment.strand,
                                         read_assignment.gene_info.intron_property_map, group_id)
+
+
+INTRON_RETENTION_EVENT_TYPES = {
+    MatchEventSubtype.intron_retention,
+    MatchEventSubtype.unspliced_intron_retention,
+}
+
+
+class IntronRetentionCounter(ProfileFeatureCounter):
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+
+    def add_read_info(self, read_assignment):
+        if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
+            return
+        if not read_assignment.isoform_matches:
+            return
+
+        if self.ignore_read_groups:
+            group_id = 0
+        elif not read_assignment.read_group_ids:
+            group_id = 0
+        else:
+            group_id = read_assignment.read_group_ids[self.group_index]
+
+        gene_info = read_assignment.gene_info
+        intron_features = gene_info.intron_profiles.features
+        property_map = gene_info.intron_property_map
+        if not property_map:
+            return
+
+        for match in read_assignment.isoform_matches:
+            if match.assigned_transcript is None:
+                continue
+            isoform_introns = gene_info.all_isoforms_introns.get(match.assigned_transcript, [])
+            for event in match.match_subclassifications:
+                if event.event_type not in INTRON_RETENTION_EVENT_TYPES:
+                    continue
+                for idx in range(event.isoform_region[0], event.isoform_region[1] + 1):
+                    if idx >= len(isoform_introns):
+                        continue
+                    intron_coords = isoform_introns[idx]
+                    try:
+                        feature_idx = intron_features.index(intron_coords)
+                    except ValueError:
+                        continue
+                    feature_id = property_map[feature_idx].id
+                    self.inclusion_feature_counter[feature_id].inc(group_id)
+                    self.encountered_group_ids.add(group_id)
+                    if feature_id not in self.feature_name_dict:
+                        self.feature_name_dict[feature_id] = property_map[feature_idx].to_str()
 

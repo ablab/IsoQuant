@@ -43,7 +43,7 @@ def test_clean_start():
                              "-r",  data_dir + "chr9.4M.fa.gz",
                              "-t", "2",
                              "--prefix", sample_name,
-                             "--count_exons", "--sqanti_output",
+                             "--count_exons", "--count_intron_retentions", "--sqanti_output",
                              "--read_group","file:" + data_dir + "chr9.4M.ont.sim.read_groups.tsv" + ":0:1"])
 
     assert result.returncode == 0
@@ -55,6 +55,7 @@ def test_clean_start():
                        "exon_grouped_file0_col1_counts.tsv",
                        "gene_counts.tsv", "gene_grouped_file0_col1_counts.tsv",
                        "splice_junction_counts.tsv", "splice_junction_grouped_file0_col1_counts.linear.tsv",
+                       "intron_retention_counts.tsv", "intron_retention_grouped_file0_col1_counts.linear.tsv",
                        "read_info.tsv.gz",
                        "intron_grouped_file0_col1_counts.tsv",
                        "novel_vs_known.SQANTI-like.tsv",

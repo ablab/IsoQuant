@@ -161,6 +161,10 @@ original file name, and barcode property (e.g. cell type).
     Perform exon and splice junction counting in addition to gene and transcript counting.
     Will take effect only when reference annotation is provided.
 
+`--count_intron_retentions`
+    Count intron retention events per reference intron. Only non-ambiguous reads are counted.
+    Will take effect only when reference annotation is provided.
+
 `--bam_tags`
     Comma separated list of BAM tags that will be imported into `read_assignments.tsv`.
 
