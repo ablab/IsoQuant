@@ -11,6 +11,7 @@ from .stats import EnumStats
 from .long_read_counter import (
     ExonCounter,
     IntronCounter,
+    IntronRetentionCounter,
     CompositeCounter,
     create_gene_counter,
     create_transcript_counter,
@@ -107,6 +108,11 @@ class ReadAssignmentAggregator:
             self.intron_counter = IntronCounter(intron_counts_path)
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
+        if self.args.count_intron_retentions and self.args.genedb:
+            ir_counts_path = sample.get_intron_retention_counts_file(chr_id) if chr_id else sample.out_intron_retention_counts_tsv
+            self.intron_retention_counter = IntronRetentionCounter(ir_counts_path)
+            self.global_counter.add_counter(self.intron_retention_counter)
+
         if self.args.read_group and self.args.genedb:
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
                 # Use chr-specific paths if chr_id is provided
@@ -140,6 +146,14 @@ class ReadAssignmentAggregator:
                     exon_counter = ExonCounter(exon_out_file, string_pools=self.string_pools, group_index=group_idx)
                     intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx)
                     self.global_counter.add_counters([exon_counter, intron_counter])
+
+                if self.args.count_intron_retentions:
+                    if chr_id:
+                        ir_out_file = sample.get_grouped_counts_file(chr_id, "intron_retention", strategy_name)
+                    else:
+                        ir_out_file = f"{sample.out_intron_retention_grouped_counts_tsv}_{strategy_name}"
+                    ir_counter = IntronRetentionCounter(ir_out_file, string_pools=self.string_pools, group_index=group_idx)
+                    self.global_counter.add_counter(ir_counter)
 
         if self.args.read_group and not self.args.no_model_construction:
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):

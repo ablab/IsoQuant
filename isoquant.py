@@ -271,6 +271,9 @@ def parse_args(cmd_args=None, namespace=None):
                                      action='store_true', default=False)
     output_setup_args_group.add_argument("--count_exons", help="perform exon and splice junction counting",
                                      action='store_true', default=False)
+    output_setup_args_group.add_argument("--count_intron_retentions",
+                                     help="count intron retention events per reference intron",
+                                     action='store_true', default=False)
     add_additional_option_to_group(output_setup_args_group,"--bam_tags",
                                    help="comma separated list of BAM tags to be imported to read_assignments.tsv",
                                    type=str)
@@ -526,6 +529,8 @@ def check_input_params(args):
     if not args.genedb:
         if args.count_exons:
             logger.warning("--count_exons option has no effect without gene annotation")
+        if args.count_intron_retentions:
+            logger.warning("--count_intron_retentions option has no effect without gene annotation")
         if args.sqanti_output:
             args.sqanti_output = False
             logger.warning("--sqanti_output option has no effect without gene annotation")

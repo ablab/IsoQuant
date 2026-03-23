@@ -69,6 +69,8 @@ class SampleData:
         self.out_gene_model_grouped_counts_tsv = self._make_path(self.prefix + ".discovered_gene_grouped")
         self.out_exon_counts_tsv = self._make_path(self.prefix + ".exon")
         self.out_intron_counts_tsv = self._make_path(self.prefix + ".splice_junction")
+        self.out_intron_retention_counts_tsv = self._make_path(self.prefix + ".intron_retention")
+        self.out_intron_retention_grouped_counts_tsv = self._make_path(self.prefix + ".intron_retention_grouped")
         self.out_gene_grouped_counts_tsv = self._make_path(self.prefix + ".gene_grouped")
         self.out_transcript_grouped_counts_tsv = self._make_path(self.prefix + ".transcript_grouped")
         self.out_exon_grouped_counts_tsv = self._make_path(self.prefix + ".exon_grouped")
@@ -174,6 +176,10 @@ class SampleData:
     def get_intron_counts_file(self, chr_id: str) -> str:
         """Get path to intron counts file for a chromosome."""
         return self._make_path(self.get_chr_prefix(chr_id) + ".splice_junction")
+
+    def get_intron_retention_counts_file(self, chr_id: str) -> str:
+        """Get path to intron retention counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".intron_retention")
 
     def get_transcript_model_counts_file(self, chr_id: str) -> str:
         """Get path to discovered transcript counts file for a chromosome."""
