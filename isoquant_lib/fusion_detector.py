@@ -806,6 +806,26 @@ class FusionDetector:
                 return existing_key
         return None
 
+    def _rename_fusion_key(self, old_key, new_key):
+        # Rename a fusion key across all internal structures (single key, no merging).
+        if old_key == new_key:
+            return  # No-op if keys are identical
+        if old_key not in self.fusion_candidates and old_key not in self.fusion_metadata:
+            return  # Key doesn't exist, nothing to do
+        logger.debug(f"Renaming fusion key: '{old_key}' → '{new_key}'")
+        # Rename in fusion_candidates
+        if old_key in self.fusion_candidates:
+            self.fusion_candidates[new_key] = self.fusion_candidates.pop(old_key)
+        # Rename in fusion_breakpoints
+        if old_key in self.fusion_breakpoints:
+            self.fusion_breakpoints[new_key] = self.fusion_breakpoints.pop(old_key)
+        # Rename in fusion_metadata
+        if old_key in self.fusion_metadata:
+            self.fusion_metadata[new_key] = self.fusion_metadata.pop(old_key)
+        # Rename in fusion_assigned_pairs
+        if old_key in self.fusion_assigned_pairs:
+            self.fusion_assigned_pairs[new_key] = self.fusion_assigned_pairs.pop(old_key)
+
     def _merge_fusion_structures(self, keep_key, discard_key):
         # Merge all internal structures from discard_key into keep_key atomically.
         logger.info(f"Consolidating duplicate fusion: '{keep_key}' ← '{discard_key}'")
@@ -841,12 +861,8 @@ class FusionDetector:
         self.fusion_assigned_pairs.pop(discard_key, None)
 
     def consolidate_duplicate_fusions(self):
-        """
-        Consolidate duplicate fusions that differ only by swapped partner order.
-        This handles cases where A--B and B--A are kept as separate fusions.
-        Computes canonical keys and merges duplicates atomically across all structures.
-        """
-        # Map canonical key → original fusion key found in metadata
+        # handles cases where A--B and B--A are kept as separate fusions.
+        # Map canonical key to original fusion key found in metadata
         canonical_to_original = {}
         fusions_to_merge = {}  # canonical_key → list of original keys with this canonical
         # First pass: identify all canonical keys and find duplicates

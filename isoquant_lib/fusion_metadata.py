@@ -10,7 +10,7 @@ class FusionMetadata:
     def process_all(self, min_support=1):
         # Process all fusion candidates and generate metadata for valid fusions."""
         logger.info(f"FusionMetadata: Processing {len(self.detector.fusion_candidates)} fusion keys with min_support={min_support}")
-        for fusion_key, reads in self.detector.fusion_candidates.items():
+        for fusion_key, reads in list(self.detector.fusion_candidates.items()):
             # Validate all filtering gates
             gate_result = self._passes_all_gates(fusion_key, reads, min_support)
             if not gate_result:
@@ -32,6 +32,12 @@ class FusionMetadata:
             right_gene = self.detector.normalize_gene_label(right_gene) if right_gene else "intergenic"
             # Finalize metadata with biotypes and validation
             self._finalize_metadata(meta, left_gene, right_gene, raw_left, raw_right, left_chr, left_pos, right_chr, right_pos)
+            # Canonicalize key AFTER orientation (critical fix!)
+            current_key = fusion_key
+            canonical_key = f"{left_gene}--{right_gene}"
+            if canonical_key != current_key:
+                self.detector._rename_fusion_key(current_key, canonical_key)
+                fusion_key = canonical_key
 
     def _passes_all_gates(self, fusion_key, reads, min_support):
         #  Validate fusion against support, breakpoint, and consensus gates.
