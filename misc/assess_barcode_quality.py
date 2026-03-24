@@ -230,6 +230,7 @@ def assess_single_barcode_mode(
 
 
 _NANOSIM_SUFFIX_RE = re.compile(r'_\d+_aligned_')
+_SPLIT_SEGMENT_SUFFIX_RE = re.compile(r'_\d+_\d+_[+-]$')
 
 
 def _strip_nanosim_suffix(read_id: str) -> str:
@@ -240,6 +241,15 @@ def _strip_nanosim_suffix(read_id: str) -> str:
     """
     m = _NANOSIM_SUFFIX_RE.search(read_id)
     return read_id[:m.start()] if m else read_id
+
+
+def _strip_split_segment_suffix(read_id: str) -> str:
+    """Remove segment suffix appended by detect_barcodes split mode.
+
+    Split mode appends '_{start}_{end}_{strand}' to valid detections.
+    NanoSim IDs use F/R for direction, never +/-, so this is safe to strip.
+    """
+    return _SPLIT_SEGMENT_SUFFIX_RE.sub('', read_id)
 
 
 def assess_split_barcode_mode(
@@ -253,10 +263,11 @@ def assess_split_barcode_mode(
     Handles multiple barcode detections per read. Ground truth barcodes are extracted
     from the template read ID by matching fields of the expected barcode length.
     """
-    # Collect all detections per read.
-    # Use the full read ID (including NanoSim suffix) so each simulated read
-    # is evaluated independently. Ground truth extraction still works because
-    # NanoSim suffix fields don't match the barcode length filter.
+    # Collect all detections per original read.
+    # Strip the split-mode segment suffix (_{start}_{end}_{strand}) so that
+    # all molecules from one NanoSim read are grouped together.
+    # Ground truth extraction still works because NanoSim suffix fields
+    # and segment suffix fields don't match the barcode length filter.
     read_detections = defaultdict(list)
 
     with open(input_file) as f:
@@ -268,7 +279,7 @@ def assess_split_barcode_mode(
             if len(cols) <= barcode_col:
                 continue
 
-            read_id = cols[0]
+            read_id = _strip_split_segment_suffix(cols[0])
             detected_bc = cols[barcode_col]
             read_detections[read_id].append(detected_bc)
 
