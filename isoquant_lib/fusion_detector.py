@@ -172,6 +172,27 @@ class FusionDetector:
         except Exception:
             pass
         return name_or_id
+    
+    def sanitize_raw_gene(self, gene, chrom, pos):
+        # Keep original if protein coding
+        biotype = self._get_gene_biotype_by_symbol_or_coords(gene, chrom, pos)
+        if biotype == "protein_coding":
+            return gene
+
+        # Try collapsing antisense/pseudogene naming like HMGA1P3 → HMGA1
+        collapsed = self.canonical_locus_name(gene)
+
+        # If collapsed is different (i.e. suffix removed), try using that
+        if collapsed != gene:
+            return collapsed
+
+        # Rescue: find nearby coding gene
+        rescue = self._find_nearby_protein_coding(chrom, pos, window=2000)
+        if rescue:
+            return rescue
+
+        # If still nothing, leave gene unchanged (do not turn into intergenic!)
+        return gene
 
     def resolve_gene_name(self, name_or_id):
         # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible.
@@ -281,8 +302,8 @@ class FusionDetector:
         if gtype == "protein_coding":
             return 60.0
         # Penalize pseudogenes heavily
-        if gtype and "pseudogene" in gtype.lower():
-            return -90.0
+        # if gtype and "pseudogene" in gtype.lower():
+            #return -90.0
         # Mild penalty for non-coding/ambiguous biotypes
         if gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
                      "sense_intronic", "sense_overlapping", "transcribed_unprocessed_pseudogene"):
@@ -654,22 +675,23 @@ class FusionDetector:
         return str(g)
 
     def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
-        # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
-        if self.has_antisense_suffix(context1) or self.has_antisense_suffix(context2):
-            return
-        # Skip fusions with intergenic partners
-        if context1 == "intergenic" or context2 == "intergenic":
-            return
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
-        left_symbol = self.normalize_gene_label(context1)
-        right_symbol = self.normalize_gene_label(context2)
+        left_clean  = self.sanitize_raw_gene(context1, chrom1, pos1)
+        right_clean = self.sanitize_raw_gene(context2, chrom2, pos2)
 
-        left_raw = context1   # original ID (likely ENSG)
-        right_raw = context2
+        # 2. Now normalize AFTER sanitization
+        left_symbol  = self.normalize_gene_label(left_clean)
+        right_symbol = self.normalize_gene_label(right_clean)
 
+        # 3. Use the same values for raw assignment
+        left_raw  = left_clean
+        right_raw = right_clean
+
+        # 4. Build fusion key from the sanitized & normalized names
         fusion_key = f"{left_symbol}--{right_symbol}"
 
+        # 5. Now store the raw genes
         self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
 
         self.fusion_candidates[fusion_key].add(read_name)
@@ -684,23 +706,21 @@ class FusionDetector:
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
-        # store the raw assigned pair for this read so we don't need to re-run assignment later
-        try:
-            self.fusion_assigned_pairs[fusion_key][read_name] = (context1, context2)
-        except Exception:
-            pass
 
     def normalize_gene_label(self, gene):
-        # Normalize any gene identifier to a canonical gene symbol string.
-        if not gene:
+        if not gene or gene == "intergenic":
             return "intergenic"
-        # Resolve ENSG / IDs → symbol if possible
-        gene = self.resolve_gene_name(gene)
-        # Collapse antisense / divergent
+
+            # Collapse antisense suffixes
         gene = self.canonical_locus_name(gene)
-        # Safety net
-        if gene is None or gene.startswith("ENSG"):
-            return "intergenic"
+
+        # If it's an ENSG ID, resolve it to symbol.
+        if gene.startswith("ENSG"):
+            resolved = self.resolve_gene_name(gene)
+            return resolved or gene
+
+        # Otherwise, assume it's already an HGNC gene symbol.
+        # DO NOT resolve again. DO NOT turn into intergenic.
         return gene
 
     def build_metadata(self, min_support=1):
@@ -1209,11 +1229,24 @@ class FusionDetector:
         return min(support_count, 10) / 10.0
 
     def canonical_locus_name(self, gene_name):
-        # Collapse antisense / divergent transcript names to the canonical locus name.
+        # Collapse antisense / divergent transcript names and map pseudogenes to parent genes.
         if not gene_name:
             return gene_name
         # Strip common antisense / divergent suffixes
         collapsed = Antisense_suffix.sub("", gene_name)
+        # Try to map pseudogene to parent (pattern: ends with P followed by digits)
+        # E.g. RPL23P6 → RPL23, SAE1P1 → SAE1
+        match = re.match(r"^(.+?)P\d+$", collapsed)
+        if match:
+            parent_candidate = match.group(1)
+            # Verify parent gene exists and is protein-coding
+            try:
+                parent_biotype = self.get_gene_biotype(parent_candidate)
+                if parent_biotype == "protein_coding":
+                    logger.debug(f"canonical_locus_name: Mapped pseudogene {gene_name} → parent {parent_candidate}")
+                    return parent_candidate
+            except Exception:
+                pass
         return collapsed
 
     def _build_symbol_biotype_index(self):
@@ -1293,8 +1326,14 @@ class FusionDetector:
         # Returns biotype string or None if not found.
         if not gene_name:
             return None
-        gene_name = self.normalize_gene_label(gene_name)
-        return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
+        # First normalize via canonical_locus_name to handle pseudogenes and antisense
+        canonical_name = self.canonical_locus_name(gene_name)
+        # Then further normalize via normalize_gene_label
+        normalized = self.normalize_gene_label(canonical_name)
+        if normalized == "intergenic":
+            # If normalization fails completely, try original gene_name too
+            return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
+        return self._get_gene_biotype_by_symbol_or_coords(normalized, chrom=chrom, pos=pos)
 
     def get_gene_strand(self, gene_name, chrom=None, pos=None):
         # Retrieve the strand (+/-) for a given gene name.
@@ -1380,8 +1419,7 @@ class FusionDetector:
             # Compute full confidence (includes reconstruction/realignment bonuses)
             conf = validator.confidence(meta, flags)
             meta["confidence"] = conf
-            # convert very low-confidence to invalid
-            if conf < 0.30 and meta.get("support", 0) < 2 and flags["is_valid"]:
+            if conf < 0.20 and meta.get("support", 0) < 2 and flags["is_valid"]:
                 flags["is_valid"] = False
                 flags["reasons"].append("Low confidence")
             meta.update(flags)

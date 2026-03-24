@@ -1,4 +1,5 @@
 import logging
+import re
 from collections import defaultdict
 
 logger = logging.getLogger('IsoQuant')
@@ -19,6 +20,25 @@ class FusionValidator:
                 logger.debug(f"Got breakpoint for {fusion_key}: {left_chr}:{left_pos} - {right_chr}:{right_pos}")
         return left_chr, left_pos, right_chr, right_pos
 
+    def _map_pseudogene_to_parent(self, gene, chrom=None, pos=None):
+        # Attempt to map a pseudogene to its parent gene.
+        # Pattern: Remove suffix like P1, P2, etc. or other numeric pseudogene suffixes.
+        # Examples: RPL23P6 → RPL23, SAE1P1 → SAE1, ZFYVE9P1 → ZFYVE9
+        if not gene or not isinstance(gene, str):
+            return None
+        # Match pattern: ends with P followed by one or more digits (e.g. P1, P6, P123)
+        # Also handles patterns like P followed by other suffixes
+        match = re.match(r"^(.+?)P\d+$", gene)
+        if not match:
+            return None
+        parent_candidate = match.group(1)
+        # Verify parent gene exists and is protein-coding
+        parent_biotype = self.detector.get_gene_biotype(parent_candidate, chrom=chrom, pos=pos)
+        if parent_biotype == "protein_coding":
+            logger.debug(f"Mapped pseudogene {gene} → parent gene {parent_candidate}")
+            return parent_candidate
+        return None
+
     def _salvage_and_check_gene_pair(self, left_gene, right_gene, left_chr, left_pos, right_chr, right_pos):
         # Salvage non-coding genes by finding nearby protein-coding alternatives.
         def _salvage_to_nearby_coding(gene, chrom, pos):
@@ -28,6 +48,10 @@ class FusionValidator:
             biotype = self.detector.get_gene_biotype(gene, chrom=chrom, pos=pos)
             if biotype and biotype == "protein_coding":
                 return gene, biotype
+            # Try to map pseudogene to parent gene first
+            parent_gene = self._map_pseudogene_to_parent(gene, chrom=chrom, pos=pos)
+            if parent_gene:
+                return parent_gene, "protein_coding"
             # Try a small window to avoid spurious swaps
             nearby = self.detector._find_nearby_protein_coding(chrom, pos, window=500)
             if nearby:
@@ -76,6 +100,9 @@ class FusionValidator:
                 fusions_to_discard.add(fusion_key)
         # Remove all discarded fusions from data structures
         self._remove_discarded_fusions_internal(fusions_to_discard)
+        
+        # Consolidate fusions with pseudogene/parent gene variants
+        self._consolidate_pseudogene_variants()
 
     def _remove_discarded_fusions_internal(self, fusions_to_discard):
         # Remove fusions from all internal data structures.
@@ -89,9 +116,78 @@ class FusionValidator:
             if fusion_key in self.detector.fusion_assigned_pairs:
                 del self.detector.fusion_assigned_pairs[fusion_key]
 
+    def _consolidate_pseudogene_variants(self):
+        # Merge fusions that differ only by pseudogene/parent gene variants.
+        # E.g., merge "RPL23P6--SOMETHING" into "RPL23--SOMETHING"
+        def canonicalize_gene_in_key(gene):
+            # Try to map pseudogene to parent
+            parent = self._map_pseudogene_to_parent(gene)
+            return parent if parent else gene
+        # Build a canonical key mapping
+        canonical_keys = {}
+        for fusion_key in list(self.detector.fusion_candidates.keys()):
+            parts = fusion_key.split("--")
+            if len(parts) != 2:
+                continue
+            left_gene, right_gene = parts
+            canonical_left = canonicalize_gene_in_key(left_gene)
+            canonical_right = canonicalize_gene_in_key(right_gene)
+            canonical_key = f"{canonical_left}--{canonical_right}"
+            canonical_keys[fusion_key] = canonical_key
+        # Merge fusions with their canonical keys
+        fusions_to_merge = {}
+        for fusion_key, canonical_key in canonical_keys.items():
+            if canonical_key != fusion_key:
+                if canonical_key not in fusions_to_merge:
+                    fusions_to_merge[canonical_key] = []
+                fusions_to_merge[canonical_key].append(fusion_key)
+        # Execute merges: for each canonical key, merge all variant keys into it
+        for canonical_key, variant_keys in fusions_to_merge.items():
+            # Ensure the canonical key exists
+            if canonical_key not in self.detector.fusion_candidates:
+                self.detector.fusion_candidates[canonical_key] = set()
+                self.detector.fusion_breakpoints[canonical_key] = defaultdict(int)
+                self.detector.fusion_assigned_pairs[canonical_key] = {}
+            # Merge all variants into the canonical key
+            for variant_key in variant_keys:
+                # Merge fusion_candidates
+                if variant_key in self.detector.fusion_candidates:
+                    self.detector.fusion_candidates[canonical_key].update(
+                        self.detector.fusion_candidates[variant_key]
+                    )
+                    del self.detector.fusion_candidates[variant_key]
+                # Merge fusion_breakpoints
+                if variant_key in self.detector.fusion_breakpoints:
+                    for bp, count in self.detector.fusion_breakpoints[variant_key].items():
+                        self.detector.fusion_breakpoints[canonical_key][bp] += count
+                    del self.detector.fusion_breakpoints[variant_key]
+                # Merge fusion_assigned_pairs
+                if variant_key in self.detector.fusion_assigned_pairs:
+                    self.detector.fusion_assigned_pairs[canonical_key].update(
+                        self.detector.fusion_assigned_pairs[variant_key]
+                    )
+                    del self.detector.fusion_assigned_pairs[variant_key]
+                # Merge fusion_metadata if it exists
+                if variant_key in self.detector.fusion_metadata:
+                    if canonical_key not in self.detector.fusion_metadata:
+                        self.detector.fusion_metadata[canonical_key] = self.detector.fusion_metadata[variant_key]
+                    else:
+                        # Merge supporting reads
+                        if "supporting_reads" in self.detector.fusion_metadata[variant_key]:
+                            if "supporting_reads" not in self.detector.fusion_metadata[canonical_key]:
+                                self.detector.fusion_metadata[canonical_key]["supporting_reads"] = set()
+                            self.detector.fusion_metadata[canonical_key]["supporting_reads"].update(
+                                self.detector.fusion_metadata[variant_key]["supporting_reads"]
+                            )
+                    del self.detector.fusion_metadata[variant_key]
+                logger.info(f"Consolidated pseudogene variant: '{variant_key}' → '{canonical_key}'")
+
+
     def filter_non_coding_genes(self):
         # Removes fusions with non-protein-coding partners completely from all data structures.
+        # NOTE: Do NOT discard fusions where biotype is None (unknown) - only discard if explicitly non-coding
         fusions_to_discard = []
+        discard_reasons = {}  # Track reason for each discarded fusion
         for fusion_key, meta in list(self.detector.fusion_metadata.items()):
             left_gene = meta.get("left_gene")
             right_gene = meta.get("right_gene")
@@ -103,17 +199,28 @@ class FusionValidator:
             # Get biotypes for both genes
             left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
             right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
-            # Discard if either partner is non-protein-coding (or unknown/not found)
-            left_is_coding = left_biotype == "protein_coding"
-            right_is_coding = right_biotype == "protein_coding"
-            if not left_is_coding or not right_is_coding:
+            # Only discard if BOTH conditions are met:
+            # 1. Biotype is not None (i.e., we actually found it)
+            # 2. Biotype is not "protein_coding"
+            # This way we KEEP fusions where biotype is unknown (None) or protein_coding
+            left_is_non_coding = left_biotype is not None and left_biotype != "protein_coding"
+            right_is_non_coding = right_biotype is not None and right_biotype != "protein_coding"
+            
+            if left_is_non_coding or right_is_non_coding:
                 reason = []
-                if not left_is_coding:
+                if left_is_non_coding:
                     reason.append(f"Left {left_gene}={left_biotype}")
-                if not right_is_coding:
+                if right_is_non_coding:
                     reason.append(f"Right {right_gene}={right_biotype}")
-                # logger.info(f"Discarding non-coding fusion: {fusion_key} - {'; '.join(reason)}")
                 fusions_to_discard.append(fusion_key)
+                discard_reasons[fusion_key] = "; ".join(reason)
+        # Log discarded fusions with details
+        if fusions_to_discard:
+            logger.info(f"filter_non_coding_genes: Discarding {len(fusions_to_discard)} fusion(s)")
+            for fusion_key in fusions_to_discard:
+                logger.info(f"  Discard: {fusion_key} - {discard_reasons[fusion_key]}")
+        else:
+            logger.info("filter_non_coding_genes: No fusions discarded (all have protein-coding partners or unknown biotypes)")
         # Remove all discarded fusions from data structures
         self._remove_discarded_fusions_internal(fusions_to_discard)
 
@@ -201,7 +308,7 @@ class FusionValidator:
             boundary_bonus += max(0.0, min(0.20, (200 - min(bL, 200)) / 200.0 * 0.20))
         if isinstance(bR, int):
             boundary_bonus += max(0.0, min(0.20, (200 - min(bR, 200)) / 200.0 * 0.20))
-        boundary_bonus = min(boundary_bonus, 0.25)
+        boundary_bonus = min(boundary_bonus, 0.35)
         return boundary_bonus
 
     def confidence(self, meta, flags=None):
