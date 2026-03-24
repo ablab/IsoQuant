@@ -425,9 +425,15 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
             result.update_coordinates(offset)
         return result
 
-    def _split_strand(self, read_id: str, sequence: str, strand: str) -> SplittingBarcodeDetectionResult:
-        """Loop through a strand finding all molecules."""
-        result = SplittingBarcodeDetectionResult(read_id)
+    def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
+        """Find all barcode+UMI patterns in a (potentially concatenated) read.
+
+        Scans both forward and reverse strands, collecting molecules from both
+        into a single result (molecules in concatenated reads can alternate orientation).
+        """
+        read_result = SplittingBarcodeDetectionResult(read_id)
+
+        # Forward strand scan
         current_start = 0
         prev_start = -1
         while True:
@@ -435,8 +441,8 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
             r = self._find_barcode_umi_split_fwd(read_id, seq, offset=current_start)
             if r.polyT == -1:
                 break
-            r.set_strand(strand)
-            result.append(r)
+            r.set_strand("+")
+            read_result.append(r)
             if r.tso != -1:
                 next_start = r.tso + len(self.TSO)
             else:
@@ -446,20 +452,27 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
             current_start = next_start
             if len(sequence) - current_start < self.MIN_REMAINING_SEQ:
                 break
-        return result
 
-    def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
-        """Find all barcode+UMI patterns in a (potentially concatenated) read."""
-        fwd_result = self._split_strand(read_id, sequence, strand="+")
+        # Reverse strand scan — collect into the same result
         rev_seq = reverese_complement(sequence)
-        rev_result = self._split_strand(read_id, rev_seq, strand="-")
-
-        if fwd_result.more_informative_than(rev_result):
-            read_result = fwd_result
-        elif rev_result.more_informative_than(fwd_result):
-            read_result = rev_result
-        else:
-            read_result = fwd_result if fwd_result.detected_patterns else rev_result
+        current_start = 0
+        prev_start = -1
+        while True:
+            seq = rev_seq[current_start:]
+            r = self._find_barcode_umi_split_fwd(read_id, seq, offset=current_start)
+            if r.polyT == -1:
+                break
+            r.set_strand("-")
+            read_result.append(r)
+            if r.tso != -1:
+                next_start = r.tso + len(self.TSO)
+            else:
+                next_start = r.polyT + self.DEFAULT_POLYT_STEP
+            next_start = max(prev_start + self.MIN_SPLIT_STEP, next_start)
+            prev_start = next_start
+            current_start = next_start
+            if len(rev_seq) - current_start < self.MIN_REMAINING_SEQ:
+                break
 
         if read_result.empty():
             r = self._find_barcode_umi_split_fwd(read_id, sequence)
