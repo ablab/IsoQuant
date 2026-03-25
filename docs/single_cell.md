@@ -27,6 +27,8 @@ which can also be used as a standalone tool.
 | Mode | Platform | Barcode whitelist files | UMI length | Notes                                                                                |
 |------|----------|--------------------|------------|--------------------------------------------------------------------------------------|
 | `tenX_v3` | 10x Genomics 3' v3 | 1 | 12 | Single 16bp barcode                                                                  |
+| `tenX_v3_split` | 10x Genomics 3' v3 | 1 | 12 | Concatenated reads: splits into individual cDNA molecules                             |
+| `tenX_v2_split` | 10x Genomics 3' v2 | 1 | 10 | Concatenated reads: splits into individual cDNA molecules (v2 chemistry)              |
 | `visium_5prime` | 10x Genomics Visium 5' | 1 | 12 | Same detector as tenX_v3                                                             |
 | `visium_hd` | 10x Genomics Visium HD | 2 | 9 | Two barcodes (15/16bp + 14/15bp)                                                     |
 | `curio` | Curio Bioscience | 1  | 9 | Double barcode (8bp + 6bp) with linker                                               |
@@ -76,6 +78,8 @@ IsoQuant processing mode. Available modes:
 
 * `bulk` -- standard bulk RNA-seq mode (default)
 * `tenX_v3` -- 10x Genomics single-cell 3' gene expression
+* `tenX_v3_split` -- 10x Genomics 3' v3 with read splitting for concatenated reads (see [below](#read-splitting-modes))
+* `tenX_v2_split` -- 10x Genomics 3' v2 with read splitting for concatenated reads
 * `curio` -- Curio Bioscience single-cell
 * `visium_hd` -- 10x Genomics Visium HD spatial transcriptomics
 * `visium_5prime` -- 10x Genomics Visium 5' spatial transcriptomics
@@ -101,7 +105,7 @@ If you have a subset of barcodes from short-read data, provide them instead of t
 
 The number of whitelist files depends on the mode:
 
-* 1 file: `tenX_v3`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio` (combined 14bp barcodes)
+* 1 file: `tenX_v3`, `tenX_v3_split`, `tenX_v2_split`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio` (combined 14bp barcodes)
 * 2 files: `visium_hd` (part 1 and part 2 barcode lists)
 * Not needed: `custom_sc` (barcode lists are specified inside the MDF file)
 
@@ -250,6 +254,46 @@ Barcode/2   VAR_FILE   barcodes.tsv   16
 UMI         VAR_ANY    12
 TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
 ```
+
+## Read splitting modes
+
+### 10x split modes (`tenX_v3_split`, `tenX_v2_split`)
+
+Oxford Nanopore long reads from 10x single-cell libraries often contain multiple cDNA molecules
+ligated end-to-end during library preparation. In a standard `tenX_v3` run, only the first
+barcode is detected and the rest of the read is treated as a single cDNA.
+The split modes detect multiple barcode/UMI patterns within each read,
+split the read at molecule boundaries, and produce a new FASTA file
+with one record per cDNA molecule.
+
+**When to use**: when your ONT reads contain concatenated 10x molecules
+(e.g. R2C2-style or natural ligation artifacts). If your reads contain
+a single cDNA molecule each, use `tenX_v3` instead.
+
+The expected molecule structure for a single molecule on the + strand is:
+```
+[R1 primer] [Barcode (16bp)] [UMI (12bp)] [PolyT] [cDNA] [TSO]
+```
+
+In concatenated reads, the TSO of one molecule is followed by the R1 of the next.
+Molecules can alternate orientation within a single read.
+
+**Example**:
+```bash
+isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
+  --fastq reads.fastq.gz --data_type nanopore \
+  --mode tenX_v3_split --barcode_whitelist barcodes.txt \
+  -o split_output
+```
+
+The split modes produce an additional output file (`*.split_reads.fasta`)
+containing the extracted cDNA segments. Each segment is named with
+the original read ID plus coordinates and strand: `{read_id}_{start}_{end}_{strand}`.
+
+### Stereo-seq split mode
+
+See the `stereoseq` mode above — it also splits concatenated reads at TSO boundaries,
+similar to the 10x split modes.
 
 ## UMI deduplication
 

@@ -31,6 +31,7 @@ import yaml
 RT_VOID = "void"           # Just run detect_barcodes, no quality check
 RT_SINGLE = "single"       # Single barcode per read (10x, curio, stereo)
 RT_STEREO_SPLIT = "stereo_split"  # Multiple barcodes per read (stereo split)
+RT_SPLIT_MODES = {RT_STEREO_SPLIT, "tenX_v3_split", "tenX_v2_split"}  # All split run types
 
 log = logging.getLogger('BarcodeTestRunner')
 
@@ -239,8 +240,9 @@ def run_barcode_quality(args, config_dict, baselines=None):
 
     # Determine QA mode
     run_type = config_dict.get("run_type", RT_SINGLE)
-    if run_type == RT_STEREO_SPLIT:
-        qa_mode = "stereo_split"
+    if run_type in RT_SPLIT_MODES:
+        # For split modes, qa_mode matches run_type directly (stereo_split, tenX_v3_split, tenX_v2_split)
+        qa_mode = run_type
     else:
         # Use mode from config or derive from detect mode
         qa_mode = config_dict.get("qa_mode", config_dict.get("mode", "stereo"))
@@ -438,7 +440,7 @@ def main():
     if run_type == RT_VOID:
         log.info("Run type is void, skipping quality assessment")
         err_codes.append(0)
-    elif run_type in (RT_SINGLE, RT_STEREO_SPLIT):
+    elif run_type in {RT_SINGLE} | RT_SPLIT_MODES:
         err_codes.append(run_barcode_quality(args, config_dict, baselines))
     else:
         log.error("Unknown run type: %s" % run_type)

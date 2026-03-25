@@ -13,6 +13,8 @@ class TestModes(unittest.TestCase):
     def test_needs_barcode_calling(self):
         # Test modes that need barcode calling
         self.assertTrue(IsoQuantMode.tenX_v3.needs_barcode_calling())
+        self.assertTrue(IsoQuantMode.tenX_v3_split.needs_barcode_calling())
+        self.assertTrue(IsoQuantMode.tenX_v2_split.needs_barcode_calling())
         self.assertTrue(IsoQuantMode.curio.needs_barcode_calling())
         self.assertTrue(IsoQuantMode.stereoseq.needs_barcode_calling())
 
@@ -29,12 +31,15 @@ class TestModes(unittest.TestCase):
         self.assertFalse(IsoQuantMode.bulk.needs_pcr_deduplication())
 
     def test_produces_new_fasta(self):
-        # Only stereoseq mode produces new fasta
+        # Modes that produce new FASTA (splitting modes)
         self.assertTrue(IsoQuantMode.stereoseq.produces_new_fasta())
+        self.assertTrue(IsoQuantMode.tenX_v3_split.produces_new_fasta())
+        self.assertTrue(IsoQuantMode.tenX_v2_split.produces_new_fasta())
 
-        # Test other modes
+        # Non-splitting modes do not produce new FASTA
         self.assertFalse(IsoQuantMode.bulk.produces_new_fasta())
         self.assertFalse(IsoQuantMode.tenX_v3.produces_new_fasta())
+        self.assertFalse(IsoQuantMode.tenX_v2.produces_new_fasta())
         self.assertFalse(IsoQuantMode.curio.produces_new_fasta())
 
     def test_needs_barcode_iterator(self):
@@ -45,6 +50,8 @@ class TestModes(unittest.TestCase):
         # Test modes that don't need barcode iterator
         self.assertFalse(IsoQuantMode.bulk.needs_barcode_iterator())
         self.assertFalse(IsoQuantMode.tenX_v3.needs_barcode_iterator())
+        self.assertFalse(IsoQuantMode.tenX_v3_split.needs_barcode_iterator())
+        self.assertFalse(IsoQuantMode.tenX_v2_split.needs_barcode_iterator())
 
     def test_enforces_single_thread(self):
         # All modes should return False for enforces_single_thread

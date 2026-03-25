@@ -61,7 +61,7 @@ When multiple input files are provided, outputs are numbered: `<prefix>_0.barcod
 
 One or more barcode whitelist files. The number of files depends on the mode:
 
-* 1 file: `tenX_v3`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio`
+* 1 file: `tenX_v3`, `tenX_v3_split`, `tenX_v2_split`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio`
 * 2 files: `visium_hd`
 * Not needed for `custom_sc` (barcodes defined in MDF file)
 
@@ -74,8 +74,8 @@ If you have a subset of barcodes from short-read data, provide them instead of t
 
 `--mode`
 
-Barcode calling mode. Available modes: `tenX_v3`, `curio`, `stereoseq`, `stereoseq_nosplit`,
-`visium_5prime`, `visium_hd`, `custom_sc`. 
+Barcode calling mode. Available modes: `tenX_v3`, `tenX_v3_split`, `tenX_v2_split`, `curio`, `stereoseq`, `stereoseq_nosplit`,
+`visium_5prime`, `visium_hd`, `custom_sc`.
 
 `--molecule`
 Path to a molecule description format (MDF) file for `custom_sc` mode.
@@ -145,6 +145,18 @@ The columns depend on the platform mode.
 | polyT | Position of polyT tail start (-1 if not found) |
 | R1 | Position of R1 primer end (-1 if not found) |
 
+**10x Genomics split modes** (`tenX_v3_split`, `tenX_v2_split`):
+
+| Column | Description |
+|--------|-------------|
+| polyT | Position of polyT tail start (-1 if not found) |
+| R1 | Position of R1 primer end (-1 if not found) |
+| tso_start | Position of TSO sequence (-1 if not found) |
+
+Output contains one row per detected molecule. Read IDs include segment coordinates:
+`{original_read_id}_{start}_{end}_{strand}`.
+An additional split FASTA file (`*.split_reads.fasta`) is produced with the extracted cDNA segments.
+
 **Curio** (`curio`):
 
 | Column | Description |
@@ -182,6 +194,18 @@ Molecule structure (3' to 5'):
 ```
 
 Requires 1 barcode whitelist file (e.g., the 10x `3M-february-2018.txt.gz`).
+
+### 10x Genomics split modes (`tenX_v3_split`, `tenX_v2_split`)
+
+For concatenated ONT reads containing multiple 10x cDNA molecules ligated end-to-end.
+Uses the same molecule structure as `tenX_v3` but scans the entire read for multiple
+barcode/UMI/TSO patterns on both strands.
+
+The output includes one line per detected molecule (not per read), plus a split FASTA
+file with extracted cDNA segments. See [read splitting modes](single_cell.md#read-splitting-modes)
+for details.
+
+Requires 1 barcode whitelist file. Use `tenX_v2_split` for v2 chemistry (10bp UMI, different TSO sequence).
 
 ### Visium HD (`visium_hd`)
 

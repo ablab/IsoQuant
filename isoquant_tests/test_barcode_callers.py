@@ -10,6 +10,7 @@ from isoquant_lib.barcode_calling.callers import (
     LinkerBarcodeDetectionResult,
     TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
+    TenXSplitBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
     increase_if_valid
@@ -388,6 +389,89 @@ class TestSplittingBarcodeDetectionResult:
 
         # Should keep only first result
         assert len(result.detected_patterns) == 1
+
+
+class TestTenXSplitBarcodeDetectionResult:
+    """Test 10x split mode detection result class."""
+
+    def test_init_default(self):
+        result = TenXSplitBarcodeDetectionResult("read_001")
+        assert result.read_id == "read_001"
+        assert result.tso == -1
+        assert result.polyT == -1
+        assert result.r1 == -1
+
+    def test_init_with_tso(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", polyT=50, r1=20, tso=80)
+        assert result.tso == 80
+        assert result.polyT == 50
+        assert result.r1 == 20
+
+    def test_update_coordinates_shifts_tso(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", polyT=50, r1=20, tso=80)
+        result.update_coordinates(100)
+        assert result.tso == 180
+        assert result.polyT == 150
+        assert result.r1 == 120
+
+    def test_update_coordinates_no_tso(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", polyT=50, r1=20, tso=-1)
+        result.update_coordinates(100)
+        assert result.tso == -1  # unchanged when not found
+
+    def test_get_fasta_segment_start_with_r1(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", r1=50)
+        assert result.get_fasta_segment_start() == 40  # r1 - 10
+
+    def test_get_fasta_segment_start_no_r1(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", r1=-1)
+        assert result.get_fasta_segment_start() == 0
+
+    def test_get_fasta_segment_end_with_tso(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", tso=100)
+        assert result.get_fasta_segment_end(500) == 135  # tso + 35
+
+    def test_get_fasta_segment_end_no_tso(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", tso=-1)
+        assert result.get_fasta_segment_end(500) == 500
+
+    def test_get_fasta_segment_end_clamps_to_seq_len(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", tso=490)
+        assert result.get_fasta_segment_end(500) == 500  # min(500, 490+35)
+
+    def test_get_tso_position(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", tso=75)
+        assert result.get_tso_position() == 75
+
+    def test_str_format_includes_tso(self):
+        result = TenXSplitBarcodeDetectionResult(
+            "read_001", barcode="ACTGACTGACTGACTG", UMI="ACGTACGTACGT",
+            BC_score=28, UMI_good=True, polyT=50, r1=20, tso=80
+        )
+        result.set_strand("+")
+        s = str(result)
+        assert "read_001" in s
+        assert "80" in s  # TSO position
+        assert s.endswith("\t80")
+
+    def test_header_includes_tso_column(self):
+        assert "tso_start" in TenXSplitBarcodeDetectionResult.header()
+
+    def test_inherits_tenx_validity(self):
+        result = TenXSplitBarcodeDetectionResult("read_001", barcode="ACTGACTGACTGACTG")
+        assert result.is_valid()
+        empty = TenXSplitBarcodeDetectionResult("read_001")
+        assert not empty.is_valid()
+
+    def test_works_in_splitting_result(self):
+        container = SplittingBarcodeDetectionResult("read_001")
+        pattern = TenXSplitBarcodeDetectionResult("read_001", barcode="ACTGACTGACTGACTG", tso=80)
+        container.append(pattern)
+        assert len(container.detected_patterns) == 1
+        assert container.is_valid()
+        assert container.get_barcode() == "ACTGACTGACTGACTG"
+        # Individual pattern retains its tso position
+        assert container.detected_patterns[0].get_tso_position() == 80
 
 
 class TestReadStats:

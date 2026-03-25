@@ -33,6 +33,7 @@ from .callers import (
     LinkerBarcodeDetectionResult,
     TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
+    TenXSplitBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
     increase_if_valid,
@@ -49,6 +50,8 @@ from .callers import (
     SharedMemoryWrapper,
     TenXBarcodeDetector,
     TenXv2BarcodeDetector,
+    TenXSplittingBarcodeDetector,
+    TenXv2SplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
     UniversalSingleMoleculeExtractor,
     MoleculeStructure
@@ -80,6 +83,7 @@ __all__ = [
     'LinkerBarcodeDetectionResult',
     'TSOBarcodeDetectionResult',
     'TenXBarcodeDetectionResult',
+    'TenXSplitBarcodeDetectionResult',
     'SplittingBarcodeDetectionResult',
     'ReadStats',
     'increase_if_valid',
@@ -95,6 +99,8 @@ __all__ = [
     # 10x detectors
     'TenXBarcodeDetector',
     'TenXv2BarcodeDetector',
+    'TenXSplittingBarcodeDetector',
+    'TenXv2SplittingBarcodeDetector',
     'VisiumHDBarcodeDetector',
     # universal calling
     'UniversalSingleMoleculeExtractor',

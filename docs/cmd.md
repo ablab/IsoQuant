@@ -191,6 +191,8 @@ IsoQuant mode for processing single-cell or spatial transcriptomics data. Availa
 
 * `bulk` - standard bulk RNA-seq mode (default)
 * `tenX_v3` - 10x Genomics single-cell 3' gene expression
+* `tenX_v3_split` - 10x Genomics 3' v3 with [read splitting](single_cell.md#read-splitting-modes) for concatenated reads
+* `tenX_v2_split` - 10x Genomics 3' v2 with [read splitting](single_cell.md#read-splitting-modes) for concatenated reads
 * `visium_5prime` - 10x Genomics Visium 5' spatial transcriptomics
 * `visium_hd` - 10x Genomics Visium HD spatial transcriptomics
 * `curio` - Curio Bioscience spatial data

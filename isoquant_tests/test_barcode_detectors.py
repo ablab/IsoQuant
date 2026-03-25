@@ -22,6 +22,8 @@ from isoquant_lib.barcode_calling.callers import (
     SharedMemoryStereoSplittingBarcodeDetector,
     # 10x Genomics
     TenXBarcodeDetector,
+    TenXSplittingBarcodeDetector,
+    TenXv2SplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
     # Curio
     CurioBarcodeDetector,
@@ -31,6 +33,7 @@ from isoquant_lib.barcode_calling.callers.base import (
     SplittingBarcodeDetectionResult,
     TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
+    TenXSplitBarcodeDetectionResult,
     LinkerBarcodeDetectionResult,
 )
 
@@ -656,6 +659,151 @@ class TestCurioIlluminaDetector:
         TODO: Add real Illumina Curio read sequence.
         """
         pytest.skip("TODO: Add real test sequence from data")
+
+
+class TestTenXSplittingBarcodeDetector:
+    """Test 10x Genomics v3 splitting barcode detector."""
+
+    # Shared barcode whitelist used across tests
+    BARCODES = [
+        "TCCATTGTCAACAAGG",
+        "CAATCTAAGTACTGGT",
+        "GTTTCTAGTGACATGC",
+        "AATCATCCACCTCACC",
+    ]
+
+    # R1 linker and TSO constants (matches TenXBarcodeDetector)
+    R1 = "CTACACGACGCTCTTCCGATCT"
+    TSO_V3 = "CCCATGTACTCTGCGTTGATACCACTGCTT"
+
+    def _make_concat_read(self, bc1, umi1, bc2, umi2):
+        """Build a synthetic concatenated 10x read with two molecules."""
+        polyt = "T" * 20
+        cdna = "GCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGC"
+        return (self.R1 + bc1 + umi1 + polyt + cdna + self.TSO_V3 +
+                self.R1 + bc2 + umi2 + polyt + cdna)
+
+    def test_init(self):
+        detector = TenXSplittingBarcodeDetector(self.BARCODES)
+        assert detector.barcode_indexer is not None
+        assert detector.tso_indexer is not None
+
+    def test_init_sets_tso_indexer(self):
+        detector = TenXSplittingBarcodeDetector(self.BARCODES)
+        # TSO indexer should be able to find the TSO in a sequence
+        assert not detector.tso_indexer.empty()
+
+    def test_no_match_random_sequence(self):
+        detector = TenXSplittingBarcodeDetector(self.BARCODES)
+        result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
+
+        assert isinstance(result, SplittingBarcodeDetectionResult)
+        assert result.read_id == "test_read"
+        assert not result.is_valid()
+
+    def test_returns_splitting_result_type(self):
+        detector = TenXSplittingBarcodeDetector(self.BARCODES)
+        result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
+        assert isinstance(result, SplittingBarcodeDetectionResult)
+
+    def test_single_molecule_returns_one_pattern(self):
+        """Single valid 10x molecule should produce one pattern."""
+        # Use a real single-molecule sequence from TestTenXBarcodeDetector
+        seq = ("TACACGACGCTCTTCCGATCTTCCATTGTCAACAAGGCTCATGGCCCCAT"
+               "TTTTTTTTTTTTTTGTTTTTTTTTTTTTTTTGCTTTTTG")
+        detector = TenXSplittingBarcodeDetector(self.BARCODES)
+        result = detector.find_barcode_umi("test_read", seq)
+
+        assert isinstance(result, SplittingBarcodeDetectionResult)
+        assert len(result.detected_patterns) >= 1
+        assert all(isinstance(p, TenXSplitBarcodeDetectionResult)
+                   for p in result.detected_patterns)
+
+    def test_concatenated_molecules_returns_multiple_patterns(self):
+        """Concatenated read should produce two patterns with correct barcodes."""
+        bc1, umi1 = "TCCATTGTCAACAAGG", "CTCATGGCCCCA"
+        bc2, umi2 = "CAATCTAAGTACTGGT", "ATCCAGGCTAGA"
+        seq = self._make_concat_read(bc1, umi1, bc2, umi2)
+        detector = TenXSplittingBarcodeDetector(self.BARCODES)
+        result = detector.find_barcode_umi("test_read", seq)
+
+        assert isinstance(result, SplittingBarcodeDetectionResult)
+        assert len(result.detected_patterns) == 2
+        barcodes = {p.get_barcode() for p in result.detected_patterns}
+        assert bc1 in barcodes
+        assert bc2 in barcodes
+
+    def test_tso_detected_in_first_molecule(self):
+        """TSO position should be set in the first of two concatenated molecules."""
+        bc1, umi1 = "TCCATTGTCAACAAGG", "CTCATGGCCCCA"
+        bc2, umi2 = "CAATCTAAGTACTGGT", "ATCCAGGCTAGA"
+        seq = self._make_concat_read(bc1, umi1, bc2, umi2)
+        detector = TenXSplittingBarcodeDetector(self.BARCODES)
+        result = detector.find_barcode_umi("test_read", seq)
+
+        # First molecule should have TSO detected
+        first = result.detected_patterns[0]
+        assert isinstance(first, TenXSplitBarcodeDetectionResult)
+        assert first.tso != -1
+
+    def test_result_patterns_are_tenx_split_type(self):
+        """All detected patterns should be TenXSplitBarcodeDetectionResult."""
+        bc1, umi1 = "TCCATTGTCAACAAGG", "CTCATGGCCCCA"
+        bc2, umi2 = "CAATCTAAGTACTGGT", "ATCCAGGCTAGA"
+        seq = self._make_concat_read(bc1, umi1, bc2, umi2)
+        detector = TenXSplittingBarcodeDetector(self.BARCODES)
+        result = detector.find_barcode_umi("test_read", seq)
+
+        for pattern in result.detected_patterns:
+            assert isinstance(pattern, TenXSplitBarcodeDetectionResult)
+
+    def test_header(self):
+        assert "tso_start" in TenXSplittingBarcodeDetector.header()
+
+
+class TestTenXv2SplittingBarcodeDetector:
+    """Test 10x Genomics v2 splitting barcode detector."""
+
+    BARCODES = [
+        "TCCATTGTCAACAAGG",
+        "CAATCTAAGTACTGGT",
+    ]
+
+    TSO_V2 = "GTACTCTGCGTTGATACCACTGCTT"
+    R1 = "CTACACGACGCTCTTCCGATCT"
+
+    def test_init_umi_length(self):
+        """v2 should use 10bp UMI."""
+        detector = TenXv2SplittingBarcodeDetector(self.BARCODES)
+        assert detector.UMI_LEN == 10
+
+    def test_init_tso_sequence(self):
+        """v2 should use the v2 TSO sequence."""
+        detector = TenXv2SplittingBarcodeDetector(self.BARCODES)
+        assert detector.TSO == self.TSO_V2
+
+    def test_tso_indexer_uses_v2_tso(self):
+        """TSO indexer should be initialized with v2 TSO."""
+        detector = TenXv2SplittingBarcodeDetector(self.BARCODES)
+        assert not detector.tso_indexer.empty()
+
+    def test_no_match_random_sequence(self):
+        detector = TenXv2SplittingBarcodeDetector(self.BARCODES)
+        result = detector.find_barcode_umi("test_read", RANDOM_SEQUENCE)
+        assert isinstance(result, SplittingBarcodeDetectionResult)
+        assert not result.is_valid()
+
+    def test_v2_concat_read(self):
+        """v2 split read with v2 TSO should detect two molecules."""
+        polyt = "T" * 20
+        cdna = "GCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGC"
+        seq = (self.R1 + "TCCATTGTCAACAAGG" + "CTCATGGCC" + "AA" + polyt + cdna +
+               self.TSO_V2 +
+               self.R1 + "CAATCTAAGTACTGGT" + "ATCCAGGCTA" + polyt + cdna)
+        detector = TenXv2SplittingBarcodeDetector(self.BARCODES)
+        result = detector.find_barcode_umi("test_read", seq)
+        assert isinstance(result, SplittingBarcodeDetectionResult)
+        assert len(result.detected_patterns) == 2
 
 
 if __name__ == '__main__':

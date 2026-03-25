@@ -32,6 +32,8 @@ from .common import reverese_complement, load_barcodes
 from . import (
     TenXBarcodeDetector,
     TenXv2BarcodeDetector,
+    TenXSplittingBarcodeDetector,
+    TenXv2SplittingBarcodeDetector,
     CurioBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
@@ -48,6 +50,8 @@ READ_CHUNK_SIZE = 100000
 BARCODE_CALLING_MODES = {
     IsoQuantMode.tenX_v3: TenXBarcodeDetector,
     IsoQuantMode.tenX_v2: TenXv2BarcodeDetector,
+    IsoQuantMode.tenX_v3_split: TenXSplittingBarcodeDetector,
+    IsoQuantMode.tenX_v2_split: TenXv2SplittingBarcodeDetector,
     IsoQuantMode.curio: CurioBarcodeDetector,
     IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
@@ -59,6 +63,8 @@ BARCODE_CALLING_MODES = {
 BARCODE_FILES_REQUIRED = {
     IsoQuantMode.tenX_v3: [1],
     IsoQuantMode.tenX_v2: [1],
+    IsoQuantMode.tenX_v3_split: [1],
+    IsoQuantMode.tenX_v2_split: [1],
     IsoQuantMode.curio: [1, 2],
     IsoQuantMode.stereoseq_nosplit: [1],
     IsoQuantMode.stereoseq: [1],
@@ -195,26 +201,43 @@ class BarcodeCaller:
 
         seq_records = []
         require_tso = len(barcode_result.detected_patterns) > 1
-        strands = set()
+        valid_patterns = []
         for r in barcode_result.detected_patterns:
             self.read_stat.add_read(r)
             if not r.is_valid():
                 self.output_file.write("%s\n" % str(r))
                 continue
 
-            read_segment_start = max(0, r.primer - 25, r.polyT - 75)
-            read_segment_end = len(read_sequence) if r.tso5 == -1 else min(len(read_sequence), r.tso5 + 25)
+            read_segment_start = r.get_fasta_segment_start()
+            read_segment_end = r.get_fasta_segment_end(len(read_sequence))
             r.read_id = read_id + ("_%d_%d_%s" % (read_segment_start, read_segment_end, r.strand))
             if r.strand == "+":
                 new_read_seq = read_sequence[read_segment_start:read_segment_end]
             else:
                 new_read_seq = reverese_complement(read_sequence)[read_segment_start:read_segment_end]
-            strands.add(r.strand)
+            valid_patterns.append(r)
             self.output_file.write("%s\n" % str(r))
-            if self.output_sequences and (not require_tso or r.tso5 != -1):
+            if self.output_sequences and (not require_tso or r.get_tso_position() != -1):
                 seq_records.append(SeqRecord.SeqRecord(seq=Seq.Seq(new_read_seq), id=r.read_id, description=""))
 
-        self.read_stat.add_custom_stats("Splits", len(barcode_result.detected_patterns))
+        # Per-read split statistics
+        self.read_stat.add_custom_stats("Input reads", 1)
+        n_valid = len(valid_patterns)
+        self.read_stat.add_custom_stats("Total cDNAs detected", n_valid)
+        if n_valid == 0:
+            self.read_stat.add_custom_stats("Reads with 0 cDNAs", 1)
+        elif n_valid == 1:
+            self.read_stat.add_custom_stats("Reads with 1 cDNA", 1)
+        elif n_valid == 2:
+            self.read_stat.add_custom_stats("Reads with 2 cDNAs", 1)
+            orientation = valid_patterns[0].strand + valid_patterns[1].strand
+            self.read_stat.add_custom_stats("2-cDNA orientation %s" % orientation, 1)
+        else:
+            self.read_stat.add_custom_stats("Reads with 3+ cDNAs", 1)
+
+        tso_count = sum(1 for r in valid_patterns if r.get_tso_position() != -1)
+        self.read_stat.add_custom_stats("TSO detected (valid cDNAs)", tso_count)
+
         if self.output_sequences_file:
             SeqIO.write(seq_records, self.output_sequences_file, "fasta")
 
