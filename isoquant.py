@@ -419,8 +419,7 @@ def run_fusion_detection_for_args(args):
             fd.report(output_path=out_fname)
             logger.info("Fusion candidates for %s written to %s" % (bam_path, out_fname))
         except Exception as e:
-            logger.error("Fusion detection failed for %s: %s" % (bam_path, str(e)))
-            logger.debug("Traceback:", exc_info=True)
+            logger.error("Fusion detection failed for %s: %s" % (bam_path, str(e)), exc_info=True)
     logger.info(" === Fusion detection finished === ")
 
 

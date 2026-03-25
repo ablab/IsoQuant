@@ -42,27 +42,6 @@ class FusionDetector:
         else:
             logger.warning("intervaltree needed for fast queries")
             self.interval_index = None
-        # FAST LOOKUP TABLES
-        self._gene_symbol_to_strand = {}
-        self._gene_symbol_to_id = {}
-        self._gene_id_to_symbol = {}
-        self._gene_symbol_to_symbol = {}
-
-        if self.interval_index is not None:
-            for chrom, tree in self.interval_index.gene_trees.items():
-                for interval in tree:
-                    gene_id = interval.data
-                    try:
-                        g = self.db[gene_id]
-                        attrs = getattr(g, "attributes", {}) or {}
-                        symbol = attrs.get("gene_name", [gene_id])[0]
-                        strand = g.strand
-                        self._gene_id_to_symbol[gene_id] = symbol
-                        self._gene_symbol_to_symbol[symbol] = symbol
-                        self._gene_symbol_to_strand[symbol] = strand
-                        self._gene_symbol_to_id[symbol] = gene_id
-                    except Exception as e:
-                        logger.debug(f"Error loading gene {gene_id}: {e}")
         # Build exon cache upfront for efficient assign_fusion_gene lookups
         self._build_exon_cache()
         self.debug = False
@@ -80,6 +59,26 @@ class FusionDetector:
             return self.aligned_len_from_cigarstring(getattr(read, "cigarstring", None))
         except Exception:
             return 0
+
+    def resolve_gene_name(self, name_or_id):
+            # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible.
+            if not name_or_id:
+                return name_or_id
+            # Quick cache hit
+            if name_or_id in self._resolved_name_cache:
+                return self._resolved_name_cache[name_or_id]
+            # Try direct lookup first
+            resolved = name_or_id
+            try:
+                feat, resolved = self._lookup_feature_by_id(name_or_id)
+                if feat is None:
+                    # If direct lookup failed, try fallback
+                    resolved = self._fallback_gene_lookup(name_or_id)
+            except Exception:
+                resolved = name_or_id
+            # Cache and return
+            self._resolved_name_cache[name_or_id] = resolved
+            return resolved
 
     def _build_exon_cache(self):
         # Pre-build exon cache for all genes to avoid repeated DB queries during fusion gene assignment.
@@ -215,61 +214,7 @@ class FusionDetector:
         # If still nothing, leave gene unchanged (do not turn into intergenic!)
         return gene
 
-    def resolve_gene_name(self, name_or_id, chrom=None, pos=None):
-        """
-        Resolve Ensembl IDs (ENSG*), locus-like names (RP11*), or
-        arbitrary identifiers into an HGNC gene symbol using only:
-        - interval-tree gene index
-        - fast lookup tables (symbol, id)
-        No gffutils database access is used.
-        """
-
-        if not name_or_id:
-            return None
-
-        # 1) Cache hit
-        if name_or_id in self._resolved_name_cache:
-            return self._resolved_name_cache[name_or_id]
-
-        # 2) Already a known HGNC symbol?
-        if name_or_id in self._gene_symbol_to_symbol:
-            resolved = name_or_id
-            self._resolved_name_cache[name_or_id] = resolved
-            return resolved
-
-        # 3) Is it a gene-id we indexed? (ex: ENSG... or internal IDs)
-        if name_or_id in self._gene_id_to_symbol:
-            resolved = self._gene_id_to_symbol[name_or_id]
-            self._resolved_name_cache[name_or_id] = resolved
-            return resolved
-
-        # 4) Try name-based lookup from interval tree
-        hits = []
-        if self.interval_index is not None:
-            hits = self.interval_index.find_genes_by_name(name_or_id)
-
-        if hits:
-            # Use first hit's gene_name
-            g = hits[0]
-            attrs = getattr(g, "attributes", {}) or {}
-            resolved = attrs.get("gene_name", [name_or_id])[0]
-            self._resolved_name_cache[name_or_id] = resolved
-            return resolved
-
-        # 5) Optional coordinate-based fallback if caller provided chrom/pos
-        if chrom and pos and self.interval_index is not None:
-            nearby = self.interval_index.get_genes_at(chrom, pos, window=2000)
-            if nearby:
-                # Pick first gene’s name
-                g = nearby[0]
-                attrs = getattr(g, "attributes", {}) or {}
-                resolved = attrs.get("gene_name", [name_or_id])[0]
-                self._resolved_name_cache[name_or_id] = resolved
-                return resolved
-
-        # 6) Nothing worked → keep original
-        self._resolved_name_cache[name_or_id] = name_or_id
-        return name_or_id
+    
 
     def has_antisense_suffix(self, gene_name):
         # Check if gene name ends with antisense/regulatory suffixes (AS1, DT, etc.)
@@ -734,8 +679,9 @@ class FusionDetector:
     def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
-        left_clean  = self.resolve_gene_name(context1, chrom1, pos1)
-        right_clean = self.resolve_gene_name(context2, chrom2, pos2)   
+        left_clean  = self.resolve_gene_name(self.sanitize_raw_gene(context1, chrom1, pos1))
+        right_clean = self.resolve_gene_name(self.sanitize_raw_gene(context2, chrom2, pos2))  
+        '''  
         (five_prime_gene, three_prime_gene,five_chr, five_pos,three_chr, three_pos) = self.orient_fusion_partners(
             left_clean, right_clean,
             chrom1, pos1,
@@ -746,7 +692,7 @@ class FusionDetector:
         right_clean = three_prime_gene
         chrom1, pos1 = five_chr, five_pos
         chrom2, pos2 = three_chr, three_pos
-        # 2. Now normalize AFTER sanitization
+        '''
         left_symbol  = self.normalize_gene_label(left_clean)
         right_symbol = self.normalize_gene_label(right_clean)
 
@@ -772,6 +718,9 @@ class FusionDetector:
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
+        # Critical: assign resolved genes to metadata NOW (not later)
+        meta["left_gene"] = left_symbol
+        meta["right_gene"] = right_symbol
 
     from functools import lru_cache
     @lru_cache(maxsize=500000)
@@ -1270,6 +1219,10 @@ class FusionDetector:
                                           g1_name, r1, g2_name, r2,
                                           require_gene_names, 
                                           max_intra_chr_distance):
+        # Assign gene names from context query
+        meta["left_gene"] = g1_name
+        meta["right_gene"] = g2_name
+        
         try:
             if isinstance(meta.get("left_gene"), str) and (meta["left_gene"].startswith("RP11") or meta["left_gene"].upper().startswith("ENS")):
                 nearby = self._find_nearby_protein_coding(c1, p1, window=1000)

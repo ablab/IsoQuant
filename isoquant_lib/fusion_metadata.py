@@ -38,18 +38,21 @@ class FusionMetadata:
                     "raw_right_gene": None,
                 },
             )
-            # 3. Update support information (do not touch gene names)
+            # 3. Update support information
             meta["supporting_reads"].update(reads)
             meta["support"] = clustered_support
             meta["consensus_bp"] = consensus_bp
-            # 4. Ensure raw & final gene names remain unchanged
-            #    (They were set correctly in record_fusion()).
-            if not meta.get("raw_left_gene") or not meta.get("raw_right_gene"):
-                # If for some reason raw genes were not recorded earlier, fall back
-                # to whatever left/right genes are currently stored.
-                meta["raw_left_gene"] = meta.get("left_gene")
-                meta["raw_right_gene"] = meta.get("right_gene")
-            # 5. Mark fusion valid (no gene reassignment here)
+            # 4. Extract and ensure gene names from fusion_key (format: "left_gene--right_gene")
+            #    These were assigned in record_fusion() but ensure they're present
+            if not meta.get("left_gene") or not meta.get("right_gene"):
+                try:
+                    parts = fusion_key.split("--")
+                    if len(parts) == 2:
+                        meta["left_gene"] = parts[0]
+                        meta["right_gene"] = parts[1]
+                except Exception as e:
+                    logger.warning(f"Failed to extract genes from fusion_key {fusion_key}: {e}")
+            # 5. Mark fusion valid
             meta["is_valid"] = True
             meta.setdefault("reasons", [])
 
