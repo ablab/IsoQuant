@@ -391,6 +391,10 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
         from ..indexers import KmerIndexer as _KmerIndexer
         self.tso_indexer = _KmerIndexer([self.TSO], kmer_size=7)
 
+    # Maximum allowed distance between R1 end and polyT for a valid split detection.
+    # Expected: R1...BC(16)...UMI(12)...polyT = ~28bp, allow generous margin.
+    MAX_R1_POLYT_DISTANCE = 50
+
     def _find_barcode_umi_split_fwd(self, read_id: str, sequence: str,
                                      offset: int = 0) -> TenXSplitBarcodeDetectionResult:
         """Detect one barcode+UMI+TSO pattern in the forward-oriented subsequence."""
@@ -425,6 +429,46 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
             result.update_coordinates(offset)
         return result
 
+    def _is_consistent_detection(self, r: 'TenXSplitBarcodeDetectionResult') -> bool:
+        """Check if polyT and R1 positions are consistent (belong to the same molecule).
+
+        The fallback R1 search in _find_barcode_umi_fwd can match R1 from a
+        different molecule far away when a spurious polyT is found in cDNA.
+        Reject these by checking that R1 and polyT are within expected distance.
+        """
+        if r.r1 == -1 or r.polyT == -1 or not r.is_valid():
+            return True  # no barcode found, nothing to reject
+        return r.r1 < r.polyT and r.polyT - r.r1 <= self.MAX_R1_POLYT_DISTANCE
+
+    def _scan_strand(self, read_id: str, sequence: str, strand: str,
+                     read_result: SplittingBarcodeDetectionResult) -> None:
+        """Scan one strand for barcode patterns, appending results."""
+        current_start = 0
+        prev_start = -1
+        while True:
+            seq = sequence[current_start:]
+            r = self._find_barcode_umi_split_fwd(read_id, seq, offset=current_start)
+            if r.polyT == -1:
+                break
+            r.set_strand(strand)
+
+            if self._is_consistent_detection(r):
+                read_result.append(r)
+                if r.tso != -1:
+                    next_start = r.tso + len(self.TSO)
+                else:
+                    next_start = r.polyT + self.DEFAULT_POLYT_STEP
+            else:
+                # polyT and R1 are from different molecules — skip to before R1
+                # so the next iteration can detect the molecule with proper R1/polyT proximity
+                next_start = r.r1 - len(self.R1) - 10
+
+            next_start = max(prev_start + self.MIN_SPLIT_STEP, next_start)
+            prev_start = next_start
+            current_start = next_start
+            if len(sequence) - current_start < self.MIN_REMAINING_SEQ:
+                break
+
     def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
         """Find all barcode+UMI patterns in a (potentially concatenated) read.
 
@@ -434,45 +478,11 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
         read_result = SplittingBarcodeDetectionResult(read_id)
 
         # Forward strand scan
-        current_start = 0
-        prev_start = -1
-        while True:
-            seq = sequence[current_start:]
-            r = self._find_barcode_umi_split_fwd(read_id, seq, offset=current_start)
-            if r.polyT == -1:
-                break
-            r.set_strand("+")
-            read_result.append(r)
-            if r.tso != -1:
-                next_start = r.tso + len(self.TSO)
-            else:
-                next_start = r.polyT + self.DEFAULT_POLYT_STEP
-            next_start = max(prev_start + self.MIN_SPLIT_STEP, next_start)
-            prev_start = next_start
-            current_start = next_start
-            if len(sequence) - current_start < self.MIN_REMAINING_SEQ:
-                break
+        self._scan_strand(read_id, sequence, "+", read_result)
 
         # Reverse strand scan — collect into the same result
         rev_seq = reverese_complement(sequence)
-        current_start = 0
-        prev_start = -1
-        while True:
-            seq = rev_seq[current_start:]
-            r = self._find_barcode_umi_split_fwd(read_id, seq, offset=current_start)
-            if r.polyT == -1:
-                break
-            r.set_strand("-")
-            read_result.append(r)
-            if r.tso != -1:
-                next_start = r.tso + len(self.TSO)
-            else:
-                next_start = r.polyT + self.DEFAULT_POLYT_STEP
-            next_start = max(prev_start + self.MIN_SPLIT_STEP, next_start)
-            prev_start = next_start
-            current_start = next_start
-            if len(rev_seq) - current_start < self.MIN_REMAINING_SEQ:
-                break
+        self._scan_strand(read_id, rev_seq, "-", read_result)
 
         if read_result.empty():
             r = self._find_barcode_umi_split_fwd(read_id, sequence)
