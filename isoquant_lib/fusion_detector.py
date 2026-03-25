@@ -45,14 +45,24 @@ class FusionDetector:
         # FAST LOOKUP TABLES
         self._gene_symbol_to_strand = {}
         self._gene_symbol_to_id = {}
+        self._gene_id_to_symbol = {}
+        self._gene_symbol_to_symbol = {}
 
         if self.interval_index is not None:
             for chrom, tree in self.interval_index.gene_trees.items():
                 for interval in tree:
-                    gene_id, gene_name, strand = interval.data
-                    if gene_name:
-                        self._gene_symbol_to_strand[gene_name] = strand
-                        self._gene_symbol_to_id[gene_name] = gene_id   
+                    gene_id = interval.data
+                    try:
+                        g = self.db[gene_id]
+                        attrs = getattr(g, "attributes", {}) or {}
+                        symbol = attrs.get("gene_name", [gene_id])[0]
+                        strand = g.strand
+                        self._gene_id_to_symbol[gene_id] = symbol
+                        self._gene_symbol_to_symbol[symbol] = symbol
+                        self._gene_symbol_to_strand[symbol] = strand
+                        self._gene_symbol_to_id[symbol] = gene_id
+                    except Exception as e:
+                        logger.debug(f"Error loading gene {gene_id}: {e}")
         # Build exon cache upfront for efficient assign_fusion_gene lookups
         self._build_exon_cache()
         self.debug = False
@@ -726,13 +736,11 @@ class FusionDetector:
             return
         left_clean  = self.resolve_gene_name(context1, chrom1, pos1)
         right_clean = self.resolve_gene_name(context2, chrom2, pos2)   
-        logger.info(f"clean fusion: '{left_clean}' ← '{right_clean}'") 
         (five_prime_gene, three_prime_gene,five_chr, five_pos,three_chr, three_pos) = self.orient_fusion_partners(
             left_clean, right_clean,
             chrom1, pos1,
             chrom2, pos2
         )
-        logger.info(f"correct orientation: '{five_prime_gene}' ← '{three_prime_gene}'") 
         # Replace original values with oriented ones
         left_clean  = five_prime_gene
         right_clean = three_prime_gene
@@ -1524,9 +1532,9 @@ class FusionDetector:
             c1, p1, c2, p2 = consensus_bp
             g1_name, r1 = self._context_query(c1, p1)
             g2_name, r2 = self._context_query(c2, p2)
-            self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
-                                                   g1_name, r1, g2_name, r2,
-                                                   require_gene_names, max_intra_chr_distance) 
+            # self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
+            #                                       g1_name, r1, g2_name, r2,
+            #                                       require_gene_names, max_intra_chr_distance) 
                 # skip reconstruction for mitochondrial candidates and invalid ones
             if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
                 self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)

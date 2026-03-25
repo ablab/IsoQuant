@@ -30,11 +30,8 @@ class GenomicIntervalIndex:
                 end = int(gene.end)
                 gene_id = gene.id
                 # Store only the feature ID in the interval tree (not the whole object)
-                attrs = gene.attributes if hasattr(gene, "attributes") else {}
-                gene_name = attrs.get("gene_name", [gene_id])[0]
-                strand = gene.strand
-                # store tuple: (gene_id, gene_name, strand)
-                self.gene_trees[chrom][start:end+1] = (gene_id, gene_name, strand)
+                # Database will be queried when needed for additional attributes
+                self.gene_trees[chrom][start:end+1] = gene_id
                 gene_count += 1
                 # Log progress for large genomes
                 if gene_count % 10000 == 0:
@@ -53,7 +50,7 @@ class GenomicIntervalIndex:
                 start = int(exon.start)
                 end = int(exon.end)
                 exon_id = exon.id
-                # Store only the feature ID in the interval tree (not the whole object)
+                # Store only the feature ID in the interval tree
                 self.exon_trees[chrom][start:end+1] = exon_id
                 exon_count += 1
                 # Log progress for large genomes

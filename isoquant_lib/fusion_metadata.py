@@ -8,22 +8,13 @@ class FusionMetadata:
         self.detector = detector
 
     def process_all(self, min_support=1):
-        """
-        Simplified metadata builder:
-        - Only applies gate checks (support + consensus clustering).
-        - Does NOT reassign genes or override orientation.
-        - Keeps all gene assignments exactly as recorded in record_fusion().
-        """
-
         detector = self.detector
         logger.info(
             f"FusionMetadata: Processing {len(detector.fusion_candidates)} fusion keys "
             f"with min_support={min_support}"
         )
-
         # Iterate through fusion candidates created earlier in record_fusion()
         for fusion_key, reads in list(detector.fusion_candidates.items()):
-
             # 1. Apply early support + breakpoint-clustering gates
             gate_result = self._passes_all_gates(fusion_key, reads, min_support)
             if not gate_result:
@@ -32,11 +23,9 @@ class FusionMetadata:
                 if meta is not None:
                     meta["is_valid"] = False
                     meta.setdefault("reasons", []).append("Failed gating (support or clustering)")
-                continue
-
+                    continue
             support, consensus_bp, clustered_support = gate_result
             left_chr, left_pos, right_chr, right_pos = consensus_bp
-
             # 2. Retrieve or create metadata as initialized during record_fusion()
             meta = detector.fusion_metadata.setdefault(
                 fusion_key,
@@ -49,12 +38,10 @@ class FusionMetadata:
                     "raw_right_gene": None,
                 },
             )
-
             # 3. Update support information (do not touch gene names)
             meta["supporting_reads"].update(reads)
             meta["support"] = clustered_support
             meta["consensus_bp"] = consensus_bp
-
             # 4. Ensure raw & final gene names remain unchanged
             #    (They were set correctly in record_fusion()).
             if not meta.get("raw_left_gene") or not meta.get("raw_right_gene"):
@@ -62,16 +49,9 @@ class FusionMetadata:
                 # to whatever left/right genes are currently stored.
                 meta["raw_left_gene"] = meta.get("left_gene")
                 meta["raw_right_gene"] = meta.get("right_gene")
-
             # 5. Mark fusion valid (no gene reassignment here)
             meta["is_valid"] = True
             meta.setdefault("reasons", [])
-
-        # 6. Do NOT rename, canonicalize, or reorder keys.
-        #    The fusion_key already represents the correct orientation as set
-        #    in record_fusion().
-
-    # Done — all metadata preserved exactly as recorded earlier
 
     def _passes_all_gates(self, fusion_key, reads, min_support):
         #  Validate fusion against support, breakpoint, and consensus gates.
