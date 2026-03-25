@@ -30,7 +30,11 @@ class GenomicIntervalIndex:
                 end = int(gene.end)
                 gene_id = gene.id
                 # Store only the feature ID in the interval tree (not the whole object)
-                self.gene_trees[chrom][start:end+1] = gene_id
+                attrs = gene.attributes if hasattr(gene, "attributes") else {}
+                gene_name = attrs.get("gene_name", [gene_id])[0]
+                strand = gene.strand
+                # store tuple: (gene_id, gene_name, strand)
+                self.gene_trees[chrom][start:end+1] = (gene_id, gene_name, strand)
                 gene_count += 1
                 # Log progress for large genomes
                 if gene_count % 10000 == 0:
@@ -144,3 +148,6 @@ class GenomicIntervalIndex:
                 except Exception:
                     pass
         return matching_genes
+
+
+

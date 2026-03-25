@@ -40,8 +40,19 @@ class FusionDetector:
         if IntervalTree is not None:
             self.interval_index = GenomicIntervalIndex(self.db)
         else:
-            logger.warning("intervaltree not available; falling back to gffutils queries")
+            logger.warning("intervaltree needed for fast queries")
             self.interval_index = None
+        # FAST LOOKUP TABLES
+        self._gene_symbol_to_strand = {}
+        self._gene_symbol_to_id = {}
+
+        if self.interval_index is not None:
+            for chrom, tree in self.interval_index.gene_trees.items():
+                for interval in tree:
+                    gene_id, gene_name, strand = interval.data
+                    if gene_name:
+                        self._gene_symbol_to_strand[gene_name] = strand
+                        self._gene_symbol_to_id[gene_name] = gene_id   
         # Build exon cache upfront for efficient assign_fusion_gene lookups
         self._build_exon_cache()
         self.debug = False
@@ -194,25 +205,61 @@ class FusionDetector:
         # If still nothing, leave gene unchanged (do not turn into intergenic!)
         return gene
 
-    def resolve_gene_name(self, name_or_id):
-        # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible.
+    def resolve_gene_name(self, name_or_id, chrom=None, pos=None):
+        """
+        Resolve Ensembl IDs (ENSG*), locus-like names (RP11*), or
+        arbitrary identifiers into an HGNC gene symbol using only:
+        - interval-tree gene index
+        - fast lookup tables (symbol, id)
+        No gffutils database access is used.
+        """
+
         if not name_or_id:
-            return name_or_id
-        # Quick cache hit
+            return None
+
+        # 1) Cache hit
         if name_or_id in self._resolved_name_cache:
             return self._resolved_name_cache[name_or_id]
-        # Try direct lookup first
-        resolved = name_or_id
-        try:
-            feat, resolved = self._lookup_feature_by_id(name_or_id)
-            if feat is None:
-                # If direct lookup failed, try fallback
-                resolved = self._fallback_gene_lookup(name_or_id)
-        except Exception:
+
+        # 2) Already a known HGNC symbol?
+        if name_or_id in self._gene_symbol_to_symbol:
             resolved = name_or_id
-        # Cache and return
-        self._resolved_name_cache[name_or_id] = resolved
-        return resolved
+            self._resolved_name_cache[name_or_id] = resolved
+            return resolved
+
+        # 3) Is it a gene-id we indexed? (ex: ENSG... or internal IDs)
+        if name_or_id in self._gene_id_to_symbol:
+            resolved = self._gene_id_to_symbol[name_or_id]
+            self._resolved_name_cache[name_or_id] = resolved
+            return resolved
+
+        # 4) Try name-based lookup from interval tree
+        hits = []
+        if self.interval_index is not None:
+            hits = self.interval_index.find_genes_by_name(name_or_id)
+
+        if hits:
+            # Use first hit's gene_name
+            g = hits[0]
+            attrs = getattr(g, "attributes", {}) or {}
+            resolved = attrs.get("gene_name", [name_or_id])[0]
+            self._resolved_name_cache[name_or_id] = resolved
+            return resolved
+
+        # 5) Optional coordinate-based fallback if caller provided chrom/pos
+        if chrom and pos and self.interval_index is not None:
+            nearby = self.interval_index.get_genes_at(chrom, pos, window=2000)
+            if nearby:
+                # Pick first gene’s name
+                g = nearby[0]
+                attrs = getattr(g, "attributes", {}) or {}
+                resolved = attrs.get("gene_name", [name_or_id])[0]
+                self._resolved_name_cache[name_or_id] = resolved
+                return resolved
+
+        # 6) Nothing worked → keep original
+        self._resolved_name_cache[name_or_id] = name_or_id
+        return name_or_id
 
     def has_antisense_suffix(self, gene_name):
         # Check if gene name ends with antisense/regulatory suffixes (AS1, DT, etc.)
@@ -677,9 +724,20 @@ class FusionDetector:
     def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
-        left_clean  = self.sanitize_raw_gene(context1, chrom1, pos1)
-        right_clean = self.sanitize_raw_gene(context2, chrom2, pos2)
-
+        left_clean  = self.resolve_gene_name(context1, chrom1, pos1)
+        right_clean = self.resolve_gene_name(context2, chrom2, pos2)   
+        logger.info(f"clean fusion: '{left_clean}' ← '{right_clean}'") 
+        (five_prime_gene, three_prime_gene,five_chr, five_pos,three_chr, three_pos) = self.orient_fusion_partners(
+            left_clean, right_clean,
+            chrom1, pos1,
+            chrom2, pos2
+        )
+        logger.info(f"correct orientation: '{five_prime_gene}' ← '{three_prime_gene}'") 
+        # Replace original values with oriented ones
+        left_clean  = five_prime_gene
+        right_clean = three_prime_gene
+        chrom1, pos1 = five_chr, five_pos
+        chrom2, pos2 = three_chr, three_pos
         # 2. Now normalize AFTER sanitization
         left_symbol  = self.normalize_gene_label(left_clean)
         right_symbol = self.normalize_gene_label(right_clean)
@@ -706,6 +764,72 @@ class FusionDetector:
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
+
+    from functools import lru_cache
+    @lru_cache(maxsize=500000)
+    def get_strand_cached(self, gene_name):
+        return self.get_gene_strand(gene_name)
+
+    @lru_cache(maxsize=500000)
+    def resolve_cached(self, gene_name):
+        return self.resolve_gene_name(gene_name)    
+
+    def orient_fusion_partners(self, gene1, gene2,chrom1, pos1, chrom2, pos2):
+        # Resolve ENSG names only once using the cache
+        def fast_resolve(g):
+            # If already a symbol in our table → bypass DB completely
+            if g in self._gene_symbol_to_id:
+                return g
+            # If it's an ENSG → do one resolution and cache results
+            resolved = self.resolve_gene_name(g)
+            if resolved:
+                self._gene_symbol_to_strand.setdefault(
+                    resolved, 
+                    self.get_gene_strand(resolved, chrom=None, pos=None)
+                )
+            return resolved
+
+        g1 = fast_resolve(gene1)
+        g2 = fast_resolve(gene2)
+
+        # Purely in-memory lookup
+        s1 = self._gene_symbol_to_strand.get(g1)
+        s2 = self._gene_symbol_to_strand.get(g2)
+
+            # Utility that returns oriented order
+        def orient_same_chrom():
+                # Same strand and known?
+            if s1 == s2 and s1 in ("+", "-"):
+                if s1 == "+":
+                        # + strand: smaller coordinate is 5'
+                    if pos1 <= pos2:
+                        return (g1, g2, chrom1, pos1, chrom2, pos2)
+                    else:
+                        return (g2, g1, chrom2, pos2, chrom1, pos1)
+                else:
+                        # - strand: larger coordinate is 5'
+                    if pos1 >= pos2:
+                        return (g1, g2, chrom1, pos1, chrom2, pos2)
+                    else:
+                        return (g2, g1, chrom2, pos2, chrom1, pos1)
+
+                # Different or unknown strands → fallback genomic ordering
+            if pos1 <= pos2:
+                return (g1, g2, chrom1, pos1, chrom2, pos2)
+            else:
+                return (g2, g1, chrom2, pos2, chrom1, pos1)
+
+            # MAIN LOGIC
+        if chrom1 == chrom2:
+            return orient_same_chrom()
+
+        # Different chromosomes:
+        # "Earlier" chromosome becomes 5'
+        if chrom1 < chrom2:
+            return (g1, g2, chrom1, pos1, chrom2, pos2)
+        else:
+            return (g2, g1, chrom2, pos2, chrom1, pos1)
+
 
     def normalize_gene_label(self, gene):
         if not gene or gene == "intergenic":
@@ -847,7 +971,7 @@ class FusionDetector:
             self.fusion_assigned_pairs[new_key] = self.fusion_assigned_pairs.pop(old_key)
 
     def _merge_fusion_structures(self, keep_key, discard_key):
-        # Merge all internal structures from discard_key into keep_key atomically.
+        #logger.info(f"Consolidating duplicate fusion: '{keep_key}' ← '{discard_key}'" Merge all internal structures from discard_key into keep_key atomically.
         logger.info(f"Consolidating duplicate fusion: '{keep_key}' ← '{discard_key}'")
         # Merge fusion_candidates: union of read sets
         if discard_key in self.fusion_candidates and keep_key in self.fusion_candidates:
