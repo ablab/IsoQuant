@@ -395,19 +395,70 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
     # Expected: R1...BC(16)...UMI(12)...polyT = ~28bp, allow generous margin.
     MAX_R1_POLYT_DISTANCE = 50
 
+    # Maximum distance from polyT to search for TSO (covers cDNA insert).
+    MAX_TSO_SEARCH_DISTANCE = 1000
+
+    def _find_barcode_umi_fwd_local(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
+        """Find barcode near polyT only — no fallback to full-read R1 search.
+
+        In split mode, the fallback R1 search is wasteful because
+        the consistency check rejects far-away R1 matches anyway.
+        """
+        polyt_start = find_polyt_start(sequence)
+        if polyt_start == -1:
+            return TenXBarcodeDetectionResult(read_id, polyT=-1)
+
+        r1_occurrences = self.r1_indexer.get_occurrences(sequence[0:polyt_start + 1])
+        r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
+                                                   self.r1_indexer.k, self.R1,
+                                                   r1_occurrences, min_score=11,
+                                                   end_delta=self.TERMINAL_MATCH_DELTA)
+
+        if r1_start is None:
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
+
+        barcode_start = r1_end + 1
+        barcode_end = r1_end + self.BARCODE_LEN_10X + 1
+        potential_barcode = sequence[barcode_start:barcode_end + 1]
+        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode,
+                                                                 max_hits=self.max_barcodes_hits,
+                                                                 min_kmers=self.min_matching_kmers)
+        barcode, bc_score, bc_start, bc_end = \
+            find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
+                                              min_score=self.min_score,
+                                              score_diff=self.score_diff)
+
+        if barcode is None:
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
+
+        read_barcode_end = barcode_start + bc_end - 1
+        potential_umi_start = read_barcode_end + 1
+        potential_umi_end = polyt_start - 1
+        if potential_umi_end - potential_umi_start <= 5:
+            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
+        potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
+
+        good_umi = self.UMI_LEN - self.UMI_LEN_DELTA <= len(potential_umi) <= self.UMI_LEN + self.UMI_LEN_DELTA
+        if not potential_umi:
+            return TenXBarcodeDetectionResult(read_id, barcode, BC_score=bc_score, polyT=polyt_start, r1=r1_end)
+        return TenXBarcodeDetectionResult(read_id, barcode, potential_umi, bc_score, good_umi,
+                                          polyT=polyt_start, r1=r1_end)
+
     def _find_barcode_umi_split_fwd(self, read_id: str, sequence: str,
                                      offset: int = 0) -> TenXSplitBarcodeDetectionResult:
         """Detect one barcode+UMI+TSO pattern in the forward-oriented subsequence."""
-        base_result = self._find_barcode_umi_fwd(read_id, sequence)
+        base_result = self._find_barcode_umi_fwd_local(read_id, sequence)
 
         tso_start = -1
         if base_result.polyT != -1:
             tso_search_start = base_result.polyT
+            tso_search_end = min(len(sequence) - 1,
+                                 tso_search_start + self.MAX_TSO_SEARCH_DISTANCE)
             tso_occurrences = self.tso_indexer.get_occurrences_substr(
-                sequence, tso_search_start, len(sequence) - 1
+                sequence, tso_search_start, tso_search_end
             )
             tso_s, tso_e = detect_exact_positions(
-                sequence, tso_search_start, len(sequence),
+                sequence, tso_search_start, tso_search_end + 1,
                 self.tso_indexer.k, self.TSO,
                 tso_occurrences,
                 min_score=20, start_delta=2, end_delta=2
