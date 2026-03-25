@@ -30,7 +30,6 @@ class GenomicIntervalIndex:
                 end = int(gene.end)
                 gene_id = gene.id
                 # Store only the feature ID in the interval tree (not the whole object)
-                # Database will be queried when needed for additional attributes
                 self.gene_trees[chrom][start:end+1] = gene_id
                 gene_count += 1
                 # Log progress for large genomes
@@ -50,7 +49,7 @@ class GenomicIntervalIndex:
                 start = int(exon.start)
                 end = int(exon.end)
                 exon_id = exon.id
-                # Store only the feature ID in the interval tree
+                # Store only the feature ID in the interval tree (not the whole object)
                 self.exon_trees[chrom][start:end+1] = exon_id
                 exon_count += 1
                 # Log progress for large genomes
@@ -145,6 +144,3 @@ class GenomicIntervalIndex:
                 except Exception:
                     pass
         return matching_genes
-
-
-

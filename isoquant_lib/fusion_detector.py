@@ -40,7 +40,7 @@ class FusionDetector:
         if IntervalTree is not None:
             self.interval_index = GenomicIntervalIndex(self.db)
         else:
-            logger.warning("intervaltree needed for fast queries")
+            logger.warning("intervaltree not available; falling back to gffutils queries")
             self.interval_index = None
         # Build exon cache upfront for efficient assign_fusion_gene lookups
         self._build_exon_cache()
@@ -59,26 +59,6 @@ class FusionDetector:
             return self.aligned_len_from_cigarstring(getattr(read, "cigarstring", None))
         except Exception:
             return 0
-
-    def resolve_gene_name(self, name_or_id):
-            # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible.
-            if not name_or_id:
-                return name_or_id
-            # Quick cache hit
-            if name_or_id in self._resolved_name_cache:
-                return self._resolved_name_cache[name_or_id]
-            # Try direct lookup first
-            resolved = name_or_id
-            try:
-                feat, resolved = self._lookup_feature_by_id(name_or_id)
-                if feat is None:
-                    # If direct lookup failed, try fallback
-                    resolved = self._fallback_gene_lookup(name_or_id)
-            except Exception:
-                resolved = name_or_id
-            # Cache and return
-            self._resolved_name_cache[name_or_id] = resolved
-            return resolved
 
     def _build_exon_cache(self):
         # Pre-build exon cache for all genes to avoid repeated DB queries during fusion gene assignment.
@@ -192,29 +172,26 @@ class FusionDetector:
         except Exception:
             pass
         return name_or_id
-    
-    def sanitize_raw_gene(self, gene, chrom, pos):
-        # Keep original if protein coding
-        biotype = self._get_gene_biotype_by_symbol_or_coords(gene, chrom, pos)
-        if biotype == "protein_coding":
-            return gene
 
-        # Try collapsing antisense/pseudogene naming like HMGA1P3 → HMGA1
-        collapsed = self.canonical_locus_name(gene)
-
-        # If collapsed is different (i.e. suffix removed), try using that
-        if collapsed != gene:
-            return collapsed
-
-        # Rescue: find nearby coding gene
-        rescue = self._find_nearby_protein_coding(chrom, pos, window=2000)
-        if rescue:
-            return rescue
-
-        # If still nothing, leave gene unchanged (do not turn into intergenic!)
-        return gene
-
-    
+    def resolve_gene_name(self, name_or_id):
+        # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible.
+        if not name_or_id:
+            return name_or_id
+        # Quick cache hit
+        if name_or_id in self._resolved_name_cache:
+            return self._resolved_name_cache[name_or_id]
+        # Try direct lookup first
+        resolved = name_or_id
+        try:
+            feat, resolved = self._lookup_feature_by_id(name_or_id)
+            if feat is None:
+                # If direct lookup failed, try fallback
+                resolved = self._fallback_gene_lookup(name_or_id)
+        except Exception:
+            resolved = name_or_id
+        # Cache and return
+        self._resolved_name_cache[name_or_id] = resolved
+        return resolved
 
     def has_antisense_suffix(self, gene_name):
         # Check if gene name ends with antisense/regulatory suffixes (AS1, DT, etc.)
@@ -304,8 +281,8 @@ class FusionDetector:
         if gtype == "protein_coding":
             return 60.0
         # Penalize pseudogenes heavily
-        # if gtype and "pseudogene" in gtype.lower():
-            #return -90.0
+        if gtype and "pseudogene" in gtype.lower():
+            return -90.0
         # Mild penalty for non-coding/ambiguous biotypes
         if gtype in ("antisense", "lncRNA", "lincRNA", "processed_transcript",
                      "sense_intronic", "sense_overlapping", "transcribed_unprocessed_pseudogene"):
@@ -608,7 +585,7 @@ class FusionDetector:
         except Exception:
             return ()
 
-    def _is_softclip_orientation_valid(self, read, clip_side, sa_chr, sa_pos):
+    def _is_softclip_orientation_valid(self, read, clip_side, sa_chr, sa_pos):    
         # Returns True if soft-clip direction is consistent with an outward-facing
         # Same chromosome required for directional check
         if read.reference_name != sa_chr:
@@ -646,29 +623,12 @@ class FusionDetector:
         try:
             hits = self._cached_aligner_map(seq)
             for hit in hits:
-                hit_len = self._get_hit_length(hit)
+                hit_len = (getattr(hit, "r_en", None) - getattr(hit, "r_st", None)) if getattr(hit, "r_en", None) else getattr(hit, "mlen", None) or getattr(hit, "alen", None) or 0
                 if hit_len and hit_len >= 50:
                     return hit  # first good hit
             return None
         except Exception:
             return None
-
-    def _get_hit_length(self, hit):
-        # Calculate the aligned length from a hit object.
-        r_en = getattr(hit, "r_en", None)
-        if r_en is not None:
-            r_st = getattr(hit, "r_st", None)
-            return r_en - r_st
-        else:
-            mlen = getattr(hit, "mlen", None)
-            if mlen is not None:
-                return mlen
-            else:
-                alen = getattr(hit, "alen", None)
-                if alen is not None:
-                    return alen
-                else:
-                    return 0
 
     def _safe_gene_token(self, g):
         # Convert None/empty to 'intergenic'
@@ -677,33 +637,22 @@ class FusionDetector:
         return str(g)
 
     def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
+        # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
+        if self.has_antisense_suffix(context1) or self.has_antisense_suffix(context2):
+            return
+        # Skip fusions with intergenic partners
+        if context1 == "intergenic" or context2 == "intergenic":
+            return
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
-        left_clean  = self.resolve_gene_name(self.sanitize_raw_gene(context1, chrom1, pos1))
-        right_clean = self.resolve_gene_name(self.sanitize_raw_gene(context2, chrom2, pos2))  
-        '''  
-        (five_prime_gene, three_prime_gene,five_chr, five_pos,three_chr, three_pos) = self.orient_fusion_partners(
-            left_clean, right_clean,
-            chrom1, pos1,
-            chrom2, pos2
-        )
-        # Replace original values with oriented ones
-        left_clean  = five_prime_gene
-        right_clean = three_prime_gene
-        chrom1, pos1 = five_chr, five_pos
-        chrom2, pos2 = three_chr, three_pos
-        '''
-        left_symbol  = self.normalize_gene_label(left_clean)
-        right_symbol = self.normalize_gene_label(right_clean)
+        left_symbol = self.normalize_gene_label(context1)
+        right_symbol = self.normalize_gene_label(context2)
 
-        # 3. Use the same values for raw assignment
-        left_raw  = left_clean
-        right_raw = right_clean
+        left_raw = context1   # original ID (likely ENSG)
+        right_raw = context2
 
-        # 4. Build fusion key from the sanitized & normalized names
         fusion_key = f"{left_symbol}--{right_symbol}"
 
-        # 5. Now store the raw genes
         self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
 
         self.fusion_candidates[fusion_key].add(read_name)
@@ -718,90 +667,23 @@ class FusionDetector:
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
-        # Critical: assign resolved genes to metadata NOW (not later)
-        meta["left_gene"] = left_symbol
-        meta["right_gene"] = right_symbol
-
-    from functools import lru_cache
-    @lru_cache(maxsize=500000)
-    def get_strand_cached(self, gene_name):
-        return self.get_gene_strand(gene_name)
-
-    @lru_cache(maxsize=500000)
-    def resolve_cached(self, gene_name):
-        return self.resolve_gene_name(gene_name)    
-
-    def orient_fusion_partners(self, gene1, gene2,chrom1, pos1, chrom2, pos2):
-        # Resolve ENSG names only once using the cache
-        def fast_resolve(g):
-            # If already a symbol in our table → bypass DB completely
-            if g in self._gene_symbol_to_id:
-                return g
-            # If it's an ENSG → do one resolution and cache results
-            resolved = self.resolve_gene_name(g)
-            if resolved:
-                self._gene_symbol_to_strand.setdefault(
-                    resolved, 
-                    self.get_gene_strand(resolved, chrom=None, pos=None)
-                )
-            return resolved
-
-        g1 = fast_resolve(gene1)
-        g2 = fast_resolve(gene2)
-
-        # Purely in-memory lookup
-        s1 = self._gene_symbol_to_strand.get(g1)
-        s2 = self._gene_symbol_to_strand.get(g2)
-
-            # Utility that returns oriented order
-        def orient_same_chrom():
-                # Same strand and known?
-            if s1 == s2 and s1 in ("+", "-"):
-                if s1 == "+":
-                        # + strand: smaller coordinate is 5'
-                    if pos1 <= pos2:
-                        return (g1, g2, chrom1, pos1, chrom2, pos2)
-                    else:
-                        return (g2, g1, chrom2, pos2, chrom1, pos1)
-                else:
-                        # - strand: larger coordinate is 5'
-                    if pos1 >= pos2:
-                        return (g1, g2, chrom1, pos1, chrom2, pos2)
-                    else:
-                        return (g2, g1, chrom2, pos2, chrom1, pos1)
-
-                # Different or unknown strands → fallback genomic ordering
-            if pos1 <= pos2:
-                return (g1, g2, chrom1, pos1, chrom2, pos2)
-            else:
-                return (g2, g1, chrom2, pos2, chrom1, pos1)
-
-            # MAIN LOGIC
-        if chrom1 == chrom2:
-            return orient_same_chrom()
-
-        # Different chromosomes:
-        # "Earlier" chromosome becomes 5'
-        if chrom1 < chrom2:
-            return (g1, g2, chrom1, pos1, chrom2, pos2)
-        else:
-            return (g2, g1, chrom2, pos2, chrom1, pos1)
-
+        # store the raw assigned pair for this read so we don't need to re-run assignment later
+        try:
+            self.fusion_assigned_pairs[fusion_key][read_name] = (context1, context2)
+        except Exception:
+            pass
 
     def normalize_gene_label(self, gene):
-        if not gene or gene == "intergenic":
+        # Normalize any gene identifier to a canonical gene symbol string.
+        if not gene:
             return "intergenic"
-
-            # Collapse antisense suffixes
+        # Resolve ENSG / IDs → symbol if possible
+        gene = self.resolve_gene_name(gene)
+        # Collapse antisense / divergent
         gene = self.canonical_locus_name(gene)
-
-        # If it's an ENSG ID, resolve it to symbol.
-        if gene.startswith("ENSG"):
-            resolved = self.resolve_gene_name(gene)
-            return resolved or gene
-
-        # Otherwise, assume it's already an HGNC gene symbol.
-        # DO NOT resolve again. DO NOT turn into intergenic.
+        # Safety net
+        if gene is None or gene.startswith("ENSG"):
+            return "intergenic"
         return gene
 
     def build_metadata(self, min_support=1):
@@ -817,8 +699,6 @@ class FusionDetector:
             logger.debug("Traceback:", exc_info=True)
             # Fallback: if processing fails, keep original behavior minimal (no-op)
             return
-        # After metadata is finalized, consolidate duplicate fusions (swapped partners)
-        self.consolidate_duplicate_fusions()
 
     def cluster_breakpoints(self, bp_counts, window):
         if not bp_counts:
@@ -830,10 +710,53 @@ class FusionDetector:
         for bp_tuple, w in bp_counts.items():
             c1, p1, c2, p2 = bp_tuple
             by_pair[(c1, c2)].append((p1, p2, w))
+        def best_window(items, w):
+            # Sort by p1; we’ll apply a sliding window on p1, and inside it on p2
+            items.sort(key=lambda x: x[0])  # sort by p1
+            best_total = 0
+            best_p1 = 0
+            best_p2 = 0
+            n = len(items)
+            j = 0
+            sum_w = 0
+            # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
+            # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
+            for i in range(n):
+                p1_i, p2_i, wi = items[i]
+                # Expand p1-window
+                sum_w += wi
+                # Shrink from left until p1-range <= w
+                while p1_i - items[j][0] > w:
+                    sum_w -= items[j][2]
+                    j += 1
+                # Now consider only slice items[j:i+1]; build p2-sorted view (small slice)
+                slice_view = items[j:i+1]
+                slice_view.sort(key=lambda x: x[1])  # sort by p2
+                # Secondary sliding window on p2
+                k = 0
+                cur_sum = 0
+                for t in range(len(slice_view)):
+                    cur_sum += slice_view[t][2]
+                    while slice_view[t][1] - slice_view[k][1] > w:
+                        cur_sum -= slice_view[k][2]
+                        k += 1
+                    if cur_sum > best_total:
+                        # Weighted mean p1/p2 for current p2-window [k..t]
+                        s_w = 0
+                        s_p1 = 0
+                        s_p2 = 0
+                        for x in slice_view[k:t+1]:
+                            s_w += x[2]
+                            s_p1 += x[0] * x[2]
+                            s_p2 += x[1] * x[2]
+                        best_total = s_w
+                        best_p1 = s_p1 // s_w
+                        best_p2 = s_p2 // s_w
+            return best_p1, best_p2, best_total
         best_pair = None
         best = (None, None, 0)
         for pair, items in by_pair.items():
-            c_p1, c_p2, total = self._best_window_for_breakpoints(items, window)
+            c_p1, c_p2, total = best_window(items, window)
             if total > best[2]:
                 best_pair = pair
                 best = (c_p1, c_p2, total)
@@ -843,157 +766,6 @@ class FusionDetector:
         (c1, c2) = best_pair
         (p1, p2, total) = best
         return (c1, p1, c2, p2), total
-
-    def _best_window_for_breakpoints(self, items, w):
-        # Find the best weighted window of breakpoints using two-pointer sliding window on both dimensions.
-        # Sort by p1; we'll apply a sliding window on p1, and inside it on p2
-        items.sort(key=lambda x: x[0])  # sort by p1
-        best_total = 0
-        best_p1 = 0
-        best_p2 = 0
-        n = len(items)
-        j = 0
-        sum_w = 0
-        # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
-        # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
-        for i in range(n):
-            p1_i, p2_i, wi = items[i]
-            # Expand p1-window
-            sum_w += wi
-            # Shrink from left until p1-range <= w
-            while p1_i - items[j][0] > w:
-                sum_w -= items[j][2]
-                j += 1
-            # Now consider only slice items[j:i+1]; build p2-sorted view (small slice)
-            slice_view = items[j:i+1]
-            slice_view.sort(key=lambda x: x[1])  # sort by p2
-            # Secondary sliding window on p2
-            k = 0
-            cur_sum = 0
-            for t in range(len(slice_view)):
-                cur_sum += slice_view[t][2]
-                while slice_view[t][1] - slice_view[k][1] > w:
-                    cur_sum -= slice_view[k][2]
-                    k += 1
-                if cur_sum > best_total:
-                    # Weighted mean p1/p2 for current p2-window [k..t]
-                    s_w = 0
-                    s_p1 = 0
-                    s_p2 = 0
-                    for x in slice_view[k:t+1]:
-                        s_w += x[2]
-                        s_p1 += x[0] * x[2]
-                        s_p2 += x[1] * x[2]
-                    best_total = s_w
-                    best_p1 = s_p1 // s_w
-                    best_p2 = s_p2 // s_w
-        return best_p1, best_p2, best_total
-
-    def _compute_canonical_fusion_key(self, left_gene, right_gene):
-        # Compute a canonical fusion key from final gene partners.
-        if not left_gene or not right_gene:
-            return None
-        genes = sorted([left_gene, right_gene])
-        return f"{genes[0]}--{genes[1]}"
-
-    def _find_duplicate_fusion_key(self, canonical_key):
-        # Find if a canonical fusion key already exists in fusion_metadata.
-        for existing_key in self.fusion_metadata.keys():
-            existing_canonical = self._compute_canonical_fusion_key(
-                self.fusion_metadata[existing_key].get("left_gene"),
-                self.fusion_metadata[existing_key].get("right_gene")
-            )
-            if existing_canonical == canonical_key:
-                return existing_key
-        return None
-
-    def _rename_fusion_key(self, old_key, new_key):
-        # Rename a fusion key across all internal structures (single key, no merging).
-        if old_key == new_key:
-            return  # No-op if keys are identical
-        if old_key not in self.fusion_candidates and old_key not in self.fusion_metadata:
-            return  # Key doesn't exist, nothing to do
-        logger.debug(f"Renaming fusion key: '{old_key}' → '{new_key}'")
-        # Rename in fusion_candidates
-        if old_key in self.fusion_candidates:
-            self.fusion_candidates[new_key] = self.fusion_candidates.pop(old_key)
-        # Rename in fusion_breakpoints
-        if old_key in self.fusion_breakpoints:
-            self.fusion_breakpoints[new_key] = self.fusion_breakpoints.pop(old_key)
-        # Rename in fusion_metadata
-        if old_key in self.fusion_metadata:
-            self.fusion_metadata[new_key] = self.fusion_metadata.pop(old_key)
-        # Rename in fusion_assigned_pairs
-        if old_key in self.fusion_assigned_pairs:
-            self.fusion_assigned_pairs[new_key] = self.fusion_assigned_pairs.pop(old_key)
-
-    def _merge_fusion_structures(self, keep_key, discard_key):
-        #logger.info(f"Consolidating duplicate fusion: '{keep_key}' ← '{discard_key}'" Merge all internal structures from discard_key into keep_key atomically.
-        logger.info(f"Consolidating duplicate fusion: '{keep_key}' ← '{discard_key}'")
-        # Merge fusion_candidates: union of read sets
-        if discard_key in self.fusion_candidates and keep_key in self.fusion_candidates:
-            self.fusion_candidates[keep_key].update(self.fusion_candidates[discard_key])
-        elif discard_key in self.fusion_candidates:
-            self.fusion_candidates[keep_key] = self.fusion_candidates[discard_key].copy()
-        # Merge fusion_breakpoints: sum of breakpoint counts
-        if discard_key in self.fusion_breakpoints and keep_key in self.fusion_breakpoints:
-            for bp, count in self.fusion_breakpoints[discard_key].items():
-                self.fusion_breakpoints[keep_key][bp] = self.fusion_breakpoints[keep_key].get(bp, 0) + count
-        elif discard_key in self.fusion_breakpoints:
-            self.fusion_breakpoints[keep_key] = self.fusion_breakpoints[discard_key].copy()
-        # Merge fusion_metadata: combine supporting reads and update support count
-        if discard_key in self.fusion_metadata and keep_key in self.fusion_metadata:
-            discard_meta = self.fusion_metadata[discard_key]
-            keep_meta = self.fusion_metadata[keep_key]
-            if "supporting_reads" in discard_meta:
-                keep_meta["supporting_reads"].update(discard_meta["supporting_reads"])
-            keep_meta["support"] = len(keep_meta.get("supporting_reads", set()))
-        elif discard_key in self.fusion_metadata:
-            self.fusion_metadata[keep_key] = self.fusion_metadata[discard_key]
-        # Merge fusion_assigned_pairs: combine read-to-gene-pair mappings
-        if discard_key in self.fusion_assigned_pairs and keep_key in self.fusion_assigned_pairs:
-            self.fusion_assigned_pairs[keep_key].update(self.fusion_assigned_pairs[discard_key])
-        elif discard_key in self.fusion_assigned_pairs:
-            self.fusion_assigned_pairs[keep_key] = self.fusion_assigned_pairs[discard_key].copy()
-        # Remove discard_key from all structures
-        self.fusion_candidates.pop(discard_key, None)
-        self.fusion_breakpoints.pop(discard_key, None)
-        self.fusion_metadata.pop(discard_key, None)
-        self.fusion_assigned_pairs.pop(discard_key, None)
-
-    def consolidate_duplicate_fusions(self):
-        # handles cases where A--B and B--A are kept as separate fusions.
-        # Map canonical key to original fusion key found in metadata
-        canonical_to_original = {}
-        fusions_to_merge = {}  # canonical_key → list of original keys with this canonical
-        # First pass: identify all canonical keys and find duplicates
-        for fusion_key in list(self.fusion_metadata.keys()):
-            meta = self.fusion_metadata[fusion_key]
-            left_gene = meta.get("left_gene")
-            right_gene = meta.get("right_gene")
-            if not left_gene or not right_gene:
-                # Skip fusions without both genes
-                continue
-            canonical_key = self._compute_canonical_fusion_key(left_gene, right_gene)
-            if canonical_key is None:
-                continue
-            if canonical_key not in canonical_to_original:
-                canonical_to_original[canonical_key] = fusion_key
-                fusions_to_merge[canonical_key] = [fusion_key]
-            else:
-                fusions_to_merge[canonical_key].append(fusion_key)
-        # Second pass: merge all duplicates with same canonical key
-        merged_count = 0
-        for canonical_key, fusion_keys in fusions_to_merge.items():
-            if len(fusion_keys) <= 1:
-                continue  # No duplicates
-            # Keep first, merge all others into it
-            keep_key = fusion_keys[0]
-            for discard_key in fusion_keys[1:]:
-                self._merge_fusion_structures(keep_key, discard_key)
-                merged_count += 1
-        if merged_count > 0:
-            logger.info(f"Consolidated {merged_count} duplicate fusion(s) (swapped partners)")
 
     def parse_sa_entries(self, sa_tag):
         entries = []
@@ -1219,10 +991,6 @@ class FusionDetector:
                                           g1_name, r1, g2_name, r2,
                                           require_gene_names, 
                                           max_intra_chr_distance):
-        # Assign gene names from context query
-        meta["left_gene"] = g1_name
-        meta["right_gene"] = g2_name
-        
         try:
             if isinstance(meta.get("left_gene"), str) and (meta["left_gene"].startswith("RP11") or meta["left_gene"].upper().startswith("ENS")):
                 nearby = self._find_nearby_protein_coding(c1, p1, window=1000)
@@ -1314,24 +1082,11 @@ class FusionDetector:
         return min(support_count, 10) / 10.0
 
     def canonical_locus_name(self, gene_name):
-        # Collapse antisense / divergent transcript names and map pseudogenes to parent genes.
+        # Collapse antisense / divergent transcript names to the canonical locus name.
         if not gene_name:
             return gene_name
         # Strip common antisense / divergent suffixes
         collapsed = Antisense_suffix.sub("", gene_name)
-        # Try to map pseudogene to parent (pattern: ends with P followed by digits)
-        # E.g. RPL23P6 → RPL23, SAE1P1 → SAE1
-        match = re.match(r"^(.+?)P\d+$", collapsed)
-        if match:
-            parent_candidate = match.group(1)
-            # Verify parent gene exists and is protein-coding
-            try:
-                parent_biotype = self.get_gene_biotype(parent_candidate)
-                if parent_biotype == "protein_coding":
-                    logger.debug(f"canonical_locus_name: Mapped pseudogene {gene_name} → parent {parent_candidate}")
-                    return parent_candidate
-            except Exception:
-                pass
         return collapsed
 
     def _build_symbol_biotype_index(self):
@@ -1411,14 +1166,8 @@ class FusionDetector:
         # Returns biotype string or None if not found.
         if not gene_name:
             return None
-        # First normalize via canonical_locus_name to handle pseudogenes and antisense
-        canonical_name = self.canonical_locus_name(gene_name)
-        # Then further normalize via normalize_gene_label
-        normalized = self.normalize_gene_label(canonical_name)
-        if normalized == "intergenic":
-            # If normalization fails completely, try original gene_name too
-            return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
-        return self._get_gene_biotype_by_symbol_or_coords(normalized, chrom=chrom, pos=pos)
+        gene_name = self.normalize_gene_label(gene_name)
+        return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
 
     def get_gene_strand(self, gene_name, chrom=None, pos=None):
         # Retrieve the strand (+/-) for a given gene name.
@@ -1485,9 +1234,9 @@ class FusionDetector:
             c1, p1, c2, p2 = consensus_bp
             g1_name, r1 = self._context_query(c1, p1)
             g2_name, r2 = self._context_query(c2, p2)
-            # self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
-            #                                       g1_name, r1, g2_name, r2,
-            #                                       require_gene_names, max_intra_chr_distance) 
+            self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
+                                                   g1_name, r1, g2_name, r2,
+                                                   require_gene_names, max_intra_chr_distance) 
                 # skip reconstruction for mitochondrial candidates and invalid ones
             if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
                 self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)
@@ -1504,7 +1253,8 @@ class FusionDetector:
             # Compute full confidence (includes reconstruction/realignment bonuses)
             conf = validator.confidence(meta, flags)
             meta["confidence"] = conf
-            if conf < 0.20 and meta.get("support", 0) < 2 and flags["is_valid"]:
+            # convert very low-confidence to invalid
+            if conf < 0.30 and meta.get("support", 0) < 2 and flags["is_valid"]:
                 flags["is_valid"] = False
                 flags["reasons"].append("Low confidence")
             meta.update(flags)

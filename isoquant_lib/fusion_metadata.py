@@ -8,125 +8,78 @@ class FusionMetadata:
         self.detector = detector
 
     def process_all(self, min_support=1):
-        detector = self.detector
-        logger.info(
-            f"FusionMetadata: Processing {len(detector.fusion_candidates)} fusion keys "
-            f"with min_support={min_support}"
-        )
-        # Iterate through fusion candidates created earlier in record_fusion()
-        for fusion_key, reads in list(detector.fusion_candidates.items()):
-            # 1. Apply early support + breakpoint-clustering gates
-            gate_result = self._passes_all_gates(fusion_key, reads, min_support)
-            if not gate_result:
-                # Mark invalid if metadata object exists already
-                meta = detector.fusion_metadata.get(fusion_key)
-                if meta is not None:
-                    meta["is_valid"] = False
-                    meta.setdefault("reasons", []).append("Failed gating (support or clustering)")
-                    continue
-            support, consensus_bp, clustered_support = gate_result
-            left_chr, left_pos, right_chr, right_pos = consensus_bp
-            # 2. Retrieve or create metadata as initialized during record_fusion()
-            meta = detector.fusion_metadata.setdefault(
-                fusion_key,
-                {
-                    "supporting_reads": set(),
-                    "left_gene": None,
-                    "right_gene": None,
-                    "support": 0,
-                    "raw_left_gene": None,
-                    "raw_right_gene": None,
-                },
-            )
-            # 3. Update support information
+        logger.info(f"FusionMetadata: Processing {len(self.detector.fusion_candidates)} fusion keys with min_support={min_support}")
+        for fusion_key, reads in self.detector.fusion_candidates.items():
+            # Check support gate FIRST before creating metadata
+            support = len(reads)
+            if support < min_support:
+                continue
+            # Check breakpoint gate
+            bp_counts = self.detector.fusion_breakpoints.get(fusion_key, {})
+            if not bp_counts:
+                continue
+            # Check consensus gate
+            consensus_result = self.detector.cluster_breakpoints(bp_counts, window=2000)
+            if not consensus_result:
+                continue
+            # All gates passed - only NOW create metadata record
+            meta = self._ensure_meta(fusion_key)
             meta["supporting_reads"].update(reads)
-            meta["support"] = clustered_support
+            meta["support"] = support
+            consensus_bp, clustered_support = consensus_result
             meta["consensus_bp"] = consensus_bp
-            # 4. Extract and ensure gene names from fusion_key (format: "left_gene--right_gene")
-            #    These were assigned in record_fusion() but ensure they're present
-            if not meta.get("left_gene") or not meta.get("right_gene"):
-                try:
-                    parts = fusion_key.split("--")
-                    if len(parts) == 2:
-                        meta["left_gene"] = parts[0]
-                        meta["right_gene"] = parts[1]
-                except Exception as e:
-                    logger.warning(f"Failed to extract genes from fusion_key {fusion_key}: {e}")
-            # 5. Mark fusion valid
-            meta["is_valid"] = True
-            meta.setdefault("reasons", [])
+            meta["support"] = clustered_support
 
-    def _passes_all_gates(self, fusion_key, reads, min_support):
-        #  Validate fusion against support, breakpoint, and consensus gates.
-        # Returns (support, consensus_bp, clustered_support) if all gates pass, None otherwise.
-        # Gate 1: Support threshold
-        support = len(reads)
-        if support < min_support:
-            return None
-        # Gate 2: Breakpoint counts exist
-        bp_counts = self.detector.fusion_breakpoints.get(fusion_key, {})
-        if not bp_counts:
-            return None
-        # Gate 3: Consensus clustering succeeds
-        consensus_result = self.detector.cluster_breakpoints(bp_counts, window=2000)
-        if not consensus_result:
-            return None
-        consensus_bp, clustered_support = consensus_result
-        return support, consensus_bp, clustered_support
+            left_chr, left_pos, right_chr, right_pos = consensus_bp
+            early_confidence = self.detector._compute_early_confidence(meta["support"])
+            meta["confidence"] = early_confidence
 
-    def _initialize_metadata(self, fusion_key, reads, consensus_bp, clustered_support):
-        # Create and initialize metadata record with consensus information.
-        meta = self._ensure_meta(fusion_key)
-        meta["supporting_reads"].update(reads)
-        meta["consensus_bp"] = consensus_bp
-        meta["support"] = clustered_support
-        meta["confidence"] = self.detector._compute_early_confidence(clustered_support)
-        return meta
+            assigned = self.detector.fusion_assigned_pairs.get(fusion_key, {})
+            raw_left, raw_right = self._collect_raw_assignments(meta["supporting_reads"], assigned, left_chr, left_pos, right_chr, right_pos)
+            if raw_left is None:
+                raw_left = self.detector.assign_fusion_gene(left_chr, left_pos)
+            if raw_right is None:
+                raw_right = self.detector.assign_fusion_gene(right_chr, right_pos)
+            meta["raw_left_gene"] = raw_left
+            meta["raw_right_gene"] = raw_right
 
-    def _assign_raw_genes(self, fusion_key, meta, left_chr, left_pos, right_chr, right_pos):
-        # Collect raw gene assignments from read-level assignments.
-        assigned = self.detector.fusion_assigned_pairs.get(fusion_key, {})
-        raw_left, raw_right = self._collect_raw_assignments(
-            meta["supporting_reads"], assigned, left_chr, left_pos, right_chr, right_pos
-        )
-        # Fall back to coordinate-based assignment if needed
-        if raw_left is None:
-            raw_left = self.detector.assign_fusion_gene(left_chr, left_pos)
-        if raw_right is None:
-            raw_right = self.detector.assign_fusion_gene(right_chr, right_pos)
-        return raw_left, raw_right
+            # Check if raw genes are "bad" (pseudogene, ncRNA, etc.) BEFORE confidence decision
+            # If a raw gene is bad, skip it in favor of consensus assignment, even if confidence > 0.6
+            raw_left_is_bad = self._is_bad_gene(raw_left, left_chr, left_pos)
+            raw_right_is_bad = self._is_bad_gene(raw_right, right_chr, right_pos)
 
-    def _select_final_genes(self, meta, raw_left, raw_right, left_chr, left_pos, right_chr, right_pos):
-        #Select final genes based on confidence level with bad-gene override.
-        confidence = meta["confidence"]
-        raw_left_is_bad = self._is_bad_gene(raw_left, left_chr, left_pos)
-        raw_right_is_bad = self._is_bad_gene(raw_right, right_chr, right_pos)
-        if confidence > 0.6:
-            # High confidence: prefer raw genes, but replace bad ones
-            left_gene = self.detector.assign_fusion_gene(left_chr, left_pos) if raw_left_is_bad else raw_left
-            right_gene = self.detector.assign_fusion_gene(right_chr, right_pos) if raw_right_is_bad else raw_right
-        else:
-            # Low confidence: always use consensus assignment
-            left_gene = self.detector.assign_fusion_gene(left_chr, left_pos)
-            right_gene = self.detector.assign_fusion_gene(right_chr, right_pos)
-        # Handle any remaining bad genes from consensus assignment
-        left_gene = self._replace_bad_gene_if_needed(left_gene, left_chr, left_pos, meta)
-        right_gene = self._replace_bad_gene_if_needed(right_gene, right_chr, right_pos, meta)
-        return left_gene, right_gene
+            # Confidence-based gene selection WITH bad-gene override
+            if early_confidence > 0.6:
+                # High confidence: prefer raw genes, BUT replace if they are bad
+                left_gene = self.detector.assign_fusion_gene(left_chr, left_pos) if raw_left_is_bad else raw_left
+                right_gene = self.detector.assign_fusion_gene(right_chr, right_pos) if raw_right_is_bad else raw_right
+            else:
+                # Low confidence: always use consensus assignment
+                left_gene = self.detector.assign_fusion_gene(left_chr, left_pos)
+                right_gene = self.detector.assign_fusion_gene(right_chr, right_pos)
 
-    def _finalize_metadata(self, meta, left_gene, right_gene, raw_left, raw_right, left_chr, left_pos, right_chr, right_pos):
-        # Store final gene labels, biotypes, and perform final validation.
-        meta["left_gene"] = left_gene
-        meta["right_gene"] = right_gene
-        # Retrieve and store biotypes
-        left_biotype = self.detector.get_gene_biotype(raw_left, chrom=left_chr, pos=left_pos)
-        right_biotype = self.detector.get_gene_biotype(raw_right, chrom=right_chr, pos=right_pos)
-        meta["left_biotype"] = left_biotype
-        meta["right_biotype"] = right_biotype
-        # Final validation: reject fusions with bad genes
-        if self._is_bad_gene(left_gene, left_chr, left_pos) or self._is_bad_gene(right_gene, right_chr, right_pos):
-            meta["is_valid"] = False
-            meta["reason_invalid"] = f"Left or right gene is pseudogene/ncRNA: {left_gene} / {right_gene}"
+            # Final normalization: handle any remaining bad genes from consensus assignment
+            left_gene = self._replace_bad_gene_if_needed(left_gene, left_chr, left_pos, meta)
+            right_gene = self._replace_bad_gene_if_needed(right_gene, right_chr, right_pos, meta)
+
+            left_gene = self.detector.normalize_gene_label(left_gene) if left_gene else "intergenic"
+            right_gene = self.detector.normalize_gene_label(right_gene) if right_gene else "intergenic"
+
+            # Store biotypes for reporting
+            left_biotype = self.detector.get_gene_biotype(raw_left, chrom=left_chr, pos=left_pos)
+            right_biotype = self.detector.get_gene_biotype(raw_right, chrom=right_chr, pos=right_pos)
+            meta["left_gene"] = left_gene
+            meta["right_gene"] = right_gene
+            meta["left_biotype"] = left_biotype
+            meta["right_biotype"] = right_biotype
+            if left_biotype == "protein_coding" and right_biotype == "protein_coding":
+                pass  # no extra 'bad gene' screening needed
+
+            # FINAL VALIDATION: If either final gene is still bad (pseudogene, ncRNA, etc.),
+            # mark the entire fusion as invalid to prevent false-alt duplicates in output
+            if self._is_bad_gene(left_gene, left_chr, left_pos) or self._is_bad_gene(right_gene, right_chr, right_pos):
+                meta["is_valid"] = False
+                meta["reason_invalid"] = f"Left or right gene is pseudogene/ncRNA: {left_gene} / {right_gene}"
 
     def _ensure_meta(self, fusion_key):
         return self.detector.fusion_metadata.setdefault(
@@ -223,6 +176,4 @@ class FusionMetadata:
             except Exception:
                 pass
         return boundaries_dict
-
-
 
