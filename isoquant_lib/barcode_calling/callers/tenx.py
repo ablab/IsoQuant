@@ -395,9 +395,6 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
     # Expected: R1...BC(16)...UMI(12)...polyT = ~28bp, allow generous margin.
     MAX_R1_POLYT_DISTANCE = 50
 
-    # Maximum distance from polyT to search for TSO (covers cDNA insert).
-    MAX_TSO_SEARCH_DISTANCE = 1000
-
     def _find_barcode_umi_fwd_local(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         """Find barcode near polyT only — no fallback to full-read R1 search.
 
@@ -450,10 +447,9 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
         base_result = self._find_barcode_umi_fwd_local(read_id, sequence)
 
         tso_start = -1
-        if base_result.polyT != -1:
+        if base_result.polyT != -1 and base_result.is_valid():
             tso_search_start = base_result.polyT
-            tso_search_end = min(len(sequence) - 1,
-                                 tso_search_start + self.MAX_TSO_SEARCH_DISTANCE)
+            tso_search_end = len(sequence) - 1
             tso_occurrences = self.tso_indexer.get_occurrences_substr(
                 sequence, tso_search_start, tso_search_end
             )
