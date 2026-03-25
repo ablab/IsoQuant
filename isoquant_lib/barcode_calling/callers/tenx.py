@@ -18,7 +18,7 @@ from ..indexers import KmerIndexer
 from ..common import (
     find_polyt_start, reverese_complement,
     find_candidate_with_max_score_ssw, find_candidate_with_max_score_ssw_var_len,
-    detect_exact_positions, str_to_2bit,
+    detect_exact_positions, detect_first_exact_positions, str_to_2bit,
     find_optimal_kmer_size,
 )
 from .base import TenXBarcodeDetectionResult, TenXSplitBarcodeDetectionResult, SplittingBarcodeDetectionResult
@@ -389,7 +389,7 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
     def __init__(self, barcode_list: List[str]):
         super().__init__(barcode_list)
         from ..indexers import KmerIndexer as _KmerIndexer
-        self.tso_indexer = _KmerIndexer([self.TSO], kmer_size=7)
+        self.tso_indexer = _KmerIndexer([self.TSO], kmer_size=9)
 
     # Maximum allowed distance between R1 end and polyT for a valid split detection.
     # Expected: R1...BC(16)...UMI(12)...polyT = ~28bp, allow generous margin.
@@ -453,11 +453,11 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
             tso_occurrences = self.tso_indexer.get_occurrences_substr(
                 sequence, tso_search_start, tso_search_end
             )
-            tso_s, tso_e = detect_exact_positions(
+            tso_s, tso_e = detect_first_exact_positions(
                 sequence, tso_search_start, tso_search_end + 1,
                 self.tso_indexer.k, self.TSO,
                 tso_occurrences,
-                min_score=20, start_delta=2, end_delta=2
+                min_score=18, start_delta=3, end_delta=3
             )
             if tso_s is not None:
                 tso_start = tso_s
