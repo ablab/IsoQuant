@@ -657,28 +657,17 @@ class FusionDetector:
 
     def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
         # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
-        if self.has_antisense_suffix(context1) or self.has_antisense_suffix(context2):
-            return
-        # Skip fusions with intergenic partners
-        if context1 == "intergenic" or context2 == "intergenic":
-            return
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
-        left_symbol = self.normalize_gene_label(context1)
-        right_symbol = self.normalize_gene_label(context2)
-
-        left_raw = context1   # original ID (likely ENSG)
-        right_raw = context2
-
-        fusion_key = f"{left_symbol}--{right_symbol}"
-
+        left_raw = self.normalize_gene_label(context1)
+        right_raw= self.normalize_gene_label(context2)
+        fusion_key = f"{left_raw}--{right_raw}"
         self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
 
         self.fusion_candidates[fusion_key].add(read_name)
         # Store breakpoint without strand information: (chrom1, pos1, chrom2, pos2)
         bp = (chrom1, int(pos1), chrom2, int(pos2))
         self.fusion_breakpoints[fusion_key][bp] += 1
-
         meta = self.fusion_metadata.setdefault(
             fusion_key,
             {"supporting_reads": set(), "consensus_bp": None,
@@ -688,7 +677,7 @@ class FusionDetector:
         meta["support"] = len(meta["supporting_reads"])
         # store the raw assigned pair for this read so we don't need to re-run assignment later
         try:
-            self.fusion_assigned_pairs[fusion_key][read_name] = (context1, context2)
+            self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
         except Exception:
             pass
 
