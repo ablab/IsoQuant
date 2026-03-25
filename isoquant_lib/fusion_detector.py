@@ -656,12 +656,40 @@ class FusionDetector:
         return str(g)
 
     def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
-        # Skip fusions involving antisense/regulatory genes (AS1, DT, etc.)
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
         left_raw = self.normalize_gene_label(context1)
-        right_raw= self.normalize_gene_label(context2)
-        fusion_key = f"{left_raw}--{right_raw}"
+        right_raw = self.normalize_gene_label(context2)
+        
+        # Validate gene plausibility: resolve to protein_coding genes if possible
+        left_biotype = self.get_gene_biotype(left_raw, chrom=chrom1, pos=pos1)
+        if left_biotype != "protein_coding":
+            # Try to find nearby protein_coding gene
+            nearby = self._find_nearby_protein_coding(chrom1, pos1, window=500)
+            if nearby:
+                logger.debug(f"Left gene {left_raw} ({left_biotype}) resolved to nearby protein_coding {nearby}")
+                left_raw = nearby
+            else:
+                # Can't resolve left side to protein_coding; skip fusion
+                logger.debug(f"Left gene {left_raw} ({left_biotype}) has no nearby protein_coding gene; skipping fusion")
+                return
+        
+        right_biotype = self.get_gene_biotype(right_raw, chrom=chrom2, pos=pos2)
+        if right_biotype != "protein_coding":
+            # Try to find nearby protein_coding gene
+            nearby = self._find_nearby_protein_coding(chrom2, pos2, window=500)
+            if nearby:
+                logger.debug(f"Right gene {right_raw} ({right_biotype}) resolved to nearby protein_coding {nearby}")
+                right_raw = nearby
+            else:
+                # Can't resolve right side to protein_coding; skip fusion
+                logger.debug(f"Right gene {right_raw} ({right_biotype}) has no nearby protein_coding gene; skipping fusion")
+                return
+        
+        # Record fusion only if both sides are protein_coding
+        # Sort genes alphabetically to avoid duplicate entries in both directions
+        sorted_genes = sorted([left_raw, right_raw])
+        fusion_key = f"{sorted_genes[0]}--{sorted_genes[1]}"
         self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
 
         self.fusion_candidates[fusion_key].add(read_name)
@@ -999,19 +1027,6 @@ class FusionDetector:
                                           g1_name, r1, g2_name, r2,
                                           require_gene_names, 
                                           max_intra_chr_distance):
-        try:
-            if isinstance(meta.get("left_gene"), str) and (meta["left_gene"].startswith("RP11") or meta["left_gene"].upper().startswith("ENS")):
-                nearby = self._find_nearby_protein_coding(c1, p1, window=1000)
-                if nearby:
-                    meta["left_gene"] = nearby
-                    meta.setdefault("notes", []).append(f"Left gene resolved to nearby coding {nearby}")
-            if isinstance(meta.get("right_gene"), str) and (meta["right_gene"].startswith("RP11") or meta["right_gene"].upper().startswith("ENS")):
-                nearby = self._find_nearby_protein_coding(c2, p2, window=1000)
-                if nearby:
-                    meta["right_gene"] = nearby
-                    meta.setdefault("notes", []).append(f"Right gene resolved to nearby coding {nearby}")
-        except Exception:
-            pass
         # classify
         if g1_name and g2_name:
             # compare resolved gene symbols for intragenic check

@@ -125,10 +125,13 @@ class FusionMetadata:
 
     def _update_fusion_key_mappings(self, original_key, final_left_gene, final_right_gene, meta):
         # Update fusion_key mappings if gene names changed during re-assignment.
+        # IMPORTANT: Always sort genes alphabetically to maintain consistency with record_fusion
         detector = self.detector
         new_left = final_left_gene or "intergenic"
         new_right = final_right_gene or "intergenic"
-        new_key = f"{new_left}--{new_right}"
+        # Sort genes alphabetically to match the ordering used in record_fusion
+        sorted_genes = sorted([new_left, new_right])
+        new_key = f"{sorted_genes[0]}--{sorted_genes[1]}"
         # If gene names changed, update all mappings
         if new_key != original_key:
             logger.info(f"Gene assignment changed: {original_key} → {new_key}")
