@@ -34,10 +34,9 @@ class FusionMetadata:
         meta = self._initialize_or_get_metadata(fusion_key, reads, clustered_support, consensus_bp)
         # 3. Set raw genes and compute raw biotypes
         self._compute_raw_genes_and_biotypes(fusion_key, meta, left_chr, left_pos, right_chr, right_pos)
-        # 4. Determine final genes based on confidence
-        early_confidence = detector._compute_early_confidence(clustered_support)
+        # 4. Determine final genes based on raw gene scores (threshold: 230)
         final_left_gene, final_right_gene = self._compute_final_genes(
-            early_confidence, meta, left_chr, left_pos, right_chr, right_pos
+            meta, left_chr, left_pos, right_chr, right_pos
         )
         # 5. Update fusion_key mappings if genes changed
         original_key = fusion_key
@@ -87,22 +86,40 @@ class FusionMetadata:
             f"right={meta.get('raw_right_gene')}({meta.get('raw_right_biotype')})"
         )
 
-    def _compute_final_genes(self, early_confidence, meta, left_chr, left_pos, right_chr, right_pos):
-        # Determine final genes based on confidence in raw assignments."""
+    def _compute_final_genes(self, meta, left_chr, left_pos, right_chr, right_pos):
+        # Determine final genes based on raw gene scores (threshold: 230).
+        # If raw score >= 230, use raw gene; otherwise re-assign at consensus breakpoint.
         detector = self.detector
-        logger.debug(f"Early confidence: {early_confidence:.3f}")
-        if early_confidence > 0.6:
-            # High confidence: use raw genes as final genes
+        SCORE_THRESHOLD = 230
+        # Left gene decision
+        raw_left_score = meta.get("raw_left_score", 0.0)
+        if raw_left_score >= SCORE_THRESHOLD:
+            # Score is good enough; use raw gene
             final_left_gene = meta.get("raw_left_gene")
-            final_right_gene = meta.get("raw_right_gene")
-            logger.debug(f"High confidence ({early_confidence:.3f}): Using raw genes as final")
+            meta["final_left_score"] = raw_left_score
+            logger.debug(f"Left gene score {raw_left_score:.1f} >= {SCORE_THRESHOLD}: Using raw gene {final_left_gene}")
         else:
-            # Low confidence: re-assign genes using consensus breakpoint
-            final_left_gene = detector.assign_fusion_gene(left_chr, left_pos)
-            final_right_gene = detector.assign_fusion_gene(right_chr, right_pos)
+            # Score is low; re-assign at consensus breakpoint
+            final_left_gene, final_left_score = detector.assign_fusion_gene(left_chr, left_pos)
+            meta["final_left_score"] = final_left_score
             logger.debug(
-                f"Low confidence ({early_confidence:.3f}): "
-                f"Re-assigned genes at consensus BP: {final_left_gene}, {final_right_gene}"
+                f"Left gene score {raw_left_score:.1f} < {SCORE_THRESHOLD}: "
+                f"Re-assigned to {final_left_gene} with score {final_left_score:.1f}"
+            )
+        # Right gene decision
+        raw_right_score = meta.get("raw_right_score", 0.0)
+        if raw_right_score >= SCORE_THRESHOLD:
+            # Score is good enough; use raw gene
+            final_right_gene = meta.get("raw_right_gene")
+            meta["final_right_score"] = raw_right_score
+            logger.debug(f"Right gene score {raw_right_score:.1f} >= {SCORE_THRESHOLD}: Using raw gene {final_right_gene}")
+        else:
+            # Score is low; re-assign at consensus breakpoint
+            final_right_gene, final_right_score = detector.assign_fusion_gene(right_chr, right_pos)
+            meta["final_right_score"] = final_right_score
+            logger.debug(
+                f"Right gene score {raw_right_score:.1f} < {SCORE_THRESHOLD}: "
+                f"Re-assigned to {final_right_gene} with score {final_right_score:.1f}"
             )
         return final_left_gene, final_right_gene
 
@@ -159,16 +176,26 @@ class FusionMetadata:
 
     def _assign_raw_genes(self, fusion_key, meta, left_chr, left_pos, right_chr, right_pos):
         # Collect raw gene assignments from read-level assignments in fusion_assigned_pairs.
-        # Directly populate meta["raw_left_gene"] and meta["raw_right_gene"]
+        # Directly populate meta["raw_left_gene"], meta["raw_right_gene"] and their scores
         assigned = self.detector.fusion_assigned_pairs.get(fusion_key, {})
         raw_left, raw_right = self._collect_raw_assignments(
             meta["supporting_reads"], assigned, left_chr, left_pos, right_chr, right_pos
         )
         # Fall back to coordinate-based assignment if needed
         if raw_left is None:
-            raw_left = self.detector.assign_fusion_gene(left_chr, left_pos)
+            raw_left, left_score = self.detector.assign_fusion_gene(left_chr, left_pos)
+            meta["raw_left_score"] = left_score
+        else:
+            # Compute score for read-consensus gene too
+            _, left_score = self.detector.assign_fusion_gene(left_chr, left_pos)
+            meta["raw_left_score"] = left_score
         if raw_right is None:
-            raw_right = self.detector.assign_fusion_gene(right_chr, right_pos)
+            raw_right, right_score = self.detector.assign_fusion_gene(right_chr, right_pos)
+            meta["raw_right_score"] = right_score
+        else:
+            # Compute score for read-consensus gene too
+            _, right_score = self.detector.assign_fusion_gene(right_chr, right_pos)
+            meta["raw_right_score"] = right_score
         # Populate metadata with raw genes
         meta["raw_left_gene"] = raw_left
         meta["raw_right_gene"] = raw_right

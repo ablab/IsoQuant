@@ -408,9 +408,23 @@ class FusionDetector:
 
     def _score_exonic_genes(self, exonic_genes, pos):
         # Score multiple exonic genes and return the best one, or single exonic gene.
+        # Returns (gene_name, score)
         if len(exonic_genes) == 1:
-            return exonic_genes[0][1]  # Fast return for single exonic gene
+            g = exonic_genes[0][0]
+            gname = exonic_genes[0][1]
+            # Compute score for fast path
+            boundary_distances = []
+            exons = exonic_genes[0][5]
+            for start, end in exons:
+                boundary_distances.append(min(abs(pos - start), abs(pos - end)))
+            boundary_min_dist = min(boundary_distances) if boundary_distances else 0
+            score = self._compute_gene_score(
+                g, pos, exon_min_dist=0, boundary_min_dist=boundary_min_dist,
+                exonic_hit=True, body_dist=0, gstart=exonic_genes[0][3], gend=exonic_genes[0][4]
+            )
+            return gname, score
         best_gene = None
+        best_score = None
         best_key = None
         for g, gname, gtype, gstart, gend, exons in exonic_genes:
             boundary_distances = [min(abs(pos - start), abs(pos - end)) for start, end in exons]
@@ -424,11 +438,14 @@ class FusionDetector:
             if best_key is None or key > best_key:
                 best_key = key
                 best_gene = gname or getattr(g, "id", None)
-        return best_gene
+                best_score = score
+        return best_gene, best_score if best_score is not None else 0.0
 
     def _score_intronic_genes(self, genes, pos):
         # Score intronic/intergenic genes and return the best one.
+        # Returns (gene_name, score)
         best_gene = None
+        best_score = None
         best_key = None
         for g in genes:
             attrs = getattr(g, "attributes", {}) or {}
@@ -448,13 +465,15 @@ class FusionDetector:
             if best_key is None or key > best_key:
                 best_key = key
                 best_gene = gname or getattr(g, "id", None)
-        return best_gene
+                best_score = score
+        return best_gene, best_score if best_score is not None else 0.0
 
     def assign_fusion_gene(self, chrom, pos, window=1000):
         # Assign the best gene at a genomic location using exonic priority and scoring.
+        # Returns (gene_name, score) or (None, 0.0) if no genes found
         genes = self._get_genes_at(chrom, pos, window)
         if not genes:
-            return None
+            return None, 0.0
         # FAST PATH: Try exonic genes first (position inside an exon)
         exonic_genes = self._collect_exonic_genes(genes, pos)
         if exonic_genes:
@@ -515,8 +534,8 @@ class FusionDetector:
                 continue
             seen_pairs.add(key)
             # Store raw assigned genes (no normalization yet - defer to build_metadata)
-            left_gene = self.assign_fusion_gene_cached(left_chr, left_pos)
-            right_gene = self.assign_fusion_gene_cached(sa_chr, right_pos)
+            left_gene, left_score = self.assign_fusion_gene_cached(left_chr, left_pos)
+            right_gene, right_score = self.assign_fusion_gene_cached(sa_chr, right_pos)
             if left_gene is None or right_gene is None:
                 continue
             if left_gene != right_gene:
@@ -846,8 +865,8 @@ class FusionDetector:
             sa_chr, (right_pos // jitter_window))
         if key in seen_pairs:
             return
-        left_gene = self.assign_fusion_gene_cached(left_chr, left_pos)
-        right_gene = self.assign_fusion_gene_cached(sa_chr, right_pos)
+        left_gene, left_score = self.assign_fusion_gene_cached(left_chr, left_pos)
+        right_gene, right_score = self.assign_fusion_gene_cached(sa_chr, right_pos)
         # Store raw genes without normalization - defer to build_metadata
         if left_gene is not None and right_gene is not None and left_gene != right_gene:
             self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos)
@@ -1266,8 +1285,8 @@ class FusionDetector:
             validator = FusionValidator(self)
             validator.merge_nearly_identical()
             with open(output_path, "w") as f:
-                f.write("LeftGene\tLeftBiotype\tRawLeftGene\tLeftChromosome\tLeftBreakpoint\t"
-                        "RightGene\tRightBiotype\tRawRightGene\tRightChromosome\tRightBreakpoint\t"
+                f.write("LeftGene\tLeftBiotype\tRawLeftGene\tRawLeftScore\tFinalLeftScore\tLeftChromosome\tLeftBreakpoint\t"
+                        "RightGene\tRightBiotype\tRawRightGene\tRawRightScore\tFinalRightScore\tRightChromosome\tRightBreakpoint\t"
                         "SupportingReads\tFusionName\tClass\tValid\tConfidence\tReasons\n")
                 for fusion_key, meta in sorted(self.fusion_metadata.items(), key=lambda x: -x[1].get("support", 0)):
                     if meta.get("confidence", 0) < min_confidence:
@@ -1293,8 +1312,13 @@ class FusionDetector:
                     reasons = ";".join(meta.get("reasons", []))
                     raw_left = meta.get("raw_left_gene")
                     raw_right = meta.get("raw_right_gene")
+                    raw_left_score = meta.get("raw_left_score", 0.0)
+                    raw_right_score = meta.get("raw_right_score", 0.0)
+                    final_left_score = meta.get("final_left_score", 0.0)
+                    final_right_score = meta.get("final_right_score", 0.0)
                     left_biotype = meta.get("left_biotype", "unknown")
                     right_biotype = meta.get("right_biotype", "unknown")
-                    f.write(f"{left_gene}\t{left_biotype}\t{raw_left}\t{left_chr}\t{left_pos}\t{right_gene}\t{right_biotype}\t"
-                            f"{raw_right}\t{right_chr}\t{right_pos}\t{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
+                    f.write(f"{left_gene}\t{left_biotype}\t{raw_left}\t{raw_left_score:.2f}\t{final_left_score:.2f}\t{left_chr}\t{left_pos}\t"
+                            f"{right_gene}\t{right_biotype}\t{raw_right}\t{raw_right_score:.2f}\t{final_right_score:.2f}\t{right_chr}\t{right_pos}\t"
+                            f"{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
                             f"{meta.get('is_valid')}\t{meta.get('confidence')}\t{reasons}\n")
