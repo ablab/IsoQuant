@@ -2,6 +2,7 @@ import logging
 from collections import defaultdict
 
 logger = logging.getLogger('IsoQuant')
+import re
 
 class FusionValidator:
 
@@ -18,6 +19,25 @@ class FusionValidator:
                 left_chr, left_pos, right_chr, right_pos = first_bp
                 logger.debug(f"Got breakpoint for {fusion_key}: {left_chr}:{left_pos} - {right_chr}:{right_pos}")
         return left_chr, left_pos, right_chr, right_pos
+
+    def _map_pseudogene_to_parent(self, gene, chrom=None, pos=None):
+        # Attempt to map a pseudogene to its parent gene.
+        # Pattern: Remove suffix like P1, P2, etc. or other numeric pseudogene suffixes.
+        # Examples: RPL23P6 → RPL23, SAE1P1 → SAE1, ZFYVE9P1 → ZFYVE9
+        if not gene or not isinstance(gene, str):
+            return None
+        # Match pattern: ends with P followed by one or more digits (e.g. P1, P6, P123)
+        # Also handles patterns like P followed by other suffixes
+        match = re.match(r"^(.+?)P\d+$", gene)
+        if not match:
+            return None
+        parent_candidate = match.group(1)
+        # Verify parent gene exists and is protein-coding
+        parent_biotype = self.detector.get_gene_biotype(parent_candidate, chrom=chrom, pos=pos)
+        if parent_biotype == "protein_coding":
+            logger.debug(f"Mapped pseudogene {gene} → parent gene {parent_candidate}")
+            return parent_candidate
+        return None
 
     def _salvage_and_check_gene_pair(self, left_gene, right_gene, left_chr, left_pos, right_chr, right_pos):
         # Salvage non-coding genes by finding nearby protein-coding alternatives.
@@ -56,7 +76,28 @@ class FusionValidator:
                 continue
             # Extract breakpoint coordinates
             left_chr, left_pos, right_chr, right_pos = self._get_breakpoint_coords(fusion_key)
-            # Check all raw assigned gene pairs for this fusion
+            # STEP 1: Map pseudogenes to parent genes EARLY, before salvage/biotype check
+            updated_any = False
+            for read_name, (left_gene, right_gene) in list(read_assignments.items()):
+                mapped_left = self._map_pseudogene_to_parent(left_gene, chrom=left_chr, pos=left_pos) or left_gene
+                mapped_right = self._map_pseudogene_to_parent(right_gene, chrom=right_chr, pos=right_pos) or right_gene
+                if mapped_left != left_gene or mapped_right != right_gene:
+                    self.detector.fusion_assigned_pairs[fusion_key][read_name] = (mapped_left, mapped_right)
+                    logger.debug(f"Mapped pseudogenes: {left_gene}->{mapped_left}, {right_gene}->{mapped_right}")
+                    updated_any = True
+            # Update metadata genes if pseudogenes were mapped
+            if updated_any:
+                meta = self.detector.fusion_metadata.get(fusion_key)
+                if meta:
+                    # Get the updated genes from assignments (majority vote or just pick first)
+                    all_left = [g for g, _ in self.detector.fusion_assigned_pairs[fusion_key].values()]
+                    all_right = [g for _, g in self.detector.fusion_assigned_pairs[fusion_key].values()]
+                    if all_left:
+                        meta["left_gene"] = max(set(all_left), key=all_left.count)
+                    if all_right:
+                        meta["right_gene"] = max(set(all_right), key=all_right.count)
+                        logger.debug(f"Updated metadata genes for {fusion_key}: {meta.get('left_gene')}, {meta.get('right_gene')}")
+            # STEP 2: Check all raw assigned gene pairs for this fusion (after pseudogene mapping)
             has_non_coding = False
             non_coding_reason = None
             for read_name, (left_gene, right_gene) in read_assignments.items():
