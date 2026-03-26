@@ -543,7 +543,8 @@ class FusionDetector:
                 # if self._is_softclip_orientation_valid(read, clip_side, sa_chr, sa_pos):
                 self.record_fusion(
                     left_gene, right_gene, read.query_name,
-                    left_chr, left_pos, sa_chr, right_pos
+                    left_chr, left_pos, sa_chr, right_pos,
+                    left_score=left_score, right_score=right_score
                 )
                 sa_used = True
         return sa_used
@@ -655,7 +656,8 @@ class FusionDetector:
             return "intergenic"
         return str(g)
 
-    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2):
+    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2,
+                      left_score=None, right_score=None):
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
         left_raw = self.normalize_gene_label(context1)
@@ -703,11 +705,12 @@ class FusionDetector:
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
-        # store the raw assigned pair for this read so we don't need to re-run assignment later
-        try:
-            self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
-        except Exception:
-            pass
+        
+        # Save the scores passed from assign_fusion_gene call
+        if left_score is not None:
+            meta["raw_left_score"] = left_score
+        if right_score is not None:
+            meta["raw_right_score"] = right_score
 
     def normalize_gene_label(self, gene):
         # Normalize any gene identifier to a canonical gene symbol string.
@@ -886,7 +889,8 @@ class FusionDetector:
         right_gene, right_score = self.assign_fusion_gene_cached(sa_chr, right_pos)
         # Store raw genes without normalization - defer to build_metadata
         if left_gene is not None and right_gene is not None and left_gene != right_gene:
-            self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos)
+            self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos,
+                             left_score=left_score, right_score=right_score)
 
     def detect_fusions(self,
                     min_al_len_primary=50,

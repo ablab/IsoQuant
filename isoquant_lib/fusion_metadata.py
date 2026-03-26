@@ -179,29 +179,19 @@ class FusionMetadata:
 
     def _assign_raw_genes(self, fusion_key, meta, left_chr, left_pos, right_chr, right_pos):
         # Collect raw gene assignments from read-level assignments in fusion_assigned_pairs.
-        # Directly populate meta["raw_left_gene"], meta["raw_right_gene"] and their scores
+        # Scores are already computed and saved in record_fusion; just populate gene names here.
         assigned = self.detector.fusion_assigned_pairs.get(fusion_key, {})
         raw_left, raw_right = self._collect_raw_assignments(
             meta["supporting_reads"], assigned, left_chr, left_pos, right_chr, right_pos
         )
-        # Fall back to coordinate-based assignment if needed
-        if raw_left is None:
-            raw_left, left_score = self.detector.assign_fusion_gene(left_chr, left_pos)
-            meta["raw_left_score"] = left_score
-        else:
-            # Compute score for read-consensus gene too
-            _, left_score = self.detector.assign_fusion_gene(left_chr, left_pos)
-            meta["raw_left_score"] = left_score
-        if raw_right is None:
-            raw_right, right_score = self.detector.assign_fusion_gene(right_chr, right_pos)
-            meta["raw_right_score"] = right_score
-        else:
-            # Compute score for read-consensus gene too
-            _, right_score = self.detector.assign_fusion_gene(right_chr, right_pos)
-            meta["raw_right_score"] = right_score
-        # Populate metadata with raw genes
+        # Populate metadata with raw genes (scores already set in record_fusion)
         meta["raw_left_gene"] = raw_left
         meta["raw_right_gene"] = raw_right
+        # Ensure scores were set by record_fusion; if missing, set fallback
+        if "raw_left_score" not in meta or meta.get("raw_left_score") is None:
+            meta["raw_left_score"] = 0.0
+        if "raw_right_score" not in meta or meta.get("raw_right_score") is None:
+            meta["raw_right_score"] = 0.0
 
     def _collect_raw_assignments(self, supporting_reads, assigned, left_chr, left_pos, right_chr, right_pos):
         left_counts = defaultdict(int)
