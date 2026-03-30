@@ -191,19 +191,29 @@ class FusionMetadata:
 
     def _assign_raw_genes(self, fusion_key, meta, left_chr, left_pos, right_chr, right_pos):
         # Collect raw gene assignments from read-level assignments in fusion_assigned_pairs.
-        # Scores are already computed and saved in record_fusion; just populate gene names here.
+        # Compute average per-read scores from fusion_read_scores.
         assigned = self.detector.fusion_assigned_pairs.get(fusion_key, {})
         raw_left, raw_right = self._collect_raw_assignments(
             meta["supporting_reads"], assigned, left_chr, left_pos, right_chr, right_pos
         )
-        # Populate metadata with raw genes (scores already set in record_fusion)
+        # Populate metadata with raw genes
         meta["raw_left_gene"] = raw_left
         meta["raw_right_gene"] = raw_right
-        # Ensure scores were set by record_fusion; if missing, set fallback
-        if "raw_left_score" not in meta or meta.get("raw_left_score") is None:
-            meta["raw_left_score"] = 0.0
-        if "raw_right_score" not in meta or meta.get("raw_right_score") is None:
-            meta["raw_right_score"] = 0.0
+        
+        # Compute average scores from per-read scores
+        read_scores = self.detector.fusion_read_scores.get(fusion_key, {})
+        left_scores = []
+        right_scores = []
+        
+        for read_name in meta["supporting_reads"]:
+            if read_name in read_scores:
+                left_score, right_score = read_scores[read_name]
+                left_scores.append(left_score)
+                right_scores.append(right_score)
+        
+        # Average the scores, or fallback to 0.0 if no scores available
+        meta["raw_left_score"] = sum(left_scores) / len(left_scores) if left_scores else 0.0
+        meta["raw_right_score"] = sum(right_scores) / len(right_scores) if right_scores else 0.0
 
     def _collect_raw_assignments(self, supporting_reads, assigned, left_chr, left_pos, right_chr, right_pos):
         left_counts = defaultdict(int)

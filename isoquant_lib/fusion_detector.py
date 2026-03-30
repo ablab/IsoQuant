@@ -29,6 +29,8 @@ class FusionDetector:
         self.fusion_metadata = {}
         # store per-read assigned raw gene pairs for each fusion key: {fusion_key: {read_name: (left,right)}}
         self.fusion_assigned_pairs = defaultdict(dict)
+        # store per-read scores for each fusion key: {fusion_key: {read_name: (left_score, right_score)}}
+        self.fusion_read_scores = defaultdict(dict)
         # cache for resolved names: id_or_symbol -> gene_symbol (if found)
         self._resolved_name_cache = {}
         # cache for symbol -> biotype mapping (built on-demand)
@@ -891,6 +893,11 @@ class FusionDetector:
         # Store breakpoint without strand information: (chrom1, pos1, chrom2, pos2)
         bp = (chrom1, int(pos1), chrom2, int(pos2))
         self.fusion_breakpoints[fusion_key][bp] += 1
+        
+        # Store per-read scores for later averaging
+        if left_score is not None and right_score is not None:
+            self.fusion_read_scores[fusion_key][read_name] = (left_score, right_score)
+        
         meta = self.fusion_metadata.setdefault(
             fusion_key,
             {"supporting_reads": set(), "consensus_bp": None,
@@ -898,12 +905,6 @@ class FusionDetector:
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
-        
-        # Save the scores passed from assign_fusion_gene call
-        if left_score is not None:
-            meta["raw_left_score"] = left_score
-        if right_score is not None:
-            meta["raw_right_score"] = right_score
 
     def normalize_gene_label(self, gene):
         # Normalize any gene identifier to a canonical gene symbol string.
@@ -1425,6 +1426,7 @@ class FusionDetector:
                         max_intra_chr_distance=None):
         self.build_metadata(min_support=min_support)
         self.fusion_assigned_pairs.clear()
+        self.fusion_read_scores.clear()
         # Delegate validation and filtering to FusionValidator
         validator = FusionValidator(self)
         validator.filter_non_coding_genes()
