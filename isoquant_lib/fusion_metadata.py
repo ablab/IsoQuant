@@ -89,33 +89,46 @@ class FusionMetadata:
     def _compute_final_genes(self, meta, left_chr, left_pos, right_chr, right_pos):
         # Determine final genes based on raw gene scores (threshold: 230).
         # If raw score >= 230, use raw gene; otherwise re-assign at consensus breakpoint.
+        # When reassigning, pass the other side's gene as fusion context for accurate scoring.
         detector = self.detector
         SCORE_THRESHOLD = 230
-        # Left gene decision
+        raw_left_gene = meta.get("raw_left_gene")
+        raw_right_gene = meta.get("raw_right_gene")
         raw_left_score = meta.get("raw_left_score", 0.0)
+        raw_right_score = meta.get("raw_right_score", 0.0)
+        # Left gene decision
         if raw_left_score >= SCORE_THRESHOLD:
             # Score is good enough; use raw gene
-            final_left_gene = meta.get("raw_left_gene")
+            final_left_gene = raw_left_gene
             meta["final_left_score"] = raw_left_score
             logger.debug(f"Left gene score {raw_left_score:.1f} >= {SCORE_THRESHOLD}: Using raw gene {final_left_gene}")
         else:
-            # Score is low; re-assign at consensus breakpoint
-            final_left_gene, final_left_score = detector.assign_fusion_gene(left_chr, left_pos)
+            # Score is low; re-assign at consensus breakpoint with fusion context
+            final_left_gene, final_left_score = detector.assign_fusion_gene(
+                left_chr, left_pos,
+                fusion_partner_gene=raw_right_gene,
+                fusion_partner_chrom=right_chr,
+                fusion_partner_pos=right_pos
+            )
             meta["final_left_score"] = final_left_score
             logger.debug(
                 f"Left gene score {raw_left_score:.1f} < {SCORE_THRESHOLD}: "
                 f"Re-assigned to {final_left_gene} with score {final_left_score:.1f}"
             )
         # Right gene decision
-        raw_right_score = meta.get("raw_right_score", 0.0)
         if raw_right_score >= SCORE_THRESHOLD:
             # Score is good enough; use raw gene
-            final_right_gene = meta.get("raw_right_gene")
+            final_right_gene = raw_right_gene
             meta["final_right_score"] = raw_right_score
             logger.debug(f"Right gene score {raw_right_score:.1f} >= {SCORE_THRESHOLD}: Using raw gene {final_right_gene}")
         else:
-            # Score is low; re-assign at consensus breakpoint
-            final_right_gene, final_right_score = detector.assign_fusion_gene(right_chr, right_pos)
+            # Score is low; re-assign at consensus breakpoint with fusion context
+            final_right_gene, final_right_score = detector.assign_fusion_gene(
+                right_chr, right_pos,
+                fusion_partner_gene=raw_left_gene,
+                fusion_partner_chrom=left_chr,
+                fusion_partner_pos=left_pos
+            )
             meta["final_right_score"] = final_right_score
             logger.debug(
                 f"Right gene score {raw_right_score:.1f} < {SCORE_THRESHOLD}: "
@@ -125,7 +138,6 @@ class FusionMetadata:
 
     def _update_fusion_key_mappings(self, original_key, final_left_gene, final_right_gene, meta):
         # Update fusion_key mappings if gene names changed during re-assignment.
-        # IMPORTANT: Always sort genes alphabetically to maintain consistency with record_fusion
         detector = self.detector
         new_left = final_left_gene or "intergenic"
         new_right = final_right_gene or "intergenic"

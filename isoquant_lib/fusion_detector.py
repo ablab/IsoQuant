@@ -204,6 +204,26 @@ class FusionDetector:
         if not gene_name or not isinstance(gene_name, str):
             return gene_name
         return Antisense_suffix.sub('', gene_name)
+    
+    def is_fusion_in_frame(self, gene_left, bp_left_chrom, bp_left_pos,
+                                gene_right, bp_right_chrom, bp_right_pos):
+        # 1. Get canonical transcripts
+        tx_left  = self.get_canonical_transcript(gene_left)
+        tx_right = self.get_canonical_transcript(gene_right)
+        cds_left  = self.get_cds_segments(tx_left)    # [(s,e),...]
+        cds_right = self.get_cds_segments(tx_right)
+        strand_left  = tx_left.strand
+        strand_right = tx_right.strand
+        # 2. Compute left coding length to breakpoint
+        left_len = self.compute_coding_length_to_breakpoint(
+            cds_left, bp_left_pos, strand_left
+        )
+        # 3. Compute right coding offset from breakpoint
+        right_off = self.compute_coding_offset_from_breakpoint(
+            cds_right, bp_right_pos, strand_right
+        )
+        # 4. in-frame?
+        return (left_len % 3) == (right_off % 3)
 
     def _lookup_gene_by_name(self, gene_name, chrom, pos):
         # Lookup mode: find gene feature by name at genomic position.
@@ -258,14 +278,79 @@ class FusionDetector:
         except Exception:
             return False, None, None, 0, []
 
-    def _score_hard_evidence(self, pos, gstart, gend, exonic_hit, boundary_min_dist, exon_min_dist):
+    def _is_at_exon_boundary(self, pos, exons):
+        # Check if breakpoint is within 2bp of an exon boundary
+        # Returns True if pos is near any exon start or end
+        if not exons:
+            return False
+        for start, end in exons:
+            # Check proximity to exon start or exon end
+            if abs(pos - start) <= 2 or abs(pos - end) <= 2:
+                return True
+        return False
+
+    def _is_near_cds_start(self, chrom, pos, gene_name):
+        # Check if breakpoint is near the CDS start (first coding exon) of a gene
+        # Returns True if pos is within ~100bp of the CDS start
+        try:
+            # Get the canonical transcript or first transcript
+            tx = self.get_canonical_transcript(gene_name)
+            if tx is None:
+                return False
+            # Get CDS segments (coding exons)
+            cds_segments = self.get_cds_segments(tx)
+            if not cds_segments:
+                return False
+            # CDS start is the beginning of the first CDS segment
+            cds_start = min(seg[0] for seg in cds_segments)
+            # Check if breakpoint is within ~100bp of CDS start
+            return abs(pos - cds_start) <= 100
+        except Exception:
+            return False
+
+    def _score_hard_evidence(self, pos, gstart, gend, exonic_hit, boundary_min_dist, exon_min_dist,
+                            g=None, gene_name=None, chrom=None, 
+                            fusion_partner_gene=None, fusion_partner_chrom=None, fusion_partner_pos=None):
         # Score based on proximity and exonic hits (hard evidence).
+        # Enhanced exonic scoring based on exon boundaries, splice sites, and CDS proximity.
         # Returns score contribution from location-based metrics.
         score = 0.0
         if gstart - 3000 <= pos <= gend + 3000:
             score += 50  # near edge bonus
-        if exonic_hit:
-            score += 200.0
+        # Enhanced exonic scoring
+        if exonic_hit and g is not None and gene_name is not None and chrom is not None:
+            # Get exons for detailed analysis
+            exons = self._get_cached_exons(g)
+            # Check if in-frame (for fusion context)
+            fusion_is_in_frame = False
+            if fusion_partner_gene and fusion_partner_chrom and fusion_partner_pos is not None:
+                try:
+                    fusion_is_in_frame = self.is_fusion_in_frame(
+                        gene_name, chrom, pos,
+                        fusion_partner_gene, fusion_partner_chrom, fusion_partner_pos
+                    )
+                except Exception:
+                    fusion_is_in_frame = False
+            # Priority scoring for exonic hits
+            if self._is_at_exon_boundary(pos, exons):
+                # Exactly at exon boundary
+                if fusion_is_in_frame:
+                    score += 150  # High bonus for boundary + in-frame
+                else:
+                    score += 80   # Boundary without in-frame is still good
+            elif self.is_splice_site(chrom, pos, gene_name)[1]:
+                # At a canonical splice site (donor/acceptor)
+                score += 200  # Highest bonus for splice sites
+            elif self._is_near_cds_start(chrom, pos, gene_name):
+                # Near the CDS start of the gene
+                score += 80
+            elif fusion_is_in_frame:
+                # Generic exonic hit that is in-frame
+                score += 50
+            else:
+                # Generic exonic hit without any special feature - penalize
+                score -= 150
+        # Generic boundary/exon distance scoring (for non-exonic hits or supplementary)
         if boundary_min_dist is not None:
             score += max(0.0, 80.0 - min(boundary_min_dist, 200))
         if exon_min_dist is not None:
@@ -298,10 +383,41 @@ class FusionDetector:
         except Exception:
             return 0.0
 
+    def _score_frame_alignment(self, gene_name, bp_chrom, bp_pos, 
+                               fusion_partner_gene=None, fusion_partner_chrom=None, 
+                               fusion_partner_pos=None):
+        # Score bonus/penalty based on in-frame fusion analysis.
+        # Returns score contribution (positive for in-frame, penalty for out-of-frame, 0 if cannot determine).
+        if not fusion_partner_gene or not fusion_partner_chrom or fusion_partner_pos is None:
+            return 0.0  # No fusion context provided
+        try:
+            # Attempt to check if fusion is in-frame
+            is_in_frame = self.is_fusion_in_frame(
+                gene_name, bp_chrom, bp_pos,
+                fusion_partner_gene, fusion_partner_chrom, fusion_partner_pos
+            )
+            if is_in_frame:
+                # Strong bonus for in-frame fusions (true protein-fused candidates)
+                return 50.0
+            else:
+                # Penalty for out-of-frame fusions (likely non-functional)
+                return -40.0
+        except Exception as e:
+            # Cannot determine frame alignment (methods not implemented or data missing)
+            logger.debug(f"Could not assess frame alignment for {gene_name} at {bp_chrom}:{bp_pos}: {e}")
+            return 0.0
+
     def _compute_gene_score(self, target, pos, chrom=None, exon_min_dist=None, 
                             boundary_min_dist=None, exonic_hit=None, body_dist=None, 
-                            gstart=None, gend=None):
+                            gstart=None, gend=None, fusion_partner_gene=None, 
+                            fusion_partner_chrom=None, fusion_partner_pos=None):
         # Compute composite gene score incorporating multiple factors.
+        # When fusion context is provided, includes frame alignment scoring.
+        #
+        # Args:
+        #   fusion_partner_gene: name of the partner gene in fusion (for in-frame checking)
+        #   fusion_partner_chrom: chromosome of fusion partner breakpoint
+        #   fusion_partner_pos: genomic position of fusion partner breakpoint
         # Determine mode and resolve feature + metrics
         if isinstance(target, str):
             # Lookup mode: find gene by name at position
@@ -318,6 +434,13 @@ class FusionDetector:
             g = target
             if gstart is None or gend is None:
                 raise ValueError("gstart and gend required for pre-computed mode")
+        # Extract gene name for fusion frame checking
+        gene_name_for_fusion = None
+        if isinstance(target, str):
+            gene_name_for_fusion = target
+        else:
+            attrs = getattr(g, "attributes", {}) or {}
+            gene_name_for_fusion = attrs.get("gene_name", [getattr(g, "id", None)])[0]
         # Extract biotype
         attrs = getattr(g, "attributes", {}) or {}
         gtype = (attrs.get("gene_type", [None])[0]
@@ -325,10 +448,61 @@ class FusionDetector:
                 or attrs.get("transcript_biotype", [None])[0])
         # Aggregate scores from all components
         score = 0.0
-        score += self._score_hard_evidence(pos, gstart, gend, exonic_hit, boundary_min_dist, exon_min_dist)
+        score += self._score_hard_evidence(pos, gstart, gend, exonic_hit, boundary_min_dist, exon_min_dist,
+                                          g=g, gene_name=gene_name_for_fusion, chrom=chrom,
+                                          fusion_partner_gene=fusion_partner_gene,
+                                          fusion_partner_chrom=fusion_partner_chrom,
+                                          fusion_partner_pos=fusion_partner_pos)
         score += self._score_biotype(gtype)
         score += self._score_exon_span_bonus(g)
+        # Add frame alignment scoring if fusion context provided
+        if fusion_partner_gene and chrom:
+            frame_score = self._score_frame_alignment(
+                gene_name_for_fusion, chrom, pos,
+                fusion_partner_gene, fusion_partner_chrom, fusion_partner_pos
+            )
+            score += frame_score
         return score
+
+    def is_splice_site(self, chrom, pos, gene_name):
+        # Returns ("donor", True) or ("acceptor", True) or (None, False)
+        strand = self.get_gene_strand(gene_name, chrom=chrom, pos=pos)
+        if strand is None:
+            return (None, False)
+        # Fetch 2bp around the breakpoint
+        try:
+            ref = pysam.FastaFile(self.reference_fasta)
+        except Exception:
+            return (None, False)
+
+        # Get sequence context
+        # for donor: exon_end = pos, look at pos+1
+        # for acceptor: exon_start = pos+1, look at pos
+        seq_5p = ref.fetch(chrom, pos-1, pos+1).upper()  # 2bp around pos
+        seq_3p = ref.fetch(chrom, pos, pos+2).upper()
+
+        # Reverse-complement for minus strand
+        if strand == "-":
+            seq_5p = self.reverse_complement(seq_5p)
+            seq_3p = self.reverse_complement(seq_3p)
+
+        # Canonical motifs
+        # donor = GT (exon end)
+        # acceptor = AG (exon start)
+        is_donor    = seq_3p.startswith("GT")
+        is_acceptor = seq_5p.endswith("AG")
+
+        if is_donor:
+            return ("donor", True)
+        if is_acceptor:
+            return ("acceptor", True)
+
+        return (None, False)
+    
+    @staticmethod
+    def reverse_complement(seq):
+        comp = str.maketrans("ACGTN", "TGCAN")
+        return seq.translate(comp)[::-1]
 
     def _get_genes_at(self, chrom, pos, window):
         # Query genes at location using interval tree or gffutils.
@@ -398,7 +572,7 @@ class FusionDetector:
         return (
             1 if gtype == "protein_coding" else 0,  # 1) PRIORITY: protein-coding
             score,                                   # 2) main score
-            bool(exonic_hit),                        # 3) prefer exonic
+            #bool(exonic_hit),                        # 3) prefer exonic
             -bnd,                                    # 4) nearer exon boundary
             -exd,                                    # 5) nearer exon span
             -bod,                                    # 6) nearer gene body
@@ -406,7 +580,8 @@ class FusionDetector:
             gname or ""                              # 8) deterministic
         )
 
-    def _score_exonic_genes(self, exonic_genes, pos):
+    def _score_exonic_genes(self, exonic_genes, pos, chrom=None, fusion_partner_gene=None, 
+                            fusion_partner_chrom=None, fusion_partner_pos=None):
         # Score multiple exonic genes and return the best one, or single exonic gene.
         # Returns (gene_name, score)
         if len(exonic_genes) == 1:
@@ -419,8 +594,11 @@ class FusionDetector:
                 boundary_distances.append(min(abs(pos - start), abs(pos - end)))
             boundary_min_dist = min(boundary_distances) if boundary_distances else 0
             score = self._compute_gene_score(
-                g, pos, exon_min_dist=0, boundary_min_dist=boundary_min_dist,
-                exonic_hit=True, body_dist=0, gstart=exonic_genes[0][3], gend=exonic_genes[0][4]
+                g, pos, chrom=chrom, exon_min_dist=0, boundary_min_dist=boundary_min_dist,
+                exonic_hit=True, body_dist=0, gstart=exonic_genes[0][3], gend=exonic_genes[0][4],
+                fusion_partner_gene=fusion_partner_gene,
+                fusion_partner_chrom=fusion_partner_chrom,
+                fusion_partner_pos=fusion_partner_pos
             )
             return gname, score
         best_gene = None
@@ -430,8 +608,11 @@ class FusionDetector:
             boundary_distances = [min(abs(pos - start), abs(pos - end)) for start, end in exons]
             boundary_min_dist = min(boundary_distances) if boundary_distances else 0
             score = self._compute_gene_score(
-                g, pos, exon_min_dist=0, boundary_min_dist=boundary_min_dist,
-                exonic_hit=True, body_dist=0, gstart=gstart, gend=gend
+                g, pos, chrom=chrom, exon_min_dist=0, boundary_min_dist=boundary_min_dist,
+                exonic_hit=True, body_dist=0, gstart=gstart, gend=gend,
+                fusion_partner_gene=fusion_partner_gene,
+                fusion_partner_chrom=fusion_partner_chrom,
+                fusion_partner_pos=fusion_partner_pos
             )
             glen = max(1, gend - gstart + 1)
             key = self._build_gene_key(gtype, score, True, boundary_min_dist, 0, 0, glen, gname)
@@ -441,7 +622,8 @@ class FusionDetector:
                 best_score = score
         return best_gene, best_score if best_score is not None else 0.0
 
-    def _score_intronic_genes(self, genes, pos):
+    def _score_intronic_genes(self, genes, pos, chrom=None, fusion_partner_gene=None,
+                              fusion_partner_chrom=None, fusion_partner_pos=None):
         # Score intronic/intergenic genes and return the best one.
         # Returns (gene_name, score)
         best_gene = None
@@ -457,8 +639,11 @@ class FusionDetector:
             gend = int(getattr(g, "end", 0))
             exon_min_dist, boundary_min_dist, exonic_hit, body_dist, exons = self._compute_gene_distances(g, pos)
             score = self._compute_gene_score(
-                g, pos, exon_min_dist=exon_min_dist, boundary_min_dist=boundary_min_dist,
-                exonic_hit=exonic_hit, body_dist=body_dist, gstart=gstart, gend=gend
+                g, pos, chrom=chrom, exon_min_dist=exon_min_dist, boundary_min_dist=boundary_min_dist,
+                exonic_hit=exonic_hit, body_dist=body_dist, gstart=gstart, gend=gend,
+                fusion_partner_gene=fusion_partner_gene,
+                fusion_partner_chrom=fusion_partner_chrom,
+                fusion_partner_pos=fusion_partner_pos
             )
             glen = max(1, gend - gstart + 1)
             key = self._build_gene_key(gtype, score, exonic_hit, boundary_min_dist, exon_min_dist, body_dist, glen, gname)
@@ -468,8 +653,10 @@ class FusionDetector:
                 best_score = score
         return best_gene, best_score if best_score is not None else 0.0
 
-    def assign_fusion_gene(self, chrom, pos, window=1000):
+    def assign_fusion_gene(self, chrom, pos, window=1000, fusion_partner_gene=None,
+                          fusion_partner_chrom=None, fusion_partner_pos=None):
         # Assign the best gene at a genomic location using exonic priority and scoring.
+        # When fusion context is provided, incorporates in-frame and splice junction metrics.
         # Returns (gene_name, score) or (None, 0.0) if no genes found
         genes = self._get_genes_at(chrom, pos, window)
         if not genes:
@@ -477,9 +664,15 @@ class FusionDetector:
         # FAST PATH: Try exonic genes first (position inside an exon)
         exonic_genes = self._collect_exonic_genes(genes, pos)
         if exonic_genes:
-            return self._score_exonic_genes(exonic_genes, pos)
+            return self._score_exonic_genes(exonic_genes, pos, chrom=chrom,
+                                           fusion_partner_gene=fusion_partner_gene,
+                                           fusion_partner_chrom=fusion_partner_chrom,
+                                           fusion_partner_pos=fusion_partner_pos)
         # SLOW PATH: No exonic hits; use intronic/intergenic scoring
-        return self._score_intronic_genes(genes, pos)
+        return self._score_intronic_genes(genes, pos, chrom=chrom,
+                                         fusion_partner_gene=fusion_partner_gene,
+                                         fusion_partner_chrom=fusion_partner_chrom,
+                                         fusion_partner_pos=fusion_partner_pos)
 
     @lru_cache(maxsize=500000)
     def assign_fusion_gene_cached(self, chrom, pos):
@@ -669,11 +862,11 @@ class FusionDetector:
             # Try to find nearby protein_coding gene
             nearby = self._find_nearby_protein_coding(chrom1, pos1, window=500)
             if nearby:
-                logger.debug(f"Left gene {left_raw} ({left_biotype}) resolved to nearby protein_coding {nearby}")
+                logger.info(f"Left gene {left_raw} ({left_biotype}) resolved to nearby protein_coding {nearby}")
                 left_raw = nearby
             else:
                 # Can't resolve left side to protein_coding; skip fusion
-                logger.debug(f"Left gene {left_raw} ({left_biotype}) has no nearby protein_coding gene; skipping fusion")
+                logger.info(f"Left gene {left_raw} ({left_biotype}) has no nearby protein_coding gene; skipping fusion")
                 return
         
         right_biotype = self.get_gene_biotype(right_raw, chrom=chrom2, pos=pos2)
@@ -681,11 +874,11 @@ class FusionDetector:
             # Try to find nearby protein_coding gene
             nearby = self._find_nearby_protein_coding(chrom2, pos2, window=500)
             if nearby:
-                logger.debug(f"Right gene {right_raw} ({right_biotype}) resolved to nearby protein_coding {nearby}")
+                logger.info(f"Right gene {right_raw} ({right_biotype}) resolved to nearby protein_coding {nearby}")
                 right_raw = nearby
             else:
                 # Can't resolve right side to protein_coding; skip fusion
-                logger.debug(f"Right gene {right_raw} ({right_biotype}) has no nearby protein_coding gene; skipping fusion")
+                logger.info(f"Right gene {right_raw} ({right_biotype}) has no nearby protein_coding gene; skipping fusion")
                 return
         
         # Record fusion only if both sides are protein_coding
@@ -887,7 +1080,6 @@ class FusionDetector:
             return
         left_gene, left_score = self.assign_fusion_gene_cached(left_chr, left_pos)
         right_gene, right_score = self.assign_fusion_gene_cached(sa_chr, right_pos)
-        # Store raw genes without normalization - defer to build_metadata
         if left_gene is not None and right_gene is not None and left_gene != right_gene:
             self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos,
                              left_score=left_score, right_score=right_score)
