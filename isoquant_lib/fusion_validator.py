@@ -41,7 +41,7 @@ class FusionValidator:
         # Check biotypes for both genes against the allowed whitelist.
         left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
         right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
-        logger.info(f"Gene pair biotypes: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
+        logger.debug(f"Gene pair biotypes: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
         # Check if either biotype is not in the allowed whitelist
         has_non_coding = False
         reason = None
@@ -250,50 +250,6 @@ class FusionValidator:
                 fusions_to_discard.add(discard_key)
         return fusions_to_discard
 
-    def _merge_similar_candidates_by_gene(self, shared_gene_index, index_type="left",
-                                           distance_threshold=10000):
-        # Merge similar fusion candidates sharing a gene on one side.
-        fusions_to_discard = set()
-        for shared_gene, entries in shared_gene_index.items():
-            if len(entries) < 2:
-                continue
-            for i in range(len(entries)):
-                for j in range(i + 1, len(entries)):
-                    if fusions_to_discard & {entries[i][0], entries[j][0]}:
-                        continue  # Skip if either fusion already marked for discard
-                    fusion_key_i, other_gene_i, other_chr_i, other_pos_i = entries[i]
-                    fusion_key_j, other_gene_j, other_chr_j, other_pos_j = entries[j]
-                    # Same chromosome and within distance threshold?
-                    if other_chr_i != other_chr_j:
-                        continue
-                    distance = abs(other_pos_i - other_pos_j)
-                    if distance > distance_threshold:
-                        continue
-                    # If genes are identical and very close (< 1kb), definitely merge as duplicates
-                    if other_gene_i == other_gene_j and distance < 1000:
-                        logger.info(f"Merging near-identical duplicates: {fusion_key_i} ← {fusion_key_j} "
-                                   f"(shared {index_type}={shared_gene}, distance={distance}bp)")
-                        self._merge_fusion_candidates(fusion_key_i, fusion_key_j)
-                        fusions_to_discard.add(fusion_key_j)
-                        continue
-                    # Skip if genes are identical and far apart (different events)
-                    if other_gene_i == other_gene_j:
-                        continue
-                    # Score both genes at their respective positions
-                    side = "right" if index_type == "left" else "left"
-                    logger.debug(f"Merging candidates: {fusion_key_i} vs {fusion_key_j} "
-                               f"(shared {index_type}={shared_gene}, {side} distance={distance}bp)")
-                    score_i = self.detector._compute_gene_score(other_gene_i, other_pos_i, chrom=other_chr_i)
-                    score_j = self.detector._compute_gene_score(other_gene_j, other_pos_j, chrom=other_chr_j)
-                    # Keep the one with higher score, discard the other
-                    if score_i >= score_j:
-                        self._merge_fusion_candidates(fusion_key_i, fusion_key_j)
-                        fusions_to_discard.add(fusion_key_j)
-                    else:
-                        self._merge_fusion_candidates(fusion_key_j, fusion_key_i)
-                        fusions_to_discard.add(fusion_key_i)
-        return fusions_to_discard
-
     def _remove_discarded_fusions(self, fusions_to_discard):
         # Remove discarded fusions from all internal data structures.
         for fusion_key in fusions_to_discard:
@@ -304,41 +260,6 @@ class FusionValidator:
                 del self.detector.fusion_candidates[fusion_key]
             if fusion_key in self.detector.fusion_breakpoints:
                 del self.detector.fusion_breakpoints[fusion_key]
-
-    def merge_nearly_identical(self, distance_threshold=2000):
-        # Merge fully identical and nearly identical fusion candidates.
-        # Step 1: Merge fully identical fusions
-        fully_identical_discards = self._merge_fully_identical()
-        # Step 2: Build indexes for nearly identical fusion detection
-        left_gene_index = defaultdict(list)
-        right_gene_index = defaultdict(list)
-        for fusion_key, meta in self.detector.fusion_metadata.items():
-            if fusion_key in fully_identical_discards:
-                continue  # Skip already-discarded fusions
-            consensus_bp = meta.get("consensus_bp")
-            if not consensus_bp:
-                continue
-            # Handle format (c1, p1, c2, p2)
-            left_chr, left_pos, right_chr, right_pos = consensus_bp
-            left_gene = meta.get("left_gene")
-            right_gene = meta.get("right_gene")
-            if not left_gene or not right_gene:
-                continue
-            # Index by left_gene: store (fusion_key, right_gene, right_chr, right_pos)
-            left_gene_index[left_gene].append((fusion_key, right_gene, right_chr, right_pos))
-            # Index by right_gene: store (fusion_key, left_gene, left_chr, left_pos)
-            right_gene_index[right_gene].append((fusion_key, left_gene, left_chr, left_pos))
-        # Step 3: Merge nearly identical by shared left gene
-        left_gene_discards = self._merge_similar_candidates_by_gene(
-            left_gene_index, index_type="left", distance_threshold=distance_threshold
-        )
-        # Step 4: Merge nearly identical by shared right gene
-        right_gene_discards = self._merge_similar_candidates_by_gene(
-            right_gene_index, index_type="right", distance_threshold=distance_threshold
-        )
-        # Step 5: Remove all discarded fusions
-        all_discards = fully_identical_discards | left_gene_discards | right_gene_discards
-        self._remove_discarded_fusions(all_discards)
 
     def _merge_fusion_candidates(self, keep_fusion_key, discard_fusion_key):
         # Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key

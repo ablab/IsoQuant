@@ -206,7 +206,7 @@ class FusionDetector:
         if not gene_name or not isinstance(gene_name, str):
             return gene_name
         return Antisense_suffix.sub('', gene_name)
-    
+
     def is_fusion_in_frame(self, gene_left, bp_left_chrom, bp_left_pos,
                                 gene_right, bp_right_chrom, bp_right_pos):
         # 1. Get canonical transcripts
@@ -305,41 +305,6 @@ class FusionDetector:
         else:
             return 0.0  # Position is intergenic
 
-    def is_splice_site(self, chrom, pos, gene_name):
-        # Returns ("donor", True) or ("acceptor", True) or (None, False)
-        strand = self.get_gene_strand(gene_name, chrom=chrom, pos=pos)
-        if strand is None:
-            return (None, False)
-        # Fetch 2bp around the breakpoint
-        try:
-            ref = pysam.FastaFile(self.reference_fasta)
-        except Exception:
-            return (None, False)
-
-        # Get sequence context
-        # for donor: exon_end = pos, look at pos+1
-        # for acceptor: exon_start = pos+1, look at pos
-        seq_5p = ref.fetch(chrom, pos-1, pos+1).upper()  # 2bp around pos
-        seq_3p = ref.fetch(chrom, pos, pos+2).upper()
-
-        # Reverse-complement for minus strand
-        if strand == "-":
-            seq_5p = self.reverse_complement(seq_5p)
-            seq_3p = self.reverse_complement(seq_3p)
-
-        # Canonical motifs
-        # donor = GT (exon end)
-        # acceptor = AG (exon start)
-        is_donor    = seq_3p.startswith("GT")
-        is_acceptor = seq_5p.endswith("AG")
-
-        if is_donor:
-            return ("donor", True)
-        if is_acceptor:
-            return ("acceptor", True)
-
-        return (None, False)
-    
     @staticmethod
     def reverse_complement(seq):
         comp = str.maketrans("ACGTN", "TGCAN")
@@ -696,22 +661,17 @@ class FusionDetector:
             return
         left_raw = self.normalize_gene_label(context1)
         right_raw = self.normalize_gene_label(context2)
-        
-        # Record fusion only if both sides are protein_coding
         # Sort genes alphabetically to avoid duplicate entries in both directions
         sorted_genes = sorted([left_raw, right_raw])
         fusion_key = f"{sorted_genes[0]}--{sorted_genes[1]}"
         self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
-
         self.fusion_candidates[fusion_key].add(read_name)
         # Store breakpoint without strand information: (chrom1, pos1, chrom2, pos2)
         bp = (chrom1, int(pos1), chrom2, int(pos2))
         self.fusion_breakpoints[fusion_key][bp] += 1
-        
         # Store per-read scores for later averaging
         if left_score is not None and right_score is not None:
             self.fusion_read_scores[fusion_key][read_name] = (left_score, right_score)
-        
         meta = self.fusion_metadata.setdefault(
             fusion_key,
             {"supporting_reads": set(), "consensus_bp": None,
@@ -1110,11 +1070,6 @@ class FusionDetector:
         except Exception:
             return None
 
-    def _compute_early_confidence(self, support_count):
-        # Early confidence based only on support (before reconstruction/validation)
-        # Used in build_metadata to decide gene reassignment strategy
-        return min(support_count, 10) / 10.0
-
     def canonical_locus_name(self, gene_name):
         # Collapse antisense / divergent transcript names to the canonical locus name.
         if not gene_name:
@@ -1285,7 +1240,7 @@ class FusionDetector:
                 flags["is_valid"] = False
                 flags["reasons"].append("cis-SAGe disallowed by policy")
 
-            # Compute full confidence (includes reconstruction/realignment bonuses)
+            # Compute confidence
             conf = validator.confidence(meta, flags)
             meta["confidence"] = conf
             # convert very low-confidence to invalid
@@ -1298,8 +1253,9 @@ class FusionDetector:
                 include_classes=("canonical","cis-SAGe"),
                 min_confidence=0.3, only_valid=False):
             self.validate_candidates(min_support=min_support)
+            # Merge only fully identical fusions (exact duplicates)
             validator = FusionValidator(self)
-            validator.merge_nearly_identical()
+            validator._merge_fully_identical()
             with open(output_path, "w") as f:
                 f.write("LeftGene\tLeftBiotype\tRawLeftGene\tFinalLeftScore\tLeftChromosome\tLeftBreakpoint\t"
                         "RightGene\tRightBiotype\tRawRightGene\tFinalRightScore\tRightChromosome\tRightBreakpoint\t"
