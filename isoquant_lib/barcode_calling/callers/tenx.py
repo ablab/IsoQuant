@@ -108,6 +108,11 @@ class TenXBarcodeDetector:
                                                       self.r1_indexer.k, self.R1,
                                                       r1_occurrences, min_score=11,
                                                       end_delta=self.TERMINAL_MATCH_DELTA)
+            if r1_start is None:
+                r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
+                                                          self.r1_indexer.k, self.R1,
+                                                          r1_occurrences, min_score=8,
+                                                          end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
         if r1_start is None:
             # if polyT was not found, or linker was not found to the left of polyT,
@@ -265,6 +270,11 @@ class VisiumHDBarcodeDetector:
                                                       self.r1_indexer.k, self.R1,
                                                       r1_occurrences, min_score=10,
                                                       end_delta=self.TERMINAL_MATCH_DELTA)
+            if r1_start is None:
+                r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
+                                                          self.r1_indexer.k, self.R1,
+                                                          r1_occurrences, min_score=8,
+                                                          end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
         if r1_start is None:
             # if polyT was not found, or linker was not found to the left of polyT,
@@ -410,6 +420,12 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
                                                    self.r1_indexer.k, self.R1,
                                                    r1_occurrences, min_score=11,
                                                    end_delta=self.TERMINAL_MATCH_DELTA)
+
+        if r1_start is None:
+            r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
+                                                      self.r1_indexer.k, self.R1,
+                                                      r1_occurrences, min_score=8,
+                                                      end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
         if r1_start is None:
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
