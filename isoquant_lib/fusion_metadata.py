@@ -34,10 +34,16 @@ class FusionMetadata:
         meta = self._initialize_or_get_metadata(fusion_key, reads, clustered_support, consensus_bp)
         # 3. Set raw genes and compute raw biotypes
         self._compute_raw_genes_and_biotypes(fusion_key, meta, left_chr, left_pos, right_chr, right_pos)
-        # 4. Determine final genes based on raw gene scores (threshold: 230)
-        final_left_gene, final_right_gene = self._compute_final_genes(
-            meta, left_chr, left_pos, right_chr, right_pos
-        )
+        # 4. Use raw genes as final genes (fusion context-aware assignment temporarily disabled for testing)
+        raw_left_gene = meta.get("raw_left_gene")
+        raw_right_gene = meta.get("raw_right_gene")
+        raw_left_score = meta.get("raw_left_score", 0.0)
+        raw_right_score = meta.get("raw_right_score", 0.0)
+        final_left_gene = raw_left_gene
+        final_right_gene = raw_right_gene
+        meta["final_left_score"] = raw_left_score
+        meta["final_right_score"] = raw_right_score
+        logger.debug(f"Using raw genes (no context-aware reassignment): {final_left_gene}, {final_right_gene}")
         # 5. Update fusion_key mappings if genes changed
         original_key = fusion_key
         new_key = self._update_fusion_key_mappings(original_key, final_left_gene, final_right_gene, meta)
@@ -85,56 +91,6 @@ class FusionMetadata:
             f"left={meta.get('raw_left_gene')}({meta.get('raw_left_biotype')}), "
             f"right={meta.get('raw_right_gene')}({meta.get('raw_right_biotype')})"
         )
-
-    def _compute_final_genes(self, meta, left_chr, left_pos, right_chr, right_pos):
-        # Determine final genes based on raw gene scores (threshold: 230).
-        # If raw score >= 230, use raw gene; otherwise re-assign at consensus breakpoint.
-        # When reassigning, pass the other side's gene as fusion context for accurate scoring.
-        detector = self.detector
-        SCORE_THRESHOLD = 230
-        raw_left_gene = meta.get("raw_left_gene")
-        raw_right_gene = meta.get("raw_right_gene")
-        raw_left_score = meta.get("raw_left_score", 0.0)
-        raw_right_score = meta.get("raw_right_score", 0.0)
-        # Left gene decision
-        if raw_left_score >= SCORE_THRESHOLD:
-            # Score is good enough; use raw gene
-            final_left_gene = raw_left_gene
-            meta["final_left_score"] = raw_left_score
-            logger.debug(f"Left gene score {raw_left_score:.1f} >= {SCORE_THRESHOLD}: Using raw gene {final_left_gene}")
-        else:
-            # Score is low; re-assign at consensus breakpoint with fusion context
-            final_left_gene, final_left_score = detector.assign_fusion_gene(
-                left_chr, left_pos,
-                fusion_partner_gene=raw_right_gene,
-                fusion_partner_chrom=right_chr,
-                fusion_partner_pos=right_pos
-            )
-            meta["final_left_score"] = final_left_score
-            logger.debug(
-                f"Left gene score {raw_left_score:.1f} < {SCORE_THRESHOLD}: "
-                f"Re-assigned to {final_left_gene} with score {final_left_score:.1f}"
-            )
-        # Right gene decision
-        if raw_right_score >= SCORE_THRESHOLD:
-            # Score is good enough; use raw gene
-            final_right_gene = raw_right_gene
-            meta["final_right_score"] = raw_right_score
-            logger.debug(f"Right gene score {raw_right_score:.1f} >= {SCORE_THRESHOLD}: Using raw gene {final_right_gene}")
-        else:
-            # Score is low; re-assign at consensus breakpoint with fusion context
-            final_right_gene, final_right_score = detector.assign_fusion_gene(
-                right_chr, right_pos,
-                fusion_partner_gene=raw_left_gene,
-                fusion_partner_chrom=left_chr,
-                fusion_partner_pos=left_pos
-            )
-            meta["final_right_score"] = final_right_score
-            logger.debug(
-                f"Right gene score {raw_right_score:.1f} < {SCORE_THRESHOLD}: "
-                f"Re-assigned to {final_right_gene} with score {final_right_score:.1f}"
-            )
-        return final_left_gene, final_right_gene
 
     def _update_fusion_key_mappings(self, original_key, final_left_gene, final_right_gene, meta):
         # Update fusion_key mappings if gene names changed during re-assignment.
@@ -199,18 +155,15 @@ class FusionMetadata:
         # Populate metadata with raw genes
         meta["raw_left_gene"] = raw_left
         meta["raw_right_gene"] = raw_right
-        
         # Compute average scores from per-read scores
         read_scores = self.detector.fusion_read_scores.get(fusion_key, {})
         left_scores = []
         right_scores = []
-        
         for read_name in meta["supporting_reads"]:
             if read_name in read_scores:
                 left_score, right_score = read_scores[read_name]
                 left_scores.append(left_score)
                 right_scores.append(right_score)
-        
         # Average the scores, or fallback to 0.0 if no scores available
         meta["raw_left_score"] = sum(left_scores) / len(left_scores) if left_scores else 0.0
         meta["raw_right_score"] = sum(right_scores) / len(right_scores) if right_scores else 0.0
@@ -236,18 +189,3 @@ class FusionMetadata:
             return None
         return sorted(counts_dict.items(), key=lambda x: (-x[1], x[0]))[0][0]
 
-    def _is_bad_gene(self, gene_name, chrom=None, pos=None):
-        # Check if a gene is "bad" (pseudogene, ncRNA, etc.) using detector's method
-        # which handles HGNC symbol resolution with coordinate fallback
-        if not gene_name:
-            return False
-        try:
-            return self.detector.is_bad_gene(gene_name, chrom=chrom, pos=pos)
-        except Exception:
-            return False
-
-    def _replace_bad_gene_if_needed(self, gene, chrom, pos, meta):
-        if self._is_bad_gene(gene, chrom, pos):
-            replacement = self.detector._find_nearby_protein_coding(chrom, pos, window=500)
-            if replacement:
-                meta.setdefault('notes', []).append(f"Replaced pseudogene/ncRNA {gene} → {replacement} at consensus")

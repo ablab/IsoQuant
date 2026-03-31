@@ -20,49 +20,35 @@ class FusionValidator:
                 logger.debug(f"Got breakpoint for {fusion_key}: {left_chr}:{left_pos} - {right_chr}:{right_pos}")
         return left_chr, left_pos, right_chr, right_pos
 
-    def _map_pseudogene_to_parent(self, gene, chrom=None, pos=None):
-        # Attempt to map a pseudogene to its parent gene.
-        # Pattern: Remove suffix like P1, P2, etc. or other numeric pseudogene suffixes.
-        # Examples: RPL23P6 → RPL23, SAE1P1 → SAE1, ZFYVE9P1 → ZFYVE9
-        if not gene or not isinstance(gene, str):
-            return None
-        # Match pattern: ends with P followed by one or more digits (e.g. P1, P6, P123)
-        # Also handles patterns like P followed by other suffixes
-        match = re.match(r"^(.+?)P\d+$", gene)
-        if not match:
-            return None
-        parent_candidate = match.group(1)
-        # Verify parent gene exists and is protein-coding
-        parent_biotype = self.detector.get_gene_biotype(parent_candidate, chrom=chrom, pos=pos)
-        if parent_biotype == "protein_coding":
-            logger.debug(f"Mapped pseudogene {gene} → parent gene {parent_candidate}")
-            return parent_candidate
-        return None
+    def _is_allowed_biotype(self, biotype):
+        # Check if a biotype is allowed for fusion detection.
+        # Includes protein-coding genes and immune receptor genes (IG and TR).
+        allowed_biotypes = {
+            "protein_coding",
+            "IG_C_gene",
+            "IG_V_gene",
+            "IG_D_gene",
+            "IG_J_gene",
+            "TR_V_gene",
+            "TR_D_gene",
+            "TR_J_gene",
+            "TR_C_gene",
+            "GBA3"
+        }
+        return biotype in allowed_biotypes
 
     def _salvage_and_check_gene_pair(self, left_gene, right_gene, left_chr, left_pos, right_chr, right_pos):
-        # Salvage non-coding genes by finding nearby protein-coding alternatives.
-        def _salvage_to_nearby_coding(gene, chrom, pos):
-            # Only attempt rescue if we have coordinates and the gene is non-coding/unknown
-            if not gene or chrom is None or pos is None:
-                return gene, None
-            biotype = self.detector.get_gene_biotype(gene, chrom=chrom, pos=pos)
-            if biotype and biotype == "protein_coding":
-                return gene, biotype
-            # Try a small window to avoid spurious swaps
-            nearby = self.detector._find_nearby_protein_coding(chrom, pos, window=500)
-            if nearby:
-                return nearby, "protein_coding"
-            return gene, biotype
-        left_gene, left_biotype = _salvage_to_nearby_coding(left_gene, left_chr, left_pos)
-        right_gene, right_biotype = _salvage_to_nearby_coding(right_gene, right_chr, right_pos)
-        logger.debug(f"Gene pair after salvage: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
-        # Check if either is still non-protein-coding
+        # Check biotypes for both genes against the allowed whitelist.
+        left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
+        right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
+        logger.debug(f"Gene pair biotypes: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
+        # Check if either biotype is not in the allowed whitelist
         has_non_coding = False
         reason = None
-        if left_gene and left_biotype and left_biotype != "protein_coding":
+        if left_gene and left_biotype and not self._is_allowed_biotype(left_biotype):
             has_non_coding = True
             reason = f"{left_gene}={left_biotype}"
-        elif right_gene and right_biotype and right_biotype != "protein_coding":
+        elif right_gene and right_biotype and not self._is_allowed_biotype(right_biotype):
             has_non_coding = True
             reason = f"{right_gene}={right_biotype}"
         return left_gene, left_biotype, right_gene, right_biotype, has_non_coding, reason
@@ -76,41 +62,46 @@ class FusionValidator:
                 continue
             # Extract breakpoint coordinates
             left_chr, left_pos, right_chr, right_pos = self._get_breakpoint_coords(fusion_key)
-            # STEP 1: Map pseudogenes to parent genes EARLY, before salvage/biotype check
-            updated_any = False
-            for read_name, (left_gene, right_gene) in list(read_assignments.items()):
-                mapped_left = self._map_pseudogene_to_parent(left_gene, chrom=left_chr, pos=left_pos) or left_gene
-                mapped_right = self._map_pseudogene_to_parent(right_gene, chrom=right_chr, pos=right_pos) or right_gene
-                if mapped_left != left_gene or mapped_right != right_gene:
-                    self.detector.fusion_assigned_pairs[fusion_key][read_name] = (mapped_left, mapped_right)
-                    logger.debug(f"Mapped pseudogenes: {left_gene}->{mapped_left}, {right_gene}->{mapped_right}")
-                    updated_any = True
-            # Update metadata genes if pseudogenes were mapped
-            if updated_any:
-                meta = self.detector.fusion_metadata.get(fusion_key)
-                if meta:
-                    # Get the updated genes from assignments (majority vote or just pick first)
-                    all_left = [g for g, _ in self.detector.fusion_assigned_pairs[fusion_key].values()]
-                    all_right = [g for _, g in self.detector.fusion_assigned_pairs[fusion_key].values()]
-                    if all_left:
-                        meta["left_gene"] = max(set(all_left), key=all_left.count)
-                    if all_right:
-                        meta["right_gene"] = max(set(all_right), key=all_right.count)
-                        logger.debug(f"Updated metadata genes for {fusion_key}: {meta.get('left_gene')}, {meta.get('right_gene')}")
-            # STEP 2: Check all raw assigned gene pairs for this fusion (after pseudogene mapping)
+            # Check all raw assigned gene pairs for this fusion
             has_non_coding = False
             non_coding_reason = None
             for read_name, (left_gene, right_gene) in read_assignments.items():
-                # Salvage genes and check biotypes
+                # Check biotypes for both genes
                 left_gene, left_biotype, right_gene, right_biotype, is_non_coding, reason = (
                     self._salvage_and_check_gene_pair(left_gene, right_gene, left_chr, left_pos, right_chr, right_pos)
                 )
                 # Update assignment with salvaged genes
                 if self.detector.fusion_assigned_pairs.get(fusion_key, {}).get(read_name):
                     self.detector.fusion_assigned_pairs[fusion_key][read_name] = (left_gene, right_gene)
+                # STEP 3: Attempt to resolve non-allowed biotypes to nearby protein-coding alternatives
+                if is_non_coding:
+                    resolved_left = left_gene
+                    resolved_right = right_gene
+                    if not self._is_allowed_biotype(left_biotype) and left_chr is not None and left_pos is not None:
+                        nearby = self.detector._find_nearby_protein_coding(left_chr, left_pos, window=500)
+                        if nearby:
+                            logger.debug(f"Resolved left gene {left_gene} ({left_biotype}) to nearby protein-coding {nearby}")
+                            resolved_left = nearby
+                            left_biotype = "protein_coding"
+                            is_non_coding = False
+                    if not self._is_allowed_biotype(right_biotype) and right_chr is not None and right_pos is not None:
+                        nearby = self.detector._find_nearby_protein_coding(right_chr, right_pos, window=500)
+                        if nearby:
+                            logger.debug(f"Resolved right gene {right_gene} ({right_biotype}) to nearby protein-coding {nearby}")
+                            resolved_right = nearby
+                            right_biotype = "protein_coding"
+                            is_non_coding = False
+                    # Update assignment with resolved genes
+                    if resolved_left != left_gene or resolved_right != right_gene:
+                        self.detector.fusion_assigned_pairs[fusion_key][read_name] = (resolved_left, resolved_right)
                 if is_non_coding:
                     has_non_coding = True
-                    non_coding_reason = reason
+                    reasons = []
+                    if not self._is_allowed_biotype(left_biotype):
+                        reasons.append(f"Left {left_gene}={left_biotype}")
+                    if not self._is_allowed_biotype(right_biotype):
+                        reasons.append(f"Right {right_gene}={right_biotype}")
+                    non_coding_reason = "; ".join(reasons)
                     break
             if has_non_coding:
                 logger.info(f"Dropping early non-coding fusion: {fusion_key} - {non_coding_reason}")
@@ -131,7 +122,7 @@ class FusionValidator:
                 del self.detector.fusion_assigned_pairs[fusion_key]
 
     def filter_non_coding_genes(self):
-        # Removes fusions with non-protein-coding partners completely from all data structures.
+        # Removes fusions with partners not in the allowed biotype whitelist from all data structures.
         fusions_to_discard = []
         for fusion_key, meta in list(self.detector.fusion_metadata.items()):
             left_gene = meta.get("left_gene")
@@ -144,16 +135,16 @@ class FusionValidator:
             # Get biotypes for both genes
             left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
             right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
-            # Discard if either partner is non-protein-coding (or unknown/not found)
-            left_is_coding = left_biotype == "protein_coding"
-            right_is_coding = right_biotype == "protein_coding"
-            if not left_is_coding or not right_is_coding:
+            # Discard if either partner has a biotype not in the allowed whitelist
+            left_is_allowed = self._is_allowed_biotype(left_biotype)
+            right_is_allowed = self._is_allowed_biotype(right_biotype)
+            if not left_is_allowed or not right_is_allowed:
                 reason = []
-                if not left_is_coding:
+                if not left_is_allowed:
                     reason.append(f"Left {left_gene}={left_biotype}")
-                if not right_is_coding:
+                if not right_is_allowed:
                     reason.append(f"Right {right_gene}={right_biotype}")
-                # logger.info(f"Discarding non-coding fusion: {fusion_key} - {'; '.join(reason)}")
+                # logger.info(f"Discarding fusion with non-allowed biotype: {fusion_key} - {'; '.join(reason)}")
                 fusions_to_discard.append(fusion_key)
         # Remove all discarded fusions from data structures
         self._remove_discarded_fusions_internal(fusions_to_discard)
@@ -233,18 +224,6 @@ class FusionValidator:
         g = gene.upper()
         return g.startswith(prefixes)
 
-    def calculate_exon_boundary_bonus(self, meta, candidate):
-        # Calculate exon boundary proximity bonus for confidence scoring.
-        bL = meta.get("left_min_exon_boundary_delta")
-        bR = meta.get("right_min_exon_boundary_delta")
-        boundary_bonus = 0.0
-        if isinstance(bL, int):
-            boundary_bonus += max(0.0, min(0.20, (200 - min(bL, 200)) / 200.0 * 0.20))
-        if isinstance(bR, int):
-            boundary_bonus += max(0.0, min(0.20, (200 - min(bR, 200)) / 200.0 * 0.20))
-        boundary_bonus = min(boundary_bonus, 0.25)
-        return boundary_bonus
-
     def confidence(self, meta, flags=None):
         # Compute full confidence score including reconstruction/realignment bonuses.
         # Start from clustered support normalized
@@ -255,8 +234,6 @@ class FusionValidator:
         hits = meta.get("realignment_hits", 0)
         mapq = meta.get("best_hit_mapq", 0)
         realign = min(hits, 3) * 0.1 + min(mapq, 30) / 300.0
-        # Exon boundary bonus
-        boundary_bonus = self.calculate_exon_boundary_bonus(meta, None)
         # Driver gene bonus vs artifact penalty
         priors = 0.0
         left = meta.get("left_gene")
@@ -266,7 +243,7 @@ class FusionValidator:
                 priors -= 0.30
             if self.is_driver_gene(left) or self.is_driver_gene(right):
                 priors += 0.20
-        conf = max(0.0, min(1.0, support + recon + realign + boundary_bonus + priors))
+        conf = max(0.0, min(1.0, support + recon + realign + priors))
         return conf
 
     def _merge_fully_identical(self):
@@ -349,7 +326,7 @@ class FusionValidator:
             if fusion_key in self.detector.fusion_breakpoints:
                 del self.detector.fusion_breakpoints[fusion_key]
 
-    def merge_nearly_identical(self, distance_threshold=10000):
+    def merge_nearly_identical(self, distance_threshold=2000):
         # Merge fully identical and nearly identical fusion candidates.
         # Step 1: Merge fully identical fusions
         fully_identical_discards = self._merge_fully_identical()
