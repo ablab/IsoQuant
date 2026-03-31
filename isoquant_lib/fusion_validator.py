@@ -41,7 +41,7 @@ class FusionValidator:
         # Check biotypes for both genes against the allowed whitelist.
         left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
         right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
-        logger.debug(f"Gene pair biotypes: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
+        logger.info(f"Gene pair biotypes: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
         # Check if either biotype is not in the allowed whitelist
         has_non_coding = False
         reason = None
@@ -73,27 +73,6 @@ class FusionValidator:
                 # Update assignment with salvaged genes
                 if self.detector.fusion_assigned_pairs.get(fusion_key, {}).get(read_name):
                     self.detector.fusion_assigned_pairs[fusion_key][read_name] = (left_gene, right_gene)
-                # STEP 3: Attempt to resolve non-allowed biotypes to nearby protein-coding alternatives
-                if is_non_coding:
-                    resolved_left = left_gene
-                    resolved_right = right_gene
-                    if not self._is_allowed_biotype(left_biotype) and left_chr is not None and left_pos is not None:
-                        nearby = self.detector._find_nearby_protein_coding(left_chr, left_pos, window=500)
-                        if nearby:
-                            logger.debug(f"Resolved left gene {left_gene} ({left_biotype}) to nearby protein-coding {nearby}")
-                            resolved_left = nearby
-                            left_biotype = "protein_coding"
-                            is_non_coding = False
-                    if not self._is_allowed_biotype(right_biotype) and right_chr is not None and right_pos is not None:
-                        nearby = self.detector._find_nearby_protein_coding(right_chr, right_pos, window=500)
-                        if nearby:
-                            logger.debug(f"Resolved right gene {right_gene} ({right_biotype}) to nearby protein-coding {nearby}")
-                            resolved_right = nearby
-                            right_biotype = "protein_coding"
-                            is_non_coding = False
-                    # Update assignment with resolved genes
-                    if resolved_left != left_gene or resolved_right != right_gene:
-                        self.detector.fusion_assigned_pairs[fusion_key][read_name] = (resolved_left, resolved_right)
                 if is_non_coding:
                     has_non_coding = True
                     reasons = []
