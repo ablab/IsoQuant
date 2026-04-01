@@ -272,6 +272,13 @@ def run_barcode_quality(args, config_dict, baselines=None):
         qa_command.extend(["--score_col", config_dict["score_col"]])
     if "barcode_length" in config_dict:
         qa_command.extend(["--barcode_length", config_dict["barcode_length"]])
+    if "truth_file" in config_dict:
+        truth_file = fix_path(config_file, config_dict["truth_file"])
+        qa_command.extend(["--truth_file", truth_file])
+    if "truth_barcode_col" in config_dict:
+        qa_command.extend(["--truth_barcode_col", config_dict["truth_barcode_col"]])
+    if "truth_umi_col" in config_dict:
+        qa_command.extend(["--truth_umi_col", config_dict["truth_umi_col"]])
 
     log.info("QA command line: " + " ".join(qa_command))
     result = subprocess.run(qa_command)

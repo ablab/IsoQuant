@@ -55,6 +55,29 @@ def get_score_thresholds(barcode_length: int) -> Tuple[int, List[int]]:
     return min_score, scores
 
 
+def load_truth_file(truth_file: str, barcode_col: int = 4,
+                    umi_col: int = 7) -> Dict[str, Tuple[str, Optional[str]]]:
+    """Load external ground truth file.
+
+    Returns dict: read_id -> (barcode, umi).
+    Strips leading '@' from read IDs to match IsoQuant output format.
+    """
+    truth: Dict[str, Tuple[str, Optional[str]]] = {}
+    with open(truth_file) as f:
+        for line in f:
+            if line.startswith('Name\t') or line.startswith('#'):
+                continue
+            cols = line.strip().split('\t')
+            if len(cols) <= barcode_col:
+                continue
+            read_id = cols[0].lstrip('@')
+            barcode = cols[barcode_col]
+            umi = cols[umi_col] if len(cols) > umi_col else None
+            if barcode:
+                truth[read_id] = (barcode, umi)
+    return truth
+
+
 def extract_ground_truth_single(read_id: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Extract ground truth barcode and UMI from simulated read ID.
@@ -352,6 +375,104 @@ def assess_split_barcode_mode(
     return metrics
 
 
+def assess_split_barcode_mode_with_truth(
+    input_file: str,
+    truth_dict: Dict[str, Tuple[str, Optional[str]]],
+    barcode_col: int = 1
+) -> Dict[str, float]:
+    """
+    Assess barcode calling quality for split modes using external ground truth.
+
+    Each truth entry has one barcode per read. IsoQuant split mode may detect
+    multiple barcodes per read; we count a correct detection if any matches.
+
+    Args:
+        input_file: Path to barcode TSV file from isoquant_detect_barcodes.py
+        truth_dict: Dict mapping read_id -> (barcode, umi) from load_truth_file()
+        barcode_col: Column index for detected barcode
+    """
+    # Collect all detections per original read
+    read_detections: Dict[str, List[str]] = defaultdict(list)
+
+    with open(input_file) as f:
+        for line in f:
+            if line.startswith('#') or line.startswith('read_id\t'):
+                continue
+
+            cols = line.strip().split('\t')
+            if len(cols) <= barcode_col:
+                continue
+
+            read_id = _strip_split_segment_suffix(cols[0])
+            detected_bc = cols[barcode_col]
+            read_detections[read_id].append(detected_bc)
+
+    # Calculate statistics
+    total_reads = len(read_detections)
+    reads_with_truth = 0
+    correct_reads = 0
+    incorrect_reads = 0
+    no_barcodes_assigned = 0
+    total_valid_detections = 0
+    correct_detections = 0
+    incorrect_detections = 0
+
+    for read_id, detected_barcodes in read_detections.items():
+        truth_entry = truth_dict.get(read_id)
+        if truth_entry is None:
+            continue
+
+        reads_with_truth += 1
+        true_barcode = truth_entry[0]
+
+        valid_detections = [bc for bc in detected_barcodes if bc != '*' and bc]
+
+        if not valid_detections:
+            no_barcodes_assigned += 1
+            continue
+
+        total_valid_detections += len(valid_detections)
+
+        # Check if any detection matches the truth barcode
+        has_correct = any(bc == true_barcode for bc in valid_detections)
+        if has_correct:
+            correct_reads += 1
+            correct_detections += 1
+            incorrect_detections += len(valid_detections) - 1
+        else:
+            incorrect_reads += 1
+            incorrect_detections += len(valid_detections)
+
+    # Compute metrics
+    metrics: Dict[str, float] = {
+        'total_reads': total_reads,
+        'reads_with_truth': reads_with_truth,
+        'correct_reads': correct_reads,
+        'incorrect_reads': incorrect_reads,
+        'no_barcodes_assigned': no_barcodes_assigned,
+        'total_valid_detections': total_valid_detections,
+        'correct_detections': correct_detections,
+        'incorrect_detections': incorrect_detections,
+    }
+
+    # Precision: fraction of reads with detections that are correct
+    reads_with_detections = reads_with_truth - no_barcodes_assigned
+    if reads_with_detections > 0:
+        metrics['precision'] = 100.0 * correct_reads / reads_with_detections
+    else:
+        metrics['precision'] = 0.0
+
+    # Recall: fraction of truth reads where barcode was correctly detected
+    if reads_with_truth > 0:
+        metrics['recall'] = 100.0 * correct_reads / reads_with_truth
+        metrics['pct_no_barcodes'] = 100.0 * no_barcodes_assigned / reads_with_truth
+    else:
+        metrics['recall'] = 0.0
+        metrics['pct_no_barcodes'] = 0.0
+
+    return metrics
+
+
 def write_metrics(metrics: Dict[str, float], output_file: Optional[str] = None):
     """Write metrics to TSV file or stdout."""
     lines = []
@@ -383,7 +504,16 @@ def print_summary(metrics: Dict[str, float], mode: str):
 
         if 'umi_within_1' in metrics:
             print(f"UMIs within 1 edit: {metrics.get('umi_within_1', 0)}", file=sys.stderr)
+    elif 'reads_with_truth' in metrics:
+        # Split mode with external truth file
+        print(f"Reads with truth: {metrics.get('reads_with_truth', 0)}", file=sys.stderr)
+        print(f"Correct reads: {metrics.get('correct_reads', 0)}", file=sys.stderr)
+        print(f"No barcodes assigned: {metrics.get('no_barcodes_assigned', 0)} "
+              f"({metrics.get('pct_no_barcodes', 0):.2f}%)", file=sys.stderr)
+        print(f"Precision: {metrics.get('precision', 0):.2f}%", file=sys.stderr)
+        print(f"Recall: {metrics.get('recall', 0):.2f}%", file=sys.stderr)
     else:
+        # Split mode with read-ID ground truth
         print(f"Total true barcodes: {metrics.get('total_true_barcodes', 0)}", file=sys.stderr)
         print(f"Reads with all correct: {metrics.get('all_correct_reads', 0)} "
               f"({metrics.get('pct_all_correct', 0):.2f}%)", file=sys.stderr)
@@ -430,6 +560,13 @@ Ground truth is extracted from read IDs in format:
                         help='Minimum score threshold for filtering barcodes. '
                              'If -1 (default), all barcodes are loaded for QA '
                              '(* treated as false negative)')
+    parser.add_argument('--truth_file', type=str,
+                        help='External truth TSV file (columns: Name, ..., Barcodes, ..., UMI). '
+                             'When provided, ground truth is loaded from this file instead of read IDs')
+    parser.add_argument('--truth_barcode_col', type=int, default=4,
+                        help='Column index for barcode in truth file (default: 4)')
+    parser.add_argument('--truth_umi_col', type=int, default=7,
+                        help='Column index for UMI in truth file (default: 7)')
     parser.add_argument('--quiet', '-q', action='store_true',
                         help='Suppress summary output to stderr')
 
@@ -449,7 +586,16 @@ def main():
     min_score = args.min_score if args.min_score >= 0 else None
 
     # Run assessment
-    if args.mode in SPLIT_MODES:
+    if args.truth_file and args.mode in SPLIT_MODES:
+        truth_dict = load_truth_file(args.truth_file,
+                                     barcode_col=args.truth_barcode_col,
+                                     umi_col=args.truth_umi_col)
+        metrics = assess_split_barcode_mode_with_truth(
+            args.input,
+            truth_dict=truth_dict,
+            barcode_col=args.barcode_col
+        )
+    elif args.mode in SPLIT_MODES:
         metrics = assess_split_barcode_mode(
             args.input,
             barcode_length=barcode_length,
