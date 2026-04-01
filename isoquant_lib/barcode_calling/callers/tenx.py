@@ -97,6 +97,45 @@ class TenXBarcodeDetector:
 
         return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
 
+    # Maximum search margin before polyT for direct barcode search (beyond BC+UMI region)
+    BARCODE_SEARCH_MARGIN = 30
+
+    def _find_barcode_near_polyt(self, read_id: str, sequence: str,
+                                 polyt_start: int) -> TenXBarcodeDetectionResult:
+        """Fallback: search for barcode directly in the region before polyT.
+
+        Used when R1 linker is not detected (partial/error-corrupted R1).
+        The polyT anchor constrains the barcode position: BC(16)...UMI(12)...polyT.
+        """
+        search_start = max(0, polyt_start - self.BARCODE_LEN_10X - self.UMI_LEN - self.BARCODE_SEARCH_MARGIN)
+        search_region = sequence[search_start:polyt_start]
+        if len(search_region) < self.BARCODE_LEN_10X:
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
+
+        matching_barcodes = self.barcode_indexer.get_occurrences(search_region,
+                                                                 max_hits=self.max_barcodes_hits,
+                                                                 min_kmers=self.min_matching_kmers)
+        barcode, bc_score, bc_start, bc_end = \
+            find_candidate_with_max_score_ssw(matching_barcodes, search_region,
+                                              min_score=self.min_score,
+                                              score_diff=self.score_diff)
+        if barcode is None:
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
+
+        logger.debug("BARCODE_NEAR_POLYT: %s score=%d at %d-%d" % (barcode, bc_score, search_start + bc_start, search_start + bc_end))
+        abs_bc_end = search_start + bc_end
+        potential_umi_start = abs_bc_end + 1
+        potential_umi_end = polyt_start - 1
+        if potential_umi_end - potential_umi_start <= 5:
+            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
+        potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
+
+        good_umi = self.UMI_LEN - self.UMI_LEN_DELTA <= len(potential_umi) <= self.UMI_LEN + self.UMI_LEN_DELTA
+        if not potential_umi:
+            return TenXBarcodeDetectionResult(read_id, barcode, BC_score=bc_score, polyT=polyt_start)
+        return TenXBarcodeDetectionResult(read_id, barcode, potential_umi, bc_score, good_umi,
+                                          polyT=polyt_start)
+
     def _find_barcode_umi_fwd(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         polyt_start = find_polyt_start(sequence)
 
@@ -125,6 +164,8 @@ class TenXBarcodeDetector:
                                                       end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
         if r1_start is None:
+            if polyt_start != -1:
+                return self._find_barcode_near_polyt(read_id, sequence, polyt_start)
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
         logger.debug("LINKER: %d-%d" % (r1_start, r1_end))
 
@@ -546,6 +587,23 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
         # Reverse strand scan — collect into the same result
         rev_seq = reverese_complement(sequence)
         self._scan_strand(read_id, rev_seq, "-", read_result)
+
+        # If no valid barcodes found, try polyT-anchored barcode search as last resort
+        # (handles reads with partial/corrupted R1 where k-mer seeding fails)
+        has_valid = any(r.is_valid() for r in read_result.detected_patterns)
+        if not has_valid:
+            for try_seq, strand in [(sequence, "+"), (rev_seq, "-")]:
+                polyt = find_polyt_start(try_seq)
+                if polyt != -1:
+                    base_result = self._find_barcode_near_polyt(read_id, try_seq, polyt)
+                    if base_result.is_valid():
+                        split_result = TenXSplitBarcodeDetectionResult(
+                            read_id, base_result.get_barcode(), base_result.get_umi(),
+                            base_result.BC_score, base_result.UMI_good,
+                            polyT=base_result.polyT, r1=-1, tso=-1)
+                        split_result.set_strand(strand)
+                        read_result.detected_patterns = [split_result]
+                        break
 
         if read_result.empty():
             r = self._find_barcode_umi_split_fwd(read_id, sequence)
