@@ -32,25 +32,16 @@ class FusionMetadata:
         left_chr, left_pos, right_chr, right_pos = consensus_bp
         # 2. Get or initialize metadata
         meta = self._initialize_or_get_metadata(fusion_key, reads, clustered_support, consensus_bp)
-        # 3. Set raw genes and compute raw biotypes
-        self._compute_raw_genes_and_biotypes(fusion_key, meta, left_chr, left_pos, right_chr, right_pos)
-        # 4. Use raw genes as final genes (fusion context-aware assignment temporarily disabled for testing)
-        raw_left_gene = meta.get("raw_left_gene")
-        raw_right_gene = meta.get("raw_right_gene")
-        raw_left_score = meta.get("raw_left_score", 0.0)
-        raw_right_score = meta.get("raw_right_score", 0.0)
-        final_left_gene = raw_left_gene
-        final_right_gene = raw_right_gene
-        meta["final_left_score"] = raw_left_score
-        meta["final_right_score"] = raw_right_score
-        logger.debug(f"Using raw genes (no context-aware reassignment): {final_left_gene}, {final_right_gene}")
+        # 3. Assign genes and compute biotypes
+        self._assign_genes(fusion_key, meta, left_chr, left_pos, right_chr, right_pos)
+        # 4. Extract assigned genes
+        left_gene = meta.get("left_gene")
+        right_gene = meta.get("right_gene")
         # 5. Update fusion_key mappings if genes changed
         original_key = fusion_key
-        new_key = self._update_fusion_key_mappings(original_key, final_left_gene, final_right_gene, meta)
-        # 6. Update metadata with final genes and biotypes
-        meta["left_gene"] = final_left_gene
-        meta["right_gene"] = final_right_gene
-        self._compute_final_biotypes(meta, final_left_gene, final_right_gene, left_chr, left_pos, right_chr, right_pos)
+        new_key = self._update_fusion_key_mappings(original_key, left_gene, right_gene, meta)
+        # 6. Update metadata with biotypes
+        self._compute_biotypes(meta, left_gene, right_gene, left_chr, left_pos, right_chr, right_pos)
         # 7. Mark fusion valid
         meta["is_valid"] = True
         meta.setdefault("reasons", [])
@@ -72,24 +63,21 @@ class FusionMetadata:
         meta["consensus_bp"] = consensus_bp
         return meta
 
-    def _compute_raw_genes_and_biotypes(self, fusion_key, meta, left_chr, left_pos, right_chr, right_pos):
-        # Assign raw genes from fusion_assigned_pairs and compute their biotypes.
+    def _compute_biotypes(self, meta, left_gene, right_gene, left_chr, left_pos, right_chr, right_pos):
+        # Compute biotypes for the assigned genes.
         detector = self.detector
-        # Populate raw genes from read-level assignments
-        self._assign_raw_genes(fusion_key, meta, left_chr, left_pos, right_chr, right_pos)
-        # Compute biotypes for raw genes
-        if meta.get("raw_left_gene"):
-            meta["raw_left_biotype"] = detector.get_gene_biotype(
-                meta["raw_left_gene"], chrom=left_chr, pos=left_pos
+        if left_gene:
+            meta["left_biotype"] = detector.get_gene_biotype(
+                left_gene, chrom=left_chr, pos=left_pos
             )
-        if meta.get("raw_right_gene"):
-            meta["raw_right_biotype"] = detector.get_gene_biotype(
-                meta["raw_right_gene"], chrom=right_chr, pos=right_pos
+        if right_gene:
+            meta["right_biotype"] = detector.get_gene_biotype(
+                right_gene, chrom=right_chr, pos=right_pos
             )
         logger.debug(
-            f"Raw assignments for {fusion_key}: "
-            f"left={meta.get('raw_left_gene')}({meta.get('raw_left_biotype')}), "
-            f"right={meta.get('raw_right_gene')}({meta.get('raw_right_biotype')})"
+            f"Gene assignments for {meta.get('supporting_reads')}: "
+            f"left={left_gene}({meta.get('left_biotype')}), "
+            f"right={right_gene}({meta.get('right_biotype')})"
         )
 
     def _update_fusion_key_mappings(self, original_key, final_left_gene, final_right_gene, meta):
@@ -116,16 +104,7 @@ class FusionMetadata:
                 detector.fusion_assigned_pairs[new_key] = detector.fusion_assigned_pairs.pop(original_key)
         return new_key
 
-    def _compute_final_biotypes(self, meta, final_left_gene, final_right_gene, left_chr, left_pos, right_chr, right_pos):
-        detector = self.detector
-        if final_left_gene:
-            meta["left_biotype"] = detector.get_gene_biotype(
-                final_left_gene, chrom=left_chr, pos=left_pos
-            )
-        if final_right_gene:
-            meta["right_biotype"] = detector.get_gene_biotype(
-                final_right_gene, chrom=right_chr, pos=right_pos
-            )
+
 
     def _passes_all_gates(self, fusion_key, reads, min_support):
         #  Validate fusion against support, breakpoint, and consensus gates.
@@ -145,18 +124,18 @@ class FusionMetadata:
         consensus_bp, clustered_support = consensus_result
         return support, consensus_bp, clustered_support
 
-    def _assign_raw_genes(self, fusion_key, meta, left_chr, left_pos, right_chr, right_pos):
+    def _assign_genes(self, fusion_key, meta, left_chr, left_pos, right_chr, right_pos):
         # Extract genes directly from fusion_key (format: GENE1--GENE2, alphabetically sorted).
         # This avoids majority voting corruption where reads can assign genes to different sides.
         parts = fusion_key.split("--")
         if len(parts) == 2:
-            raw_left, raw_right = parts[0], parts[1]
+            left_gene, right_gene = parts[0], parts[1]
         else:
             # Fallback to empty if key format is unexpected
-            raw_left, raw_right = None, None
-        # Populate metadata with raw genes
-        meta["raw_left_gene"] = raw_left
-        meta["raw_right_gene"] = raw_right
+            left_gene, right_gene = None, None
+        # Populate metadata with genes
+        meta["left_gene"] = left_gene
+        meta["right_gene"] = right_gene
         # Compute average scores from per-read scores
         read_scores = self.detector.fusion_read_scores.get(fusion_key, {})
         left_scores = []
@@ -167,6 +146,6 @@ class FusionMetadata:
                 left_scores.append(left_score)
                 right_scores.append(right_score)
         # Average the scores, or fallback to 0.0 if no scores available
-        meta["raw_left_score"] = sum(left_scores) / len(left_scores) if left_scores else 0.0
-        meta["raw_right_score"] = sum(right_scores) / len(right_scores) if right_scores else 0.0
+        meta["left_score"] = sum(left_scores) / len(left_scores) if left_scores else 0.0
+        meta["right_score"] = sum(right_scores) / len(right_scores) if right_scores else 0.0
 

@@ -1257,8 +1257,8 @@ class FusionDetector:
             validator = FusionValidator(self)
             validator._merge_fully_identical()
             with open(output_path, "w") as f:
-                f.write("LeftGene\tLeftBiotype\tRawLeftGene\tFinalLeftScore\tLeftChromosome\tLeftBreakpoint\t"
-                        "RightGene\tRightBiotype\tRawRightGene\tFinalRightScore\tRightChromosome\tRightBreakpoint\t"
+                f.write("LeftGene\tLeftBiotype\tLeftScore\tLeftChromosome\tLeftBreakpoint\t"
+                        "RightGene\tRightBiotype\tRightScore\tRightChromosome\tRightBreakpoint\t"
                         "SupportingReads\tFusionName\tClass\tValid\tConfidence\tReasons\n")
                 for fusion_key, meta in sorted(self.fusion_metadata.items(), key=lambda x: -x[1].get("support", 0)):
                     if meta.get("confidence", 0) < min_confidence:
@@ -1282,13 +1282,11 @@ class FusionDetector:
                         continue
                     fusion_name = f"{left_gene}-{right_gene}"
                     reasons = ";".join(meta.get("reasons", []))
-                    raw_left = meta.get("raw_left_gene")
-                    raw_right = meta.get("raw_right_gene")
-                    final_left_score = meta.get("final_left_score", 0.0)
-                    final_right_score = meta.get("final_right_score", 0.0)
+                    left_score = meta.get("left_score", 0.0)
+                    right_score = meta.get("right_score", 0.0)
                     left_biotype = meta.get("left_biotype", "unknown")
                     right_biotype = meta.get("right_biotype", "unknown")
-                    f.write(f"{left_gene}\t{left_biotype}\t{raw_left}\t{final_left_score:.2f}\t{left_chr}\t{left_pos}\t"
-                            f"{right_gene}\t{right_biotype}\t{raw_right}\t{final_right_score:.2f}\t{right_chr}\t{right_pos}\t"
+                    f.write(f"{left_gene}\t{left_biotype}\t{left_score:.2f}\t{left_chr}\t{left_pos}\t"
+                            f"{right_gene}\t{right_biotype}\t{right_score:.2f}\t{right_chr}\t{right_pos}\t"
                             f"{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
                             f"{meta.get('is_valid')}\t{meta.get('confidence')}\t{reasons}\n")
