@@ -128,6 +128,30 @@ class FusionValidator:
         # Remove all discarded fusions from data structures
         self._remove_discarded_fusions_internal(fusions_to_discard)
 
+    def filter_multicopy_artifact_pairs(self):
+        # Filter out fusions where both partners belong to multicopy artifact families.
+        # These are biologically non-relevant fusions like TRAJ17-TRAV1-2, ZNF124-ZNF670, H2AC13-H2BC13.
+        if not self.detector.fusion_metadata:
+            return
+        for fusion_key, meta in self.detector.fusion_metadata.items():
+            if meta.get("is_valid") == False:
+                continue
+            left_gene = meta.get("left_gene")
+            right_gene = meta.get("right_gene")
+            # Check if both genes belong to multicopy artifact families
+            if (left_gene and right_gene and 
+                self.is_multicopy_artifact_family(left_gene) and 
+                self.is_multicopy_artifact_family(right_gene)) or (left_gene and right_gene and 
+                self._is_ribosomal_or_histone_gene(left_gene) and 
+                self._is_ribosomal_or_histone_gene(right_gene)):
+                meta["is_valid"] = False
+                if "reasons" not in meta:
+                    meta["reasons"] = []
+                meta["reasons"].append(
+                    f"Both genes belong to multicopy artifact families: {left_gene} - {right_gene}"
+                )
+                logger.info(f"Filtering multicopy artifact pair fusion: {fusion_key} ({left_gene} - {right_gene})")
+
     def apply_frequency_filters(self):
         # Filter out multicopy artifacts based on gene frequency within the sample.
         if not self.detector.fusion_metadata:

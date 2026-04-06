@@ -1199,6 +1199,7 @@ class FusionDetector:
         # Delegate validation and filtering to FusionValidator
         validator = FusionValidator(self)
         validator.filter_non_coding_genes()
+        validator.filter_multicopy_artifact_pairs()
         validator.apply_frequency_filters()
         for fusion_key, meta in self.fusion_metadata.items():
             # Check if already marked invalid by frequency filter
