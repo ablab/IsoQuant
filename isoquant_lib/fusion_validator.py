@@ -53,16 +53,17 @@ class FusionValidator:
             reason = f"{right_gene}={right_biotype}"
         return left_gene, left_biotype, right_gene, right_biotype, has_non_coding, reason
 
-    def filter_raw_non_coding_genes(self):
-        # Drop fusions with non-protein-coding genes at the raw assignment stage.
+    def filter_early_non_coding_genes(self):
+        # Drop fusions with non-protein-coding genes at the early read-assignment stage.
+        # This is before final gene assignment and allows salvaging via context analysis.
         fusions_to_discard = set()
-        logger.info(f"filter_raw_non_coding_genes: Processing {len(self.detector.fusion_assigned_pairs)} fusion keys")
+        logger.info(f"filter_early_non_coding_genes: Processing {len(self.detector.fusion_assigned_pairs)} fusion keys")
         for fusion_key, read_assignments in self.detector.fusion_assigned_pairs.items():
             if fusion_key not in self.detector.fusion_candidates:
                 continue
             # Extract breakpoint coordinates
             left_chr, left_pos, right_chr, right_pos = self._get_breakpoint_coords(fusion_key)
-            # Check all raw assigned gene pairs for this fusion
+            # Check all assigned gene pairs for this fusion
             has_non_coding = False
             non_coding_reason = None
             for read_name, (left_gene, right_gene) in read_assignments.items():

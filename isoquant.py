@@ -242,7 +242,7 @@ def parse_args(cmd_args=None, namespace=None):
 
     # add fusion mode flag: uses same input & data_type options as default
     add_additional_option_to_group(pipeline_args_group, "--fusion", action='store_true', default=False,
-                                   help="run fusion gene detection (experimental). input files and --data_type behave the same as default isoform mode.")
+                                   help="run fusion gene detection, input files and --data_type behave the same as default isoform mode.")
 
     resume_args = pipeline_args_group.add_mutually_exclusive_group()
     resume_args.add_argument("--resume", action="store_true", default=False,

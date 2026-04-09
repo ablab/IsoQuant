@@ -532,14 +532,14 @@ class FusionDetector:
             if key in seen_pairs:
                 continue
             seen_pairs.add(key)
-            # Store raw assigned genes (no normalization yet - defer to build_metadata)
             left_gene, left_score = self.assign_fusion_gene_cached(left_chr, left_pos)
             right_gene, right_score = self.assign_fusion_gene_cached(sa_chr, right_pos)
             if left_gene is None or right_gene is None:
                 continue
             if left_gene != right_gene:
                 # Check soft-clip orientation consistency
-                # if self._is_softclip_orientation_valid(read, clip_side, sa_chr, sa_pos):
+                # if clip_side and not self._is_softclip_orientation_valid(read, clip_side, sa_chr, sa_pos):
+                    # continue
                 self.record_fusion(
                     left_gene, right_gene, read.query_name,
                     left_chr, left_pos, sa_chr, right_pos,
@@ -548,30 +548,38 @@ class FusionDetector:
                 sa_used = True
         return sa_used
 
-    def detect_softclip(self, read):
-        # Detect large soft-clips (>=50 bp) on either end of the read.
-        # Returns (clip_side, clip_len) or (None, 0) if no significant clip.
+    def detect_softclip(self, read, min_len=50):
+        # Detect a single large terminal soft-clip.
         cigartuples = getattr(read, "cigartuples", None)
-        clip_side, clip_len = None, 0
         if cigartuples:
-            # Leading soft-clip
-            if len(cigartuples) > 0 and cigartuples[0][0] == 4 and cigartuples[0][1] >= 50:
-                clip_side, clip_len = "left", cigartuples[0][1]
-            # Trailing soft-clip
-            elif len(cigartuples) > 0 and cigartuples[-1][0] == 4 and cigartuples[-1][1] >= 50:
-                clip_side, clip_len = "right", cigartuples[-1][1]
-        else:
-            # Fallback: parse cigarstring
-            cigarstr = getattr(read, "cigarstring", "") or ""
-            m1 = re.match(r'^(\d+)S', cigarstr)
-            m2 = re.search(r'(\d+)S$', cigarstr)
-            if m1 and int(m1.group(1)) >= 50:
-                clip_side, clip_len = "left", int(m1.group(1))
-            elif m2 and int(m2.group(1)) >= 50:
-                clip_side, clip_len = "right", int(m2.group(1))
-        return clip_side, clip_len
-
-
+            left_clip = (
+                cigartuples[0][0] == 4 and cigartuples[0][1] >= min_len
+            )
+            right_clip = (
+                cigartuples[-1][0] == 4 and cigartuples[-1][1] >= min_len
+            )
+            # Ambiguous: soft-clips on both ends
+            if left_clip and right_clip:
+                return None, 0
+            if left_clip:
+                return "left", cigartuples[0][1]
+            if right_clip:
+                return "right", cigartuples[-1][1]
+            return None, 0
+        # Fallback to cigarstring (rare in pysam, but safe)
+        cigar = getattr(read, "cigarstring", "") or ""
+        m_left = re.match(r'^(\d+)S', cigar)
+        m_right = re.search(r'(\d+)S$', cigar)
+        left_len = int(m_left.group(1)) if m_left else 0
+        right_len = int(m_right.group(1)) if m_right else 0
+        # Ambiguous dual clip
+        if left_len >= min_len and right_len >= min_len:
+            return None, 0
+        if left_len >= min_len:
+            return "left", left_len
+        if right_len >= min_len:
+            return "right", right_len
+        return None, 0
 
     def aligned_len_from_cigartuples(self, cigartuples):
         # count read-aligned operations: M (=0), = (=7), X (=8)
@@ -604,36 +612,26 @@ class FusionDetector:
         except Exception:
             return ()
 
-    def _is_softclip_orientation_valid(self, read, clip_side, sa_chr, sa_pos):    
-        # Returns True if soft-clip direction is consistent with an outward-facing
-        # Same chromosome required for directional check
+    def _is_softclip_orientation_valid(self, read, clip_side, sa_chr, sa_pos, tol=10):
+        if clip_side is None:
+            return True
         if read.reference_name != sa_chr:
             return True
         prim_start = self.safe_reference_start(read)
-        prim_end   = read.reference_end
+        prim_end = read.reference_end
         if prim_start is None or prim_end is None:
-            return True  # can't evaluate; don't block the event
-        read_is_reverse = read.is_reverse
-        # Forward-strand logic
-        if not read_is_reverse:
+            return True
+        if not read.is_reverse:
             if clip_side == "right":
-                # clipping at 3' end → expect SA alignment downstream
-                return sa_pos > prim_end
+                return sa_pos > prim_end - tol
             elif clip_side == "left":
-                # clipping at 5' end → expect SA alignment upstream
-                return sa_pos < prim_start
-            else:
-                return True
-        # Reverse-strand logic
+                return sa_pos < prim_start + tol
         else:
             if clip_side == "left":
-                # left clip on reverse strand is 3' end → downstream
-                return sa_pos > prim_end
+                return sa_pos > prim_end - tol
             elif clip_side == "right":
-                # right clip on reverse strand is 5' end → upstream
-                return sa_pos < prim_start
-            else:
-                return True
+                return sa_pos < prim_start + tol
+        return True
 
     def realign_clipped_seq(self, seq):
         # Realign a clipped sequence using the aligner.
@@ -659,12 +657,12 @@ class FusionDetector:
                       left_score=None, right_score=None):
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
-        left_raw = self.normalize_gene_label(context1)
-        right_raw = self.normalize_gene_label(context2)
+        left_gene = self.normalize_gene_label(context1)
+        right_gene = self.normalize_gene_label(context2)
         # Sort genes alphabetically to avoid duplicate entries in both directions
-        sorted_genes = sorted([left_raw, right_raw])
+        sorted_genes = sorted([left_gene, right_gene])
         fusion_key = f"{sorted_genes[0]}--{sorted_genes[1]}"
-        self.fusion_assigned_pairs[fusion_key][read_name] = (left_raw, right_raw)
+        self.fusion_assigned_pairs[fusion_key][read_name] = (left_gene, right_gene)
         self.fusion_candidates[fusion_key].add(read_name)
         # Store breakpoint without strand information: (chrom1, pos1, chrom2, pos2)
         bp = (chrom1, int(pos1), chrom2, int(pos2))
@@ -688,15 +686,16 @@ class FusionDetector:
         gene = self.resolve_gene_name(gene)
         # Collapse antisense / divergent
         gene = self.canonical_locus_name(gene)
-        # Safety net
-        if gene is None or gene.startswith("ENSG"):
+        # Safety net: exclude unresolved identifiers -> mark as intergenic
+        # This catches ENSG*, RP11*, and other unresolved gene identifiers
+        if gene is None or gene.startswith(("ENSG", "RP11")):
             return "intergenic"
         return gene
 
     def build_metadata(self, min_support=1):
         # Apply early filtering to drop non-protein-coding fusions BEFORE breakpoint clustering
         validator = FusionValidator(self)
-        validator.filter_raw_non_coding_genes()
+        validator.filter_early_non_coding_genes()
 
         try:
             from .fusion_metadata import FusionMetadata
@@ -1198,6 +1197,7 @@ class FusionDetector:
         self.fusion_read_scores.clear()
         # Delegate validation and filtering to FusionValidator
         validator = FusionValidator(self)
+        # validator.filter_unresolved_genes()
         validator.filter_non_coding_genes()
         validator.filter_multicopy_artifact_pairs()
         validator.apply_frequency_filters()
