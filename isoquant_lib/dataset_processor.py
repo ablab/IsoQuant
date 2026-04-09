@@ -528,6 +528,8 @@ class DatasetProcessor:
         umi_ed_dict = {IsoQuantMode.bulk: [],
                        IsoQuantMode.tenX_v3: [3],
                        IsoQuantMode.tenX_v2: [3],
+                       IsoQuantMode.tenX_v3_split: [3],
+                       IsoQuantMode.tenX_v2_split: [3],
                        IsoQuantMode.visium_5prime: [3],
                        IsoQuantMode.curio: [3],
                        IsoQuantMode.visium_hd: [4],

@@ -104,6 +104,10 @@ venv.bak/
 .mypy_cache/
 
 .idea
+<<<<<<< HEAD
+.vscode/
+=======
 
 # Claude Code documentation (private)
 .claude/
+>>>>>>> upstream/master

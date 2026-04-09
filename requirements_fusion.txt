@@ -1,0 +1,2 @@
+mappy>=2.24
+intervaltree>=3.0
