@@ -16,7 +16,7 @@ import argparse
 from traceback import print_exc
 import gzip
 
-from .error_codes import IsoQuantExitCode
+from isoquant_lib.error_codes import IsoQuantExitCode
 
 logger = logging.getLogger('IsoQuant')
 
