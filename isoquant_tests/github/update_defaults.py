@@ -106,9 +106,13 @@ def update_yaml_baselines(config_file, run_name, base_output_dir):
         print("Updating baselines.%s from %s" % (section, new_values_file))
         data["baselines"][section] = updated
 
-    # Barcode baselines: new etalon is at {base_output_dir}/{run_name}.new_etalon.tsv
+    # Barcode baselines: new etalon is at {base_output_dir}/barcodes/{run_name}.new_etalon.tsv
+    # (CI workflows use OUTPUT_BASE with /barcodes/ suffix)
     if "barcode" in data["baselines"]:
-        barcode_etalon = os.path.join(base_output_dir, run_name + ".new_etalon.tsv")
+        barcode_etalon = os.path.join(base_output_dir, "barcodes", run_name + ".new_etalon.tsv")
+        if not os.path.exists(barcode_etalon):
+            # Fallback: try without barcodes/ subfolder
+            barcode_etalon = os.path.join(base_output_dir, run_name + ".new_etalon.tsv")
         if not os.path.exists(barcode_etalon):
             print("Warning! %s does not exist, skipping barcode!" % barcode_etalon)
         else:
