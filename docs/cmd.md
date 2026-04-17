@@ -36,6 +36,8 @@ can be provided only when raw reads are used as an input (constructed automatica
     Gene database in gffutils database format or GTF/GFF format (can be gzipped).
 If you use official gene annotations we recommend to set `--complete_genedb` option.
 
+You can convert a GTF/GFF to a gffutils database (or vise versa) via `isoquant_lib/gtf2db.py` script.
+
 `--complete_genedb`
     Set this flag if gene annotation contains transcript and gene meta-features.
 Use this flag when providing official annotations, e.g. GENCODE.
