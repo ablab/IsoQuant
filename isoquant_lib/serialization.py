@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
@@ -7,8 +7,8 @@
 # serialization stuff
 ENCODING = 'utf-8'
 BYTE_ORDER = "big"
-STR_LEN_BYTES = 2
-NONE_STR_LEN = (1 << 16) - 1
+STR_LEN_BYTES = 4
+NONE_STR_LEN = (1 << (8 * STR_LEN_BYTES)) - 1
 SHORT_INT_BYTES = 2
 LONG_INT_BYTES = 4
 TERMINATION_INT = (1 << 32) - 1
@@ -43,6 +43,20 @@ def read_string_or_none(inf):
     if str_len == NONE_STR_LEN:
         return None
     return inf.read(str_len).decode(encoding=ENCODING)
+
+
+def write_int_or_none(val, outf, bytes_len=LONG_INT_BYTES):
+    if val is None:
+        outf.write(TERMINATION_INT.to_bytes(bytes_len, BYTE_ORDER))
+        return
+    outf.write(val.to_bytes(bytes_len, BYTE_ORDER))
+
+
+def read_int_or_none(inf, bytes_len=LONG_INT_BYTES):
+    val = int.from_bytes(inf.read(bytes_len), BYTE_ORDER)
+    if val == TERMINATION_INT:
+        return None
+    return val
 
 
 def write_int(val, outf, bytes_len=LONG_INT_BYTES):

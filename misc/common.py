@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2020-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -30,6 +30,18 @@ class IsoQuantSeparator:
         elif l.find('transcript_id "SIRV') != -1 or l.find('transcript_id "ENS') != -1:
             return TranscriptType.known
         return TranscriptType.undefined
+
+
+class IsaToolsSeparator:
+    def __init__(self, _):
+        pass
+
+    def separate(self, l):
+        if l.find("_Gene") != -1 or l.find("_Tr") != -1:
+            return TranscriptType.novel
+        elif l.find('transcript_id "SIRV') != -1 or l.find('transcript_id "ENS') != -1:
+            return TranscriptType.known
+        return TranscriptType.undefine
 
 
 class StringTieSeparator:
@@ -72,7 +84,7 @@ class CountTranscriptIdSeparator:
         print("Reading counts")
         self.count_dict = defaultdict(float)
         for l in open(gtf_path + ".counts"):
-            if l.startswith("#") or l.startswith("TXNAME"):
+            if l.startswith("#") or l.startswith("TXNAME") or l.startswith("feature_id\t"):
                 continue
             t = l.strip().split()
             tid = t[0]
@@ -102,7 +114,8 @@ SEPARATE_FUNCTORS = {'isoquant':IsoQuantSeparator,
                      'flair':TranscriptIdSeparator,
                      'talon':TranscriptIdSeparator,
                      'bambu':CountTranscriptIdSeparator,
-                     'flames':FlamesSeparator}
+                     'flames':FlamesSeparator,
+                     'isatools':IsaToolsSeparator}
 
 
 def split_gtf(ingtf_path, seaprator, out_full_path, out_known_path, out_novel_path):

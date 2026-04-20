@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2020-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -27,7 +27,7 @@ from .isoform_assignment import (match_subtype_to_str_with_additional_info,
                                  BasicReadAssignment,
                                  MatchClassification,
                                  ReadAssignmentType)
-from .gene_info import GeneInfo
+from .gene_info import GeneInfo, GeneList
 
 
 logger = logging.getLogger('IsoQuant')
@@ -54,21 +54,30 @@ class PrintOnlyFunctor:
 
 
 class AbstractAssignmentPrinter:
-    def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor(), gzipped=False):
+    def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor()):
         self.assignment_checker = assignment_checker
         self.params = params
         self.output_file_name = output_file_name
+
+    def add_read_info(self, read_assignment):
+        raise NotImplementedError()
+
+    def flush(self):
+        raise NotImplementedError()
+
+
+class TextFileAssignmentPrinter(AbstractAssignmentPrinter):
+    def __init__(self, output_file_name, params, assignment_checker=PrintAllFunctor(), gzipped=False):
+        AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker)
         self.gzipped = gzipped
         if gzipped:
-            self.output_file = gzip.open(output_file_name + ".gz", "wt")
+            self.output_file_name += ".gz"
+            self.output_file = gzip.open(self.output_file_name, "wt")
         else:
             self.output_file = open(self.output_file_name, "w")
 
     def __del__(self):
         self.output_file.close()
-
-    def add_read_info(self, read_assignment):
-        raise NotImplementedError()
 
     def flush(self):
         if not self.gzipped:
@@ -97,10 +106,10 @@ class VoidPrinter:
 
 
 # write mapped reads to bed file
-class BEDPrinter(AbstractAssignmentPrinter):
+class BEDPrinter(TextFileAssignmentPrinter):
     def __init__(self, output_file_name, params, print_corrected=False, assignment_checker=PrintAllFunctor(),
                  gzipped=False):
-        AbstractAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker, gzipped=gzipped)
+        TextFileAssignmentPrinter.__init__(self, output_file_name, params, assignment_checker, gzipped=gzipped)
         self.print_corrected = print_corrected
         self.output_file.write("#chrom\tchromStart\tchromEnd\tname\tscore\tstrand\tthickStart\tthickEnd\titemRgb\tblockCount\tblockSizes\tblockStarts\n")
 
@@ -127,13 +136,18 @@ class BEDPrinter(AbstractAssignmentPrinter):
 class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
     GENE_INFO = 255
     READ_ASSIGNMENT = 255 << 8
+
     def __init__(self, output_file_name, params):
         AbstractAssignmentPrinter.__init__(self, output_file_name, params)
         self.dumper = open(self.output_file_name, "wb")
 
     def __del__(self):
-        write_short_int(SHORT_TERMINATION_INT, self.dumper)
-        self.dumper.close()
+        self.close()
+
+    def close(self):
+        if not self.dumper.closed:
+            write_short_int(SHORT_TERMINATION_INT, self.dumper)
+            self.dumper.close()
 
     def add_gene_info(self, gene_info):
         write_short_int(self.GENE_INFO, self.dumper)
@@ -144,6 +158,9 @@ class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
             return
         write_short_int(self.READ_ASSIGNMENT, self.dumper)
         read_assignment.serialize(self.dumper)
+
+    def flush(self):
+        pass
 
 
 class BaseTmpFileAssignmentLoader:
@@ -169,11 +186,12 @@ class BaseTmpFileAssignmentLoader:
 
 
 class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
-    def __init__(self, input_file_name, genedb, chr_record):
+    def __init__(self, input_file_name, genedb, chr_record, string_pools=None):
         BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
         self.genedb = genedb
         self.chr_record = chr_record
         self.current_gene_info = None
+        self.string_pools = string_pools
 
     def get_object(self):
         if self.is_gene_info():
@@ -186,7 +204,27 @@ class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
             return self.current_gene_info
         elif self.is_read_assignment():
             assert self.current_gene_info is not None
-            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info)
+            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info, self.string_pools)
+            self._read_id()
+            return assignment
+        else:
+            return None
+
+
+class GeneListTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
+    def __init__(self, input_file_name, string_pools=None):
+        BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
+        self.current_gene_info = None
+        self.string_pools = string_pools
+
+    def get_object(self):
+        if self.is_gene_info():
+            self.current_gene_info = GeneList.deserialize(self.loader)
+            self._read_id()
+            return self.current_gene_info
+        elif self.is_read_assignment():
+            assert self.current_gene_info is not None
+            assignment = ReadAssignment.deserialize(self.loader, self.current_gene_info, self.string_pools)
             self._read_id()
             return assignment
         else:
@@ -194,8 +232,9 @@ class NormalTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
 
 
 class QuickTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
-    def __init__(self, input_file_name):
+    def __init__(self, input_file_name, string_pools=None):
         BaseTmpFileAssignmentLoader.__init__(self, input_file_name)
+        self.string_pools = string_pools
 
     def get_object(self):
         if self.is_gene_info():
@@ -203,18 +242,18 @@ class QuickTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
             self._read_id()
             return None
         elif self.is_read_assignment():
-            assignment = BasicReadAssignment.deserialize_from_read_assignment(self.loader)
+            assignment = BasicReadAssignment.deserialize_from_read_assignment(self.loader, self.string_pools)
             self._read_id()
             return assignment
         else:
             return None
 
 
-class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
+class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support, additional_header = "", gzipped=False):
-        AbstractAssignmentPrinter.__init__(self, output_file_name, params, gzipped=gzipped)
-        self.header = "#read_id\tchr\tstrand\tisoform_id\tgene_id" \
-                      "\tassignment_type\tassignment_events\texons\tadditional_info\n"
+        TextFileAssignmentPrinter.__init__(self, output_file_name, params, gzipped=gzipped)
+        self.header = "read_id\tchr\tstrand\tisoform_id\tgene_id" \
+                      "\tassignment_type\tassignment_events\texons\tadditional_info\tgroups\n"
         self.output_file.write(additional_header)
         self.output_file.write(self.header)
         self.io_support = io_support
@@ -230,9 +269,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
             val = read_assignment.additional_attributes[attr]
             additional_info.append("%s=%s;" % (attr, val))
         if additional_info:
-            line += "\t" + " ".join(additional_info) + "\n"
+            line += "\t" + " ".join(additional_info)
         else:
-            line += "\t*\n"
+            line += "\t*"
+        line += "\t%s\n" % ",".join(read_assignment.read_group)
         return line
 
     def add_read_info(self, read_assignment):
@@ -291,9 +331,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
                 additional_info.append("%s=%s;" % (attr, val))
 
             if additional_info:
-                line += "\t" + " ".join(additional_info) + "\n"
+                line += "\t" + " ".join(additional_info)
             else:
-                line += "\t*\n"
+                line += "\t*"
+            line += "\t%s\n" % ",".join(read_assignment.read_group)
             self.output_file.write(line)
 
 
@@ -347,10 +388,10 @@ class BasicTSVAssignmentPrinter(AbstractAssignmentPrinter):
     """
 
 
-class SqantiTSVPrinter(AbstractAssignmentPrinter):
+class SqantiTSVPrinter(TextFileAssignmentPrinter):
     def __init__(self, output_file_name, params, io_support):
-        AbstractAssignmentPrinter.__init__(self, output_file_name, params)
-        self.header = '#isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
+        TextFileAssignmentPrinter.__init__(self, output_file_name, params)
+        self.header = 'isoform\tchrom\tstrand\tlength\texons\tstructural_category' \
                       '\tassociated_gene\tassociated_transcript\tref_length\tref_exons\tdiff_to_TSS\tdiff_to_TTS' \
                       '\tdiff_to_gene_TSS\tdiff_to_gene_TTS\tsubcategory\tRTS_stage\tall_canonical' \
                       '\tmin_sample_cov\tmin_cov\tmin_cov_pos\tsd_cov\tFL' \

@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2020-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -9,11 +9,51 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import math
 from collections import defaultdict
 from enum import Enum
 
 logger = logging.getLogger('IsoQuant')
+
+
+def _get_log_params():
+    """Return (log_file, log_level) from the current IsoQuant logger configuration."""
+    w = logging.getLogger('IsoQuant')
+    log_level = w.level or logging.INFO
+    log_file = None
+    for h in w.handlers:
+        if hasattr(h, 'baseFilename'):
+            log_file = h.baseFilename
+            break
+    return log_file, log_level
+
+
+def setup_worker_logging(log_file, log_level):
+    """Initialize IsoQuant logging in a worker process.
+
+    Must be passed as the 'initializer' argument to every ProcessPoolExecutor.
+    Works for both 'fork' (clears broken inherited handlers) and 'spawn'
+    (creates handlers from scratch). Python 3.14 changed the default start
+    method from 'fork' to 'spawn' on Linux, and also changed _at_fork_reinit
+    behaviour so inherited handlers can break even with explicit fork.
+    """
+    w = logging.getLogger('IsoQuant')
+    for h in w.handlers[:]:
+        w.removeHandler(h)
+    w.setLevel(log_level)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    if log_file:
+        fh = logging.FileHandler(log_file, mode='a')
+        fh.set_name("isoquant_file_log")
+        fh.setLevel(log_level)
+        fh.setFormatter(formatter)
+        w.addHandler(fh)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.set_name("isoquant_screen_log")
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    w.addHandler(ch)
 
 
 class CigarEvent(Enum):
@@ -886,3 +926,20 @@ base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', 'a': 't', 'c': 'g
 def reverse_complement(seq):
     lms = list(map(lambda x: base_comp[x], seq))[::-1]
     return ''.join(lms)
+
+
+def large_output_enabled(args, output_type):
+    """Check if a large output type is enabled.
+
+    Args:
+        args: Parsed command-line arguments
+        output_type: One of 'read_assignments', 'corrected_bed', 'read2transcripts', 'allinfo'
+
+    Returns:
+        True if the output type is enabled, False otherwise
+    """
+    if not hasattr(args, 'large_output') or not args.large_output:
+        return False
+    if "none" in args.large_output:
+        return False
+    return output_type in args.large_output

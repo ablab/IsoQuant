@@ -1,5 +1,120 @@
 # IsoQuant changelog
 
+## IsoQuant 3.12.1, 19 March 2026
+
+- Fix package naming.
+
+## IsoQuant 3.12.1, 18 March 2026
+
+- Add pip installation.
+
+## IsoQuant 3.12.0, 11 March 2026
+
+- Fix Python 3.14 compatibility.
+
+- Add `--barcoded_bam` option for reading barcodes and UMIs directly from a input BAM.
+
+- Add `--barcode2barcode` option for Visium HD data processing.
+
+- Dramatic speed-up for 10x and universal barcode calling on large whitelists.
+
+- Per-barcode counts grouping is now performed automatically if the barcodes are set.
+
+## IsoQuant 3.11.1, 11 February 2026
+
+- Fix Python 3.8 compatibility.
+
+- Fix MTX conversion.
+
+## IsoQuant 3.11.0, 5 February 2026
+
+- `--read_group` now supports multiple read grouping strategies. 
+You can now simultaneously group counts by samples, BAM tags, read attributes provided in separate TSV files or within read ids themselves.  
+
+- New `--large_output` option to control which large output files are generated.
+
+- Significant performance optimizations.
+
+- Experimental release of the single-cell/spatial IsoQuant pipeline. Official release will follow soon.
+
+## IsoQuant 3.10.0, 21 October 2025
+
+- New `--unmapped_bam` option for providing unmapped BAM files typical for PacBio CSS data.
+
+- New `--polya_trimmed` option to indicate polyA-trimmed reads (thanks @hmutpw for the suggestion [#342](https://github.com/ablab/IsoQuant/issues/342)).
+
+- New `--process_only_chr` option to process a specific list of chromosomes.
+
+
+## IsoQuant 3.9.0, 1 October 2025
+
+- Secondary alignments are not used by default from now on. It significantly improves running time and RAM consumption but barely affects the results' quality.
+Use `--use_secondary` to process secondary alignments.
+
+- New options that force IsoQuant to use only a faction of reads in high-coverage loci.
+Significantly improves running time and RAM consumption but affects gene/isoform counts. 
+This new default behaviour only affects small chromosomes and scaffolds (<500kbp).
+
+    In some cases, high-coverage regions take too much time to process due to extreme number of mapped reads,
+especially `chrM` (up to 10x longer compared to normal chromosomes). However, using only a fraction of these
+reads is enough to obtain reliable results.
+
+    These options allow to process only up to given number of reads mapping to a hich-coverage loci on short and normal chromosomes:
+  - `--max_coverage_small_chr` (default value is 1 million);
+  - `--max_coverage_normal_chr` (default value is infinity, so usual chromosomes are not affected by default even if some genes have extreme coverage).
+
+- New option `--discard_chr` to discard a list of chromosomes from the analysis.
+
+## IsoQuant 3.8.0, 8 September 2025
+
+- Fixed `--report_canonical` preset ([#332](https://github.com/ablab/IsoQuant/issues/332), thanks to @wwliao).
+
+- Fixed counts for novel genes in `discovered_gene_counts.tsv` and `discovered_gene_tpm.tsv`
+([#337](https://github.com/ablab/IsoQuant/issues/337), thanks to @yjliuhub).
+
+- Fixed `--genedb_output` option ([#335](https://github.com/ablab/IsoQuant/issues/335), thanks to @YalanBi).
+
+## IsoQuant 3.7.1, 5 August 2025
+
+- Support for indexing BAMs with large chromosomes, fixes [#327](https://github.com/ablab/IsoQuant/issues/327). Thanks to @maol-corteva.
+
+- `CDS` features are now used when `exon` features are absent, fixes [#309](https://github.com/ablab/IsoQuant/issues/309).
+ 
+- Chromosome names are now checked for consistency between reference genome, annotation and BAM file provided. 
+Only overlapping chromosome names are used if inconsistent.
+
+- Fixed SQANTI-like output headers, fixes [#318](https://github.com/ablab/IsoQuant/issues/318).
+
+- Some minor cosmetics.
+
+## IsoQuant 3.7.0, 16 May 2025
+
+- Optimized grouped counts output. By default, all counts are stored in linear format, which saves time and disk space.
+Matrices with a small number of columns are automatically converted to a usual matrix in TSV format, 
+larger matrices typical for single-cell and spatial data are converted to MTX format.
+See `--counts_format` paramter for options. It is also possible to convert counts after IsoQuant is finished using `isoquant_lib/convert_grouped_counts.py`.
+Fixes issues mentioned in [#248](https://github.com/ablab/IsoQuant/issues/248).
+
+- Renamed counts related to discovered transcripts and genes to avoid confusion.
+
+- New options `--indexing_options` and `--mapping_options` that allow to pass options to the indexing and mapping commands.
+Fixes [#284](https://github.com/ablab/IsoQuant/issues/284) and [#259](https://github.com/ablab/IsoQuant/issues/259).
+
+- STARlong is now an alternative options for aligning, can be set via `--aligner starlong` (not recommended for ONT reads).
+Fixes [#284](https://github.com/ablab/IsoQuant/issues/284)
+
+- Exon/splice junction counts now only come from reads assigned to the same strand, fixes [#253](https://github.com/ablab/IsoQuant/issues/253).
+
+- Use only gene-assigned reads for exon counting, fixes [#283](https://github.com/ablab/IsoQuant/issues/283).
+
+- Fixed a rare serialization bug [#304](https://github.com/ablab/IsoQuant/issues/304).
+
+## IsoQuant 3.6.3, 13 January 2025
+
+- Fix penalty score for terminal exon elongation when selecting similar isoforms for inconsistent reads [#270](https://github.com/ablab/IsoQuant/issues/270).
+
+- Fix `transcript_model_grouped_counts` output format [#275](https://github.com/ablab/IsoQuant/issues/275).
+
 ## IsoQuant 3.6.2, 15 November 2024
 
 - Fixes linear grouped counts output [#258](https://github.com/ablab/IsoQuant/issues/258).
@@ -14,7 +129,7 @@
 ## IsoQuant 3.6.0, 13 September 2024
 
 - Fixed duplicated `noninformative` and `intergenic` reads assignments.
-As a results, fixed duplicated novel transcripts [#236](https://github.com/ablab/IsoQuant/issues/236).
+As a result, fixed duplicated novel transcripts [#236](https://github.com/ablab/IsoQuant/issues/236).
 
 ## IsoQuant 3.5.2, 3 September 2024
 
@@ -37,7 +152,7 @@ As a results, fixed duplicated novel transcripts [#236](https://github.com/ablab
 
 - New visualization software developed by [@jackfreeman88](https://github.com/jackfreeman88). See more [here](https://ablab.github.io/IsoQuant/visualization.html).
 
-- Dramatically reduced RAM consumption for grouped counts, about 10-20x decrease on datasets with large number of groups.
+- Dramatically reduced RAM consumption for grouped counts, about 10-20x decrease on datasets with the large number of groups.
   Important fix for single-cell data processing. Should fix [#189](https://github.com/ablab/IsoQuant/issues/189).
 
 - Fixed [#195](https://github.com/ablab/IsoQuant/issues/195): output GTF contained very similar isoforms and estimated their expression as 0.
@@ -55,7 +170,7 @@ the reference annotation and from 230GB down to 6GB in the reference-free mode.
 Running time in the default mode increased by approximately 20-25%.
 When using `--high_memory` option, running time remains the same as in 3.4.1,
 RAM consumption in the reference-based mode is 46GB, and 36GB in the reference-free mode.
-Note, that in general RAM consumption depends on the particular data being used and the number of threads.
+Note that in general RAM consumption depends on the particular data being used and the number of threads.
 
 In brief, in 3.4.0 and 3.4.1 inadequate RAM consumption was caused by
 [this commit](https://github.com/ablab/IsoQuant/commit/557e5834d0503587b918a0eedf3ff5cee3253141).
@@ -85,7 +200,7 @@ Major novelties and improvements:
 
 - Added support for Illumina reads for spliced alignment correction (thanks to [@rkpfeil](https://github.com/rkpfeil)).
 
-- Added support YAML files (thanks to [@rkpfeil](https://github.com/rkpfeil)). Old options `--bam_list` and `--fastq_list` are still availble, but deprecated since this version.
+- Added support for YAML files (thanks to [@rkpfeil](https://github.com/rkpfeil)). Old options `--bam_list` and `--fastq_list` are still availble, but deprecated since this version.
 
 Transcript discovery and GTF processing:
 

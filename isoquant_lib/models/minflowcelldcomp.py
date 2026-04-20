@@ -14,7 +14,7 @@ import flowpaths.mingenset as mgs
 import flowpaths.utils as utils
 import flowpaths.nodeexpandeddigraph as nedg
 
-from src.cell_type_tree import CellTypeTree
+from ..cell_type_tree import CellTypeTree
 from .kflowcellcomp import kFlowCellTypeDecomp
 from .nodeexpandeddigraph import NodeExpandedDiGraph
 

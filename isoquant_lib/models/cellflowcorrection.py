@@ -11,7 +11,7 @@ from copy import deepcopy
 import flowpaths.utils as utils
 
 from copy import deepcopy
-from src.cell_type_tree import CellTypeTree
+from ..cell_type_tree import CellTypeTree
 from .nodeexpandeddigraph import NodeExpandedDiGraph
 
 class MinErrorCellTypeFlowCorrection(fp.MinErrorFlow):

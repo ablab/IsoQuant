@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=64,<75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isoquant"
+dynamic = ["version"]
+description = "Reference-based analysis and quantification of long RNA reads"
+readme = "README.md"
+license = {text = "GPL-2.0-only"}
+requires-python = ">=3.8"
+authors = [{name = "Andrey Prjibelski"}]
+keywords = ["bioinformatics", "transcriptomics", "long-reads", "nanopore", "pacbio", "isoforms", "single-cell", "spatial"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "gffutils>=0.10.1",
+    "pandas>=1.0.1",
+    "pysam>=0.15",
+    "pyfaidx>=0.7",
+    "ssw-py>=1.0.0",
+    "pyyaml>=5.4",
+    "matplotlib>=3.1.3",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "seaborn>=0.10.0",
+    "editdistance>=0.8.1",
+    "biopython>=1.76",
+    "numba>=0.58",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=5.4.1",
+    "pytest-cov>=2.8.1",
+    "coverage>=7.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/ablab/IsoQuant"
+Documentation = "https://ablab.github.io/IsoQuant"
+Repository = "https://github.com/ablab/IsoQuant"
+
+[project.scripts]
+isoquant = "isoquant:main_entry"
+isoquant-detect-barcodes = "isoquant_detect_barcodes:main_entry"
+isoquant-visualize = "isoquant_visualize:main"
+
+[tool.setuptools]
+packages = ["isoquant_lib", "isoquant_lib.barcode_calling", "isoquant_lib.barcode_calling.callers",
+            "isoquant_lib.barcode_calling.indexers"]
+py-modules = ["isoquant", "isoquant_detect_barcodes", "isoquant_visualize"]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.package-data]
+isoquant_lib = ["test_data/*"]

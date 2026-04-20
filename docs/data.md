@@ -8,7 +8,8 @@ IsoQuant support all kinds of long RNA data:
 * ONT dRNA / ONT cDNA
 * Assembled / corrected transcript sequences
 
-Reads must be provided in FASTQ or FASTA format (can be gzipped). If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
+Reads must be provided in FASTQ/FASTA format (can be gzipped) or unmapped BAM format.  
+If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
 
 IsoQuant expect reads to contain polyA tails. For more reliable transcript model construction do not trim polyA tails.
 
@@ -27,4 +28,4 @@ In this case it will be converted to [gffutils](https://pythonhosted.org/gffutil
 Note, that gffutils databases may not work correctly on NFS shares. It is possible to set a designated folder for 
 the database with `--genedb_output` (different from the output directory).
 
-Pre-constructed aligner index can also be provided to increase mapping time.
+Pre-constructed aligner index can also be provided to reduce mapping time.

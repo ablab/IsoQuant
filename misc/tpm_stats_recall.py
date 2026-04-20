@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 ############################################################################
-# Copyright (c) 2022-2024 University of Helsinki
+# Copyright (c) 2022-2026 University of Helsinki
 # Copyright (c) 2020-2022 Saint Petersburg State University
 # # All Rights Reserved
 # See file LICENSE for details.
@@ -26,7 +26,7 @@ def parse_args():
 def load_counts(counts_file):
     count_dict = {}
     for l in open(counts_file):
-        if l.startswith("#"):
+        if l.startswith("#") or l.startswith("feature_id\t"):
             continue
         t = l.strip().split()
         if len(t) < 3:

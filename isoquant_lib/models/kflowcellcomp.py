@@ -9,7 +9,7 @@ import flowpaths.abstractpathmodeldag as pathmodel
 import flowpaths.utils.safetyflowdecomp as sfd
 import flowpaths.utils as utils
 
-from src.cell_type_tree import CellTypeTree
+from ..cell_type_tree import CellTypeTree
 from .nodeexpandeddigraph import NodeExpandedDiGraph
 
 class kFlowCellTypeDecomp(pathmodel.AbstractPathModelDAG):

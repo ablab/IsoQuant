@@ -4,16 +4,18 @@ import signal
 import flowpaths as fp
 import networkx as nx
 from collections import defaultdict
-from src.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
 import logging
 from itertools import chain
 import pickle
-logger = logging.getLogger('IsoQuant')
 
+
+from isoquant_lib.intron_graph import VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
 from .cell_type_tree import CellTypeTree
 from .models.minflowcelldcompapproximate import MinFlowCellDecomp
 from .models.minerror_celltypeflow import MinErrorCellTypeFlow
 from .models.cellflowcorrection import MinErrorCellTypeFlowCorrection
+
+logger = logging.getLogger('IsoQuant')
 
 '''
 # Create a simple graph
