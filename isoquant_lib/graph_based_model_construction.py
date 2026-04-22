@@ -91,7 +91,8 @@ class GraphBasedModelConstructor:
         self.ground_truth_gene_info = ground_truth_gene_info
         self.ground_truth_isoforms = {}
 
-        self.ilp_solution_assignement = None
+        self.ilp_solution_assignement = []
+        self.use_ilp = (self.args.model_construction_strategy == "ilp_model" and not self.args.no_ilp)
 
 
     def get_transcript_id(self):
@@ -152,24 +153,20 @@ class GraphBasedModelConstructor:
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
-        if self.args.no_ilp:
+        if not self.use_ilp:
             self.construct_fl_isoforms()
             self.construct_assignment_based_isoforms(read_assignment_storage)
             self.pre_filter_transcripts()
             self.assign_reads_to_models(read_assignment_storage)
             self.filter_transcripts()
+            # reassign reads
+            self.assign_reads_to_models(read_assignment_storage)
         else:
-            # This is the last "time" we can play with the isoQuant graph before entering into the ILP world
-            # self.pre_filter_transcripts()
             self.construct_ilp_isoforms()
             self.assign_reads_to_models(read_assignment_storage)
-            self.filter_transcripts() #this filters out some predictions based on Andrey's heuristic
-
-        # reassign reads. why is it like this?
-
-        self.assign_reads_to_models(read_assignment_storage)
-        # self.forward_counts()
-        self.ilp_counts()
+            self.filter_transcripts()
+            self.assign_reads_to_models(read_assignment_storage)
+            self.ilp_counts()
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
@@ -731,7 +728,7 @@ class GraphBasedModelConstructor:
                 # adding FL reference isoform
                 if reference_isoform in GraphBasedModelConstructor.detected_known_isoforms:
                     pass
-                elif count < self.params.min_known_count:
+                elif count < self.args.min_known_count:
                     pass
                 else:
                     new_model = self.transcript_from_reference(reference_isoform)
@@ -745,14 +742,18 @@ class GraphBasedModelConstructor:
 
                 if len(novel_exons) == 2 and (not polya_site or transcript_ss_strand == '.'):
                     pass
-                elif transcript_strand == '.' and not self.params.report_unstranded:
+                elif transcript_strand == '.' and not self.args.report_unstranded:
                     logger.info("Avoiding unreliable transcript with %d exons" % len(novel_exons))
                     pass
                 else:
-                    if self.params.use_technical_replicas and \
-                            len(set([a.read_group for a in self.path_storage.paths_to_reads[path]])) <= 1:
-                        # logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
-                        continue
+                    if self.use_technical_replicas and self.file_name_group_idx >= 0:
+                        read_assignments = self.path_storage.paths_to_reads[path]
+                        if read_assignments:
+                            file_groups = set([a.read_group[self.file_name_group_idx]
+                                               for a in read_assignments
+                                               if self.file_name_group_idx < len(a.read_group)])
+                            if len(file_groups) <= 1:
+                                continue
 
                     transcript_gene = self.select_reference_gene(intron_path, transcript_range, transcript_strand)
                     if transcript_gene is None:

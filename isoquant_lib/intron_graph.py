@@ -27,6 +27,17 @@ def is_starting_vertex(v):
     return v[0] in [VERTEX_polyt, VERTEX_read_start]
 
 
+def _cell_type_key(read_group) -> str:
+    """Convert a ReadAssignment.read_group (list[str] on master) into a hashable
+    cell-type key. The first grouping strategy's value is used as the cell-type
+    label; "NA" is returned when unset so CellTypeTree can filter it later."""
+    if isinstance(read_group, str):
+        return read_group
+    if read_group:
+        return read_group[0]
+    return "NA"
+
+
 class IntronCollector:
     def __init__(self, gene_info, delta: float = 0):
         self.gene_info = gene_info
@@ -47,8 +58,8 @@ class IntronCollector:
         for assignment in read_assignments:
             if not assignment.corrected_introns or assignment.multimapper:
                 continue
+            read_group = _cell_type_key(assignment.read_group)
             for intron in assignment.corrected_introns:
-                read_group = assignment.read_group
                 if intron not in introns_with_cell_types: introns_with_cell_types[intron] = defaultdict(int)
                 introns_with_cell_types[intron][read_group] += 1
                 all_introns[intron] += 1
@@ -278,11 +289,11 @@ class IntronGraph:
             if assignment.multimapper or any(intron in self.intron_collector.discarded_introns for intron in assignment.corrected_introns):
                 continue
 
+            read_group = _cell_type_key(assignment.read_group)
             for i in range(len(assignment.corrected_introns) - 1):
                 intron1 = assignment.corrected_introns[i]
                 intron2 = assignment.corrected_introns[i + 1]
-                read_id = assignment.read_group 
-                self.add_edge(intron1, intron2, read_id) # This needs to have the cell type listed
+                self.add_edge(intron1, intron2, read_group)
 
         self.max_coverage =  max(self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
 
@@ -291,7 +302,9 @@ class IntronGraph:
         self.clean_tips_and_bulges()
         self.remove_singleton_dead_ends()
         self.remove_isolates()
-        self.error_correction()
+        if getattr(self.params, "model_construction_strategy", None) == "ilp_model" \
+                and not getattr(self.params, "no_ilp", True):
+            self.error_correction()
         self.intron_collector.simplify_correction_map()
 
 

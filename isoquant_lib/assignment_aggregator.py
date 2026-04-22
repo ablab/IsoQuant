@@ -84,14 +84,12 @@ class ReadAssignmentAggregator:
         if not self.args.no_model_construction:
             transcript_model_counts_path = sample.get_transcript_model_counts_file(chr_id) if chr_id else sample.out_transcript_model_counts_tsv
             gene_model_counts_path = sample.get_gene_model_counts_file(chr_id) if chr_id else sample.out_gene_model_counts_tsv
-            if self.args.no_ilp:
-                self.transcript_model_counter = create_transcript_counter(sample.out_transcript_model_counts_tsv,
-                                                                          self.args.transcript_quantification)
-            else:
-                self.transcript_model_counter = create_ilp_transcript_counter(sample.out_transcript_model_counts_tsv,
+            if self.args.model_construction_strategy == "ilp_model" and not self.args.no_ilp:
+                self.transcript_model_counter = create_ilp_transcript_counter(transcript_model_counts_path,
                                                                               self.args.transcript_quantification)
-            self.transcript_model_counter = create_transcript_counter(transcript_model_counts_path,
-                                                                      self.args.transcript_quantification)
+            else:
+                self.transcript_model_counter = create_transcript_counter(transcript_model_counts_path,
+                                                                          self.args.transcript_quantification)
             self.gene_model_counter = create_gene_counter(gene_model_counts_path,
                                                           self.args.gene_quantification)
 
