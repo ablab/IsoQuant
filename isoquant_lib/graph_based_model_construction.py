@@ -22,6 +22,7 @@ from .common import (
 from .assignment_io import ReadAssignmentType
 from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
 from .intron_graph import IntronGraph, VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
+from .intron_graph_flow import dump_flow_graph
 from .isoform_assignment import (
     is_matching_assignment,
     match_subtype_to_str_with_additional_info,
@@ -126,6 +127,13 @@ class GraphBasedModelConstructor:
 
     def process(self, read_assignment_storage):
         self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage)
+        if getattr(self.args, "dump_intron_graphs", None):
+            gene_ids = [g.id for g in self.gene_info.gene_db_list] if self.gene_info.gene_db_list else []
+            gene_tag = "_".join(gene_ids) if gene_ids else "region_%d_%d" % (self.gene_info.start, self.gene_info.end)
+            dump_flow_graph(self.intron_graph, self.gene_info.chr_id, gene_tag,
+                            self.args.dump_intron_graphs,
+                            gene_info=self.gene_info,
+                            ground_truth_counts=getattr(self.args, "ground_truth_counts_map", None))
         self.path_processor = IntronPathProcessor(self.args, self.intron_graph)
         self.path_storage = IntronPathStorage(self.args, self.path_processor)
         self.path_storage.fill(read_assignment_storage)

@@ -292,6 +292,15 @@ def parse_args(cmd_args=None, namespace=None):
                                                                                     "database, will be created automatically "
                                                                                     " (same as output by default)", type=str)
 
+    add_additional_option_to_group(output_setup_args_group, "--dump_intron_graphs", type=str, default=None,
+                                   help="dump per-gene intron graphs as integer-labelled flow networks "
+                                        "(vertices.tsv + edges.tsv) to the given directory")
+    add_additional_option_to_group(output_setup_args_group, "--ground_truth_counts", type=str, default=None,
+                                   help="TSV with ground-truth transcript counts (col1: transcript_id matching "
+                                        "--genedb, col2: count); when combined with --dump_intron_graphs, "
+                                        "each gene's dump also gets a paths.tsv mapping transcripts onto "
+                                        "integer vertex paths with weights")
+
     # ALIGNER
     add_additional_option_to_group(align_args_group, "--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS)
                                         + "; chosen based on data type if not set", type=str)
@@ -990,6 +999,31 @@ def set_additional_params(args):
     else:
         args.bam_tags = []
     args.original_annotation = None
+
+    args.ground_truth_counts_map = None
+    if getattr(args, "ground_truth_counts", None):
+        if not getattr(args, "dump_intron_graphs", None):
+            logger.warning("--ground_truth_counts is only used together with --dump_intron_graphs; ignoring")
+        else:
+            if not os.path.exists(args.ground_truth_counts):
+                logger.error("--ground_truth_counts file not found: %s" % args.ground_truth_counts)
+                sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+            counts_map = {}
+            with open(args.ground_truth_counts) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    parts = line.split("\t")
+                    if len(parts) < 2:
+                        continue
+                    try:
+                        counts_map[parts[0]] = float(parts[1])
+                    except ValueError:
+                        logger.warning("Skipping malformed line in --ground_truth_counts: %s" % line)
+            logger.info("Loaded %d ground-truth transcript counts from %s"
+                        % (len(counts_map), args.ground_truth_counts))
+            args.ground_truth_counts_map = counts_map
 
 
 def prepare_reference_genome(args):
