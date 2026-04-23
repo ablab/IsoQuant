@@ -136,24 +136,79 @@ class Intron2Graph:
         return [self.vertex2intron[v] for v in path]
 
 
-def _thread_transcript(intron_collector, introns) -> Tuple[str, List[Tuple[int, int]]]:
+GAP_MARKER = "*"
+
+
+def _thread_transcript(
+    flow: "Intron2Graph",
+    intron_graph,
+    introns,
+) -> Tuple[str, str, int, int]:
     """Project an annotated transcript's intron tuples onto the simplified graph.
 
-    Mirrors ``IntronPathProcessor.thread_introns``: discarded introns abort,
-    surviving introns are substituted via ``intron_correction_map``. Returns
-    ``(status, path)`` where ``path`` is empty unless ``status == "ok"``.
+    Each annotated intron is run through ``intron_collector.substitute`` and
+    mapped to a graph vertex; introns in ``discarded_introns`` or whose
+    substituted form is not in ``clustered_introns`` map to ``None``. Every
+    consecutive pair is then checked against ``intron_graph.outgoing_edges``.
+
+    Returns ``(status, path_str, missing_vertices, missing_edges)``:
+    - ``status`` is one of ``monoexonic`` / ``ok`` / ``disconnected`` /
+      ``partial`` (partial = at least one vertex missing).
+    - ``path_str`` is a comma-separated rendering where surviving vertex ids
+      are joined normally and any break (missing vertex or disconnected edge
+      between two surviving vertices) is marked by a single ``*`` token.
     """
     if not introns:
-        return "monoexonic", []
-    path: List[Tuple[int, int]] = []
+        return "monoexonic", "", 0, 0
+
+    intron_collector = intron_graph.intron_collector
+    mapped: List[Optional[int]] = []
     for intron in introns:
         if intron in intron_collector.discarded_introns:
-            return "discarded", []
+            mapped.append(None)
+            continue
         substituted = intron_collector.substitute(intron)
         if substituted not in intron_collector.clustered_introns:
-            return "unmapped", []
-        path.append(substituted)
-    return "ok", path
+            mapped.append(None)
+            continue
+        mapped.append(flow.intron2vertex.get(substituted))
+
+    missing_vertices = sum(1 for v in mapped if v is None)
+
+    edge_ok: List[bool] = []
+    for i in range(len(mapped) - 1):
+        u, v = mapped[i], mapped[i + 1]
+        if u is None or v is None:
+            edge_ok.append(False)
+            continue
+        u_tuple = flow.vertex2intron[u]
+        v_tuple = flow.vertex2intron[v]
+        edge_ok.append(v_tuple in intron_graph.outgoing_edges.get(u_tuple, ()))
+    missing_edges = sum(1 for ok in edge_ok if not ok)
+
+    tokens: List[str] = []
+
+    def push_gap() -> None:
+        if not tokens or tokens[-1] != GAP_MARKER:
+            tokens.append(GAP_MARKER)
+
+    for i, v in enumerate(mapped):
+        if v is None:
+            push_gap()
+        else:
+            if i > 0 and mapped[i - 1] is not None and not edge_ok[i - 1]:
+                push_gap()
+            tokens.append(str(v))
+
+    path_str = ",".join(tokens)
+
+    if missing_vertices > 0:
+        status = "partial"
+    elif missing_edges > 0:
+        status = "disconnected"
+    else:
+        status = "ok"
+    return status, path_str, missing_vertices, missing_edges
 
 
 def _dump_paths(
@@ -166,35 +221,28 @@ def _dump_paths(
 ) -> None:
     """Write per-gene ground-truth paths TSV.
 
-    Columns: ``transcript_id  count  status  path`` (path is comma-separated
-    int vertex ids). Emits one row for every transcript in ``gene_info`` that
-    appears in ``counts_map``.
+    Columns: ``transcript_id  count  status  path  missing_vertices
+    missing_edges``. ``path`` is comma-separated; surviving vertex ids are
+    rendered as ints and any break (missing vertex or disconnected edge)
+    collapses into a single ``*`` token.
     """
     rows = []
     for t_id, introns in gene_info.all_isoforms_introns.items():
         if t_id not in counts_map:
             continue
         count = counts_map[t_id]
-        status, tuple_path = _thread_transcript(intron_graph.intron_collector, introns)
-        if status == "ok":
-            try:
-                vertex_path = [flow.intron2vertex[t] for t in tuple_path]
-                path_str = ",".join(str(v) for v in vertex_path)
-            except KeyError:
-                # Substituted intron slipped through; treat as unmapped.
-                status = "unmapped"
-                path_str = ""
-        else:
-            path_str = ""
-        rows.append((t_id, count, status, path_str))
+        status, path_str, missing_vertices, missing_edges = _thread_transcript(
+            flow, intron_graph, introns
+        )
+        rows.append((t_id, count, status, path_str, missing_vertices, missing_edges))
 
     if not rows:
         return
 
     with open(paths_path, "w") as pf:
-        pf.write("transcript_id\tcount\tstatus\tpath\n")
-        for t_id, count, status, path_str in rows:
-            pf.write("%s\t%g\t%s\t%s\n" % (t_id, count, status, path_str))
+        pf.write("transcript_id\tcount\tstatus\tpath\tmissing_vertices\tmissing_edges\n")
+        for t_id, count, status, path_str, mv, me in rows:
+            pf.write("%s\t%g\t%s\t%s\t%d\t%d\n" % (t_id, count, status, path_str, mv, me))
 
 
 def dump_flow_graph(
