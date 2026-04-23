@@ -300,6 +300,11 @@ def parse_args(cmd_args=None, namespace=None):
                                         "--genedb, col2: count); when combined with --dump_intron_graphs, "
                                         "each gene's dump also gets a paths.tsv mapping transcripts onto "
                                         "integer vertex paths with weights")
+    add_additional_option_to_group(output_setup_args_group, "--dump_ref_data", action="store_true", default=False,
+                                   help="when combined with --dump_intron_graphs, also emit per-gene "
+                                        "ref_vertices.tsv / ref_edges.tsv listing every annotated intron "
+                                        "and every consecutive intron pair with its graph status "
+                                        "(in_graph / discarded / unmapped / missing_edge / missing_vertex)")
 
     # ALIGNER
     add_additional_option_to_group(align_args_group, "--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS)
@@ -1024,6 +1029,10 @@ def set_additional_params(args):
             logger.info("Loaded %d ground-truth transcript counts from %s"
                         % (len(counts_map), args.ground_truth_counts))
             args.ground_truth_counts_map = counts_map
+
+    if getattr(args, "dump_ref_data", False) and not getattr(args, "dump_intron_graphs", None):
+        logger.warning("--dump_ref_data is only used together with --dump_intron_graphs; ignoring")
+        args.dump_ref_data = False
 
 
 def prepare_reference_genome(args):

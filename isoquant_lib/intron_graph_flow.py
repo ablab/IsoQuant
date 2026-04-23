@@ -245,6 +245,87 @@ def _dump_paths(
             pf.write("%s\t%g\t%s\t%s\t%d\t%d\n" % (t_id, count, status, path_str, mv, me))
 
 
+def _dump_ref_data(
+    flow: "Intron2Graph",
+    intron_graph,
+    gene_info,
+    ref_vertices_path: str,
+    ref_edges_path: str,
+) -> None:
+    """Emit per-gene reference-vs-graph diff TSVs.
+
+    ``<chr>.<gene>.ref_vertices.tsv`` — one row per unique annotated intron
+    across all transcripts in this gene:
+    ``ref_start  ref_end  status  vertex_id  graph_start  graph_end``
+    - ``status`` ∈ {``in_graph``, ``discarded``, ``unmapped``}
+    - ``vertex_id`` is the integer graph id (empty for non-``in_graph``)
+    - ``graph_start/graph_end`` are the post-substitution coords, repeating
+      the ref coords when no substitution occurred (empty for ``discarded``)
+
+    ``<chr>.<gene>.ref_edges.tsv`` — one row per unique consecutive intron
+    pair appearing in at least one transcript:
+    ``u_start  u_end  v_start  v_end  status  u_id  v_id``
+    - ``status`` ∈ {``in_graph``, ``missing_edge``, ``missing_vertex``}
+    """
+    intron_collector = intron_graph.intron_collector
+
+    vertex_info: Dict[Tuple[int, int], Tuple[Optional[int], str, Optional[Tuple[int, int]]]] = {}
+    edge_info: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[Optional[int], Optional[int], str]] = {}
+
+    def resolve(intron: Tuple[int, int]) -> Optional[int]:
+        if intron in vertex_info:
+            return vertex_info[intron][0]
+        if intron in intron_collector.discarded_introns:
+            vertex_info[intron] = (None, "discarded", None)
+            return None
+        substituted = intron_collector.substitute(intron)
+        if substituted not in intron_collector.clustered_introns:
+            vertex_info[intron] = (None, "unmapped", substituted)
+            return None
+        vid = flow.intron2vertex.get(substituted)
+        if vid is None:
+            vertex_info[intron] = (None, "unmapped", substituted)
+            return None
+        vertex_info[intron] = (vid, "in_graph", substituted)
+        return vid
+
+    for _t_id, introns in gene_info.all_isoforms_introns.items():
+        if not introns:
+            continue
+        mapped = [resolve(intron) for intron in introns]
+        for i in range(len(introns) - 1):
+            key = (introns[i], introns[i + 1])
+            if key in edge_info:
+                continue
+            u, v = mapped[i], mapped[i + 1]
+            if u is None or v is None:
+                edge_info[key] = (u, v, "missing_vertex")
+                continue
+            u_tuple = flow.vertex2intron[u]
+            v_tuple = flow.vertex2intron[v]
+            if v_tuple in intron_graph.outgoing_edges.get(u_tuple, ()):
+                edge_info[key] = (u, v, "in_graph")
+            else:
+                edge_info[key] = (u, v, "missing_edge")
+
+    with open(ref_vertices_path, "w") as vf:
+        vf.write("ref_start\tref_end\tstatus\tvertex_id\tgraph_start\tgraph_end\n")
+        for (rs, re_), (vid, status, graph_tuple) in sorted(vertex_info.items()):
+            vid_str = "" if vid is None else str(vid)
+            if graph_tuple is None:
+                gs_str = ge_str = ""
+            else:
+                gs_str, ge_str = str(graph_tuple[0]), str(graph_tuple[1])
+            vf.write("%d\t%d\t%s\t%s\t%s\t%s\n" % (rs, re_, status, vid_str, gs_str, ge_str))
+
+    with open(ref_edges_path, "w") as ef:
+        ef.write("u_start\tu_end\tv_start\tv_end\tstatus\tu_id\tv_id\n")
+        for ((us, ue), (vs, ve_)), (u_id, v_id, status) in sorted(edge_info.items()):
+            u_str = "" if u_id is None else str(u_id)
+            v_str = "" if v_id is None else str(v_id)
+            ef.write("%d\t%d\t%d\t%d\t%s\t%s\t%s\n" % (us, ue, vs, ve_, status, u_str, v_str))
+
+
 def dump_flow_graph(
     intron_graph,
     chr_id: str,
@@ -252,6 +333,7 @@ def dump_flow_graph(
     out_dir: str,
     gene_info=None,
     ground_truth_counts: Optional[Dict[str, float]] = None,
+    dump_ref_data: bool = False,
 ) -> None:
     """Write the gene's flow network to ``out_dir`` as TSVs.
 
@@ -260,7 +342,13 @@ def dump_flow_graph(
     - ``<chr>.<gene>.edges.tsv``: ``u  v  weight``
     - ``<chr>.<gene>.paths.tsv`` (only when ``ground_truth_counts`` and
       ``gene_info`` are given and at least one transcript in the gene
-      appears in the counts map): ``transcript_id  count  status  path``
+      appears in the counts map): ``transcript_id  count  status  path
+      missing_vertices  missing_edges``
+    - ``<chr>.<gene>.ref_vertices.tsv`` and ``<chr>.<gene>.ref_edges.tsv``
+      (only when ``dump_ref_data`` is true and ``gene_info`` carries
+      annotated transcripts): every unique annotated intron / consecutive
+      intron pair with its graph status (see ``_dump_ref_data`` for
+      column layouts).
     """
     if not intron_graph.intron_collector.clustered_introns \
             and not intron_graph.outgoing_edges \
@@ -290,6 +378,11 @@ def dump_flow_graph(
     if ground_truth_counts and gene_info is not None:
         paths_path = os.path.join(out_dir, "%s.%s.paths.tsv" % (chr_id, safe_gene))
         _dump_paths(flow, intron_graph, gene_info, ground_truth_counts, chr_id, paths_path)
+
+    if dump_ref_data and gene_info is not None and gene_info.all_isoforms_introns:
+        ref_vertices_path = os.path.join(out_dir, "%s.%s.ref_vertices.tsv" % (chr_id, safe_gene))
+        ref_edges_path = os.path.join(out_dir, "%s.%s.ref_edges.tsv" % (chr_id, safe_gene))
+        _dump_ref_data(flow, intron_graph, gene_info, ref_vertices_path, ref_edges_path)
 
     logger.debug("Dumped flow graph for %s / %s (%d vertices, %d edges) to %s",
                  chr_id, gene_id, flow.target + 1, len(flow.edge_list), out_dir)

@@ -133,7 +133,8 @@ class GraphBasedModelConstructor:
             dump_flow_graph(self.intron_graph, self.gene_info.chr_id, gene_tag,
                             self.args.dump_intron_graphs,
                             gene_info=self.gene_info,
-                            ground_truth_counts=getattr(self.args, "ground_truth_counts_map", None))
+                            ground_truth_counts=getattr(self.args, "ground_truth_counts_map", None),
+                            dump_ref_data=getattr(self.args, "dump_ref_data", False))
         self.path_processor = IntronPathProcessor(self.args, self.intron_graph)
         self.path_storage = IntronPathStorage(self.args, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
