@@ -24,17 +24,17 @@ which can also be used as a standalone tool.
 
 ## Supported platforms
 
-| Mode | Platform | Barcode whitelist files | UMI length | Notes                                                                                |
-|------|----------|--------------------|------------|--------------------------------------------------------------------------------------|
-| `tenX_v3` | 10x Genomics 3' v3 | 1 | 12 | Single 16bp barcode                                                                  |
-| `tenX_v3_split` | 10x Genomics 3' v3 | 1 | 12 | Concatenated reads: splits into individual cDNA molecules                             |
-| `tenX_v2_split` | 10x Genomics 3' v2 | 1 | 10 | Concatenated reads: splits into individual cDNA molecules (v2 chemistry)              |
-| `visium_5prime` | 10x Genomics Visium 5' | 1 | 12 | Same detector as tenX_v3                                                             |
-| `visium_hd` | 10x Genomics Visium HD | 2 | 9 | Two barcodes (15/16bp + 14/15bp)                                                     |
-| `curio` | Curio Bioscience | 1  | 9 | Double barcode (8bp + 6bp) with linker                                               |
-| `stereoseq` | Stereo-seq | 1 | 10 | 25bp barcode, read splitting mode                                                    |
-| `stereoseq_nosplit` | Stereo-seq | 1 | 10 | 25bp barcode, no read splitting                                                      |
-| `custom_sc` | Any platform | 0 (uses MDF) | varies | User-defined molecule structure via [MDF file](#molecule-definition-file-mdf-format) |
+| Mode                | Platform               | Barcode whitelist files | UMI length | Notes                                                                     |
+|---------------------|------------------------|-------------------------|------------|---------------------------------------------------------------------------|
+| `tenX_v3`           | 10x Genomics 3' v3     | 1                       | 12         | Single 16bp barcode                                                       |
+| `tenX_v3_split`     | 10x Genomics 3' v3     | 1                       | 12         | Concatenated reads: splits into individual cDNA molecules                 |
+| `tenX_v2_split`     | 10x Genomics 3' v2     | 1                       | 10         | Concatenated reads: splits into individual cDNA molecules (v2 chemistry)  |
+| `visium_5prime`     | 10x Genomics Visium 5' | 1                       | 12         | Same detector as tenX_v3                                                  |
+| `visium_hd`         | 10x Genomics Visium HD | 2                       | 9          | Two barcodes (15/16bp + 14/15bp)                                          |
+| `curio`             | Curio Bioscience       | 1                       | 9          | Double barcode (8bp + 6bp) with linker                                    |
+| `stereoseq`         | Stereo-seq             | 1                       | 10         | 25bp barcode, read splitting mode                                         |
+| `stereoseq_nosplit` | Stereo-seq             | 1                       | 10         | 25bp barcode, no read splitting                                           |
+| `custom_sc`         | Any platform           | 0 (uses MDF)            | varies     | User-defined molecule structure via [MDF file](#molecule-definition-file-mdf-format)                       |
 
 ## Quick start examples
 
@@ -101,7 +101,9 @@ Supports plain text and gzipped files.
 _Notes:_
 - Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
 If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
-- IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
+- IsoQuant will perform per-barcode quantification automatically **only** if no barcode-related
+grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified. 
+Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 
 The number of whitelist files depends on the mode:
 
@@ -117,7 +119,9 @@ More than 3 columns are allowed, but only the first 3 will be used.
 
 _Notes:_
 - IsoQuant does not read barcodes or UMIs from BAM file tags;
-- IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
+- soQuant will perform per-barcode quantification automatically **only** if no barcode-related
+grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified. 
+Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 
 
 `--barcoded_bam`
@@ -178,16 +182,16 @@ An MDF file has two parts:
 
 ### Element types
 
-| Type | Description                                                                   | Value field              |
-|------|-------------------------------------------------------------------------------|--------------------------|
-| `CONST` | Constant/known sequence (primer, linker, TSO)                                 | Sequence                 |
-| `VAR_FILE` | Variable sequence matched against a whitelist file                            | Path to TSV file         |
-| `VAR_LIST` | Variable sequence matched against an inline list                              | Comma-separated sequences |
-| `VAR_ANY` | Variable fixed-length sequence extracted as-is                                | Length (integer)         |
-| `VAR_ANY_SEPARATOR` | Fixed-length variable separator sequence (not extracted)                      | Length (integer)        |
+| Type                      | Description                                                                   | Value field              |
+|---------------------------|-------------------------------------------------------------------------------|--------------------------|
+| `CONST`                   | Constant/known sequence (primer, linker, TSO)                                 | Sequence                 |
+| `VAR_FILE`                | Variable sequence matched against a whitelist file                            | Path to TSV file         |
+| `VAR_LIST`                | Variable sequence matched against an inline list                              | Comma-separated sequences |
+| `VAR_ANY`                 | Variable fixed-length sequence extracted as-is                                | Length (integer)         |
+| `VAR_ANY_SEPARATOR`       | Fixed-length variable separator sequence (not extracted)                      | Length (integer)        |
 | `VAR_ANY_NON_T_SEPARATOR` | Fixed-length variable separator sequence without T nucleoties (not extracted) | Length (integer)         |
-| `PolyT` | PolyT tail                                                                    | (none)                   |
-| `cDNA` | cDNA region                                                                   | (none)                   |
+| `PolyT`                   | PolyT tail                                                                    | (none)                   |
+| `cDNA`                    | cDNA region                                                                   | (none)                   |
 
 At the moment, only a single `cDNA` and a single `PolyT` are supported. 
 
@@ -351,7 +355,7 @@ Use `--read_group` to control how reads are grouped for quantification.
 Multiple grouping strategies can be combined (space-separated), producing separate count tables for each.
 
 In single-cell/spatial modes, IsoQuant automatically adds `--read_group barcode`
-if no barcode-related grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
+**only** if no barcode-related grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
 Use `--read_group none` to disable automatic grouping.
 
 The most common use-cases for single-cell/spatial data are grouping by barcode property (cell type, spot):

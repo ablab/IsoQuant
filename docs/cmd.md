@@ -104,8 +104,7 @@ Input file names are used as labels if not set.
 
  * `file_name` - groups reads by their original file names (or file name labels) within an experiment.
 This option makes sense when multiple files are provided.
-If multiple BAM/FASTQ files are provided and `--read_group` option is not set, IsoQuant will set `--read_group file_name`
-by default.
+If multiple BAM/FASTQ files are provided, IsoQuant will add `--read_group file_name` automatically.
 
  * `tag:TAG` - groups reads by BAM file read tag, where `TAG` is the tag name
 (e.g. `tag:RG` uses `RG` tag values as groups, commonly used for read group information).
@@ -121,10 +120,12 @@ where `FILE` is the file path, `READ_COL` is column with read ids (default: 0),
 
  * `barcode_spot` - group by barcode properties, such as spots/cell types.
 Set barcode-to-spot mapping via `--barcode2spot` option.
+IsoQuant will add `--read_group barcode_spot` automatically if `--barcode2spot` is set.
 Useful for grouping single-cell/spatial data by cell type or spatial region instead of individual barcodes.
 
  * `barcode_barcode` - group by spot-level barcode mapping for UMI deduplication.
 Set barcode-to-spot mapping via `--barcode2barcode` option.
+IsoQuant will add `--read_group barcode_barcode` automatically if `--barcode2barcode` is set.
 Multiple barcodes mapping to the same spot are grouped together.
 
 * `barcode` - groups reads by cell barcode.
@@ -133,7 +134,7 @@ It is recommended to use `--barcode2spot` file instead.
 In single-cell/spatial modes, `barcode` grouping is added automatically if no barcode-related
 grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
 
-* `none` - disable all automatic read grouping.
+* `none` - disable all automatic read grouping (not compatible with other options).
 By default, IsoQuant automatically adds grouping in certain cases
 (e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
 Use `--read_group none` to suppress this and produce only bulk counts.

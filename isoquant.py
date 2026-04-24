@@ -151,7 +151,8 @@ def parse_args(cmd_args=None, namespace=None):
                                        "file_name (original filename), "
                                        "barcode_spot (map barcodes to spots/cell types using --barcode2spot), "
                                        "barcode_barcode (map barcodes to spots using --barcode2barcode), "
-                                       "barcode (group by barcode from --barcoded_reads)")
+                                       "barcode (group by barcode from --barcoded_reads),"
+                                       "none (no grouping)")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
                                    help="reuse read assignments (binary format)", default=None)
