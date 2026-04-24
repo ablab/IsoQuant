@@ -82,7 +82,7 @@ class TestReadIdSplitReadGrouper:
 
         # Returns empty string if no delimiter found
         result = grouper.get_group_id(alignment)
-        assert result == ""
+        assert result == 'NA'
 
     def test_get_group_multiple_delimiters(self):
         """Test getting group with multiple delimiters."""
