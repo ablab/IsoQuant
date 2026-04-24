@@ -134,10 +134,15 @@ It is recommended to use `--barcode2spot` file instead.
 In single-cell/spatial modes, `barcode` grouping is added automatically if no barcode-related
 grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
 
-* `none` - disable all automatic read grouping (not compatible with other options).
+* `no_auto` - disable automatic read grouping.
 By default, IsoQuant automatically adds grouping in certain cases
 (e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
-Use `--read_group none` to suppress this and produce only bulk counts.
+This option will enforce only explicitly stated grouping rules. 
+
+* `none` - disable all read grouping (not compatible with other options).
+By default, IsoQuant automatically adds grouping in certain cases
+(e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
+Use `--read_group none` to suppress all read grouping and produce only bulk counts.
 
 **Example**: `--read_group tag:RG file_name barcode_spot` creates multi-level grouping by read group tag,
 original file name, and barcode property (e.g. cell type).

@@ -43,12 +43,15 @@ class AlignmentTagReadGrouper(AbstractReadGrouper):
     def __init__(self, tag='RG'):
         AbstractReadGrouper.__init__(self)
         self.tag = tag
+        self.warn = False
 
     def get_group_id(self, alignment, read_assignment=None, filename=None):
         try:
             tag_value = alignment.get_tag(self.tag)
         except KeyError:
-            logger.warning("Tag %s is not present for read %s, skipping" % (self.tag, alignment.query_name))
+            if not self.warn:
+                logger.warning("Tag %s is not present for read %s, skipping; next reads may be skipped without warning" % (self.tag, alignment.query_name))
+                self.warn = True
             self.read_groups.add(self.default_group_id)
             return self.default_group_id
         self.read_groups.add(tag_value)
@@ -59,13 +62,16 @@ class ReadIdSplitReadGrouper(AbstractReadGrouper):
     def __init__(self, delim):
         AbstractReadGrouper.__init__(self)
         self.delim = delim
+        self.warn = False
 
     def get_group_id(self, alignment, read_assignment=None, filename=None):
         read_id = alignment.query_name
         values = read_id.split(self.delim)
         if len(values) == 1:
-            logger.warning("Delimiter %s is not present in read id %s, skipping" % (self.delim, read_id))
-            return ""
+            if not self.warn:
+                logger.warning("Delimiter %s is not present in read id %s, skipping; next reads may be skipped without warning" % (self.delim, read_id))
+                self.warn = True
+            return self.default_group_id
 
         self.read_groups.add(values[-1])
         return values[-1]
@@ -349,6 +355,8 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
 
     if values[0] == "file_name":
         return FileNameGrouper(args, sample)
+    elif values[0] == "no_auto":
+        return None
     elif values[0] == 'barcode_spot':
         # Always uses --barcode2spot (single argument)
         if not hasattr(args, 'barcode2spot') or not args.barcode2spot:

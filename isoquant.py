@@ -152,6 +152,7 @@ def parse_args(cmd_args=None, namespace=None):
                                        "barcode_spot (map barcodes to spots/cell types using --barcode2spot), "
                                        "barcode_barcode (map barcodes to spots using --barcode2barcode), "
                                        "barcode (group by barcode from --barcoded_reads),"
+                                       "no_auto (use only explicitly stated read grouping rules),"
                                        "none (no grouping)")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
@@ -770,21 +771,21 @@ def set_data_dependent_options(args):
             args.read_group = ["file_name"]
         else:
             # Read grouping specified, ensure file_name is included
-            if "file_name" not in args.read_group:
+            if "file_name" not in args.read_group and "no_auto" not in args.read_group:
                 args.read_group.append("file_name")
 
     # Automatically add barcode_spot grouping when --barcode2spot is set
     if hasattr(args, 'barcode2spot') and args.barcode2spot:
         if args.read_group is None:
             args.read_group = ["barcode_spot"]
-        elif "barcode_spot" not in args.read_group:
+        elif "barcode_spot" not in args.read_group and "no_auto" not in args.read_group:
             args.read_group.append("barcode_spot")
 
     # Automatically add barcode_barcode grouping when --barcode2barcode is set
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
         if args.read_group is None:
             args.read_group = ["barcode_barcode"]
-        elif "barcode_barcode" not in args.read_group:
+        elif "barcode_barcode" not in args.read_group and "no_auto" not in args.read_group:
             args.read_group.append("barcode_barcode")
 
     # In SC modes, auto-add barcode grouping if no barcode-related grouping is set
@@ -792,13 +793,13 @@ def set_data_dependent_options(args):
         barcode_groupings = {"barcode", "barcode_spot", "barcode_barcode"}
         has_barcode_grouping = (args.read_group is not None and
                                 any(rg in barcode_groupings for rg in args.read_group))
-        if not has_barcode_grouping:
+        if not has_barcode_grouping and "no_auto" not in args.read_group:
             if args.read_group is None:
                 args.read_group = ["barcode"]
             else:
                 args.read_group.append("barcode")
             logger.info("Single-cell/spatial mode: automatically adding '--read_group barcode'. "
-                        "Use '--read_group none' to disable.")
+                        "Use '--read_group none' or `--read_group no_auto` to disable.")
 
 
 def set_matching_options(args):
