@@ -127,11 +127,12 @@ class GraphBasedModelConstructor:
 
     def process(self, read_assignment_storage):
         self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage)
-        if getattr(self.args, "dump_intron_graphs", None):
+        dump_dir = getattr(self.args, "dump_intron_graphs_dir", None)
+        if dump_dir:
             gene_ids = [g.id for g in self.gene_info.gene_db_list] if self.gene_info.gene_db_list else []
             gene_tag = "_".join(gene_ids) if gene_ids else "region_%d_%d" % (self.gene_info.start, self.gene_info.end)
             dump_flow_graph(self.intron_graph, self.gene_info.chr_id, gene_tag,
-                            self.args.dump_intron_graphs,
+                            dump_dir,
                             gene_info=self.gene_info,
                             ground_truth_counts=getattr(self.args, "ground_truth_counts_map", None),
                             dump_ref_data=getattr(self.args, "dump_ref_data", False))

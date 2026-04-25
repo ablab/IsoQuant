@@ -292,9 +292,9 @@ def parse_args(cmd_args=None, namespace=None):
                                                                                     "database, will be created automatically "
                                                                                     " (same as output by default)", type=str)
 
-    add_additional_option_to_group(output_setup_args_group, "--dump_intron_graphs", type=str, default=None,
+    add_additional_option_to_group(output_setup_args_group, "--dump_intron_graphs", action="store_true", default=False,
                                    help="dump per-gene intron graphs as integer-labelled flow networks "
-                                        "(vertices.tsv + edges.tsv) to the given directory")
+                                        "(vertices.tsv + edges.tsv) into <output>/intron_graphs/")
     add_additional_option_to_group(output_setup_args_group, "--ground_truth_counts", type=str, default=None,
                                    help="TSV with ground-truth transcript counts (col1: transcript_id matching "
                                         "--genedb, col2: count); when combined with --dump_intron_graphs, "
@@ -1005,9 +1005,15 @@ def set_additional_params(args):
         args.bam_tags = []
     args.original_annotation = None
 
+    if getattr(args, "dump_intron_graphs", False):
+        args.dump_intron_graphs_dir = os.path.join(args.output, "intron_graphs")
+        os.makedirs(args.dump_intron_graphs_dir, exist_ok=True)
+    else:
+        args.dump_intron_graphs_dir = None
+
     args.ground_truth_counts_map = None
     if getattr(args, "ground_truth_counts", None):
-        if not getattr(args, "dump_intron_graphs", None):
+        if not getattr(args, "dump_intron_graphs", False):
             logger.warning("--ground_truth_counts is only used together with --dump_intron_graphs; ignoring")
         else:
             if not os.path.exists(args.ground_truth_counts):
@@ -1030,7 +1036,7 @@ def set_additional_params(args):
                         % (len(counts_map), args.ground_truth_counts))
             args.ground_truth_counts_map = counts_map
 
-    if getattr(args, "dump_ref_data", False) and not getattr(args, "dump_intron_graphs", None):
+    if getattr(args, "dump_ref_data", False) and not getattr(args, "dump_intron_graphs", False):
         logger.warning("--dump_ref_data is only used together with --dump_intron_graphs; ignoring")
         args.dump_ref_data = False
 
