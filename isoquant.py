@@ -790,10 +790,10 @@ def set_data_dependent_options(args):
 
     # In SC modes, auto-add barcode grouping if no barcode-related grouping is set
     if args.mode.needs_barcode_calling():
-        barcode_groupings = {"barcode", "barcode_spot", "barcode_barcode"}
+        barcode_groupings = {"barcode", "barcode_spot", "barcode_barcode", "no_auto"}
         has_barcode_grouping = (args.read_group is not None and
                                 any(rg in barcode_groupings for rg in args.read_group))
-        if not has_barcode_grouping and "no_auto" not in args.read_group:
+        if not has_barcode_grouping:
             if args.read_group is None:
                 args.read_group = ["barcode"]
             else:
