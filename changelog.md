@@ -1,20 +1,30 @@
 # IsoQuant changelog
 
+## IsoQuant 3.13.0, 24 April 2026
+
+- Improved recall for 10x single-cell barcode calling;
+
+- Added cDNA splitting mode for 10x barcode calling;
+
+- Improved exon and splice junction counts output (TSV matrix and mtx format);
+
+- Added `no_auto` read grouping mode to avoid automatic grouping.
+
 ## IsoQuant 3.12.1, 19 March 2026
 
-- Fix package naming.
+- Fixed package naming.
 
 ## IsoQuant 3.12.1, 18 March 2026
 
-- Add pip installation.
+- Added pip installation.
 
 ## IsoQuant 3.12.0, 11 March 2026
 
-- Fix Python 3.14 compatibility.
+- Fixed Python 3.14 compatibility.
 
-- Add `--barcoded_bam` option for reading barcodes and UMIs directly from a input BAM.
+- Added `--barcoded_bam` option for reading barcodes and UMIs directly from a input BAM.
 
-- Add `--barcode2barcode` option for Visium HD data processing.
+- Added `--barcode2barcode` option for Visium HD data processing.
 
 - Dramatic speed-up for 10x and universal barcode calling on large whitelists.
 
@@ -22,9 +32,9 @@
 
 ## IsoQuant 3.11.1, 11 February 2026
 
-- Fix Python 3.8 compatibility.
+- Fixed Python 3.8 compatibility.
 
-- Fix MTX conversion.
+- Fixed MTX conversion.
 
 ## IsoQuant 3.11.0, 5 February 2026
 
@@ -111,13 +121,13 @@ Fixes [#284](https://github.com/ablab/IsoQuant/issues/284)
 
 ## IsoQuant 3.6.3, 13 January 2025
 
-- Fix penalty score for terminal exon elongation when selecting similar isoforms for inconsistent reads [#270](https://github.com/ablab/IsoQuant/issues/270).
+- Fixed penalty score for terminal exon elongation when selecting similar isoforms for inconsistent reads [#270](https://github.com/ablab/IsoQuant/issues/270).
 
-- Fix `transcript_model_grouped_counts` output format [#275](https://github.com/ablab/IsoQuant/issues/275).
+- Fixed `transcript_model_grouped_counts` output format [#275](https://github.com/ablab/IsoQuant/issues/275).
 
 ## IsoQuant 3.6.2, 15 November 2024
 
-- Fixes linear grouped counts output [#258](https://github.com/ablab/IsoQuant/issues/258).
+- Fixed linear grouped counts output [#258](https://github.com/ablab/IsoQuant/issues/258).
 
 ## IsoQuant 3.6.1, 25 September 2024
 
