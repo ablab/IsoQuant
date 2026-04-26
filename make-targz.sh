@@ -26,6 +26,8 @@ cp -r ./docs $TARGET_DIR/
 
 
 rm -fr $TARGET_DIR/isoquant_tests/short_reads_toy/
+rm -fr $TARGET_DIR/isoquant_tests/simple_data/
+rm -fr $TARGET_DIR/isoquant_tests/universal_data/
 
 cp isoquant.py $TARGET_DIR/
 cp isoquant_detect_barcodes.py $TARGET_DIR/

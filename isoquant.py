@@ -1147,7 +1147,7 @@ class TestMode(argparse.Action):
         if os.path.exists(self.out_dir):
             shutil.rmtree(self.out_dir)
         source_dir = os.path.dirname(os.path.realpath(__file__))
-        test_data_dir = os.path.join(source_dir, 'isoquant_tests', 'simple_data')
+        test_data_dir = os.path.join(source_dir, 'isoquant_lib', 'test_data')
         if not os.path.isdir(test_data_dir):
             # pip-installed: find test data via src package
             import isoquant_lib
