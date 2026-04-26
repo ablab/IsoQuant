@@ -1,25 +1,41 @@
-import re
-import pysam
-import gffutils
-from collections import defaultdict
-import mappy as mp
 import logging
+import re
+from collections import defaultdict
 from functools import lru_cache
-from intervaltree import IntervalTree
-from .genomic_interval_index import GenomicIntervalIndex
+from typing import Any, Optional
+
+import gffutils
+import pysam
+
+try:
+    import mappy as mp
+except ImportError:
+    mp = None
+
+try:
+    from intervaltree import IntervalTree
+except ImportError:
+    IntervalTree = None
+
 from .fusion_validator import FusionValidator
+from .genomic_interval_index import GenomicIntervalIndex
 
 logger = logging.getLogger('IsoQuant')
-Antisense_suffix = re.compile(r"-(AS\d+|DT|DIVERGENT|NAT)$", re.IGNORECASE)
+ANTISENSE_SUFFIX_RE = re.compile(r"-(AS\d+|DT|DIVERGENT|NAT)$", re.IGNORECASE)
 
 class FusionDetector:
-    def __init__(self, bam_path, gene_db_path, reference_fasta):
+    def __init__(self, bam_path: str, gene_db_path: str, reference_fasta: Optional[str]) -> None:
+        if mp is None:
+            raise ImportError(
+                "mappy is required for fusion detection. "
+                "Install with `pip install -r requirements_fusion.txt`."
+            )
         self.bam_path = bam_path
         self.genedb_path = gene_db_path
         self.db = gffutils.FeatureDB(gene_db_path, keep_order=True)
-        self.fusion_candidates = defaultdict(set)
+        self.fusion_candidates: dict[str, set[str]] = defaultdict(set)
         # store breakpoint counts per fusion key: {(chr1,pos1,chr2,pos2): count}
-        self.fusion_breakpoints = defaultdict(lambda: defaultdict(int))
+        self.fusion_breakpoints: dict[str, dict[tuple, int]] = defaultdict(lambda: defaultdict(int))
         # optional reference and aligner for soft-clip realignment
         self.reference_fasta = reference_fasta
         try:
@@ -127,8 +143,8 @@ class FusionDetector:
                 else:
                     return gene_name, "intronic"
             else:
-                # Not inside any gene; check if overlapping any exon 
-                return None, "exonic" if exons else "intergenic"
+                # Not inside any gene; check if overlapping any exon
+                return None, ("exonic" if exons else "intergenic")
         except Exception:
             return None, "unknown"
 
@@ -175,8 +191,8 @@ class FusionDetector:
             pass
         return name_or_id
 
-    def resolve_gene_name(self, name_or_id):
-        # Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible.
+    def resolve_gene_name(self, name_or_id: Optional[str]) -> Optional[str]:
+        """Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible."""
         if not name_or_id:
             return name_or_id
         # Quick cache hit
@@ -195,37 +211,17 @@ class FusionDetector:
         self._resolved_name_cache[name_or_id] = resolved
         return resolved
 
-    def has_antisense_suffix(self, gene_name):
-        # Check if gene name ends with antisense/regulatory suffixes (AS1, DT, etc.)
+    def has_antisense_suffix(self, gene_name: Optional[str]) -> bool:
+        """Return True if ``gene_name`` ends with an antisense/regulatory suffix (AS1, DT, etc.)."""
         if not gene_name or not isinstance(gene_name, str):
             return False
-        return Antisense_suffix.search(gene_name) is not None
+        return ANTISENSE_SUFFIX_RE.search(gene_name) is not None
 
-    def strip_antisense_suffix(self, gene_name):
-        # Remove antisense/regulatory suffix and return stripped name
+    def strip_antisense_suffix(self, gene_name: Optional[str]) -> Optional[str]:
+        """Strip antisense/regulatory suffix from a gene name and return the bare locus name."""
         if not gene_name or not isinstance(gene_name, str):
             return gene_name
-        return Antisense_suffix.sub('', gene_name)
-
-    def is_fusion_in_frame(self, gene_left, bp_left_chrom, bp_left_pos,
-                                gene_right, bp_right_chrom, bp_right_pos):
-        # 1. Get canonical transcripts
-        tx_left  = self.get_canonical_transcript(gene_left)
-        tx_right = self.get_canonical_transcript(gene_right)
-        cds_left  = self.get_cds_segments(tx_left)    # [(s,e),...]
-        cds_right = self.get_cds_segments(tx_right)
-        strand_left  = tx_left.strand
-        strand_right = tx_right.strand
-        # 2. Compute left coding length to breakpoint
-        left_len = self.compute_coding_length_to_breakpoint(
-            cds_left, bp_left_pos, strand_left
-        )
-        # 3. Compute right coding offset from breakpoint
-        right_off = self.compute_coding_offset_from_breakpoint(
-            cds_right, bp_right_pos, strand_right
-        )
-        # 4. in-frame?
-        return (left_len % 3) == (right_off % 3)
+        return ANTISENSE_SUFFIX_RE.sub('', gene_name)
 
     def _lookup_gene_by_name(self, gene_name, chrom, pos):
         # Lookup mode: find gene feature by name at genomic position.
@@ -280,9 +276,9 @@ class FusionDetector:
         except Exception:
             return False, None, None, 0, []
 
-    def _compute_gene_score(self, target, pos, chrom=None, exon_min_dist=None, 
-                            boundary_min_dist=None, exonic_hit=None, body_dist=None, 
-                            gstart=None, gend=None, fusion_partner_gene=None, 
+    def _compute_gene_score(self, target, pos, chrom=None, exon_min_dist=None,
+                            boundary_min_dist=None, exonic_hit=None, body_dist=None,
+                            gstart=None, gend=None, fusion_partner_gene=None,
                             fusion_partner_chrom=None, fusion_partner_pos=None):
         # Simplified gene scoring for long reads: assign gene if breakpoint is inside gene bounds.
         # Returns 1.0 if pos is inside gene, 0.0 if intergenic.
@@ -306,7 +302,8 @@ class FusionDetector:
             return 0.0  # Position is intergenic
 
     @staticmethod
-    def reverse_complement(seq):
+    def reverse_complement(seq: str) -> str:
+        """Return the reverse complement of a DNA sequence (ACGTN alphabet, case preserved on N)."""
         comp = str.maketrans("ACGTN", "TGCAN")
         return seq.translate(comp)[::-1]
 
@@ -386,7 +383,7 @@ class FusionDetector:
             gname or ""                              # 8) deterministic
         )
 
-    def _score_exonic_genes(self, exonic_genes, pos, chrom=None, fusion_partner_gene=None, 
+    def _score_exonic_genes(self, exonic_genes, pos, chrom=None, fusion_partner_gene=None,
                             fusion_partner_chrom=None, fusion_partner_pos=None):
         # Score multiple exonic genes and return the best one, or single exonic gene.
         # Returns (gene_name, score)
@@ -459,11 +456,14 @@ class FusionDetector:
                 best_score = score
         return best_gene, best_score if best_score is not None else 0.0
 
-    def assign_fusion_gene(self, chrom, pos, window=1000, fusion_partner_gene=None,
-                          fusion_partner_chrom=None, fusion_partner_pos=None):
-        # Assign the best gene at a genomic location using exonic priority and scoring.
-        # When fusion context is provided, incorporates in-frame and splice junction metrics.
-        # Returns (gene_name, score) or (None, 0.0) if no genes found
+    def assign_fusion_gene(self, chrom: str, pos: int, window: int = 1000,
+                            fusion_partner_gene: Optional[str] = None,
+                            fusion_partner_chrom: Optional[str] = None,
+                            fusion_partner_pos: Optional[int] = None) -> tuple[Optional[str], float]:
+        """Assign the best gene at a genomic location using exonic priority and scoring.
+
+        Returns ``(gene_name, score)`` or ``(None, 0.0)`` if no genes are found.
+        """
         genes = self._get_genes_at(chrom, pos, window)
         if not genes:
             return None, 0.0
@@ -548,8 +548,8 @@ class FusionDetector:
                 sa_used = True
         return sa_used
 
-    def detect_softclip(self, read, min_len=50):
-        # Detect a single large terminal soft-clip.
+    def detect_softclip(self, read, min_len: int = 50) -> tuple[Optional[str], int]:
+        """Detect a single large terminal soft-clip; returns ``(side, length)`` or ``(None, 0)``."""
         cigartuples = getattr(read, "cigartuples", None)
         if cigartuples:
             left_clip = (
@@ -581,14 +581,14 @@ class FusionDetector:
             return "right", right_len
         return None, 0
 
-    def aligned_len_from_cigartuples(self, cigartuples):
-        # count read-aligned operations: M (=0), = (=7), X (=8)
+    def aligned_len_from_cigartuples(self, cigartuples) -> int:
+        """Sum the read-aligned operations (M, =, X) from a list of CIGAR tuples."""
         if not cigartuples:
             return 0
         return sum(l for op, l in cigartuples if op in (0, 7, 8))
 
-    def aligned_len_from_cigarstring(self, cigar):
-        # Use cached parser to avoid re-running regex for identical CIGAR strings
+    def aligned_len_from_cigarstring(self, cigar: Optional[str]) -> int:
+        """Sum the read-aligned operations (M, =, X) from a CIGAR string."""
         return self._cached_aligned_len_from_cigarstring(cigar)
 
     @staticmethod
@@ -647,14 +647,17 @@ class FusionDetector:
         except Exception:
             return None
 
-    def _safe_gene_token(self, g):
-        # Convert None/empty to 'intergenic'
+    def _safe_gene_token(self, g) -> str:
+        """Convert ``None`` or empty/whitespace strings to ``'intergenic'``."""
         if not g or (isinstance(g, str) and not g.strip()):
             return "intergenic"
         return str(g)
 
-    def record_fusion(self, context1, context2, read_name, chrom1, pos1, chrom2, pos2,
-                      left_score=None, right_score=None):
+    def record_fusion(self, context1: Optional[str], context2: Optional[str],
+                       read_name: str, chrom1: str, pos1: int, chrom2: str, pos2: int,
+                       left_score: Optional[float] = None,
+                       right_score: Optional[float] = None) -> None:
+        """Record a fusion observation: register supporting read, breakpoint, and per-read scores."""
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
         left_gene = self.normalize_gene_label(context1)
@@ -678,8 +681,8 @@ class FusionDetector:
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
 
-    def normalize_gene_label(self, gene):
-        # Normalize any gene identifier to a canonical gene symbol string.
+    def normalize_gene_label(self, gene: Optional[str]) -> str:
+        """Normalize any gene identifier to a canonical gene symbol string (or ``intergenic``)."""
         if not gene:
             return "intergenic"
         # Resolve ENSG / IDs → symbol if possible
@@ -692,8 +695,8 @@ class FusionDetector:
             return "intergenic"
         return gene
 
-    def build_metadata(self, min_support=1):
-        # Apply early filtering to drop non-protein-coding fusions BEFORE breakpoint clustering
+    def build_metadata(self, min_support: int = 1) -> None:
+        """Apply early non-coding filtering, then run the FusionMetadata pipeline."""
         validator = FusionValidator(self)
         validator.filter_early_non_coding_genes()
 
@@ -706,11 +709,11 @@ class FusionDetector:
             # Fallback: if processing fails, keep original behavior minimal (no-op)
             return
 
-    def cluster_breakpoints(self, bp_counts, window):
+    def cluster_breakpoints(self, bp_counts: dict, window: int):
+        """Cluster breakpoint counts within ``window`` and return ``((c1,p1,c2,p2), total)`` or None."""
         if not bp_counts:
             return None
         # Group by chrom pair and collect strand information
-        from collections import defaultdict
         by_pair = defaultdict(list)
         # Handle format (c1, p1, c2, p2)
         for bp_tuple, w in bp_counts.items():
@@ -773,8 +776,9 @@ class FusionDetector:
         (p1, p2, total) = best
         return (c1, p1, c2, p2), total
 
-    def parse_sa_entries(self, sa_tag):
-        entries = []
+    def parse_sa_entries(self, sa_tag: Optional[str]) -> list[tuple]:
+        """Parse a BAM ``SA`` tag string into a list of ``(chrom, pos, strand, cigar, mapq, nm)`` tuples."""
+        entries: list[tuple] = []
         if not sa_tag:
             return entries
         for sa in sa_tag.split(";"):
@@ -799,9 +803,12 @@ class FusionDetector:
             entries.append((chrom, pos, strand, cigar, mapq, nm))
         return entries
 
-    def estimate_breakpoint(self, read, sa_pos, clip_side=None, sa_cigar=None):
+    def estimate_breakpoint(self, read, sa_pos: Optional[int],
+                             clip_side: Optional[str] = None,
+                             sa_cigar: Optional[str] = None) -> tuple:
+        """Estimate left/right fusion breakpoints from a read and its SA mate."""
         left_chr = read.reference_name
-        prim_start = self.safe_reference_start(read) 
+        prim_start = self.safe_reference_start(read)
         prim_end = (read.reference_end if read.reference_end is not None else None)
         if prim_end is not None:
             prim_end = int(prim_end)
@@ -859,84 +866,62 @@ class FusionDetector:
                              left_score=left_score, right_score=right_score)
 
     def detect_fusions(self,
-                    min_al_len_primary=50,
-                    min_al_len_sa=40,
-                    min_sa_mapq=10,
-                    min_softclip_len=30,
-                    jitter_window=50):
-        # Main fusion detection entry point. Processes all reads in BAM file.
+                       min_al_len_primary: int = 50,
+                       min_al_len_sa: int = 40,
+                       min_sa_mapq: int = 10,
+                       min_softclip_len: int = 30,
+                       jitter_window: int = 50) -> None:
+        """Main fusion detection entry point. Processes all reads in BAM file."""
         logger.info(f"Starting fusion detection on {self.bam_path}")
-        bam = pysam.AlignmentFile(self.bam_path, "rb")
-        processed_reads = 0
-        for read in bam:
-            processed_reads += 1
-            # Filter reads by quality and alignment length
-            passes, clip_side, clip_len = self._passes_read_filters(
-                read, min_al_len_primary, min_sa_mapq
-            )
-            if not passes:
-                continue
-            # Extract and filter SA entries
-            sa_entries = []
-            if read.has_tag("SA"):
-                sa_entries = self.parse_sa_entries(read.get_tag("SA"))
-            # Process SA entries to find fusions
-            sa_used = False
-            if sa_entries:
-                filtered = self._filter_sa_entries(
-                    sa_entries, min_al_len_sa, min_sa_mapq
+        with pysam.AlignmentFile(self.bam_path, "rb") as bam:
+            for read in bam:
+                passes, clip_side, clip_len = self._passes_read_filters(
+                    read, min_al_len_primary, min_sa_mapq
                 )
-                sa_used = self._process_sa_entries(
-                    read, filtered, clip_side, jitter_window, min_sa_mapq
-                )
-            if clip_side and clip_len >= min_softclip_len:
-                seen_pairs = set()  # Local scope for this read's softclip realignment
-                self.realign_softclip(
-                    read, clip_side, clip_len,
-                    seen_pairs,
-                    jitter_window=jitter_window,
-                    min_sa_mapq=min_sa_mapq
-                )
-        bam.close()
-        '''
-        logger.info(f"Fusion detection complete: processed {processed_reads} reads, found {len(self.fusion_candidates)} fusion keys")
-        logger.info(f"Fusion keys detected: {list(self.fusion_candidates.keys())}")
-        '''
+                if not passes:
+                    continue
+                sa_entries = []
+                if read.has_tag("SA"):
+                    sa_entries = self.parse_sa_entries(read.get_tag("SA"))
+                if sa_entries:
+                    filtered = self._filter_sa_entries(
+                        sa_entries, min_al_len_sa, min_sa_mapq
+                    )
+                    self._process_sa_entries(
+                        read, filtered, clip_side, jitter_window, min_sa_mapq
+                    )
+                if clip_side and clip_len >= min_softclip_len:
+                    seen_pairs: set = set()
+                    self.realign_softclip(
+                        read, clip_side, clip_len,
+                        seen_pairs,
+                        jitter_window=jitter_window,
+                        min_sa_mapq=min_sa_mapq
+                    )
 
     def reconstruct_fusion_transcript(self, c1, p1, c2, p2, exon_padding=100):
-        # Returns (sequence, left_exons, right_exons) or (None, None, None) on failure.
+        """Returns (sequence, left_exons, right_exons) or (None, None, None) on failure."""
         try:
-            # Get exons around left breakpoint (c1:p1)
             left_exons = list(self.db.region(region=(c1, max(1, p1 - exon_padding), p1 + exon_padding), featuretype='exon'))
             if not left_exons:
                 return None, None, None
             left_exons = sorted([(int(e.start), int(e.end)) for e in left_exons])
-            # Get exons around right breakpoint (c2:p2)
             right_exons = list(self.db.region(region=(c2, max(1, p2 - exon_padding), p2 + exon_padding), featuretype='exon'))
             if not right_exons:
                 return None, None, None
             right_exons = sorted([(int(e.start), int(e.end)) for e in right_exons])
-            # Extract sequences
             try:
                 ref = pysam.FastaFile(self.reference_fasta)
             except Exception:
                 return None, None, None
-            left_seq = ""
-            for s, e in left_exons:
-                seq = ref.fetch(c1, s - 1, e)
-                if seq:
-                    left_seq += seq
-            right_seq = ""
-            for s, e in right_exons:
-                seq = ref.fetch(c2, s - 1, e)
-                if seq:
-                    right_seq += seq
-            ref.close()
+            try:
+                left_seq = "".join(ref.fetch(c1, s - 1, e) or "" for s, e in left_exons)
+                right_seq = "".join(ref.fetch(c2, s - 1, e) or "" for s, e in right_exons)
+            finally:
+                ref.close()
             if not left_seq or not right_seq:
                 return None, None, None
-            # Construct fusion transcript: left portion + right portion
-            fusion_transcript = left_seq + right_seq
-            return fusion_transcript, left_exons, right_exons
+            return left_seq + right_seq, left_exons, right_exons
         except Exception as e:
             logger.debug(f"Failed to reconstruct fusion transcript at {c1}:{p1}--{c2}:{p2}: {str(e)}")
             return None, None, None
@@ -968,7 +953,7 @@ class FusionDetector:
                         match_len = None
                 if not match_len:
                     match_len = getattr(h, 'mlen', None) or getattr(h, 'alen', None) or 0
-                mapq = getattr(h, 'mapq', 0) or getattr(h, 'mapq', 0)
+                mapq = getattr(h, 'mapq', 0)
                 logger.debug(f"Raw hit: q_st={q_st} q_en={q_en} match_len={match_len} mapq={mapq} ctg={getattr(h,'ctg',None)} r_st={getattr(h,'r_st',None)} r_en={getattr(h,'r_en',None)}")
                 if match_len >= min_match_len and mapq >= min_mapq:
                     good_hits.append(h)
@@ -978,8 +963,10 @@ class FusionDetector:
             logger.debug(f"Failed to realign fusion transcript: {str(e)}")
             return []
 
-    def _is_mitochondrial_candidate(self, c1, c2, left_gene, right_gene):
-        # Return True if either side appears mitochondrial by chromosome or gene name.
+    def _is_mitochondrial_candidate(self, c1: str, c2: str,
+                                     left_gene: Optional[str],
+                                     right_gene: Optional[str]) -> bool:
+        """Return True if either side of a fusion candidate appears mitochondrial."""
         mito_chrs = {"chrM", "MT", "M", "chrMT", "mitochondrion"}
         if (c1 in mito_chrs) or (c2 in mito_chrs):
             return True
@@ -995,7 +982,7 @@ class FusionDetector:
 
     def _apply_classification_and_filters(self, meta, flags, c1, p1, c2, p2,
                                           g1_name, r1, g2_name, r2,
-                                          require_gene_names, 
+                                          require_gene_names,
                                           max_intra_chr_distance):
         # classify
         if g1_name and g2_name:
@@ -1069,12 +1056,12 @@ class FusionDetector:
         except Exception:
             return None
 
-    def canonical_locus_name(self, gene_name):
-        # Collapse antisense / divergent transcript names to the canonical locus name.
+    def canonical_locus_name(self, gene_name: Optional[str]) -> Optional[str]:
+        """Collapse antisense/divergent transcript names to the canonical locus name."""
         if not gene_name:
             return gene_name
         # Strip common antisense / divergent suffixes
-        collapsed = Antisense_suffix.sub("", gene_name)
+        collapsed = ANTISENSE_SUFFIX_RE.sub("", gene_name)
         return collapsed
 
     def _build_symbol_biotype_index(self):
@@ -1148,17 +1135,19 @@ class FusionDetector:
         logger.debug(f"Could not find biotype for {gene_symbol} (chrom={chrom}, pos={pos}, cache_size={len(self._symbol_biotype_cache)})")
         return None
 
-    def get_gene_biotype(self, gene_name, chrom=None, pos=None):
-        # Retrieve the biotype (gene_type or gene_biotype) for a given gene name.
-        # If gene_name is an HGNC symbol (not found as direct key), uses coordinates to match.
-        # Returns biotype string or None if not found.
+    def get_gene_biotype(self, gene_name: Optional[str],
+                          chrom: Optional[str] = None,
+                          pos: Optional[int] = None) -> Optional[str]:
+        """Retrieve the biotype for a gene name, optionally disambiguating by ``(chrom, pos)``."""
         if not gene_name:
             return None
         gene_name = self.normalize_gene_label(gene_name)
         return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
 
-    def get_gene_strand(self, gene_name, chrom=None, pos=None):
-        # Retrieve the strand (+/-) for a given gene name.
+    def get_gene_strand(self, gene_name: Optional[str],
+                         chrom: Optional[str] = None,
+                         pos: Optional[int] = None) -> Optional[str]:
+        """Retrieve the strand (``+``/``-``) for a given gene name."""
         if not gene_name:
             return None
         try:
@@ -1189,9 +1178,13 @@ class FusionDetector:
             pass
         return None
 
-    def validate_candidates(self, min_support=2, window=25, require_gene_names=True,
-                        require_mapq=10, allow_cis_sage=True, require_exon_boundary=True,
-                        max_intra_chr_distance=None):
+    def validate_candidates(self, min_support: int = 2, window: int = 25,
+                             require_gene_names: bool = True,
+                             require_mapq: int = 10,
+                             allow_cis_sage: bool = True,
+                             require_exon_boundary: bool = True,
+                             max_intra_chr_distance: Optional[int] = None) -> None:
+        """Run the validation pipeline: gating, classification, reconstruction, and scoring."""
         self.build_metadata(min_support=min_support)
         self.fusion_assigned_pairs.clear()
         self.fusion_read_scores.clear()
@@ -1203,7 +1196,7 @@ class FusionDetector:
         validator.apply_frequency_filters()
         for fusion_key, meta in self.fusion_metadata.items():
             # Check if already marked invalid by frequency filter
-            if meta.get("is_valid") == False:
+            if meta.get("is_valid", True) is False:
                 # Keep existing reasons, skip to next
                 continue
             support = meta.get("support", 0)
@@ -1227,8 +1220,8 @@ class FusionDetector:
             g2_name, r2 = self._context_query(c2, p2)
             self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
                                                    g1_name, r1, g2_name, r2,
-                                                   require_gene_names, max_intra_chr_distance) 
-                # skip reconstruction for mitochondrial candidates and invalid ones
+                                                   require_gene_names, max_intra_chr_distance)
+            # skip reconstruction for mitochondrial candidates and invalid ones
             if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
                 self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)
             else:
@@ -1250,9 +1243,12 @@ class FusionDetector:
                 flags["reasons"].append("Low confidence")
             meta.update(flags)
 
-    def report(self, output_path="fusion_candidates.tsv", min_support=2,
-                include_classes=("canonical","cis-SAGe"),
-                min_confidence=0.3, only_valid=False):
+    def report(self, output_path: str = "fusion_candidates.tsv",
+                min_support: int = 2,
+                include_classes: tuple = ("canonical", "cis-SAGe"),
+                min_confidence: float = 0.3,
+                only_valid: bool = False) -> None:
+            """Validate candidates and write the fusion report TSV."""
             self.validate_candidates(min_support=min_support)
             # Merge only fully identical fusions (exact duplicates)
             validator = FusionValidator(self)

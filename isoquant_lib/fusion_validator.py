@@ -1,12 +1,13 @@
 import logging
 from collections import defaultdict
+from typing import Optional
 
 logger = logging.getLogger('IsoQuant')
-import re
+
 
 class FusionValidator:
 
-    def __init__(self, detector):
+    def __init__(self, detector) -> None:
         self.detector = detector
 
     def _get_breakpoint_coords(self, fusion_key):
@@ -20,9 +21,8 @@ class FusionValidator:
                 logger.debug(f"Got breakpoint for {fusion_key}: {left_chr}:{left_pos} - {right_chr}:{right_pos}")
         return left_chr, left_pos, right_chr, right_pos
 
-    def _is_allowed_biotype(self, biotype):
-        # Check if a biotype is allowed for fusion detection.
-        # Includes protein-coding genes and immune receptor genes (IG and TR).
+    def _is_allowed_biotype(self, biotype: Optional[str]) -> bool:
+        """Return True if ``biotype`` is in the fusion-allowed whitelist (protein-coding, IG, TR)."""
         allowed_biotypes = {
             "protein_coding",
             "IG_C_gene",
@@ -53,9 +53,8 @@ class FusionValidator:
             reason = f"{right_gene}={right_biotype}"
         return left_gene, left_biotype, right_gene, right_biotype, has_non_coding, reason
 
-    def filter_early_non_coding_genes(self):
-        # Drop fusions with non-protein-coding genes at the early read-assignment stage.
-        # This is before final gene assignment and allows salvaging via context analysis.
+    def filter_early_non_coding_genes(self) -> None:
+        """Drop fusions with non-protein-coding partners at the early read-assignment stage."""
         fusions_to_discard = set()
         logger.info(f"filter_early_non_coding_genes: Processing {len(self.detector.fusion_assigned_pairs)} fusion keys")
         for fusion_key, read_assignments in self.detector.fusion_assigned_pairs.items():
@@ -101,8 +100,8 @@ class FusionValidator:
             if fusion_key in self.detector.fusion_assigned_pairs:
                 del self.detector.fusion_assigned_pairs[fusion_key]
 
-    def filter_non_coding_genes(self):
-        # Removes fusions with partners not in the allowed biotype whitelist from all data structures.
+    def filter_non_coding_genes(self) -> None:
+        """Remove fusions whose partners are not in the allowed biotype whitelist."""
         fusions_to_discard = []
         for fusion_key, meta in list(self.detector.fusion_metadata.items()):
             left_gene = meta.get("left_gene")
@@ -129,21 +128,20 @@ class FusionValidator:
         # Remove all discarded fusions from data structures
         self._remove_discarded_fusions_internal(fusions_to_discard)
 
-    def filter_multicopy_artifact_pairs(self):
-        # Filter out fusions where both partners belong to multicopy artifact families.
-        # These are biologically non-relevant fusions like TRAJ17-TRAV1-2, ZNF124-ZNF670, H2AC13-H2BC13.
+    def filter_multicopy_artifact_pairs(self) -> None:
+        """Mark fusions invalid when both partners belong to multicopy artifact families."""
         if not self.detector.fusion_metadata:
             return
         for fusion_key, meta in self.detector.fusion_metadata.items():
-            if meta.get("is_valid") == False:
+            if meta.get("is_valid", True) is False:
                 continue
             left_gene = meta.get("left_gene")
             right_gene = meta.get("right_gene")
             # Check if both genes belong to multicopy artifact families
-            if (left_gene and right_gene and 
-                self.is_multicopy_artifact_family(left_gene) and 
-                self.is_multicopy_artifact_family(right_gene)) or (left_gene and right_gene and 
-                self._is_ribosomal_or_histone_gene(left_gene) and 
+            if (left_gene and right_gene and
+                self.is_multicopy_artifact_family(left_gene) and
+                self.is_multicopy_artifact_family(right_gene)) or (left_gene and right_gene and
+                self._is_ribosomal_or_histone_gene(left_gene) and
                 self._is_ribosomal_or_histone_gene(right_gene)):
                 meta["is_valid"] = False
                 if "reasons" not in meta:
@@ -153,8 +151,8 @@ class FusionValidator:
                 )
                 logger.info(f"Filtering multicopy artifact pair fusion: {fusion_key} ({left_gene} - {right_gene})")
 
-    def apply_frequency_filters(self):
-        # Filter out multicopy artifacts based on gene frequency within the sample.
+    def apply_frequency_filters(self) -> None:
+        """Mark fusions invalid when a partner gene exceeds frequency thresholds within the sample."""
         if not self.detector.fusion_metadata:
             return
         # Count gene frequencies across all fusions
@@ -169,7 +167,7 @@ class FusionValidator:
                 right_gene_count[right_gene] += 1
         # Mark fusions with high-frequency genes as artifacts
         for fusion_key, meta in self.detector.fusion_metadata.items():
-            if meta.get("is_valid") == False:
+            if meta.get("is_valid", True) is False:
                 continue
             left_gene = meta.get("left_gene")
             right_gene = meta.get("right_gene")
@@ -202,15 +200,16 @@ class FusionValidator:
                     meta["reasons"] = []
                 meta["reasons"].extend(artifact_reasons)
 
-    def _is_ribosomal_or_histone_gene(self, gene_name):
-        # Check if a gene is ribosomal or histone-related based on name patterns.
+    def _is_ribosomal_or_histone_gene(self, gene_name: Optional[str]) -> bool:
+        """Return True if ``gene_name`` matches a ribosomal or histone name pattern."""
         if not gene_name or not isinstance(gene_name, str):
             return False
         gene_upper = gene_name.upper()
         rib_hist_patterns = ('RPL', 'RPS', 'RPLP', 'HIST', 'H1', 'H2A', 'H2B', 'H3', 'H4')
         return any(gene_upper.startswith(p) for p in rib_hist_patterns)
 
-    def is_driver_gene(self, gene):
+    def is_driver_gene(self, gene: Optional[str]) -> bool:
+        """Return True if ``gene`` is in the curated driver-gene whitelist."""
         driver_genes = {
             "BCR", "ABL1", "RUNX1", "RUNX1T1", "PML", "RARA", "ETV6",
             "NUP98", "NUP214", "KMT2A", "MLLT3", "EWSR1", "ERG",
@@ -219,8 +218,8 @@ class FusionValidator:
         }
         return gene in driver_genes
 
-    def is_multicopy_artifact_family(self, gene):
-        # Check if a gene belongs to a multicopy artifact family (ribosomal, histone, etc.)
+    def is_multicopy_artifact_family(self, gene: str) -> bool:
+        """Return True if ``gene`` belongs to a multicopy artifact family (ribosomal, histone, IG, etc.)."""
         prefixes = ("RPL", "RPS", "MRPL", "MRPS", "H1-", "H2A", "H2B", "H3-", "H4-",
                     "HIST1", "HIST2", "HIST3", "HLA-", "MICA", "MICB", "KRT", "KRT",
                     "OR", "ZNF", "DEFA", "DEFB", "IGH", "IGK", "IGL", "TRAV", "TRBV", "TRGV", "TRDV",
@@ -228,8 +227,8 @@ class FusionValidator:
         g = gene.upper()
         return g.startswith(prefixes)
 
-    def confidence(self, meta, flags=None):
-        # Compute full confidence score including reconstruction/realignment bonuses.
+    def confidence(self, meta: dict, flags: Optional[dict] = None) -> float:
+        """Compute the final confidence score from support, reconstruction, realignment, and priors."""
         # Start from clustered support normalized
         support = min(meta.get("support", 0), 10) / 10.0
         # Reconstruction bonus
