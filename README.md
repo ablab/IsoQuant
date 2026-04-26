@@ -1,10 +1,137 @@
+[![BioConda Install](https://img.shields.io/conda/dn/bioconda/isoquant.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/isoquant)
+[![PyPI Downloads](https://img.shields.io/pypi/v/isoquant)](https://pypi.org/project/isoquant/)
+[![Python version](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/licence-GPLv2-blue)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/ablab/IsoQuant)](https://github.com/ablab/IsoQuant/releases/)
+[![GitHub Downloads](https://img.shields.io/github/downloads/ablab/IsoQuant/total.svg?style=social&logo=github&label=Download)](https://github.com/ablab/IsoQuant/releases)
+[![UnitTests](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml/badge.svg)](https://github.com/ablab/IsoQuant/actions/workflows/Unit_tests.yml)
+[![User manual](https://github.com/ablab/IsoQuant/actions/workflows/docs.yml/badge.svg)](https://ablab.github.io/IsoQuant/)
 
-[Full IsoQuant documentation can found here](https://ablab.github.io/IsoQuant/).
 
-This is a feature branch developed for complementing IsoQuant with fusion transcript detection.
-It is a separate pipeline triggered by `--fusion` flag in the IsoQuant input. Example command:
-```
-python3 isoquant.py -d nanopore --fusion --fastq ~/Thesis/real_data/SRR12048357_Ont.fastq \
- --genedb ~/Thesis/refs/gencode.v49.chr_patch_hapl_scaff.annotation.db \
- --reference ~/Thesis/refs/GRCh38.primary_assembly.genome.fa --output ~/Thesis/Isoquant/AML
-```
+<img src="https://raw.githubusercontent.com/ablab/IsoQuant/master/docs/isoquant_logo.png" width="300" alt="IsoQuant">
+
+[Full IsoQuant documentation can be found here](https://ablab.github.io/IsoQuant/).
+Information in this README is given only for convenience and is not a full user manual.
+
+Current version: see `VERSION` file.
+
+* [Citation information](#citation)
+* [Feedback and bug reports](#feedback-and-bug-reports)
+* [Quick start examples](#quick-start)
+
+
+## About IsoQuant
+
+IsoQuant is a tool for the genome-based analysis of long RNA reads, such as PacBio or
+Oxford Nanopores. IsoQuant allows reconstructing and quantifying transcript models with
+high precision and decent recall. If the reference annotation is given, IsoQuant also
+assigns reads to the annotated isoforms based on their intron and exon structure.
+IsoQuant further performs annotated gene, isoform, exon, and intron quantification.
+If reads are grouped (e.g. according to a cell type), counts are reported according to the provided grouping.
+
+The latest IsoQuant version can be downloaded from [github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
+
+Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
+
+## Supported sequencing data
+
+IsoQuant supports all kinds of long RNA data:
+* PacBio CCS
+* ONT dRNA / ONT cDNA
+* Assembled / corrected transcript sequences
+
+Reads must be provided in FASTQ/FASTA format (can be gzipped) or unmapped BAM format. 
+If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
+IsoQuant expect reads to contain polyA tails. For more reliable transcript model construction do not trim polyA tails.
+
+IsoQuant can also take aligned Illumina reads to correct long-read spliced alignments. However, short reads are _not_
+used to discover transcript models or compute abundances.
+
+
+## Supported reference data
+
+Reference genome is mandatory and should be provided in multi-FASTA format (can be gzipped).
+
+Reference gene annotation is not mandatory but is likely to increase precision and recall.
+It can be provided in GFF/GTF format (can be gzipped).
+
+Pre-constructed `minimap2` index can also be provided to reduce mapping time.
+
+
+## Citation
+The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
+
+To try IsoQuant, you can use the data that was used in the publication [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
+
+
+## Feedback and bug reports
+Your comments, bug reports, and suggestions are very welcome. They will help us to further improve IsoQuant. If you have any troubles running IsoQuant, please send us `isoquant.log` from the `<output_dir>` directory.
+
+You can leave your comments and bug reports at our [GitHub repository tracker](https://github.com/ablab/IsoQuant/issues) or send them via email: isoquant.rna@gmail.com.
+
+
+
+## Quick start
+
+*   Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
+
+*   IsoQuant can installed via pip:
+
+        pip install isoquant
+
+*   Via conda (bioconda channel):
+
+        conda create -c conda-forge -c bioconda -n isoquant python=3.12 isoquant
+
+*   Or from GitHub:
+
+        git clone https://github.com/ablab/IsoQuant.git 
+        cd IsoQuant
+        git checkout latest
+        pip install -e .
+
+Installation typically takes no more than a few minutes.
+
+*   If running simply from [the source archive](https://github.com/ablab/IsoQuant/releases/), 
+you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [biopython](https://biopython.org/), [pyfaidx](https://pypi.org/project/pyfaidx/),
+ [ssw-py](https://pypi.org/project/ssw-py/), [editdistance](https://pypi.org/project/editdistance/) and some other common Python libraries to be installed. See `requirements.txt` for details. 
+You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
+All required Python libraries can be installed via: 
+
+        pip install -r requirements.txt
+
+*   Verify your installation by running (typically takes less than 1 minute):
+
+        isoquant --test
+
+*   To run IsoQuant on raw FASTQ/FASTA files, use the following command
+
+        isoquant --reference /PATH/TO/reference_genome.fasta \
+        --genedb /PATH/TO/gene_annotation.gtf \
+        --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz \
+        --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
+
+    For example, using the toy data provided within this repository,
+
+        isoquant --fastq /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.ont.sim.fq.gz \
+        --reference /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.fa.gz \
+        --genedb /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.gtf.gz \
+        --data_type nanopore --complete_genedb -p TEST_DATA --output isoquant_test 
+
+
+* To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
+
+        isoquant --reference /PATH/TO/reference_genome.fasta \
+        --genedb /PATH/TO/gene_annotation.gtf \
+        --bam /PATH/TO/sample1.sorted.bam /PATH/TO/sample2.sorted.bam \
+        --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
+
+* If using official annotations containing `gene` and `transcript` features use `--complete_genedb` to save time.
+
+* Using reference annotation is optional since version 3.0, you may preform de novo transcript discovery without providing `--genedb` option':
+
+        isoquant --reference /PATH/TO/reference_genome.fasta \
+        --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz \
+        --data_type (assembly|pacbio|nanopore) -o OUTPUT_FOLDER
+
+* If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
