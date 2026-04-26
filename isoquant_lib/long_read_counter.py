@@ -209,6 +209,7 @@ class CompositeCounter:
     def add_read_info(self, read_assignment):
         for p in self.counters:
             p.add_read_info(read_assignment)
+
     def add_read_info_raw(self, read_id, feature_ids, group_ids):
         for p in self.counters:
             p.add_read_info_raw(read_id, feature_ids, group_ids)
