@@ -52,8 +52,10 @@ def test_clean_start():
     # Note: corrected_reads.bed.gz and transcript_model_reads.tsv.gz are only generated
     # with --large_output corrected_bed read2transcripts (not in default)
     resulting_files = ["exon_counts.tsv", "exon_grouped_file0_col1_counts.linear.tsv",
+                       "exon_grouped_file0_col1_counts.tsv",
                        "gene_counts.tsv", "gene_grouped_file0_col1_counts.tsv",
                        "intron_counts.tsv", "intron_grouped_file0_col1_counts.linear.tsv",
+                       "intron_grouped_file0_col1_counts.tsv",
                        "read_assignments.tsv.gz",
                        "novel_vs_known.SQANTI-like.tsv",
                        "transcript_counts.tsv", "transcript_grouped_file0_col1_counts.tsv",

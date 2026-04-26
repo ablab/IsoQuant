@@ -14,7 +14,10 @@ from .isoform_assignment import (
 )
 from .gene_info import FeatureInfo
 from .read_groups import AbstractReadGrouper
-from .convert_grouped_counts import GROUP_COUNT_CUTOFF, convert_to_mtx, convert_to_matrix
+from .convert_grouped_counts import (
+    GROUP_COUNT_CUTOFF, convert_to_mtx, convert_to_matrix,
+    convert_profile_to_matrix, convert_profile_to_mtx,
+)
 from .file_naming import (
     counts_prefix, tpm_prefix, counts_file_name, tpm_file_name,
     counts_stats_file_name, counts_usable_file_name
@@ -596,8 +599,34 @@ class ProfileFeatureCounter(AbstractCounter):
                     if incl_count > 0 or excl_count > 0:
                         f.write("%s\t%s\t%d\t%d\n" % (feature_name, group_name, incl_count, excl_count))
 
+    def _feature_type(self) -> str:
+        return "feature"
+
     def finalize(self, args=None):
-        pass
+        if not args or self.ignore_read_groups:
+            return
+        counts_format = {GroupedOutputFormat[f] for f in args.counts_format}
+        explicit_matrix = GroupedOutputFormat.matrix in counts_format
+        default_format = GroupedOutputFormat.default in counts_format
+        num_groups = (len(self.string_pools.get_read_group_pool(self.group_index))
+                      if self.string_pools is not None else 1)
+        actual_num_groups = num_groups
+        if explicit_matrix or default_format:
+            max_groups = GROUP_COUNT_CUTOFF if default_format and not explicit_matrix else 0
+            pool_reliable = self.string_pools is not None
+            if pool_reliable and max_groups > 0 and num_groups > max_groups:
+                logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
+                            "Use '--counts_format matrix' to force conversion." %
+                            (num_groups, max_groups))
+            else:
+                actual_num_groups = convert_profile_to_matrix(
+                    self.output_file, self.output_counts_prefix,
+                    feature_type=self._feature_type(),
+                    max_groups=max_groups) or num_groups
+
+        if (GroupedOutputFormat.mtx in counts_format or
+                (default_format and actual_num_groups > GROUP_COUNT_CUTOFF)):
+            convert_profile_to_mtx(self.output_file, self.output_counts_prefix)
 
     @staticmethod
     def is_valid(assignment):
@@ -614,6 +643,9 @@ class ProfileFeatureCounter(AbstractCounter):
 class ExonCounter(ProfileFeatureCounter):
     def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
         ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+
+    def _feature_type(self) -> str:
+        return "exon"
 
     def add_read_info(self, read_assignment):
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
@@ -632,6 +664,9 @@ class ExonCounter(ProfileFeatureCounter):
 class IntronCounter(ProfileFeatureCounter):
     def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
         ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+
+    def _feature_type(self) -> str:
+        return "intron"
 
     def add_read_info(self, read_assignment):
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):

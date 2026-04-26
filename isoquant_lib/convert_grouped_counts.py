@@ -9,7 +9,7 @@
 import sys
 import os
 import argparse
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from traceback import print_exc
 import pandas
 import logging
@@ -18,11 +18,17 @@ import gffutils
 
 try:
     from .error_codes import IsoQuantExitCode
-    from .file_naming import mtx_matrix_file, mtx_features_file, mtx_barcodes_file
+    from .file_naming import (
+        mtx_matrix_file, mtx_features_file, mtx_barcodes_file,
+        mtx_include_matrix_file, mtx_exclude_matrix_file,
+    )
 except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from error_codes import IsoQuantExitCode
-    from file_naming import mtx_matrix_file, mtx_features_file, mtx_barcodes_file
+    from file_naming import (
+        mtx_matrix_file, mtx_features_file, mtx_barcodes_file,
+        mtx_include_matrix_file, mtx_exclude_matrix_file,
+    )
 
 
 GROUP_COUNT_CUTOFF = 100
@@ -147,6 +153,143 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
     logger.info("Matrix was saved to 3 files with prefix %s" % output_file_prefix)
 
 
+PROFILE_LINEAR_COLS = ['chr', 'start', 'end', 'strand', 'flags',
+                       'gene_ids', 'group_id', 'include_counts', 'exclude_counts']
+
+
+def _load_profile_linear(input_linear_counts: str):
+    """Load 9-column exon/intron linear counts file into a DataFrame.
+
+    Adds a synthetic ``feature_id`` column as ``chr:start-end:strand``.
+    The ``flags`` (exon/intron type) column is preserved on the DataFrame
+    but ignored by downstream matrix conversion.
+    """
+    cols = len(open(input_linear_counts).readline().strip().split('\t'))
+    if cols != 9:
+        logger.error("Unexpected number of columns in %s: %d (expected 9)" %
+                     (input_linear_counts, cols))
+        return None
+    df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1,
+                         keep_default_na=False, names=PROFILE_LINEAR_COLS,
+                         dtype={'chr': str, 'start': int, 'end': int, 'strand': str,
+                                'flags': str, 'gene_ids': str, 'group_id': str,
+                                'include_counts': float, 'exclude_counts': float})
+    df['feature_id'] = (df['chr'] + ':' + df['start'].astype(str) + '-' +
+                        df['end'].astype(str) + ':' + df['strand'])
+    return df
+
+
+def _ordered_unique_features(df) -> tuple:
+    """Return ordered unique feature_ids and a feature_id -> gene_ids map.
+
+    Order matches first appearance in the input so the features file is
+    deterministic across MTX files sharing it.
+    """
+    seen = OrderedDict()
+    for feature_id, gene_ids in zip(df['feature_id'], df['gene_ids']):
+        if feature_id not in seen:
+            seen[feature_id] = gene_ids
+    return list(seen.keys()), seen
+
+
+def convert_profile_to_matrix(input_linear_counts: str, output_file_path: str,
+                              gzipped: bool = False, feature_type: str = 'exon',
+                              max_groups: int = 0) -> int:
+    """Convert exon/intron linear counts to a single matrix TSV.
+
+    Each cell contains ``include,exclude`` (comma-separated). Missing
+    feature/group combinations become ``0,0``.
+
+    Returns the number of groups in the input file, or 0 on error.
+    """
+    logger.info("Converting %s to full matrix" % input_linear_counts)
+    df = _load_profile_linear(input_linear_counts)
+    if df is None:
+        return 0
+
+    if max_groups > 0:
+        num_groups = df['group_id'].nunique()
+        if num_groups > max_groups:
+            logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
+                        "Use '--counts_format matrix' to force conversion." %
+                        (num_groups, max_groups))
+            return num_groups
+
+    incl = df.pivot_table(index='feature_id', columns='group_id',
+                          values='include_counts', aggfunc='sum', fill_value=0)
+    excl = df.pivot_table(index='feature_id', columns='group_id',
+                          values='exclude_counts', aggfunc='sum', fill_value=0)
+
+    feature_order, _ = _ordered_unique_features(df)
+    columns = sorted(set(incl.columns).union(excl.columns))
+    incl = incl.reindex(index=feature_order, columns=columns, fill_value=0)
+    excl = excl.reindex(index=feature_order, columns=columns, fill_value=0)
+    num_groups = len(columns)
+
+    output_file = output_file_path + ".tsv" + (".gz" if gzipped else "")
+    if num_groups > GROUP_COUNT_CUTOFF:
+        logger.warning("You have %d groups in your matrix, conversion might take a lot of time "
+                       "and the output file can be very large" % num_groups)
+
+    with gzip.open(output_file, 'wt') if gzipped else open(output_file, 'w') as outfile:
+        outfile.write(feature_type + '_id\t' + '\t'.join(columns) + '\n')
+        for feature_id in feature_order:
+            incl_row = incl.loc[feature_id]
+            excl_row = excl.loc[feature_id]
+            cells = ["%d,%d" % (int(incl_row[c]), int(excl_row[c])) for c in columns]
+            outfile.write(feature_id + '\t' + '\t'.join(cells) + '\n')
+    logger.info("Matrix was saved to %s" % output_file)
+    return num_groups
+
+
+def convert_profile_to_mtx(input_linear_counts: str, output_file_prefix: str,
+                           gzipped: bool = False) -> None:
+    """Convert exon/intron linear counts to MTX format.
+
+    Writes a shared features file and barcodes file plus two matrices
+    (one for include_counts, one for exclude_counts).
+    """
+    logger.info("Converting %s to MTX format" % input_linear_counts)
+    df = _load_profile_linear(input_linear_counts)
+    if df is None:
+        return
+
+    feature_order, feature_to_gene = _ordered_unique_features(df)
+    unique_groups = list(sorted(df['group_id'].unique()))
+    feature_index_map = {feature_id: idx + 1 for idx, feature_id in enumerate(feature_order)}
+    group_index_map = {group_id: idx + 1 for idx, group_id in enumerate(unique_groups)}
+
+    features_file = mtx_features_file(output_file_prefix)
+    barcodes_file = mtx_barcodes_file(output_file_prefix)
+    include_file = mtx_include_matrix_file(output_file_prefix)
+    exclude_file = mtx_exclude_matrix_file(output_file_prefix)
+
+    with open(barcodes_file, 'w') as bc_out:
+        for group in unique_groups:
+            bc_out.write(f"{group}\n")
+
+    with open(features_file, 'w') as ft_out:
+        for feature_id in feature_order:
+            ft_out.write(f"{feature_id}\t{feature_to_gene.get(feature_id, '')}\n")
+
+    incl_nonzero = df[df['include_counts'] != 0]
+    excl_nonzero = df[df['exclude_counts'] != 0]
+
+    def _write_mtx(path, frame, value_col):
+        with gzip.open(path + ".gz", 'wt') if gzipped else open(path, 'w') as out:
+            out.write("%%MatrixMarket matrix coordinate real general\n")
+            out.write(f"{len(feature_order)} {len(unique_groups)} {frame.shape[0]}\n")
+            for _, row in frame.iterrows():
+                out.write(f"{feature_index_map[row['feature_id']]} "
+                          f"{group_index_map[row['group_id']]} "
+                          f"{int(row[value_col])}\n")
+
+    _write_mtx(include_file, incl_nonzero, 'include_counts')
+    _write_mtx(exclude_file, excl_nonzero, 'exclude_counts')
+    logger.info("MTX output saved with prefix %s (include + exclude matrices)" %
+                output_file_prefix)
+
+
 def get_normalization_factors(counts, usable_reads_per_group=None):
     if not usable_reads_per_group:
         total_group_counts = defaultdict(float)
@@ -198,9 +341,10 @@ def parse_args():
     parser.add_argument("--genedb", "-g", type=str, help="gene annotation in .db format "
                                                          "(can be found in IsoQuant output folder), "
                                                          "feature names will be used instead of IDs if provided")
-    parser.add_argument("--feature_type", help="feature types to be converted [gene, transcript]; "
-                                               "has no effect if the annotation is not provided",
-                        default="gene", choices=['gene', 'transcript'])
+    parser.add_argument("--feature_type", help="feature type to be converted "
+                                               "[gene, transcript, exon, intron]; "
+                                               "annotation lookup applies only to gene/transcript",
+                        default="gene", choices=['gene', 'transcript', 'exon', 'intron'])
     parser.add_argument("--output_format", "-f", type=str, choices=["mtx", "matrix"],
                         help="output format [mtx, matrix]", required=True)
     parser.add_argument("--tpm", help="convert counts to TPM", dest="convert_to_tpm",
@@ -216,8 +360,10 @@ def main():
     args = parse_args()
     set_logger(logger)
 
+    is_profile_feature = args.feature_type in ('exon', 'intron')
+
     feature_name_dict = None
-    if args.genedb:
+    if args.genedb and not is_profile_feature:
         gene_names, transcript_names, transcript2gene = load_gene_name_map(args.genedb)
         if args.feature_type == 'gene':
             feature_name_dict = gene_names
@@ -227,9 +373,19 @@ def main():
                 for t in sorted(transcript2gene.keys()):
                     gene_info = transcript2gene[t]
                     out_mapf.write("%s\t%s\t%s\n" % (t, gene_info[0], gene_info[1]))
+
+    if is_profile_feature:
+        if args.convert_to_tpm:
+            logger.warning("--tpm is ignored for exon/intron conversion")
+        if args.output_format == "mtx":
+            convert_profile_to_mtx(args.input, args.output, gzipped=args.gzipped)
+        elif args.output_format == "matrix":
+            convert_profile_to_matrix(args.input, args.output, gzipped=args.gzipped,
+                                      feature_type=args.feature_type)
         else:
-            logger.error("Unknown feature %s" % args.feature_type)
+            logger.error("Unknown format %s" % args.output_format)
             sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+        return
 
     if args.output_format == "mtx":
         convert_to_mtx(args.input, args.output, feature_name_dict, gzipped=args.gzipped,

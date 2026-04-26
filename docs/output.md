@@ -34,8 +34,8 @@ If `--read_group` is set or multiple files are provided, the per-group expressio
 #### Default grouped counts in linear format
 * `SAMPLE_ID.gene_grouped_counts.linear.tsv`
 * `SAMPLE_ID.transcript_grouped_counts.linear.tsv`
-* `SAMPLE_ID.exon_grouped_counts.tsv`
-* `SAMPLE_ID.intron_grouped_counts.tsv`
+* `SAMPLE_ID.exon_grouped_counts.linear.tsv`
+* `SAMPLE_ID.intron_grouped_counts.linear.tsv`
 
 Note, that grouped counts can be converted to any format using `isoquant_lib/convert_grouped_counts.py`.
 
@@ -48,11 +48,15 @@ See [options](cmd.md#specific-output-options) for details.
 * `SAMPLE_ID.transcript_grouped_counts.tsv` - grouped transcript counts in standard matrix format;
 * `SAMPLE_ID.gene_grouped_tpm.tsv` - grouped gene TPM values in standard matrix format;
 * `SAMPLE_ID.transcript_grouped_tpm.tsv` - grouped TPM values counts in standard matrix format;
+* `SAMPLE_ID.exon_grouped_counts.tsv` - grouped exon counts in standard matrix format; row IDs are `chr:start-end:strand`, each cell holds `include,exclude` (comma-separated);
+* `SAMPLE_ID.intron_grouped_counts.tsv` - grouped intron counts in standard matrix format; same layout as exon counts;
 
 * `SAMPLE_ID.gene_grouped_counts.matrix.mtx`, `SAMPLE_ID.gene_grouped_counts.features.tsv`, `SAMPLE_ID.gene_grouped_counts.barcodes.tsv` - grouped gene counts in Seurat-compatible MTX format;
 * `SAMPLE_ID.transcript_grouped_counts.matrix.mtx`, `SAMPLE_ID.transcript_grouped_counts.features.tsv`, `SAMPLE_ID.transcript_grouped_counts.barcodes.tsv` - grouped transcript counts in Seurat-compatible MTX format;
 * `SAMPLE_ID.gene_grouped_tpm.matrix.mtx`, `SAMPLE_ID.gene_grouped_tpm.features.tsv`, `SAMPLE_ID.gene_grouped_tpm.barcodes.tsv` - grouped gene TPM values in Seurat-compatible MTX format;
 * `SAMPLE_ID.transcript_grouped_tpm.matrix.mtx`, `SAMPLE_ID.transcript_grouped_tpm.features.tsv`, `SAMPLE_ID.transcript_grouped_tpm.barcodes.tsv` - grouped transcript TPM values in Seurat-compatible MTX format;
+* `SAMPLE_ID.exon_grouped_counts.include.matrix.mtx`, `SAMPLE_ID.exon_grouped_counts.exclude.matrix.mtx`, `SAMPLE_ID.exon_grouped_counts.features.tsv`, `SAMPLE_ID.exon_grouped_counts.barcodes.tsv` - grouped exon counts in Seurat-compatible MTX format; one features file and one barcodes file are shared between the include and exclude matrices;
+* `SAMPLE_ID.intron_grouped_counts.include.matrix.mtx`, `SAMPLE_ID.intron_grouped_counts.exclude.matrix.mtx`, `SAMPLE_ID.intron_grouped_counts.features.tsv`, `SAMPLE_ID.intron_grouped_counts.barcodes.tsv` - grouped intron counts in Seurat-compatible MTX format;
 
 
 ## Transcript discovery output

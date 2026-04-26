@@ -185,3 +185,13 @@ def mtx_features_file(output_prefix: str):
 def mtx_barcodes_file(output_prefix: str):
     """Get barcodes file name for Matrix Market format."""
     return output_prefix + ".barcodes.tsv"
+
+
+def mtx_include_matrix_file(output_prefix: str):
+    """Get include-counts Matrix Market file name (exon/intron profile)."""
+    return output_prefix + ".include.matrix.mtx"
+
+
+def mtx_exclude_matrix_file(output_prefix: str):
+    """Get exclude-counts Matrix Market file name (exon/intron profile)."""
+    return output_prefix + ".exclude.matrix.mtx"
