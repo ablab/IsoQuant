@@ -104,6 +104,6 @@ venv.bak/
 .mypy_cache/
 
 .idea
-
+.vscode/
 # Claude Code documentation (private)
 .claude/

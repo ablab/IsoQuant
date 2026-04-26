@@ -48,13 +48,13 @@ from isoquant_lib.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.stats import combine_counts
 from isoquant_lib.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
 from isoquant_lib.common import setup_worker_logging, _get_log_params
+from isoquant_lib.fusion_detector import FusionDetector
 
 
 logger = logging.getLogger('IsoQuant')
 
 # Large output file types for --large_output option
 LARGE_OUTPUT_TYPES = ["read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
-
 
 def bool_str(s):
     s = s.lower()
@@ -242,6 +242,10 @@ def parse_args(cmd_args=None, namespace=None):
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
                                      default="16")
 
+    # add fusion mode flag: uses same input & data_type options as default
+    add_additional_option_to_group(pipeline_args_group, "--fusion", action='store_true', default=False,
+                                   help="run fusion gene detection, input files and --data_type behave the same as default isoform mode.")
+
     resume_args = pipeline_args_group.add_mutually_exclusive_group()
     resume_args.add_argument("--resume", action="store_true", default=False,
                              help="resume failed run, specify output folder, input options are not allowed")
@@ -385,6 +389,41 @@ def parse_args(cmd_args=None, namespace=None):
         os.makedirs(args.output)
 
     return args, parser
+
+
+def run_fusion_detection_for_args(args):
+    logger.info("Fusion detection mode enabled.")
+    # ensure gene DB (.db) is available
+    if not args.genedb:
+        logger.critical("Fusion detection requires a gene database (--genedb). Provide a .db or a GTF/GFF to be converted.")
+        exit(-1)
+    # collect BAM files from prepared input_data (mapping step or user-provided BAMs)
+    bam_files = []
+    for sample in args.input_data.samples:
+        for lib in sample.file_list:
+            for in_file in lib:
+                # treat any existing file as candidate BAM (check existence below)
+                bam_files.append(in_file)
+        if getattr(sample, "illumina_bam", None):
+            bam_files.extend(sample.illumina_bam)
+            bam_files = [f for f in bam_files if os.path.isfile(f)]
+    if not bam_files:
+        logger.critical("No BAM files detected for fusion detection. Provide --bam or --fastq (will be mapped).")
+        exit(-1)
+    # Run fusion detection for each BAM file and write per-BAM report into the main output folder
+    for bam_path in bam_files:
+        try:
+            logger.info("Running fusion detection on %s" % bam_path)
+            # pass reference FASTA so FusionDetector can extract sequences and realign soft-clips
+            fd = FusionDetector(bam_path, args.genedb, reference_fasta=args.reference)
+            fd.detect_fusions()
+            out_fname = os.path.join(args.output, "fusion_" + os.path.basename(bam_path) + ".tsv")
+            fd.report(output_path=out_fname)
+            logger.info("Fusion candidates for %s written to %s" % (bam_path, out_fname))
+        except Exception as e:
+            logger.error("Fusion detection failed for %s: %s" % (bam_path, str(e)))
+            logger.debug("Traceback:", exc_info=True)
+    logger.info(" === Fusion detection finished === ")
 
 
 def check_and_load_args(args, parser):
@@ -1106,25 +1145,31 @@ def run_pipeline(args):
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
+
     if args.mode.needs_barcode_calling():
         # call barcodes
         call_barcodes(args)
 
     # gunzip refernece genome if needed
     prepare_reference_genome(args)
-
+ 
     # convert GTF/GFF if needed
     if args.genedb and not args.genedb.lower().endswith('db'):
         args.original_annotation = args.genedb
         args.genedb = convert_gtf_to_db(args)
-
+ 
     # map reads if fastqs are provided
     if args.input_data.input_type.needs_mapping():
         # substitute input reads with bams
         dataset_mapper = DataSetReadMapper(args)
         args.index = dataset_mapper.index_fname
         args.input_data = dataset_mapper.map_reads(args)
-
+ 
+    # If fusion detection requested, delegate to helper and return early
+    if getattr(args, "fusion", False):
+        run_fusion_detection_for_args(args)
+        return
+ 
     if args.run_aligner_only:
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
         return

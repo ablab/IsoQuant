@@ -807,3 +807,4 @@ def get_all_chromosome_genes(genedb, chr_id):
 
 def get_all_chromosome_transcripts(genedb, chr_id):
     return [g.id for g in genedb.region(seqid=chr_id, start=1, featuretype=GeneInfo.DEFAULT_RNA_TYPES)]
+
