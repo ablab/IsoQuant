@@ -556,37 +556,37 @@ class GraphBasedModelConstructor:
             if not read_assignment.assignment_type.is_unique():
                 continue
 
-            reference_isoform_id = read_assignment.isoform_matches[0].assigned_transcript
-            if reference_isoform_id in GraphBasedModelConstructor.detected_known_isoforms:
+            refrenence_isoform_id = read_assignment.isoform_matches[0].assigned_transcript
+            if refrenence_isoform_id in GraphBasedModelConstructor.detected_known_isoforms:
                 continue
 
             events = read_assignment.isoform_matches[0].match_subclassifications
             if any(e.event_type == MatchEventSubtype.mono_exon_match for e in events):
-                mono_exon_isoform_reads[reference_isoform_id].append(read_assignment)
-                assert len(self.gene_info.all_isoforms_introns[reference_isoform_id]) == 0
-                transcript_start = self.gene_info.all_isoforms_exons[reference_isoform_id][0][0]
-                transcript_end = self.gene_info.all_isoforms_exons[reference_isoform_id][-1][1]
+                mono_exon_isoform_reads[refrenence_isoform_id].append(read_assignment)
+                assert len(self.gene_info.all_isoforms_introns[refrenence_isoform_id]) == 0
+                transcript_start = self.gene_info.all_isoforms_exons[refrenence_isoform_id][0][0]
+                transcript_end = self.gene_info.all_isoforms_exons[refrenence_isoform_id][-1][1]
                 t_len = transcript_end - transcript_start + 1
 
-                if reference_isoform_id not in mono_exon_isoform_coverage:
-                    mono_exon_isoform_coverage[reference_isoform_id] = [0 for _ in range(t_len)]
+                if refrenence_isoform_id not in mono_exon_isoform_coverage:
+                    mono_exon_isoform_coverage[refrenence_isoform_id] = [0 for _ in range(t_len)]
                 start = max(0, read_assignment.corrected_exons[0][0] - transcript_start)
                 end = min(t_len, read_assignment.corrected_exons[-1][1] - transcript_start + 1)
                 for i in range(start, end):
-                    mono_exon_isoform_coverage[reference_isoform_id][i] = 1
+                    mono_exon_isoform_coverage[refrenence_isoform_id][i] = 1
 
-                if self.gene_info.isoform_strands[reference_isoform_id] == '+':
+                if self.gene_info.isoform_strands[refrenence_isoform_id] == '+':
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_right for x in events):
-                        polya_sites[reference_isoform_id] += 1
+                        polya_sites[refrenence_isoform_id] += 1
                 else:
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
-                        polya_sites[reference_isoform_id] += 1
-            elif len(self.gene_info.all_isoforms_exons[reference_isoform_id]) > 1:
+                        polya_sites[refrenence_isoform_id] += 1
+            elif len(self.gene_info.all_isoforms_exons[refrenence_isoform_id]) > 1:
                 if self.read_assignment_counts[read_assignment.read_id] > 0:
                     pass
                     # logger.debug("Spliced read %s was previously used for construction, assigned id %s" %
-                    #             (read_assignment.read_id, reference_isoform_id))
-                spliced_isoform_reads[reference_isoform_id].append(read_assignment)
+                    #             (read_assignment.read_id, refrenence_isoform_id))
+                spliced_isoform_reads[refrenence_isoform_id].append(read_assignment)
 
                 if self.args.requires_polya_for_construction and self.gene_info.isoform_strands[refrenence_isoform_id] == '-':
                     if any(x.event_type == MatchEventSubtype.correct_polya_site_left for x in events):
