@@ -1143,7 +1143,6 @@ def run_pipeline(args):
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
-    # gunzip reference genome if needed
 
     if args.mode.needs_barcode_calling():
         # call barcodes
