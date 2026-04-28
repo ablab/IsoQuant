@@ -389,9 +389,21 @@ def dump_flow_graph(
     vertices_path = os.path.join(gene_dir, "vertices.tsv")
     edges_path = os.path.join(gene_dir, "edges.tsv")
 
+    incoming_totals: Dict[int, int] = defaultdict(int)
+    outgoing_totals: Dict[int, int] = defaultdict(int)
+    for (u, v), w in flow.flow_dict.items():
+        incoming_totals[v] += w
+        outgoing_totals[u] += w
+
     def _vertex_weight(intron_tuple: Tuple[int, int]) -> str:
         if intron_tuple in clustered_introns:
             return str(clustered_introns[intron_tuple])
+        vid = flow.intron2vertex.get(intron_tuple)
+        if vid is not None:
+            if is_terminal_vertex(intron_tuple):
+                return str(incoming_totals[vid])
+            if is_starting_vertex(intron_tuple):
+                return str(outgoing_totals[vid])
         return GAP_MARKER
 
     with open(vertices_path, "w") as vf:

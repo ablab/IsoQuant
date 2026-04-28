@@ -455,19 +455,27 @@ class IntronGraph:
             #    logger.debug("Annotated terminal positions: " + str(sorted(self.terminal_known_positions[intron])))
             # logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
             # logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
-            for pos in clustered_polyas.keys():
-                self.outgoing_edges[intron].add((VERTEX_polya, pos))
-            for pos in terminal_positions.keys():
-                self.outgoing_edges[intron].add((VERTEX_read_end, pos))
+            for pos, count in clustered_polyas.items():
+                terminal_vertex = (VERTEX_polya, pos)
+                self.outgoing_edges[intron].add(terminal_vertex)
+                self.edge_weights[(intron, terminal_vertex)] = count
+            for pos, count in terminal_positions.items():
+                terminal_vertex = (VERTEX_read_end, pos)
+                self.outgoing_edges[intron].add(terminal_vertex)
+                self.edge_weights[(intron, terminal_vertex)] = count
         else:
             # if intron in self.starting_known_positions:
             #    logger.debug("Annotated terminal positions: " + str(sorted(self.starting_known_positions[intron])))
             # logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
             # logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
-            for pos in clustered_polyas.keys():
-                self.incoming_edges[intron].add((VERTEX_polyt, pos))
-            for pos in terminal_positions.keys():
-                self.incoming_edges[intron].add((VERTEX_read_start, pos))
+            for pos, count in clustered_polyas.items():
+                starting_vertex = (VERTEX_polyt, pos)
+                self.incoming_edges[intron].add(starting_vertex)
+                self.edge_weights[(starting_vertex, intron)] = count
+            for pos, count in terminal_positions.items():
+                starting_vertex = (VERTEX_read_start, pos)
+                self.incoming_edges[intron].add(starting_vertex)
+                self.edge_weights[(starting_vertex, intron)] = count
 
     def collect_terminal_positions(self):
         polya_ends = defaultdict(lambda: defaultdict(int))
