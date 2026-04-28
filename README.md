@@ -113,9 +113,9 @@ All required Python libraries can be installed via:
 
     For example, using the toy data provided within this repository,
 
-        isoquant --fastq /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.ont.sim.fq.gz \
-        --reference /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.fa.gz \
-        --genedb /home/andreyp/ablab/IsoQuant/isoquant_tests/simple_data/chr9.4M.gtf.gz \
+        isoquant --fastq isoquant_lib/test_data/chr9.4M.ont.sim.fq.gz \
+        --reference isoquant_lib/test_data/chr9.4M.fa.gz \
+        --genedb isoquant_lib/test_data/chr9.4M.gtf.gz \
         --data_type nanopore --complete_genedb -p TEST_DATA --output isoquant_test 
 
 
