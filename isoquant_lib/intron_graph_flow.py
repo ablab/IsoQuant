@@ -7,9 +7,10 @@
 
 """
 Convert IsoQuant's :class:`IntronGraph` into an "algorithmic" flow network:
-integer-labelled vertices with a super-source (id 0) and a super-target
-(id N), plus an edge list and an edge -> flow dict. Intended for external
-flow-decomposition / ILP tooling that expects consecutive int vertices.
+integer-labelled consecutive vertices plus an edge list and an edge -> flow
+dict. By default the network does not include a super-source or
+super-target — opt in via ``Intron2Graph(..., add_super_source_target=True)``
+when the downstream tool needs a single-source / single-sink wrap.
 
 Ported from the ``src/encode_ilp_gurobi.py::Intron2Graph`` prototype on the
 ``ilp_models`` branch.
@@ -51,18 +52,24 @@ def _vertex_info(v: Tuple[int, int]) -> Tuple[str, int, int]:
 class Intron2Graph:
     """Integer-labelled flow network built from an :class:`IntronGraph`.
 
-    Vertex 0 is the super-source, vertex ``self.target`` is the super-target;
-    all intron, starting and terminal vertices carry ids in ``[1, target)``.
+    Vertex ids start at ``0`` and are consecutive. By default no super-source
+    or super-target is added; set ``add_super_source_target=True`` to wrap the
+    graph with a single super-source (id 0) and super-target (last id).
     """
 
-    def __init__(self, intron_graph) -> None:
+    def __init__(self, intron_graph, add_super_source_target: bool = False) -> None:
         self.intron2vertex: Dict[Tuple[int, int], int] = {}
         self.vertex2intron: Dict[int, Tuple[int, int]] = {}
-        self.source: int = 0
+        self.add_super_source_target: bool = add_super_source_target
+        self.source: Optional[int] = None
+        self.target: Optional[int] = None
         self.edge_list: List[Tuple[int, int]] = []
         self.flow_dict: Dict[Tuple[int, int], int] = defaultdict(int)
 
-        next_id = 1
+        next_id = 0
+        if add_super_source_target:
+            self.source = next_id
+            next_id += 1
 
         # 1. real intron vertices
         for intron in intron_graph.intron_collector.clustered_introns.keys():
@@ -86,7 +93,9 @@ class Intron2Graph:
                     self.vertex2intron[next_id] = subsequent
                     next_id += 1
 
-        self.target: int = next_id
+        if add_super_source_target:
+            self.target = next_id
+            next_id += 1
 
         # 4. intron -> intron / starting -> intron / intron -> terminal edges
         edge_set = set()
@@ -116,17 +125,18 @@ class Intron2Graph:
                 self.flow_dict[(u, v)] = intron_graph.edge_weights[(intron, subsequent)]
                 terminal_totals[subsequent] += intron_graph.edge_weights[(intron, subsequent)]
 
-        # 5. super-source -> each starting vertex, weight = sum of outgoing flow
-        for start_v, total in starting_totals.items():
-            sv = self.intron2vertex[start_v]
-            self.edge_list.append((self.source, sv))
-            self.flow_dict[(self.source, sv)] = total
+        if add_super_source_target:
+            # 5. super-source -> each starting vertex, weight = sum of outgoing flow
+            for start_v, total in starting_totals.items():
+                sv = self.intron2vertex[start_v]
+                self.edge_list.append((self.source, sv))
+                self.flow_dict[(self.source, sv)] = total
 
-        # 6. each terminal vertex -> super-target
-        for end_v, total in terminal_totals.items():
-            tv = self.intron2vertex[end_v]
-            self.edge_list.append((tv, self.target))
-            self.flow_dict[(tv, self.target)] = total
+            # 6. each terminal vertex -> super-target
+            for end_v, total in terminal_totals.items():
+                tv = self.intron2vertex[end_v]
+                self.edge_list.append((tv, self.target))
+                self.flow_dict[(tv, self.target)] = total
 
     def transcript_to_path(self, transcript) -> List[Tuple[int, int]]:
         vertex_list = [self.intron2vertex[t] for t in transcript]
@@ -137,13 +147,15 @@ class Intron2Graph:
 
 
 GAP_MARKER = "*"
+EDGE_PRESENT = "-"
+EDGE_MISSING = "|"
 
 
 def _thread_transcript(
     flow: "Intron2Graph",
     intron_graph,
     introns,
-) -> Tuple[str, str, int, int]:
+) -> Tuple[str, str, str, int, int]:
     """Project an annotated transcript's intron tuples onto the simplified graph.
 
     Each annotated intron is run through ``intron_collector.substitute`` and
@@ -151,15 +163,19 @@ def _thread_transcript(
     substituted form is not in ``clustered_introns`` map to ``None``. Every
     consecutive pair is then checked against ``intron_graph.outgoing_edges``.
 
-    Returns ``(status, path_str, missing_vertices, missing_edges)``:
+    Returns ``(status, path_str, simple_path_str, missing_vertices,
+    missing_edges)``:
     - ``status`` is one of ``monoexonic`` / ``ok`` / ``disconnected`` /
       ``partial`` (partial = at least one vertex missing).
-    - ``path_str`` is a comma-separated rendering where surviving vertex ids
-      are joined normally and any break (missing vertex or disconnected edge
-      between two surviving vertices) is marked by a single ``*`` token.
+    - ``path_str`` interleaves vertex tokens with separators carrying edge
+      info: ``-`` (edge present), ``|`` (both real but no edge), ``-``
+      defaulted whenever either side is a missing-vertex ``*``.
+    - ``simple_path_str`` is a comma-separated list of the vertex ids
+      that actually map to the graph (missing introns are dropped, no
+      gap markers); ignores edge state.
     """
     if not introns:
-        return "monoexonic", "", 0, 0
+        return "monoexonic", "", "", 0, 0
 
     intron_collector = intron_graph.intron_collector
     mapped: List[Optional[int]] = []
@@ -186,21 +202,20 @@ def _thread_transcript(
         edge_ok.append(v_tuple in intron_graph.outgoing_edges.get(u_tuple, ()))
     missing_edges = sum(1 for ok in edge_ok if not ok)
 
-    tokens: List[str] = []
+    vertex_tokens = [GAP_MARKER if v is None else str(v) for v in mapped]
+    simple_path_str = ",".join(str(v) for v in mapped if v is not None)
 
-    def push_gap() -> None:
-        if not tokens or tokens[-1] != GAP_MARKER:
-            tokens.append(GAP_MARKER)
-
-    for i, v in enumerate(mapped):
-        if v is None:
-            push_gap()
-        else:
-            if i > 0 and mapped[i - 1] is not None and not edge_ok[i - 1]:
-                push_gap()
-            tokens.append(str(v))
-
-    path_str = ",".join(tokens)
+    parts: List[str] = []
+    for i, token in enumerate(vertex_tokens):
+        if i > 0:
+            prev_real = mapped[i - 1] is not None
+            cur_real = mapped[i] is not None
+            if prev_real and cur_real:
+                parts.append(EDGE_PRESENT if edge_ok[i - 1] else EDGE_MISSING)
+            else:
+                parts.append(EDGE_PRESENT)
+        parts.append(token)
+    path_str = "".join(parts)
 
     if missing_vertices > 0:
         status = "partial"
@@ -208,7 +223,7 @@ def _thread_transcript(
         status = "disconnected"
     else:
         status = "ok"
-    return status, path_str, missing_vertices, missing_edges
+    return status, path_str, simple_path_str, missing_vertices, missing_edges
 
 
 def _dump_paths(
@@ -221,28 +236,29 @@ def _dump_paths(
 ) -> None:
     """Write per-gene ground-truth paths TSV.
 
-    Columns: ``transcript_id  count  status  path  missing_vertices
-    missing_edges``. ``path`` is comma-separated; surviving vertex ids are
-    rendered as ints and any break (missing vertex or disconnected edge)
-    collapses into a single ``*`` token.
+    Columns: ``transcript_id  count  status  path  path_simple
+    missing_vertices  missing_edges``. ``path`` interleaves vertex tokens
+    with edge separators (``-`` present, ``|`` absent, ``*`` for missing
+    vertex). ``path_simple`` is a plain comma-separated vertex sequence
+    using ``*`` for missing vertices, ignoring edge state.
     """
     rows = []
     for t_id, introns in gene_info.all_isoforms_introns.items():
         if t_id not in counts_map:
             continue
         count = counts_map[t_id]
-        status, path_str, missing_vertices, missing_edges = _thread_transcript(
+        status, path_str, simple_str, missing_vertices, missing_edges = _thread_transcript(
             flow, intron_graph, introns
         )
-        rows.append((t_id, count, status, path_str, missing_vertices, missing_edges))
+        rows.append((t_id, count, status, path_str, simple_str, missing_vertices, missing_edges))
 
     if not rows:
         return
 
     with open(paths_path, "w") as pf:
-        pf.write("transcript_id\tcount\tstatus\tpath\tmissing_vertices\tmissing_edges\n")
-        for t_id, count, status, path_str, mv, me in rows:
-            pf.write("%s\t%g\t%s\t%s\t%d\t%d\n" % (t_id, count, status, path_str, mv, me))
+        pf.write("transcript_id\tcount\tstatus\tpath\tpath_simple\tmissing_vertices\tmissing_edges\n")
+        for t_id, count, status, path_str, simple_str, mv, me in rows:
+            pf.write("%s\t%g\t%s\t%s\t%s\t%d\t%d\n" % (t_id, count, status, path_str, simple_str, mv, me))
 
 
 def _dump_ref_data(
@@ -311,9 +327,9 @@ def _dump_ref_data(
     with open(ref_vertices_path, "w") as vf:
         vf.write("ref_start\tref_end\tstatus\tvertex_id\tgraph_start\tgraph_end\n")
         for (rs, re_), (vid, status, graph_tuple) in sorted(vertex_info.items()):
-            vid_str = "" if vid is None else str(vid)
+            vid_str = GAP_MARKER if vid is None else str(vid)
             if graph_tuple is None:
-                gs_str = ge_str = ""
+                gs_str = ge_str = GAP_MARKER
             else:
                 gs_str, ge_str = str(graph_tuple[0]), str(graph_tuple[1])
             vf.write("%d\t%d\t%s\t%s\t%s\t%s\n" % (rs, re_, status, vid_str, gs_str, ge_str))
@@ -321,8 +337,8 @@ def _dump_ref_data(
     with open(ref_edges_path, "w") as ef:
         ef.write("u_start\tu_end\tv_start\tv_end\tstatus\tu_id\tv_id\n")
         for ((us, ue), (vs, ve_)), (u_id, v_id, status) in sorted(edge_info.items()):
-            u_str = "" if u_id is None else str(u_id)
-            v_str = "" if v_id is None else str(v_id)
+            u_str = GAP_MARKER if u_id is None else str(u_id)
+            v_str = GAP_MARKER if v_id is None else str(v_id)
             ef.write("%d\t%d\t%d\t%d\t%s\t%s\t%s\n" % (us, ue, vs, ve_, status, u_str, v_str))
 
 
@@ -334,55 +350,82 @@ def dump_flow_graph(
     gene_info=None,
     ground_truth_counts: Optional[Dict[str, float]] = None,
     dump_ref_data: bool = False,
+    add_super_source_target: bool = False,
+    include_edge_weights: bool = False,
 ) -> None:
-    """Write the gene's flow network to ``out_dir`` as TSVs.
+    """Write the gene's flow network to ``<out_dir>/<chr>.<gene>/`` as TSVs.
 
-    - ``<chr>.<gene>.vertices.tsv``: ``vertex_id  type  chr  start  end``
-      (source / target rows have empty start/end columns)
-    - ``<chr>.<gene>.edges.tsv``: ``u  v  weight``
-    - ``<chr>.<gene>.paths.tsv`` (only when ``ground_truth_counts`` and
-      ``gene_info`` are given and at least one transcript in the gene
-      appears in the counts map): ``transcript_id  count  status  path
+    - ``vertices.tsv``: ``vertex_id  type  chr  start  end  weight``
+      (intron rows carry the clustered-intron count; source / target /
+      terminal / starting rows mark missing fields with ``*``)
+    - ``edges.tsv``: ``u  v`` (default) or ``u  v  weight`` when
+      ``include_edge_weights=True``
+    - ``paths.tsv`` (only when ``ground_truth_counts`` and ``gene_info`` are
+      given and at least one transcript in the gene appears in the counts
+      map): ``transcript_id  count  status  path  path_simple
       missing_vertices  missing_edges``
-    - ``<chr>.<gene>.ref_vertices.tsv`` and ``<chr>.<gene>.ref_edges.tsv``
-      (only when ``dump_ref_data`` is true and ``gene_info`` carries
-      annotated transcripts): every unique annotated intron / consecutive
-      intron pair with its graph status (see ``_dump_ref_data`` for
-      column layouts).
+    - ``ref_vertices.tsv`` and ``ref_edges.tsv`` (only when
+      ``dump_ref_data`` is true and ``gene_info`` carries annotated
+      transcripts): every unique annotated intron / consecutive intron
+      pair with its graph status (see ``_dump_ref_data`` for column
+      layouts).
+
+    ``add_super_source_target`` and ``include_edge_weights`` are internal
+    knobs (no CLI exposure) for downstream tooling that wants the wrapped
+    flow network or per-edge weights.
     """
     if not intron_graph.intron_collector.clustered_introns \
             and not intron_graph.outgoing_edges \
             and not intron_graph.incoming_edges:
         return
 
-    os.makedirs(out_dir, exist_ok=True)
-    flow = Intron2Graph(intron_graph)
+    flow = Intron2Graph(intron_graph, add_super_source_target=add_super_source_target)
+    clustered_introns = intron_graph.intron_collector.clustered_introns
 
     safe_gene = gene_id.replace("/", "_")
-    vertices_path = os.path.join(out_dir, "%s.%s.vertices.tsv" % (chr_id, safe_gene))
-    edges_path = os.path.join(out_dir, "%s.%s.edges.tsv" % (chr_id, safe_gene))
+    gene_dir = os.path.join(out_dir, "%s.%s" % (chr_id, safe_gene))
+    os.makedirs(gene_dir, exist_ok=True)
+
+    vertices_path = os.path.join(gene_dir, "vertices.tsv")
+    edges_path = os.path.join(gene_dir, "edges.tsv")
+
+    def _vertex_weight(intron_tuple: Tuple[int, int]) -> str:
+        if intron_tuple in clustered_introns:
+            return str(clustered_introns[intron_tuple])
+        return GAP_MARKER
 
     with open(vertices_path, "w") as vf:
-        vf.write("vertex_id\ttype\tchr\tstart\tend\n")
-        vf.write("%d\tsource\t%s\t\t\n" % (flow.source, chr_id))
+        vf.write("vertex_id\ttype\tchr\tstart\tend\tweight\n")
+        if flow.source is not None:
+            vf.write("%d\tsource\t%s\t%s\t%s\t%s\n" % (
+                flow.source, chr_id, GAP_MARKER, GAP_MARKER, GAP_MARKER))
         for vid in sorted(flow.vertex2intron.keys()):
-            vtype, start, end = _vertex_info(flow.vertex2intron[vid])
-            vf.write("%d\t%s\t%s\t%d\t%d\n" % (vid, vtype, chr_id, start, end))
-        vf.write("%d\ttarget\t%s\t\t\n" % (flow.target, chr_id))
+            intron_tuple = flow.vertex2intron[vid]
+            vtype, start, end = _vertex_info(intron_tuple)
+            vf.write("%d\t%s\t%s\t%d\t%d\t%s\n" % (
+                vid, vtype, chr_id, start, end, _vertex_weight(intron_tuple)))
+        if flow.target is not None:
+            vf.write("%d\ttarget\t%s\t%s\t%s\t%s\n" % (
+                flow.target, chr_id, GAP_MARKER, GAP_MARKER, GAP_MARKER))
 
     with open(edges_path, "w") as ef:
-        ef.write("u\tv\tweight\n")
-        for u, v in flow.edge_list:
-            ef.write("%d\t%d\t%d\n" % (u, v, flow.flow_dict[(u, v)]))
+        if include_edge_weights:
+            ef.write("u\tv\tweight\n")
+            for u, v in flow.edge_list:
+                ef.write("%d\t%d\t%d\n" % (u, v, flow.flow_dict[(u, v)]))
+        else:
+            ef.write("u\tv\n")
+            for u, v in flow.edge_list:
+                ef.write("%d\t%d\n" % (u, v))
 
     if ground_truth_counts and gene_info is not None:
-        paths_path = os.path.join(out_dir, "%s.%s.paths.tsv" % (chr_id, safe_gene))
+        paths_path = os.path.join(gene_dir, "paths.tsv")
         _dump_paths(flow, intron_graph, gene_info, ground_truth_counts, chr_id, paths_path)
 
     if dump_ref_data and gene_info is not None and gene_info.all_isoforms_introns:
-        ref_vertices_path = os.path.join(out_dir, "%s.%s.ref_vertices.tsv" % (chr_id, safe_gene))
-        ref_edges_path = os.path.join(out_dir, "%s.%s.ref_edges.tsv" % (chr_id, safe_gene))
+        ref_vertices_path = os.path.join(gene_dir, "ref_vertices.tsv")
+        ref_edges_path = os.path.join(gene_dir, "ref_edges.tsv")
         _dump_ref_data(flow, intron_graph, gene_info, ref_vertices_path, ref_edges_path)
 
     logger.debug("Dumped flow graph for %s / %s (%d vertices, %d edges) to %s",
-                 chr_id, gene_id, flow.target + 1, len(flow.edge_list), out_dir)
+                 chr_id, gene_id, len(flow.vertex2intron), len(flow.edge_list), gene_dir)
