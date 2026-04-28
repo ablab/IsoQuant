@@ -79,7 +79,10 @@ class FusionDetector:
             return 0
 
     def _build_exon_cache(self):
-        # Pre-build exon cache for all genes to avoid repeated DB queries during fusion gene assignment.
+        # Cache ordered exon spans for each gene to support exon-boundary
+        # and exon-distance calculations. This is used in gene scoring and
+        # is distinct from interval-tree–based coordinate lookups
+
         if self.exon_cache:
             return  # Already built
         logger.debug("Building exon cache from genedb...")
@@ -95,10 +98,12 @@ class FusionDetector:
                     continue
                 try:
                     exons = list(self.db.children(gene, featuretype='exon', order_by='start'))
-                    if exons:
-                        self.exon_cache[gene_id] = [(int(ex.start), int(ex.end)) for ex in exons]
                 except Exception:
-                    pass
+                    logger.debug(
+                        "Failed to fetch exons for gene %s",
+                        getattr(gene, "id", gene),
+                        exc_info=True
+                    )
         except Exception as e:
             logger.warning(f"Failed to build exon cache: {e}")
 
@@ -146,6 +151,11 @@ class FusionDetector:
                 # Not inside any gene; check if overlapping any exon
                 return None, ("exonic" if exons else "intergenic")
         except Exception:
+            logger.debug(
+                "Context query failed for %s:%s",
+                chrom, pos,
+                exc_info=True
+            )
             return None, "unknown"
 
     def _get_parent_gene_symbol(self, feature):
@@ -181,32 +191,38 @@ class FusionDetector:
         except Exception:
             return None, name_or_id
 
-    def _fallback_gene_lookup(self, name_or_id):
-        # Last resort: search for a gene feature with matching ID.
+    def _fallback_gene_lookup(self, name_or_id: str) -> str:
+        # Last-resort resolution of a gene identifier to a gene symbol.
         try:
-            genes = list(self.db.features_of_type('gene', id=name_or_id))
-            if genes:
-                return genes[0].attributes.get('gene_name', [genes[0].id])[0]
-        except Exception:
-            pass
-        return name_or_id
+            genes = list(self.db.features_of_type("gene", id=name_or_id))
+            if not genes:
+                return name_or_id
+            gene = genes[0]
+            attrs = getattr(gene, "attributes", {}) or {}
+            return attrs.get("gene_name", [gene.id])[0]
+        except (AttributeError, KeyError, TypeError):
+            logger.debug(
+                "Fallback gene lookup failed for identifier %r",
+                name_or_id,
+                exc_info=True,
+            )
+            return name_or_id
 
     def resolve_gene_name(self, name_or_id: Optional[str]) -> Optional[str]:
-        """Resolve Ensembl or other IDs (e.g. ENS*, RP11*) to gene symbols when possible."""
+        """
+        Resolve Ensembl or other identifiers (e.g. ENS*, RP11*) to gene symbols
+        when possible. Falls back to returning the input unchanged.
+        """
         if not name_or_id:
             return name_or_id
-        # Quick cache hit
-        if name_or_id in self._resolved_name_cache:
-            return self._resolved_name_cache[name_or_id]
-        # Try direct lookup first
-        resolved = name_or_id
-        try:
-            feat, resolved = self._lookup_feature_by_id(name_or_id)
-            if feat is None:
-                # If direct lookup failed, try fallback
-                resolved = self._fallback_gene_lookup(name_or_id)
-        except Exception:
-            resolved = name_or_id
+        # Cache hit
+        cached = self._resolved_name_cache.get(name_or_id)
+        if cached is not None:
+            return cached
+        # Attempt direct lookup
+        feat, resolved = self._lookup_feature_by_id(name_or_id)
+        if feat is None:
+            resolved = self._fallback_gene_lookup(name_or_id)
         # Cache and return
         self._resolved_name_cache[name_or_id] = resolved
         return resolved
@@ -318,24 +334,31 @@ class FusionDetector:
             return None
 
     def _collect_exonic_genes(self, genes, pos):
-        # Return list of genes where pos falls inside an exon.
+        # Return a list of genes for which ``pos`` falls inside at least one exon.
         exonic_genes = []
-        for g in genes:
-            attrs = getattr(g, "attributes", {}) or {}
-            gname = attrs.get("gene_name", [getattr(g, "id", None)])[0]
-            gtype = (attrs.get("gene_type", [None])[0]
-                    or attrs.get("gene_biotype", [None])[0]
-                    or attrs.get("transcript_biotype", [None])[0])
-            gstart = int(getattr(g, "start", 0))
-            gend = int(getattr(g, "end", 0))
+        for gene in genes:
+            attrs = getattr(gene, "attributes", {}) or {}
+            gene_name = attrs.get("gene_name", [getattr(gene, "id", None)])[0]
+            gene_type = (
+                attrs.get("gene_type", [None])[0]
+                or attrs.get("gene_biotype", [None])[0]
+                or attrs.get("transcript_biotype", [None])[0]
+            )
             try:
-                exons = self._get_cached_exons(g)
-                exonic_hit = any(start <= pos <= end for start, end in exons)
-                if exonic_hit:
-                    exonic_genes.append((g, gname, gtype, gstart, gend, exons))
-            except Exception:
-                pass
+                gene_start = int(gene.start)
+                gene_end = int(gene.end)
+                exons = self._get_cached_exons(gene)
+            except (AttributeError, TypeError, ValueError):
+                logger.debug(
+                    "Failed to extract gene or exon information for %r",
+                    gene,
+                    exc_info=True,
+                )
+                continue
+            if any(start <= pos <= end for start, end in exons):
+                exonic_genes.append((gene, gene_name, gene_type, gene_start, gene_end, exons))
         return exonic_genes
+
 
     def _compute_gene_distances(self, g, pos):
         # Compute exon and body distances for a gene relative to pos.
@@ -1031,31 +1054,6 @@ class FusionDetector:
             except Exception:
                 meta["best_hit_mapq"] = 0
 
-    @lru_cache(maxsize=50000)
-    def _find_nearby_protein_coding(self, chrom, pos, window):
-        # Search for a nearby protein-coding gene within +/- window and return its gene_name if found.
-        try:
-            # Use interval tree if available for faster lookups
-            if self.interval_index is not None:
-                genes = self.interval_index.get_genes_at(chrom, pos, window=window)
-            else:
-                start = max(1, pos - window)
-                end = pos + window
-                genes = list(self.db.region(region=(chrom, start, end), featuretype='gene'))
-            for g in genes:
-                # check common biotype attribute keys
-                attrs = g.attributes if hasattr(g, 'attributes') else {}
-                biotype = None
-                for key in ('gene_type', 'gene_biotype', 'transcript_type', 'transcript_biotype'):
-                    if key in attrs:
-                        biotype = attrs.get(key, [None])[0]
-                        break
-                if biotype and biotype == 'protein_coding':
-                    return attrs.get('gene_name', [g.id])[0]
-            return None
-        except Exception:
-            return None
-
     def canonical_locus_name(self, gene_name: Optional[str]) -> Optional[str]:
         """Collapse antisense/divergent transcript names to the canonical locus name."""
         if not gene_name:
@@ -1143,40 +1141,6 @@ class FusionDetector:
             return None
         gene_name = self.normalize_gene_label(gene_name)
         return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
-
-    def get_gene_strand(self, gene_name: Optional[str],
-                         chrom: Optional[str] = None,
-                         pos: Optional[int] = None) -> Optional[str]:
-        """Retrieve the strand (``+``/``-``) for a given gene name."""
-        if not gene_name:
-            return None
-        try:
-            # Try direct lookup by gene ID first
-            try:
-                gene = self.db[gene_name]
-                if gene.featuretype == "gene":
-                    return gene.strand
-            except Exception:
-                pass
-            # If not found and we have coordinates, look up genes at position
-            if chrom and pos:
-                if self.interval_index is not None:
-                    genes = self.interval_index.get_genes_at(chrom, pos, window=500)
-                else:
-                    genes = list(self.db.region(region=(chrom, max(1, pos - 500), pos + 500), featuretype='gene'))
-                for g in genes:
-                    attrs = getattr(g, 'attributes', {}) or {}
-                    gname = attrs.get('gene_name', [None])[0]
-                    if gname == gene_name:
-                        return g.strand
-            # Last resort: search through all genes
-            if self.interval_index is not None:
-                genes = self.interval_index.find_genes_by_name(gene_name)
-                if genes:
-                    return genes[0].strand
-        except Exception:
-            pass
-        return None
 
     def validate_candidates(self, min_support: int = 2, window: int = 25,
                              require_gene_names: bool = True,
