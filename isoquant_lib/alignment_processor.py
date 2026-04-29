@@ -343,6 +343,7 @@ class AlignmentCollector:
                         "can be set via --%s" % option_string)
 
         gene_info = self.get_gene_info_for_region(current_region)
+        gene_info.coverage_scale_factor = skip_read_fraction
         if gene_info.empty():
             assignment_storage = self.process_intergenic(alignment_storage, current_region, skip_read_fraction)
         else:

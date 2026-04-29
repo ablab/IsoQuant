@@ -190,6 +190,12 @@ class GeneInfo:
                          'tRNA', 'telomerase_RNA', 'Y_RNA', 'scRNA'}
 
     def __init__(self, gene_db_list, db, delta=0, prepare_profiles=True):
+        # 1 == no downsampling. AlignmentCollector overwrites this when
+        # max_coverage_small_chr / max_coverage_normal_chr triggers
+        # "process 1 out of every N reads"; downstream code can multiply
+        # observed counts by this factor to back out the original load.
+        self.coverage_scale_factor: int = 1
+
         if db is None:
             return
 
@@ -241,6 +247,7 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
+        gene_info.coverage_scale_factor = 1
         if not transcript_model_storage:
             return cls([], None, delta)
 
@@ -308,6 +315,7 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
+        gene_info.coverage_scale_factor = 1
         # gene region
         gene_info.chr_id = transcript_model.chr_id
         gene_info.start = transcript_model.get_start()
@@ -361,6 +369,7 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
+        gene_info.coverage_scale_factor = 1
         # gene region
         gene_info.chr_id = chr_id
         gene_info.start = start
@@ -410,6 +419,7 @@ class GeneInfo:
         gene_info.chr_id = read_string(infile)
         gene_info.start = read_int(infile)
         gene_info.end = read_int(infile)
+        gene_info.coverage_scale_factor = read_int(infile)
 
         gene_info.all_read_region_start = gene_info.start
         gene_info.all_read_region_end = gene_info.end
@@ -451,6 +461,7 @@ class GeneInfo:
         write_string(self.chr_id, outfile)
         write_int(self.start, outfile)
         write_int(self.end, outfile)
+        write_int(self.coverage_scale_factor, outfile)
 
     def empty(self):
         return not self.exon_profiles.features
