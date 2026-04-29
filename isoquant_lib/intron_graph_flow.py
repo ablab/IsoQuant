@@ -205,58 +205,21 @@ def _match_terminal(
     return best_vid
 
 
-def _thread_transcript(
+def _render_path(
     flow: "Intron2Graph",
     intron_graph,
-    gene_info,
-    t_id: str,
-    introns,
-    apa_delta: int,
-    low_candidates: List[Tuple[int, int]],
-    high_candidates: List[Tuple[int, int]],
+    mapped: List[Optional[int]],
 ) -> Tuple[str, str, str, int, int]:
-    """Project an annotated transcript onto the simplified graph.
+    """Render a vertex-id chain into ``(status, path, path_simple, mv, me)``.
 
-    Each annotated intron runs through ``intron_collector.substitute`` and
-    maps to a graph vertex; the transcript's 5'/3' exon boundaries (low/high
-    genomic ends) are matched to the closest starting / terminal vertex in
-    the graph within ``apa_delta``. Anything that doesn't resolve becomes a
-    ``*`` slot — no synthetic vertices are introduced. Every consecutive
-    pair in the resulting chain is then checked against
-    ``intron_graph.outgoing_edges``.
-
-    Returns ``(status, path_str, simple_path_str, missing_vertices,
-    missing_edges)``:
-    - ``status`` is one of ``monoexonic`` / ``ok`` / ``disconnected`` /
-      ``partial`` (partial = at least one vertex missing).
-    - ``path_str`` interleaves vertex tokens with separators carrying edge
-      info: ``-`` (edge present), ``|`` (both real but no edge), ``-``
-      defaulted whenever either side is a missing-vertex ``*``.
-    - ``simple_path_str`` is a comma-separated list of the vertex ids
-      that actually map to the graph (missing slots are dropped, no
-      gap markers); ignores edge state.
+    ``mapped`` is a list of flow vertex ids with ``None`` for missing slots.
+    ``status`` is ``ok`` (all vertices present, all edges present),
+    ``disconnected`` (vertices all present, at least one edge missing) or
+    ``partial`` (at least one vertex missing). ``path`` interleaves vertex
+    tokens with ``-`` (edge present), ``|`` (both real but no edge), or
+    ``-`` (default whenever either side is ``*``); ``path_simple`` is a
+    comma-separated list of resolved vertex ids only.
     """
-    if not introns:
-        return "monoexonic", "", "", 0, 0
-
-    intron_collector = intron_graph.intron_collector
-    intron_mapped: List[Optional[int]] = []
-    for intron in introns:
-        if intron in intron_collector.discarded_introns:
-            intron_mapped.append(None)
-            continue
-        substituted = intron_collector.substitute(intron)
-        if substituted not in intron_collector.clustered_introns:
-            intron_mapped.append(None)
-            continue
-        intron_mapped.append(flow.intron2vertex.get(substituted))
-
-    exons = gene_info.all_isoforms_exons[t_id]
-    low_vid = _match_terminal(low_candidates, exons[0][0], apa_delta)
-    high_vid = _match_terminal(high_candidates, exons[-1][1], apa_delta)
-
-    mapped: List[Optional[int]] = [low_vid] + intron_mapped + [high_vid]
-
     missing_vertices = sum(1 for v in mapped if v is None)
 
     edge_ok: List[bool] = []
@@ -292,6 +255,50 @@ def _thread_transcript(
     else:
         status = "ok"
     return status, path_str, simple_path_str, missing_vertices, missing_edges
+
+
+def _thread_transcript(
+    flow: "Intron2Graph",
+    intron_graph,
+    gene_info,
+    t_id: str,
+    introns,
+    apa_delta: int,
+    low_candidates: List[Tuple[int, int]],
+    high_candidates: List[Tuple[int, int]],
+) -> Tuple[str, str, str, int, int]:
+    """Project an annotated transcript onto the simplified graph.
+
+    Each annotated intron runs through ``intron_collector.substitute`` and
+    maps to a graph vertex; the transcript's 5'/3' exon boundaries (low/high
+    genomic ends) are matched to the closest starting / terminal vertex in
+    the graph within ``apa_delta``. Anything that doesn't resolve becomes a
+    ``*`` slot — no synthetic vertices are introduced.
+
+    Returns ``(status, path_str, simple_path_str, missing_vertices,
+    missing_edges)`` — see :func:`_render_path`.
+    """
+    if not introns:
+        return "monoexonic", "", "", 0, 0
+
+    intron_collector = intron_graph.intron_collector
+    intron_mapped: List[Optional[int]] = []
+    for intron in introns:
+        if intron in intron_collector.discarded_introns:
+            intron_mapped.append(None)
+            continue
+        substituted = intron_collector.substitute(intron)
+        if substituted not in intron_collector.clustered_introns:
+            intron_mapped.append(None)
+            continue
+        intron_mapped.append(flow.intron2vertex.get(substituted))
+
+    exons = gene_info.all_isoforms_exons[t_id]
+    low_vid = _match_terminal(low_candidates, exons[0][0], apa_delta)
+    high_vid = _match_terminal(high_candidates, exons[-1][1], apa_delta)
+
+    mapped: List[Optional[int]] = [low_vid] + intron_mapped + [high_vid]
+    return _render_path(flow, intron_graph, mapped)
 
 
 def _dump_paths(
@@ -331,6 +338,41 @@ def _dump_paths(
         pf.write("transcript_id\tcount\tstatus\tpath\tpath_simple\tmissing_vertices\tmissing_edges\n")
         for t_id, count, status, path_str, simple_str, mv, me in rows:
             pf.write("%s\t%g\t%s\t%s\t%s\t%d\t%d\n" % (t_id, count, status, path_str, simple_str, mv, me))
+
+
+def _dump_read_subpaths(
+    flow: "Intron2Graph",
+    intron_graph,
+    paths: Dict[Tuple, int],
+    fl_paths,
+    out_path: str,
+) -> None:
+    """Write ``read_subpaths.tsv`` — one row per distinct threaded read path.
+
+    Columns: ``read_count  is_fl  status  path  path_simple
+    missing_vertices  missing_edges``. ``read_count`` is the number of
+    reads that produced the path (from ``IntronPathStorage.paths``);
+    ``is_fl`` is 1 when both a starting and a terminal vertex were
+    threaded (the FL subset); otherwise 0. Path / path_simple use the
+    same connectivity encoding as ``paths.tsv``.
+    """
+    if not paths:
+        return
+
+    rows = []
+    for path_tuple, count in paths.items():
+        mapped: List[Optional[int]] = [flow.intron2vertex.get(v) for v in path_tuple]
+        status, path_str, simple_str, mv, me = _render_path(flow, intron_graph, mapped)
+        is_fl = 1 if path_tuple in fl_paths else 0
+        rows.append((count, is_fl, status, path_str, simple_str, mv, me))
+
+    rows.sort(key=lambda r: (-r[0], -r[1]))
+
+    with open(out_path, "w") as f:
+        f.write("read_count\tis_fl\tstatus\tpath\tpath_simple\tmissing_vertices\tmissing_edges\n")
+        for count, is_fl, status, path_str, simple_str, mv, me in rows:
+            f.write("%d\t%d\t%s\t%s\t%s\t%d\t%d\n" %
+                    (count, is_fl, status, path_str, simple_str, mv, me))
 
 
 def _dump_ref_data(
@@ -478,6 +520,7 @@ def dump_flow_graph(
     gene_info=None,
     ground_truth_counts: Optional[Dict[str, float]] = None,
     dump_ref_data: bool = False,
+    path_storage=None,
     add_super_source_target: bool = False,
     include_edge_weights: bool = False,
 ) -> None:
@@ -497,6 +540,9 @@ def dump_flow_graph(
       transcripts): every unique annotated intron / consecutive intron
       pair with its graph status (see ``_dump_ref_data`` for column
       layouts).
+    - ``read_subpaths.tsv`` (only when ``path_storage`` is provided):
+      every distinct read-threaded path with its supporting read count
+      and FL flag (see ``_dump_read_subpaths``).
 
     ``add_super_source_target`` and ``include_edge_weights`` are internal
     knobs (no CLI exposure) for downstream tooling that wants the wrapped
@@ -566,6 +612,13 @@ def dump_flow_graph(
         ref_vertices_path = os.path.join(gene_dir, "ref_vertices.tsv")
         ref_edges_path = os.path.join(gene_dir, "ref_edges.tsv")
         _dump_ref_data(flow, intron_graph, gene_info, ref_vertices_path, ref_edges_path)
+
+    if path_storage is not None and getattr(path_storage, "paths", None):
+        read_subpaths_path = os.path.join(gene_dir, "read_subpaths.tsv")
+        _dump_read_subpaths(flow, intron_graph,
+                            path_storage.paths,
+                            getattr(path_storage, "fl_paths", set()),
+                            read_subpaths_path)
 
     logger.debug("Dumped flow graph for %s / %s (%d vertices, %d edges) to %s",
                  chr_id, gene_id, len(flow.vertex2intron), len(flow.edge_list), gene_dir)

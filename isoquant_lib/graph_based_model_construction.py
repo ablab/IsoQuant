@@ -127,6 +127,9 @@ class GraphBasedModelConstructor:
 
     def process(self, read_assignment_storage):
         self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage)
+        self.path_processor = IntronPathProcessor(self.args, self.intron_graph)
+        self.path_storage = IntronPathStorage(self.args, self.path_processor)
+        self.path_storage.fill(read_assignment_storage)
         dump_dir = getattr(self.args, "dump_intron_graphs_dir", None)
         if dump_dir:
             gene_ids = [g.id for g in self.gene_info.gene_db_list] if self.gene_info.gene_db_list else []
@@ -135,10 +138,8 @@ class GraphBasedModelConstructor:
                             dump_dir,
                             gene_info=self.gene_info,
                             ground_truth_counts=getattr(self.args, "ground_truth_counts_map", None),
-                            dump_ref_data=getattr(self.args, "dump_ref_data", False))
-        self.path_processor = IntronPathProcessor(self.args, self.intron_graph)
-        self.path_storage = IntronPathStorage(self.args, self.path_processor)
-        self.path_storage.fill(read_assignment_storage)
+                            dump_ref_data=getattr(self.args, "dump_ref_data", False),
+                            path_storage=self.path_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
 
