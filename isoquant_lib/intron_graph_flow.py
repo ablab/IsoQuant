@@ -308,36 +308,45 @@ def _dump_paths(
     counts_map: Dict[str, float],
     chr_id: str,
     paths_path: str,
+    coverage_scale_factor: int = 1,
 ) -> None:
     """Write per-gene ground-truth paths TSV.
 
-    Columns: ``transcript_id  count  status  path  path_simple
-    missing_vertices  missing_edges``. The path threads through the
-    transcript's 5'/3' exon boundaries (matched to the closest starting /
-    terminal vertex within ``params.apa_delta``) followed by its intron
-    chain; unmatched slots become ``*``.
+    Columns: ``transcript_id  count  count_scaled  status  path
+    path_simple  missing_vertices  missing_edges``. ``count`` is the
+    original (pre-downsampling) abundance from
+    ``--ground_truth_counts``; ``count_scaled = round(count /
+    coverage_scale_factor)`` is the expected post-downsampling load
+    that matches the observed weights in ``vertices.tsv`` /
+    ``read_subpaths.tsv`` when IsoQuant is processing 1 read out of
+    every ``coverage_scale_factor`` (driven by
+    ``--max_coverage_small_chr`` / ``--max_coverage_normal_chr``).
+    With no downsampling (``scale == 1``) the two columns are equal.
     """
     apa_delta = intron_graph.params.apa_delta
     low_candidates, high_candidates = _terminal_candidates(flow)
+    scale = max(1, int(coverage_scale_factor))
 
     rows = []
     for t_id, introns in gene_info.all_isoforms_introns.items():
         if t_id not in counts_map:
             continue
         count = counts_map[t_id]
+        scaled_count = int(round(count / scale)) if scale > 1 else count
         status, path_str, simple_str, missing_vertices, missing_edges = _thread_transcript(
             flow, intron_graph, gene_info, t_id, introns,
             apa_delta, low_candidates, high_candidates,
         )
-        rows.append((t_id, count, status, path_str, simple_str, missing_vertices, missing_edges))
+        rows.append((t_id, count, scaled_count, status, path_str, simple_str, missing_vertices, missing_edges))
 
     if not rows:
         return
 
     with open(paths_path, "w") as pf:
-        pf.write("transcript_id\tcount\tstatus\tpath\tpath_simple\tmissing_vertices\tmissing_edges\n")
-        for t_id, count, status, path_str, simple_str, mv, me in rows:
-            pf.write("%s\t%g\t%s\t%s\t%s\t%d\t%d\n" % (t_id, count, status, path_str, simple_str, mv, me))
+        pf.write("transcript_id\tcount\tcount_scaled\tstatus\tpath\tpath_simple\tmissing_vertices\tmissing_edges\n")
+        for t_id, count, scaled_count, status, path_str, simple_str, mv, me in rows:
+            pf.write("%s\t%g\t%g\t%s\t%s\t%s\t%d\t%d\n" %
+                     (t_id, count, scaled_count, status, path_str, simple_str, mv, me))
 
 
 def _dump_read_subpaths(
@@ -606,7 +615,9 @@ def dump_flow_graph(
 
     if ground_truth_counts and gene_info is not None:
         paths_path = os.path.join(gene_dir, "paths.tsv")
-        _dump_paths(flow, intron_graph, gene_info, ground_truth_counts, chr_id, paths_path)
+        scale = getattr(gene_info, "coverage_scale_factor", 1)
+        _dump_paths(flow, intron_graph, gene_info, ground_truth_counts, chr_id, paths_path,
+                    coverage_scale_factor=scale)
 
     if dump_ref_data and gene_info is not None and gene_info.all_isoforms_introns:
         ref_vertices_path = os.path.join(gene_dir, "ref_vertices.tsv")
