@@ -151,17 +151,79 @@ EDGE_PRESENT = "-"
 EDGE_MISSING = "|"
 
 
+def _edge_in_graph(intron_graph, u_tuple, v_tuple) -> bool:
+    """True iff ``u_tuple -> v_tuple`` exists in the IntronGraph.
+
+    Starting-vertex edges only live in ``incoming_edges[intron]`` (they are
+    never recorded in ``outgoing_edges[starting_vertex]``), so consulting
+    ``outgoing_edges`` alone misses them.
+    """
+    if v_tuple in intron_graph.outgoing_edges.get(u_tuple, ()):
+        return True
+    if u_tuple in intron_graph.incoming_edges.get(v_tuple, ()):
+        return True
+    return False
+
+
+def _terminal_candidates(
+    flow: "Intron2Graph",
+) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+    """Return ``(low_candidates, high_candidates)`` as sorted ``(pos, vid)`` lists.
+
+    ``low_candidates`` covers polyT / read_start vertices (incoming side of an
+    intron); ``high_candidates`` covers polyA / read_end (outgoing side).
+    """
+    low: List[Tuple[int, int]] = []
+    high: List[Tuple[int, int]] = []
+    for v_tuple, vid in flow.intron2vertex.items():
+        if is_starting_vertex(v_tuple):
+            low.append((v_tuple[1], vid))
+        elif is_terminal_vertex(v_tuple):
+            high.append((v_tuple[1], vid))
+    low.sort()
+    high.sort()
+    return low, high
+
+
+def _match_terminal(
+    candidates: List[Tuple[int, int]],
+    position: int,
+    apa_delta: int,
+) -> Optional[int]:
+    """Return the closest candidate vertex id within ``apa_delta`` of ``position``.
+
+    Linear scan; graph-local terminal lists are short. Ties broken by first
+    occurrence in the sorted list (lowest position wins).
+    """
+    best_vid: Optional[int] = None
+    best_diff = apa_delta + 1
+    for cand_pos, vid in candidates:
+        diff = abs(cand_pos - position)
+        if diff <= apa_delta and diff < best_diff:
+            best_diff = diff
+            best_vid = vid
+    return best_vid
+
+
 def _thread_transcript(
     flow: "Intron2Graph",
     intron_graph,
+    gene_info,
+    t_id: str,
     introns,
+    apa_delta: int,
+    low_candidates: List[Tuple[int, int]],
+    high_candidates: List[Tuple[int, int]],
 ) -> Tuple[str, str, str, int, int]:
-    """Project an annotated transcript's intron tuples onto the simplified graph.
+    """Project an annotated transcript onto the simplified graph.
 
-    Each annotated intron is run through ``intron_collector.substitute`` and
-    mapped to a graph vertex; introns in ``discarded_introns`` or whose
-    substituted form is not in ``clustered_introns`` map to ``None``. Every
-    consecutive pair is then checked against ``intron_graph.outgoing_edges``.
+    Each annotated intron runs through ``intron_collector.substitute`` and
+    maps to a graph vertex; the transcript's 5'/3' exon boundaries (low/high
+    genomic ends) are matched to the closest starting / terminal vertex in
+    the graph within ``apa_delta``. Anything that doesn't resolve becomes a
+    ``*`` slot — no synthetic vertices are introduced. Every consecutive
+    pair in the resulting chain is then checked against
+    ``intron_graph.outgoing_edges``.
 
     Returns ``(status, path_str, simple_path_str, missing_vertices,
     missing_edges)``:
@@ -171,23 +233,29 @@ def _thread_transcript(
       info: ``-`` (edge present), ``|`` (both real but no edge), ``-``
       defaulted whenever either side is a missing-vertex ``*``.
     - ``simple_path_str`` is a comma-separated list of the vertex ids
-      that actually map to the graph (missing introns are dropped, no
+      that actually map to the graph (missing slots are dropped, no
       gap markers); ignores edge state.
     """
     if not introns:
         return "monoexonic", "", "", 0, 0
 
     intron_collector = intron_graph.intron_collector
-    mapped: List[Optional[int]] = []
+    intron_mapped: List[Optional[int]] = []
     for intron in introns:
         if intron in intron_collector.discarded_introns:
-            mapped.append(None)
+            intron_mapped.append(None)
             continue
         substituted = intron_collector.substitute(intron)
         if substituted not in intron_collector.clustered_introns:
-            mapped.append(None)
+            intron_mapped.append(None)
             continue
-        mapped.append(flow.intron2vertex.get(substituted))
+        intron_mapped.append(flow.intron2vertex.get(substituted))
+
+    exons = gene_info.all_isoforms_exons[t_id]
+    low_vid = _match_terminal(low_candidates, exons[0][0], apa_delta)
+    high_vid = _match_terminal(high_candidates, exons[-1][1], apa_delta)
+
+    mapped: List[Optional[int]] = [low_vid] + intron_mapped + [high_vid]
 
     missing_vertices = sum(1 for v in mapped if v is None)
 
@@ -199,7 +267,7 @@ def _thread_transcript(
             continue
         u_tuple = flow.vertex2intron[u]
         v_tuple = flow.vertex2intron[v]
-        edge_ok.append(v_tuple in intron_graph.outgoing_edges.get(u_tuple, ()))
+        edge_ok.append(_edge_in_graph(intron_graph, u_tuple, v_tuple))
     missing_edges = sum(1 for ok in edge_ok if not ok)
 
     vertex_tokens = [GAP_MARKER if v is None else str(v) for v in mapped]
@@ -237,18 +305,22 @@ def _dump_paths(
     """Write per-gene ground-truth paths TSV.
 
     Columns: ``transcript_id  count  status  path  path_simple
-    missing_vertices  missing_edges``. ``path`` interleaves vertex tokens
-    with edge separators (``-`` present, ``|`` absent, ``*`` for missing
-    vertex). ``path_simple`` is a plain comma-separated vertex sequence
-    using ``*`` for missing vertices, ignoring edge state.
+    missing_vertices  missing_edges``. The path threads through the
+    transcript's 5'/3' exon boundaries (matched to the closest starting /
+    terminal vertex within ``params.apa_delta``) followed by its intron
+    chain; unmatched slots become ``*``.
     """
+    apa_delta = intron_graph.params.apa_delta
+    low_candidates, high_candidates = _terminal_candidates(flow)
+
     rows = []
     for t_id, introns in gene_info.all_isoforms_introns.items():
         if t_id not in counts_map:
             continue
         count = counts_map[t_id]
         status, path_str, simple_str, missing_vertices, missing_edges = _thread_transcript(
-            flow, intron_graph, introns
+            flow, intron_graph, gene_info, t_id, introns,
+            apa_delta, low_candidates, high_candidates,
         )
         rows.append((t_id, count, status, path_str, simple_str, missing_vertices, missing_edges))
 
@@ -270,76 +342,132 @@ def _dump_ref_data(
 ) -> None:
     """Emit per-gene reference-vs-graph diff TSVs.
 
-    ``<chr>.<gene>.ref_vertices.tsv`` — one row per unique annotated intron
+    ``<chr>.<gene>.ref_vertices.tsv`` — one row per unique annotated slot
     across all transcripts in this gene:
-    ``ref_start  ref_end  status  vertex_id  graph_start  graph_end``
-    - ``status`` ∈ {``in_graph``, ``discarded``, ``unmapped``}
-    - ``vertex_id`` is the integer graph id (empty for non-``in_graph``)
-    - ``graph_start/graph_end`` are the post-substitution coords, repeating
-      the ref coords when no substitution occurred (empty for ``discarded``)
+    ``kind  ref_start  ref_end  status  vertex_id  graph_start  graph_end``
+    - ``kind`` ∈ {``intron``, ``starting``, ``terminal``} — ``starting`` is
+      the low-coord exon boundary (matched against polyT / read_start),
+      ``terminal`` is the high-coord boundary (polyA / read_end)
+    - ``status`` for introns ∈ {``in_graph``, ``discarded``, ``unmapped``};
+      for terminal slots ∈ {``in_graph``, ``unmapped``}
+    - ``vertex_id`` is the integer graph id (``*`` when unresolved)
+    - ``graph_start/graph_end`` are the post-substitution intron coords or
+      the matched terminal position; ``*`` when no graph counterpart
 
-    ``<chr>.<gene>.ref_edges.tsv`` — one row per unique consecutive intron
-    pair appearing in at least one transcript:
-    ``u_start  u_end  v_start  v_end  status  u_id  v_id``
+    Terminal slots are matched by position within
+    ``intron_graph.params.apa_delta``; if no graph terminal sits inside the
+    radius the slot is recorded as ``unmapped`` rather than synthesized.
+
+    ``<chr>.<gene>.ref_edges.tsv`` — one row per unique consecutive pair
+    appearing in at least one transcript (intron→intron, plus
+    starting→first_intron and last_intron→terminal):
+    ``kind  u_start  u_end  v_start  v_end  status  u_id  v_id``
     - ``status`` ∈ {``in_graph``, ``missing_edge``, ``missing_vertex``}
     """
     intron_collector = intron_graph.intron_collector
+    apa_delta = intron_graph.params.apa_delta
+    low_candidates, high_candidates = _terminal_candidates(flow)
 
-    vertex_info: Dict[Tuple[int, int], Tuple[Optional[int], str, Optional[Tuple[int, int]]]] = {}
-    edge_info: Dict[Tuple[Tuple[int, int], Tuple[int, int]], Tuple[Optional[int], Optional[int], str]] = {}
+    vertex_info: Dict[
+        Tuple[str, int, int],
+        Tuple[Optional[int], str, Optional[Tuple[int, int]]],
+    ] = {}
+    edge_info: Dict[
+        Tuple, Tuple[Optional[int], Optional[int], str]
+    ] = {}
 
-    def resolve(intron: Tuple[int, int]) -> Optional[int]:
-        if intron in vertex_info:
-            return vertex_info[intron][0]
+    def resolve_intron(intron: Tuple[int, int]) -> Optional[int]:
+        key = ("intron", intron[0], intron[1])
+        if key in vertex_info:
+            return vertex_info[key][0]
         if intron in intron_collector.discarded_introns:
-            vertex_info[intron] = (None, "discarded", None)
+            vertex_info[key] = (None, "discarded", None)
             return None
         substituted = intron_collector.substitute(intron)
         if substituted not in intron_collector.clustered_introns:
-            vertex_info[intron] = (None, "unmapped", substituted)
+            vertex_info[key] = (None, "unmapped", substituted)
             return None
         vid = flow.intron2vertex.get(substituted)
         if vid is None:
-            vertex_info[intron] = (None, "unmapped", substituted)
+            vertex_info[key] = (None, "unmapped", substituted)
             return None
-        vertex_info[intron] = (vid, "in_graph", substituted)
+        vertex_info[key] = (vid, "in_graph", substituted)
         return vid
 
-    for _t_id, introns in gene_info.all_isoforms_introns.items():
+    def resolve_terminal(position: int, side: str) -> Optional[int]:
+        kind = "starting" if side == "low" else "terminal"
+        key = (kind, position, position)
+        if key in vertex_info:
+            return vertex_info[key][0]
+        candidates = low_candidates if side == "low" else high_candidates
+        vid = _match_terminal(candidates, position, apa_delta)
+        if vid is None:
+            vertex_info[key] = (None, "unmapped", None)
+            return None
+        graph_tuple = flow.vertex2intron[vid]
+        vertex_info[key] = (vid, "in_graph", (graph_tuple[1], graph_tuple[1]))
+        return vid
+
+    def classify_edge(
+        u_vid: Optional[int], v_vid: Optional[int]
+    ) -> Tuple[Optional[int], Optional[int], str]:
+        if u_vid is None or v_vid is None:
+            return u_vid, v_vid, "missing_vertex"
+        u_tuple = flow.vertex2intron[u_vid]
+        v_tuple = flow.vertex2intron[v_vid]
+        if _edge_in_graph(intron_graph, u_tuple, v_tuple):
+            return u_vid, v_vid, "in_graph"
+        return u_vid, v_vid, "missing_edge"
+
+    for t_id, introns in gene_info.all_isoforms_introns.items():
         if not introns:
             continue
-        mapped = [resolve(intron) for intron in introns]
+        mapped = [resolve_intron(intron) for intron in introns]
         for i in range(len(introns) - 1):
-            key = (introns[i], introns[i + 1])
+            key = ("intron",
+                   introns[i][0], introns[i][1],
+                   introns[i + 1][0], introns[i + 1][1])
             if key in edge_info:
                 continue
-            u, v = mapped[i], mapped[i + 1]
-            if u is None or v is None:
-                edge_info[key] = (u, v, "missing_vertex")
-                continue
-            u_tuple = flow.vertex2intron[u]
-            v_tuple = flow.vertex2intron[v]
-            if v_tuple in intron_graph.outgoing_edges.get(u_tuple, ()):
-                edge_info[key] = (u, v, "in_graph")
-            else:
-                edge_info[key] = (u, v, "missing_edge")
+            edge_info[key] = classify_edge(mapped[i], mapped[i + 1])
+
+        exons = gene_info.all_isoforms_exons[t_id]
+        low_pos = exons[0][0]
+        high_pos = exons[-1][1]
+        low_vid = resolve_terminal(low_pos, "low")
+        high_vid = resolve_terminal(high_pos, "high")
+
+        first_intron = introns[0]
+        last_intron = introns[-1]
+        start_key = ("starting", low_pos, low_pos,
+                     first_intron[0], first_intron[1])
+        if start_key not in edge_info:
+            edge_info[start_key] = classify_edge(low_vid, mapped[0])
+        end_key = ("terminal", last_intron[0], last_intron[1],
+                   high_pos, high_pos)
+        if end_key not in edge_info:
+            edge_info[end_key] = classify_edge(mapped[-1], high_vid)
 
     with open(ref_vertices_path, "w") as vf:
-        vf.write("ref_start\tref_end\tstatus\tvertex_id\tgraph_start\tgraph_end\n")
-        for (rs, re_), (vid, status, graph_tuple) in sorted(vertex_info.items()):
+        vf.write("kind\tref_start\tref_end\tstatus\tvertex_id\tgraph_start\tgraph_end\n")
+        for (kind, rs, re_), (vid, status, graph_tuple) in sorted(vertex_info.items()):
             vid_str = GAP_MARKER if vid is None else str(vid)
             if graph_tuple is None:
                 gs_str = ge_str = GAP_MARKER
             else:
                 gs_str, ge_str = str(graph_tuple[0]), str(graph_tuple[1])
-            vf.write("%d\t%d\t%s\t%s\t%s\t%s\n" % (rs, re_, status, vid_str, gs_str, ge_str))
+            vf.write("%s\t%d\t%d\t%s\t%s\t%s\t%s\n"
+                     % (kind, rs, re_, status, vid_str, gs_str, ge_str))
 
     with open(ref_edges_path, "w") as ef:
-        ef.write("u_start\tu_end\tv_start\tv_end\tstatus\tu_id\tv_id\n")
-        for ((us, ue), (vs, ve_)), (u_id, v_id, status) in sorted(edge_info.items()):
+        ef.write("kind\tu_start\tu_end\tv_start\tv_end\tstatus\tu_id\tv_id\n")
+        for key, (u_id, v_id, status) in sorted(edge_info.items()):
+            kind = key[0]
+            us, ue, vs, ve_ = key[1], key[2], key[3], key[4]
             u_str = GAP_MARKER if u_id is None else str(u_id)
             v_str = GAP_MARKER if v_id is None else str(v_id)
-            ef.write("%d\t%d\t%d\t%d\t%s\t%s\t%s\n" % (us, ue, vs, ve_, status, u_str, v_str))
+            ef.write("%s\t%d\t%d\t%d\t%d\t%s\t%s\t%s\n"
+                     % (kind, us, ue, vs, ve_, status, u_str, v_str))
 
 
 def dump_flow_graph(
