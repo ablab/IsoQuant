@@ -933,15 +933,9 @@ class FusionDetector:
             if not right_exons:
                 return None, None, None
             right_exons = sorted([(int(e.start), int(e.end)) for e in right_exons])
-            try:
-                ref = pysam.FastaFile(self.reference_fasta)
-            except Exception:
-                return None, None, None
-            try:
+            with pysam.FastaFile(self.reference_fasta) as ref:
                 left_seq = "".join(ref.fetch(c1, s - 1, e) or "" for s, e in left_exons)
                 right_seq = "".join(ref.fetch(c2, s - 1, e) or "" for s, e in right_exons)
-            finally:
-                ref.close()
             if not left_seq or not right_seq:
                 return None, None, None
             return left_seq + right_seq, left_exons, right_exons
@@ -1158,7 +1152,7 @@ class FusionDetector:
         validator.filter_non_coding_genes()
         validator.filter_multicopy_artifact_pairs()
         validator.apply_frequency_filters()
-        for fusion_key, meta in self.fusion_metadata.items():
+        for fusion_key, meta in list(self.fusion_metadata.items()):
             # Check if already marked invalid by frequency filter
             if meta.get("is_valid", True) is False:
                 # Keep existing reasons, skip to next
