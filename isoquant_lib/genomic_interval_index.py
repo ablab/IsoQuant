@@ -79,7 +79,11 @@ class GenomicIntervalIndex:
                 gene = self.db[gene_id]
                 genes.append(gene)
             except Exception:
-                pass
+                logger.debug(
+                    "Failed to resolve gene %r from interval tree at %s:%s",
+                    iv.data, chrom, pos,
+                    exc_info=True,
+                )
         return genes
 
     def get_exons_at(self, chrom: str, pos: int, window: Optional[int] = None) -> list:
@@ -99,7 +103,11 @@ class GenomicIntervalIndex:
                 exon = self.db[exon_id]
                 exons.append(exon)
             except Exception:
-                pass
+                logger.debug(
+                    "Failed to resolve exon %r from interval tree at %s:%s",
+                    iv.data, chrom, pos,
+                    exc_info=True,
+                )
         return exons
 
     def get_exons_of_gene(self, gene_feature) -> list:

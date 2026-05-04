@@ -750,40 +750,38 @@ class FusionDetector:
             best_p2 = 0
             n = len(items)
             j = 0
+            k = 0
             sum_w = 0
-            # Maintain a multiset (sorted list) on p2 within current p1-window using two-pointer
-            # For speed, we keep an array slice [j..i] and then slide a second pointer k on p2.
+            sum_p1w = 0
+            sum_p2w = 0
+            # Sort by (p1, p2) once: O(n log n). Then use two-pointer for both windows: O(n).
+            items.sort(key=lambda x: (x[0], x[1]))
+            # Two-pointer sliding window on both p1 and p2 dimensions
             for i in range(n):
                 p1_i, p2_i, wi = items[i]
-                # Expand p1-window
-                sum_w += wi
-                # Shrink from left until p1-range <= w
-                while p1_i - items[j][0] > w:
+                # Shrink p1-window from left if needed
+                while j <= i and p1_i - items[j][0] > w:
                     sum_w -= items[j][2]
+                    sum_p1w -= items[j][0] * items[j][2]
+                    sum_p2w -= items[j][1] * items[j][2]
                     j += 1
-                # Now consider only slice items[j:i+1]; build p2-sorted view (small slice)
-                slice_view = items[j:i+1]
-                slice_view.sort(key=lambda x: x[1])  # sort by p2
-                # Secondary sliding window on p2
-                k = 0
-                cur_sum = 0
-                for t in range(len(slice_view)):
-                    cur_sum += slice_view[t][2]
-                    while slice_view[t][1] - slice_view[k][1] > w:
-                        cur_sum -= slice_view[k][2]
-                        k += 1
-                    if cur_sum > best_total:
-                        # Weighted mean p1/p2 for current p2-window [k..t]
-                        s_w = 0
-                        s_p1 = 0
-                        s_p2 = 0
-                        for x in slice_view[k:t+1]:
-                            s_w += x[2]
-                            s_p1 += x[0] * x[2]
-                            s_p2 += x[1] * x[2]
-                        best_total = s_w
-                        best_p1 = s_p1 // s_w
-                        best_p2 = s_p2 // s_w
+                # Expand current item into window
+                sum_w += wi
+                sum_p1w += p1_i * wi
+                sum_p2w += p2_i * wi
+                # k must stay within p1-window
+                k = max(k, j)
+                # Shrink p2-window from left if needed (keeping only items within p2-window relative to i)
+                while k <= i and p2_i - items[k][1] > w:
+                    sum_w -= items[k][2]
+                    sum_p1w -= items[k][0] * items[k][2]
+                    sum_p2w -= items[k][1] * items[k][2]
+                    k += 1
+                # Update best window if current is better
+                if sum_w > best_total:
+                    best_total = sum_w
+                    best_p1 = sum_p1w // sum_w if sum_w > 0 else 0
+                    best_p2 = sum_p2w // sum_w if sum_w > 0 else 0
             return best_p1, best_p2, best_total
         best_pair = None
         best = (None, None, 0)
