@@ -1,7 +1,6 @@
 import logging
 import re
 from collections import defaultdict
-from functools import lru_cache
 from typing import Any, Optional
 
 import gffutils
@@ -22,6 +21,12 @@ from .genomic_interval_index import GenomicIntervalIndex
 
 logger = logging.getLogger('IsoQuant')
 ANTISENSE_SUFFIX_RE = re.compile(r"-(AS\d+|DT|DIVERGENT|NAT)$", re.IGNORECASE)
+
+# Module-level caches
+_CONTEXT_CACHE = {}  # (chrom, pos) → (gene_name, region_type)
+_GENE_ASSIGNMENT_CACHE = {}  # (chrom, pos) → (gene_name, score)
+_ALIGNER_MAP_CACHE = {}  # seq → tuple of hits
+_CIGAR_CACHE = {}  # cigar_string → aligned_length
 
 class FusionDetector:
     def __init__(self, bam_path: str, gene_db_path: str, reference_fasta: Optional[str]) -> None:
@@ -125,10 +130,13 @@ class FusionDetector:
         except Exception:
             return []
 
-    @lru_cache(maxsize=200000)
     def _context_query(self, chrom, pos):
         # Query genomic context at position (chrom, pos).
+        # Uses module-level cache to avoid holding self reference.
         # Uses interval tree if available for O(log n) performance, otherwise falls back to gffutils.
+        cache_key = (chrom, pos)
+        if cache_key in _CONTEXT_CACHE:
+            return _CONTEXT_CACHE[cache_key]        
         try:
             genes = []
             exons = []
@@ -144,19 +152,26 @@ class FusionDetector:
                 gene_name = genes[0].attributes.get('gene_name', [genes[0].id])[0]
                 # Are we in an exon of that gene?
                 if exons:
-                    return gene_name, "exonic"
+                    result = (gene_name, "exonic")
                 else:
-                    return gene_name, "intronic"
+                    result = (gene_name, "intronic")
             else:
                 # Not inside any gene; check if overlapping any exon
-                return None, ("exonic" if exons else "intergenic")
+                result = (None, ("exonic" if exons else "intergenic"))
         except Exception:
             logger.debug(
                 "Context query failed for %s:%s",
                 chrom, pos,
                 exc_info=True
             )
-            return None, "unknown"
+            result = (None, "unknown")        
+        # Cache with size limit
+        if len(_CONTEXT_CACHE) > 200000:
+            # Remove oldest entries (FIFO)
+            for _ in range(20000):
+                _CONTEXT_CACHE.pop(next(iter(_CONTEXT_CACHE)))
+        _CONTEXT_CACHE[cache_key] = result
+        return result
 
     def _get_parent_gene_symbol(self, feature):
         # Extract gene symbol from a feature, handling gene/transcript/other feature types.
@@ -503,9 +518,19 @@ class FusionDetector:
                                          fusion_partner_chrom=fusion_partner_chrom,
                                          fusion_partner_pos=fusion_partner_pos)
 
-    @lru_cache(maxsize=500000)
     def assign_fusion_gene_cached(self, chrom, pos):
-        return self.assign_fusion_gene(chrom, pos)
+        # Cache gene assignment results at (chrom, pos) using module-level dict
+        cache_key = (chrom, pos)
+        if cache_key in _GENE_ASSIGNMENT_CACHE:
+            return _GENE_ASSIGNMENT_CACHE[cache_key]
+        result = self.assign_fusion_gene(chrom, pos)
+        # Cache with size limit to prevent unbounded growth
+        if len(_GENE_ASSIGNMENT_CACHE) > 500000:
+            # Remove oldest entries (FIFO)
+            for _ in range(50000):
+                _GENE_ASSIGNMENT_CACHE.pop(next(iter(_GENE_ASSIGNMENT_CACHE)))
+        _GENE_ASSIGNMENT_CACHE[cache_key] = result
+        return result
 
     def _passes_read_filters(self, read, min_al_len_primary, min_sa_mapq):
         # Check if read passes basic quality filters.
@@ -609,31 +634,43 @@ class FusionDetector:
         if not cigartuples:
             return 0
         return sum(l for op, l in cigartuples if op in (0, 7, 8))
-
+    
     def aligned_len_from_cigarstring(self, cigar: Optional[str]) -> int:
         """Sum the read-aligned operations (M, =, X) from a CIGAR string."""
         return self._cached_aligned_len_from_cigarstring(cigar)
 
     @staticmethod
-    @lru_cache(maxsize=50000)
     def _cached_aligned_len_from_cigarstring(cigar):
         if not cigar:
             return 0
+        cached = _CIGAR_CACHE.get(cigar)
+        if cached is not None:
+            return cached
         total = 0
         for m in re.finditer(r'(\d+)([MIDNSHP=XB])', cigar):
-            length = int(m.group(1)); op = m.group(2)
-            if op in ('M', '=', 'X'):
+            length = int(m.group(1))
+            op = m.group(2)
+            if op in ("M", "=", "X"):
                 total += length
+        _CIGAR_CACHE[cigar] = total
         return total
 
-    @lru_cache(maxsize=10000)
     def _cached_aligner_map(self, seq):
-        # Cache aligner.map() results for identical sequences to avoid expensive re-alignment
+        # Cache aligner.map() results for identical sequences using module-level dict
+        if seq in _ALIGNER_MAP_CACHE:
+            return _ALIGNER_MAP_CACHE[seq]
         try:
             hits = tuple(self.aligner.map(seq))
-            return hits
+            result = hits
         except Exception:
-            return ()
+            result = ()
+        # Cache with size limit
+        if len(_ALIGNER_MAP_CACHE) > 10000:
+            # Remove oldest entries (FIFO)
+            for _ in range(1000):
+                _ALIGNER_MAP_CACHE.pop(next(iter(_ALIGNER_MAP_CACHE)))
+        _ALIGNER_MAP_CACHE[seq] = result
+        return result
 
     def _is_softclip_orientation_valid(self, read, clip_side, sa_chr, sa_pos, tol=10):
         if clip_side is None:

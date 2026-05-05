@@ -122,25 +122,32 @@ class GenomicIntervalIndex:
         genes = []
         for chrom, tree in self.gene_trees.items():
             for interval in tree:
+                gene_id = interval.data
                 try:
-                    gene_id = interval.data
-                    gene = self.db[gene_id]
-                    genes.append(gene)
-                except Exception:
-                    pass
+                    genes.append(self.db[gene_id])
+                except (KeyError, AttributeError, TypeError):
+                    logger.debug(
+                        "Failed to resolve gene feature for id %r on chromosome %s",
+                        gene_id, chrom,
+                        exc_info=True,
+                    )
         return genes
 
     def find_genes_by_name(self, gene_name: str) -> list:
-        """Return all gene features whose ``gene_name`` attribute matches ``gene_name``."""
+        """Return all gene features whose gene_name attribute matches gene_name."""
         matching_genes = []
         for chrom, tree in self.gene_trees.items():
             for interval in tree:
+                gene_id = interval.data
                 try:
-                    gene_id = interval.data
                     gene = self.db[gene_id]
-                    attrs = getattr(gene, 'attributes', {}) or {}
-                    if attrs.get('gene_name', [None])[0] == gene_name:
+                    attrs = getattr(gene, "attributes", {}) or {}
+                    if attrs.get("gene_name", [None])[0] == gene_name:
                         matching_genes.append(gene)
-                except Exception:
-                    pass
+                except (KeyError, AttributeError, TypeError):
+                    logger.debug(
+                        "Failed to evaluate gene %r on chromosome %s during name lookup",
+                        gene_id, chrom,
+                        exc_info=True,
+                    )
         return matching_genes
