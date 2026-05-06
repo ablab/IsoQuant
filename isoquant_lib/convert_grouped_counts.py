@@ -339,7 +339,7 @@ def parse_args():
     parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
     parser.add_argument("--input", "-i", type=str, help="counts in linear IsoQuant format", required=True)
     parser.add_argument("--genedb", "-g", type=str, help="gene annotation in .db format "
-                                                         "(can be found in IsoQuant output folder), "
+                                                         "(path to .db file can be found in the isoquant.log file), "
                                                          "feature names will be used instead of IDs if provided")
     parser.add_argument("--feature_type", help="feature type to be converted "
                                                "[gene, transcript, exon, intron]; "

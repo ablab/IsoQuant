@@ -37,7 +37,29 @@ If `--read_group` is set or multiple files are provided, the per-group expressio
 * `SAMPLE_ID.exon_grouped_counts.linear.tsv`
 * `SAMPLE_ID.intron_grouped_counts.linear.tsv`
 
-Note, that grouped counts can be converted to any format using `isoquant_lib/convert_grouped_counts.py`.
+Note that grouped counts can be converted to any format using `{IsoQuant intsllation folder}/isoquant_lib/convert_grouped_counts.py`.
+The script accepts the following arguments:
+
+`--output` or `-o`
+    Output prefix name;
+
+`--input` or `-i`
+    Path to counts files in linear IsoQuant format;
+
+`--genedb` or `-g`
+    Gene annotation in gffutils `.db` format (can be found in IsoQuant log), feature names will be used instead of IDs if provided; works only for genes and trascncripts;
+
+`--feature_type {gene,transcript,exon,intron}`
+    Feature type to be converted [gene, transcript, exon, intron]; annotation lookup applies only to genes/transcripts;
+
+`--output_format {mtx,matrix}` or `-f {mtx,matrix}`
+    Output format; `matrix` is a simple TSV matrix (not recommended for large matrices), `mtx` is a Seurat-compatible MTX format;
+`--tpm`
+    Convert counts to TPM (works only for genes and transcripts);
+
+`--gzip`
+    Gzip output files.
+
 
 #### Other formats
 By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 
