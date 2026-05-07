@@ -31,6 +31,13 @@ except (ImportError, SystemError):
     NUMBA_AVAILABLE = False
 
 
+# Index entries are packed as little-endian uint40 (5 bytes), cutting the
+# inverted-list footprint by 37.5% relative to uint64. This caps the supported
+# barcode count at 2**40 - 1 (~1.1T), well above any realistic whitelist.
+INDEX_BYTES_PER_ENTRY: int = 5
+MAX_INDEXED_BARCODES: int = (1 << (INDEX_BYTES_PER_ENTRY * 8)) - 1
+
+
 def _count_kmers_python(seqs, shifts, mask, kmer_counts, num_kmers_per_seq):
     """Pure Python fallback for k-mer counting."""
     for seq_idx in range(len(seqs)):
@@ -40,8 +47,8 @@ def _count_kmers_python(seqs, shifts, mask, kmer_counts, num_kmers_per_seq):
             kmer_counts[kmer_idx] += 1
 
 
-def _populate_index_python(seqs, shifts, mask, index_ranges, index, num_kmers_per_seq):
-    """Pure Python fallback for index population."""
+def _populate_index_python(seqs, shifts, mask, index_ranges, index_bytes, num_kmers_per_seq):
+    """Pure Python fallback writing packed uint40 entries (little-endian)."""
     total_kmers = len(index_ranges) - 1
     write_positions = numpy.zeros(total_kmers, dtype=numpy.uint64)
 
@@ -50,7 +57,12 @@ def _populate_index_python(seqs, shifts, mask, index_ranges, index, num_kmers_pe
         for k_pos in range(num_kmers_per_seq):
             kmer_idx = (seq >> int(shifts[k_pos])) & mask
             write_pos = int(index_ranges[kmer_idx] + write_positions[kmer_idx])
-            index[write_pos] = seq_idx
+            base = write_pos * 5
+            index_bytes[base + 0] = seq_idx & 0xFF
+            index_bytes[base + 1] = (seq_idx >> 8) & 0xFF
+            index_bytes[base + 2] = (seq_idx >> 16) & 0xFF
+            index_bytes[base + 3] = (seq_idx >> 24) & 0xFF
+            index_bytes[base + 4] = (seq_idx >> 32) & 0xFF
             write_positions[kmer_idx] += 1
 
 
@@ -65,8 +77,8 @@ if NUMBA_AVAILABLE:
                 kmer_counts[kmer_idx] += 1
 
     @njit(cache=True)
-    def _populate_index_numba(seqs, shifts, mask, index_ranges, index, num_kmers_per_seq):
-        """Numba JIT-compiled index population - O(n) direct writes."""
+    def _populate_index_numba(seqs, shifts, mask, index_ranges, index_bytes, num_kmers_per_seq):
+        """Numba JIT-compiled index population: writes 5-byte little-endian entries."""
         total_kmers = len(index_ranges) - 1
         write_positions = numpy.zeros(total_kmers, dtype=numpy.uint64)
 
@@ -75,7 +87,12 @@ if NUMBA_AVAILABLE:
             for k_pos in range(num_kmers_per_seq):
                 kmer_idx = (seq >> shifts[k_pos]) & mask
                 write_pos = index_ranges[kmer_idx] + write_positions[kmer_idx]
-                index[write_pos] = seq_idx
+                base = write_pos * 5
+                index_bytes[base + 0] = seq_idx & 0xFF
+                index_bytes[base + 1] = (seq_idx >> 8) & 0xFF
+                index_bytes[base + 2] = (seq_idx >> 16) & 0xFF
+                index_bytes[base + 3] = (seq_idx >> 24) & 0xFF
+                index_bytes[base + 4] = (seq_idx >> 32) & 0xFF
                 write_positions[kmer_idx] += 1
 
     _count_kmers = _count_kmers_numba
@@ -131,15 +148,17 @@ class SharedMemoryArray2BitKmerIndexer:
     """
 
     SEQ_DTYPE = numpy.uint64
-    KMER_DTYPE = numpy.uint64
-    INDEX_DTYPE = numpy.uint64
+    INDEX_BYTE_DTYPE = numpy.uint8  # uint40 entries packed as 5 bytes each
+    RANGES_DTYPE = numpy.uint64
 
-    def __init__(self, known_bin_seq: list, kmer_size: int = 12, seq_len: int = 25):
+    def __init__(self, known_bin_seq, kmer_size: int = 12, seq_len: int = 25):
         """
         Initialize shared memory k-mer index.
 
         Args:
-            known_bin_seq: Pre-encoded sequences as integers (use str_to_2bit)
+            known_bin_seq: Pre-encoded sequences as integers (use str_to_2bit).
+                Accepts a numpy.uint64 array (preferred — used without copy) or
+                any sequence convertible by numpy.asarray.
             kmer_size: Length of k-mers
             seq_len: Length of sequences (all must be same length)
         """
@@ -158,12 +177,20 @@ class SharedMemoryArray2BitKmerIndexer:
             self.index_shared_memory = None
             self.index_ranges_shared_memory = None
             self.known_bin_seq = numpy.array([], dtype=self.SEQ_DTYPE)
-            self.index = numpy.array([], dtype=self.KMER_DTYPE)
-            self.index_ranges = numpy.zeros(total_kmers + 1, dtype=self.INDEX_DTYPE)
+            self.index = numpy.array([], dtype=self.INDEX_BYTE_DTYPE)
+            self.index_ranges = numpy.zeros(total_kmers + 1, dtype=self.RANGES_DTYPE)
             return
 
-        # Convert to numpy array for vectorized operations
-        seqs = numpy.array(known_bin_seq, dtype=self.SEQ_DTYPE)
+        if self.total_sequences > MAX_INDEXED_BARCODES:
+            raise ValueError(
+                f"SharedMemoryArray2BitKmerIndexer supports at most "
+                f"{MAX_INDEXED_BARCODES} sequences (uint40 packed entries); "
+                f"got {self.total_sequences}"
+            )
+
+        # asarray reuses the buffer when input is already a uint64 numpy array,
+        # avoiding a redundant 8-byte-per-entry copy on large whitelists.
+        seqs = numpy.asarray(known_bin_seq, dtype=self.SEQ_DTYPE)
 
         # Precompute bit shifts for k-mer extraction
         num_kmers_per_seq = seq_len - kmer_size + 1
@@ -178,29 +205,34 @@ class SharedMemoryArray2BitKmerIndexer:
         _count_kmers(seqs, shifts, self.mask, kmer_counts, num_kmers_per_seq)
         logger.info("K-mer counting complete")
 
-        # Compute index size from counts
+        # Compute index size (entries) from counts; bytes = entries * 5
         self.index_size = int(numpy.sum(kmer_counts))
 
-        # Allocate barcodes shared memory
+        # Allocate barcodes shared memory and copy in once. After this we
+        # discard the temporary `seqs` reference and use the shared-memory
+        # view as the working array, so only one 8 GB-per-billion copy is
+        # alive across the populate phase.
         self.barcodes_shared_memory = shared_memory.SharedMemory(
             create=True, size=self.total_sequences * self.SEQ_DTYPE().nbytes)
         self.known_bin_seq = numpy.ndarray(
             shape=(self.total_sequences,), dtype=self.SEQ_DTYPE,
             buffer=self.barcodes_shared_memory.buf)
         self.known_bin_seq[:] = seqs[:]
+        del seqs
 
-        # Allocate index shared memory
+        # Allocate index shared memory as a packed byte buffer (uint40 entries)
         self.index_shared_memory = shared_memory.SharedMemory(
-            create=True, size=self.index_size * self.KMER_DTYPE().nbytes)
+            create=True, size=self.index_size * INDEX_BYTES_PER_ENTRY)
         self.index = numpy.ndarray(
-            shape=(self.index_size,), dtype=self.KMER_DTYPE,
+            shape=(self.index_size * INDEX_BYTES_PER_ENTRY,),
+            dtype=self.INDEX_BYTE_DTYPE,
             buffer=self.index_shared_memory.buf)
 
         # Allocate index_ranges shared memory
         self.index_ranges_shared_memory = shared_memory.SharedMemory(
-            create=True, size=(total_kmers + 1) * self.INDEX_DTYPE().nbytes)
+            create=True, size=(total_kmers + 1) * self.RANGES_DTYPE().nbytes)
         self.index_ranges = numpy.ndarray(
-            shape=(total_kmers + 1,), dtype=self.INDEX_DTYPE,
+            shape=(total_kmers + 1,), dtype=self.RANGES_DTYPE,
             buffer=self.index_ranges_shared_memory.buf)
 
         # Compute ranges from counts using cumsum
@@ -208,11 +240,12 @@ class SharedMemoryArray2BitKmerIndexer:
         self.index_ranges[1:] = numpy.cumsum(kmer_counts)
 
         # Pass 2: Populate index using direct writes (Numba JIT if available)
-        _populate_index(seqs, shifts, self.mask, self.index_ranges, self.index, num_kmers_per_seq)
+        _populate_index(self.known_bin_seq, shifts, self.mask,
+                        self.index_ranges, self.index, num_kmers_per_seq)
         logger.info("K-mer index population complete")
 
         # Explicitly delete temporary arrays to free memory before forking
-        del seqs, kmer_counts, shifts
+        del kmer_counts, shifts
         gc.collect()
 
     def __del__(self):
@@ -255,15 +288,15 @@ class SharedMemoryArray2BitKmerIndexer:
         kmer_index.index_shared_memory = shared_memory.SharedMemory(
             create=False, name=shared_mem_index_info.index_sm_name)
         kmer_index.index = numpy.ndarray(
-            shape=(kmer_index.index_size,),
-            dtype=kmer_index.KMER_DTYPE,
+            shape=(kmer_index.index_size * INDEX_BYTES_PER_ENTRY,),
+            dtype=kmer_index.INDEX_BYTE_DTYPE,
             buffer=kmer_index.index_shared_memory.buf)
 
         kmer_index.index_ranges_shared_memory = shared_memory.SharedMemory(
             create=False, name=shared_mem_index_info.index_range_sm_name)
         kmer_index.index_ranges = numpy.ndarray(
             shape=(total_kmers + 1,),
-            dtype=kmer_index.INDEX_DTYPE,
+            dtype=kmer_index.RANGES_DTYPE,
             buffer=kmer_index.index_ranges_shared_memory.buf)
 
         return kmer_index
@@ -303,11 +336,18 @@ class SharedMemoryArray2BitKmerIndexer:
         barcode_positions = defaultdict(list)
 
         seq = str_to_2bit(sequence)
+        index_buf = self.index
         for pos, kmer_idx in enumerate(self._get_kmer_bin_indexes(seq)):
-            start_index = self.index_ranges[kmer_idx]
-            end_index = self.index_ranges[kmer_idx + 1]
+            start_index = int(self.index_ranges[kmer_idx])
+            end_index = int(self.index_ranges[kmer_idx + 1])
             for barcode_index in range(start_index, end_index):
-                barcode = int(self.known_bin_seq[self.index[barcode_index]])
+                base = barcode_index * INDEX_BYTES_PER_ENTRY
+                seq_idx = (int(index_buf[base])
+                           | (int(index_buf[base + 1]) << 8)
+                           | (int(index_buf[base + 2]) << 16)
+                           | (int(index_buf[base + 3]) << 24)
+                           | (int(index_buf[base + 4]) << 32))
+                barcode = int(self.known_bin_seq[seq_idx])
                 barcode_counts[barcode] += 1
                 barcode_positions[barcode].append(pos)
 
