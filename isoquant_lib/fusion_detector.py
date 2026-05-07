@@ -5,17 +5,8 @@ from typing import Any, Optional
 
 import gffutils
 import pysam
-
-try:
-    import mappy as mp
-except ImportError:
-    mp = None
-
-try:
-    from intervaltree import IntervalTree
-except ImportError:
-    IntervalTree = None
-
+import mappy as mp
+from intervaltree import IntervalTree
 from .fusion_validator import FusionValidator
 from .genomic_interval_index import GenomicIntervalIndex
 
@@ -82,6 +73,14 @@ class FusionDetector:
             return self.aligned_len_from_cigarstring(getattr(read, "cigarstring", None))
         except Exception:
             return 0
+
+    def clear_state(self) -> None:
+        """Clear all fusion detection state for processing a new BAM file."""
+        self.fusion_candidates.clear()
+        self.fusion_breakpoints.clear()
+        self.fusion_metadata.clear()
+        self.fusion_assigned_pairs.clear()
+        self.fusion_read_scores.clear()
 
     def _build_exon_cache(self):
         # Cache ordered exon spans for each gene to support exon-boundary

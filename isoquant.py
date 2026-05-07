@@ -392,7 +392,6 @@ def parse_args(cmd_args=None, namespace=None):
 
 def run_fusion_detection_for_args(args) -> None:
     from isoquant_lib.fusion_detector import FusionDetector
-
     logger.info("Fusion detection mode enabled.")
     if not args.genedb:
         logger.critical("Fusion detection requires a gene database (--genedb).")
@@ -408,17 +407,14 @@ def run_fusion_detection_for_args(args) -> None:
     if not bam_files:
         logger.critical("No BAM files detected for fusion detection.")
         exit(-1)
+    
     # Create ONCE, reuse for all BAMs
     fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
     for bam_path in bam_files:
         try:
             logger.info("Running fusion detection on %s" % bam_path)
             fd.bam_path = bam_path  # Switch BAM
-            fd.fusion_candidates.clear()  # Clear state
-            fd.fusion_breakpoints.clear()
-            fd.fusion_metadata.clear()
-            fd.fusion_assigned_pairs.clear()
-            fd.fusion_read_scores.clear()
+            fd.clear_state()  # Clear state for new BAM
             fd.detect_fusions()
             out_fname = os.path.join(args.output, "fusion_" + os.path.basename(bam_path) + ".tsv")
             fd.report(output_path=out_fname)
