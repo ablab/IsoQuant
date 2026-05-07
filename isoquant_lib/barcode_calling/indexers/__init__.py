@@ -13,11 +13,16 @@ Classes:
     Dict2BitKmerIndexer: Memory-efficient dict with integer keys
     Array2BitKmerIndexer: Memory-efficient array for large barcode sets
     SharedMemoryArray2BitKmerIndexer: Shared memory version for parallel processing
+    SharedMemorySparseAnchorIndexer: 3-anchor sparse variant for 10B-scale whitelists
 """
 
 from .base import KmerIndexer, ArrayKmerIndexer
 from .two_bit import Dict2BitKmerIndexer, Array2BitKmerIndexer
-from .shared_memory import SharedMemoryArray2BitKmerIndexer, SharedMemoryIndexInfo
+from .shared_memory import (
+    SharedMemoryArray2BitKmerIndexer,
+    SharedMemoryIndexInfo,
+    SharedMemorySparseAnchorIndexer,
+)
 
 __all__ = [
     'KmerIndexer',
@@ -26,4 +31,5 @@ __all__ = [
     'Array2BitKmerIndexer',
     'SharedMemoryArray2BitKmerIndexer',
     'SharedMemoryIndexInfo',
+    'SharedMemorySparseAnchorIndexer',
 ]

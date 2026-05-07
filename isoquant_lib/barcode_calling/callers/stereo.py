@@ -13,7 +13,12 @@ Stereo-seq uses spatial barcodes with linker sequences and optional TSO detectio
 import logging
 from typing import List, Optional
 
-from ..indexers import ArrayKmerIndexer, Dict2BitKmerIndexer, SharedMemoryArray2BitKmerIndexer
+from ..indexers import (
+    ArrayKmerIndexer,
+    Dict2BitKmerIndexer,
+    SharedMemoryArray2BitKmerIndexer,
+    SharedMemorySparseAnchorIndexer,
+)
 from ..common import (
     find_polyt_start, reverese_complement, batch_str_to_2bit_chunked,
     find_candidate_with_max_score_ssw, detect_exact_positions, detect_first_exact_positions,
@@ -49,6 +54,11 @@ class StereoBarcodeDetector:
         self.strict_linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=6)
 
         self.barcode_indexer = None
+        # Number of matching k-mer anchors required before a candidate is
+        # forwarded to SSW. Dense indexers expose 12 anchors per 25-bp barcode
+        # so 2 is a meaningful floor. Sparse indexers only have 3 anchors —
+        # subclasses that wire in the sparse indexer drop this to 1.
+        self.barcode_min_kmers = 2
         if barcodes:
             bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
@@ -168,7 +178,8 @@ class StereoBarcodeDetector:
 
         potential_barcode = sequence[barcode_start:barcode_end + 1]
         logger.debug("Barcode: %s" % (potential_barcode))
-        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode, max_hits=10, min_kmers=2)
+        matching_barcodes = self.barcode_indexer.get_occurrences(
+            potential_barcode, max_hits=10, min_kmers=self.barcode_min_kmers)
         barcode, bc_score, bc_start, bc_end = \
             find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
                                               min_score=self.min_score, sufficient_score=self.BC_LENGTH - 1)
@@ -222,9 +233,11 @@ class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
             self.bit_barcodes = bit_barcodes
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
-            # For large sets, use shared memory indexer
-            self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=14,
-                                                                    seq_len=self.BC_LENGTH)
+            # Sparse 3-anchor index keeps the inverted list within budget for
+            # 10B-scale whitelists; only 3 entries per barcode (vs 12 dense).
+            self.barcode_indexer = SharedMemorySparseAnchorIndexer(
+                bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+            self.barcode_min_kmers = 1
 
         logger.info("Indexed %d barcodes" % self.barcode_count)
 
@@ -247,7 +260,8 @@ class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
             self.bit_barcodes = state[2]
             self.barcode_indexer = Dict2BitKmerIndexer(self.bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
-            self.barcode_indexer = SharedMemoryArray2BitKmerIndexer.from_sharable_info(state[2])
+            self.barcode_indexer = SharedMemorySparseAnchorIndexer.from_sharable_info(state[2])
+            self.barcode_min_kmers = 1
 
 
 class StereoSplittingBarcodeDetector:
@@ -278,6 +292,8 @@ class StereoSplittingBarcodeDetector:
         self.strict_linker_indexer = ArrayKmerIndexer([StereoBarcodeDetector.LINKER], kmer_size=7)
 
         self.barcode_indexer = None
+        # See StereoBarcodeDetector.__init__ for the rationale.
+        self.barcode_min_kmers = 2
         if barcodes:
             bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
@@ -457,7 +473,8 @@ class StereoSplittingBarcodeDetector:
                                              polyT=polyt_start, primer=primer_end,
                                              linker_start=linker_start, linker_end=linker_end, tso=tso5_start)
 
-        matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode, max_hits=10, min_kmers=2)
+        matching_barcodes = self.barcode_indexer.get_occurrences(
+            potential_barcode, max_hits=10, min_kmers=self.barcode_min_kmers)
         barcode, bc_score, bc_start, bc_end = \
             find_candidate_with_max_score_ssw(matching_barcodes, potential_barcode,
                                               min_score=self.min_score, sufficient_score=self.BC_LENGTH - 1)
@@ -511,9 +528,10 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
             self.bit_barcodes = bit_barcodes
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
-            # For large sets, use shared memory indexer
-            self.barcode_indexer = SharedMemoryArray2BitKmerIndexer(bit_barcodes, kmer_size=14,
-                                                                    seq_len=self.BC_LENGTH)
+            # Sparse 3-anchor index for 10B-scale whitelists.
+            self.barcode_indexer = SharedMemorySparseAnchorIndexer(
+                bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+            self.barcode_min_kmers = 1
 
         logger.info("Indexed %d barcodes" % self.barcode_count)
 
@@ -536,7 +554,8 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
             self.bit_barcodes = state[2]
             self.barcode_indexer = Dict2BitKmerIndexer(self.bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
-            self.barcode_indexer = SharedMemoryArray2BitKmerIndexer.from_sharable_info(state[2])
+            self.barcode_indexer = SharedMemorySparseAnchorIndexer.from_sharable_info(state[2])
+            self.barcode_min_kmers = 1
 
 
 class SharedMemoryWrapper:
