@@ -565,8 +565,9 @@ def dump_flow_graph(
     flow = Intron2Graph(intron_graph, add_super_source_target=add_super_source_target)
     clustered_introns = intron_graph.intron_collector.clustered_introns
 
-    safe_gene = gene_id.replace("/", "_")
-    gene_dir = os.path.join(out_dir, "%s.%s" % (chr_id, safe_gene))
+    gene_count = gene_id.count("_") + 1
+    safe_gene = gene_id.replace("/", "_")[:44]
+    gene_dir = os.path.join(out_dir, "%s.%d.%s" % (chr_id, gene_count, safe_gene))
     os.makedirs(gene_dir, exist_ok=True)
 
     vertices_path = os.path.join(gene_dir, "vertices.tsv")
