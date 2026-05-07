@@ -1279,3 +1279,4 @@ class FusionDetector:
                             f"{right_gene}\t{right_biotype}\t{right_score:.2f}\t{right_chr}\t{right_pos}\t"
                             f"{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
                             f"{meta.get('is_valid')}\t{meta.get('confidence')}\t{reasons}\n")
+

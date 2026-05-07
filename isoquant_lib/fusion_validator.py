@@ -307,3 +307,4 @@ class FusionValidator:
                 if "supporting_reads" in meta and "supporting_reads" in discard_meta:
                     meta["supporting_reads"].update(discard_meta["supporting_reads"])
                     meta["support"] = len(meta["supporting_reads"])
+                    
