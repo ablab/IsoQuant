@@ -757,7 +757,7 @@ class FusionDetector:
     def build_metadata(self, min_support: int = 1) -> None:
         """Apply early non-coding filtering, then run the FusionMetadata pipeline."""
         validator = FusionValidator(self)
-        validator.filter_early_non_coding_genes()
+        validator.filter_non_coding_genes()
 
         try:
             from .fusion_metadata import FusionMetadata

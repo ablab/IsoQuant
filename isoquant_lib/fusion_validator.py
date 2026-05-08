@@ -32,7 +32,7 @@ class FusionValidator:
             "TR_V_gene",
             "TR_D_gene",
             "TR_J_gene",
-            "TR_C_gene",
+            "TR_C_gene"
         }
         return biotype in allowed_biotypes
 
@@ -82,7 +82,7 @@ class FusionValidator:
                     non_coding_reason = "; ".join(reasons)
                     break
             if has_non_coding:
-                logger.info(f"Dropping early non-coding fusion: {fusion_key} - {non_coding_reason}")
+                logger.info(f"Dropping non-coding fusion: {fusion_key} - {non_coding_reason}")
                 fusions_to_discard.add(fusion_key)
         # Remove all discarded fusions from data structures
         self._remove_discarded_fusions_internal(fusions_to_discard)
