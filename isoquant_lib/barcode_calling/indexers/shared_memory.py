@@ -115,6 +115,10 @@ else:
 NUM_ANCHORS: int = 3
 HAMMING_LOW_BIT_MASK: int = 0x5555_5555_5555_5555
 
+# Anchor k-mer values are stored as uint32 in the transient (N, 3) buffer
+# during index construction. 4**k must fit in uint32, i.e. k <= 16.
+MAX_KMER_SIZE_FOR_UINT32_ANCHORS: int = 16
+
 
 def _splitmix64_python(x: int) -> int:
     mask = 0xFFFFFFFFFFFFFFFF
@@ -191,8 +195,8 @@ if NUMBA_AVAILABLE:
         sentinel = numpy.uint64(0xFFFFFFFFFFFFFFFF)
         for i in range(len(seqs)):
             seq = seqs[i]
-            anchors_out[i, 0] = (seq >> first_shift) & k_mask
-            anchors_out[i, 1] = (seq >> last_shift) & k_mask
+            anchors_out[i, 0] = numpy.uint32((seq >> first_shift) & k_mask)
+            anchors_out[i, 1] = numpy.uint32((seq >> last_shift) & k_mask)
             best_hash = sentinel
             best_kmer = numpy.uint64(0)
             for j in range(n_mid):
@@ -201,7 +205,7 @@ if NUMBA_AVAILABLE:
                 if h < best_hash:
                     best_hash = h
                     best_kmer = kmer
-            anchors_out[i, 2] = best_kmer
+            anchors_out[i, 2] = numpy.uint32(best_kmer)
 
     @njit(cache=True)
     def _count_anchors_numba(anchors, kmer_counts):
@@ -552,6 +556,12 @@ class SharedMemorySparseAnchorIndexer:
                 f"kmer_size + 2 (got seq_len={seq_len}, kmer_size={kmer_size}); "
                 f"need at least one internal window for the minimizer."
             )
+        if kmer_size > MAX_KMER_SIZE_FOR_UINT32_ANCHORS:
+            raise ValueError(
+                f"SharedMemorySparseAnchorIndexer stores anchor k-mer values "
+                f"as uint32, so kmer_size must be <= "
+                f"{MAX_KMER_SIZE_FOR_UINT32_ANCHORS} (got kmer_size={kmer_size})."
+            )
 
         self.main_instance = True
         self.k = kmer_size
@@ -601,8 +611,11 @@ class SharedMemorySparseAnchorIndexer:
         )
 
         # Pass 1: extract the 3 anchors per sequence into a transient buffer.
+        # uint32 is sufficient because 4**kmer_size fits in uint32 for
+        # kmer_size <= 16 (validated above), and halves this buffer's size
+        # vs. uint64 (e.g. 240 GB -> 120 GB at N=10B).
         anchors = numpy.empty(
-            (self.total_sequences, NUM_ANCHORS), dtype=numpy.uint64,
+            (self.total_sequences, NUM_ANCHORS), dtype=numpy.uint32,
         )
         _compute_anchors(seqs, first_shift, last_shift, k_mask, mid_shifts, anchors)
         logger.info("Anchor extraction complete")
