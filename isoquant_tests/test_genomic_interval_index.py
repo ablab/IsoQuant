@@ -367,3 +367,4 @@ class TestGenomicIntervalIndex:
         for pos in range(int(gene.start), int(gene.end), 100):
             genes = index.get_genes_at(chrom, pos)
             assert isinstance(genes, list)
+

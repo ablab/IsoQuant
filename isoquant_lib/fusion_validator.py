@@ -33,7 +33,6 @@ class FusionValidator:
             "TR_D_gene",
             "TR_J_gene",
             "TR_C_gene",
-            "GBA3"
         }
         return biotype in allowed_biotypes
 
