@@ -4,6 +4,7 @@
 # See file LICENSE for details.
 ############################################################################
 
+import numpy
 import pytest
 from isoquant_lib.barcode_calling.indexers import (
     SharedMemoryArray2BitKmerIndexer,
@@ -386,6 +387,47 @@ class TestSharedMemorySparseAnchorIndexer:
             dense_seqs = {seq for seq, _, _ in dense.get_occurrences(q, min_kmers=1)}
             assert q in sparse_seqs
             assert q in dense_seqs
+
+    def test_low_mem_parity(self):
+        # The materialized and fused build paths must produce identical
+        # index_ranges and index byte content given the same input.
+        barcodes = [
+            "ACTGACTGACTGACTGACTGACTGA",
+            "TGCATGCATGCATGCATGCATGCAT",
+            "GGGGGGGGGGGGGGGGGGGGGGGGG",
+            "AAAAAAAAAAAAAAAAAAAAAAAAA",
+            "CGTACGTACGTACGTACGTACGTAC",
+        ]
+        bin_seqs = [str_to_2bit(b) for b in barcodes]
+
+        regular = SharedMemorySparseAnchorIndexer(
+            bin_seqs, kmer_size=14, seq_len=25, low_mem=False)
+        low_mem = SharedMemorySparseAnchorIndexer(
+            bin_seqs, kmer_size=14, seq_len=25, low_mem=True)
+
+        assert regular.index_size == low_mem.index_size
+        assert numpy.array_equal(regular.index_ranges, low_mem.index_ranges)
+        # The inverted list contents per bucket must match as multisets.
+        for k in range(len(regular.index_ranges) - 1):
+            start = int(regular.index_ranges[k])
+            end = int(regular.index_ranges[k + 1])
+            if start == end:
+                continue
+            reg_bytes = bytes(regular.index[start * 5:end * 5])
+            low_bytes = bytes(low_mem.index[start * 5:end * 5])
+            reg_ids = sorted(
+                int.from_bytes(reg_bytes[i * 5:(i + 1) * 5], 'little')
+                for i in range(end - start))
+            low_ids = sorted(
+                int.from_bytes(low_bytes[i * 5:(i + 1) * 5], 'little')
+                for i in range(end - start))
+            assert reg_ids == low_ids
+
+        # Both must give the same query results too.
+        for q in barcodes:
+            r_seqs = {s for s, _, _ in regular.get_occurrences(q, min_kmers=1)}
+            l_seqs = {s for s, _, _ in low_mem.get_occurrences(q, min_kmers=1)}
+            assert r_seqs == l_seqs
 
 
 if __name__ == '__main__':

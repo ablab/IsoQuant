@@ -235,8 +235,12 @@ class SharedMemoryStereoBarcodeDetector(StereoBarcodeDetector):
         else:
             # Sparse 3-anchor index keeps the inverted list within budget for
             # 10B-scale whitelists; only 3 entries per barcode (vs 12 dense).
+            # low_mem=True skips the (N, 3) anchor buffer at construction
+            # time (saves ~120 GB at 10B) at the cost of a second
+            # anchor-extraction pass.
             self.barcode_indexer = SharedMemorySparseAnchorIndexer(
-                bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+                bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH,
+                low_mem=True)
             self.barcode_min_kmers = 1
 
         logger.info("Indexed %d barcodes" % self.barcode_count)
@@ -528,9 +532,12 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
             self.bit_barcodes = bit_barcodes
             self.barcode_indexer = Dict2BitKmerIndexer(bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
-            # Sparse 3-anchor index for 10B-scale whitelists.
+            # Sparse 3-anchor index for 10B-scale whitelists. low_mem=True
+            # avoids the transient (N, 3) anchor buffer (~120 GB at N=10B)
+            # at the cost of one extra anchor-extraction pass.
             self.barcode_indexer = SharedMemorySparseAnchorIndexer(
-                bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+                bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH,
+                low_mem=True)
             self.barcode_min_kmers = 1
 
         logger.info("Indexed %d barcodes" % self.barcode_count)

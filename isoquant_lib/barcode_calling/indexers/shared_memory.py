@@ -181,6 +181,60 @@ def _populate_anchors_python(anchors, index_ranges, index_bytes):
             write_positions[kmer_idx] += 1
 
 
+# Fused variants for the low-memory build path: recompute anchors inline so
+# no (N, NUM_ANCHORS) transient buffer is needed. Two passes through `seqs`
+# (count then populate) trade ~one extra anchor-extraction's worth of CPU for
+# eliminating the buffer (e.g. ~120 GB at N=10B with uint32 anchors).
+
+
+def _compute_and_count_anchors_python(seqs, first_shift, last_shift, k_mask,
+                                      mid_shifts, kmer_counts):
+    n_mid = len(mid_shifts)
+    for i in range(len(seqs)):
+        seq = int(seqs[i])
+        first = (seq >> int(first_shift)) & int(k_mask)
+        last = (seq >> int(last_shift)) & int(k_mask)
+        best_hash = 0xFFFFFFFFFFFFFFFF
+        best_kmer = 0
+        for j in range(n_mid):
+            kmer = (seq >> int(mid_shifts[j])) & int(k_mask)
+            h = _splitmix64_python(kmer)
+            if h < best_hash:
+                best_hash = h
+                best_kmer = kmer
+        kmer_counts[first] += 1
+        kmer_counts[last] += 1
+        kmer_counts[best_kmer] += 1
+
+
+def _compute_and_populate_anchors_python(seqs, first_shift, last_shift, k_mask,
+                                         mid_shifts, index_ranges, index_bytes):
+    n_mid = len(mid_shifts)
+    total_kmers = len(index_ranges) - 1
+    write_positions = numpy.zeros(total_kmers, dtype=numpy.uint64)
+    for i in range(len(seqs)):
+        seq = int(seqs[i])
+        first = (seq >> int(first_shift)) & int(k_mask)
+        last = (seq >> int(last_shift)) & int(k_mask)
+        best_hash = 0xFFFFFFFFFFFFFFFF
+        best_kmer = 0
+        for j in range(n_mid):
+            kmer = (seq >> int(mid_shifts[j])) & int(k_mask)
+            h = _splitmix64_python(kmer)
+            if h < best_hash:
+                best_hash = h
+                best_kmer = kmer
+        for kmer_idx in (first, last, best_kmer):
+            wp = int(index_ranges[kmer_idx] + write_positions[kmer_idx])
+            base = wp * 5
+            index_bytes[base + 0] = i & 0xFF
+            index_bytes[base + 1] = (i >> 8) & 0xFF
+            index_bytes[base + 2] = (i >> 16) & 0xFF
+            index_bytes[base + 3] = (i >> 24) & 0xFF
+            index_bytes[base + 4] = (i >> 32) & 0xFF
+            write_positions[kmer_idx] += 1
+
+
 if NUMBA_AVAILABLE:
     @njit(cache=True)
     def _splitmix64_numba(x):
@@ -231,13 +285,71 @@ if NUMBA_AVAILABLE:
                 index_bytes[base + numpy.uint64(4)] = (seq_idx >> numpy.uint64(32)) & numpy.uint64(0xFF)
                 write_positions[kmer_idx] += numpy.uint64(1)
 
+    @njit(cache=True)
+    def _compute_and_count_anchors_numba(seqs, first_shift, last_shift, k_mask,
+                                         mid_shifts, kmer_counts):
+        n_mid = len(mid_shifts)
+        sentinel = numpy.uint64(0xFFFFFFFFFFFFFFFF)
+        for i in range(len(seqs)):
+            seq = seqs[i]
+            first = (seq >> first_shift) & k_mask
+            last = (seq >> last_shift) & k_mask
+            best_hash = sentinel
+            best_kmer = numpy.uint64(0)
+            for j in range(n_mid):
+                kmer = (seq >> mid_shifts[j]) & k_mask
+                h = _splitmix64_numba(kmer)
+                if h < best_hash:
+                    best_hash = h
+                    best_kmer = kmer
+            kmer_counts[first] += 1
+            kmer_counts[last] += 1
+            kmer_counts[best_kmer] += 1
+
+    @njit(cache=True)
+    def _compute_and_populate_anchors_numba(seqs, first_shift, last_shift, k_mask,
+                                            mid_shifts, index_ranges, index_bytes):
+        n_mid = len(mid_shifts)
+        sentinel = numpy.uint64(0xFFFFFFFFFFFFFFFF)
+        total_kmers = len(index_ranges) - 1
+        write_positions = numpy.zeros(total_kmers, dtype=numpy.uint64)
+        slot_buf = numpy.empty(3, dtype=numpy.uint64)
+        for i in range(len(seqs)):
+            seq = seqs[i]
+            slot_buf[0] = (seq >> first_shift) & k_mask
+            slot_buf[1] = (seq >> last_shift) & k_mask
+            best_hash = sentinel
+            best_kmer = numpy.uint64(0)
+            for j in range(n_mid):
+                kmer = (seq >> mid_shifts[j]) & k_mask
+                h = _splitmix64_numba(kmer)
+                if h < best_hash:
+                    best_hash = h
+                    best_kmer = kmer
+            slot_buf[2] = best_kmer
+            seq_idx = numpy.uint64(i)
+            for slot in range(3):
+                kmer_idx = slot_buf[slot]
+                wp = index_ranges[kmer_idx] + write_positions[kmer_idx]
+                base = wp * numpy.uint64(5)
+                index_bytes[base + numpy.uint64(0)] = seq_idx & numpy.uint64(0xFF)
+                index_bytes[base + numpy.uint64(1)] = (seq_idx >> numpy.uint64(8)) & numpy.uint64(0xFF)
+                index_bytes[base + numpy.uint64(2)] = (seq_idx >> numpy.uint64(16)) & numpy.uint64(0xFF)
+                index_bytes[base + numpy.uint64(3)] = (seq_idx >> numpy.uint64(24)) & numpy.uint64(0xFF)
+                index_bytes[base + numpy.uint64(4)] = (seq_idx >> numpy.uint64(32)) & numpy.uint64(0xFF)
+                write_positions[kmer_idx] += numpy.uint64(1)
+
     _compute_anchors = _compute_anchors_numba
     _count_anchors = _count_anchors_numba
     _populate_anchors = _populate_anchors_numba
+    _compute_and_count_anchors = _compute_and_count_anchors_numba
+    _compute_and_populate_anchors = _compute_and_populate_anchors_numba
 else:
     _compute_anchors = _compute_anchors_python
     _count_anchors = _count_anchors_python
     _populate_anchors = _populate_anchors_python
+    _compute_and_count_anchors = _compute_and_count_anchors_python
+    _compute_and_populate_anchors = _compute_and_populate_anchors_python
 
 
 class SharedMemoryIndexInfo:
@@ -541,7 +653,8 @@ class SharedMemorySparseAnchorIndexer:
     INDEX_BYTE_DTYPE = numpy.uint8
     RANGES_DTYPE = numpy.uint64
 
-    def __init__(self, known_bin_seq, kmer_size: int = 14, seq_len: int = 25):
+    def __init__(self, known_bin_seq, kmer_size: int = 14, seq_len: int = 25,
+                 low_mem: bool = False):
         """
         Args:
             known_bin_seq: Pre-encoded sequences as integers (use str_to_2bit).
@@ -549,6 +662,12 @@ class SharedMemorySparseAnchorIndexer:
                 or any sequence convertible by numpy.asarray.
             kmer_size: Length of k-mers (anchor length). Default 14.
             seq_len: Length of sequences. Default 25.
+            low_mem: If True, skip the (N, 3) uint32 anchor buffer used to
+                feed the count and populate passes; instead recompute anchors
+                inline in two fused passes through ``known_bin_seq``. This
+                trades ~one extra anchor-extraction pass of CPU time for
+                eliminating the transient buffer (e.g. ~120 GB at N=10B,
+                k=14). Recommended for whitelists in the 1B+ range.
         """
         if seq_len < kmer_size + 2:
             raise ValueError(
@@ -606,24 +725,33 @@ class SharedMemorySparseAnchorIndexer:
         mid_shifts = numpy.array(self._mid_shifts_py, dtype=numpy.uint64)
 
         logger.info(
-            "Building sparse 3-anchor index for %d sequences (Numba: %s)",
-            self.total_sequences, "enabled" if NUMBA_AVAILABLE else "disabled",
+            "Building sparse 3-anchor index for %d sequences "
+            "(Numba: %s, low_mem: %s)",
+            self.total_sequences,
+            "enabled" if NUMBA_AVAILABLE else "disabled",
+            low_mem,
         )
 
-        # Pass 1: extract the 3 anchors per sequence into a transient buffer.
-        # uint32 is sufficient because 4**kmer_size fits in uint32 for
-        # kmer_size <= 16 (validated above), and halves this buffer's size
-        # vs. uint64 (e.g. 240 GB -> 120 GB at N=10B).
-        anchors = numpy.empty(
-            (self.total_sequences, NUM_ANCHORS), dtype=numpy.uint32,
-        )
-        _compute_anchors(seqs, first_shift, last_shift, k_mask, mid_shifts, anchors)
-        logger.info("Anchor extraction complete")
-
-        # Pass 2: count per-bucket occurrences for the cumulative offsets.
         kmer_counts = numpy.zeros(total_kmers, dtype=numpy.uint64)
-        _count_anchors(anchors, kmer_counts)
-        logger.info("Anchor counting complete")
+        if low_mem:
+            # Fused pass 1: count anchors inline (no (N, 3) buffer).
+            _compute_and_count_anchors(
+                seqs, first_shift, last_shift, k_mask, mid_shifts, kmer_counts,
+            )
+            anchors = None
+            logger.info("Anchor counting complete (low-mem)")
+        else:
+            # Pass 1: materialize the 3 anchors per sequence. uint32 fits
+            # because 4**kmer_size <= 2**32 (validated above), halving this
+            # buffer vs uint64 (e.g. 240 GB -> 120 GB at N=10B).
+            anchors = numpy.empty(
+                (self.total_sequences, NUM_ANCHORS), dtype=numpy.uint32,
+            )
+            _compute_anchors(seqs, first_shift, last_shift, k_mask, mid_shifts, anchors)
+            logger.info("Anchor extraction complete")
+            # Pass 2: count per-bucket occurrences for the cumulative offsets.
+            _count_anchors(anchors, kmer_counts)
+            logger.info("Anchor counting complete")
 
         # Each barcode contributes exactly NUM_ANCHORS entries.
         self.index_size = int(NUM_ANCHORS * self.total_sequences)
@@ -659,12 +787,22 @@ class SharedMemorySparseAnchorIndexer:
         )
         self.index_ranges[0] = 0
         self.index_ranges[1:] = numpy.cumsum(kmer_counts)
+        del kmer_counts  # freed before the heaviest phase begins
 
-        # Pass 3: write packed uint40 entries into the inverted list.
-        _populate_anchors(anchors, self.index_ranges, self.index)
-        logger.info("Sparse anchor index population complete")
+        if low_mem:
+            # Fused pass 2: re-extract anchors and write uint40 entries.
+            _compute_and_populate_anchors(
+                self.known_bin_seq, first_shift, last_shift, k_mask,
+                mid_shifts, self.index_ranges, self.index,
+            )
+            logger.info("Sparse anchor index population complete (low-mem)")
+        else:
+            # Pass 3: write packed uint40 entries into the inverted list.
+            _populate_anchors(anchors, self.index_ranges, self.index)
+            del anchors
+            logger.info("Sparse anchor index population complete")
 
-        del kmer_counts, anchors, mid_shifts
+        del mid_shifts
         gc.collect()
 
     def __del__(self):
