@@ -273,17 +273,6 @@ class FusionValidator:
                 fusions_to_discard.add(discard_key)
         return fusions_to_discard
 
-    def _remove_discarded_fusions(self, fusions_to_discard):
-        # Remove discarded fusions from all internal data structures.
-        for fusion_key in fusions_to_discard:
-            logger.info(f"Discarding fusion candidate: {fusion_key}")
-            if fusion_key in self.detector.fusion_metadata:
-                del self.detector.fusion_metadata[fusion_key]
-            if fusion_key in self.detector.fusion_candidates:
-                del self.detector.fusion_candidates[fusion_key]
-            if fusion_key in self.detector.fusion_breakpoints:
-                del self.detector.fusion_breakpoints[fusion_key]
-
     def _merge_fusion_candidates(self, keep_fusion_key, discard_fusion_key):
         # Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key
         if discard_fusion_key in self.detector.fusion_candidates:

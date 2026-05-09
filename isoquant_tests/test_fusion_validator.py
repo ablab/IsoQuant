@@ -636,21 +636,6 @@ class TestMergeFusions:
         assert fusion2 in fusions_to_discard
         assert len(self.detector.fusion_candidates[fusion1]) == 3
 
-    def test_remove_discarded_fusions(self):
-        """Test removal of discarded fusions."""
-        fusion_keys = ["fusion1", "fusion2", "fusion3"]
-
-        for key in fusion_keys:
-            self.detector.fusion_metadata[key] = {"gene": "test"}
-            self.detector.fusion_candidates[key] = {"read1"}
-            self.detector.fusion_breakpoints[key] = {("chr1", 1000, "chr2", 2000): 1}
-        fusions_to_discard = {"fusion2"}
-        self.validator._remove_discarded_fusions(fusions_to_discard)
-        assert "fusion1" in self.detector.fusion_metadata
-        assert "fusion2" not in self.detector.fusion_metadata
-        assert "fusion3" in self.detector.fusion_metadata
-
-
 class TestFilterEarlyNonCodingGenes:
     """Test the filter_early_non_coding_genes method."""
 
