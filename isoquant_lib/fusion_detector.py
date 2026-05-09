@@ -757,7 +757,7 @@ class FusionDetector:
     def build_metadata(self, min_support: int = 1) -> None:
         """Apply early non-coding filtering, then run the FusionMetadata pipeline."""
         validator = FusionValidator(self)
-        validator.filter_non_coding_genes()
+        validator.filter_early_non_coding_genes()
 
         try:
             from .fusion_metadata import FusionMetadata
@@ -956,25 +956,56 @@ class FusionDetector:
                         min_sa_mapq=min_sa_mapq
                     )
 
-    def reconstruct_fusion_transcript(self, c1, p1, c2, p2, exon_padding=100):
-        """Returns (sequence, left_exons, right_exons) or (None, None, None) on failure."""
+    def reconstruct_fusion_transcript(self, c1: str, p1: int, c2: str, p2: int,
+        exon_padding: int = 100,
+    ):
+        """
+        Attempt to reconstruct a fusion transcript sequence by concatenating
+        exon sequences in the vicinity of two breakpoints.
+        Returns:
+            (sequence, left_exons, right_exons) on success,
+            (None, None, None) on failure.
+        """
         try:
-            left_exons = list(self.db.region(region=(c1, max(1, p1 - exon_padding), p1 + exon_padding), featuretype='exon'))
+            left_exons = list(
+                self.db.region(
+                    region=(c1, max(1, p1 - exon_padding), p1 + exon_padding),
+                    featuretype="exon",
+                )
+            )
             if not left_exons:
+                logger.debug("No left exons found near %s:%s", c1, p1)
                 return None, None, None
-            left_exons = sorted([(int(e.start), int(e.end)) for e in left_exons])
-            right_exons = list(self.db.region(region=(c2, max(1, p2 - exon_padding), p2 + exon_padding), featuretype='exon'))
+            right_exons = list(
+                self.db.region(
+                    region=(c2, max(1, p2 - exon_padding), p2 + exon_padding),
+                    featuretype="exon",
+                )
+            )
             if not right_exons:
+                logger.debug("No right exons found near %s:%s", c2, p2)
                 return None, None, None
-            right_exons = sorted([(int(e.start), int(e.end)) for e in right_exons])
-            with pysam.FastaFile(self.reference_fasta) as ref:
-                left_seq = "".join(ref.fetch(c1, s - 1, e) or "" for s, e in left_exons)
-                right_seq = "".join(ref.fetch(c2, s - 1, e) or "" for s, e in right_exons)
+
+            left_coords = sorted((int(e.start), int(e.end)) for e in left_exons)
+            right_coords = sorted((int(e.start), int(e.end)) for e in right_exons)
+
+            # Open FASTA lazily
+            if not hasattr(self, "_ref_fasta"):
+                self._ref_fasta = pysam.FastaFile(self.reference_fasta)
+            ref = self._ref_fasta
+            left_seq = "".join(ref.fetch(c1, s - 1, e) for s, e in left_coords)
+            right_seq = "".join(ref.fetch(c2, s - 1, e) for s, e in right_coords)
             if not left_seq or not right_seq:
+                logger.debug("Empty sequence during fusion reconstruction at %s:%s--%s:%s", c1, p1, c2, p2)
                 return None, None, None
-            return left_seq + right_seq, left_exons, right_exons
-        except Exception as e:
-            logger.debug(f"Failed to reconstruct fusion transcript at {c1}:{p1}--{c2}:{p2}: {str(e)}")
+            return left_seq + right_seq, left_coords, right_coords
+
+        except (ValueError, KeyError, AttributeError, OSError):
+            logger.debug(
+                "Failed to reconstruct fusion transcript at %s:%s--%s:%s",
+                c1, p1, c2, p2,
+                exc_info=True,
+            )
             return None, None, None
 
     def realign_fusion_transcript(self, fusion_seq, min_match_len=30, min_mapq=10):
