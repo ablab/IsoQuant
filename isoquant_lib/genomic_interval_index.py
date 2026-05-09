@@ -20,7 +20,7 @@ class GenomicIntervalIndex:
 
     def _build_indices(self) -> None:
         """Build interval trees for all genes and exons in the database."""
-        logger.info("Building genomic interval trees (memory-efficient mode)...")
+        logger.info("Building genomic interval trees...")
         gene_count = 0
         try:
             for gene in self.db.features_of_type('gene'):

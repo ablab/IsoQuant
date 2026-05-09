@@ -82,7 +82,7 @@ class FusionValidator:
                     non_coding_reason = "; ".join(reasons)
                     break
             if has_non_coding:
-                logger.info(f"Dropping non-coding fusion: {fusion_key} - {non_coding_reason}")
+                logger.debug(f"Dropping non-coding fusion: {fusion_key} - {non_coding_reason}")
                 fusions_to_discard.add(fusion_key)
         # Remove all discarded fusions from data structures
         self._remove_discarded_fusions_internal(fusions_to_discard)
@@ -148,7 +148,7 @@ class FusionValidator:
                 meta["reasons"].append(
                     f"Both genes belong to multicopy artifact families: {left_gene} - {right_gene}"
                 )
-                logger.info(f"Filtering multicopy artifact pair fusion: {fusion_key} ({left_gene} - {right_gene})")
+                logger.debug(f"Filtering multicopy artifact pair fusion: {fusion_key} ({left_gene} - {right_gene})")
 
     def apply_frequency_filters(self) -> None:
         """Mark fusions invalid when a partner gene exceeds frequency thresholds within the sample."""
