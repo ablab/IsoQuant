@@ -408,7 +408,7 @@ def run_fusion_detection_for_args(args) -> None:
         logger.critical("No BAM files detected for fusion detection.")
         exit(-1)
     
-    # Create ONCE, reuse for all BAMs
+    # Create once, reuse for all BAMs
     fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
     for bam_path in bam_files:
         try:

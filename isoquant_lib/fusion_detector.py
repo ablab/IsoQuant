@@ -1201,113 +1201,127 @@ class FusionDetector:
         gene_name = self.normalize_gene_label(gene_name)
         return self._get_gene_biotype_by_symbol_or_coords(gene_name, chrom=chrom, pos=pos)
 
-    def validate_candidates(self, min_support: int = 2, window: int = 25,
-                             require_gene_names: bool = True,
-                             require_mapq: int = 10,
-                             allow_cis_sage: bool = True,
-                             require_exon_boundary: bool = True,
-                             max_intra_chr_distance: Optional[int] = None) -> None:
-        """Run the validation pipeline: gating, classification, reconstruction, and scoring."""
-        self.build_metadata(min_support=min_support)
+    def _clear_read_level_data(self) -> None:
+        """Clear read-level fusion tracking data after metadata is built."""
         self.fusion_assigned_pairs.clear()
         self.fusion_read_scores.clear()
+
+    def _update_metadata_flags(self, meta: dict, flags: dict, confidence: Optional[float] = None) -> None:
+        """Update metadata with computed flags and confidence score."""
+        if confidence is not None:
+            meta["confidence"] = confidence
+        meta.update(flags)
+
+    def validate_candidates(self, min_support: int = 2, window: int = 25,
+                            require_gene_names: bool = True,
+                            allow_cis_sage: bool = True,
+                            max_intra_chr_distance: Optional[int] = None,
+                            min_confidence_threshold: float = 0.30,
+                            low_confidence_support_cutoff: int = 2) -> None:
+        """Run the validation pipeline: gating, classification, reconstruction, and scoring."""
+        self.build_metadata(min_support=min_support)
+        self._clear_read_level_data()
         # Delegate validation and filtering to FusionValidator
         validator = FusionValidator(self)
-        # validator.filter_unresolved_genes()
         validator.filter_non_coding_genes()
         validator.filter_multicopy_artifact_pairs()
         validator.apply_frequency_filters()
-        for fusion_key, meta in list(self.fusion_metadata.items()):
+
+        for meta in list(self.fusion_metadata.values()):
             # Check if already marked invalid by frequency filter
-            if meta.get("is_valid", True) is False:
-                # Keep existing reasons, skip to next
+            if not meta.get("is_valid", True):
                 continue
             support = meta.get("support", 0)
             flags = {"is_valid": True, "reasons": [], "class": "canonical"}
+            # Gate 1: Check minimum support
             if support < min_support:
                 flags["is_valid"] = False
                 flags["reasons"].append(f"Low support ({support} < {min_support})")
-                meta.update(flags)
+                self._update_metadata_flags(meta, flags)
                 continue
-            # Consensus breakpoint already computed in build_metadata - no need to re-cluster
+            # Gate 2: Check consensus breakpoint exists
             consensus_bp = meta.get("consensus_bp")
             if not consensus_bp:
                 flags["is_valid"] = False
                 flags["reasons"].append("No stable breakpoint cluster")
-                meta.update(flags)
+                self._update_metadata_flags(meta, flags)
                 continue
 
-            # perform classification and basic filtering
+            # Perform classification and basic filtering
             c1, p1, c2, p2 = consensus_bp
             g1_name, r1 = self._context_query(c1, p1)
             g2_name, r2 = self._context_query(c2, p2)
-            self._apply_classification_and_filters(meta, flags, c1, p1, c2, p2,
-                                                   g1_name, r1, g2_name, r2,
-                                                   require_gene_names, max_intra_chr_distance)
-            # skip reconstruction for mitochondrial candidates and invalid ones
-            if flags["is_valid"] and not self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
+            self._apply_classification_and_filters(
+                meta, flags, c1, p1, c2, p2,
+                g1_name, r1, g2_name, r2,
+                require_gene_names, max_intra_chr_distance
+            )
+            # Gate 3: Skip reconstruction for mitochondrial and invalid candidates
+            is_mito = self._is_mitochondrial_candidate(
+                c1, c2, meta.get("left_gene"), meta.get("right_gene")
+            )
+            if flags["is_valid"] and not is_mito:
                 self._attempt_reconstruction_and_realignment(meta, flags, c1, p1, c2, p2)
-            else:
-                if flags["is_valid"] and self._is_mitochondrial_candidate(c1, c2, meta.get("left_gene"), meta.get("right_gene")):
-                    flags["is_valid"] = False
-                    flags["reasons"].append("Mitochondrial fusion candidate filtered out")
+            elif is_mito and flags["is_valid"]:
+                flags["is_valid"] = False
+                flags["reasons"].append("Mitochondrial fusion candidate filtered out")
 
-            # cis-SAGe policy enforcement
+            # Gate 4: cis-SAGe policy enforcement
             if flags["class"] == "cis-SAGe" and not allow_cis_sage:
                 flags["is_valid"] = False
                 flags["reasons"].append("cis-SAGe disallowed by policy")
 
-            # Compute confidence
+            # Gate 5: Confidence-based filtering
             conf = validator.confidence(meta, flags)
-            meta["confidence"] = conf
-            # convert very low-confidence to invalid
-            if conf < 0.30 and meta.get("support", 0) < 2 and flags["is_valid"]:
+            if conf < min_confidence_threshold and support < low_confidence_support_cutoff and flags["is_valid"]:
                 flags["is_valid"] = False
-                flags["reasons"].append("Low confidence")
-            meta.update(flags)
+                flags["reasons"].append(f"Low confidence ({conf:.2f} < {min_confidence_threshold})")
+            self._update_metadata_flags(meta, flags, confidence=conf)
 
     def report(self, output_path: str = "fusion_candidates.tsv",
                 min_support: int = 2,
                 include_classes: tuple = ("canonical", "cis-SAGe"),
                 min_confidence: float = 0.3,
                 only_valid: bool = False) -> None:
-            """Validate candidates and write the fusion report TSV."""
-            self.validate_candidates(min_support=min_support)
-            # Merge only fully identical fusions (exact duplicates)
-            validator = FusionValidator(self)
-            validator._merge_fully_identical()
-            with open(output_path, "w") as f:
-                f.write("LeftGene\tLeftBiotype\tLeftScore\tLeftChromosome\tLeftBreakpoint\t"
-                        "RightGene\tRightBiotype\tRightScore\tRightChromosome\tRightBreakpoint\t"
-                        "SupportingReads\tFusionName\tClass\tValid\tConfidence\tReasons\n")
-                for fusion_key, meta in sorted(self.fusion_metadata.items(), key=lambda x: -x[1].get("support", 0)):
-                    if meta.get("confidence", 0) < min_confidence:
-                        continue
-                    if only_valid and not meta.get("is_valid", True):
-                        continue
-                    if meta.get("class") not in include_classes:
-                        continue
-                    if not meta.get("consensus_bp"):
-                        continue
-                    # Handle both old format (c1, p1, c2, p2) and new format (c1, p1, s1, c2, p2, s2)
-                    consensus_bp = meta["consensus_bp"]
-                    left_chr, left_pos, right_chr, right_pos = consensus_bp
-                    left_gene  = meta["left_gene"]
-                    right_gene = meta["right_gene"]
-                    # Skip if collapse makes them equal
-                    if left_gene == right_gene:
-                        continue
-                    # Skip if either gene has antisense/regulatory suffix
-                    if self.has_antisense_suffix(left_gene) or self.has_antisense_suffix(right_gene):
-                        continue
-                    fusion_name = f"{left_gene}-{right_gene}"
-                    reasons = ";".join(meta.get("reasons", []))
-                    left_score = meta.get("left_score", 0.0)
-                    right_score = meta.get("right_score", 0.0)
-                    left_biotype = meta.get("left_biotype", "unknown")
-                    right_biotype = meta.get("right_biotype", "unknown")
-                    f.write(f"{left_gene}\t{left_biotype}\t{left_score:.2f}\t{left_chr}\t{left_pos}\t"
-                            f"{right_gene}\t{right_biotype}\t{right_score:.2f}\t{right_chr}\t{right_pos}\t"
-                            f"{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
-                            f"{meta.get('is_valid')}\t{meta.get('confidence')}\t{reasons}\n")
+        """Validate candidates and write the fusion report TSV."""
+        self.validate_candidates(min_support=min_support)
+        # Merge only fully identical fusions (exact duplicates)
+        validator = FusionValidator(self)
+        validator._merge_fully_identical()
+        with open(output_path, "w") as f:
+            f.write("LeftGene\tLeftBiotype\tLeftScore\tLeftChromosome\tLeftBreakpoint\t"
+                    "RightGene\tRightBiotype\tRightScore\tRightChromosome\tRightBreakpoint\t"
+                    "SupportingReads\tFusionName\tClass\tValid\tConfidence\tReasons\n")
+            for meta in sorted(self.fusion_metadata.values(), key=lambda x: -x.get("support", 0)):
+                # Gate 1: Confidence threshold
+                if meta.get("confidence", 0) < min_confidence:
+                    continue
+                # Gate 2: Validity requirement
+                if only_valid and not meta.get("is_valid", True):
+                    continue
+                # Gate 3: Class filter
+                if meta.get("class") not in include_classes:
+                    continue
+                # Gate 4: Consensus breakpoint required
+                consensus_bp = meta.get("consensus_bp")
+                if not consensus_bp:
+                    continue
+                # Extract coordinates
+                left_chr, left_pos, right_chr, right_pos = consensus_bp
+                left_gene = meta["left_gene"]
+                right_gene = meta["right_gene"]
+                # Skip if collapse makes them equal
+                if left_gene == right_gene:
+                    continue
+                # Format output
+                fusion_name = f"{left_gene}-{right_gene}"
+                reasons = ";".join(meta.get("reasons", []))
+                left_score = meta.get("left_score", 0.0)
+                right_score = meta.get("right_score", 0.0)
+                left_biotype = meta.get("left_biotype", "unknown")
+                right_biotype = meta.get("right_biotype", "unknown")
+                f.write(f"{left_gene}\t{left_biotype}\t{left_score:.2f}\t{left_chr}\t{left_pos}\t"
+                        f"{right_gene}\t{right_biotype}\t{right_score:.2f}\t{right_chr}\t{right_pos}\t"
+                        f"{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
+                        f"{meta.get('is_valid')}\t{meta.get('confidence')}\t{reasons}\n")
 
