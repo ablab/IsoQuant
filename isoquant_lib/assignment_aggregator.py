@@ -10,6 +10,7 @@ import logging
 from .stats import EnumStats
 from .long_read_counter import (
     ExonCounter,
+    JointExonCounter,
     IntronCounter,
     IntronRetentionCounter,
     CompositeCounter,
@@ -103,10 +104,13 @@ class ReadAssignmentAggregator:
         if self.args.count_exons and self.args.genedb:
             exon_counts_path = sample.get_exon_counts_file(chr_id) if chr_id else sample.out_exon_counts_tsv
             intron_counts_path = sample.get_intron_counts_file(chr_id) if chr_id else sample.out_intron_counts_tsv
+            joint_exon_counts_path = (sample.get_joint_exon_counts_file(chr_id)
+                                      if chr_id else sample.out_joint_exon_counts_tsv)
             # string_pools=None means ungrouped counting
             self.exon_counter = ExonCounter(exon_counts_path)
             self.intron_counter = IntronCounter(intron_counts_path)
-            self.global_counter.add_counters([self.exon_counter, self.intron_counter])
+            self.joint_exon_counter = JointExonCounter(joint_exon_counts_path)
+            self.global_counter.add_counters([self.exon_counter, self.intron_counter, self.joint_exon_counter])
 
         if self.args.count_intron_retentions and self.args.genedb:
             ir_counts_path = sample.get_intron_retention_counts_file(chr_id) if chr_id else sample.out_intron_retention_counts_tsv
@@ -140,12 +144,16 @@ class ReadAssignmentAggregator:
                     if chr_id:
                         exon_out_file = sample.get_grouped_counts_file(chr_id, "exon", strategy_name)
                         intron_out_file = sample.get_grouped_counts_file(chr_id, "splice_junction", strategy_name)
+                        joint_exon_out_file = sample.get_grouped_counts_file(chr_id, "joint_exon", strategy_name)
                     else:
                         exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
                         intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
+                        joint_exon_out_file = f"{sample.out_joint_exon_grouped_counts_tsv}_{strategy_name}"
                     exon_counter = ExonCounter(exon_out_file, string_pools=self.string_pools, group_index=group_idx)
                     intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx)
-                    self.global_counter.add_counters([exon_counter, intron_counter])
+                    joint_exon_counter = JointExonCounter(joint_exon_out_file,
+                                                          string_pools=self.string_pools, group_index=group_idx)
+                    self.global_counter.add_counters([exon_counter, intron_counter, joint_exon_counter])
 
                 if self.args.count_intron_retentions:
                     if chr_id:

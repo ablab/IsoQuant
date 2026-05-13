@@ -139,6 +139,19 @@ class FeatureInfo:
         return "%s\t%d\t%d\t%s\t%s\t%s" % (self.chr_id, self.start, self.end, self.strand, self.type, ",".join(self.gene_ids))
 
 
+# group of overlapping annotated exons treated as a single quantification unit
+class ExonRegion:
+    region_id_counter = SimpleIDDistributor()
+
+    def __init__(self, chr_id: str, start: int, end: int, strand: str):
+        self.id: int = ExonRegion.region_id_counter.increment()
+        self.chr_id: str = chr_id
+        self.start: int = start
+        self.end: int = end
+        self.strand: str = strand
+        self.member_exon_indices: list = []
+
+
 class GeneList:
     def __init__(self, gene_id_list, delta, chr_id, start, end):
         self.gene_id_set = set(gene_id_list)
@@ -235,6 +248,11 @@ class GeneInfo:
         if prepare_profiles:
             self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
             self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
+            self.exon_overlap_regions, self.exon_overlap_region_map = \
+                self.build_exon_overlap_regions(self.exon_profiles.features, self.exon_property_map)
+        else:
+            self.exon_overlap_regions = []
+            self.exon_overlap_region_map = None
 
     @classmethod
     def from_models(cls, transcript_model_storage, delta=0):
@@ -293,6 +311,8 @@ class GeneInfo:
         gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
+        gene_info.exon_overlap_regions = []
+        gene_info.exon_overlap_region_map = None
 
         # additional info for canonical splice site detection
         gene_info.all_read_region_start = gene_info.start
@@ -346,6 +366,8 @@ class GeneInfo:
         gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
+        gene_info.exon_overlap_regions = []
+        gene_info.exon_overlap_region_map = None
 
         # additional info for canonical splice site detection
         gene_info.all_read_region_start = gene_info.start
@@ -383,6 +405,8 @@ class GeneInfo:
         gene_info.regions_for_bam_fetch = [(start, end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
+        gene_info.exon_overlap_regions = []
+        gene_info.exon_overlap_region_map = None
 
         # additional info for canonical splice site detection
         gene_info.all_read_region_start = gene_info.start
@@ -441,6 +465,8 @@ class GeneInfo:
         gene_info.set_gene_attributes()
         gene_info.exon_property_map = gene_info.set_feature_properties(gene_info.all_isoforms_exons, gene_info.exon_profiles)
         gene_info.intron_property_map = gene_info.set_feature_properties(gene_info.all_isoforms_introns, gene_info.intron_profiles)
+        gene_info.exon_overlap_regions, gene_info.exon_overlap_region_map = \
+            gene_info.build_exon_overlap_regions(gene_info.exon_profiles.features, gene_info.exon_property_map)
         return gene_info
 
     def serialize(self, outfile):
@@ -658,6 +684,32 @@ class GeneInfo:
 
         assert len(feature_properties) == len(feature_profiles.features)
         return feature_properties
+
+    # group annotated exons that mutually overlap (within a strand) into ExonRegions.
+    # Returns (regions, region_map) where region_map[i] gives the index into `regions`
+    # for the exon at exon_profiles.features[i].
+    def build_exon_overlap_regions(self, exon_features, exon_property_map):
+        n = len(exon_features)
+        region_map = [-1] * n
+        regions = []
+        # bucket exon indices by their strand_str, preserving sorted order from exon_features
+        by_strand = defaultdict(list)
+        for i in range(n):
+            by_strand[exon_property_map[i].strand].append(i)
+
+        for strand, idx_list in by_strand.items():
+            current = None
+            for i in idx_list:
+                exon = exon_features[i]
+                if current is None or exon[0] > current.end:
+                    current = ExonRegion(self.chr_id, exon[0], exon[1], strand)
+                    regions.append(current)
+                else:
+                    if exon[1] > current.end:
+                        current.end = exon[1]
+                current.member_exon_indices.append(i)
+                region_map[i] = len(regions) - 1
+        return regions, region_map
 
     # split exons into non-overlapping covering blocks
     @staticmethod

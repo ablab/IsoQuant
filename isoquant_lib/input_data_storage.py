@@ -68,12 +68,14 @@ class SampleData:
         self.out_transcript_model_grouped_counts_tsv = self._make_path(self.prefix + ".discovered_transcript_grouped")
         self.out_gene_model_grouped_counts_tsv = self._make_path(self.prefix + ".discovered_gene_grouped")
         self.out_exon_counts_tsv = self._make_path(self.prefix + ".exon")
+        self.out_joint_exon_counts_tsv = self._make_path(self.prefix + ".joint_exon")
         self.out_intron_counts_tsv = self._make_path(self.prefix + ".splice_junction")
         self.out_intron_retention_counts_tsv = self._make_path(self.prefix + ".intron_retention")
         self.out_intron_retention_grouped_counts_tsv = self._make_path(self.prefix + ".intron_retention_grouped")
         self.out_gene_grouped_counts_tsv = self._make_path(self.prefix + ".gene_grouped")
         self.out_transcript_grouped_counts_tsv = self._make_path(self.prefix + ".transcript_grouped")
         self.out_exon_grouped_counts_tsv = self._make_path(self.prefix + ".exon_grouped")
+        self.out_joint_exon_grouped_counts_tsv = self._make_path(self.prefix + ".joint_exon_grouped")
         self.out_intron_grouped_counts_tsv = self._make_path(self.prefix + ".splice_junction_grouped")
         self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
         self.barcodes_tsv = self._make_path(self.prefix + ".barcoded_reads")
@@ -172,6 +174,10 @@ class SampleData:
     def get_exon_counts_file(self, chr_id: str) -> str:
         """Get path to exon counts file for a chromosome."""
         return self._make_path(self.get_chr_prefix(chr_id) + ".exon")
+
+    def get_joint_exon_counts_file(self, chr_id: str) -> str:
+        """Get path to joint (overlap-region) exon counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".joint_exon")
 
     def get_intron_counts_file(self, chr_id: str) -> str:
         """Get path to intron counts file for a chromosome."""
