@@ -1,6 +1,6 @@
 from collections import defaultdict
 import logging
-from typing import Optional
+from typing import List, Optional
 
 logger = logging.getLogger('IsoQuant')
 
@@ -129,8 +129,8 @@ class FusionMetadata:
         meta["left_gene"] = left_gene
         meta["right_gene"] = right_gene
         read_scores = self.detector.fusion_read_scores.get(fusion_key, {})
-        left_scores: list[float] = []
-        right_scores: list[float] = []
+        left_scores: List[float] = []
+        right_scores: List[float] = []
         for read_name in meta["supporting_reads"]:
             if read_name in read_scores:
                 left_score, right_score = read_scores[read_name]

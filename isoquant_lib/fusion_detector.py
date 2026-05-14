@@ -1,7 +1,7 @@
 import logging
 import re
 from collections import defaultdict
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import gffutils
 import pysam
@@ -29,9 +29,9 @@ class FusionDetector:
         self.bam_path = bam_path
         self.genedb_path = gene_db_path
         self.db = gffutils.FeatureDB(gene_db_path, keep_order=True)
-        self.fusion_candidates: dict[str, set[str]] = defaultdict(set)
+        self.fusion_candidates: Dict[str, Set[str]] = defaultdict(set)
         # store breakpoint counts per fusion key: {(chr1,pos1,chr2,pos2): count}
-        self.fusion_breakpoints: dict[str, dict[tuple, int]] = defaultdict(lambda: defaultdict(int))
+        self.fusion_breakpoints: Dict[str, Dict[Tuple, int]] = defaultdict(lambda: defaultdict(int))
         # optional reference and aligner for soft-clip realignment
         self.reference_fasta = reference_fasta
         try:
@@ -490,7 +490,7 @@ class FusionDetector:
     def assign_fusion_gene(self, chrom: str, pos: int, window: int = 1000,
                             fusion_partner_gene: Optional[str] = None,
                             fusion_partner_chrom: Optional[str] = None,
-                            fusion_partner_pos: Optional[int] = None) -> tuple[Optional[str], float]:
+                            fusion_partner_pos: Optional[int] = None) -> Tuple[Optional[str], float]:
         """Assign the best gene at a genomic location using exonic priority and scoring.
 
         Returns ``(gene_name, score)`` or ``(None, 0.0)`` if no genes are found.
@@ -589,7 +589,7 @@ class FusionDetector:
                 sa_used = True
         return sa_used
 
-    def detect_softclip(self, read, min_len: int = 50) -> tuple[Optional[str], int]:
+    def detect_softclip(self, read, min_len: int = 50) -> Tuple[Optional[str], int]:
         """Detect a single large terminal soft-clip; returns ``(side, length)`` or ``(None, 0)``."""
         cigartuples = getattr(read, "cigartuples", None)
         if cigartuples:
@@ -827,9 +827,9 @@ class FusionDetector:
         (p1, p2, total) = best
         return (c1, p1, c2, p2), total
 
-    def parse_sa_entries(self, sa_tag: Optional[str]) -> list[tuple]:
+    def parse_sa_entries(self, sa_tag: Optional[str]) -> List[Tuple]:
         """Parse a BAM ``SA`` tag string into a list of ``(chrom, pos, strand, cigar, mapq, nm)`` tuples."""
-        entries: list[tuple] = []
+        entries: List[Tuple] = []
         if not sa_tag:
             return entries
         for sa in sa_tag.split(";"):
