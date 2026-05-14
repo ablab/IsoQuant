@@ -331,12 +331,6 @@ class FusionDetector:
         else:
             return 0.0  # Position is intergenic
 
-    @staticmethod
-    def reverse_complement(seq: str) -> str:
-        """Return the reverse complement of a DNA sequence (ACGTN alphabet, case preserved on N)."""
-        comp = str.maketrans("ACGTN", "TGCAN")
-        return seq.translate(comp)[::-1]
-
     def _get_genes_at(self, chrom, pos, window):
         # Query genes at location using interval tree or gffutils.
         try:
