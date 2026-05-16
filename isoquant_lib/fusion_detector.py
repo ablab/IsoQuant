@@ -281,50 +281,11 @@ class FusionDetector:
             logger.debug(f"Error looking up gene {gene_name} at {chrom}:{pos}: {e}")
             return None, None, None
 
-    def _compute_exonic_metrics(self, g, pos):
-        # Compute exon-based distance metrics.
-        try:
-            exons = self._get_cached_exons(g)
-            gstart = int(getattr(g, "start", 0))
-            gend = int(getattr(g, "end", 0))
-            # Determine if position is inside an exon
-            exonic_hit = any(es <= pos <= ee for es, ee in exons)
-            # Compute distances to exon boundaries
-            distances = []
-            for es, ee in exons:
-                distances.append(abs(pos - es))
-                distances.append(abs(pos - ee))
-            exon_min_dist = min(distances) if distances else None
-            boundary_min_dist = exon_min_dist  # Same metric, used with different thresholds
-            # Compute body distance (distance to gene boundaries)
-            body_dist = 0
-            if pos < gstart:
-                body_dist = gstart - pos
-            elif pos > gend:
-                body_dist = pos - gend
-            return exonic_hit, exon_min_dist, boundary_min_dist, body_dist, exons
-        except Exception:
-            return False, None, None, 0, []
-
-    def _compute_gene_score(self, target, pos, chrom=None, exon_min_dist=None,
-                            boundary_min_dist=None, exonic_hit=None, body_dist=None,
-                            gstart=None, gend=None, fusion_partner_gene=None,
-                            fusion_partner_chrom=None, fusion_partner_pos=None):
+    def _compute_gene_score(self, target, pos, gstart=None, gend=None):
         # Simplified gene scoring for long reads: assign gene if breakpoint is inside gene bounds.
         # Returns 1.0 if pos is inside gene, 0.0 if intergenic.
-        if isinstance(target, str):
-            # Lookup mode: find gene by name at position
-            gene_name = target
-            if chrom is None:
-                raise ValueError("chrom required when target is a gene name")
-            g, gstart, gend = self._lookup_gene_by_name(gene_name, chrom, pos)
-            if g is None:
-                return 0.0
-        else:
-            # Pre-computed mode: target is already a feature object
-            g = target
-            if gstart is None or gend is None:
-                raise ValueError("gstart and gend required for pre-computed mode")
+        if gstart is None or gend is None:
+            raise ValueError("gstart and gend required")
         # Simple rule: assign score based on whether position is inside gene bounds
         if gstart <= pos <= gend:
             return 1.0  # Position is inside gene
@@ -397,7 +358,7 @@ class FusionDetector:
             body_dist = min(abs(pos - gstart), abs(pos - gend))
         return exon_min_dist, boundary_min_dist, exonic_hit, body_dist, exons
 
-    def _build_gene_key(self, gtype, score, exonic_hit, boundary_min_dist, exon_min_dist, body_dist, glen, gname):
+    def _build_gene_key(self, gtype, score, boundary_min_dist, exon_min_dist, body_dist, glen, gname):
         # Build a comparison tuple for gene scoring. Higher tuple = better gene."""
         INF = 10**9
         bnd = boundary_min_dist if boundary_min_dist is not None else INF
@@ -406,33 +367,21 @@ class FusionDetector:
         return (
             1 if gtype == "protein_coding" else 0,  # 1) PRIORITY: protein-coding
             score,                                   # 2) main score
-            #bool(exonic_hit),                        # 3) prefer exonic
-            -bnd,                                    # 4) nearer exon boundary
-            -exd,                                    # 5) nearer exon span
-            -bod,                                    # 6) nearer gene body
-            -min(glen, 500000),                      # 7) gentle preference for longer locus
-            gname or ""                              # 8) deterministic
+            -bnd,                                    # 3) nearer exon boundary
+            -exd,                                    # 4) nearer exon span
+            -bod,                                    # 5) nearer gene body
+            -min(glen, 500000),                      # 6) gentle preference for longer locus
+            gname or ""                              # 7) deterministic
         )
 
-    def _score_exonic_genes(self, exonic_genes, pos, chrom=None, fusion_partner_gene=None,
-                            fusion_partner_chrom=None, fusion_partner_pos=None):
+    def _score_exonic_genes(self, exonic_genes, pos):
         # Score multiple exonic genes and return the best one, or single exonic gene.
         # Returns (gene_name, score)
         if len(exonic_genes) == 1:
             g = exonic_genes[0][0]
             gname = exonic_genes[0][1]
-            # Compute score for fast path
-            boundary_distances = []
-            exons = exonic_genes[0][5]
-            for start, end in exons:
-                boundary_distances.append(min(abs(pos - start), abs(pos - end)))
-            boundary_min_dist = min(boundary_distances) if boundary_distances else 0
             score = self._compute_gene_score(
-                g, pos, chrom=chrom, exon_min_dist=0, boundary_min_dist=boundary_min_dist,
-                exonic_hit=True, body_dist=0, gstart=exonic_genes[0][3], gend=exonic_genes[0][4],
-                fusion_partner_gene=fusion_partner_gene,
-                fusion_partner_chrom=fusion_partner_chrom,
-                fusion_partner_pos=fusion_partner_pos
+                g, pos, gstart=exonic_genes[0][3], gend=exonic_genes[0][4]
             )
             return gname, score
         best_gene = None
@@ -442,22 +391,17 @@ class FusionDetector:
             boundary_distances = [min(abs(pos - start), abs(pos - end)) for start, end in exons]
             boundary_min_dist = min(boundary_distances) if boundary_distances else 0
             score = self._compute_gene_score(
-                g, pos, chrom=chrom, exon_min_dist=0, boundary_min_dist=boundary_min_dist,
-                exonic_hit=True, body_dist=0, gstart=gstart, gend=gend,
-                fusion_partner_gene=fusion_partner_gene,
-                fusion_partner_chrom=fusion_partner_chrom,
-                fusion_partner_pos=fusion_partner_pos
+                g, pos, gstart=gstart, gend=gend
             )
             glen = max(1, gend - gstart + 1)
-            key = self._build_gene_key(gtype, score, True, boundary_min_dist, 0, 0, glen, gname)
+            key = self._build_gene_key(gtype, score, boundary_min_dist, 0, 0, glen, gname)
             if best_key is None or key > best_key:
                 best_key = key
                 best_gene = gname or getattr(g, "id", None)
                 best_score = score
         return best_gene, best_score if best_score is not None else 0.0
 
-    def _score_intronic_genes(self, genes, pos, chrom=None, fusion_partner_gene=None,
-                              fusion_partner_chrom=None, fusion_partner_pos=None):
+    def _score_intronic_genes(self, genes, pos):
         # Score intronic/intergenic genes and return the best one.
         # Returns (gene_name, score)
         best_gene = None
@@ -473,24 +417,17 @@ class FusionDetector:
             gend = int(getattr(g, "end", 0))
             exon_min_dist, boundary_min_dist, exonic_hit, body_dist, exons = self._compute_gene_distances(g, pos)
             score = self._compute_gene_score(
-                g, pos, chrom=chrom, exon_min_dist=exon_min_dist, boundary_min_dist=boundary_min_dist,
-                exonic_hit=exonic_hit, body_dist=body_dist, gstart=gstart, gend=gend,
-                fusion_partner_gene=fusion_partner_gene,
-                fusion_partner_chrom=fusion_partner_chrom,
-                fusion_partner_pos=fusion_partner_pos
+                g, pos, gstart=gstart, gend=gend
             )
             glen = max(1, gend - gstart + 1)
-            key = self._build_gene_key(gtype, score, exonic_hit, boundary_min_dist, exon_min_dist, body_dist, glen, gname)
+            key = self._build_gene_key(gtype, score, boundary_min_dist, exon_min_dist, body_dist, glen, gname)
             if best_key is None or key > best_key:
                 best_key = key
                 best_gene = gname or getattr(g, "id", None)
                 best_score = score
         return best_gene, best_score if best_score is not None else 0.0
 
-    def assign_fusion_gene(self, chrom: str, pos: int, window: int = 1000,
-                            fusion_partner_gene: Optional[str] = None,
-                            fusion_partner_chrom: Optional[str] = None,
-                            fusion_partner_pos: Optional[int] = None) -> Tuple[Optional[str], float]:
+    def assign_fusion_gene(self, chrom: str, pos: int, window: int = 1000) -> Tuple[Optional[str], float]:
         """Assign the best gene at a genomic location using exonic priority and scoring.
 
         Returns ``(gene_name, score)`` or ``(None, 0.0)`` if no genes are found.
@@ -501,15 +438,9 @@ class FusionDetector:
         # FAST PATH: Try exonic genes first (position inside an exon)
         exonic_genes = self._collect_exonic_genes(genes, pos)
         if exonic_genes:
-            return self._score_exonic_genes(exonic_genes, pos, chrom=chrom,
-                                           fusion_partner_gene=fusion_partner_gene,
-                                           fusion_partner_chrom=fusion_partner_chrom,
-                                           fusion_partner_pos=fusion_partner_pos)
+            return self._score_exonic_genes(exonic_genes, pos)
         # SLOW PATH: No exonic hits; use intronic/intergenic scoring
-        return self._score_intronic_genes(genes, pos, chrom=chrom,
-                                         fusion_partner_gene=fusion_partner_gene,
-                                         fusion_partner_chrom=fusion_partner_chrom,
-                                         fusion_partner_pos=fusion_partner_pos)
+        return self._score_intronic_genes(genes, pos)
 
     def assign_fusion_gene_cached(self, chrom, pos):
         # Cache gene assignment results at (chrom, pos) using module-level dict
