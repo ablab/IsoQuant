@@ -6,7 +6,6 @@ logger = logging.getLogger('IsoQuant')
 
 
 class FusionValidator:
-
     def __init__(self, detector) -> None:
         self.detector = detector
 
@@ -99,7 +98,7 @@ class FusionValidator:
             if fusion_key in self.detector.fusion_assigned_pairs:
                 del self.detector.fusion_assigned_pairs[fusion_key]
 
-    def filter_non_coding_genes(self) -> None:
+    def filter_based_on_biotype(self) -> None:
         """Remove fusions whose partners are not in the allowed biotype whitelist."""
         fusions_to_discard = []
         for fusion_key, meta in list(self.detector.fusion_metadata.items()):

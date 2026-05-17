@@ -4,6 +4,7 @@ from typing import List, Optional
 
 logger = logging.getLogger('IsoQuant')
 
+
 class FusionMetadata:
     def __init__(self, detector) -> None:
         self.detector = detector

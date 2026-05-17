@@ -1,16 +1,16 @@
 import logging
 from typing import Optional, List
-
 from intervaltree import IntervalTree
 
 logger = logging.getLogger('IsoQuant')
+
 
 class GenomicIntervalIndex:
     """Interval-tree index for mapping genomic coordinates to biological entities.
 
     Pre-builds interval trees for genes and exons to eliminate repeated database queries.
     """
-
+    
     def __init__(self, genedb, chromosomes: Optional[List[str]] = None):
         self.db = genedb
         self.gene_trees: dict = {}

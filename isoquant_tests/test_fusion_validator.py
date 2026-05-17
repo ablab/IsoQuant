@@ -283,7 +283,7 @@ class TestFilterNonCodingGenes:
             "consensus_bp": ("chr1", 1000, "chr2", 2000)
         }
 
-        self.validator.filter_non_coding_genes()
+        self.validator.filter_based_on_biotype()
         assert fusion_key in self.detector.fusion_metadata
 
     def test_filter_removes_non_coding_left(self):
@@ -294,7 +294,7 @@ class TestFilterNonCodingGenes:
             "right_gene": "BRCA2",
             "consensus_bp": ("chr1", 1000, "chr2", 2000)
         }
-        self.validator.filter_non_coding_genes()
+        self.validator.filter_based_on_biotype()
         assert fusion_key not in self.detector.fusion_metadata
 
     def test_filter_removes_non_coding_right(self):
@@ -305,7 +305,7 @@ class TestFilterNonCodingGenes:
             "right_gene": "HIST1H1A",
             "consensus_bp": ("chr1", 1000, "chr2", 2000)
         }
-        self.validator.filter_non_coding_genes()
+        self.validator.filter_based_on_biotype()
         assert fusion_key not in self.detector.fusion_metadata
 
     def test_filter_multiple_fusions(self):
@@ -327,7 +327,7 @@ class TestFilterNonCodingGenes:
                 "consensus_bp": ("chr15", 1000, "chr17", 4000)
             }
         }
-        self.validator.filter_non_coding_genes()
+        self.validator.filter_based_on_biotype()
         assert "fusion1" in self.detector.fusion_metadata
         assert "fusion2" not in self.detector.fusion_metadata
         assert "fusion3" in self.detector.fusion_metadata
@@ -695,7 +695,7 @@ class TestIntegration:
             }
         }
         # Apply filters
-        self.validator.filter_non_coding_genes()
+        self.validator.filter_based_on_biotype()
         # Check results
         assert "valid_fusion" in self.detector.fusion_metadata
         assert self.detector.fusion_metadata["valid_fusion"]["is_valid"] is True

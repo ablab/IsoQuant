@@ -1,8 +1,7 @@
 import logging
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set, Tuple
-
+from typing import Dict, List, Optional, Set, Tuple
 import gffutils
 import pysam
 import mappy as mp
@@ -18,6 +17,7 @@ _CONTEXT_CACHE = {}  # (chrom, pos) → (gene_name, region_type)
 _GENE_ASSIGNMENT_CACHE = {}  # (chrom, pos) → (gene_name, score)
 _ALIGNER_MAP_CACHE = {}  # seq → tuple of hits
 _CIGAR_CACHE = {}  # cigar_string → aligned_length
+
 
 class FusionDetector:
     def __init__(self, bam_path: str, gene_db_path: str, reference_fasta: Optional[str]) -> None:
@@ -1095,7 +1095,7 @@ class FusionDetector:
 
     def _get_gene_biotype_by_symbol_or_coords(self, gene_symbol, chrom=None, pos=None):
         """Resolve HGNC symbol to biotype using two strategies.
-        
+
         1) Direct lookup in symbol cache (built on-demand)
         2) If cache miss, query genes at (chrom, pos) and match by gene_name attribute
         """
@@ -1169,7 +1169,7 @@ class FusionDetector:
         self._clear_read_level_data()
         # Delegate validation and filtering to FusionValidator
         validator = FusionValidator(self)
-        validator.filter_non_coding_genes()
+        validator.filter_based_on_biotype()
         validator.filter_multicopy_artifact_pairs()
         validator.apply_frequency_filters()
 
