@@ -11,7 +11,7 @@ class FusionValidator:
         self.detector = detector
 
     def _get_breakpoint_coords(self, fusion_key):
-        # Extract chromosome and position coordinates from the first breakpoint of a fusion.
+        """Extract chromosome and position coordinates from the first breakpoint of a fusion."""
         left_chr, left_pos, right_chr, right_pos = None, None, None, None
         bp_counts = self.detector.fusion_breakpoints.get(fusion_key, {})
         if bp_counts:
@@ -37,7 +37,7 @@ class FusionValidator:
         return biotype in allowed_biotypes
 
     def _salvage_and_check_gene_pair(self, left_gene, right_gene, left_chr, left_pos, right_chr, right_pos):
-        # Check biotypes for both genes against the allowed whitelist.
+        """Check biotypes for both genes against the allowed whitelist."""
         left_biotype = self.detector.get_gene_biotype(left_gene, chrom=left_chr, pos=left_pos)
         right_biotype = self.detector.get_gene_biotype(right_gene, chrom=right_chr, pos=right_pos)
         logger.debug(f"Gene pair biotypes: {left_gene}={left_biotype}, {right_gene}={right_biotype}")
@@ -88,7 +88,7 @@ class FusionValidator:
         self._remove_discarded_fusions_internal(fusions_to_discard)
 
     def _remove_discarded_fusions_internal(self, fusions_to_discard):
-        # Remove fusions from all internal data structures.
+        """Remove fusions from all internal data structures."""
         for fusion_key in fusions_to_discard:
             if fusion_key in self.detector.fusion_metadata:
                 del self.detector.fusion_metadata[fusion_key]
@@ -249,8 +249,10 @@ class FusionValidator:
         return conf
 
     def _merge_fully_identical(self):
-        # Detect and merge fully identical fusions (same genes AND same consensus breakpoints).
-        # This handles exact duplicates that result from processing.
+        """Detect and merge fully identical fusions (same genes AND same consensus breakpoints).
+
+        This handles exact duplicates that result from processing.
+        """
         bp_to_fusion_keys = defaultdict(list)
         for fusion_key, meta in self.detector.fusion_metadata.items():
             consensus_bp = meta.get("consensus_bp")
@@ -274,7 +276,7 @@ class FusionValidator:
         return fusions_to_discard
 
     def _merge_fusion_candidates(self, keep_fusion_key, discard_fusion_key):
-        # Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key
+        """Merge two fusion candidates: add supporting reads from discard_fusion_key to keep_fusion_key."""
         if discard_fusion_key in self.detector.fusion_candidates:
             keep_reads = self.detector.fusion_candidates.get(keep_fusion_key, set())
             discard_reads = self.detector.fusion_candidates[discard_fusion_key]

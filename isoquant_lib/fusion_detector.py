@@ -83,10 +83,10 @@ class FusionDetector:
         self.fusion_read_scores.clear()
 
     def _build_exon_cache(self):
-        # Cache ordered exon spans for each gene to support exon-boundary
-        # and exon-distance calculations. This is used in gene scoring and
-        # is distinct from interval-tree–based coordinate lookups
+        """Cache ordered exon spans for each gene to support exon-boundary and exon-distance calculations.
 
+        This is used in gene scoring and is distinct from interval-tree–based coordinate lookups.
+        """
         if self.exon_cache:
             return  # Already built
         logger.debug("Building exon cache from genedb...")
@@ -112,7 +112,7 @@ class FusionDetector:
             logger.warning(f"Failed to build exon cache: {e}")
 
     def _get_cached_exons(self, gene):
-        # Retrieve exons for a gene, preferring cached version.
+        """Retrieve exons for a gene, preferring cached version."""
         gene_id = getattr(gene, 'id', None)
         if not gene_id:
             return []
@@ -130,12 +130,14 @@ class FusionDetector:
             return []
 
     def _context_query(self, chrom, pos):
-        # Query genomic context at position (chrom, pos).
-        # Uses module-level cache to avoid holding self reference.
-        # Uses interval tree if available for O(log n) performance, otherwise falls back to gffutils.
+        """Query genomic context at position (chrom, pos).
+
+        Uses module-level cache to avoid holding self reference.
+        Uses interval tree if available for O(log n) performance, otherwise falls back to gffutils.
+        """
         cache_key = (chrom, pos)
         if cache_key in _CONTEXT_CACHE:
-            return _CONTEXT_CACHE[cache_key]        
+            return _CONTEXT_CACHE[cache_key]
         try:
             genes = []
             exons = []
@@ -163,7 +165,7 @@ class FusionDetector:
                 chrom, pos,
                 exc_info=True
             )
-            result = (None, "unknown")        
+            result = (None, "unknown")
         # Cache with size limit
         if len(_CONTEXT_CACHE) > 200000:
             # Remove oldest entries (FIFO)
@@ -173,7 +175,7 @@ class FusionDetector:
         return result
 
     def _get_parent_gene_symbol(self, feature):
-        # Extract gene symbol from a feature, handling gene/transcript/other feature types.
+        """Extract gene symbol from a feature, handling gene/transcript/other feature types."""
         if feature.featuretype == 'gene':
             # For gene features, prefer gene_name attribute
             return feature.attributes.get('gene_name', [feature.id])[0]
@@ -197,7 +199,7 @@ class FusionDetector:
             return feature.attributes.get('gene_name', [feature.id])[0] if hasattr(feature, 'attributes') else feature.id
 
     def _lookup_feature_by_id(self, name_or_id):
-        # Try direct DB lookup by ID. Returns (feature, resolved_name) or (None, original_id).
+        """Try direct DB lookup by ID. Returns (feature, resolved_name) or (None, original_id)."""
         try:
             feat = self.db[name_or_id]
             resolved = self._get_parent_gene_symbol(feat)
@@ -206,7 +208,7 @@ class FusionDetector:
             return None, name_or_id
 
     def _fallback_gene_lookup(self, name_or_id: str) -> str:
-        # Last-resort resolution of a gene identifier to a gene symbol.
+        """Last-resort resolution of a gene identifier to a gene symbol."""
         try:
             genes = list(self.db.features_of_type("gene", id=name_or_id))
             if not genes:
@@ -254,8 +256,10 @@ class FusionDetector:
         return ANTISENSE_SUFFIX_RE.sub('', gene_name)
 
     def _lookup_gene_by_name(self, gene_name, chrom, pos):
-        # Lookup mode: find gene feature by name at genomic position.
-        # Returns (feature, gstart, gend) or (None, None, None) on failure.
+        """Lookup mode: find gene feature by name at genomic position.
+
+        Returns (feature, gstart, gend) or (None, None, None) on failure.
+        """
         try:
             gene_features = list(self.db.region(
                 region=(chrom, max(1, pos - 500), pos + 500),
@@ -282,8 +286,10 @@ class FusionDetector:
             return None, None, None
 
     def _compute_gene_score(self, target, pos, gstart=None, gend=None):
-        # Simplified gene scoring for long reads: assign gene if breakpoint is inside gene bounds.
-        # Returns 1.0 if pos is inside gene, 0.0 if intergenic.
+        """Simplified gene scoring for long reads: assign gene if breakpoint is inside gene bounds.
+
+        Returns 1.0 if pos is inside gene, 0.0 if intergenic.
+        """
         if gstart is None or gend is None:
             raise ValueError("gstart and gend required")
         # Simple rule: assign score based on whether position is inside gene bounds
@@ -293,7 +299,7 @@ class FusionDetector:
             return 0.0  # Position is intergenic
 
     def _get_genes_at(self, chrom, pos, window):
-        # Query genes at location using interval tree or gffutils.
+        """Query genes at location using interval tree or gffutils."""
         try:
             if self.interval_index is None:
                 logger.warning("IntervalTree not available; assign_fusion_gene requires it for efficiency")
@@ -303,7 +309,7 @@ class FusionDetector:
             return None
 
     def _collect_exonic_genes(self, genes, pos):
-        # Return a list of genes for which ``pos`` falls inside at least one exon.
+        """Return a list of genes for which ``pos`` falls inside at least one exon."""
         exonic_genes = []
         for gene in genes:
             attrs = getattr(gene, "attributes", {}) or {}
@@ -330,7 +336,7 @@ class FusionDetector:
 
 
     def _compute_gene_distances(self, g, pos):
-        # Compute exon and body distances for a gene relative to pos.
+        """Compute exon and body distances for a gene relative to pos."""
         exon_min_dist = None
         boundary_min_dist = None
         exonic_hit = False
@@ -359,7 +365,7 @@ class FusionDetector:
         return exon_min_dist, boundary_min_dist, exonic_hit, body_dist, exons
 
     def _build_gene_key(self, gtype, score, boundary_min_dist, exon_min_dist, body_dist, glen, gname):
-        # Build a comparison tuple for gene scoring. Higher tuple = better gene."""
+        """Build a comparison tuple for gene scoring. Higher tuple = better gene."""
         INF = 10**9
         bnd = boundary_min_dist if boundary_min_dist is not None else INF
         exd = exon_min_dist if exon_min_dist is not None else INF
@@ -375,8 +381,10 @@ class FusionDetector:
         )
 
     def _score_exonic_genes(self, exonic_genes, pos):
-        # Score multiple exonic genes and return the best one, or single exonic gene.
-        # Returns (gene_name, score)
+        """Score multiple exonic genes and return the best one, or single exonic gene.
+
+        Returns (gene_name, score).
+        """
         if len(exonic_genes) == 1:
             g = exonic_genes[0][0]
             gname = exonic_genes[0][1]
@@ -402,8 +410,10 @@ class FusionDetector:
         return best_gene, best_score if best_score is not None else 0.0
 
     def _score_intronic_genes(self, genes, pos):
-        # Score intronic/intergenic genes and return the best one.
-        # Returns (gene_name, score)
+        """Score intronic/intergenic genes and return the best one.
+
+        Returns (gene_name, score).
+        """
         best_gene = None
         best_score = None
         best_key = None
@@ -443,7 +453,7 @@ class FusionDetector:
         return self._score_intronic_genes(genes, pos)
 
     def assign_fusion_gene_cached(self, chrom, pos):
-        # Cache gene assignment results at (chrom, pos) using module-level dict
+        """Cache gene assignment results at (chrom, pos) using module-level dict."""
         cache_key = (chrom, pos)
         if cache_key in _GENE_ASSIGNMENT_CACHE:
             return _GENE_ASSIGNMENT_CACHE[cache_key]
@@ -457,8 +467,10 @@ class FusionDetector:
         return result
 
     def _passes_read_filters(self, read, min_al_len_primary, min_sa_mapq):
-        # Check if read passes basic quality filters.
-        # Returns (passes, clip_side, clip_len).
+        """Check if read passes basic quality filters.
+
+        Returns (passes, clip_side, clip_len).
+        """
         if read.is_unmapped or read.is_secondary or read.is_supplementary:
             return False, None, 0
         prim_al_len = self.compute_aligned_length(read)
@@ -471,8 +483,10 @@ class FusionDetector:
         return True, clip_side, clip_len
 
     def _filter_sa_entries(self, sa_entries, min_al_len_sa, min_sa_mapq):
-        # Filter & prioritize SA entries by mapq and aligned length.
-        # Returns list of (chr, pos, strand, cigar, mapq, nm, al_len) tuples.
+        """Filter & prioritize SA entries by mapq and aligned length.
+
+        Returns list of (chr, pos, strand, cigar, mapq, nm, al_len) tuples.
+        """
         filtered = []
         for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm) in sa_entries:
             if sa_pos is None or sa_cigar is None:
@@ -488,8 +502,10 @@ class FusionDetector:
         return filtered
 
     def _process_sa_entries(self, read, sa_entries, clip_side, jitter_window, min_sa_mapq):
-        # Process all SA entries from a read and record fusion candidates.
-        # Returns True if at least one fusion was recorded, False otherwise.
+        """Process all SA entries from a read and record fusion candidates.
+
+        Returns True if at least one fusion was recorded, False otherwise.
+        """
         seen_pairs = set()
         sa_used = False
         for (sa_chr, sa_pos, sa_strand, sa_cigar, sa_mapq, sa_nm, sa_al_len) in sa_entries:
@@ -558,7 +574,7 @@ class FusionDetector:
         if not cigartuples:
             return 0
         return sum(l for op, l in cigartuples if op in (0, 7, 8))
-    
+
     def aligned_len_from_cigarstring(self, cigar: Optional[str]) -> int:
         """Sum the read-aligned operations (M, =, X) from a CIGAR string."""
         return self._cached_aligned_len_from_cigarstring(cigar)
@@ -580,7 +596,7 @@ class FusionDetector:
         return total
 
     def _cached_aligner_map(self, seq):
-        # Cache aligner.map() results for identical sequences using module-level dict
+        """Cache aligner.map() results for identical sequences using module-level dict."""
         if seq in _ALIGNER_MAP_CACHE:
             return _ALIGNER_MAP_CACHE[seq]
         try:
@@ -597,6 +613,7 @@ class FusionDetector:
         return result
 
     def _is_softclip_orientation_valid(self, read, clip_side, sa_chr, sa_pos, tol=10):
+        """Check if soft-clip orientation is valid relative to SA alignment."""
         if clip_side is None:
             return True
         if read.reference_name != sa_chr:
@@ -618,7 +635,7 @@ class FusionDetector:
         return True
 
     def realign_clipped_seq(self, seq):
-        # Realign a clipped sequence using the aligner.
+        """Realign a clipped sequence using the aligner."""
         if not seq or not self.aligner:
             return None
         try:
@@ -704,7 +721,7 @@ class FusionDetector:
             c1, p1, c2, p2 = bp_tuple
             by_pair[(c1, c2)].append((p1, p2, w))
         def best_window(items, w):
-            # Sort by p1; we’ll apply a sliding window on p1, and inside it on p2
+            """Sort by p1; we'll apply a sliding window on p1, and inside it on p2."""
             items.sort(key=lambda x: x[0])  # sort by p1
             best_total = 0
             best_p1 = 0
@@ -1014,7 +1031,7 @@ class FusionDetector:
             flags["reasons"].append("Missing gene name on one side")
 
     def _attempt_reconstruction_and_realignment(self, meta, flags, c1, p1, c2, p2):
-        # Try to reconstruct fusion transcript and realign; update meta/flags accordingly.
+        """Try to reconstruct fusion transcript and realign; update meta/flags accordingly."""
         if not (self.reference_fasta and self.aligner):
             meta.setdefault("notes", []).append("Realignment skipped: reference or aligner not available")
             return
@@ -1047,8 +1064,10 @@ class FusionDetector:
         return collapsed
 
     def _build_symbol_biotype_index(self):
-        # One-time index construction: map HGNC symbols to biotypes using all genes in db
-        # This is called lazily when first needed
+        """One-time index construction: map HGNC symbols to biotypes using all genes in db.
+
+        This is called lazily when first needed.
+        """
         if self._symbol_biotype_cache:
             return  # already built
         logger.debug("Building symbol → biotype index from genedb...")
@@ -1075,9 +1094,11 @@ class FusionDetector:
             logger.warning(f"Failed to build symbol→biotype index: {e}")
 
     def _get_gene_biotype_by_symbol_or_coords(self, gene_symbol, chrom=None, pos=None):
-        # Resolve HGNC symbol to biotype using two strategies:
-        # 1) Direct lookup in symbol cache (built on-demand)
-        # 2) If cache miss, query genes at (chrom, pos) and match by gene_name attribute
+        """Resolve HGNC symbol to biotype using two strategies.
+        
+        1) Direct lookup in symbol cache (built on-demand)
+        2) If cache miss, query genes at (chrom, pos) and match by gene_name attribute
+        """
         if not gene_symbol:
             return None
         # Strategy 1: Check symbol cache first
