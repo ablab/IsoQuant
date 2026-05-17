@@ -131,7 +131,6 @@ class GraphBasedModelConstructor:
         self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
-
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():
             self.known_isoforms_in_graph_ids[isoform_id] = intron_path
 
@@ -1069,3 +1068,6 @@ class TranscriptToGeneJoiner:
             model.gene_id = transcript_to_new_gene_id[model.transcript_id]
 
         return self.transcipt_model_storage
+
+
+
