@@ -81,7 +81,7 @@ class TerminalCounter(AbstractCounter):
 
     def sort_peaks(self, x):
         if x.peak_count > 1:
-            sorted_indices = np.argsort(-x['peak_prominence'])  
+            sorted_indices = np.argsort(-x['peak_heights'])  
             x['peak_location'] = np.array(x['peak_location'])[sorted_indices].tolist()
             x['peak_prominence'] = x['peak_prominence'][sorted_indices]
             x['peak_width'] = x['peak_width'][sorted_indices]
@@ -89,9 +89,12 @@ class TerminalCounter(AbstractCounter):
             x['peak_left'] = np.array(x['peak_left'])[sorted_indices].tolist()
             x['peak_right'] = np.array(x['peak_right'])[sorted_indices].tolist()
             x['rank'] = list(range(1, len(sorted_indices)+1))
+            x['relative_height'] = [y/x['peak_heights'][0] for y in x['peak_heights']]
         else:
-            x['rank'] = 0
+            x['rank'] = [0]
+            x['relative_height'] = [1]
         return x
+
 
     def result(self, dff):
         dff['count'] = 1
@@ -120,7 +123,6 @@ class TerminalCounter(AbstractCounter):
         self.df['max'] = self.df['transcript_id'].apply(lambda x: stats.mode(self.transcripts[x]['data'])[0])-self.df.start
         self.df['mean'] = self.df['transcript_id'].apply(lambda x: np.mean(self.transcripts[x]['data']))-self.df.start
         self.df['histogram'] = self.df['transcript_id'].apply(lambda x: [0]*10 + list(np.histogram(self.transcripts[x]['data'], bins = 1+max(self.transcripts[x]['data']) - min(self.transcripts[x]['data']))[0])+[0]*10)
-        self.df['mean_height'] = self.df['histogram'].apply(lambda x: np.mean(x))
         self.df['var'] = self.df['transcript_id'].apply(lambda x: np.var(self.transcripts[x]['data']))
         self.df['range'] = self.df['transcript_id'].apply(lambda x: np.max(self.transcripts[x]['data']) - np.min(self.transcripts[x]['data'])) + 1
         self.df['skew'] = self.df['transcript_id'].apply(lambda x: stats.skew(self.transcripts[x]['data']) if (len(self.transcripts[x]['data']) > 3 and np.var(self.transcripts[x]['data']) >= 1e-12) else None)
@@ -133,6 +135,7 @@ class TerminalCounter(AbstractCounter):
         self.df['peak_right'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.98)[3]])
         self.df['entropy'] = self.df['histogram'].apply(lambda x: stats.entropy(x))
         self.df['annotated'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['annotated'])
+        self.df['mean_height'] = self.df['histogram'].apply(lambda x: np.mean(x))
 
         self.dfResult = pd.DataFrame()
         if 0 in list(self.df['peak_count']):
@@ -143,8 +146,8 @@ class TerminalCounter(AbstractCounter):
             self.df = self.df.drop(self.df[self.df.peak_count==0].index, axis = 0).reset_index(drop=True)
             self.dfResult['peak_heights'] = self.dfResult.apply(lambda x: x.histogram[x.prediction+10], axis = 1)
        
-            
-    
+
+
         keys = list(self.df.peak_info[0].keys())
         self.peaks = self.df.drop('max', axis = 1).copy()
         for i in keys:
@@ -153,25 +156,26 @@ class TerminalCounter(AbstractCounter):
         self.peaks = self.peaks.apply(lambda x: self.sort_peaks(x), axis = 1)
         keys.remove('left_thresholds')
         keys.remove('right_thresholds')
-        self.peaks = self.peaks.explode(keys+['peak_location', 'rank', 'peak_prominence', 'peak_width', 'peak_left', 'peak_right']).drop(['peak_info'], axis = 1).reset_index(drop=True)
-             
-            
+
+
+        self.peaks['mean_height'] = self.peaks['peak_heights'].apply(lambda x: np.mean(x))
+      
+        self.peaks = self.peaks.explode(keys+['relative_height', 'peak_location', 'rank', 'peak_prominence', 'peak_width', 'peak_left', 'peak_right']).drop(['peak_info'], axis = 1).reset_index(drop=True)
+   
+                
         self.peaks[['mean', 'var', 'range', 'skew', 'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence',
             'rank']] = self.peaks[['mean', 'var', 'range', 'skew',
             'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence', 'rank']].astype(float, errors='ignore') 
-        
-        self.peaks['target'] = self.peaks['transcript_id'].apply(lambda x: [self.transcripts[x]['annotated']])
 
-        k = 0
-        for id in self.transcripts:
-            if "_" in id:
-                k += 1
-                if self.peaks['transcript_id'].eq(id.split("_")[0]).any():
-                    self.peaks[self.peaks['transcript_id']==id.split("_")[0]]['target'] += [self.transcripts[id]['annotated']]
+        self.peaks['target'] = self.peaks['transcript_id'].apply(lambda x: self.transcripts[x]['annotated'])
 
-        print(k)
+        # for id in self.transcripts:
+        #     if "_" in id:
+        #         if self.peaks['transcript_id'].eq(id.split("_")[0]).any():
+        #             self.peaks[self.peaks['transcript_id']==id.split("_")[0]]['target'] += [self.transcripts[id]['annotated']]
+
 
         self.peaks['true_peak'] = self.peaks.apply(lambda x: self.peak_target(x) , axis = 1)
 
@@ -186,8 +190,8 @@ class TerminalCounter(AbstractCounter):
         
     def train_model(self):
         self.model = XGBClassifier()
-        self.model.load_model('src/model.json')
-        params = self.model.get_xgb_params()
+        # self.model.load_model('src/model.json')
+        # params = self.model.get_xgb_params()
         # {'booster': 'gbtree', 'learning_rate': 0.1711139976081603, 'gamma': 3.213024131696218, 'max_depth': 8, 'min_child_weight': 7.031066410000928, 'reg_lambda': 0.00035253812038082424, 'reg_alpha': 0.010639993402868728, 'subsample': 0.6310944088222122, 'colsample_bytree': 0.7856502544324856, 'n_estimators': 56, 'scale_pos_weight': 0.3971102549981997}
         # {'booster': 'dart', 'learning_rate': 0.09115397231222125, 'gamma': 0.7911797085921515, 'max_depth': 6, 'min_child_weight': 8.890261356320382, 'reg_lambda': 3.4438281320977343e-07, 'reg_alpha': 4.583918034010515e-06, 'subsample': 0.9139332107255594, 'colsample_bytree': 0.9804235433943478, 'n_estimators': 95, 'scale_pos_weight': 0.41416529852133854}
         params = {'booster': 'dart', 'learning_rate': 0.25989024187450366, 'gamma': 4.087502269121285, 'max_depth': 6, 'min_child_weight': 5.722951381412213, 'reg_lambda': 4.84758559371017, 'reg_alpha': 0.03795296107941127, 'subsample': 0.8809954546952385, 'colsample_bytree': 0.7483035972922923, 'n_estimators': 111, 'scale_pos_weight': 0.297061977156673}
@@ -208,6 +212,8 @@ class TerminalCounter(AbstractCounter):
 
         X_test = X[X["chromosome"].isin(test_chrs)].drop('chromosome', axis = 1).copy().reset_index(drop=True)
         y_test = y[X["chromosome"].isin(test_chrs)].copy().reset_index(drop=True)
+
+
 
         self.model_new.fit(X_train.drop(['peak_left', 'peak_right', 'histogram','annotated', 'rank', 'transcript_id', 'gene_id', 'start'], axis = 1).astype(float, errors='ignore'), y_train)
         
@@ -232,7 +238,6 @@ class TerminalCounter(AbstractCounter):
         self.df['max'] = self.df['transcript_id'].apply(lambda x: stats.mode(self.transcripts[x]['data'])[0])-self.df.start
         self.df['mean'] = self.df['transcript_id'].apply(lambda x: np.mean(self.transcripts[x]['data']))-self.df.start
         self.df['histogram'] = self.df['transcript_id'].apply(lambda x: [0]*10 + list(np.histogram(self.transcripts[x]['data'], bins = 1+max(self.transcripts[x]['data']) - min(self.transcripts[x]['data']))[0])+[0]*10)
-        self.df['mean_height'] = self.df['histogram'].apply(lambda x: np.mean(x))
         self.df['var'] = self.df['transcript_id'].apply(lambda x: np.var(self.transcripts[x]['data']))
         self.df['range'] = self.df['transcript_id'].apply(lambda x: np.max(self.transcripts[x]['data']) - np.min(self.transcripts[x]['data'])) + 1
         self.df['skew'] = self.df['transcript_id'].apply(lambda x: stats.skew(self.transcripts[x]['data']) if (len(self.transcripts[x]['data']) > 3 and np.var(self.transcripts[x]['data']) >= 1e-12) else None)
@@ -245,6 +250,7 @@ class TerminalCounter(AbstractCounter):
         self.df['peak_right'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.98)[3]])
         self.df['entropy'] = self.df['histogram'].apply(lambda x: stats.entropy(x))
         self.df['annotated'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['annotated'])
+        self.df['mean_height'] = self.df['histogram'].apply(lambda x: np.mean(x))
 
         self.dfResult = pd.DataFrame()
         if 0 in list(self.df['peak_count']):
@@ -256,53 +262,41 @@ class TerminalCounter(AbstractCounter):
             self.dfResult['peak_heights'] = self.dfResult.apply(lambda x: x.histogram[x.prediction+10], axis = 1)
        
 
+
         keys = list(self.df.peak_info[0].keys())
         self.peaks = self.df.drop('max', axis = 1).copy()
-
-
         for i in keys:
             self.peaks[i] = self.peaks.peak_info.apply(lambda x: x[i])
         self.peaks = self.peaks.drop(['left_thresholds', 'right_thresholds'], axis = 1)
         self.peaks = self.peaks.apply(lambda x: self.sort_peaks(x), axis = 1)
-
-
-
-        
-
-
         keys.remove('left_thresholds')
         keys.remove('right_thresholds')
-        self.peaks = self.peaks.explode(keys+['peak_location', 'rank', 'peak_prominence', 'peak_width', 'peak_left', 'peak_right']).drop(['peak_info'], axis = 1).reset_index(drop=True)
+
+
+        self.peaks['mean_height'] = self.peaks['peak_heights'].apply(lambda x: np.mean(x))
+      
+        self.peaks = self.peaks.explode(keys+['relative_height', 'peak_location', 'rank', 'peak_prominence', 'peak_width', 'peak_left', 'peak_right']).drop(['peak_info'], axis = 1).reset_index(drop=True)
+
+
              
-
-
         self.peaks[['mean', 'var', 'range', 'skew', 'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence',
             'rank']] = self.peaks[['mean', 'var', 'range', 'skew',
             'peak_count', 'peak_location', 'entropy', 
             'peak_heights', 'peak_width', 'peak_prominence', 'rank']].astype(float, errors='ignore') 
+
+
         
         
         
         self.peaks['prediction'] = self.model.predict(self.peaks.drop(['peak_left', 'peak_right', 'histogram', 
-            'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome'], axis = 1).astype(float, errors='ignore'))
+            'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome', 'mean', 'peak_location', 'peak_prominence', 'range'], axis = 1).astype(float, errors='ignore'))
         
         self.peaks['prediction'] = self.peaks['prediction'].apply(lambda x: True if x == 1 else False)
-        
-        if self.first:
-            self.peaks.to_csv("src/peaks_1.csv", sep="\t", index=False, mode="w", header=True)
-        else:
-            self.peaks.to_csv("src/peaks_1.csv", sep="\t", index=False, mode="a", header=False)
 
+        self.peaks = self.peaks[self.peaks['prediction']==True]
+        
 
-        
-        # self.peaks = self.peaks[self.peaks.prediction ==True].reset_index(drop=True) 
-
-        # self.peaks = self.peaks[self.peaks.peak_location > 40].reset_index(drop=True)   
-        
-        
-        
-        
         
         self.peaks['prediction'] = self.peaks['peak_location']
         self.dfResult = pd.concat([self.dfResult, self.peaks], axis=0).reset_index(drop=True)
@@ -314,10 +308,7 @@ class TerminalCounter(AbstractCounter):
                 self.df.to_csv(self.output_prefix, sep="\t", index=False, mode="w", header=True)
             else:
                 self.df.to_csv(self.output_prefix, sep="\t", index=False, mode="a", header=False)
-            return
-
-        print(len(self.dfResult))
-        
+            return        
 
 
         self.dfResult['counts'] = self.dfResult.apply(lambda x: self.counts(x), axis = 1)
@@ -351,30 +342,6 @@ class TerminalCounter(AbstractCounter):
         else:
             self.dfResult.to_csv(self.output_prefix, sep="\t", index=False, mode="a", header=False)
 
-    def test_model(self):
-        self.model = XGBClassifier()
-        self.model.load_model('src/model.json')
-        params = self.model.get_xgb_params()
-        params = {'booster': 'dart', 'learning_rate': 0.09115397231222125, 'gamma': 0.7911797085921515, 'max_depth': 6, 'min_child_weight': 8.890261356320382, 'reg_lambda': 3.4438281320977343e-07, 'reg_alpha': 4.583918034010515e-06, 'subsample': 0.9139332107255594, 'colsample_bytree': 0.9804235433943478, 'n_estimators': 95, 'scale_pos_weight': 0.41416529852133854}
-        self.model_new = XGBClassifier(**params)
-
-        self.model_df = pd.read_csv("src/model_df.csv")
-
-        X = self.model_df.drop('true_peak', axis = 1).copy().astype(float, errors='ignore') 
-        y = self.model_df['true_peak'].copy()
-        
-        chrs = list(X.chromosome.unique())
-        n = len(chrs)//2
-        test_chrs = random.sample(chrs, n)
-
-        X_test = X[X["chromosome"].isin(test_chrs)].drop('chromosome', axis = 1).copy().reset_index(drop=True)
-        y_test = y[X["chromosome"].isin(test_chrs)].copy().reset_index(drop=True)
-
-        
-        X_test['prediction'] = self.model.predict(X_test.drop(['peak_left', 'peak_right', 'annotated', 'rank', 'transcript_id', 'gene_id', 'start'], axis = 1).astype(float, errors='ignore'))
-
-        X_test['true_peak'] = y_test
-        self.result(X_test)
         
 
 
@@ -419,7 +386,7 @@ class TSSCounter(TerminalCounter):
         
     def dump(self):
         self.model = XGBClassifier()
-        self.model.load_model('src/model_new.json')
+        self.model.load_model('src/model_tss.json')
 
         self.create_df()
         # self.collect_data()
@@ -429,6 +396,7 @@ class TSSCounter(TerminalCounter):
 
     def finalize(self, args=None):
         # self.train_model()
+        
         pass    
 
 
@@ -470,18 +438,17 @@ class PolyACounter(TerminalCounter):
      
     def dump(self):
         self.model = XGBClassifier()
-        self.model.load_model('src/model.json')
-        # self.model.load_model('src/model_new.json')
+        self.model.load_model('src/model_polya.json')
 
 
-        # self.create_df()
-        self.collect_data()
+        self.create_df()
+        # self.collect_data()
 
         self.transcripts = {}
         self.first = False
 
     def finalize(self, args=None):
-        self.train_model()
+        # self.train_model()
         pass
 
 # to train a model: 
