@@ -14,6 +14,7 @@ Classes:
     Array2BitKmerIndexer: Memory-efficient array for large barcode sets
     SharedMemoryArray2BitKmerIndexer: Shared memory version for parallel processing
     SharedMemorySparseAnchorIndexer: 3-anchor sparse variant for 10B-scale whitelists
+    MappedSparseAnchorIndexer: Disk-backed (mmap) sparse variant for 50B-scale whitelists
 """
 
 from .base import KmerIndexer, ArrayKmerIndexer
@@ -22,6 +23,10 @@ from .shared_memory import (
     SharedMemoryArray2BitKmerIndexer,
     SharedMemoryIndexInfo,
     SharedMemorySparseAnchorIndexer,
+)
+from .mapped import (
+    MappedIndexInfo,
+    MappedSparseAnchorIndexer,
 )
 
 __all__ = [
@@ -32,4 +37,6 @@ __all__ = [
     'SharedMemoryArray2BitKmerIndexer',
     'SharedMemoryIndexInfo',
     'SharedMemorySparseAnchorIndexer',
+    'MappedIndexInfo',
+    'MappedSparseAnchorIndexer',
 ]
