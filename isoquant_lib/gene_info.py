@@ -150,6 +150,8 @@ class ExonRegion:
         self.end: int = end
         self.strand: str = strand
         self.member_exon_indices: list = []
+        # union of gene_ids across member exons; populated by build_exon_overlap_regions
+        self.gene_ids: set = set()
 
 
 class GeneList:
@@ -708,6 +710,7 @@ class GeneInfo:
                     if exon[1] > current.end:
                         current.end = exon[1]
                 current.member_exon_indices.append(i)
+                current.gene_ids.update(exon_property_map[i].gene_ids)
                 region_map[i] = len(regions) - 1
         return regions, region_map
 

@@ -690,6 +690,13 @@ class JointExonCounter(AbstractCounter):
         gene_info = read_assignment.gene_info
         if not getattr(gene_info, "exon_overlap_regions", None):
             return
+        read_gene = None
+        for m in read_assignment.isoform_matches:
+            if m.assigned_gene:
+                read_gene = m.assigned_gene
+                break
+        if read_gene is None:
+            return
         if self.ignore_read_groups:
             group_id = 0
         elif not read_assignment.read_group_ids:
@@ -697,9 +704,9 @@ class JointExonCounter(AbstractCounter):
         else:
             group_id = read_assignment.read_group_ids[self.group_index]
         self._classify(read_assignment.exon_gene_profile, read_assignment.strand,
-                       gene_info, group_id)
+                       gene_info, group_id, read_gene)
 
-    def _classify(self, profile, read_strand, gene_info, group_id):
+    def _classify(self, profile, read_strand, gene_info, group_id, read_gene):
         self.encountered_group_ids.add(group_id)
         exon_features = gene_info.exon_profiles.features
         property_map = gene_info.exon_property_map
@@ -716,21 +723,28 @@ class JointExonCounter(AbstractCounter):
             inclusions = [i for i, s in zip(members, states) if s == 1]
             if inclusions:
                 for i in inclusions:
+                    # only attribute the inclusion to the read's assigned gene
+                    if read_gene not in property_map[i].gene_ids:
+                        continue
                     feature_id = property_map[i].id
-                    self.inclusion_counter[feature_id].inc(group_id)
-                    key = ("inc", feature_id)
-                    if key not in self.feature_row_prefix:
+                    counter_key = (feature_id, read_gene)
+                    self.inclusion_counter[counter_key].inc(group_id)
+                    row_key = ("inc", counter_key)
+                    if row_key not in self.feature_row_prefix:
                         exon_start, exon_end = exon_features[i]
-                        self.feature_row_prefix[key] = "%s\t%d\t%d\t%s\t%d\t%d\tinclusion" % (
+                        self.feature_row_prefix[row_key] = "%s\t%d\t%d\t%s\t%d\t%d\t%s\tinclusion" % (
                             region.chr_id, region.start, region.end, region.strand,
-                            exon_start, exon_end)
+                            exon_start, exon_end, read_gene)
             else:
-                # all states == -1: region skipped entirely
-                self.exclusion_counter[region.id].inc(group_id)
-                key = ("exc", region.id)
-                if key not in self.feature_row_prefix:
-                    self.feature_row_prefix[key] = "%s\t%d\t%d\t%s\t.\t.\texclusion" % (
-                        region.chr_id, region.start, region.end, region.strand)
+                # all states == -1: region skipped entirely; attribute to the read's gene only
+                if read_gene not in region.gene_ids:
+                    continue
+                counter_key = (region.id, read_gene)
+                self.exclusion_counter[counter_key].inc(group_id)
+                row_key = ("exc", counter_key)
+                if row_key not in self.feature_row_prefix:
+                    self.feature_row_prefix[row_key] = "%s\t%d\t%d\t%s\t.\t.\t%s\texclusion" % (
+                        region.chr_id, region.start, region.end, region.strand, read_gene)
 
     def _get_group_name(self, group_id: int) -> str:
         if self.string_pools is None:
@@ -740,7 +754,7 @@ class JointExonCounter(AbstractCounter):
 
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
-            f.write("chr\tregion_start\tregion_end\tstrand\texon_start\texon_end\tfeature_kind\tgroup_id\tcount\n")
+            f.write("chr\tregion_start\tregion_end\tstrand\texon_start\texon_end\tgene_id\tfeature_kind\tgroup_id\tcount\n")
             all_group_ids = sorted(self.encountered_group_ids)
             for key, prefix in self.feature_row_prefix.items():
                 kind, fid = key
