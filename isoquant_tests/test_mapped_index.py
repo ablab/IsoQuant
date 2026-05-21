@@ -41,11 +41,13 @@ class TestMappedSparseAnchorIndexer:
         assert indexer.total_sequences == 1
         assert indexer.k == 14
         assert not indexer.empty()
-        # Exactly 3 anchors per sequence.
-        assert indexer.index_size == 3
-        # All four files exist.
+        # Inverted list holds 2 postings per barcode (first anchor is in the
+        # permutation table, not the inverted list).
+        assert indexer.index_size == 2
+        # All five files exist (Step B adds first_anchor_starts.bin).
         for fname in (
             MappedSparseAnchorIndexer.BARCODES_FILENAME,
+            MappedSparseAnchorIndexer.FIRST_ANCHOR_FILENAME,
             MappedSparseAnchorIndexer.RANGES_FILENAME,
             MappedSparseAnchorIndexer.INDEX_FILENAME,
             MappedSparseAnchorIndexer.META_FILENAME,
@@ -63,15 +65,20 @@ class TestMappedSparseAnchorIndexer:
         assert meta["barcode_count"] == 3
         assert meta["kmer_size"] == 14
         assert meta["seq_len"] == 25
-        assert meta["index_size"] == 9
+        # Step B: inverted list holds only last + minimizer postings → 2 * N.
+        assert meta["index_size"] == 6
+        assert meta.get("has_first_anchor_table") is True
         # File sizes match meta.
         assert os.path.getsize(
             os.path.join(str(tmp_path), "known_bin_seq.bin")) == 3 * 8
         assert os.path.getsize(
-            os.path.join(str(tmp_path), "inverted_list.bin")) == 9 * 5
-        # 4^14 + 1 cumulative offsets, uint64.
+            os.path.join(str(tmp_path), "inverted_list.bin")) == 6 * 5
+        # 4^14 + 1 cumulative offsets, uint64, for both range tables.
         assert os.path.getsize(
             os.path.join(str(tmp_path), "index_ranges.bin")) == (4**14 + 1) * 8
+        assert os.path.getsize(
+            os.path.join(str(tmp_path), "first_anchor_starts.bin")
+        ) == (4**14 + 1) * 8
         # Persistence: directory should NOT be unlinked while indexer alive,
         # and we explicitly opt out of cleanup by keeping the indexer reachable.
         del indexer
@@ -288,6 +295,127 @@ class TestMappedSparseAnchorIndexer:
         assert os.path.exists(os.path.join(str(tmp_path), "meta.json"))
         assert os.path.exists(
             os.path.join(str(tmp_path), "known_bin_seq.bin"))
+        assert os.path.exists(
+            os.path.join(str(tmp_path), "first_anchor_starts.bin"))
+
+    def test_layout_version_is_two(self):
+        # Sanity check: Step B bumped the layout version.
+        assert MappedSparseAnchorIndexer.LAYOUT_VERSION == 2
+
+    def test_first_anchor_table_sorted_by_first_anchor(self, tmp_path):
+        # After Step B, known_bin_seq is stable-sorted by the first anchor
+        # k-mer, so first_anchor_starts gives the slice bounds directly.
+        seqs = _bin_seqs(BARCODES)
+        indexer = MappedSparseAnchorIndexer(
+            seqs, kmer_size=14, seq_len=25, cache_dir=str(tmp_path),
+        )
+        first_shift = (25 - 14) * 2
+        k_mask = (1 << 28) - 1
+        stored = numpy.asarray(indexer.known_bin_seq, dtype=numpy.uint64)
+        first_anchors = (stored >> numpy.uint64(first_shift)) & numpy.uint64(k_mask)
+        # The first anchors of the stored barcodes must be non-decreasing.
+        assert numpy.all(first_anchors[:-1] <= first_anchors[1:])
+        # And first_anchor_starts must be a cumulative count of first anchors.
+        for a in numpy.unique(first_anchors):
+            start = int(indexer.first_anchor_starts[int(a)])
+            end = int(indexer.first_anchor_starts[int(a) + 1])
+            assert end - start == int((first_anchors == a).sum())
+            # Every entry in the slice has first anchor == a.
+            assert numpy.all(first_anchors[start:end] == a)
+
+    def test_first_anchor_table_collision(self, tmp_path):
+        # Construct multiple barcodes that share the same first anchor
+        # (positions 0..13). They must all land in a contiguous slice of the
+        # sorted known_bin_seq array.
+        shared_prefix = "ACTGACTGACTGAC"  # first 14 nt → shared anchor
+        barcodes = [
+            shared_prefix + "TGACTGACTGA",
+            shared_prefix + "AAACTGACTGA",
+            shared_prefix + "GGGCTGACTGA",
+            shared_prefix + "CCCCTGACTGA",
+        ]
+        # And one that has a different first anchor.
+        outsider = "TTTTACTGACTGACTGACTGACTGA"
+        barcodes.append(outsider)
+
+        seqs = _bin_seqs(barcodes)
+        indexer = MappedSparseAnchorIndexer(
+            seqs, kmer_size=14, seq_len=25, cache_dir=str(tmp_path),
+        )
+        # Each barcode must be findable via an exact-match query.
+        for q in barcodes:
+            results = indexer.get_occurrences(q, max_hits=10, min_kmers=1)
+            assert any(r[0] == q for r in results), q
+            # Exact match scores 3000 (3 anchors, 0 hamming).
+            assert any(r[0] == q and r[1] == 3000 for r in results), q
+
+    def test_first_anchor_table_distinct(self, tmp_path):
+        # Barcodes with totally distinct first anchors — each bucket should
+        # hold exactly one entry, and queries return the matching barcode.
+        barcodes = [
+            "AAAAAAAAAAAAAA" + "ACTGACTGACT",
+            "CCCCCCCCCCCCCC" + "ACTGACTGACT",
+            "GGGGGGGGGGGGGG" + "ACTGACTGACT",
+            "TTTTTTTTTTTTTT" + "ACTGACTGACT",
+        ]
+        seqs = _bin_seqs(barcodes)
+        indexer = MappedSparseAnchorIndexer(
+            seqs, kmer_size=14, seq_len=25, cache_dir=str(tmp_path),
+        )
+        first_shift = (25 - 14) * 2
+        k_mask = (1 << 28) - 1
+        for q in barcodes:
+            anchor = (int(_bin_seqs([q])[0]) >> first_shift) & k_mask
+            start = int(indexer.first_anchor_starts[anchor])
+            end = int(indexer.first_anchor_starts[anchor + 1])
+            assert end - start == 1
+            # Exact-match query must return this barcode.
+            results = indexer.get_occurrences(q, max_hits=5, min_kmers=1)
+            assert any(r[0] == q and r[1] == 3000 for r in results)
+
+    def test_inverted_list_shrunk_vs_three_anchors(self, tmp_path):
+        # Without Step B the inverted list would be 3 * N entries; Step B
+        # collapses the first-anchor third into a permutation table, so the
+        # on-disk file is exactly 2/3 the size of the pre-Step-B layout.
+        seqs = _bin_seqs(BARCODES)
+        indexer = MappedSparseAnchorIndexer(
+            seqs, kmer_size=14, seq_len=25, cache_dir=str(tmp_path),
+        )
+        expected = 2 * len(BARCODES) * 5  # 2 anchors * 5 bytes / entry
+        actual = os.path.getsize(
+            os.path.join(str(tmp_path), "inverted_list.bin"))
+        assert actual == expected
+        # Keep `indexer` reachable until after the size check.
+        assert indexer.total_sequences == len(BARCODES)
+
+    def test_step_b_parity_with_shared_memory_on_collision(self, tmp_path):
+        # Even when many barcodes collide on the first anchor (the case where
+        # Step B's permutation table is most loaded), query results must still
+        # agree with the SHM indexer byte-for-byte (set of returned barcodes
+        # plus their scores).
+        shared = "ACTGACTGACTGAC"
+        barcodes = [
+            shared + "AAAAAAAAAAA",
+            shared + "CCCCCCCCCCC",
+            shared + "GGGGGGGGGGG",
+            shared + "TTTTTTTTTTT",
+            "GCGCGCGCGCGCGC" + "ACTGACTGACT",
+        ]
+        seqs = _bin_seqs(barcodes)
+        mapped = MappedSparseAnchorIndexer(
+            seqs, kmer_size=14, seq_len=25,
+            cache_dir=str(tmp_path), low_mem=True,
+        )
+        shm = SharedMemorySparseAnchorIndexer(
+            seqs, kmer_size=14, seq_len=25, low_mem=True,
+        )
+        try:
+            for q in barcodes:
+                mapped_results = mapped.get_occurrences(q, min_kmers=1)
+                shm_results = shm.get_occurrences(q, min_kmers=1)
+                assert sorted(mapped_results) == sorted(shm_results)
+        finally:
+            del shm
 
 
 class TestMappedIndexInfo:

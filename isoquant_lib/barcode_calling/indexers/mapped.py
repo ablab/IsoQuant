@@ -13,16 +13,25 @@ shared-memory segments. Resident-set size becomes whatever the page cache
 chooses to retain, capping RAM usage for 10B-50B-scale whitelists at the
 cost of disk-backed random reads at query time.
 
-File layout (versioned via ``meta.json``):
+Step-B layout (``LAYOUT_VERSION = 2``): barcodes are stable-sorted by their
+first anchor at build time, so the first-anchor posting list collapses into
+a contiguous slice of ``known_bin_seq`` (no inverted-list entries needed).
+A per-bucket cumulative table ``first_anchor_starts`` (length ``4^k + 1``)
+gives the slice bounds in O(1). The on-disk inverted list now stores only
+last-anchor and minimizer postings, shrinking by ~1/3.
+
+File layout::
 
     {cache_dir}/
-      meta.json           -- versioned metadata (LAYOUT_VERSION 1)
-      known_bin_seq.bin   -- N * 8 bytes (uint64 2-bit-packed barcodes)
-      index_ranges.bin    -- (4^k + 1) * 8 bytes (uint64 cumulative offsets)
-      inverted_list.bin   -- index_size * 5 bytes (uint40 packed barcode IDs)
+      meta.json                  -- versioned metadata (LAYOUT_VERSION 2)
+      known_bin_seq.bin          -- N * 8 bytes (sorted by first anchor)
+      first_anchor_starts.bin    -- (4^k + 1) * 8 bytes (uint64 cumulative)
+      index_ranges.bin           -- (4^k + 1) * 8 bytes (uint64 cumulative,
+                                                          last + min only)
+      inverted_list.bin          -- 2N * 5 bytes (uint40 packed barcode IDs)
 
 The build path mirrors :class:`SharedMemorySparseAnchorIndexer` (low-mem
-two-pass anchor extraction) but writes directly into ``numpy.memmap``-backed
+fused anchor extraction) but writes directly into ``numpy.memmap``-backed
 arrays so the inverted list never has to be resident as a single
 contiguous allocation.
 """
@@ -44,16 +53,211 @@ from .shared_memory import (
     MAX_INDEXED_BARCODES,
     MAX_KMER_SIZE_FOR_UINT32_ANCHORS,
     NUM_ANCHORS,
-    _compute_and_count_anchors,
-    _compute_and_populate_anchors,
     _compute_anchors,
-    _count_anchors,
     _hamming_2bit_python,
-    _populate_anchors,
     _splitmix64_python,
 )
 
 logger = logging.getLogger('IsoQuant')
+
+
+# After Step B, the inverted list holds only last-anchor and minimizer
+# postings; first-anchor lookup is a direct slice of ``known_bin_seq``.
+NUM_INVERTED_ANCHORS: int = 2
+
+
+try:
+    from numba import njit
+    _NUMBA_AVAILABLE = True
+except (ImportError, SystemError):
+    _NUMBA_AVAILABLE = False
+
+
+# ---------- Python fallbacks --------------------------------------------------
+
+
+def _compute_and_count_split_anchors_python(
+        seqs, first_shift, last_shift, k_mask, mid_shifts,
+        first_counts, lm_counts):
+    """Fused pass-1: count first-anchor and last/min anchors separately."""
+    n_mid = len(mid_shifts)
+    for i in range(len(seqs)):
+        seq = int(seqs[i])
+        first = (seq >> int(first_shift)) & int(k_mask)
+        last = (seq >> int(last_shift)) & int(k_mask)
+        best_hash = 0xFFFFFFFFFFFFFFFF
+        best_kmer = 0
+        for j in range(n_mid):
+            kmer = (seq >> int(mid_shifts[j])) & int(k_mask)
+            h = _splitmix64_python(kmer)
+            if h < best_hash:
+                best_hash = h
+                best_kmer = kmer
+        first_counts[first] += 1
+        lm_counts[last] += 1
+        lm_counts[best_kmer] += 1
+
+
+def _split_count_from_anchor_buffer_python(anchors, first_counts, lm_counts):
+    for i in range(anchors.shape[0]):
+        first_counts[anchors[i, 0]] += 1
+        lm_counts[anchors[i, 1]] += 1
+        lm_counts[anchors[i, 2]] += 1
+
+
+def _bucket_sort_by_first_anchor_python(
+        seqs, first_shift, k_mask, write_pos, sorted_out):
+    """Stable bucket sort of ``seqs`` by first anchor into ``sorted_out``."""
+    for i in range(len(seqs)):
+        seq = int(seqs[i])
+        first = (seq >> int(first_shift)) & int(k_mask)
+        pos = int(write_pos[first])
+        sorted_out[pos] = seq
+        write_pos[first] = pos + 1
+
+
+def _bucket_sort_by_first_anchor_with_buffer_python(
+        seqs, anchors, write_pos, sorted_out):
+    """Bucket-sort using a pre-materialized anchors buffer (low_mem=False)."""
+    for i in range(len(seqs)):
+        first = int(anchors[i, 0])
+        pos = int(write_pos[first])
+        sorted_out[pos] = seqs[i]
+        write_pos[first] = pos + 1
+
+
+def _compute_and_populate_lm_anchors_python(
+        seqs, last_shift, k_mask, mid_shifts, index_ranges, index_bytes):
+    """Fused pass-2: populate last-anchor and minimizer postings only."""
+    n_mid = len(mid_shifts)
+    total_kmers = len(index_ranges) - 1
+    write_positions = numpy.zeros(total_kmers, dtype=numpy.uint64)
+    for i in range(len(seqs)):
+        seq = int(seqs[i])
+        last = (seq >> int(last_shift)) & int(k_mask)
+        best_hash = 0xFFFFFFFFFFFFFFFF
+        best_kmer = 0
+        for j in range(n_mid):
+            kmer = (seq >> int(mid_shifts[j])) & int(k_mask)
+            h = _splitmix64_python(kmer)
+            if h < best_hash:
+                best_hash = h
+                best_kmer = kmer
+        for kmer_idx in (last, best_kmer):
+            wp = int(index_ranges[kmer_idx] + write_positions[kmer_idx])
+            base = wp * 5
+            index_bytes[base + 0] = i & 0xFF
+            index_bytes[base + 1] = (i >> 8) & 0xFF
+            index_bytes[base + 2] = (i >> 16) & 0xFF
+            index_bytes[base + 3] = (i >> 24) & 0xFF
+            index_bytes[base + 4] = (i >> 32) & 0xFF
+            write_positions[kmer_idx] += 1
+
+
+# ---------- Numba JIT specializations -----------------------------------------
+
+
+if _NUMBA_AVAILABLE:
+    @njit(cache=True)
+    def _splitmix64_jit(x):
+        x = (x ^ (x >> numpy.uint64(30))) * numpy.uint64(0xBF58476D1CE4E5B9)
+        x = (x ^ (x >> numpy.uint64(27))) * numpy.uint64(0x94D049BB133111EB)
+        return x ^ (x >> numpy.uint64(31))
+
+    @njit(cache=True)
+    def _compute_and_count_split_anchors_numba(
+            seqs, first_shift, last_shift, k_mask, mid_shifts,
+            first_counts, lm_counts):
+        n_mid = len(mid_shifts)
+        sentinel = numpy.uint64(0xFFFFFFFFFFFFFFFF)
+        for i in range(len(seqs)):
+            seq = seqs[i]
+            first = (seq >> first_shift) & k_mask
+            last = (seq >> last_shift) & k_mask
+            best_hash = sentinel
+            best_kmer = numpy.uint64(0)
+            for j in range(n_mid):
+                kmer = (seq >> mid_shifts[j]) & k_mask
+                h = _splitmix64_jit(kmer)
+                if h < best_hash:
+                    best_hash = h
+                    best_kmer = kmer
+            first_counts[first] += 1
+            lm_counts[last] += 1
+            lm_counts[best_kmer] += 1
+
+    @njit(cache=True)
+    def _split_count_from_anchor_buffer_numba(
+            anchors, first_counts, lm_counts):
+        for i in range(anchors.shape[0]):
+            first_counts[anchors[i, 0]] += 1
+            lm_counts[anchors[i, 1]] += 1
+            lm_counts[anchors[i, 2]] += 1
+
+    @njit(cache=True)
+    def _bucket_sort_by_first_anchor_numba(
+            seqs, first_shift, k_mask, write_pos, sorted_out):
+        for i in range(len(seqs)):
+            seq = seqs[i]
+            first = (seq >> first_shift) & k_mask
+            pos = write_pos[first]
+            sorted_out[pos] = seq
+            write_pos[first] = pos + numpy.uint64(1)
+
+    @njit(cache=True)
+    def _bucket_sort_by_first_anchor_with_buffer_numba(
+            seqs, anchors, write_pos, sorted_out):
+        for i in range(len(seqs)):
+            first = numpy.uint64(anchors[i, 0])
+            pos = write_pos[first]
+            sorted_out[pos] = seqs[i]
+            write_pos[first] = pos + numpy.uint64(1)
+
+    @njit(cache=True)
+    def _compute_and_populate_lm_anchors_numba(
+            seqs, last_shift, k_mask, mid_shifts, index_ranges, index_bytes):
+        n_mid = len(mid_shifts)
+        sentinel = numpy.uint64(0xFFFFFFFFFFFFFFFF)
+        total_kmers = len(index_ranges) - 1
+        write_positions = numpy.zeros(total_kmers, dtype=numpy.uint64)
+        slot_buf = numpy.empty(2, dtype=numpy.uint64)
+        for i in range(len(seqs)):
+            seq = seqs[i]
+            slot_buf[0] = (seq >> last_shift) & k_mask
+            best_hash = sentinel
+            best_kmer = numpy.uint64(0)
+            for j in range(n_mid):
+                kmer = (seq >> mid_shifts[j]) & k_mask
+                h = _splitmix64_jit(kmer)
+                if h < best_hash:
+                    best_hash = h
+                    best_kmer = kmer
+            slot_buf[1] = best_kmer
+            seq_idx = numpy.uint64(i)
+            for slot in range(2):
+                kmer_idx = slot_buf[slot]
+                wp = index_ranges[kmer_idx] + write_positions[kmer_idx]
+                base = wp * numpy.uint64(5)
+                index_bytes[base + numpy.uint64(0)] = seq_idx & numpy.uint64(0xFF)
+                index_bytes[base + numpy.uint64(1)] = (seq_idx >> numpy.uint64(8)) & numpy.uint64(0xFF)
+                index_bytes[base + numpy.uint64(2)] = (seq_idx >> numpy.uint64(16)) & numpy.uint64(0xFF)
+                index_bytes[base + numpy.uint64(3)] = (seq_idx >> numpy.uint64(24)) & numpy.uint64(0xFF)
+                index_bytes[base + numpy.uint64(4)] = (seq_idx >> numpy.uint64(32)) & numpy.uint64(0xFF)
+                write_positions[kmer_idx] += numpy.uint64(1)
+
+    _compute_and_count_split_anchors = _compute_and_count_split_anchors_numba
+    _split_count_from_anchor_buffer = _split_count_from_anchor_buffer_numba
+    _bucket_sort_by_first_anchor = _bucket_sort_by_first_anchor_numba
+    _bucket_sort_by_first_anchor_with_buffer = (
+        _bucket_sort_by_first_anchor_with_buffer_numba)
+    _compute_and_populate_lm_anchors = _compute_and_populate_lm_anchors_numba
+else:
+    _compute_and_count_split_anchors = _compute_and_count_split_anchors_python
+    _split_count_from_anchor_buffer = _split_count_from_anchor_buffer_python
+    _bucket_sort_by_first_anchor = _bucket_sort_by_first_anchor_python
+    _bucket_sort_by_first_anchor_with_buffer = (
+        _bucket_sort_by_first_anchor_with_buffer_python)
+    _compute_and_populate_lm_anchors = _compute_and_populate_lm_anchors_python
 
 
 def _madvise_random(memmap_array: numpy.memmap) -> None:
@@ -156,9 +360,10 @@ class MappedSparseAnchorIndexer:
     INDEX_BYTE_DTYPE = numpy.uint8
     RANGES_DTYPE = numpy.uint64
 
-    LAYOUT_VERSION: int = 1
+    LAYOUT_VERSION: int = 2
     META_FILENAME: str = "meta.json"
     BARCODES_FILENAME: str = "known_bin_seq.bin"
+    FIRST_ANCHOR_FILENAME: str = "first_anchor_starts.bin"
     RANGES_FILENAME: str = "index_ranges.bin"
     INDEX_FILENAME: str = "inverted_list.bin"
 
@@ -234,6 +439,8 @@ class MappedSparseAnchorIndexer:
 
         self._barcodes_path: str = os.path.join(
             self.cache_dir, self.BARCODES_FILENAME)
+        self._first_anchor_path: str = os.path.join(
+            self.cache_dir, self.FIRST_ANCHOR_FILENAME)
         self._ranges_path: str = os.path.join(
             self.cache_dir, self.RANGES_FILENAME)
         self._index_path: str = os.path.join(
@@ -247,6 +454,8 @@ class MappedSparseAnchorIndexer:
             self.index = numpy.array([], dtype=self.INDEX_BYTE_DTYPE)
             self.index_ranges = numpy.zeros(
                 total_kmers + 1, dtype=self.RANGES_DTYPE)
+            self.first_anchor_starts = numpy.zeros(
+                total_kmers + 1, dtype=self.RANGES_DTYPE)
             self._persist_meta()
             return
 
@@ -257,7 +466,7 @@ class MappedSparseAnchorIndexer:
                 f"got {self.total_sequences}"
             )
 
-        seqs = numpy.asarray(known_bin_seq, dtype=self.SEQ_DTYPE)
+        seqs_input = numpy.asarray(known_bin_seq, dtype=self.SEQ_DTYPE)
 
         first_shift = numpy.uint64(self._first_shift)
         last_shift = numpy.uint64(self._last_shift)
@@ -270,11 +479,13 @@ class MappedSparseAnchorIndexer:
             self.total_sequences, low_mem, self.cache_dir,
         )
 
-        # --- Pass 1: count anchors per bucket (no large allocation) -------
-        kmer_counts = numpy.zeros(total_kmers, dtype=numpy.uint64)
+        # --- Pass 1: split-count first vs. last/min anchors ----------------
+        first_counts = numpy.zeros(total_kmers, dtype=numpy.uint64)
+        lm_counts = numpy.zeros(total_kmers, dtype=numpy.uint64)
         if low_mem:
-            _compute_and_count_anchors(
-                seqs, first_shift, last_shift, k_mask, mid_shifts, kmer_counts,
+            _compute_and_count_split_anchors(
+                seqs_input, first_shift, last_shift, k_mask, mid_shifts,
+                first_counts, lm_counts,
             )
             anchors = None
             logger.info("Anchor counting complete (low-mem)")
@@ -283,15 +494,28 @@ class MappedSparseAnchorIndexer:
                 (self.total_sequences, NUM_ANCHORS), dtype=numpy.uint32,
             )
             _compute_anchors(
-                seqs, first_shift, last_shift, k_mask, mid_shifts, anchors,
+                seqs_input, first_shift, last_shift, k_mask, mid_shifts,
+                anchors,
             )
             logger.info("Anchor extraction complete")
-            _count_anchors(anchors, kmer_counts)
+            _split_count_from_anchor_buffer(anchors, first_counts, lm_counts)
             logger.info("Anchor counting complete")
 
-        self.index_size = int(NUM_ANCHORS * self.total_sequences)
+        self.index_size = int(NUM_INVERTED_ANCHORS * self.total_sequences)
 
-        # --- Allocate barcodes memmap and copy in ------------------------
+        # --- Persist first-anchor cumulative table ------------------------
+        self.first_anchor_starts = numpy.memmap(
+            self._first_anchor_path,
+            dtype=self.RANGES_DTYPE,
+            mode="w+",
+            shape=(total_kmers + 1,),
+        )
+        _madvise_sequential(self.first_anchor_starts)
+        self.first_anchor_starts[0] = 0
+        self.first_anchor_starts[1:] = numpy.cumsum(first_counts)
+        del first_counts
+
+        # --- Bucket-sort barcodes by first anchor into the memmap ---------
         self.known_bin_seq = numpy.memmap(
             self._barcodes_path,
             dtype=self.SEQ_DTYPE,
@@ -299,8 +523,21 @@ class MappedSparseAnchorIndexer:
             shape=(self.total_sequences,),
         )
         _madvise_sequential(self.known_bin_seq)
-        self.known_bin_seq[:] = seqs[:]
-        del seqs
+        write_pos = numpy.array(
+            self.first_anchor_starts[:-1], dtype=numpy.uint64, copy=True,
+        )
+        if low_mem:
+            _bucket_sort_by_first_anchor(
+                seqs_input, first_shift, k_mask, write_pos, self.known_bin_seq,
+            )
+        else:
+            _bucket_sort_by_first_anchor_with_buffer(
+                seqs_input, anchors, write_pos, self.known_bin_seq,
+            )
+            del anchors
+        del write_pos
+        del seqs_input
+        logger.info("Bucket sort by first anchor complete")
 
         # --- Allocate index_ranges memmap and write cumsum ---------------
         self.index_ranges = numpy.memmap(
@@ -311,8 +548,8 @@ class MappedSparseAnchorIndexer:
         )
         _madvise_sequential(self.index_ranges)
         self.index_ranges[0] = 0
-        self.index_ranges[1:] = numpy.cumsum(kmer_counts)
-        del kmer_counts
+        self.index_ranges[1:] = numpy.cumsum(lm_counts)
+        del lm_counts
 
         # --- Allocate inverted-list memmap as the populate target --------
         self.index = numpy.memmap(
@@ -324,25 +561,22 @@ class MappedSparseAnchorIndexer:
         # Random scatter writes follow.
         _madvise_random(self.index)
 
-        if low_mem:
-            _compute_and_populate_anchors(
-                self.known_bin_seq, first_shift, last_shift, k_mask,
-                mid_shifts, self.index_ranges, self.index,
-            )
-            logger.info(
-                "Sparse anchor index population complete (low-mem, mmap)")
-        else:
-            _populate_anchors(anchors, self.index_ranges, self.index)
-            del anchors
-            logger.info("Sparse anchor index population complete (mmap)")
+        _compute_and_populate_lm_anchors(
+            self.known_bin_seq, last_shift, k_mask,
+            mid_shifts, self.index_ranges, self.index,
+        )
+        logger.info(
+            "Sparse anchor index population complete (last+min, mmap)")
 
         # Flush dirty pages so workers opening the file read consistent data.
         self.known_bin_seq.flush()
+        self.first_anchor_starts.flush()
         self.index_ranges.flush()
         self.index.flush()
 
         # Mark for query phase: read pattern is random.
         _madvise_random(self.known_bin_seq)
+        _madvise_random(self.first_anchor_starts)
         _madvise_random(self.index_ranges)
 
         del mid_shifts
@@ -355,7 +589,8 @@ class MappedSparseAnchorIndexer:
         # Release file handles by dropping memmap refs explicitly so the
         # directory removal below has no busy maps to fight (matters on
         # filesystems where unlink-while-mapped is awkward to debug).
-        for attr in ("known_bin_seq", "index_ranges", "index"):
+        for attr in ("known_bin_seq", "first_anchor_starts",
+                     "index_ranges", "index"):
             buf = getattr(self, attr, None)
             if isinstance(buf, numpy.memmap):
                 underlying = getattr(buf, "_mmap", None)
@@ -386,6 +621,7 @@ class MappedSparseAnchorIndexer:
             "kmer_size": int(self.k),
             "seq_len": int(self.seq_len),
             "index_size": int(self.index_size),
+            "has_first_anchor_table": True,
         }
         tmp_path = self._meta_path + ".tmp"
         with open(tmp_path, "w") as fh:
@@ -449,6 +685,8 @@ class MappedSparseAnchorIndexer:
         kmer_index.cache_dir = shared_mem_index_info.cache_dir
         kmer_index._barcodes_path = os.path.join(
             kmer_index.cache_dir, cls.BARCODES_FILENAME)
+        kmer_index._first_anchor_path = os.path.join(
+            kmer_index.cache_dir, cls.FIRST_ANCHOR_FILENAME)
         kmer_index._ranges_path = os.path.join(
             kmer_index.cache_dir, cls.RANGES_FILENAME)
         kmer_index._index_path = os.path.join(
@@ -461,6 +699,8 @@ class MappedSparseAnchorIndexer:
             kmer_index.index = numpy.array([], dtype=cls.INDEX_BYTE_DTYPE)
             kmer_index.index_ranges = numpy.zeros(
                 total_kmers + 1, dtype=cls.RANGES_DTYPE)
+            kmer_index.first_anchor_starts = numpy.zeros(
+                total_kmers + 1, dtype=cls.RANGES_DTYPE)
             return kmer_index
 
         kmer_index.known_bin_seq = numpy.memmap(
@@ -468,6 +708,12 @@ class MappedSparseAnchorIndexer:
             dtype=cls.SEQ_DTYPE,
             mode="r",
             shape=(kmer_index.total_sequences,),
+        )
+        kmer_index.first_anchor_starts = numpy.memmap(
+            kmer_index._first_anchor_path,
+            dtype=cls.RANGES_DTYPE,
+            mode="r",
+            shape=(total_kmers + 1,),
         )
         kmer_index.index_ranges = numpy.memmap(
             kmer_index._ranges_path,
@@ -482,6 +728,7 @@ class MappedSparseAnchorIndexer:
             shape=(kmer_index.index_size * INDEX_BYTES_PER_ENTRY,),
         )
         _madvise_random(kmer_index.known_bin_seq)
+        _madvise_random(kmer_index.first_anchor_starts)
         _madvise_random(kmer_index.index_ranges)
         _madvise_random(kmer_index.index)
         return kmer_index
@@ -523,9 +770,17 @@ class MappedSparseAnchorIndexer:
         q_first, q_last, q_min = self._query_anchors(seq)
 
         slot_masks: dict[int, int] = {}
+
+        # First-anchor probe: direct slice of the sorted barcode array.
+        fa_start = int(self.first_anchor_starts[q_first])
+        fa_end = int(self.first_anchor_starts[q_first + 1])
+        for seq_idx in range(fa_start, fa_end):
+            barcode = int(self.known_bin_seq[seq_idx])
+            slot_masks[barcode] = slot_masks.get(barcode, 0) | 0b001
+
+        # Last and minimizer probes: walk the inverted list as before.
         index_buf = self.index
-        for slot_bit, hash_val in (
-                (0b001, q_first), (0b010, q_last), (0b100, q_min)):
+        for slot_bit, hash_val in ((0b010, q_last), (0b100, q_min)):
             start_index = int(self.index_ranges[hash_val])
             end_index = int(self.index_ranges[hash_val + 1])
             for entry_idx in range(start_index, end_index):
