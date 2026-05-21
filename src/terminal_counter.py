@@ -30,7 +30,7 @@ from .long_read_counter import AbstractCounter
 
 
 class TerminalCounter(AbstractCounter):
-    def __init__(self, output_prefix, read_groups, ignore_read_groups=False):
+    def __init__(self, args, output_prefix, read_groups, ignore_read_groups=False):
         super().__init__(output_prefix, ignore_read_groups=False)
         self.ignore_read_groups = ignore_read_groups
         self.read_groups = read_groups
@@ -38,11 +38,14 @@ class TerminalCounter(AbstractCounter):
         self.transcripts_additional = {}   
         self.gene_info = None
         self.first = True
+        self.args = args
         self.group_numeric_ids = {}
         self.ordered_groups = sorted(self.read_groups)
         if self.ordered_groups:
             for i, g in enumerate(self.ordered_groups):
                 self.group_numeric_ids[g] = i
+
+        self.cols = ['var', 'skew', 'peak_count', 'peak_width', 'entropy', 'mean_height', 'peak_heights', 'relative_height']
 
     def peak_target(self, x):
         ok = False
@@ -94,7 +97,6 @@ class TerminalCounter(AbstractCounter):
             x['rank'] = [0]
             x['relative_height'] = [1]
         return x
-
 
     def result(self, dff):
         dff['count'] = 1
@@ -190,10 +192,7 @@ class TerminalCounter(AbstractCounter):
         
     def train_model(self):
         self.model = XGBClassifier()
-        # self.model.load_model('src/model.json')
-        # params = self.model.get_xgb_params()
-        # {'booster': 'gbtree', 'learning_rate': 0.1711139976081603, 'gamma': 3.213024131696218, 'max_depth': 8, 'min_child_weight': 7.031066410000928, 'reg_lambda': 0.00035253812038082424, 'reg_alpha': 0.010639993402868728, 'subsample': 0.6310944088222122, 'colsample_bytree': 0.7856502544324856, 'n_estimators': 56, 'scale_pos_weight': 0.3971102549981997}
-        # {'booster': 'dart', 'learning_rate': 0.09115397231222125, 'gamma': 0.7911797085921515, 'max_depth': 6, 'min_child_weight': 8.890261356320382, 'reg_lambda': 3.4438281320977343e-07, 'reg_alpha': 4.583918034010515e-06, 'subsample': 0.9139332107255594, 'colsample_bytree': 0.9804235433943478, 'n_estimators': 95, 'scale_pos_weight': 0.41416529852133854}
+       
         params = {'booster': 'dart', 'learning_rate': 0.25989024187450366, 'gamma': 4.087502269121285, 'max_depth': 6, 'min_child_weight': 5.722951381412213, 'reg_lambda': 4.84758559371017, 'reg_alpha': 0.03795296107941127, 'subsample': 0.8809954546952385, 'colsample_bytree': 0.7483035972922923, 'n_estimators': 111, 'scale_pos_weight': 0.297061977156673}
         self.model_new = XGBClassifier(**params)
         
@@ -217,11 +216,11 @@ class TerminalCounter(AbstractCounter):
 
         self.model_new.fit(X_train.drop(['peak_left', 'peak_right', 'histogram','annotated', 'rank', 'transcript_id', 'gene_id', 'start'], axis = 1).astype(float, errors='ignore'), y_train)
         
-        X_test['prediction'] = self.model_new.predict(X_test.drop(['peak_left', 'peak_right', 'histogram', 'annotated', 'rank', 'transcript_id', 'gene_id', 'start'], axis = 1).astype(float, errors='ignore'))
+        X_test['prediction'] = self.model_new.predict(X_test[self.cols].astype(float, errors='ignore'))
 
         X_test['true_peak'] = y_test
         self.result(X_test)
-        self.model_new.save_model('src/model_new.json')
+        self.model_new.save_model(self.model_file)
 
     def create_df(self):
         if self.transcripts == {}:
@@ -249,8 +248,9 @@ class TerminalCounter(AbstractCounter):
         self.df['peak_left'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.98)[2]])
         self.df['peak_right'] = self.df['histogram'].apply(lambda x: [int(j - 10) for j in peak_widths(x, find_peaks(x, distance=10)[0], rel_height=0.98)[3]])
         self.df['entropy'] = self.df['histogram'].apply(lambda x: stats.entropy(x))
-        self.df['annotated'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['annotated'])
         self.df['mean_height'] = self.df['histogram'].apply(lambda x: np.mean(x))
+        if self.args.genedb != None:
+            self.df['annotated'] = self.df['transcript_id'].apply(lambda x: self.transcripts[x]['annotated'])
 
         self.dfResult = pd.DataFrame()
         if 0 in list(self.df['peak_count']):
@@ -288,9 +288,9 @@ class TerminalCounter(AbstractCounter):
 
         
         
-        
-        self.peaks['prediction'] = self.model.predict(self.peaks.drop(['peak_left', 'peak_right', 'histogram', 
-            'annotated', 'rank', 'transcript_id', 'gene_id', 'start', 'chromosome', 'mean', 'peak_location', 'peak_prominence', 'range'], axis = 1).astype(float, errors='ignore'))
+
+
+        self.peaks['prediction'] = self.model.predict(self.peaks[self.cols].astype(float, errors='ignore'))
         
         self.peaks['prediction'] = self.peaks['prediction'].apply(lambda x: True if x == 1 else False)
 
@@ -318,7 +318,11 @@ class TerminalCounter(AbstractCounter):
 
         self.dfResult['prediction'] += self.dfResult['start']
         self.dfResult['prediction'] = self.dfResult['prediction'].astype(int)
-        self.dfResult['flag'] = self.dfResult.apply(lambda x: self.flag(x), axis = 1)
+        if self.args.genedb != None:
+            self.dfResult['flag'] = self.dfResult.apply(lambda x: self.flag(x), axis = 1)
+        else:
+            self.dfResult['flag'] = 'Novel'
+            
         self.dfResult['peak_heights'] = self.dfResult['peak_heights'].astype(int)
         if 'peak_info' in self.dfResult:
             self.dfResult = self.dfResult.drop('peak_info', axis = 1)
@@ -346,8 +350,8 @@ class TerminalCounter(AbstractCounter):
 
 
 class TSSCounter(TerminalCounter):
-    def __init__(self, output_prefix, read_groups, ignore_read_groups=False):
-        super().__init__(output_prefix, read_groups, ignore_read_groups=False)
+    def __init__(self, args, output_prefix, read_groups, ignore_read_groups=False):
+        super().__init__(args, output_prefix, read_groups, ignore_read_groups=False)
         
     def add_read_info(self, read_assignment: ReadAssignment):
         if self.gene_info is None:
@@ -368,12 +372,15 @@ class TSSCounter(TerminalCounter):
             if ok:
                 isoform_match: IsoformMatch = read_assignment.isoform_matches[0]
                 if isoform_match.assigned_transcript not in self.transcripts:
-
-                    if read_assignment.strand == '+':
-                        annot_start = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][0][0] - 1
+                    if self.args.genedb != None:
+                        if read_assignment.strand == '+':
+                            annot_start = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][0][0] - 1
+                        else:
+                            annot_start = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][-1][1] + 1
+                        self.transcripts[isoform_match.assigned_transcript] = {'chr': read_assignment.chr_id, 'gene_id': isoform_match.assigned_gene, 'data': [], 'annotated': annot_start}
                     else:
-                        annot_start = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][-1][1] + 1
-                    self.transcripts[isoform_match.assigned_transcript] = {'chr': read_assignment.chr_id, 'gene_id': isoform_match.assigned_gene, 'data': [], 'annotated': annot_start}
+
+                        self.transcripts[isoform_match.assigned_transcript] = {'chr': read_assignment.chr_id, 'gene_id': isoform_match.assigned_gene, 'data': []}
                     
                     
                     if not self.ignore_read_groups:
@@ -395,14 +402,15 @@ class TSSCounter(TerminalCounter):
         self.first = False
 
     def finalize(self, args=None):
+        # self.model_file = 'src/model_tss_new.json'
         # self.train_model()
         
         pass    
 
 
 class PolyACounter(TerminalCounter):
-    def __init__(self, output_prefix, read_groups, ignore_read_groups=False):
-        super().__init__(output_prefix, read_groups, ignore_read_groups=False)
+    def __init__(self, args, output_prefix, read_groups, ignore_read_groups=False):
+        super().__init__(args, output_prefix, read_groups, ignore_read_groups=False)
 
     def add_read_info(self, read_assignment: ReadAssignment):
         if self.gene_info is None:
@@ -411,7 +419,7 @@ class PolyACounter(TerminalCounter):
         group_id = self.group_numeric_ids[group_id]
 
         # add a single read_assignment to features dataframe
-        if read_assignment.polyA_found == True and read_assignment.assignment_type in [ReadAssignmentType.inconsistent_non_intronic, ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference, ReadAssignmentType.inconsistent]:
+        if read_assignment.polyA_found == True and read_assignment.assignment_type in [ReadAssignmentType.inconsistent_non_intronic, ReadAssignmentType.unique, ReadAssignmentType.unique_minor_difference, ReadAssignmentType.inconsistent, ReadAssignmentType.intergenic]:
             ok = False
             if read_assignment.strand == '-' and read_assignment.polya_info.external_polyt_pos != -1:
                 polya_pos = read_assignment.polya_info.external_polyt_pos
@@ -422,11 +430,14 @@ class PolyACounter(TerminalCounter):
             if ok:                
                 isoform_match: IsoformMatch = read_assignment.isoform_matches[0]
                 if isoform_match.assigned_transcript not in self.transcripts:
-                    if read_assignment.strand == '+':
-                        annot_polya = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][-1][1] + 1
+                    if self.args.genedb != None:
+                        if read_assignment.strand == '+':
+                            annot_polya = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][-1][1] + 1
+                        else:
+                            annot_polya = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][0][0] - 1
+                        self.transcripts[isoform_match.assigned_transcript] = {'chr': read_assignment.chr_id, 'gene_id': isoform_match.assigned_gene, 'data': [], 'annotated': annot_polya}
                     else:
-                        annot_polya = read_assignment.gene_info.all_isoforms_exons[isoform_match.assigned_transcript][0][0] - 1
-                    self.transcripts[isoform_match.assigned_transcript] = {'chr': read_assignment.chr_id, 'gene_id': isoform_match.assigned_gene, 'data': [], 'annotated': annot_polya}
+                        self.transcripts[isoform_match.assigned_transcript] = {'chr': read_assignment.chr_id, 'gene_id': isoform_match.assigned_gene, 'data': []}
                     
                     if not self.ignore_read_groups:
                         for i in self.group_numeric_ids.values():
@@ -441,6 +452,7 @@ class PolyACounter(TerminalCounter):
         self.model.load_model('src/model_polya.json')
 
 
+
         self.create_df()
         # self.collect_data()
 
@@ -448,6 +460,7 @@ class PolyACounter(TerminalCounter):
         self.first = False
 
     def finalize(self, args=None):
+        # self.model_file = 'src/model_polya_new.json'
         # self.train_model()
         pass
 
