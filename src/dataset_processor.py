@@ -355,11 +355,12 @@ class ReadAssignmentAggregator:
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         self.global_counter = CompositeCounter([])
-        self.polyA_counter = PolyACounter(self.args, sample.out_polya, read_groups)
-        if self.args.fl_data:
-            self.tss_counter = TSSCounter(self.args, sample.out_tss, read_groups)
-            self.global_counter.add_counters([self.tss_counter])
-        self.global_counter.add_counters([self.polyA_counter])
+        if self.args.genedb != None:
+            self.polyA_counter = PolyACounter(self.args, sample.out_polya, read_groups)
+            self.global_counter.add_counters([self.polyA_counter])
+            if self.args.fl_data:
+                self.tss_counter = TSSCounter(self.args, sample.out_tss, read_groups)
+                self.global_counter.add_counters([self.tss_counter])
 
         if self.args.genedb:
             self.gene_counter = create_gene_counter(sample.out_gene_counts_tsv,
