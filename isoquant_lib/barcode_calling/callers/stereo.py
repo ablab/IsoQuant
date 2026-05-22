@@ -11,11 +11,14 @@ Stereo-seq uses spatial barcodes with linker sequences and optional TSO detectio
 """
 
 import logging
+import os
+import tempfile
 from typing import List, Optional
 
 from ..indexers import (
     ArrayKmerIndexer,
     Dict2BitKmerIndexer,
+    MappedSparseAnchorIndexer,
     SharedMemoryArray2BitKmerIndexer,
     SharedMemorySparseAnchorIndexer,
 )
@@ -562,6 +565,69 @@ class SharedMemoryStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector)
             self.barcode_indexer = Dict2BitKmerIndexer(self.bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
         else:
             self.barcode_indexer = SharedMemorySparseAnchorIndexer.from_sharable_info(state[2])
+            self.barcode_min_kmers = 1
+
+
+class MappedStereoSplittingBarcodeDetector(StereoSplittingBarcodeDetector):
+    """
+    Stereo-seq splitting detector backed by the disk-mmap sparse anchor
+    index. Drop-in replacement for
+    :class:`SharedMemoryStereoSplittingBarcodeDetector` for whitelists that
+    don't fit comfortably in RAM under the SHM layout (~10B+ barcodes).
+
+    The mmap cache is placed inside ``scratch_dir`` (caller-provided, e.g.
+    the IsoQuant ``--scratch_dir`` setting) and unlinked when the
+    main-process detector is destroyed.
+    """
+
+    MIN_BARCODES_FOR_SHARED_MEM = 1000000
+
+    def __init__(self, barcodes: List[str], scratch_dir: Optional[str] = None):
+        super().__init__([])
+        bit_barcodes = batch_str_to_2bit_chunked(iter(barcodes), seq_len=self.BC_LENGTH)
+        self.barcode_count = len(bit_barcodes)
+        self.bit_barcodes = None
+        if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
+            # Small whitelist — no point paying disk I/O.
+            self.bit_barcodes = bit_barcodes
+            self.barcode_indexer = Dict2BitKmerIndexer(
+                bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+        else:
+            if scratch_dir:
+                os.makedirs(scratch_dir, exist_ok=True)
+                cache_dir = tempfile.mkdtemp(
+                    prefix="isoquant_barcode_index_", dir=scratch_dir)
+            else:
+                cache_dir = tempfile.mkdtemp(prefix="isoquant_barcode_index_")
+            logger.info("Building mmap-backed barcode index in %s", cache_dir)
+            self.barcode_indexer = MappedSparseAnchorIndexer(
+                bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH,
+                cache_dir=cache_dir, low_mem=True)
+            self.barcode_min_kmers = 1
+
+        logger.info("Indexed %d barcodes" % self.barcode_count)
+
+    def __getstate__(self):
+        if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
+            return (self.min_score,
+                    self.barcode_count,
+                    self.bit_barcodes)
+        else:
+            return (self.min_score,
+                    self.barcode_count,
+                    self.barcode_indexer.get_sharable_info())
+
+    def __setstate__(self, state):
+        self.min_score = state[0]
+        super().__init__([])
+        self.bit_barcodes = None
+        self.barcode_count = state[1]
+        if self.barcode_count < self.MIN_BARCODES_FOR_SHARED_MEM:
+            self.bit_barcodes = state[2]
+            self.barcode_indexer = Dict2BitKmerIndexer(
+                self.bit_barcodes, kmer_size=14, seq_len=self.BC_LENGTH)
+        else:
+            self.barcode_indexer = MappedSparseAnchorIndexer.from_sharable_info(state[2])
             self.barcode_min_kmers = 1
 
 

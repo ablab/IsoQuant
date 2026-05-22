@@ -27,6 +27,7 @@ Detectors:
     SharedMemoryStereoBarcodeDetector: Stereo-seq with shared memory
     StereoSplittingBarcodeDetector: Stereo-seq with read splitting
     SharedMemoryStereoSplittingBarcodeDetector: Stereo-seq splitting with shared memory
+    MappedStereoSplittingBarcodeDetector: Stereo-seq splitting backed by disk-mmap sparse index
     SharedMemoryWrapper: Generic shared memory wrapper
     TenXBarcodeDetector: 10x Genomics v3 detector
     TenXv2BarcodeDetector: 10x Genomics v2 detector
@@ -64,6 +65,7 @@ from .stereo import (
     SharedMemoryStereoBarcodeDetector,
     StereoSplittingBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
+    MappedStereoSplittingBarcodeDetector,
     SharedMemoryWrapper,
 )
 
@@ -101,6 +103,7 @@ __all__ = [
     'SharedMemoryStereoBarcodeDetector',
     'StereoSplittingBarcodeDetector',
     'SharedMemoryStereoSplittingBarcodeDetector',
+    'MappedStereoSplittingBarcodeDetector',
     'SharedMemoryWrapper',
     # 10x detectors
     'TenXBarcodeDetector',

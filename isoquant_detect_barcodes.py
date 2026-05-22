@@ -57,13 +57,16 @@ def parse_args(sys_argv):
     parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM, SAM",
                         required=True)
     parser.add_argument("--threads", "-t", type=int, help="threads to use (16)", default=16)
-    parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
+    parser.add_argument("--scratch_dir", type=str, default=None,
+                        help="folder for temporary scratch files (default: <output_dir>/.tmp)")
     add_hidden_option('--debug', action='store_true', default=False, help='Debug log output.')
 
     args = parser.parse_args(sys_argv)
     args.mode = IsoQuantMode[args.mode]
     args.out_fasta = None
     args.output_tsv = None
+    if args.scratch_dir is None:
+        args.scratch_dir = os.path.join(os.path.dirname(args.output) or ".", ".tmp")
     return args
 
 
@@ -93,6 +96,7 @@ def main(sys_argv):
     out_dir = os.path.dirname(args.output)
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(args.scratch_dir, exist_ok=True)
 
     if args.threads == 1 or args.mode.enforces_single_thread():
         process_single_thread(args)

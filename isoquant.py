@@ -332,6 +332,8 @@ def parse_args(cmd_args=None, namespace=None):
                                    type=int, default=-1)
 
     # REST
+    add_hidden_option("--scratch_dir", type=str, default=None,
+                      help="directory for temporary scratch files; default: <output>/.tmp")
     add_hidden_option("--graph_clustering_distance", type=int, default=None,
                       help="intron graph clustering distance, "
                            "splice junctions less that this number of bp apart will not be differentiated")
@@ -383,6 +385,10 @@ def parse_args(cmd_args=None, namespace=None):
     args.output_exists = os.path.exists(args.output)
     if not args.output_exists:
         os.makedirs(args.output)
+
+    if getattr(args, "scratch_dir", None) is None:
+        args.scratch_dir = os.path.join(args.output, ".tmp")
+    os.makedirs(args.scratch_dir, exist_ok=True)
 
     return args, parser
 
@@ -1020,14 +1026,14 @@ def prepare_reference_genome(args):
 
 
 class BarcodeCallingArgs:
-    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
+    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, scratch_dir, threads,
                  molecule: str = None):
         self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
         self.output_tsv = output  # Can be a single filename (str) or list of filenames
         self.out_fasta = out_fasta  # Can be a single filename (str), list of filenames, or None
-        self.tmp_dir = tmp_dir
+        self.scratch_dir = scratch_dir
         self.threads = threads
         self.molecule = molecule
 
@@ -1068,7 +1074,7 @@ def call_barcodes(args):
 
             bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
             bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
+                                         output_barcodes_list, output_fasta_list, args.scratch_dir, bc_threads,
                                          molecule=getattr(args, 'molecule', None))
             # Launching barcode calling in a separate process has the following reason:
             # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main

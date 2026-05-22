@@ -37,6 +37,7 @@ from . import (
     CurioBarcodeDetector,
     SharedMemoryStereoBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
+    MappedStereoSplittingBarcodeDetector,
     ReadStats,
     VisiumHDBarcodeDetector,
     UniversalSingleMoleculeExtractor,
@@ -55,6 +56,7 @@ BARCODE_CALLING_MODES = {
     IsoQuantMode.curio: CurioBarcodeDetector,
     IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    IsoQuantMode.stereoseq_mmap: MappedStereoSplittingBarcodeDetector,
     IsoQuantMode.visium_5prime: TenXBarcodeDetector,
     IsoQuantMode.visium_hd: VisiumHDBarcodeDetector,
     IsoQuantMode.custom_sc: UniversalSingleMoleculeExtractor
@@ -68,6 +70,7 @@ BARCODE_FILES_REQUIRED = {
     IsoQuantMode.curio: [1, 2],
     IsoQuantMode.stereoseq_nosplit: [1],
     IsoQuantMode.stereoseq: [1],
+    IsoQuantMode.stereoseq_mmap: [1],
     IsoQuantMode.visium_5prime: [1],
     IsoQuantMode.visium_hd: [2],
     IsoQuantMode.custom_sc: [0]
@@ -329,7 +332,11 @@ def create_barcode_caller(args):
                 logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
 
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    detector_class = BARCODE_CALLING_MODES[args.mode]
+    if detector_class is MappedStereoSplittingBarcodeDetector:
+        barcode_detector = detector_class(barcodes, scratch_dir=args.scratch_dir)
+    else:
+        barcode_detector = detector_class(barcodes)
 
     return barcode_detector
 
@@ -376,13 +383,11 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
         logger.error("Unknown file format " + input_file)
         sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
-    tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
+    scratch_base = args.scratch_dir or os.path.dirname(args.output)
+    os.makedirs(scratch_base, exist_ok=True)
+    tmp_dir = os.path.join(scratch_base, "barcode_calling_%x" % random.randint(0, 1 << 32))
     while os.path.exists(tmp_dir):
-        tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
-    if args.tmp_dir:
-        tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
-    else:
-        tmp_dir = os.path.join(os.path.dirname(args.output), tmp_dir)
+        tmp_dir = os.path.join(scratch_base, "barcode_calling_%x" % random.randint(0, 1 << 32))
     os.makedirs(tmp_dir)
 
     tmp_barcode_file = os.path.join(tmp_dir, "bc")

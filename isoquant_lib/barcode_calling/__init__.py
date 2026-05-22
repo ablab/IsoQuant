@@ -47,6 +47,7 @@ from .callers import (
     SharedMemoryStereoBarcodeDetector,
     StereoSplittingBarcodeDetector,
     SharedMemoryStereoSplittingBarcodeDetector,
+    MappedStereoSplittingBarcodeDetector,
     SharedMemoryWrapper,
     TenXBarcodeDetector,
     TenXv2BarcodeDetector,
@@ -95,6 +96,7 @@ __all__ = [
     'SharedMemoryStereoBarcodeDetector',
     'StereoSplittingBarcodeDetector',
     'SharedMemoryStereoSplittingBarcodeDetector',
+    'MappedStereoSplittingBarcodeDetector',
     'SharedMemoryWrapper',
     # 10x detectors
     'TenXBarcodeDetector',

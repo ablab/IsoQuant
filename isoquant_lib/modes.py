@@ -17,6 +17,7 @@ class IsoQuantMode(Enum):
     curio = 3
     stereoseq_nosplit = 4
     stereoseq = 5
+    stereoseq_mmap = 8
     visium_hd = 61
     visium_5prime = 7
     custom_sc = 10
@@ -29,6 +30,7 @@ class IsoQuantMode(Enum):
                         IsoQuantMode.curio,
                         IsoQuantMode.stereoseq_nosplit,
                         IsoQuantMode.stereoseq,
+                        IsoQuantMode.stereoseq_mmap,
                         IsoQuantMode.visium_hd,
                         IsoQuantMode.visium_5prime,
                         IsoQuantMode.custom_sc]
@@ -41,17 +43,21 @@ class IsoQuantMode(Enum):
                         IsoQuantMode.curio,
                         IsoQuantMode.stereoseq_nosplit,
                         IsoQuantMode.stereoseq,
+                        IsoQuantMode.stereoseq_mmap,
                         IsoQuantMode.visium_hd,
                         IsoQuantMode.visium_5prime,
                         IsoQuantMode.custom_sc]
 
     def produces_new_fasta(self):
         return self in [IsoQuantMode.stereoseq,
+                        IsoQuantMode.stereoseq_mmap,
                         IsoQuantMode.tenX_v3_split,
                         IsoQuantMode.tenX_v2_split]
 
     def needs_barcode_iterator(self):
-        return self in [IsoQuantMode.stereoseq_nosplit, IsoQuantMode.stereoseq]
+        return self in [IsoQuantMode.stereoseq_nosplit,
+                        IsoQuantMode.stereoseq,
+                        IsoQuantMode.stereoseq_mmap]
 
     def enforces_single_thread(self):
         return False 
