@@ -78,11 +78,30 @@ class OutputConfig:
         self.input_gtf = self.input_gtf or params.get("genedb")
         self.genedb_filename = params.get("genedb_filename")
 
+        # Paths in .params are stored as IsoQuant received them on the command line,
+        # so a relative -o / --genedb produces relative entries here. Re-anchor them
+        # against the parent of the output_directory the user passed to the visualizer
+        # so visualize.py works regardless of the CWD.
+        self.input_gtf = self._reanchor_relative_path(self.input_gtf)
+        self.genedb_filename = self._reanchor_relative_path(self.genedb_filename)
+
         if params.get("yaml"):
             # YAML input case
-            self.yaml_input = True
-            self.yaml_input_path = params.get("yaml")
-            # Keep the output_directory as is, don't modify it
+            yaml_path = params.get("yaml")
+            yaml_path = self._reanchor_relative_path(yaml_path)
+            single_sample = self._yaml_single_sample_name(yaml_path)
+            if single_sample is not None:
+                # IsoQuant only writes combined_*.tsv when len(samples) > 1, so a
+                # single-sample YAML run has the same on-disk layout as a non-YAML
+                # run. Treat it that way to avoid the "combined file missing" path.
+                self.yaml_input = False
+                self.output_directory = os.path.join(
+                    self.output_directory, single_sample
+                )
+            else:
+                self.yaml_input = True
+                self.yaml_input_path = yaml_path
+            # Keep the output_directory as is for the multi-sample YAML case.
         else:
             # Non-YAML input case
             self.yaml_input = False
@@ -95,6 +114,37 @@ class OutputConfig:
                 raise ValueError(
                     "Processing sample directory not found in params for non-YAML input."
                 )
+
+    def _yaml_single_sample_name(self, yaml_path):
+        """Return the sole sample name if the YAML defines exactly one sample,
+        otherwise None. Used to short-circuit the YAML branch when combined_*
+        files are not produced by IsoQuant."""
+        if not yaml_path or not os.path.exists(yaml_path):
+            return None
+        try:
+            with open(yaml_path, "r") as yf:
+                data = yaml.safe_load(yf)
+        except Exception:
+            return None
+        samples = data if isinstance(data, list) else (data or {}).get("samples", [])
+        names = [
+            s.get("name")
+            for s in samples
+            if isinstance(s, dict) and s.get("name")
+        ]
+        return names[0] if len(names) == 1 else None
+
+    def _reanchor_relative_path(self, path):
+        """Try to resolve a relative path stored in .params against the user-provided
+        output_directory (assumed to be the IsoQuant -o directory). Returns the
+        original value when there is nothing to do."""
+        if not path or os.path.isabs(path) or os.path.exists(path):
+            return path
+        anchor = os.path.dirname(os.path.abspath(self.output_directory))
+        candidate = os.path.normpath(os.path.join(anchor, path))
+        if os.path.exists(candidate):
+            return candidate
+        return path
 
     def _conditional_unzip(self):
         """Check if unzip is needed and perform it conditionally based on the model use."""
@@ -172,20 +222,20 @@ class OutputConfig:
                 self.gene_tpm = os.path.join(self.output_directory, file_name)
             elif file_name.endswith(".transcript_tpm.tsv"):
                 self.transcript_tpm = os.path.join(self.output_directory, file_name)
-            elif file_name.endswith(".transcript_model_counts.tsv"):
-                self.transcript_model_counts = os.path.join(
+            elif file_name.endswith(".discovered_transcript_grouped_counts.tsv"):
+                self.transcript_model_grouped_counts = os.path.join(
                     self.output_directory, file_name
                 )
-            elif file_name.endswith(".transcript_model_tpm.tsv"):
-                self.transcript_model_tpm = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".transcript_model_grouped_tpm.tsv"):
+            elif file_name.endswith(".discovered_transcript_grouped_tpm.tsv"):
                 self.transcript_model_grouped_tpm = os.path.join(
                     self.output_directory, file_name
                 )
-            elif file_name.endswith(".transcript_model_grouped_counts.tsv"):
-                self.transcript_model_grouped_counts = os.path.join(
+            elif file_name.endswith(".discovered_transcript_counts.tsv"):
+                self.transcript_model_counts = os.path.join(
+                    self.output_directory, file_name
+                )
+            elif file_name.endswith(".discovered_transcript_tpm.tsv"):
+                self.transcript_model_tpm = os.path.join(
                     self.output_directory, file_name
                 )
 
@@ -462,6 +512,13 @@ class DictionaryBuilder:
         return gene_dict
 
     def update_gene_dict(self, gene_dict, value_df):
+        if value_df is None:
+            kind = "counts" if self.config.use_counts else "TPM"
+            raise FileNotFoundError(
+                f"Could not locate a gene {kind} file in "
+                f"{self.config.output_directory}. Re-run IsoQuant so the matching "
+                f"*.tsv is produced, or drop --counts to use TPM outputs instead."
+            )
         new_dict = {}
         gene_values = {}
 
@@ -501,6 +558,14 @@ class DictionaryBuilder:
         return new_dict
 
     def update_transcript_values(self, gene_dict, value_df):
+        if value_df is None:
+            kind = "counts" if self.config.use_counts else "TPM"
+            quant = "reference" if self.config.ref_only else "discovered transcript model"
+            raise FileNotFoundError(
+                f"Could not locate a {quant} transcript {kind} file in "
+                f"{self.config.output_directory}. Re-run IsoQuant so the matching "
+                f"*.tsv is produced, or pass --ref_only / drop --counts to match the available outputs."
+            )
         new_dict = copy.deepcopy(gene_dict)  # Preserve the original structure
         transcript_values = {}
 

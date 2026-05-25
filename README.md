@@ -113,9 +113,9 @@ All required Python libraries can be installed via:
 
     For example, using the toy data provided within this repository,
 
-        isoquant --fastq isoquant_tests/simple_data/chr9.4M.ont.sim.fq.gz \
-        --reference isoquant_tests/simple_data/chr9.4M.fa.gz \
-        --genedb isoquant_tests/simple_data/chr9.4M.gtf.gz \
+        isoquant --fastq isoquant_lib/test_data/chr9.4M.ont.sim.fq.gz \
+        --reference isoquant_lib/test_data/chr9.4M.fa.gz \
+        --genedb isoquant_lib/test_data/chr9.4M.gtf.gz \
         --data_type nanopore --complete_genedb -p TEST_DATA --output isoquant_test 
 
 
@@ -135,3 +135,4 @@ All required Python libraries can be installed via:
         --data_type (assembly|pacbio|nanopore) -o OUTPUT_FOLDER
 
 * If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
+
