@@ -241,9 +241,9 @@ def parse_args(cmd_args=None, namespace=None):
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
                                      default="16")
 
-    # add fusion mode flag: uses same input & data_type options as default
+    # add fusion flag: runs fusion detection in addition to the default isoform pipeline
     add_additional_option_to_group(pipeline_args_group, "--fusion", action='store_true', default=False,
-                                   help="run fusion gene detection, input files and --data_type behave the same as default isoform mode.")
+                                   help="run fusion gene detection after isoform detection; requires --genedb.")
 
     resume_args = pipeline_args_group.add_mutually_exclusive_group()
     resume_args.add_argument("--resume", action="store_true", default=False,
@@ -433,26 +433,6 @@ def run_fusion_detection_on_bams(fd, bam_files: list, output_dir: str) -> dict:
             summary["failed"] += 1
             summary["skipped"].append(bam_path)
     return summary
-
-
-def run_fusion_detection_for_args(args) -> None:
-    """Run fusion detection in --fusion-only mode (early exit from pipeline).
-
-    This is called when --fusion flag is used, bypassing isoform detection.
-    """
-    from isoquant_lib.fusion_detector import FusionDetector
-    logger.info("Fusion detection mode enabled.")
-    if not args.genedb:
-        logger.critical("Fusion detection requires a gene database (--genedb).")
-        exit(-1)
-    bam_files = get_bam_files_from_samples(args.input_data)
-    if not bam_files:
-        logger.critical("No BAM files detected for fusion detection.")
-        exit(-1)
-    # Create once, reuse for all BAMs
-    fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
-    run_fusion_detection_on_bams(fd, bam_files, args.output)
-    logger.info(" === Fusion detection finished === ")
 
 
 def check_and_load_args(args, parser):
@@ -1194,11 +1174,6 @@ def run_pipeline(args):
         args.index = dataset_mapper.index_fname
         args.input_data = dataset_mapper.map_reads(args)
 
-    # If --fusion flag used alone (fusion-only mode), run fusion and exit early
-    if getattr(args, "fusion", False):
-        run_fusion_detection_for_args(args)
-        return
-
     if args.run_aligner_only:
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
         return
@@ -1211,25 +1186,25 @@ def run_pipeline(args):
     if len(args.input_data.samples) > 1 and args.genedb:
         combine_counts(args.input_data, args.output)
 
-    # Auto-trigger fusion detection after isoform detection completes
-    logger.info(" === Isoform detection completed, starting auto-triggered fusion detection === ")
-    bam_files = get_bam_files_from_samples(args.input_data)
-    if bam_files and args.genedb:
-        try:
-            from isoquant_lib.fusion_detector import FusionDetector
-            fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
-            summary = run_fusion_detection_on_bams(fd, bam_files, args.output)
-            logger.info("Fusion detection summary: %d total, %d successful, %d failed" % 
-                       (summary["total"], summary["successful"], summary["failed"]))
-            logger.info(" === Fusion detection finished === ")
-        except Exception as e:
-            logger.warning("Auto-triggered fusion detection encountered an error and was skipped: %s" % str(e))
-            logger.debug("Traceback:", exc_info=True)
-    else:
-        if not bam_files:
-            logger.info("No BAM files available for fusion detection; skipping auto-triggered fusion")
+    # Run fusion detection after isoform detection when --fusion is enabled
+    if getattr(args, "fusion", False):
+        logger.info(" === Isoform detection completed, starting fusion detection === ")
+        bam_files = get_bam_files_from_samples(args.input_data)
         if not args.genedb:
-            logger.info("Gene database not provided; skipping auto-triggered fusion")
+            logger.warning("Fusion detection requires --genedb; skipping")
+        elif not bam_files:
+            logger.warning("No BAM files available for fusion detection; skipping")
+        else:
+            try:
+                from isoquant_lib.fusion_detector import FusionDetector
+                fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
+                summary = run_fusion_detection_on_bams(fd, bam_files, args.output)
+                logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
+                           (summary["total"], summary["successful"], summary["failed"]))
+                logger.info(" === Fusion detection finished === ")
+            except Exception as e:
+                logger.warning("Fusion detection encountered an error and was skipped: %s" % str(e))
+                logger.debug("Traceback:", exc_info=True)
 
     logger.info(" === IsoQuant pipeline finished === ")
 
