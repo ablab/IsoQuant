@@ -56,8 +56,9 @@ class FusionDetector:
         else:
             logger.warning("intervaltree not available; falling back to gffutils queries")
             self.interval_index = None
-        # Build exon cache upfront for efficient assign_fusion_gene lookups
-        self._build_exon_cache()
+        # Fusions are rare, so populate the exon cache lazily in _get_cached_exons
+        # rather than walking every gene at init. Uncomment to switch back to eager.
+        # self._build_exon_cache()
         self.debug = False
 
     def safe_reference_start(self, read):
