@@ -172,20 +172,20 @@ class OutputConfig:
                 self.gene_tpm = os.path.join(self.output_directory, file_name)
             elif file_name.endswith(".transcript_tpm.tsv"):
                 self.transcript_tpm = os.path.join(self.output_directory, file_name)
-            elif file_name.endswith(".transcript_model_counts.tsv"):
-                self.transcript_model_counts = os.path.join(
+            elif file_name.endswith(".discovered_transcript_grouped_counts.tsv"):
+                self.transcript_model_grouped_counts = os.path.join(
                     self.output_directory, file_name
                 )
-            elif file_name.endswith(".transcript_model_tpm.tsv"):
-                self.transcript_model_tpm = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".transcript_model_grouped_tpm.tsv"):
+            elif file_name.endswith(".discovered_transcript_grouped_tpm.tsv"):
                 self.transcript_model_grouped_tpm = os.path.join(
                     self.output_directory, file_name
                 )
-            elif file_name.endswith(".transcript_model_grouped_counts.tsv"):
-                self.transcript_model_grouped_counts = os.path.join(
+            elif file_name.endswith(".discovered_transcript_counts.tsv"):
+                self.transcript_model_counts = os.path.join(
+                    self.output_directory, file_name
+                )
+            elif file_name.endswith(".discovered_transcript_tpm.tsv"):
+                self.transcript_model_tpm = os.path.join(
                     self.output_directory, file_name
                 )
 
@@ -462,6 +462,13 @@ class DictionaryBuilder:
         return gene_dict
 
     def update_gene_dict(self, gene_dict, value_df):
+        if value_df is None:
+            kind = "counts" if self.config.use_counts else "TPM"
+            raise FileNotFoundError(
+                f"Could not locate a gene {kind} file in "
+                f"{self.config.output_directory}. Re-run IsoQuant so the matching "
+                f"*.tsv is produced, or drop --counts to use TPM outputs instead."
+            )
         new_dict = {}
         gene_values = {}
 
@@ -501,6 +508,14 @@ class DictionaryBuilder:
         return new_dict
 
     def update_transcript_values(self, gene_dict, value_df):
+        if value_df is None:
+            kind = "counts" if self.config.use_counts else "TPM"
+            quant = "reference" if self.config.ref_only else "discovered transcript model"
+            raise FileNotFoundError(
+                f"Could not locate a {quant} transcript {kind} file in "
+                f"{self.config.output_directory}. Re-run IsoQuant so the matching "
+                f"*.tsv is produced, or pass --ref_only / drop --counts to match the available outputs."
+            )
         new_dict = copy.deepcopy(gene_dict)  # Preserve the original structure
         transcript_values = {}
 
