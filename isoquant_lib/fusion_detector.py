@@ -708,56 +708,39 @@ class FusionDetector:
             return
 
     def cluster_breakpoints(self, bp_counts: dict, window: int):
-        """Cluster breakpoint counts within ``window`` and return ``((c1,p1,c2,p2), total)`` or None."""
+        """Cluster breakpoint counts within ``window`` and return ``((c1,p1,c2,p2), total)`` or None.
+
+        For each chromosome pair, finds the densest ``window x window`` square in
+        ``(p1, p2)`` space and returns its weighted centroid. Brute O(n^2) per pair;
+        ``n`` is the number of distinct breakpoints for one fusion candidate, which
+        is typically small (tens to low hundreds).
+        """
         if not bp_counts:
             return None
-        # Group by chrom pair and collect strand information
         by_pair = defaultdict(list)
-        # Handle format (c1, p1, c2, p2)
         for bp_tuple, w in bp_counts.items():
             c1, p1, c2, p2 = bp_tuple
             by_pair[(c1, c2)].append((p1, p2, w))
+
         def best_window(items, w):
-            """Sort by p1; we'll apply a sliding window on p1, and inside it on p2."""
-            items.sort(key=lambda x: x[0])  # sort by p1
             best_total = 0
             best_p1 = 0
             best_p2 = 0
-            n = len(items)
-            j = 0
-            k = 0
-            sum_w = 0
-            sum_p1w = 0
-            sum_p2w = 0
-            # Sort by (p1, p2) once: O(n log n). Then use two-pointer for both windows: O(n).
-            items.sort(key=lambda x: (x[0], x[1]))
-            # Two-pointer sliding window on both p1 and p2 dimensions
-            for i in range(n):
-                p1_i, p2_i, wi = items[i]
-                # Shrink p1-window from left if needed
-                while j <= i and p1_i - items[j][0] > w:
-                    sum_w -= items[j][2]
-                    sum_p1w -= items[j][0] * items[j][2]
-                    sum_p2w -= items[j][1] * items[j][2]
-                    j += 1
-                # Expand current item into window
-                sum_w += wi
-                sum_p1w += p1_i * wi
-                sum_p2w += p2_i * wi
-                # k must stay within p1-window
-                k = max(k, j)
-                # Shrink p2-window from left if needed (keeping only items within p2-window relative to i)
-                while k <= i and p2_i - items[k][1] > w:
-                    sum_w -= items[k][2]
-                    sum_p1w -= items[k][0] * items[k][2]
-                    sum_p2w -= items[k][1] * items[k][2]
-                    k += 1
-                # Update best window if current is better
+            for p1_i, p2_i, _ in items:
+                sum_w = 0
+                sum_p1w = 0
+                sum_p2w = 0
+                for p1_j, p2_j, wj in items:
+                    if abs(p1_i - p1_j) <= w and abs(p2_i - p2_j) <= w:
+                        sum_w += wj
+                        sum_p1w += p1_j * wj
+                        sum_p2w += p2_j * wj
                 if sum_w > best_total:
                     best_total = sum_w
-                    best_p1 = sum_p1w // sum_w if sum_w > 0 else 0
-                    best_p2 = sum_p2w // sum_w if sum_w > 0 else 0
+                    best_p1 = sum_p1w // sum_w
+                    best_p2 = sum_p2w // sum_w
             return best_p1, best_p2, best_total
+
         best_pair = None
         best = (None, None, 0)
         for pair, items in by_pair.items():
@@ -769,8 +752,8 @@ class FusionDetector:
         if best_pair is None:
             return None
         (c1, c2) = best_pair
-        (p1, p2, total) = best
-        return (c1, p1, c2, p2), total
+        (p1, p2, _total) = best
+        return (c1, p1, c2, p2), best[2]
 
     def parse_sa_entries(self, sa_tag: Optional[str]) -> List[Tuple]:
         """Parse a BAM ``SA`` tag string into a list of ``(chrom, pos, strand, cigar, mapq, nm)`` tuples."""
