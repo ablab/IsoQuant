@@ -61,7 +61,7 @@ class GenomicIntervalIndex:
 
     def get_genes_at(self, chrom: str, pos: int, window: Optional[int] = None) -> list:
         """Return all gene features overlapping ``pos`` (or ``[pos-window, pos+window]``) on ``chrom``."""
-        if IntervalTree is None or chrom not in self.gene_trees:
+        if chrom not in self.gene_trees:
             return []
         if window is None:
             intervals = self.gene_trees[chrom][pos]
@@ -85,7 +85,7 @@ class GenomicIntervalIndex:
 
     def get_exons_at(self, chrom: str, pos: int, window: Optional[int] = None) -> list:
         """Return all exon features overlapping ``pos`` (or ``[pos-window, pos+window]``) on ``chrom``."""
-        if IntervalTree is None or chrom not in self.exon_trees:
+        if chrom not in self.exon_trees:
             return []
         if window is None:
             intervals = self.exon_trees[chrom][pos]
