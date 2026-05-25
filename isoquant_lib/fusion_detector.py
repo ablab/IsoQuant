@@ -102,6 +102,7 @@ class FusionDetector:
                     continue
                 try:
                     exons = list(self.db.children(gene, featuretype='exon', order_by='start'))
+                    self.exon_cache[gene_id] = [(int(ex.start), int(ex.end)) for ex in exons]
                 except Exception:
                     logger.debug(
                         "Failed to fetch exons for gene %s",
