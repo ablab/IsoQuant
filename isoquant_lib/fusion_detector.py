@@ -21,11 +21,6 @@ _CIGAR_CACHE = {}  # cigar_string → aligned_length
 
 class FusionDetector:
     def __init__(self, bam_path: str, gene_db_path: str, reference_fasta: Optional[str]) -> None:
-        if mp is None:
-            raise ImportError(
-                "mappy is required for fusion detection. "
-                "Install with `pip install -r requirements_fusion.txt`."
-            )
         self.bam_path = bam_path
         self.genedb_path = gene_db_path
         self.db = gffutils.FeatureDB(gene_db_path, keep_order=True)
