@@ -522,9 +522,6 @@ class FusionDetector:
             if left_gene is None or right_gene is None:
                 continue
             if left_gene != right_gene:
-                # Check soft-clip orientation consistency
-                # if clip_side and not self._is_softclip_orientation_valid(read, clip_side, sa_chr, sa_pos):
-                    # continue
                 self.record_fusion(
                     left_gene, right_gene, read.query_name,
                     left_chr, left_pos, sa_chr, right_pos,
@@ -1246,8 +1243,9 @@ class FusionDetector:
                 right_score = meta.get("right_score", 0.0)
                 left_biotype = meta.get("left_biotype", "unknown")
                 right_biotype = meta.get("right_biotype", "unknown")
+                confidence = meta.get("confidence", 0.0) or 0.0
                 f.write(f"{left_gene}\t{left_biotype}\t{left_score:.2f}\t{left_chr}\t{left_pos}\t"
                         f"{right_gene}\t{right_biotype}\t{right_score:.2f}\t{right_chr}\t{right_pos}\t"
                         f"{meta.get('support', 0)}\t{fusion_name}\t{meta.get('class')}\t"
-                        f"{meta.get('is_valid')}\t{meta.get('confidence')}\t{reasons}\n")
+                        f"{meta.get('is_valid')}\t{confidence:.3f}\t{reasons}\n")
 
