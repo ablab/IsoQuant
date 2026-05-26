@@ -114,9 +114,46 @@ def test_with_bam_and_polya():
                        "intron_counts.tsv", "read_assignments.tsv.gz",
                        "novel_vs_known.SQANTI-like.tsv",
                        "transcript_counts.tsv",
-                       "discovered_transcript_counts.tsv", "transcript_models.gtf"]
+                       "discovered_transcript_counts.tsv", "transcript_models.gtf",
+                       "polyA_prediction.tsv"]
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
+    # polyA prediction should produce at least a header row and some data.
+    polya_tsv = os.path.join(sample_folder, sample_name + ".polyA_prediction.tsv")
+    with open(polya_tsv) as f:
+        lines = f.read().splitlines()
+    assert lines[0].split("\t")[:3] == ["chromosome", "transcript_id", "gene_id"]
+    assert any(ln and not ln.startswith("chromosome") for ln in lines), \
+        "polyA prediction TSV is empty"
+
+
+def test_with_bam_polya_and_fl_data():
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    data_dir = os.path.join(source_dir, 'simple_data/')
+    out_dir = os.path.join(source_dir, "out_polya_fl/")
+    shutil.rmtree(out_dir, ignore_errors=True)
+    sample_name = "ONT_Simulated.chr9.4M.polyA.fl"
+
+    result = subprocess.run(["python3", "isoquant.py",
+                             "-o", out_dir,
+                             "--data_type", "nanopore",
+                             "--bam", os.path.join(data_dir, "chr9.4M.ont.sim.polya.bam"),
+                             "--genedb", os.path.join(data_dir, "chr9.4M.gtf.gz"),
+                             "--complete_genedb",
+                             "-r", os.path.join(data_dir, "chr9.4M.fa.gz"),
+                             "-t", "2",
+                             "--fl_data",
+                             "--prefix", sample_name])
+
+    assert result.returncode == 0
+    sample_folder = os.path.join(out_dir, sample_name)
+    assert os.path.isdir(sample_folder)
+    for f in ["polyA_prediction.tsv", "TSS_prediction.tsv"]:
+        path = os.path.join(sample_folder, sample_name + "." + f)
+        assert os.path.exists(path), f"expected {f} to be produced"
+        with open(path) as fh:
+            lines = fh.read().splitlines()
+        assert lines[0].split("\t")[:3] == ["chromosome", "transcript_id", "gene_id"]
 
 
 def test_with_illumina():

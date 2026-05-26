@@ -15,6 +15,7 @@ from .long_read_counter import (
     create_gene_counter,
     create_transcript_counter,
 )
+from .terminal_counter import PolyACounter, TSSCounter
 from .assignment_io import (
     IOSupport,
     BEDPrinter,
@@ -100,6 +101,18 @@ class ReadAssignmentAggregator:
             self.intron_counter = IntronCounter(intron_counts_path)
             self.global_counter.add_counters([self.exon_counter, self.intron_counter])
 
+        # polyA / TSS terminal-position prediction (ungrouped). PolyA requires
+        # only the gene annotation; TSS also requires --fl_data because read
+        # start coordinates without full-length evidence are unreliable.
+        if self.args.genedb:
+            polya_path = sample.get_polya_prediction_file(chr_id) if chr_id else sample.out_polya_prediction_tsv
+            self.polya_counter = PolyACounter(self.args, polya_path)
+            self.global_counter.add_counter(self.polya_counter)
+            if self.args.fl_data:
+                tss_path = sample.get_tss_prediction_file(chr_id) if chr_id else sample.out_tss_prediction_tsv
+                self.tss_counter = TSSCounter(self.args, tss_path)
+                self.global_counter.add_counter(self.tss_counter)
+
         if self.args.read_group and self.args.genedb:
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
                 # Use chr-specific paths if chr_id is provided
@@ -133,6 +146,25 @@ class ReadAssignmentAggregator:
                     exon_counter = ExonCounter(exon_out_file, string_pools=self.string_pools, group_index=group_idx)
                     intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx)
                     self.global_counter.add_counters([exon_counter, intron_counter])
+
+                # Grouped polyA / TSS prediction (one file per grouping strategy).
+                if chr_id:
+                    polya_out_file = sample.get_grouped_counts_file(chr_id, "polyA_prediction", strategy_name)
+                else:
+                    polya_out_file = f"{sample.out_polya_prediction_grouped_tsv}_{strategy_name}"
+                grouped_polya_counter = PolyACounter(self.args, polya_out_file,
+                                                     string_pools=self.string_pools,
+                                                     group_index=group_idx)
+                self.global_counter.add_counter(grouped_polya_counter)
+                if self.args.fl_data:
+                    if chr_id:
+                        tss_out_file = sample.get_grouped_counts_file(chr_id, "TSS_prediction", strategy_name)
+                    else:
+                        tss_out_file = f"{sample.out_tss_prediction_grouped_tsv}_{strategy_name}"
+                    grouped_tss_counter = TSSCounter(self.args, tss_out_file,
+                                                     string_pools=self.string_pools,
+                                                     group_index=group_idx)
+                    self.global_counter.add_counter(grouped_tss_counter)
 
         if self.args.read_group and not self.args.no_model_construction:
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
