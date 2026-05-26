@@ -739,6 +739,23 @@ class DatasetProcessor:
             merge_counts(counter, sample.prefix, chr_ids, unaligned)
             # counter.convert_counts_to_tpm(self.args.normalization_method)
 
+        # Developer training-data collection: concatenate per-chr training
+        # fragments (written by TerminalCounter._dump_training_features) into
+        # the user-supplied CSV path. Per-chr fragments live next to the
+        # per-chr prediction TSVs with a .training.csv suffix.
+        polya_csv = getattr(self.args, "collect_polya_training", None)
+        if polya_csv:
+            with open(polya_csv, "w") as fh:
+                merge_files(sample.out_polya_prediction_tsv + ".training.csv",
+                            sample.prefix, chr_ids, fh, header_lines=1)
+            logger.info("PolyA training features written to %s", polya_csv)
+        tss_csv = getattr(self.args, "collect_tss_training", None)
+        if tss_csv and self.args.fl_data:
+            with open(tss_csv, "w") as fh:
+                merge_files(sample.out_tss_prediction_tsv + ".training.csv",
+                            sample.prefix, chr_ids, fh, header_lines=1)
+            logger.info("TSS training features written to %s", tss_csv)
+
     def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
         merge_files(gff_printer.model_fname, label, chr_ids, gff_printer.out_gff, copy_header=False)
         if gff_printer.output_r2t:
