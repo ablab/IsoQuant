@@ -145,6 +145,25 @@ class TestLoadYamlConfig(unittest.TestCase):
         self.assertEqual(config, {})
         self.assertEqual(baselines, {})
 
+    def test_polya_prediction_baselines_extracted(self):
+        # Schema check for the polya_prediction run type added alongside
+        # misc/assess_polya_prediction.py. Only precision and recall are
+        # baselined (see Mouse.ONT_simulated.polyA.yaml).
+        path = self._write_yaml({
+            "name": "polya_test",
+            "run_type": "polya_prediction",
+            "reference_polya_gtf": "/abga/work/coroari/thesis_model/polya/updated_mouse_polya_1.gtf",
+            "baselines": {
+                "polya_prediction": {"precision": 79.41, "recall": 50.00},
+            },
+        })
+        config, baselines = pipeline_load_yaml(path)
+        self.assertEqual(config["run_type"], "polya_prediction")
+        self.assertIn("reference_polya_gtf", config)
+        self.assertIn("polya_prediction", baselines)
+        self.assertAlmostEqual(baselines["polya_prediction"]["precision"], 79.41)
+        self.assertAlmostEqual(baselines["polya_prediction"]["recall"], 50.00)
+
 
 class TestLoadConfigDispatch(unittest.TestCase):
     def setUp(self):

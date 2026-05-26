@@ -34,6 +34,7 @@ RT_QUANTIFICATION_NOVEL = "quantification_novel"
 RT_QUANTIFICATION_GENES = "quantification_genes"
 RT_PERFORMANCE = "performance"
 RT_ALLINFO = "allinfo"
+RT_POLYA_PREDICTION = "polya_prediction"
 RT_FUSION = "fusion"
 
 
@@ -312,6 +313,61 @@ def     run_assignment_quality(args, config_dict, baselines=None):
         if err_code != 0:
             exit_code = err_code
 
+    new_etalon_outf.close()
+    return exit_code
+
+
+def run_polya_prediction(args, config_dict, baselines=None):
+    log.info('== Running polyA prediction quality assessment ==')
+    config_file = args.config_file
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    isoquant_dir = os.path.join(source_dir, "../../")
+
+    label = config_dict["label"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
+    prediction_tsv = os.path.join(output_folder, "%s/%s.polyA_prediction.tsv" % (label, label))
+    if not os.path.exists(prediction_tsv):
+        log.error("polyA prediction TSV not found at %s" % prediction_tsv)
+        return -5
+
+    if "reference_polya_gtf" not in config_dict:
+        log.error("reference_polya_gtf is not set in the config")
+        return -4
+    reference_gtf = fix_path(config_file, config_dict["reference_polya_gtf"])
+
+    quality_report = os.path.join(output_folder, "polya_report.tsv")
+    qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/assess_polya_prediction.py"),
+                       "--prediction", prediction_tsv,
+                       "--reference_gtf", reference_gtf,
+                       "--output", quality_report]
+    if "qa_options" in config_dict:
+        log.info("Appending additional options: %s" % config_dict["qa_options"])
+        opts = config_dict["qa_options"].replace('"', '').split()
+        qa_command_list += opts
+
+    log.info("QA command line: " + " ".join(qa_command_list))
+    result = subprocess.run(qa_command_list)
+    if result.returncode != 0:
+        log.error("QA exited with non-zero status: %d" % result.returncode)
+        return -11
+
+    if not baselines or "polya_prediction" not in baselines:
+        return 0
+    etalon_dict = {k: str(v) for k, v in baselines["polya_prediction"].items()}
+
+    log.info('== Checking polyA prediction metrics ==')
+    quality_report_dict = load_tsv_config(quality_report)
+    exit_code = 0
+    new_etalon_outf = open(os.path.join(output_folder, "new_polya_prediction_etalon.tsv"), "w")
+    for k, v in etalon_dict.items():
+        if k not in quality_report_dict:
+            log.error("Metric %s was not found in the report" % k)
+            exit_code = -12
+            continue
+        new_etalon_outf.write("%s\t%.4f\n" % (k, float(quality_report_dict[k])))
+        err_code = check_value(float(v), float(quality_report_dict[k]), k)
+        if err_code != 0:
+            exit_code = err_code
     new_etalon_outf.close()
     return exit_code
 
@@ -690,6 +746,8 @@ def main():
         err_codes.append(run_allinfo_quality(args, config_dict, baselines))
     if RT_FUSION in run_types:
         err_codes.append(run_fusion_quality(args, config_dict, baselines))
+    if RT_POLYA_PREDICTION in run_types:
+        err_codes.append(run_polya_prediction(args, config_dict, baselines))
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
