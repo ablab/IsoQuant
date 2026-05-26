@@ -148,15 +148,19 @@ class ReadAssignmentAggregator:
                     self.global_counter.add_counters([exon_counter, intron_counter])
 
                 # Grouped polyA / TSS prediction (one file per grouping strategy).
-                if chr_id:
-                    polya_out_file = sample.get_grouped_counts_file(chr_id, "polyA_prediction", strategy_name)
-                else:
-                    polya_out_file = f"{sample.out_polya_prediction_grouped_tsv}_{strategy_name}"
-                grouped_polya_counter = PolyACounter(self.args, polya_out_file,
-                                                     string_pools=self.string_pools,
-                                                     group_index=group_idx)
-                self.global_counter.add_counter(grouped_polya_counter)
-                if self.args.fl_data:
+                # Skipped in training-collection mode -- only the ungrouped counter
+                # writes the per-chr training fragment, and grouped predictions
+                # are not produced in dev mode.
+                if not getattr(self.args, "collect_polya_training", None):
+                    if chr_id:
+                        polya_out_file = sample.get_grouped_counts_file(chr_id, "polyA_prediction", strategy_name)
+                    else:
+                        polya_out_file = f"{sample.out_polya_prediction_grouped_tsv}_{strategy_name}"
+                    grouped_polya_counter = PolyACounter(self.args, polya_out_file,
+                                                         string_pools=self.string_pools,
+                                                         group_index=group_idx)
+                    self.global_counter.add_counter(grouped_polya_counter)
+                if self.args.fl_data and not getattr(self.args, "collect_tss_training", None):
                     if chr_id:
                         tss_out_file = sample.get_grouped_counts_file(chr_id, "TSS_prediction", strategy_name)
                     else:

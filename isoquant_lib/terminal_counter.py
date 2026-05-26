@@ -63,6 +63,14 @@ EMPTY_COLUMNS = ['chromosome', 'transcript_id', 'gene_id', 'prediction',
                  'counts', 'flag']
 EMPTY_COLUMNS_GROUPED = EMPTY_COLUMNS + ['counts_byGroup', 'group_id']
 
+# Columns dumped per peak when training-data collection is enabled.
+# Trainer (misc/train_polya_tss_model.py) consumes exactly this layout.
+TRAINING_COLUMNS = FEATURE_COLUMNS + ['chromosome', 'true_peak']
+
+# Per-chr training CSV is placed next to the per-chr prediction TSV with this
+# suffix; the sample-level merge concatenates them into the user-supplied path.
+TRAINING_SUFFIX = ".training.csv"
+
 
 class TerminalCounter(AbstractCounter):
     """Base class for polyA / TSS peak prediction counters.
@@ -72,6 +80,10 @@ class TerminalCounter(AbstractCounter):
     instance accumulates positional histograms per transcript across the reads
     it sees and emits its predictions in :meth:`dump`.
     """
+
+    # Subclasses set the args attribute name (e.g. "collect_polya_training")
+    # to pick up their per-counter training-collection flag.
+    TRAINING_ARG: str = ""
 
     def __init__(self, args, output_prefix: str, model_path: Path,
                  string_pools=None, group_index: int = 0) -> None:
@@ -96,6 +108,17 @@ class TerminalCounter(AbstractCounter):
         # deadlocks fork() workers in ProcessPoolExecutor.
         self._model_path = model_path
         self._model = None
+
+        # Developer training-data collection mode (off by default).
+        self._collecting_training = bool(
+            self.TRAINING_ARG and getattr(args, self.TRAINING_ARG, None))
+        # Per-chr fragment lives next to the per-chr prediction TSV; the
+        # sample-level merge will concatenate fragments into the user's
+        # requested CSV path.
+        self._training_csv_path = (output_prefix + TRAINING_SUFFIX
+                                   if self._collecting_training else None)
+        if self._training_csv_path:
+            open(self._training_csv_path, "w").close()
 
         # transcript_id -> {'chr', 'gene_id', 'data', 'annotated',
         #                   int_group_id -> list[int]}
@@ -194,7 +217,47 @@ class TerminalCounter(AbstractCounter):
             self._write_empty()
             return
 
-        # Build base per-transcript dataframe.
+        df = self._build_peak_dataframe()
+        zero_peaks, peaks = self._split_zero_and_real_peaks(df)
+        if not peaks.empty:
+            peaks = self._rank_and_explode(peaks)
+
+        # Developer training-data collection: dump features + true_peak label
+        # for every detected peak, skip the XGBoost filter, emit an empty
+        # prediction TSV so the rest of the pipeline still sees the file.
+        if self._collecting_training:
+            self._dump_training_features(zero_peaks, peaks)
+            self._write_empty()
+            return
+
+        if not peaks.empty:
+            peaks[FEATURE_COLUMNS] = peaks[FEATURE_COLUMNS].astype(float, errors='ignore')
+            predicted = self.model.predict(peaks[FEATURE_COLUMNS].astype(float))
+            peaks = peaks[predicted == 1].copy()
+            peaks['prediction'] = peaks['peak_location']
+
+        frames = [f for f in (zero_peaks, peaks) if not f.empty]
+        if not frames:
+            self._write_empty()
+            return
+        result = (pd.concat(frames, axis=0, ignore_index=True, sort=False)
+                  if len(frames) > 1 else frames[0].reset_index(drop=True))
+
+        # Convert peak position back to genomic coordinate and add flag.
+        result['prediction'] = (result['prediction'].astype(int)
+                                + result['start'].astype(int))
+        result['flag'] = (
+            (result['prediction'] - result['annotated']).abs()
+                .gt(ANNOTATION_TOLERANCE).map({True: 'Novel', False: 'Known'}))
+        result['counts'] = result.apply(self._counts_for_peak, axis=1)
+
+        if self.ignore_read_groups:
+            self._write_ungrouped(result)
+        else:
+            self._write_grouped(result)
+
+    def _build_peak_dataframe(self) -> pd.DataFrame:
+        """One row per transcript with histogram, summary stats, and raw peaks."""
         records = []
         for tid, entry in self.transcripts.items():
             data = entry['data']
@@ -223,11 +286,10 @@ class TerminalCounter(AbstractCounter):
                 'mean_height': float(np.mean(padded)),
                 'histogram': padded,
             })
-
         df = pd.DataFrame.from_records(records)
 
-        # Peak detection per row. find_peaks returns positions relative to the
-        # padded array; subtract HISTOGRAM_PAD to convert to start-relative.
+        # find_peaks returns padded-array indices; subtract HISTOGRAM_PAD to
+        # convert to start-relative coordinates.
         peaks_idx = df['histogram'].apply(
             lambda h: find_peaks(h, distance=PEAK_DISTANCE)[0])
         df['peak_count'] = peaks_idx.apply(len)
@@ -249,8 +311,12 @@ class TerminalCounter(AbstractCounter):
             lambda w: [int(j - HISTOGRAM_PAD) for j in w[2]])
         df['peak_right'] = widths.apply(
             lambda w: [int(j - HISTOGRAM_PAD) for j in w[3]])
+        return df
 
-        # Transcripts with zero detected peaks: fall back to the mode.
+    @staticmethod
+    def _split_zero_and_real_peaks(df: pd.DataFrame):
+        """Split out transcripts with zero detected peaks (mode fallback) from
+        those with one or more real peaks."""
         zero_peaks = df[df['peak_count'] == 0].copy()
         if not zero_peaks.empty:
             zero_peaks['prediction'] = zero_peaks['mode']
@@ -260,38 +326,33 @@ class TerminalCounter(AbstractCounter):
                 axis=1)
             zero_peaks['peak_left'] = zero_peaks['mode']
             zero_peaks['peak_right'] = zero_peaks['mode']
-            df = df[df['peak_count'] > 0].copy()
+        peaks = df[df['peak_count'] > 0].copy()
+        return zero_peaks, peaks
 
-        # Transcripts with peaks: rank, explode, run XGBoost filter.
-        if not df.empty:
-            df = df.apply(self._rank_peaks, axis=1)
-            df = df.explode(['peak_location', 'peak_prominence', 'peak_width',
-                             'peak_heights', 'peak_left', 'peak_right',
-                             'rank', 'relative_height']).reset_index(drop=True)
-            df[FEATURE_COLUMNS] = df[FEATURE_COLUMNS].astype(float, errors='ignore')
-            predicted = self.model.predict(df[FEATURE_COLUMNS].astype(float))
-            df = df[predicted == 1].copy()
-            df['prediction'] = df['peak_location']
+    def _rank_and_explode(self, peaks: pd.DataFrame) -> pd.DataFrame:
+        peaks = peaks.apply(self._rank_peaks, axis=1)
+        return peaks.explode(['peak_location', 'peak_prominence', 'peak_width',
+                              'peak_heights', 'peak_left', 'peak_right',
+                              'rank', 'relative_height']).reset_index(drop=True)
 
-        frames = [f for f in (zero_peaks, df) if not f.empty]
+    def _dump_training_features(self, zero_peaks: pd.DataFrame,
+                                peaks: pd.DataFrame) -> None:
+        """Append per-peak features + ``true_peak`` label to the per-chr
+        training CSV. The sample-level merge concatenates fragments into the
+        user-supplied path."""
+        frames = [f for f in (zero_peaks, peaks) if not f.empty]
         if not frames:
-            self._write_empty()
             return
-        result = (pd.concat(frames, axis=0, ignore_index=True, sort=False)
-                  if len(frames) > 1 else frames[0].reset_index(drop=True))
-
-        # Convert peak position back to genomic coordinate and add flag.
-        result['prediction'] = (result['prediction'].astype(int)
-                                + result['start'].astype(int))
-        result['flag'] = (
-            (result['prediction'] - result['annotated']).abs()
-                .gt(ANNOTATION_TOLERANCE).map({True: 'Novel', False: 'Known'}))
-        result['counts'] = result.apply(self._counts_for_peak, axis=1)
-
-        if self.ignore_read_groups:
-            self._write_ungrouped(result)
-        else:
-            self._write_grouped(result)
+        rows = (pd.concat(frames, axis=0, ignore_index=True, sort=False)
+                if len(frames) > 1 else frames[0].reset_index(drop=True))
+        genomic_prediction = (rows['peak_location'].astype(int)
+                              + rows['start'].astype(int))
+        rows = rows.assign(true_peak=(
+            (genomic_prediction - rows['annotated']).abs()
+                .le(ANNOTATION_TOLERANCE).astype(int)))
+        rows[TRAINING_COLUMNS].to_csv(
+            self._training_csv_path, sep=",", index=False, mode="w",
+            header=True)
 
     def _rank_peaks(self, row: pd.Series) -> pd.Series:
         heights = np.asarray(row['peak_heights'], dtype=float)
@@ -376,6 +437,8 @@ class TerminalCounter(AbstractCounter):
 class PolyACounter(TerminalCounter):
     """Predicts polyA cleavage sites per transcript."""
 
+    TRAINING_ARG = "collect_polya_training"
+
     def __init__(self, args, output_prefix: str,
                  string_pools=None, group_index: int = 0) -> None:
         super().__init__(args, output_prefix, POLYA_MODEL_PATH,
@@ -402,6 +465,8 @@ class PolyACounter(TerminalCounter):
 
 class TSSCounter(TerminalCounter):
     """Predicts transcription start sites per transcript."""
+
+    TRAINING_ARG = "collect_tss_training"
 
     def __init__(self, args, output_prefix: str,
                  string_pools=None, group_index: int = 0) -> None:

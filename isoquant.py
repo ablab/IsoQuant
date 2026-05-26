@@ -338,6 +338,25 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
     add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
 
+    # PolyA / TSS training-data collection (developer-only).
+    # When either flag is given to a normal IsoQuant run, the matching
+    # terminal-position counter switches from inference to dumping per-peak
+    # features (the eight FEATURE_COLUMNS plus `chromosome` and a `true_peak`
+    # 0/1 label computed against the annotated transcript end) to the CSV
+    # path supplied as the flag value. The XGBoost model is not consulted;
+    # rows are accumulated, not filtered. Feed the CSV to
+    # `misc/train_polya_tss_model.py` to fit a fresh model.
+    #   python isoquant.py … --genedb GENEDB --collect_polya_training peaks.csv
+    #   python misc/train_polya_tss_model.py --features peaks.csv \
+    #       --output isoquant_lib/data/model_polya.json
+    # For TSS, add --fl_data and --collect_tss_training tss_peaks.csv.
+    # These flags are intentionally hidden from --help/--full_help; the run
+    # emits a clearly marked warning when they are used.
+    add_hidden_option("--collect_polya_training", type=str, default=None,
+                      help="Developer: dump per-peak features + true_peak label for polyA training to this CSV path.")
+    add_hidden_option("--collect_tss_training", type=str, default=None,
+                      help="Developer: dump per-peak features + true_peak label for TSS training to this CSV path.")
+
     isoquant_version = "3.12.0"
     try:
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
@@ -1187,6 +1206,15 @@ def main(cmd_args):
         parser.print_usage()
         sys.exit(IsoQuantExitCode.SUCCESS)
     set_logger(args)
+    if getattr(args, "collect_polya_training", None) or getattr(args, "collect_tss_training", None):
+        logger.warning("=" * 78)
+        logger.warning("DEVELOPER MODE: polyA/TSS training-data collection enabled.")
+        logger.warning("Per-peak features will be written to the supplied CSV path INSTEAD of")
+        logger.warning("running the production XGBoost peak filter. Predictions in")
+        logger.warning("*.polyA_prediction.tsv / *.TSS_prediction.tsv will be empty.")
+        logger.warning("This mode is intended only for retraining the shipped model; see")
+        logger.warning("misc/train_polya_tss_model.py and .claude/POLYA_TSS_TRAINING.md.")
+        logger.warning("=" * 78)
     args = check_and_load_args(args, parser)
     create_output_dirs(args)
     set_additional_params(args)
