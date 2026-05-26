@@ -256,3 +256,95 @@ def test_counts_for_peak_clamps_to_histogram_bounds():
         "peak_right": 10,  # past histogram end, must clamp
     })
     assert counter_cls._counts_for_peak(None, row) == sum([1, 2, 3, 4, 5])
+
+
+@pytest.mark.parametrize("strand,expected", [("+", 401), ("-", 99)])
+def test_polya_counter_annotated_position(stub_model, tmp_path, strand, expected):
+    counter = tc.PolyACounter(_make_args(), str(tmp_path / "p.tsv"))
+    read = _make_read_assignment(strand=strand,
+                                 exons=[(100, 200), (300, 400)])
+    assert counter._annotated_position(read, "T1") == expected
+
+
+@pytest.mark.parametrize("strand,expected", [("+", 99), ("-", 401)])
+def test_tss_counter_annotated_position(stub_model, tmp_path, strand, expected):
+    counter = tc.TSSCounter(_make_args(), str(tmp_path / "t.tsv"))
+    read = _make_read_assignment(strand=strand,
+                                 exons=[(100, 200), (300, 400)])
+    assert counter._annotated_position(read, "T1") == expected
+
+
+def test_tss_counter_rejects_dot_strand(stub_model, tmp_path):
+    counter = tc.TSSCounter(_make_args(), str(tmp_path / "t.tsv"))
+    counter.add_read_info(_make_read_assignment(strand="."))
+    assert counter.transcripts == {}
+
+
+def test_tss_counter_rejects_empty_exons(stub_model, tmp_path):
+    counter = tc.TSSCounter(_make_args(), str(tmp_path / "t.tsv"))
+    read = _make_read_assignment()
+    read.corrected_exons = []
+    counter.add_read_info(read)
+    assert counter.transcripts == {}
+
+
+def test_polya_counter_rejects_negative_strand_without_polyt(stub_model, tmp_path):
+    counter = tc.PolyACounter(_make_args(), str(tmp_path / "p.tsv"))
+    bad = _make_read_assignment(strand="-", polya_pos=420)
+    bad.polya_info = _make_polya_info(external_polyt_pos=-1)
+    counter.add_read_info(bad)
+    assert counter.transcripts == {}
+
+
+def test_dump_emits_rows_for_multiple_transcripts(stub_model, tmp_path):
+    out = tmp_path / "multi.tsv"
+    counter = tc.PolyACounter(_make_args(), str(out))
+    exons_a = [(100, 200), (300, 400)]
+    exons_b = [(1000, 1100), (1300, 1500)]
+    gene_info = types.SimpleNamespace(
+        all_isoforms_exons={"T1": exons_a, "T2": exons_b})
+    for _ in range(30):
+        counter.add_read_info(_make_read_assignment(
+            transcript_id="T1", gene_id="G1",
+            exons=exons_a, polya_pos=420, gene_info=gene_info))
+        counter.add_read_info(_make_read_assignment(
+            transcript_id="T2", gene_id="G2",
+            exons=exons_b, polya_pos=1520, gene_info=gene_info))
+    counter.dump()
+
+    df = _read_tsv(out)
+    assert set(df["transcript_id"]) == {"T1", "T2"}
+    assert set(df["gene_id"]) == {"G1", "G2"}
+
+
+def test_dump_zero_peak_fallback_uses_histogram_mode(stub_model, tmp_path):
+    # A single read produces a one-bin histogram; find_peaks returns nothing,
+    # so the zero-peak branch fires and emits a row using the mode position.
+    out = tmp_path / "mode.tsv"
+    counter = tc.PolyACounter(_make_args(), str(out))
+    counter.add_read_info(_make_read_assignment(
+        polya_pos=420, exons=[(100, 200), (300, 400)]))
+    counter.dump()
+
+    df = _read_tsv(out)
+    assert len(df) == 1
+    assert df.iloc[0]["prediction"] == 420
+
+
+def test_no_op_methods_do_not_raise(stub_model, tmp_path):
+    counter = tc.PolyACounter(_make_args(), str(tmp_path / "p.tsv"))
+    counter.add_read_info(None)
+    counter.add_read_info_raw("rid", ["F1"], [0])
+    counter.add_confirmed_features({"F1"})
+    counter.add_unassigned(_make_read_assignment())
+    counter.add_unaligned(3)
+    counter.finalize()
+    counter.finalize(_make_args())
+    assert counter.transcripts == {}
+
+
+def test_init_truncates_existing_output_file(stub_model, tmp_path):
+    path = tmp_path / "stale.tsv"
+    path.write_text("garbage from a previous run\n")
+    tc.PolyACounter(_make_args(), str(path))
+    assert path.read_text() == ""
