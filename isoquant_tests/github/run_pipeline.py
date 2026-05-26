@@ -34,6 +34,7 @@ RT_QUANTIFICATION_NOVEL = "quantification_novel"
 RT_QUANTIFICATION_GENES = "quantification_genes"
 RT_PERFORMANCE = "performance"
 RT_ALLINFO = "allinfo"
+RT_FUSION = "fusion"
 
 
 log = logging.getLogger('GitHubRunner')
@@ -569,6 +570,67 @@ def run_allinfo_quality(args, config_dict, baselines=None):
     return exit_code
 
 
+def run_fusion_quality(args, config_dict, baselines=None):
+    log.info('== Running fusion detection quality assessment ==')
+    config_file = args.config_file
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    isoquant_dir = os.path.join(source_dir, "../../")
+
+    name = config_dict["name"]
+    label = name if "label" not in config_dict else config_dict["label"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
+
+    fusion_files = glob.glob(os.path.join(output_folder, "fusion_*.tsv"))
+    if not fusion_files:
+        log.error("No fusion output files (fusion_*.tsv) found in %s" % output_folder)
+        return -40
+
+    fusion_tsv = fusion_files[0]
+    log.info("Found fusion output: %s" % fusion_tsv)
+
+    if "fusion_truth" not in config_dict:
+        log.warning("No fusion_truth specified in config; skipping quality check")
+        return 0
+
+    truth_file = fix_path(config_file, config_dict["fusion_truth"])
+    if not os.path.exists(truth_file):
+        log.error("Fusion truth file not found: %s" % truth_file)
+        return -41
+
+    quality_report = os.path.join(output_folder, "fusion_quality_report.tsv")
+    qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/assess_fusion_quality.py"),
+                       "--fusion_tsv", fusion_tsv,
+                       "--truth", truth_file,
+                       "--output", quality_report]
+
+    log.info("QA command line: " + " ".join(qa_command_list))
+    result = subprocess.run(qa_command_list)
+    if result.returncode != 0:
+        log.error("Fusion QA exited with non-zero status: %d" % result.returncode)
+        return -42
+
+    if baselines and "fusion" in baselines:
+        etalon_dict = {k: str(v) for k, v in baselines["fusion"].items()}
+    else:
+        return 0
+
+    log.info('== Checking fusion quality metrics ==')
+    quality_dict = load_tsv_config(quality_report)
+    exit_code = 0
+    for metric_name, etalon_val_str in etalon_dict.items():
+        etalon_val = float(etalon_val_str)
+        if metric_name not in quality_dict:
+            log.error("Metric %s not found in fusion quality report" % metric_name)
+            exit_code = -43
+            continue
+        output_val = float(quality_dict[metric_name])
+        err = check_value(etalon_val, output_val, metric_name)
+        if err != 0:
+            exit_code = err
+
+    return exit_code
+
+
 def check_output_files(out_dir, label, file_list):
     missing_files = []
     internal_output_dir = os.path.join(out_dir, label)
@@ -626,6 +688,8 @@ def main():
         err_codes.append(run_performance_assessment(args, config_dict, baselines))
     if RT_ALLINFO in run_types:
         err_codes.append(run_allinfo_quality(args, config_dict, baselines))
+    if RT_FUSION in run_types:
+        err_codes.append(run_fusion_quality(args, config_dict, baselines))
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
