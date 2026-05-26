@@ -7,6 +7,7 @@ include requirements_tests.txt
 
 recursive-include isoquant_lib *.py
 recursive-include isoquant_lib/test_data *
+recursive-include isoquant_lib/data *.json
 
 prune isoquant_tests/out_*
 prune .claude

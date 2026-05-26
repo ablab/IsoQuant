@@ -29,6 +29,29 @@ If `--count_exons` is set, exon and intron counts will be produced:
 * `SAMPLE_ID.exon_counts.tsv` - reference exon inclusion/exclusion read counts;
 * `SAMPLE_ID.intron_counts.tsv` - reference intron inclusion/exclusion read counts;
 
+#### PolyA / TSS site prediction
+
+Whenever a gene annotation is supplied via `--genedb`, IsoQuant accumulates
+per-transcript histograms of read polyA positions, detects peaks, filters them
+with a pre-trained XGBoost classifier, and classifies each retained peak as
+`Known` (within 10 bp of the annotated transcript end) or `Novel`:
+
+* `SAMPLE_ID.polyA_prediction.tsv` - predicted polyA cleavage sites per reference transcript.
+
+If `--fl_data` is also supplied (reads represent full-length transcripts), the
+same machinery is applied to read start positions:
+
+* `SAMPLE_ID.TSS_prediction.tsv` - predicted transcription start sites per reference transcript.
+
+Columns: `chromosome`, `transcript_id`, `gene_id`, `prediction` (genomic
+coordinate of the peak), `counts` (number of reads supporting the peak window),
+`flag` (`Known` / `Novel`). When `--read_group` is set, an additional file per
+grouping strategy is produced with two extra columns, `counts_byGroup` and
+`group_id`:
+
+* `SAMPLE_ID.polyA_prediction_grouped_<strategy>`
+* `SAMPLE_ID.TSS_prediction_grouped_<strategy>` (only with `--fl_data`)
+
 If `--read_group` is set or multiple files are provided, the per-group expression values for reference features will be also computed:
 
 #### Default grouped counts in linear format

@@ -73,6 +73,10 @@ class SampleData:
         self.out_exon_grouped_counts_tsv = self._make_path(self.prefix + ".exon_grouped")
         self.out_intron_grouped_counts_tsv = self._make_path(self.prefix + ".intron_grouped")
         self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
+        self.out_polya_prediction_tsv = self._make_path(self.prefix + ".polyA_prediction.tsv")
+        self.out_tss_prediction_tsv = self._make_path(self.prefix + ".TSS_prediction.tsv")
+        self.out_polya_prediction_grouped_tsv = self._make_path(self.prefix + ".polyA_prediction_grouped")
+        self.out_tss_prediction_grouped_tsv = self._make_path(self.prefix + ".TSS_prediction_grouped")
         self.barcodes_tsv = self._make_path(self.prefix + ".barcoded_reads")
         self.barcodes_done = self._make_aux_path(self.prefix + ".barcodes_done")
         self.barcodes_split_reads = self._make_aux_path(self.prefix + ".split_barcodes")
@@ -181,6 +185,14 @@ class SampleData:
     def get_t2t_tsv_file(self, chr_id: str) -> str:
         """Get path to SQANTI-like TSV for a chromosome."""
         return self._make_path(self.get_chr_prefix(chr_id) + ".novel_vs_known.SQANTI-like.tsv")
+
+    def get_polya_prediction_file(self, chr_id: str) -> str:
+        """Get path to polyA prediction TSV for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".polyA_prediction.tsv")
+
+    def get_tss_prediction_file(self, chr_id: str) -> str:
+        """Get path to TSS prediction TSV for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".TSS_prediction.tsv")
 
     def get_grouped_counts_file(self, chr_id: str, feature: str, strategy_name: str) -> str:
         """Get path to grouped counts file for a chromosome.

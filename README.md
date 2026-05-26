@@ -29,6 +29,13 @@ assigns reads to the annotated isoforms based on their intron and exon structure
 IsoQuant further performs annotated gene, isoform, exon, and intron quantification.
 If reads are grouped (e.g. according to a cell type), counts are reported according to the provided grouping.
 
+When a reference annotation is supplied, IsoQuant additionally predicts polyA cleavage
+sites per transcript by clustering read end positions, filtering peaks with a
+pre-trained XGBoost classifier, and flagging each peak as `Known` (within 10 bp of the
+annotated transcript end) or `Novel`. Passing `--fl_data` enables the same prediction
+for transcription start sites. Results are written to `*.polyA_prediction.tsv` and
+`*.TSS_prediction.tsv` alongside the standard counts files (see [docs/output.md](docs/output.md)).
+
 The latest IsoQuant version can be downloaded from [github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
 
 Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://ablab.github.io/IsoQuant/).
