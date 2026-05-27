@@ -11,3 +11,5 @@ seaborn>=0.10.0
 editdistance>=0.8.1
 biopython>=1.76
 numba>=0.58
+mappy>=2.24
+intervaltree>=3.0

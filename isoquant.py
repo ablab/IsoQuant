@@ -55,7 +55,6 @@ logger = logging.getLogger('IsoQuant')
 # Large output file types for --large_output option
 LARGE_OUTPUT_TYPES = ["read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
 
-
 def bool_str(s):
     s = s.lower()
     if s not in {'false', 'true', '0', '1'}:
@@ -242,6 +241,10 @@ def parse_args(cmd_args=None, namespace=None):
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
                                      default="16")
 
+    # add fusion flag: runs fusion detection in addition to the default isoform pipeline
+    add_additional_option_to_group(pipeline_args_group, "--fusion", action='store_true', default=False,
+                                   help="run fusion gene detection after isoform detection; requires --genedb.")
+
     resume_args = pipeline_args_group.add_mutually_exclusive_group()
     resume_args.add_argument("--resume", action="store_true", default=False,
                              help="resume failed run, specify output folder, input options are not allowed")
@@ -385,6 +388,51 @@ def parse_args(cmd_args=None, namespace=None):
         os.makedirs(args.output)
 
     return args, parser
+
+
+def get_bam_files_from_samples(input_data) -> list:
+    """Extract all BAM file paths from input_data.samples.
+    
+    Returns a list of BAM file paths (long-read and Illumina).
+    """
+    bam_files: list[str] = []
+    for sample in input_data.samples:
+        for lib in sample.file_list:
+            for in_file in lib:
+                bam_files.append(in_file)
+        if getattr(sample, "illumina_bam", None):
+            bam_files.extend(sample.illumina_bam)
+    return [f for f in bam_files if os.path.isfile(f)]
+
+
+def run_fusion_detection_on_bams(fd, bam_files: list, output_dir: str) -> dict:
+    """Run fusion detection on a list of BAM files using a shared FusionDetector.
+
+    Args:
+        fd: FusionDetector instance (initialized with first BAM, will be reused)
+        bam_files: List of BAM file paths to process
+        output_dir: Directory to write fusion_*.tsv files
+
+    Returns:
+        Dictionary with summary: {"total": int, "successful": int, "failed": int, "skipped": list}
+    """
+    summary = {"total": len(bam_files), "successful": 0, "failed": 0, "skipped": []}
+    for bam_path in bam_files:
+        try:
+            logger.info("Running fusion detection on %s" % bam_path)
+            fd.bam_path = bam_path  # Switch BAM
+            fd.clear_state()  # Clear state for new BAM
+            fd.detect_fusions()
+            out_fname = os.path.join(output_dir, "fusion_" + os.path.basename(bam_path) + ".tsv")
+            fd.report(output_path=out_fname)
+            logger.info("Fusion candidates for %s written to %s" % (bam_path, out_fname))
+            summary["successful"] += 1
+        except Exception as e:
+            logger.error("Fusion detection failed for %s: %s" % (bam_path, str(e)))
+            logger.debug("Traceback:", exc_info=True)
+            summary["failed"] += 1
+            summary["skipped"].append(bam_path)
+    return summary
 
 
 def check_and_load_args(args, parser):
@@ -1106,6 +1154,7 @@ def run_pipeline(args):
     logger.info("gffutils version: %s" % gffutils.__version__)
     logger.info("pysam version: %s" % pysam.__version__)
     logger.info("pyfaidx version: %s" % pyfaidx.__version__)
+
     if args.mode.needs_barcode_calling():
         # call barcodes
         call_barcodes(args)
@@ -1136,6 +1185,26 @@ def run_pipeline(args):
     # aggregate counts for all samples
     if len(args.input_data.samples) > 1 and args.genedb:
         combine_counts(args.input_data, args.output)
+
+    # Run fusion detection after isoform detection when --fusion is enabled
+    if getattr(args, "fusion", False):
+        logger.info(" === Isoform detection completed, starting fusion detection === ")
+        bam_files = get_bam_files_from_samples(args.input_data)
+        if not args.genedb:
+            logger.warning("Fusion detection requires --genedb; skipping")
+        elif not bam_files:
+            logger.warning("No BAM files available for fusion detection; skipping")
+        else:
+            try:
+                from isoquant_lib.fusion_detector import FusionDetector
+                fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
+                summary = run_fusion_detection_on_bams(fd, bam_files, args.output)
+                logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
+                           (summary["total"], summary["successful"], summary["failed"]))
+                logger.info(" === Fusion detection finished === ")
+            except Exception as e:
+                logger.warning("Fusion detection encountered an error and was skipped: %s" % str(e))
+                logger.debug("Traceback:", exc_info=True)
 
     logger.info(" === IsoQuant pipeline finished === ")
 

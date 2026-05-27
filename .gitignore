@@ -104,6 +104,12 @@ venv.bak/
 .mypy_cache/
 
 .idea
-
+.vscode/
 # Claude Code documentation (private)
 .claude/
+
+# Test output
+chr9.4M*
+TEST_DATA/
+.params
+isoquant_tests/out*
