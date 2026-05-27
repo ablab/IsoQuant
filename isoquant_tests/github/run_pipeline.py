@@ -339,6 +339,9 @@ def run_polya_prediction(args, config_dict, baselines=None):
                        "--prediction", prediction_tsv,
                        "--reference_gtf", reference_gtf,
                        "--output", quality_report]
+    if "simulated_counts" in config_dict:
+        qa_command_list += ["--transcript_counts",
+                            fix_path(config_file, config_dict["simulated_counts"])]
     if "qa_options" in config_dict:
         log.info("Appending additional options: %s" % config_dict["qa_options"])
         opts = config_dict["qa_options"].replace('"', '').split()
