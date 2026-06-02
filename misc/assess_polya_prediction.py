@@ -59,7 +59,44 @@ def parse_args() -> argparse.Namespace:
                    help="bp tolerance for matching a prediction to a truth "
                         "end coordinate. Default 10 matches "
                         "ANNOTATION_TOLERANCE in terminal_counter.py.")
+    p.add_argument("--mode", choices=["polya", "tss"], default="polya",
+                   help="Which terminal coordinate is being evaluated: "
+                        "polyA (last exon end on +, first exon start on -) "
+                        "or TSS (first exon start on +, last exon end on -). "
+                        "Default: polya.")
     return p.parse_args()
+
+
+def _normalize_gtf_if_needed(gtf_path: str) -> str:
+    """Some upstream GTFs ship with an extra column 9 (a literal ``""``)
+    before the real attributes — gffutils then can't find ``transcript_id``
+    and assigns synthetic IDs. Detect that shape and emit a sibling
+    ``.fixed.gtf`` with the bogus column stripped."""
+    with open(gtf_path) as fh:
+        for line in fh:
+            if line.startswith("#"):
+                continue
+            fields = line.rstrip("\n").split("\t")
+            n = len(fields)
+            break
+        else:
+            return gtf_path
+    if n <= 9:
+        return gtf_path
+    fixed_path = gtf_path + ".fixed.gtf"
+    if not os.path.exists(fixed_path):
+        logger.info("GTF has %d columns; writing normalized 9-col copy to %s",
+                    n, fixed_path)
+        with open(gtf_path) as fin, open(fixed_path, "w") as fout:
+            for line in fin:
+                if line.startswith("#"):
+                    fout.write(line)
+                    continue
+                fields = line.rstrip("\n").split("\t")
+                if len(fields) > 9:
+                    fields = fields[:8] + [fields[-1]]
+                fout.write("\t".join(fields) + "\n")
+    return fixed_path
 
 
 def get_or_build_db(gtf_path: str) -> gffutils.FeatureDB:
@@ -68,6 +105,7 @@ def get_or_build_db(gtf_path: str) -> gffutils.FeatureDB:
     the cache stays compatible with any other consumer in the project."""
     if gtf_path.endswith(".db"):
         return gffutils.FeatureDB(gtf_path, keep_order=True)
+    gtf_path = _normalize_gtf_if_needed(gtf_path)
     db_path = gtf_path + ".db"
     if not os.path.exists(db_path):
         logger.info("Building gffutils DB at %s (one-time cache)", db_path)
@@ -81,16 +119,27 @@ def get_or_build_db(gtf_path: str) -> gffutils.FeatureDB:
     return gffutils.FeatureDB(db_path, keep_order=True)
 
 
-def annotated_polya(strand: str, exon_blocks: list) -> Optional[int]:
-    """Match PolyACounter._annotated_position. exon_blocks is a list of
-    ``(start, end)`` tuples sorted by genomic coordinate."""
+def annotated_position(strand: str, exon_blocks: list, mode: str) -> Optional[int]:
+    """Match PolyACounter._annotated_position / TSSCounter._annotated_position.
+    exon_blocks is a list of ``(start, end)`` tuples sorted by genomic
+    coordinate. ``mode`` is ``polya`` or ``tss``."""
     if not exon_blocks:
         return None
-    if strand == "+":
-        return exon_blocks[-1][1] + 1
-    if strand == "-":
-        return exon_blocks[0][0] - 1
+    if mode == "polya":
+        if strand == "+":
+            return exon_blocks[-1][1] + 1
+        if strand == "-":
+            return exon_blocks[0][0] - 1
+    elif mode == "tss":
+        if strand == "+":
+            return exon_blocks[0][0] - 1
+        if strand == "-":
+            return exon_blocks[-1][1] + 1
     return None
+
+
+def annotated_polya(strand: str, exon_blocks: list) -> Optional[int]:
+    return annotated_position(strand, exon_blocks, "polya")
 
 
 def _is_novel_id(tid: str) -> bool:
@@ -104,9 +153,9 @@ def _base_id(tid: str) -> str:
     return tid.rsplit("_", 1)[0]
 
 
-def load_truth(db: gffutils.FeatureDB) -> dict:
-    """Return ``{transcript_id: [(chr, polya_pos, is_novel), ...]}`` keyed
-    by base GENCODE ID. Novel transcript entries (IDs with a ``_<digits>``
+def load_truth(db: gffutils.FeatureDB, mode: str = "polya") -> dict:
+    """Return ``{transcript_id: [(chr, pos, is_novel), ...]}`` keyed by
+    base GENCODE ID. Novel transcript entries (IDs with a ``_<digits>``
     suffix) are merged into the base transcript's list so that a prediction
     for the base ID can match either the known or the novel site."""
     truth: dict = defaultdict(list)
@@ -118,12 +167,12 @@ def load_truth(db: gffutils.FeatureDB) -> dict:
         exon_blocks = sorted(
             ((e.start, e.end) for e in db.children(t, featuretype="exon")),
             key=lambda b: b[0])
-        polya = annotated_polya(t.strand, exon_blocks)
-        if polya is None:
+        pos = annotated_position(t.strand, exon_blocks, mode)
+        if pos is None:
             continue
         novel = _is_novel_id(tid)
         key = _base_id(tid) if novel else tid
-        truth[key].append((t.seqid, polya, novel))
+        truth[key].append((t.seqid, pos, novel))
         if novel:
             n_novel += 1
         else:
@@ -341,7 +390,7 @@ def main() -> int:
         return 2
 
     db = get_or_build_db(args.reference_gtf)
-    truth = load_truth(db)
+    truth = load_truth(db, mode=args.mode)
     predictions = read_predictions(args.prediction)
     expressed = None
     if args.transcript_counts:

@@ -35,6 +35,7 @@ RT_QUANTIFICATION_GENES = "quantification_genes"
 RT_PERFORMANCE = "performance"
 RT_ALLINFO = "allinfo"
 RT_POLYA_PREDICTION = "polya_prediction"
+RT_TSS_PREDICTION = "tss_prediction"
 
 
 log = logging.getLogger('GitHubRunner')
@@ -316,28 +317,36 @@ def     run_assignment_quality(args, config_dict, baselines=None):
     return exit_code
 
 
-def run_polya_prediction(args, config_dict, baselines=None):
-    log.info('== Running polyA prediction quality assessment ==')
+def run_terminal_prediction(args, config_dict, baselines=None, mode="polya"):
+    """Quality assessment for polyA or TSS prediction. ``mode`` controls which
+    output TSV is consumed (`polyA_prediction` vs `TSS_prediction`), which
+    config key supplies the reference GTF, and the baseline block name."""
+    label_human = "polyA" if mode == "polya" else "TSS"
+    log.info('== Running %s prediction quality assessment ==' % label_human)
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))
     isoquant_dir = os.path.join(source_dir, "../../")
 
     label = config_dict["label"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], label)
-    prediction_tsv = os.path.join(output_folder, "%s/%s.polyA_prediction.tsv" % (label, label))
+    tsv_suffix = "polyA_prediction" if mode == "polya" else "TSS_prediction"
+    prediction_tsv = os.path.join(output_folder, "%s/%s.%s.tsv" % (label, label, tsv_suffix))
     if not os.path.exists(prediction_tsv):
-        log.error("polyA prediction TSV not found at %s" % prediction_tsv)
+        log.error("%s prediction TSV not found at %s" % (label_human, prediction_tsv))
         return -5
 
-    if "reference_polya_gtf" not in config_dict:
-        log.error("reference_polya_gtf is not set in the config")
+    gtf_key = "reference_polya_gtf" if mode == "polya" else "reference_tss_gtf"
+    if gtf_key not in config_dict:
+        log.error("%s is not set in the config" % gtf_key)
         return -4
-    reference_gtf = fix_path(config_file, config_dict["reference_polya_gtf"])
+    reference_gtf = fix_path(config_file, config_dict[gtf_key])
 
-    quality_report = os.path.join(output_folder, "polya_report.tsv")
+    report_suffix = "polya_report" if mode == "polya" else "tss_report"
+    quality_report = os.path.join(output_folder, "%s.tsv" % report_suffix)
     qa_command_list = ["python3", os.path.join(isoquant_dir, "misc/assess_polya_prediction.py"),
                        "--prediction", prediction_tsv,
                        "--reference_gtf", reference_gtf,
+                       "--mode", mode,
                        "--output", quality_report]
     if "simulated_counts" in config_dict:
         qa_command_list += ["--transcript_counts",
@@ -353,14 +362,16 @@ def run_polya_prediction(args, config_dict, baselines=None):
         log.error("QA exited with non-zero status: %d" % result.returncode)
         return -11
 
-    if not baselines or "polya_prediction" not in baselines:
+    baseline_key = "polya_prediction" if mode == "polya" else "tss_prediction"
+    if not baselines or baseline_key not in baselines:
         return 0
-    etalon_dict = {k: str(v) for k, v in baselines["polya_prediction"].items()}
+    etalon_dict = {k: str(v) for k, v in baselines[baseline_key].items()}
 
-    log.info('== Checking polyA prediction metrics ==')
+    log.info('== Checking %s prediction metrics ==' % label_human)
     quality_report_dict = load_tsv_config(quality_report)
     exit_code = 0
-    new_etalon_outf = open(os.path.join(output_folder, "new_polya_prediction_etalon.tsv"), "w")
+    etalon_name = "new_%s_prediction_etalon.tsv" % mode
+    new_etalon_outf = open(os.path.join(output_folder, etalon_name), "w")
     for k, v in etalon_dict.items():
         if k not in quality_report_dict:
             log.error("Metric %s was not found in the report" % k)
@@ -372,6 +383,14 @@ def run_polya_prediction(args, config_dict, baselines=None):
             exit_code = err_code
     new_etalon_outf.close()
     return exit_code
+
+
+def run_polya_prediction(args, config_dict, baselines=None):
+    return run_terminal_prediction(args, config_dict, baselines, mode="polya")
+
+
+def run_tss_prediction(args, config_dict, baselines=None):
+    return run_terminal_prediction(args, config_dict, baselines, mode="tss")
 
 
 def parse_gffcomapre(stats_file):
@@ -687,6 +706,8 @@ def main():
         err_codes.append(run_allinfo_quality(args, config_dict, baselines))
     if RT_POLYA_PREDICTION in run_types:
         err_codes.append(run_polya_prediction(args, config_dict, baselines))
+    if RT_TSS_PREDICTION in run_types:
+        err_codes.append(run_tss_prediction(args, config_dict, baselines))
 
     if "check_input_files" in config_dict:
         files_list = config_dict["check_input_files"].split()
