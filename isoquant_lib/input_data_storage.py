@@ -84,6 +84,7 @@ class SampleData:
         self.out_umi_filtered_tmp = self._make_aux_path(self.prefix + ".UMI_filtered")
         self.out_umi_filtered_done= self._make_aux_path(self.prefix + ".UMI_filtered.done")
         self.split_reads_fasta = self._make_path(self.prefix + ".split_reads")
+        self.out_rna_velocity_loom = self._make_path(self.prefix + "RNA_velocity_count_marix.loom")
 
     # Chromosome-specific path methods (delegate to file_naming.py)
 

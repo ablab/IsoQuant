@@ -16,6 +16,8 @@ from .long_read_counter import (
     create_transcript_counter,
 )
 from .terminal_counter import PolyACounter, TSSCounter
+from .rna_velocity_counter import RNAVelocityCounter
+from .modes import IsoQuantMode
 from .assignment_io import (
     IOSupport,
     BEDPrinter,
@@ -112,6 +114,14 @@ class ReadAssignmentAggregator:
                 tss_path = sample.get_tss_prediction_file(chr_id) if chr_id else sample.out_tss_prediction_tsv
                 self.tss_counter = TSSCounter(self.args, tss_path)
                 self.global_counter.add_counter(self.tss_counter)
+
+
+        if self.args.mode != IsoQuantMode.bulk:
+            rna_velocity_path = sample.out_rna_velocity_loom
+            self.rna_velocity_counter = RNAVelocityCounter(self.args, rna_velocity_path)
+            self.global_counter.add_counter(self.rna_velocity_counter)
+            
+
 
         if self.args.read_group and self.args.genedb:
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
