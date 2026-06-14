@@ -33,20 +33,17 @@ from .isoform_assignment import (
 )
 from .long_read_counter import AbstractCounter
 from .read_groups import AbstractReadGrouper
+from .terminal_peaks import (
+    ANNOTATION_TOLERANCE,
+    FEATURE_COLUMNS,
+    HISTOGRAM_PAD,
+    PEAK_DISTANCE,
+    PEAK_REL_HEIGHT,
+    POLYA_MODEL_PATH,
+    TSS_MODEL_PATH,
+)
 
 logger = logging.getLogger('IsoQuant')
-
-_DATA_DIR = Path(__file__).parent / "data"
-POLYA_MODEL_PATH = _DATA_DIR / "model_polya.json"
-TSS_MODEL_PATH = _DATA_DIR / "model_tss.json"
-
-# Peak finding + classification parameters. Match values used to train the
-# shipped XGBoost models -- changing these without retraining will break the
-# feature alignment between fit time and inference time.
-PEAK_DISTANCE = 10
-PEAK_REL_HEIGHT = 0.98
-HISTOGRAM_PAD = 10
-ANNOTATION_TOLERANCE = 10
 
 _ACCEPTED_ASSIGNMENT_TYPES = frozenset({
     ReadAssignmentType.unique,
@@ -54,10 +51,6 @@ _ACCEPTED_ASSIGNMENT_TYPES = frozenset({
     ReadAssignmentType.inconsistent,
     ReadAssignmentType.inconsistent_non_intronic,
 })
-
-# XGBoost feature columns (must match training)
-FEATURE_COLUMNS = ['var', 'skew', 'peak_count', 'peak_width', 'entropy',
-                   'mean_height', 'peak_heights', 'relative_height']
 
 EMPTY_COLUMNS = ['chromosome', 'transcript_id', 'gene_id', 'prediction',
                  'counts', 'flag']
