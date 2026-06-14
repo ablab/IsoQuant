@@ -31,3 +31,13 @@ class TestAdditionalCommon(unittest.TestCase):
         # Test existing program (assuming 'python' exists)
         path = get_path_to_program("python")
         self.assertTrue(os.path.exists(path))
+
+    def test_interval_bin_search(self):
+        intervals = [(10, 20), (30, 40), (50, 60)]
+        self.assertEqual(interval_bin_search(intervals, 35), 1)
+        self.assertEqual(interval_bin_search(intervals, 5), -1)
+        self.assertEqual(interval_bin_search(intervals, 100), -1)
+        # Empty intervals must not raise (regression: novel transcript in a
+        # locus with no annotated exons + a real polyA position).
+        self.assertEqual(interval_bin_search([], 100), -1)
+        self.assertEqual(interval_bin_search_rev([], 100), -1)
