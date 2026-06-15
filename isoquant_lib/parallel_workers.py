@@ -275,6 +275,10 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
             aggregator.global_printer.add_read_info(read_assignment)
             aggregator.global_counter.add_read_info(read_assignment)
 
+        # Per-gene flush of terminal (polyA/TSS) predictions: predict on this
+        # gene's read accumulation, then clear it. Other counters no-op here.
+        aggregator.global_counter.flush()
+
         if construct_models:
             strategy_names = aggregator.grouping_strategy_names if hasattr(aggregator, 'grouping_strategy_names') else []
             model_constructor = GraphBasedModelConstructor(gene_info, loader.chr_record, args,
