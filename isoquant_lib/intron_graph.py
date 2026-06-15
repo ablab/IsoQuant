@@ -424,12 +424,18 @@ class IntronGraph:
         self._attach_side(introns, polyt_starts, read_starts, read_end=False)
 
     def _attach_side(self, introns, polya_confirmed_positions, read_terminal_positions, read_end):
+        # Clustering stays the vertex SOURCE (recall identical to the ad-hoc
+        # method); the trained detector only REFINES vertex coordinates, so we
+        # never emit fewer terminal vertices than clustering alone. Detector
+        # peaks are computed before clustering, which mutates its input dict.
+        polya_detector = (self._detect_batch(introns, polya_confirmed_positions, get_polya_model)
+                          if self.use_polya_model else {})
+
         # Step 1: polyA / polyT confirmed terminal positions per intron.
-        if self.use_polya_model:
-            polya_positions = self._predict_polya_positions_batch(introns, polya_confirmed_positions, read_end)
-        else:
-            polya_positions = {intron: self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
-                               for intron in introns}
+        polya_positions = {}
+        for intron in introns:
+            clustered = self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
+            polya_positions[intron] = self._refine_positions(clustered, polya_detector.get(intron))
 
         # Step 2: per-intron read-end cutoff and the extra (non-polyA) positions.
         cutoffs = {}
@@ -459,12 +465,13 @@ class IntronGraph:
             extra_positions[intron] = extra
 
         # Step 3: read-end / TSS terminal positions per intron.
-        if self.use_tss_model:
-            terminal_positions = self._predict_terminal_positions_batch(introns, extra_positions, cutoffs)
-        else:
-            terminal_positions = {intron: self.cluster_terminal_positions(extra_positions[intron],
-                                                                          read_end=read_end, cutoff=cutoffs[intron])
-                                  for intron in introns}
+        tss_detector = (self._detect_batch(introns, extra_positions, get_tss_model)
+                        if self.use_tss_model else {})
+        terminal_positions = {}
+        for intron in introns:
+            clustered = self.cluster_terminal_positions(extra_positions[intron],
+                                                        read_end=read_end, cutoff=cutoffs[intron])
+            terminal_positions[intron] = self._refine_positions(clustered, tss_detector.get(intron))
 
         # Step 4: attach terminal vertices.
         polya_vertex = VERTEX_polya if read_end else VERTEX_polyt
@@ -476,54 +483,29 @@ class IntronGraph:
             for pos in terminal_positions[intron].keys():
                 edges[intron].add((read_vertex, pos))
 
-    def _predict_polya_positions_batch(self, introns, polya_confirmed_positions, read_end):
-        # Detect polyA / polyT peaks with the trained model, then snap each
-        # accepted peak to a nearby annotated end and apply the same abs/rel
-        # count cutoff used by cluster_polya_positions.
-        targets = [intron for intron in introns if polya_confirmed_positions.get(intron)]
-        result = {intron: {} for intron in introns}
+    def _detect_batch(self, introns, position_dicts, model_getter):
+        # Batched peak detection (one predict call per gene side) over the
+        # per-intron position histograms; returns {intron: [Peak, ...]}.
+        targets = [i for i in introns if position_dicts.get(i)]
         if not targets:
-            return result
-        histograms = [polya_confirmed_positions[intron] for intron in targets]
-        peak_lists = detect_peaks_batch(histograms, get_polya_model())
-        for intron, peaks in zip(targets, peak_lists):
-            known_positions = (self.terminal_known_positions[intron] if read_end
-                               else self.starting_known_positions[intron])
-            clustered = {}
-            for peak in peaks:
-                pos = peak.position
-                nearest, diff = find_closest(pos, known_positions)
-                if nearest is not None and diff <= self.params.apa_delta:
-                    pos = nearest
-                if (read_end and pos <= intron[1]) or (not read_end and pos >= intron[0]):
-                    # predicted position landed on the wrong side of the intron
-                    continue
-                clustered[pos] = clustered.get(pos, 0) + peak.count
-            result[intron] = self._apply_polya_cutoff(clustered)
-        return result
-
-    def _apply_polya_cutoff(self, clustered_counts):
-        if not clustered_counts:
             return {}
-        max_count = max(clustered_counts.values())
-        if max_count == self.params.terminal_position_abs:
-            return clustered_counts
-        cutoff = max(max_count * self.params.terminal_position_rel, self.params.terminal_position_abs)
-        return {position: count for position, count in clustered_counts.items() if count >= cutoff}
+        histograms = [position_dicts[i] for i in targets]
+        peak_lists = detect_peaks_batch(histograms, model_getter())
+        return dict(zip(targets, peak_lists))
 
-    def _predict_terminal_positions_batch(self, introns, extra_positions, cutoffs):
-        # Detect read-end / TSS peaks with the trained model and keep the ones
-        # above the per-intron cutoff.
-        targets = [intron for intron in introns if extra_positions.get(intron)]
-        result = {intron: {} for intron in introns}
-        if not targets:
-            return result
-        histograms = [extra_positions[intron] for intron in targets]
-        peak_lists = detect_peaks_batch(histograms, get_tss_model())
-        for intron, peaks in zip(targets, peak_lists):
-            cutoff = cutoffs[intron]
-            result[intron] = {peak.position: peak.count for peak in peaks if peak.count >= cutoff}
-        return result
+    def _refine_positions(self, clustered, detector_peaks):
+        # Snap each clustered terminal position to the nearest detected peak
+        # within apa_delta. Keeps every clustering vertex (recall-safe), only
+        # nudging coordinates toward the trained-model peak.
+        if not clustered or not detector_peaks:
+            return clustered
+        peak_positions = [p.position for p in detector_peaks]
+        refined = {}
+        for pos, count in clustered.items():
+            nearest, diff = find_closest(pos, peak_positions)
+            new_pos = nearest if (nearest is not None and diff <= self.params.apa_delta) else pos
+            refined[new_pos] = refined.get(new_pos, 0) + count
+        return refined
 
     def collect_terminal_positions(self):
         polya_ends = defaultdict(lambda: defaultdict(int))
