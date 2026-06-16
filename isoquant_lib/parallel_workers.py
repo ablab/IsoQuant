@@ -281,13 +281,21 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
 
         if construct_models:
             strategy_names = aggregator.grouping_strategy_names if hasattr(aggregator, 'grouping_strategy_names') else []
+            # Reuse this gene's polyA/TSS predictions (computed just above by
+            # flush()) to refine the intron-graph terminal vertices.
+            polya_counter = getattr(aggregator, 'polya_counter', None)
+            tss_counter = getattr(aggregator, 'tss_counter', None)
+            gene_polya_predictions = polya_counter.last_gene_predictions if polya_counter else None
+            gene_tss_predictions = tss_counter.last_gene_predictions if tss_counter else None
             model_constructor = GraphBasedModelConstructor(gene_info, loader.chr_record, args,
                                                            aggregator.transcript_model_global_counter,
                                                            aggregator.gene_model_global_counter,
                                                            transcript_id_distributor,
                                                            grouping_strategy_names=strategy_names,
                                                            use_technical_replicas=sample.use_technical_replicas,
-                                                           string_pools=string_pools)
+                                                           string_pools=string_pools,
+                                                           polya_predictions=gene_polya_predictions,
+                                                           tss_predictions=gene_tss_predictions)
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
