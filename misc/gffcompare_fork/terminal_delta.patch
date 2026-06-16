@@ -1,0 +1,84 @@
+diff --git a/gffcompare.cpp b/gffcompare.cpp
+index 2e703e9..bb3dbf6 100644
+--- a/gffcompare.cpp
++++ b/gffcompare.cpp
+@@ -58,6 +58,10 @@ gffcompare [-r <reference_mrna.gtf> [-R]] [-T] [-V] [-s <seq_path>]\n\
+     for terminal exons; code '=' is only assigned if transcript ends are\n\
+     within that range, otherwise code '~' is assigned just for intron chain\n\
+     match (or significant overlap in the case of single exon transcripts)\n\
++ --terminal-delta <d> : like --strict-match but uses <d> as the terminal-end\n\
++    tolerance for the transcript-level '=' code, INDEPENDENTLY of -e (which\n\
++    stays tied to exon-level accuracy); makes Transcript-level Sn/Sp\n\
++    end-sensitive while Intron-chain level stays end-agnostic\n\
+ \n\
+  -d max. distance (range) for grouping transcript start sites (100)\n\
+  -V verbose processing mode (also shows GFF parser warnings)\n\
+@@ -255,7 +259,7 @@ int main(int argc, char* argv[]) {
+ #endif
+ 
+   GArgs args(argc, argv,
+-		  "version;help;debug;gids;gidnames;gnames;no-merge;strict-match;"
++		  "version;help;debug;gids;gidnames;gnames;no-merge;strict-match;terminal-delta=;"
+ 		  "chr-stats;vACDSGEFJKLMNQTVRXhp:e:d:s:i:j:n:r:o:");
+   int e;
+   if ((e=args.isError())>0) {
+@@ -343,6 +347,17 @@ int main(int argc, char* argv[]) {
+ 	  exonEndRange=s.asInt();
+   if (stricterMatching)
+ 	  terminalMatchRange=exonEndRange;
++  // --terminal-delta N : enforce a terminal-end tolerance of N at the
++  // transcript level ONLY, independently of -e/exonEndRange (which stays
++  // tied to exon-level Sn/Sp). Sets terminalStrict so the '~'->'=' promotion
++  // is disabled, making Transcript-level Sn/Sp end-sensitive while
++  // Intron-chain level remains end-agnostic. Does not trigger the other
++  // --strict-match effects.
++  s=args.getOpt("terminal-delta");
++  if (!s.is_empty()) {
++	  terminalMatchRange=s.asInt();
++	  terminalStrict=true;
++  }
+ 
+   s=args.getOpt('d');
+   if (!s.is_empty()) tssDist=s.asInt();
+@@ -833,7 +848,7 @@ void compareLoci2R(GList<GLocus>& loci, GList<GSuperLocus>& cmpdata,
+ 		  char tmatch=transcriptMatch(*(super->qmrnas[i]),*(super->rmrnas[j]), ovlen, terminalMatchRange);
+ 		  //bool isTMatch=(tmatch>0);
+ 		  if (tmatch) {
+-			  if (!stricterMatching) tmatch='=';
++			  if (!stricterMatching && !terminalStrict) tmatch='=';
+ 			  //at least the intron chains match !
+ 			  if (super->qmrnas[i]->exons.Count()>1) {
+ 				  super->ichainTP++;
+@@ -1792,7 +1807,7 @@ GffObj* findRefMatch(GffObj& m, GLocus& rloc, int& ovlen) {
+ 		  }
+ 	  */
+ 	  //for class code output, '~' should be shown as '=' unless strict matching was requested!
+-	  if (eqcode=='~' && !stricterMatching) { eqcode='='; olen--; }
++	  if (eqcode=='~' && !stricterMatching && !terminalStrict) { eqcode='='; olen--; }
+ 	  mdata->addOvl(eqcode,rloc.mrnas[r], olen);
+       //this must be called only for the head of an equivalency chain
+       CTData* rdata=(CTData*)rloc.mrnas[r]->uptr;
+diff --git a/gtf_tracking.cpp b/gtf_tracking.cpp
+index e4fcc28..ad1b041 100644
+--- a/gtf_tracking.cpp
++++ b/gtf_tracking.cpp
+@@ -10,6 +10,7 @@ bool reduceRefs=false; //-R
+ bool qDupStrict=false;
+ bool stricterMatching=false;
+ int terminalMatchRange=0;
++bool terminalStrict=false; // --terminal-delta: enforce terminal range at transcript level only
+ bool noMergeCloseExons=false;
+ bool debug=false;
+ 
+diff --git a/gtf_tracking.h b/gtf_tracking.h
+index 786f9a1..43fcb07 100644
+--- a/gtf_tracking.h
++++ b/gtf_tracking.h
+@@ -19,6 +19,7 @@ extern bool gtf_tracking_largeScale;
+ extern bool qDupStrict;
+ extern bool stricterMatching;
+ extern int terminalMatchRange;
++extern bool terminalStrict;
+ extern bool noMergeCloseExons;
+ extern bool debug;
+ extern bool reduceRefs;

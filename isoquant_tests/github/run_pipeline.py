@@ -429,33 +429,43 @@ def run_transcript_quality(args, config_dict, baselines=None):
         log.error("Transcript evaluation exited with non-zero status: %d" % result.returncode)
         return -21
 
-    # Get etalon values from YAML baselines or external file
-    if baselines and "transcripts" in baselines:
-        etalon_qaulity_dict = {k: str(v) for k, v in baselines["transcripts"].items()}
-    elif "etalon" in config_dict:
-        etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
-    else:
+    # Transcript-level accuracy is scored at three terminal-end tolerances:
+    # the default end-agnostic match plus --terminal-delta 50/10 (end-sensitive,
+    # produced by reduced_db_gffcompare.py via the gffcompare fork). Each maps
+    # to its own baseline block. See .claude/GFFCOMPARE.md. A variant is checked
+    # only if its baseline block exists and its stats file was produced (so a
+    # stock gffcompare without --terminal-delta degrades to the default only).
+    delta_variants = [("", "transcripts"),
+                      (".td50", "transcripts_td50"),
+                      (".td10", "transcripts_td10")]
+    if not (baselines and any(k in baselines for _, k in delta_variants)) \
+            and "etalon" not in config_dict:
         return 0
 
     log.info('== Checking quality metrics ==')
     exit_code = 0
     new_etalon_outf = open(os.path.join(quality_output, "new_gtf_etalon.tsv"), "w")
-    for gtf_type in ['full', 'known', 'novel']:
-        recall, precision = parse_gffcomapre(os.path.join(quality_output, "isoquant." + gtf_type + ".stats"))
-        metric_name = gtf_type + "_recall"
-        if metric_name in etalon_qaulity_dict:
-            new_etalon_outf.write("%s\t%.2f\n" % (metric_name, recall))
-            etalon_recall = float(etalon_qaulity_dict[metric_name])
-            err_code = check_value(etalon_recall, recall , metric_name)
-            if err_code != 0:
-                exit_code = err_code
-        metric_name = gtf_type + "_precision"
-        if metric_name in etalon_qaulity_dict:
-            new_etalon_outf.write("%s\t%.2f\n" % (metric_name, precision))
-            etalon_precision = float(etalon_qaulity_dict[metric_name])
-            err_code = check_value(etalon_precision, precision, metric_name)
-            if err_code != 0:
-                exit_code = err_code
+    for stats_suffix, baseline_key in delta_variants:
+        if baselines and baseline_key in baselines:
+            etalon_qaulity_dict = {k: str(v) for k, v in baselines[baseline_key].items()}
+        elif baseline_key == "transcripts" and "etalon" in config_dict:
+            etalon_qaulity_dict = load_tsv_config(fix_path(config_file, config_dict["etalon"]))
+        else:
+            continue
+        for gtf_type in ['full', 'known', 'novel']:
+            stats_path = os.path.join(quality_output, "isoquant.%s%s.stats" % (gtf_type, stats_suffix))
+            if not os.path.exists(stats_path):
+                continue
+            recall, precision = parse_gffcomapre(stats_path)
+            for metric_value, suffix in ((recall, "_recall"), (precision, "_precision")):
+                metric_name = gtf_type + suffix
+                if metric_name not in etalon_qaulity_dict:
+                    continue
+                new_etalon_outf.write("%s.%s\t%.2f\n" % (baseline_key, metric_name, metric_value))
+                err_code = check_value(float(etalon_qaulity_dict[metric_name]), metric_value,
+                                       baseline_key + "." + metric_name)
+                if err_code != 0:
+                    exit_code = err_code
     new_etalon_outf.close()
     return exit_code
 

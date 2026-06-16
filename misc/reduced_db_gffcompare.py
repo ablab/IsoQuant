@@ -15,6 +15,11 @@ from traceback import print_exc
 from common import *
 
 
+# Terminal-end tolerances (bp) for transcript-level matching. None = default
+# end-agnostic match; the integers use the gffcompare fork's --terminal-delta.
+TERMINAL_DELTAS = [None, 50, 10]
+
+
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="output folder", default="gtf_stats")
@@ -41,15 +46,26 @@ def main():
     print("Seprating known and novel transcripts")
     separator = SEPARATE_FUNCTORS[args.tool](args.gtf)
     split_gtf(args.gtf, separator, out_full_path, out_known_path, out_novel_path)
-    print("Running gffcompare for entire GTF")
-    expressed_gtf = args.genedb + ".expressed.gtf"
-    run_gff_compare(expressed_gtf, out_full_path, os.path.join(args.output, args.tool + ".full.stats"))
-    print("Running gffcompare for known transcripts")
-    expressed_gtf = args.genedb + ".expressed_kept.gtf"
-    run_gff_compare(expressed_gtf, out_known_path, os.path.join(args.output, args.tool + ".known.stats"))
-    print("Running gffcompare for novel transcripts")
-    expressed_gtf = args.genedb + ".excluded.gtf"
-    run_gff_compare(expressed_gtf, out_novel_path, os.path.join(args.output, args.tool + ".novel.stats"))
+
+    # (split, reference subset, query split GTF)
+    splits = [
+        ("full",  args.genedb + ".expressed.gtf",      out_full_path),
+        ("known", args.genedb + ".expressed_kept.gtf", out_known_path),
+        ("novel", args.genedb + ".excluded.gtf",       out_novel_path),
+    ]
+    # Score each split at several terminal-end tolerances. None = default
+    # end-agnostic transcript match (-> "<tool>.<split>.stats"); the integer
+    # deltas use the gffcompare fork's --terminal-delta so the transcript-level
+    # metric becomes end-sensitive (-> "<tool>.<split>.td<delta>.stats").
+    # See .claude/GFFCOMPARE.md. Requires the gffcompare fork for the deltas;
+    # the default run works with stock gffcompare too.
+    for split, reference_gtf, compared_gtf in splits:
+        for delta in TERMINAL_DELTAS:
+            suffix = "" if delta is None else (".td%d" % delta)
+            option = "" if delta is None else ("--terminal-delta=%d" % delta)
+            out_stats = os.path.join(args.output, "%s.%s%s.stats" % (args.tool, split, suffix))
+            print("Running gffcompare for %s transcripts (terminal-delta=%s)" % (split, delta))
+            run_gff_compare(reference_gtf, compared_gtf, out_stats, additional_option=option)
 
 
 if __name__ == "__main__":
