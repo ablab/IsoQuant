@@ -119,6 +119,10 @@ class TerminalCounter(AbstractCounter):
         # Per-gene prediction rows buffered by flush() for the ungrouped
         # counter; concatenated and written once in dump().
         self._pending: list = []
+        # Genomic positions predicted for the most recently flushed gene, so
+        # transcript discovery can reuse them to refine intron-graph terminal
+        # vertices (set by flush()).
+        self.last_gene_predictions: list = []
 
     @property
     def model(self) -> XGBClassifier:
@@ -221,6 +225,9 @@ class TerminalCounter(AbstractCounter):
         rows = self._predict_rows()
         if rows is not None:
             self._pending.append(rows)
+            self.last_gene_predictions = rows['prediction'].tolist()
+        else:
+            self.last_gene_predictions = []
         self.transcripts = {}
 
     def dump(self) -> None:

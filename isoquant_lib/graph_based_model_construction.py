@@ -53,12 +53,19 @@ class GraphBasedModelConstructor:
     def __init__(self, gene_info, chr_record, args, transcript_counter, gene_counter, id_distributor,
                  grouping_strategy_names=None,
                  use_technical_replicas=False,
-                 string_pools=None):
+                 string_pools=None,
+                 polya_predictions=None,
+                 tss_predictions=None):
         self.gene_info = gene_info
         self.chr_record = chr_record
         self.args = args
         self.id_distributor = id_distributor
         self.string_pools = string_pools
+        # Predicted polyA / TSS sites for this gene (genomic positions), reused
+        # from the per-gene terminal-position counters to refine intron-graph
+        # terminal vertices.
+        self.polya_predictions = polya_predictions
+        self.tss_predictions = tss_predictions
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else []
         self.use_technical_replicas = use_technical_replicas
         # Find file_name group index for technical replicas check
@@ -125,7 +132,9 @@ class GraphBasedModelConstructor:
         return None
 
     def process(self, read_assignment_storage):
-        self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage)
+        self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage,
+                                        polya_predictions=self.polya_predictions,
+                                        tss_predictions=self.tss_predictions)
         self.path_processor = IntronPathProcessor(self.args, self.intron_graph)
         self.path_storage = IntronPathStorage(self.args, self.path_processor)
         self.path_storage.fill(read_assignment_storage)

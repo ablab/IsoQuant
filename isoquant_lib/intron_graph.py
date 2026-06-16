@@ -10,7 +10,6 @@ import queue
 from collections import defaultdict
 
 from .common import find_closest, overlaps
-from .terminal_peaks import detect_peaks_batch, get_polya_model, get_tss_model
 
 logger = logging.getLogger('IsoQuant')
 
@@ -136,17 +135,19 @@ class IntronCollector:
 
 
 class IntronGraph:
-    def __init__(self, params, gene_info, read_assignments):
+    def __init__(self, params, gene_info, read_assignments,
+                 polya_predictions=None, tss_predictions=None):
         self.params = params
         self.gene_info = gene_info
         self.read_assignments = read_assignments
 
-        # Use the trained polyA / TSS detectors for terminal vertices instead
-        # of ad-hoc clustering. polyA needs the annotation (snap to known
-        # ends); TSS additionally needs full-length data, matching the gating
-        # of the polyA/TSS prediction counters.
-        self.use_polya_model = bool(getattr(params, 'genedb', None))
-        self.use_tss_model = self.use_polya_model and bool(getattr(params, 'fl_data', False))
+        # Predicted polyA / TSS sites for this gene (genomic positions), reused
+        # from the per-gene terminal-position counters. Clustering stays the
+        # terminal-vertex SOURCE; these only refine vertex coordinates (snap to
+        # the nearest predicted site). None when unavailable (no annotation for
+        # polyA, no --fl_data for TSS) -> no refinement, pure clustering.
+        self.polya_predictions = polya_predictions
+        self.tss_predictions = tss_predictions
 
         self.incoming_edges = defaultdict(set)
         self.outgoing_edges = defaultdict(set)
@@ -425,17 +426,15 @@ class IntronGraph:
 
     def _attach_side(self, introns, polya_confirmed_positions, read_terminal_positions, read_end):
         # Clustering stays the vertex SOURCE (recall identical to the ad-hoc
-        # method); the trained detector only REFINES vertex coordinates, so we
-        # never emit fewer terminal vertices than clustering alone. Detector
-        # peaks are computed before clustering, which mutates its input dict.
-        polya_detector = (self._detect_batch(introns, polya_confirmed_positions, get_polya_model)
-                          if self.use_polya_model else {})
+        # method); the predicted polyA / TSS sites (reused from the per-gene
+        # terminal-position counters) only REFINE vertex coordinates, so we
+        # never emit fewer terminal vertices than clustering alone.
 
         # Step 1: polyA / polyT confirmed terminal positions per intron.
         polya_positions = {}
         for intron in introns:
             clustered = self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
-            polya_positions[intron] = self._refine_positions(clustered, polya_detector.get(intron))
+            polya_positions[intron] = self._refine_positions(clustered, self.polya_predictions)
 
         # Step 2: per-intron read-end cutoff and the extra (non-polyA) positions.
         cutoffs = {}
@@ -465,13 +464,11 @@ class IntronGraph:
             extra_positions[intron] = extra
 
         # Step 3: read-end / TSS terminal positions per intron.
-        tss_detector = (self._detect_batch(introns, extra_positions, get_tss_model)
-                        if self.use_tss_model else {})
         terminal_positions = {}
         for intron in introns:
             clustered = self.cluster_terminal_positions(extra_positions[intron],
                                                         read_end=read_end, cutoff=cutoffs[intron])
-            terminal_positions[intron] = self._refine_positions(clustered, tss_detector.get(intron))
+            terminal_positions[intron] = self._refine_positions(clustered, self.tss_predictions)
 
         # Step 4: attach terminal vertices.
         polya_vertex = VERTEX_polya if read_end else VERTEX_polyt
@@ -483,26 +480,15 @@ class IntronGraph:
             for pos in terminal_positions[intron].keys():
                 edges[intron].add((read_vertex, pos))
 
-    def _detect_batch(self, introns, position_dicts, model_getter):
-        # Batched peak detection (one predict call per gene side) over the
-        # per-intron position histograms; returns {intron: [Peak, ...]}.
-        targets = [i for i in introns if position_dicts.get(i)]
-        if not targets:
-            return {}
-        histograms = [position_dicts[i] for i in targets]
-        peak_lists = detect_peaks_batch(histograms, model_getter())
-        return dict(zip(targets, peak_lists))
-
-    def _refine_positions(self, clustered, detector_peaks):
-        # Snap each clustered terminal position to the nearest detected peak
-        # within apa_delta. Keeps every clustering vertex (recall-safe), only
-        # nudging coordinates toward the trained-model peak.
-        if not clustered or not detector_peaks:
+    def _refine_positions(self, clustered, predicted_positions):
+        # Snap each clustered terminal position to the nearest predicted polyA /
+        # TSS site within apa_delta. Keeps every clustering vertex (recall-safe),
+        # only nudging coordinates toward the predicted site.
+        if not clustered or not predicted_positions:
             return clustered
-        peak_positions = [p.position for p in detector_peaks]
         refined = {}
         for pos, count in clustered.items():
-            nearest, diff = find_closest(pos, peak_positions)
+            nearest, diff = find_closest(pos, predicted_positions)
             new_pos = nearest if (nearest is not None and diff <= self.params.apa_delta) else pos
             refined[new_pos] = refined.get(new_pos, 0) + count
         return refined
