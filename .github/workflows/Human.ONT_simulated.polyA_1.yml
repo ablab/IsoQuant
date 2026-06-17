@@ -72,5 +72,5 @@ jobs:
         env:
           STEP_NAME: Human.ONT_simulated.polyA_1
         run: |
-          export PATH=$PATH:${{env.BIN_PATH}}
+          export PATH=${{env.BIN_PATH}}:$PATH
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
