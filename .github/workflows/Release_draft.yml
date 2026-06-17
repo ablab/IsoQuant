@@ -1,0 +1,64 @@
+name: Release draft
+
+on:
+  workflow_dispatch:        # manual only — intentionally no `push: tags`
+
+permissions:
+  contents: write           # required for gh release create
+
+jobs:
+  release-draft:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+          sudo apt-get update && sudo apt-get install -y minimap2 samtools
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Read version
+        run: echo "VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
+
+      # --- Step 1: unit tests, BEFORE packaging, from the full checkout ---
+      - name: Unit tests (tox)
+        run: python -m tox
+
+      # --- Step 2: build the source archive ---
+      - name: Build source archive
+        run: bash make-targz.sh        # -> IsoQuant-${VERSION}.tar.gz
+
+      # --- Step 3: unpack and smoke-test the shipped artifact ---
+      - name: Unpack archive
+        run: tar -xzf "IsoQuant-${VERSION}.tar.gz"
+
+      - name: Smoke test (isoquant.py --test) on unpacked archive
+        working-directory: IsoQuant-${{ env.VERSION }}
+        run: python3 isoquant.py --test
+
+      # --- Step 4: changelog notes + release draft ---
+      - name: Extract latest changelog section
+        run: awk '/^## /{c++} c==1' changelog.md > release_notes.md
+
+      - name: Create release draft
+        run: |
+          tag="v${VERSION}"
+          # idempotent re-runs: remove a previous *draft* for this tag, if any
+          if gh release view "$tag" --json isDraft -q .isDraft 2>/dev/null | grep -q true; then
+            gh release delete "$tag" --yes
+          fi
+          gh release create "$tag" \
+            --draft \
+            --target "${{ github.ref_name }}" \
+            --title "IsoQuant ${VERSION}" \
+            --notes-file release_notes.md \
+            "IsoQuant-${VERSION}.tar.gz"
