@@ -58,7 +58,7 @@ jobs:
           fi
           gh release create "$tag" \
             --draft \
-            --target "${{ github.ref_name }}" \
+            --target "${{ github.sha }}" \
             --title "IsoQuant ${VERSION}" \
             --notes-file release_notes.md \
             "IsoQuant-${VERSION}.tar.gz"
