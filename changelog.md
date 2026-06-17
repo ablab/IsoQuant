@@ -1,5 +1,9 @@
 # IsoQuant changelog
 
+## IsoQuant 3.13.1, 17 June 2026
+
+- Fixed duplicated exon and intron counts ([#394](https://github.com/ablab/IsoQuant/issues/394)).
+
 ## IsoQuant 3.13.0, 24 April 2026
 
 - Improved recall for 10x single-cell barcode calling;
