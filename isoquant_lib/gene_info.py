@@ -19,7 +19,6 @@ from .common import (
     overlaps,
     junctions_from_blocks
 )
-from .id_policy import SimpleIDDistributor
 
 logger = logging.getLogger('IsoQuant')
 
@@ -120,16 +119,17 @@ class FeatureProfiles:
 
 # exon/intron info
 class FeatureInfo:
-    feature_id_counter = SimpleIDDistributor()
     def __init__(self, chr_id, start, end, strand, type, gene_ids):
-        self.id = FeatureInfo.feature_id_counter.increment()
+        # Coordinate-based identity so the same physical feature gets the same id
+        # across separate GeneInfo builds (e.g. a gene split across coverage-valley
+        # sub-regions). Counts then merge instead of producing duplicate rows.
+        self.id = (chr_id, start, end, strand)
         self.chr_id = chr_id
         self.start = start
         self.end = end
         self.strand = strand
         self.type = type
         self.gene_ids = gene_ids
-        #self.id = "%s_%d_%d_%s" % (self.chr_id, self.start, self.end, self.strand)
 
     @staticmethod
     def header():
