@@ -71,6 +71,16 @@ class GraphBasedModelConstructor:
         # Find file_name group index for technical replicas check
         self.file_name_group_idx = self.grouping_strategy_names.index("file_name") if "file_name" in self.grouping_strategy_names else -1
 
+        # Opt-in (default off): when an FL path's chain matches a reference but a
+        # refined terminal vertex differs from the annotated end by > apa_delta,
+        # emit a novel-in-catalog model with the refined ends instead of the
+        # annotated reference (alternative polyA/TSS discovery).
+        self.refine_ends = bool(getattr(args, 'refine_transcript_ends', False))
+        # The 5' (TSS) side may only drive an alternative-end NIC when there is
+        # full-length evidence; otherwise read starts are unreliable and the 5'
+        # end is left at the annotation (polyA side needs only --genedb).
+        self.refine_tss = self.refine_ends and bool(getattr(args, 'fl_data', False))
+
         self.strand_detector = StrandDetector(self.chr_record)
         self.intron_genes = defaultdict(set)
         self.set_gene_properties()
@@ -429,6 +439,49 @@ class GraphBasedModelConstructor:
         self.internal_counter[transcript_id] += 1
         self.read_assignment_counts[read_id] += 1
 
+    def _reference_isoform_for_path(self, assignment, path, intron_path, transcript_range):
+        # Reference isoform whose intron chain matches this path. It is reported
+        # as the annotated known UNLESS a *detected polyA* terminal vertex
+        # (VERTEX_polya / VERTEX_polyt) disagrees with the annotated end by more
+        # than apa_delta -> then the caller emits a novel-in-catalog isoform with
+        # the refined ends. A bare read_end / read_start (no polyA evidence, e.g.
+        # a degraded ONT terminus) never triggers reclassification, so known
+        # transcripts are not lost to noise.
+        if is_matching_assignment(assignment):
+            matched_reference_id = assignment.isoform_matches[0].assigned_transcript
+        elif intron_path in self.known_isoforms_in_graph:
+            matched_reference_id = self.known_isoforms_in_graph[intron_path]
+        else:
+            return None
+
+        if matched_reference_id is None or \
+                matched_reference_id not in self.gene_info.all_isoforms_exons:
+            return None
+
+        ref_exons = self.gene_info.all_isoforms_exons[matched_reference_id]
+        left_diff = abs(transcript_range[0] - ref_exons[0][0]) > self.args.apa_delta
+        right_diff = abs(transcript_range[1] - ref_exons[-1][1]) > self.args.apa_delta
+
+        # PolyA side: a detected polyA vertex (VERTEX_polyt on the genomic-left
+        # 3' end of a '-' transcript, VERTEX_polya on the genomic-right 3' end of
+        # a '+' transcript) that disagrees with the annotation -> alternative
+        # polyA NIC. Bare read termini never trigger here (degraded-end safety).
+        if path[0][0] == VERTEX_polyt and left_diff:
+            return None
+        if path[-1][0] == VERTEX_polya and right_diff:
+            return None
+
+        # TSS side: only with full-length evidence (--fl_data). The 5' end is the
+        # genomic-left read_start for '+' and the genomic-right read_end for '-'.
+        if self.refine_tss:
+            strand = self.gene_info.isoform_strands.get(matched_reference_id, '.')
+            if strand == '+' and path[0][0] == VERTEX_read_start and left_diff:
+                return None
+            if strand == '-' and path[-1][0] == VERTEX_read_end and right_diff:
+                return None
+
+        return matched_reference_id
+
     def construct_fl_isoforms(self):
         # a minor trick to compare tuples of pairs, whose starting and terminating elements have different type
         logger.debug("Total FL paths %d" % len(self.path_storage.fl_paths))
@@ -458,7 +511,13 @@ class GraphBasedModelConstructor:
             # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
             #             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
 
-            if is_matching_assignment(assignment):
+            if self.refine_ends:
+                # use the path's goal-1-refined terminal vertices: keep the
+                # reference only when both ends agree with the annotation within
+                # apa_delta, otherwise fall through to the novel branch below to
+                # emit an alternative-end NIC built from the refined exons
+                reference_isoform = self._reference_isoform_for_path(assignment, path, intron_path, transcript_range)
+            elif is_matching_assignment(assignment):
                 reference_isoform = assignment.isoform_matches[0].assigned_transcript
                 # logger.debug("uuu Substituting with known isoform %s" % reference_isoform)
             elif intron_path in self.known_isoforms_in_graph:

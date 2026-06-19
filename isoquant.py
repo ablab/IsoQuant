@@ -360,6 +360,14 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--collect_tss_training", type=str, default=None,
                       help="Developer: dump per-peak features + true_peak label for TSS training to this CSV path.")
 
+    # Developer: when an FL path's intron chain matches a reference but its
+    # (goal-1-refined) terminal vertex differs from the annotated end by more
+    # than apa_delta, emit a novel-in-catalog model with the refined ends
+    # instead of the annotated reference. Off by default so default discovery
+    # output is unchanged.
+    add_hidden_option("--refine_transcript_ends", action="store_true", default=False,
+                      help="Developer: emit alternative-end NIC models when refined path ends differ from the reference.")
+
     isoquant_version = "3.12.0"
     try:
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
