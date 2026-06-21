@@ -368,6 +368,12 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--refine_transcript_ends", action="store_true", default=False,
                       help="Developer: emit alternative-end NIC models when refined path ends differ from the reference.")
 
+    # Developer: with --refine_transcript_ends, also spin off alternative-end
+    # isoforms for novel (non-reference) transcripts in the post-construction
+    # pass, not only known ones. Off by default.
+    add_hidden_option("--novel_apa", action="store_true", default=False,
+                      help="Developer: extend alternative-end isoform creation to novel transcripts too.")
+
     isoquant_version = "3.12.0"
     try:
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
