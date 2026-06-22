@@ -72,16 +72,18 @@ class GraphBasedModelConstructor:
         # Find file_name group index for technical replicas check
         self.file_name_group_idx = self.grouping_strategy_names.index("file_name") if "file_name" in self.grouping_strategy_names else -1
 
-        # Opt-in (default off): when an FL path's chain matches a reference but a
-        # refined terminal vertex differs from the annotated end by > apa_delta,
-        # emit a novel-in-catalog model with the refined ends instead of the
-        # annotated reference (alternative polyA/TSS discovery).
-        self.refine_ends = bool(getattr(args, 'refine_transcript_ends', False))
+        # Alternative polyA/TSS isoform discovery (default ON whenever an
+        # annotation is given): when a transcript's refined terminal differs from
+        # the annotated end by > apa_delta, emit a novel-in-catalog model with the
+        # refined ends. Inactive without --genedb (no known transcripts to refine
+        # against, and pure de-novo end handling is left unchanged).
+        self.refine_ends = bool(getattr(args, 'genedb', None))
         # The 5' (TSS) side may only drive an alternative-end NIC when there is
         # full-length evidence; otherwise read starts are unreliable and the 5'
         # end is left at the annotation (polyA side needs only --genedb).
         self.refine_tss = self.refine_ends and bool(getattr(args, 'fl_data', False))
-        # Part 3: also create alternative-end isoforms for novel transcripts.
+        # Opt-in (--novel_apa, default off): also create alternative-end isoforms
+        # for novel (non-reference) transcripts, not only known ones.
         self.novel_apa = self.refine_ends and bool(getattr(args, 'novel_apa', False))
 
         self.strand_detector = StrandDetector(self.chr_record)
