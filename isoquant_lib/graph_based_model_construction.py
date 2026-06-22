@@ -935,22 +935,9 @@ class GraphBasedModelConstructor:
         last_exon_left = transcript_model.exon_blocks[-1][0]
         strand = transcript_model.strand
 
-        start_supported = False
-        end_supported = False
-        start_hist = defaultdict(int)
-        end_hist = defaultdict(int)
-        for assignment in assigned_reads:
-            read_exons = assignment.corrected_exons
-            read_start = read_exons[0][0]
-            read_end = read_exons[-1][1]
-            if abs(read_start - transcript_start) <= self.args.apa_delta:
-                start_supported = True
-            if abs(read_end - transcript_end) <= self.args.apa_delta:
-                end_supported = True
-            if read_start < first_exon_right:
-                start_hist[read_start] += 1
-            if read_end > last_exon_left:
-                end_hist[read_end] += 1
+        start_hist, end_hist = self._terminal_histograms(transcript_model, assigned_reads)
+        start_supported = any(abs(p - transcript_start) <= self.args.apa_delta for p in start_hist)
+        end_supported = any(abs(p - transcript_end) <= self.args.apa_delta for p in end_hist)
 
         if not start_supported:
             model = self._terminal_model(strand, left=True)
@@ -1009,6 +996,53 @@ class GraphBasedModelConstructor:
             if not greater and pos < boundary:
                 return pos
         return None
+
+    @staticmethod
+    def _confirmed_polya_pos(assignment, strand):
+        # Detected polyA cleavage site of a read, matching the trained-model
+        # domain (PolyACounter): only polyA-confirmed reads, at external_polya_pos
+        # ('+') / external_polyt_pos ('-'). None otherwise.
+        info = getattr(assignment, 'polya_info', None)
+        if not getattr(assignment, 'polyA_found', False) or info is None:
+            return None
+        if strand == '+' and info.external_polya_pos != -1:
+            return info.external_polya_pos
+        if strand == '-' and info.external_polyt_pos != -1:
+            return info.external_polyt_pos
+        return None
+
+    def _terminal_histograms(self, source_model, assigned_reads):
+        # Build genomic-left (start) and genomic-right (end) read-terminus
+        # histograms matching what each trained model was fit on:
+        #   - 3' polyA side: polyA-CONFIRMED reads at the detected cleavage site
+        #     (so a low overall polyA rate naturally raises the support bar);
+        #   - 5' TSS side: all stranded reads' alignment ends.
+        # Unstranded -> alignment ends on both sides (no polyA orientation).
+        strand = source_model.strand
+        first_exon_right = source_model.exon_blocks[0][1]
+        last_exon_left = source_model.exon_blocks[-1][0]
+        start_hist = defaultdict(int)
+        end_hist = defaultdict(int)
+        for a in assigned_reads:
+            ex = a.corrected_exons
+            if strand == '+':
+                if ex[0][0] < first_exon_right:           # 5' TSS (all reads)
+                    start_hist[ex[0][0]] += 1
+                pos = self._confirmed_polya_pos(a, '+')   # 3' polyA (confirmed)
+                if pos is not None and pos > last_exon_left:
+                    end_hist[pos] += 1
+            elif strand == '-':
+                pos = self._confirmed_polya_pos(a, '-')   # 3' polyA (confirmed)
+                if pos is not None and pos < first_exon_right:
+                    start_hist[pos] += 1
+                if ex[-1][1] > last_exon_left:            # 5' TSS (all reads)
+                    end_hist[ex[-1][1]] += 1
+            else:
+                if ex[0][0] < first_exon_right:
+                    start_hist[ex[0][0]] += 1
+                if ex[-1][1] > last_exon_left:
+                    end_hist[ex[-1][1]] += 1
+        return start_hist, end_hist
 
     @staticmethod
     def _intron_chain_key(model):
@@ -1110,16 +1144,7 @@ class GraphBasedModelConstructor:
                         if source_model.transcript_type == TranscriptModelType.known
                         else source_model.transcript_type)
 
-        start_hist = defaultdict(int)
-        end_hist = defaultdict(int)
-        for assignment in assigned_reads:
-            read_exons = assignment.corrected_exons
-            read_start = read_exons[0][0]
-            read_end = read_exons[-1][1]
-            if read_start < first_exon_right:
-                start_hist[read_start] += 1
-            if read_end > last_exon_left:
-                end_hist[read_end] += 1
+        start_hist, end_hist = self._terminal_histograms(source_model, assigned_reads)
 
         new_models = []
         start_model = self._terminal_model(strand, left=True)
@@ -1136,21 +1161,21 @@ class GraphBasedModelConstructor:
 
     def _alternative_end_positions(self, histogram, model, annotated_pos, clamp):
         # Detected peaks representing a genuine alternative end: inside the
-        # terminal exon, > apa_delta from the annotated end, and supported by at
-        # least the novel cutoff (on top of the XGBoost filter).
+        # terminal exon, > apa_delta from the annotated end, and clearing BOTH an
+        # absolute (min_novel_count) and a RELATIVE support cutoff. The relative
+        # cutoff (terminal_position_rel x the transcript's dominant terminal peak,
+        # reusing the intron-graph terminal threshold) rejects minor secondary
+        # peaks that are not real co-expressed isoforms and self-normalizes per
+        # transcript, so it does not depend on absolute depth or fit one isoform.
         if not histogram:
             return []
-        cutoff = max(self.args.min_novel_count, 1)
-        positions = []
-        for peak in detect_peaks(histogram, model):
-            if not clamp(peak.position):
-                continue
-            if abs(peak.position - annotated_pos) <= self.args.apa_delta:
-                continue
-            if peak.count < cutoff:
-                continue
-            positions.append(peak.position)
-        return positions
+        peaks = [p for p in detect_peaks(histogram, model) if clamp(p.position)]
+        if not peaks:
+            return []
+        dominant = max(p.count for p in peaks)
+        cutoff = max(self.args.min_novel_count, self.args.terminal_position_rel * dominant)
+        return [p.position for p in peaks
+                if abs(p.position - annotated_pos) > self.args.apa_delta and p.count >= cutoff]
 
     def _nic_model_with_boundary(self, source_model, transcript_type, start=None, end=None):
         # Build an alternative-end model from a source one by replacing a single
