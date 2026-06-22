@@ -360,17 +360,9 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--collect_tss_training", type=str, default=None,
                       help="Developer: dump per-peak features + true_peak label for TSS training to this CSV path.")
 
-    # Developer: when an FL path's intron chain matches a reference but its
-    # (goal-1-refined) terminal vertex differs from the annotated end by more
-    # than apa_delta, emit a novel-in-catalog model with the refined ends
-    # instead of the annotated reference. Off by default so default discovery
-    # output is unchanged.
-    add_hidden_option("--refine_transcript_ends", action="store_true", default=False,
-                      help="Developer: emit alternative-end NIC models when refined path ends differ from the reference.")
-
-    # Developer: with --refine_transcript_ends, also spin off alternative-end
-    # isoforms for novel (non-reference) transcripts in the post-construction
-    # pass, not only known ones. Off by default.
+    # Alternative-polyA/TSS isoform discovery is default ON when an annotation is
+    # given (--genedb). --novel_apa (default off) extends it to novel
+    # (non-reference) transcripts, not only known ones.
     add_hidden_option("--novel_apa", action="store_true", default=False,
                       help="Developer: extend alternative-end isoform creation to novel transcripts too.")
 
