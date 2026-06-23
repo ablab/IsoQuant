@@ -72,19 +72,21 @@ class GraphBasedModelConstructor:
         # Find file_name group index for technical replicas check
         self.file_name_group_idx = self.grouping_strategy_names.index("file_name") if "file_name" in self.grouping_strategy_names else -1
 
-        # Alternative polyA/TSS isoform discovery (default ON whenever an
-        # annotation is given): when a transcript's refined terminal differs from
-        # the annotated end by > apa_delta, emit a novel-in-catalog model with the
-        # refined ends. Inactive without --genedb (no known transcripts to refine
-        # against, and pure de-novo end handling is left unchanged).
-        self.refine_ends = bool(getattr(args, 'genedb', None))
-        # The 5' (TSS) side may only drive an alternative-end NIC when there is
-        # full-length evidence; otherwise read starts are unreliable and the 5'
-        # end is left at the annotation (polyA side needs only --genedb).
-        self.refine_tss = self.refine_ends and bool(getattr(args, 'fl_data', False))
+        # Transcript-end polishing: always refine constructed (novel) model ends
+        # to the trained polyA/TSS peaks. Runs with or without an annotation
+        # (needs only the shipped detector + the model's own reads); never
+        # creates or drops models.
+        self.polish_ends = True
+        # Alternative-end NIC *creation* (graph-level reclassification +
+        # post-pass known->NIC) requires an annotation to refine against, so it
+        # is gated on --genedb. Keeps the with-genedb behaviour unchanged.
+        self.create_nics = bool(getattr(args, 'genedb', None))
+        # TSS model is used (for polishing and for NIC creation) only with
+        # full-length evidence; read starts are unreliable otherwise.
+        self.use_tss_model = bool(getattr(args, 'fl_data', False))
         # Opt-in (--novel_apa, default off): also create alternative-end isoforms
-        # for novel (non-reference) transcripts, not only known ones.
-        self.novel_apa = self.refine_ends and bool(getattr(args, 'novel_apa', False))
+        # for novel (non-reference) transcripts; works with or without --genedb.
+        self.novel_apa = bool(getattr(args, 'novel_apa', False))
 
         self.strand_detector = StrandDetector(self.chr_record)
         self.intron_genes = defaultdict(set)
@@ -390,7 +392,7 @@ class GraphBasedModelConstructor:
             filtered_storage.append(model)
 
         self.transcript_model_storage = filtered_storage
-        if self.refine_ends:
+        if self.create_nics or self.novel_apa:
             self._add_known_alternative_end_models()
             self._drop_duplicate_alt_end_models()
 
@@ -481,7 +483,7 @@ class GraphBasedModelConstructor:
 
         # TSS side: only with full-length evidence (--fl_data). The 5' end is the
         # genomic-left read_start for '+' and the genomic-right read_end for '-'.
-        if self.refine_tss:
+        if self.use_tss_model:
             strand = self.gene_info.isoform_strands.get(matched_reference_id, '.')
             if strand == '+' and path[0][0] == VERTEX_read_start and left_diff:
                 return None
@@ -519,7 +521,7 @@ class GraphBasedModelConstructor:
             # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
             #             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
 
-            if self.refine_ends:
+            if self.create_nics:
                 # use the path's goal-1-refined terminal vertices: keep the
                 # reference only when both ends agree with the annotation within
                 # apa_delta, otherwise fall through to the novel branch below to
@@ -873,7 +875,7 @@ class GraphBasedModelConstructor:
                 self.read_assignment_counts[read_id] = 0
 
     def correct_novel_transcript_ends(self, transcript_model, assigned_reads):
-        if self.refine_ends:
+        if self.polish_ends:
             self._refine_novel_transcript_ends(transcript_model, assigned_reads)
         else:
             self._correct_novel_transcript_ends_simple(transcript_model, assigned_reads)
@@ -927,7 +929,7 @@ class GraphBasedModelConstructor:
         # histograms from this model's own reads and snap each unsupported terminal
         # exon end to the dominant confident polyA/TSS peak (XGBoost detect_peaks);
         # both ends are refined in one pass over the same reads so the chosen
-        # 5'/3' stay concordant. polyA always; TSS only when refine_tss
+        # 5'/3' stay concordant. polyA always; TSS only when use_tss_model
         # (--fl_data). No confident peak / no model -> positional fallback, then
         # leave as is. Never creates or drops a model.
         logger.debug("Verifying ends for transcript %s" % transcript_model.transcript_id)
@@ -975,8 +977,8 @@ class GraphBasedModelConstructor:
         else:
             return None
         if is_polya_side:
-            return get_polya_model() if self.refine_ends else None
-        return get_tss_model() if self.refine_tss else None
+            return get_polya_model() if (self.polish_ends or self.create_nics) else None
+        return get_tss_model() if self.use_tss_model else None
 
     @staticmethod
     def _peak_boundary(histogram, model, valid):
@@ -1132,7 +1134,7 @@ class GraphBasedModelConstructor:
         # reads (per-transcript, so 5'/3' stay concordant). Returns a list of new
         # alternative-end TranscriptModel objects (one per alternative end, each
         # changing a single terminal); the source model is left untouched. polyA
-        # always; TSS only when refine_tss (--fl_data). A known source yields
+        # always; TSS only when use_tss_model (--fl_data). A known source yields
         # novel-in-catalog siblings; a novel source keeps its own type.
         if not assigned_reads:
             return []
