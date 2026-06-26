@@ -116,10 +116,6 @@ class ReadAssignmentAggregator:
                 self.global_counter.add_counter(self.tss_counter)
 
 
-        if self.args.mode != IsoQuantMode.bulk:
-            rna_velocity_path = sample.out_rna_velocity_loom
-            self.rna_velocity_counter = RNAVelocityCounter(self.args, rna_velocity_path)
-            self.global_counter.add_counter(self.rna_velocity_counter)
             
 
 
@@ -179,6 +175,12 @@ class ReadAssignmentAggregator:
                                                      string_pools=self.string_pools,
                                                      group_index=group_idx)
                     self.global_counter.add_counter(grouped_tss_counter)
+
+                
+                if self.args.mode != IsoQuantMode.bulk:
+                    rna_velocity_path = sample.get_velocity_counts_file(chr_id) if chr_id else sample.out_rna_velocity
+                    rna_velocity_counter = RNAVelocityCounter(self.args, rna_velocity_path, string_pools=self.string_pools, group_index=group_idx)
+                    self.global_counter.add_counter(rna_velocity_counter)
 
         if self.args.read_group and not self.args.no_model_construction:
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):

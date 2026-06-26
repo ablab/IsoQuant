@@ -5,9 +5,8 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import loompy
-import scipy.sparse as sparse
-from scipy import stats
-from xgboost import XGBClassifier
+from scipy import sparse
+
 
 from .isoform_assignment import (
     IsoformMatch,
@@ -17,6 +16,7 @@ from .isoform_assignment import (
 from .long_read_counter import AbstractCounter
 from .read_groups import AbstractReadGrouper
 from .gene_info import FeatureInfo, GeneInfo
+import csv
 
 logger = logging.getLogger('IsoQuant')
 
@@ -44,16 +44,12 @@ class RNAVelocityCounter(AbstractCounter):
         self.args = args
         self.string_pools = string_pools
         self.group_index = group_index
-        self.spliced_col = []
-        self.spliced_row = []
-        self.spliced_val = []
+  
+  
 
-        self.unspliced_col = []
-        self.unspliced_row = []
-        self.unspliced_val = []
 
-        self.gene_ids = {}
-        self.cell_ids = {}
+        self.spliced = {}
+        self.unspliced = {}
 
         
     
@@ -66,63 +62,78 @@ class RNAVelocityCounter(AbstractCounter):
         isoform_match: IsoformMatch = read_assignment.isoform_matches[0]
         
         gene_id = isoform_match.assigned_gene
+
         group_id = read_assignment.read_group_ids[self.group_index]
-
-        
-        if gene_id not in self.gene_ids:
-            self.gene_ids[gene_id] = len(self.gene_ids)
-
-        if group_id not in self.cell_ids:
-            self.cell_ids[group_id] = len(self.cell_ids)
-
-        
+        pool = self.string_pools.get_read_group_pool(self.group_index)
+        cell_id = pool.get_str(group_id)
 
         if read_assignment.assignment_type in SPLICED_ASSIGNMENT_TYPES:
-            self.spliced_col.append(self.cell_ids[group_id])
-            self.spliced_row.append(self.gene_ids[gene_id])
-            self.spliced_val.append(1)
+            if (cell_id, gene_id) not in self.spliced:
+                self.spliced[(cell_id, gene_id)] = 1
+            else:
+                self.spliced[(cell_id, gene_id)] += 1
         else:
-            self.unspliced_col.append(self.cell_ids[group_id])
-            self.unspliced_row.append(self.gene_ids[gene_id])
-            self.unspliced_val.append(1)
+
+            if (cell_id, gene_id) not in self.unspliced:
+                self.unspliced[(cell_id, gene_id)] = 1
+            else:
+                self.unspliced[(cell_id, gene_id)] += 1
 
     
+    
+    def dump(self):
+
+        all_keys = set(self.spliced.keys()).union(set(self.unspliced.keys()))
+    
+        with open(self.output_file, "a") as f:
+            writer = csv.writer(f, delimiter='\t')
+            
+            
+            for cell_id, gene_id in all_keys:
+                s_count = self.spliced.get((cell_id, gene_id), 0)
+                u_count = self.unspliced.get((cell_id, gene_id), 0)
+                
+                writer.writerow([cell_id, gene_id, s_count, u_count])
+                
+        return       
+    
+
     def create_loom(self):
-        self.total_genes = len(self.gene_ids)
-        
-        self.total_cells = len(self.cell_ids)
+        self.total_genes = self.velocity_counts_df['gene_id'].nunique()
+        self.total_cells = self.velocity_counts_df['cell_id'].nunique()
+        self.velocity_counts_df['cell_id_encoded'], self.unique_cells = pd.factorize(self.velocity_counts_df['cell_id'])
+        self.velocity_counts_df['gene_id_encoded'], self.unique_genes = pd.factorize(self.velocity_counts_df['gene_id'])
+        self.spliced_val = self.velocity_counts_df['spliced']
+        self.spliced_row = self.velocity_counts_df['gene_id_encoded']
+        self.spliced_col = self.velocity_counts_df['cell_id_encoded']
 
-
-        sorted_group_ids = list(self.cell_ids.keys())
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        barcode_strings = [pool.get_str(gid) for gid in sorted_group_ids]
+        self.unspliced_val = self.velocity_counts_df['unspliced']
+        self.unspliced_row = self.velocity_counts_df['gene_id_encoded']
+        self.unspliced_col = self.velocity_counts_df['cell_id_encoded']
 
         spliced_matrix = sparse.coo_matrix(
                                             (self.spliced_val, (self.spliced_row, self.spliced_col)), 
                                             shape=(self.total_genes, self.total_cells)
                                         )
-        spliced_matrix.sum_duplicates()
         
         unspliced_matrix = sparse.coo_matrix(
                                             (self.unspliced_val, (self.unspliced_row, self.unspliced_col)), 
                                             shape=(self.total_genes, self.total_cells)
                                         )
-        unspliced_matrix.sum_duplicates()
 
-        row_attrs = {'gene_id': np.array(list(self.gene_ids.keys()))}
+        row_attrs = {'gene_id': self.unique_genes.to_numpy()}
 
-        col_attrs = {'cell_id': np.array(barcode_strings)}
+        col_attrs = {'cell_id': self.unique_cells.to_numpy()}
 
-        loompy.create(self.output_file, spliced_matrix, row_attrs, col_attrs)
-        with loompy.connect(self.output_file) as ds:
+        loompy.create(self.output_file + ".loom", spliced_matrix, row_attrs, col_attrs)
+        with loompy.connect(self.output_file + ".loom") as ds:
             ds.layers['spliced'] = spliced_matrix
             ds.layers['unspliced'] = unspliced_matrix
-
-
-
-    def dump(self):
         return
+    
 
     def finalize(self, args=None):
+        self.velocity_counts_df = pd.read_csv(self.output_file, sep='\t', header = None, names = ['cell_id', 'gene_id', 'spliced', 'unspliced'])
         self.create_loom()
         return
+        
