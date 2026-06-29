@@ -17,6 +17,7 @@ from .long_read_counter import (
 )
 from .terminal_counter import PolyACounter, TSSCounter
 from .rna_velocity_counter import RNAVelocityCounter
+from .read_groups import get_grouping_pool_types
 from .modes import IsoQuantMode
 from .assignment_io import (
     IOSupport,
@@ -120,6 +121,10 @@ class ReadAssignmentAggregator:
 
 
         if self.args.read_group and self.args.genedb:
+            # Pool type per grouping strategy (index-aligned with
+            # grouping_strategy_names); used to restrict RNA velocity to
+            # cell-barcode groupings.
+            grouping_pool_types = get_grouping_pool_types(self.args)
             for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
                 # Use chr-specific paths if chr_id is provided
                 if chr_id:
@@ -176,12 +181,14 @@ class ReadAssignmentAggregator:
                                                      group_index=group_idx)
                     self.global_counter.add_counter(grouped_tss_counter)
 
-                # RNA velocity (spliced/unspliced) counts, one counter per
-                # grouping strategy. Each strategy must write to its own path:
-                # otherwise the grouped counters share a single file and the
-                # merge stage removes the per-chr fragment on the first counter,
-                # then crashes deleting it again for the second (FileNotFoundError).
-                if self.args.mode != IsoQuantMode.bulk:
+                # RNA velocity (spliced/unspliced) counts. Only meaningful for
+                # cell-barcode groupings (barcode / barcode_spot / barcode_barcode);
+                # groupings like file_name or BAM tags would collapse the whole
+                # sample into a single "cell". Each strategy writes to its own
+                # path -- otherwise grouped counters would share one file and the
+                # merge stage would delete the per-chr fragment twice (FileNotFoundError).
+                is_barcode_grouping = grouping_pool_types.get(group_idx, "").startswith("barcode")
+                if self.args.mode != IsoQuantMode.bulk and is_barcode_grouping:
                     if chr_id:
                         rna_velocity_path = sample.get_grouped_counts_file(chr_id, "RNA_velocity", strategy_name)
                     else:
