@@ -188,7 +188,7 @@ class AbstractCounter:
     def dump(self):
         raise NotImplementedError()
 
-    def flush(self):
+    def flush(self) -> None:
         # Per-gene incremental emission hook. No-op for most counters; the
         # terminal (polyA/TSS) counters override it to predict per gene.
         pass
@@ -232,7 +232,7 @@ class CompositeCounter:
         for p in self.counters:
             p.dump()
 
-    def flush(self):
+    def flush(self) -> None:
         for p in self.counters:
             p.flush()
 
