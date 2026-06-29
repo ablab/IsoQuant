@@ -116,9 +116,12 @@ class TerminalCounter(AbstractCounter):
         # transcript_id -> {'chr', 'gene_id', 'data', 'annotated',
         #                   int_group_id -> list[int]}
         self.transcripts: dict = {}
-        # Per-gene prediction rows buffered by flush() for the ungrouped
-        # counter; concatenated and written once in dump().
-        self._pending: list = []
+        # Chromosome-wide accumulator for the ungrouped counter: flush() merges
+        # each gene's per-gene buffer (self.transcripts) into this, and dump()
+        # predicts once over the full per-transcript histogram. Keeps the
+        # emitted output independent of loader granularity (a transcript whose
+        # reads span several gene blocks must not be split into partial rows).
+        self._all_transcripts: dict = {}
         # Genomic positions predicted for the most recently flushed gene, so
         # transcript discovery can reuse them to refine intron-graph terminal
         # vertices (set by flush()).
@@ -213,22 +216,32 @@ class TerminalCounter(AbstractCounter):
     # -- emission -------------------------------------------------------------
 
     def flush(self) -> None:
-        """Predict the currently accumulated transcripts and buffer the rows.
+        """Predict the current gene's transcripts for reuse, then fold them into
+        the chromosome-wide buffer.
 
-        Called once per gene from the worker loop, so prediction runs on
-        per-gene read accumulations rather than the whole chromosome. Grouped
-        and training counters keep accumulating across the chromosome and emit
-        only in :meth:`dump` (grouped output needs the full per-group
-        positions, training emits a single CSV)."""
+        Called once per gene from the worker loop. The per-gene prediction is
+        exposed as :attr:`last_gene_predictions` so transcript discovery can
+        refine intron-graph terminal vertices with this gene's polyA/TSS sites;
+        the accumulated reads are then merged into :attr:`_all_transcripts` so
+        the emitted output is still computed once over each transcript's full
+        histogram in :meth:`dump`. Grouped and training counters keep
+        accumulating across the chromosome and emit only in :meth:`dump`."""
         if not self.ignore_read_groups or self._collecting_training:
             return
         rows = self._predict_rows()
-        if rows is not None:
-            self._pending.append(rows)
-            self.last_gene_predictions = rows['prediction'].tolist()
-        else:
-            self.last_gene_predictions = []
+        self.last_gene_predictions = rows['prediction'].tolist() if rows is not None else []
+        self._merge_into_all()
         self.transcripts = {}
+
+    def _merge_into_all(self) -> None:
+        """Fold the current per-gene buffer into the chromosome-wide one,
+        concatenating the read-position lists of transcripts seen before."""
+        for transcript_id, entry in self.transcripts.items():
+            existing = self._all_transcripts.get(transcript_id)
+            if existing is None:
+                self._all_transcripts[transcript_id] = entry
+            else:
+                existing['data'].extend(entry['data'])
 
     def dump(self) -> None:
         if self._collecting_training:
@@ -245,17 +258,18 @@ class TerminalCounter(AbstractCounter):
                 self._write_grouped(result)
             return
 
-        # Ungrouped: predictions are produced per gene via flush(); flush any
-        # transcripts not yet emitted and write the buffered rows.
+        # Ungrouped: flush the last gene into the chromosome-wide buffer, then
+        # predict once over each transcript's full histogram (matching the
+        # grouped path and master; no per-gene splitting).
         self.flush()
-        if not self._pending:
+        self.transcripts = self._all_transcripts
+        result = self._predict_rows()
+        if result is None:
             self._write_empty()
-            return
-        result = (pd.concat(self._pending, axis=0, ignore_index=True, sort=False)
-                  if len(self._pending) > 1 else self._pending[0].reset_index(drop=True))
-        self._write_ungrouped(result)
+        else:
+            self._write_ungrouped(result)
 
-    def _predict_rows(self):
+    def _predict_rows(self) -> Optional[pd.DataFrame]:
         """Peak detection + XGBoost filter over the currently accumulated
         transcripts. Returns the per-peak prediction rows (genomic position,
         counts, Known/Novel flag) as a DataFrame, or None if there are none."""
