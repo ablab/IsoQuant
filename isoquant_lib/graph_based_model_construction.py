@@ -9,6 +9,7 @@ import logging
 from collections import defaultdict
 from functools import cmp_to_key
 from enum import unique, Enum
+from typing import Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from .common import (
     TranscriptNaming,
@@ -34,6 +35,9 @@ from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
 from .terminal_peaks import detect_peaks, get_polya_model, get_tss_model
+
+if TYPE_CHECKING:
+    from xgboost import XGBClassifier
 
 
 logger = logging.getLogger('IsoQuant')
@@ -72,11 +76,10 @@ class GraphBasedModelConstructor:
         # Find file_name group index for technical replicas check
         self.file_name_group_idx = self.grouping_strategy_names.index("file_name") if "file_name" in self.grouping_strategy_names else -1
 
-        # Transcript-end polishing: always refine constructed (novel) model ends
-        # to the trained polyA/TSS peaks. Runs with or without an annotation
-        # (needs only the shipped detector + the model's own reads); never
-        # creates or drops models.
-        self.polish_ends = True
+        # Constructed (novel) model ends are always refined to the trained
+        # polyA/TSS peaks (see correct_novel_transcript_ends). Runs with or
+        # without an annotation (needs only the shipped detector + the model's
+        # own reads); never creates or drops models.
         # Alternative-end NIC *creation* (graph-level reclassification +
         # post-pass known->NIC) requires an annotation to refine against, so it
         # is gated on --genedb. Keeps the with-genedb behaviour unchanged.
@@ -449,7 +452,8 @@ class GraphBasedModelConstructor:
         self.internal_counter[transcript_id] += 1
         self.read_assignment_counts[read_id] += 1
 
-    def _reference_isoform_for_path(self, assignment, path, intron_path, transcript_range):
+    def _reference_isoform_for_path(self, assignment: ReadAssignment, path: tuple, intron_path: tuple,
+                                    transcript_range: Tuple[int, int]) -> Optional[str]:
         # Reference isoform whose intron chain matches this path. It is reported
         # as the annotated known UNLESS a *detected polyA* terminal vertex
         # (VERTEX_polya / VERTEX_polyt) disagrees with the annotated end by more
@@ -874,57 +878,8 @@ class GraphBasedModelConstructor:
             else:
                 self.read_assignment_counts[read_id] = 0
 
-    def correct_novel_transcript_ends(self, transcript_model, assigned_reads):
-        if self.polish_ends:
-            self._refine_novel_transcript_ends(transcript_model, assigned_reads)
-        else:
-            self._correct_novel_transcript_ends_simple(transcript_model, assigned_reads)
-
-    def _correct_novel_transcript_ends_simple(self, transcript_model, assigned_reads):
-        logger.debug("Verifying ends for transcript %s" % transcript_model.transcript_id)
-        transcript_end = transcript_model.exon_blocks[-1][1]
-        transcript_start = transcript_model.exon_blocks[0][0]
-        start_supported = False
-        read_starts = set()
-        end_supported = False
-        read_ends = defaultdict(int)
-
-        for assignment in assigned_reads:
-            read_exons = assignment.corrected_exons
-            if abs(read_exons[0][0] - transcript_start) <= self.args.apa_delta:
-                start_supported = True
-            if not start_supported and read_exons[0][0] < transcript_model.exon_blocks[0][1]:
-                read_starts.add(read_exons[0][0])
-            if abs(read_exons[-1][1] - transcript_end) <= self.args.apa_delta:
-                end_supported = True
-            if not end_supported and read_exons[-1][1] > transcript_model.exon_blocks[-1][0]:
-                read_ends[read_exons[-1][1]] += 1
-
-        new_transcript_start = None
-        if not start_supported:
-            read_starts = sorted(read_starts)
-            for read_start in read_starts:
-                if read_start > transcript_start:
-                    new_transcript_start = read_start
-                    break
-        if new_transcript_start and new_transcript_start < transcript_model.exon_blocks[0][1]:
-            logger.debug("Changed start for transcript %s: from %d to %d" %
-                         (transcript_model.transcript_id, transcript_model.exon_blocks[0][0], new_transcript_start))
-            transcript_model.exon_blocks[0] = (new_transcript_start, transcript_model.exon_blocks[0][1])
-
-        new_transcript_end = None
-        if not end_supported:
-            read_ends = sorted(read_ends, reverse=True)
-            for read_end in read_ends:
-                if read_end < transcript_end:
-                    new_transcript_end = read_end
-                    break
-        if new_transcript_end and new_transcript_end > transcript_model.exon_blocks[-1][0]:
-            logger.debug("Changed end for transcript %s: from %d to %d" %
-                         (transcript_model.transcript_id, transcript_model.exon_blocks[-1][1], new_transcript_end))
-            transcript_model.exon_blocks[-1] = (transcript_model.exon_blocks[-1][0], new_transcript_end)
-
-    def _refine_novel_transcript_ends(self, transcript_model, assigned_reads):
+    def correct_novel_transcript_ends(self, transcript_model: TranscriptModel,
+                                      assigned_reads: List[ReadAssignment]) -> None:
         # Part 1: detector-based per-transcript end refinement. Build read-terminus
         # histograms from this model's own reads and snap each unsupported terminal
         # exon end to the dominant confident polyA/TSS peak (XGBoost detect_peaks);
@@ -965,7 +920,7 @@ class GraphBasedModelConstructor:
                              (transcript_model.transcript_id, transcript_end, new_end))
                 transcript_model.exon_blocks[-1] = (last_exon_left, new_end)
 
-    def _terminal_model(self, strand, left):
+    def _terminal_model(self, strand: str, left: bool) -> Optional["XGBClassifier"]:
         # Which trained model applies to a genomic-side boundary. For '+' the
         # right end is the polyA site and the left is the TSS; for '-' reversed.
         # Returns None (-> positional fallback) for unstranded, or a side whose
@@ -977,11 +932,13 @@ class GraphBasedModelConstructor:
         else:
             return None
         if is_polya_side:
-            return get_polya_model() if (self.polish_ends or self.create_nics) else None
+            # polyA end refinement is always on (polishing needs no annotation).
+            return get_polya_model()
         return get_tss_model() if self.use_tss_model else None
 
     @staticmethod
-    def _peak_boundary(histogram, model, valid):
+    def _peak_boundary(histogram: Dict[int, int], model: "XGBClassifier",
+                       valid: Callable[[int], bool]) -> Optional[int]:
         # Best-supported detected peak satisfying the terminal-exon clamp.
         if not histogram:
             return None
@@ -991,7 +948,7 @@ class GraphBasedModelConstructor:
         return max(peaks, key=lambda p: p.count).position
 
     @staticmethod
-    def _closest_inward(sorted_positions, boundary, greater):
+    def _closest_inward(sorted_positions: List[int], boundary: int, greater: bool) -> Optional[int]:
         # Positional fallback: nearest read terminus on the inward side of the
         # current boundary (matches the original end-correction behaviour).
         for pos in sorted_positions:
@@ -1002,7 +959,7 @@ class GraphBasedModelConstructor:
         return None
 
     @staticmethod
-    def _confirmed_polya_pos(assignment, strand):
+    def _confirmed_polya_pos(assignment: ReadAssignment, strand: str) -> Optional[int]:
         # Detected polyA cleavage site of a read, matching the trained-model
         # domain (PolyACounter): only polyA-confirmed reads, at external_polya_pos
         # ('+') / external_polyt_pos ('-'). None otherwise.
@@ -1015,7 +972,8 @@ class GraphBasedModelConstructor:
             return info.external_polyt_pos
         return None
 
-    def _terminal_histograms(self, source_model, assigned_reads):
+    def _terminal_histograms(self, source_model: TranscriptModel,
+                             assigned_reads: List[ReadAssignment]) -> Tuple[Dict[int, int], Dict[int, int]]:
         # Build genomic-left (start) and genomic-right (end) read-terminus
         # histograms matching what each trained model was fit on:
         #   - 3' polyA side: polyA-CONFIRMED reads at the detected cleavage site
@@ -1049,13 +1007,13 @@ class GraphBasedModelConstructor:
         return start_hist, end_hist
 
     @staticmethod
-    def _intron_chain_key(model):
+    def _intron_chain_key(model: TranscriptModel) -> Tuple[Tuple[int, int], ...]:
         # Terminal-end-independent identity of a transcript: the tuple of its
         # introns derived from exon blocks. Monoexon -> empty tuple.
         eb = model.exon_blocks
         return tuple((eb[i][1], eb[i + 1][0]) for i in range(len(eb) - 1))
 
-    def _add_known_alternative_end_models(self):
+    def _add_known_alternative_end_models(self) -> None:
         # Part 2: for each known (reference) model, peak-call its own assigned
         # reads and emit a NIC for every confident alternative polyA/TSS end,
         # keeping the known (union). Deduplicated against everything already in
@@ -1094,7 +1052,7 @@ class GraphBasedModelConstructor:
             logger.debug("Added %d known alternative-end NICs" % len(new_models))
             self.transcript_model_storage.extend(new_models)
 
-    def _drop_duplicate_alt_end_models(self):
+    def _drop_duplicate_alt_end_models(self) -> None:
         # Final dedup over the whole storage (catches graph-level NICs too): drop
         # any non-known model that is structurally identical (intron chain + both
         # ends within apa_delta) to a reference isoform -> it is that annotated
@@ -1129,7 +1087,8 @@ class GraphBasedModelConstructor:
             logger.debug("Dropped %d duplicate / reference-matching alt-end models" % dropped)
         self.transcript_model_storage = kept
 
-    def derive_alternative_end_models(self, source_model, assigned_reads):
+    def derive_alternative_end_models(self, source_model: TranscriptModel,
+                                      assigned_reads: List[ReadAssignment]) -> List[TranscriptModel]:
         # Confident alternative polyA/TSS ends for a transcript, from its own
         # reads (per-transcript, so 5'/3' stay concordant). Returns a list of new
         # alternative-end TranscriptModel objects (one per alternative end, each
@@ -1163,7 +1122,8 @@ class GraphBasedModelConstructor:
                 new_models.append(self._nic_model_with_boundary(source_model, sibling_type, end=pos))
         return new_models
 
-    def _alternative_end_positions(self, histogram, model, annotated_pos, clamp):
+    def _alternative_end_positions(self, histogram: Dict[int, int], model: "XGBClassifier",
+                                   annotated_pos: int, clamp: Callable[[int], bool]) -> List[int]:
         # Detected peaks representing a genuine alternative end: inside the
         # terminal exon, > apa_delta from the annotated end, and clearing BOTH an
         # absolute (min_novel_count) and a RELATIVE support cutoff. The relative
@@ -1181,7 +1141,8 @@ class GraphBasedModelConstructor:
         return [p.position for p in peaks
                 if abs(p.position - annotated_pos) > self.args.apa_delta and p.count >= cutoff]
 
-    def _nic_model_with_boundary(self, source_model, transcript_type, start=None, end=None):
+    def _nic_model_with_boundary(self, source_model: TranscriptModel, transcript_type: TranscriptModelType,
+                                 start: Optional[int] = None, end: Optional[int] = None) -> TranscriptModel:
         # Build an alternative-end model from a source one by replacing a single
         # terminal coordinate; the intron chain (internal exons) is unchanged.
         # transcript_type is novel_in_catalog for a known source, or the source's
