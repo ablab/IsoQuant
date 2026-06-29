@@ -176,10 +176,18 @@ class ReadAssignmentAggregator:
                                                      group_index=group_idx)
                     self.global_counter.add_counter(grouped_tss_counter)
 
-                
+                # RNA velocity (spliced/unspliced) counts, one counter per
+                # grouping strategy. Each strategy must write to its own path:
+                # otherwise the grouped counters share a single file and the
+                # merge stage removes the per-chr fragment on the first counter,
+                # then crashes deleting it again for the second (FileNotFoundError).
                 if self.args.mode != IsoQuantMode.bulk:
-                    rna_velocity_path = sample.get_velocity_counts_file(chr_id) if chr_id else sample.out_rna_velocity
-                    rna_velocity_counter = RNAVelocityCounter(self.args, rna_velocity_path, string_pools=self.string_pools, group_index=group_idx)
+                    if chr_id:
+                        rna_velocity_path = sample.get_grouped_counts_file(chr_id, "RNA_velocity", strategy_name)
+                    else:
+                        rna_velocity_path = f"{sample.out_rna_velocity_grouped}_{strategy_name}"
+                    rna_velocity_counter = RNAVelocityCounter(self.args, rna_velocity_path,
+                                                              string_pools=self.string_pools, group_index=group_idx)
                     self.global_counter.add_counter(rna_velocity_counter)
 
         if self.args.read_group and not self.args.no_model_construction:
