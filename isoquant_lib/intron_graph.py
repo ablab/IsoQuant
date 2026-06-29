@@ -8,6 +8,7 @@
 import logging
 import queue
 from collections import defaultdict
+from typing import Dict, List, Optional
 
 from .common import find_closest, overlaps
 
@@ -136,7 +137,8 @@ class IntronCollector:
 
 class IntronGraph:
     def __init__(self, params, gene_info, read_assignments,
-                 polya_predictions=None, tss_predictions=None):
+                 polya_predictions: Optional[List[int]] = None,
+                 tss_predictions: Optional[List[int]] = None):
         self.params = params
         self.gene_info = gene_info
         self.read_assignments = read_assignments
@@ -424,7 +426,8 @@ class IntronGraph:
         self._attach_side(introns, polya_ends, read_ends, read_end=True)
         self._attach_side(introns, polyt_starts, read_starts, read_end=False)
 
-    def _attach_side(self, introns, polya_confirmed_positions, read_terminal_positions, read_end):
+    def _attach_side(self, introns: List, polya_confirmed_positions: dict,
+                     read_terminal_positions: dict, read_end: bool) -> None:
         # Clustering stays the vertex SOURCE (recall identical to the ad-hoc
         # method); the predicted polyA / TSS sites (reused from the per-gene
         # terminal-position counters) only REFINE vertex coordinates, so we
@@ -463,12 +466,16 @@ class IntronGraph:
             cutoffs[intron] = cutoff
             extra_positions[intron] = extra
 
-        # Step 3: read-end / TSS terminal positions per intron.
+        # Step 3: read-end / TSS terminal positions per intron. Refine toward
+        # the prediction set for THIS genomic side: polyA (3') for read ends
+        # (read_end=True), TSS (5') for read starts (read_end=False). Using TSS
+        # for both sides would snap 3' read ends onto 5' sites.
+        terminal_predictions = self.polya_predictions if read_end else self.tss_predictions
         terminal_positions = {}
         for intron in introns:
             clustered = self.cluster_terminal_positions(extra_positions[intron],
                                                         read_end=read_end, cutoff=cutoffs[intron])
-            terminal_positions[intron] = self._refine_positions(clustered, self.tss_predictions)
+            terminal_positions[intron] = self._refine_positions(clustered, terminal_predictions)
 
         # Step 4: attach terminal vertices.
         polya_vertex = VERTEX_polya if read_end else VERTEX_polyt
@@ -480,7 +487,8 @@ class IntronGraph:
             for pos in terminal_positions[intron].keys():
                 edges[intron].add((read_vertex, pos))
 
-    def _refine_positions(self, clustered, predicted_positions):
+    def _refine_positions(self, clustered: Dict[int, int],
+                          predicted_positions: Optional[List[int]]) -> Dict[int, int]:
         # Snap each clustered terminal position to the nearest predicted polyA /
         # TSS site within apa_delta. Keeps every clustering vertex (recall-safe),
         # only nudging coordinates toward the predicted site.
