@@ -13,6 +13,7 @@ import sys
 import math
 from collections import defaultdict
 from enum import Enum
+from typing import List, Tuple
 
 logger = logging.getLogger('IsoQuant')
 
@@ -882,7 +883,9 @@ def get_strand(introns, reference_region, ref_region_start=1):
 
 
 # binary search of a coordinate in ordered non-overlapping intervals
-def interval_bin_search(ordered_intervals, pos):
+def interval_bin_search(ordered_intervals: List[Tuple[int, int]], pos: int) -> int:
+    if not ordered_intervals:
+        return -1
     if pos > ordered_intervals[-1][1] or pos < ordered_intervals[0][0]:
         return -1
 
@@ -901,7 +904,9 @@ def interval_bin_search(ordered_intervals, pos):
     return ind
 
 
-def interval_bin_search_rev(ordered_intervals, pos):
+def interval_bin_search_rev(ordered_intervals: List[Tuple[int, int]], pos: int) -> int:
+    if not ordered_intervals:
+        return -1
     if pos > ordered_intervals[-1][1] or pos < ordered_intervals[0][0]:
         return -1
 

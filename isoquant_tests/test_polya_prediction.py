@@ -162,6 +162,62 @@ def test_dump_ungrouped_emits_one_row_per_peak(stub_model, tmp_path):
     assert df["flag"].iloc[0] == "Novel"
 
 
+def test_per_gene_flush_does_not_split_transcript(stub_model, tmp_path):
+    # A transcript whose reads arrive across several per-gene flush() batches
+    # (loader yields its reads in more than one gene block) must still be
+    # emitted as a single row per peak with the full read count -- not one
+    # partial row per batch. Regression for the per-gene-flush splitting bug.
+    out = tmp_path / "split.tsv"
+    counter = tc.PolyACounter(_make_args(), str(out))
+    exons = [(100, 200), (300, 400)]
+    # Batch 1 (10 reads), flush; batch 2 (20 reads), flush -- same peak ~420.
+    for offset in range(10):
+        counter.add_read_info(_make_read_assignment(polya_pos=420 + offset % 3, exons=exons))
+    counter.flush()
+    assert counter.last_gene_predictions  # per-gene reuse still produced
+    for offset in range(20):
+        counter.add_read_info(_make_read_assignment(polya_pos=420 + offset % 3, exons=exons))
+    counter.flush()
+    counter.dump()
+
+    df = _read_tsv(out)
+    assert (df["transcript_id"] == "T1").all()
+    # No duplicate (transcript_id, prediction) rows, and every read counted once.
+    assert not df.duplicated(subset=["transcript_id", "prediction"]).any()
+    assert df["counts"].sum() == 30
+
+
+def test_flush_sets_predictions_and_clears_buffer(stub_model, tmp_path):
+    # flush() exposes the per-gene predictions (reused by intron-graph
+    # refinement), folds the gene into the chromosome-wide buffer, and clears
+    # the per-gene buffer for the next gene.
+    counter = tc.PolyACounter(_make_args(), str(tmp_path / "f.tsv"))
+    exons = [(100, 200), (300, 400)]
+    for offset in range(30):
+        counter.add_read_info(_make_read_assignment(polya_pos=420 + offset % 3, exons=exons))
+    assert counter.transcripts                 # buffered before flush
+    counter.flush()
+    assert counter.last_gene_predictions       # per-gene predictions exposed for reuse
+    assert counter.transcripts == {}           # per-gene buffer cleared
+    assert counter._all_transcripts            # merged into chromosome-wide buffer
+
+
+def test_flush_is_noop_for_grouped_counter(stub_model, tmp_path):
+    # A grouped counter accumulates across the whole chromosome (whole-chr
+    # prediction in dump); flush() must not touch its buffer or predictions.
+    pool = types.SimpleNamespace(get_str=lambda i: f"g{i}")
+    string_pools = types.SimpleNamespace(get_read_group_pool=lambda _idx: pool)
+    counter = tc.PolyACounter(_make_args(), str(tmp_path / "g.tsv"),
+                              string_pools=string_pools, group_index=0)
+    exons = [(100, 200), (300, 400)]
+    for offset in range(30):
+        counter.add_read_info(_make_read_assignment(
+            polya_pos=420 + offset % 3, exons=exons, read_group_ids=[offset % 2]))
+    counter.flush()
+    assert counter.transcripts                 # NOT cleared (flush no-op for grouped)
+    assert counter.last_gene_predictions == []
+
+
 def test_dump_flags_peak_as_known_within_tolerance(stub_model, tmp_path):
     out = tmp_path / "known.tsv"
     counter = tc.PolyACounter(_make_args(), str(out))

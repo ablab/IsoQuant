@@ -33,20 +33,17 @@ from .isoform_assignment import (
 )
 from .long_read_counter import AbstractCounter
 from .read_groups import AbstractReadGrouper
+from .terminal_peaks import (
+    ANNOTATION_TOLERANCE,
+    FEATURE_COLUMNS,
+    HISTOGRAM_PAD,
+    PEAK_DISTANCE,
+    PEAK_REL_HEIGHT,
+    POLYA_MODEL_PATH,
+    TSS_MODEL_PATH,
+)
 
 logger = logging.getLogger('IsoQuant')
-
-_DATA_DIR = Path(__file__).parent / "data"
-POLYA_MODEL_PATH = _DATA_DIR / "model_polya.json"
-TSS_MODEL_PATH = _DATA_DIR / "model_tss.json"
-
-# Peak finding + classification parameters. Match values used to train the
-# shipped XGBoost models -- changing these without retraining will break the
-# feature alignment between fit time and inference time.
-PEAK_DISTANCE = 10
-PEAK_REL_HEIGHT = 0.98
-HISTOGRAM_PAD = 10
-ANNOTATION_TOLERANCE = 10
 
 _ACCEPTED_ASSIGNMENT_TYPES = frozenset({
     ReadAssignmentType.unique,
@@ -54,10 +51,6 @@ _ACCEPTED_ASSIGNMENT_TYPES = frozenset({
     ReadAssignmentType.inconsistent,
     ReadAssignmentType.inconsistent_non_intronic,
 })
-
-# XGBoost feature columns (must match training)
-FEATURE_COLUMNS = ['var', 'skew', 'peak_count', 'peak_width', 'entropy',
-                   'mean_height', 'peak_heights', 'relative_height']
 
 EMPTY_COLUMNS = ['chromosome', 'transcript_id', 'gene_id', 'prediction',
                  'counts', 'flag']
@@ -123,6 +116,16 @@ class TerminalCounter(AbstractCounter):
         # transcript_id -> {'chr', 'gene_id', 'data', 'annotated',
         #                   int_group_id -> list[int]}
         self.transcripts: dict = {}
+        # Chromosome-wide accumulator for the ungrouped counter: flush() merges
+        # each gene's per-gene buffer (self.transcripts) into this, and dump()
+        # predicts once over the full per-transcript histogram. Keeps the
+        # emitted output independent of loader granularity (a transcript whose
+        # reads span several gene blocks must not be split into partial rows).
+        self._all_transcripts: dict = {}
+        # Genomic positions predicted for the most recently flushed gene, so
+        # transcript discovery can reuse them to refine intron-graph terminal
+        # vertices (set by flush()).
+        self.last_gene_predictions: list = []
 
     @property
     def model(self) -> XGBClassifier:
@@ -212,25 +215,71 @@ class TerminalCounter(AbstractCounter):
 
     # -- emission -------------------------------------------------------------
 
-    def dump(self) -> None:
-        if not self.transcripts:
-            self._write_empty()
+    def flush(self) -> None:
+        """Predict the current gene's transcripts for reuse, then fold them into
+        the chromosome-wide buffer.
+
+        Called once per gene from the worker loop. The per-gene prediction is
+        exposed as :attr:`last_gene_predictions` so transcript discovery can
+        refine intron-graph terminal vertices with this gene's polyA/TSS sites;
+        the accumulated reads are then merged into :attr:`_all_transcripts` so
+        the emitted output is still computed once over each transcript's full
+        histogram in :meth:`dump`. Grouped and training counters keep
+        accumulating across the chromosome and emit only in :meth:`dump`."""
+        if not self.ignore_read_groups or self._collecting_training:
             return
+        rows = self._predict_rows()
+        self.last_gene_predictions = rows['prediction'].tolist() if rows is not None else []
+        self._merge_into_all()
+        self.transcripts = {}
+
+    def _merge_into_all(self) -> None:
+        """Fold the current per-gene buffer into the chromosome-wide one,
+        concatenating the read-position lists of transcripts seen before."""
+        for transcript_id, entry in self.transcripts.items():
+            existing = self._all_transcripts.get(transcript_id)
+            if existing is None:
+                self._all_transcripts[transcript_id] = entry
+            else:
+                existing['data'].extend(entry['data'])
+
+    def dump(self) -> None:
+        if self._collecting_training:
+            self._dump_training()
+            return
+
+        if not self.ignore_read_groups:
+            # Grouped output needs the full per-group positions, so it is
+            # computed once here with self.transcripts kept intact.
+            result = self._predict_rows()
+            if result is None:
+                self._write_empty()
+            else:
+                self._write_grouped(result)
+            return
+
+        # Ungrouped: flush the last gene into the chromosome-wide buffer, then
+        # predict once over each transcript's full histogram (matching the
+        # grouped path and master; no per-gene splitting).
+        self.flush()
+        self.transcripts = self._all_transcripts
+        result = self._predict_rows()
+        if result is None:
+            self._write_empty()
+        else:
+            self._write_ungrouped(result)
+
+    def _predict_rows(self) -> Optional[pd.DataFrame]:
+        """Peak detection + XGBoost filter over the currently accumulated
+        transcripts. Returns the per-peak prediction rows (genomic position,
+        counts, Known/Novel flag) as a DataFrame, or None if there are none."""
+        if not self.transcripts:
+            return None
 
         df = self._build_peak_dataframe()
         zero_peaks, peaks = self._split_zero_and_real_peaks(df)
         if not peaks.empty:
             peaks = self._rank_and_explode(peaks)
-
-        # Developer training-data collection: dump features + true_peak label
-        # for every detected peak, skip the XGBoost filter, emit an empty
-        # prediction TSV so the rest of the pipeline still sees the file.
-        if self._collecting_training:
-            self._dump_training_features(zero_peaks, peaks)
-            self._write_empty()
-            return
-
-        if not peaks.empty:
             peaks[FEATURE_COLUMNS] = peaks[FEATURE_COLUMNS].astype(float, errors='ignore')
             predicted = self.model.predict(peaks[FEATURE_COLUMNS].astype(float))
             peaks = peaks[predicted == 1].copy()
@@ -238,8 +287,7 @@ class TerminalCounter(AbstractCounter):
 
         frames = [f for f in (zero_peaks, peaks) if not f.empty]
         if not frames:
-            self._write_empty()
-            return
+            return None
         result = (pd.concat(frames, axis=0, ignore_index=True, sort=False)
                   if len(frames) > 1 else frames[0].reset_index(drop=True))
 
@@ -250,11 +298,20 @@ class TerminalCounter(AbstractCounter):
             (result['prediction'] - result['annotated']).abs()
                 .gt(ANNOTATION_TOLERANCE).map({True: 'Novel', False: 'Known'}))
         result['counts'] = result.apply(self._counts_for_peak, axis=1)
+        return result
 
-        if self.ignore_read_groups:
-            self._write_ungrouped(result)
-        else:
-            self._write_grouped(result)
+    def _dump_training(self) -> None:
+        """Training-data collection: emit per-peak features + true_peak label
+        (whole chromosome) and a header-only prediction TSV."""
+        if not self.transcripts:
+            self._write_empty()
+            return
+        df = self._build_peak_dataframe()
+        zero_peaks, peaks = self._split_zero_and_real_peaks(df)
+        if not peaks.empty:
+            peaks = self._rank_and_explode(peaks)
+        self._dump_training_features(zero_peaks, peaks)
+        self._write_empty()
 
     def _build_peak_dataframe(self) -> pd.DataFrame:
         """One row per transcript with histogram, summary stats, and raw peaks."""

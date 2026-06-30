@@ -8,6 +8,7 @@
 import logging
 import queue
 from collections import defaultdict
+from typing import Dict, List, Optional
 
 from .common import find_closest, overlaps
 
@@ -135,10 +136,20 @@ class IntronCollector:
 
 
 class IntronGraph:
-    def __init__(self, params, gene_info, read_assignments):
+    def __init__(self, params, gene_info, read_assignments,
+                 polya_predictions: Optional[List[int]] = None,
+                 tss_predictions: Optional[List[int]] = None):
         self.params = params
         self.gene_info = gene_info
         self.read_assignments = read_assignments
+
+        # Predicted polyA / TSS sites for this gene (genomic positions), reused
+        # from the per-gene terminal-position counters. Clustering stays the
+        # terminal-vertex SOURCE; these only refine vertex coordinates (snap to
+        # the nearest predicted site). None when unavailable (no annotation for
+        # polyA, no --fl_data for TSS) -> no refinement, pure clustering.
+        self.polya_predictions = polya_predictions
+        self.tss_predictions = tss_predictions
 
         self.incoming_edges = defaultdict(set)
         self.outgoing_edges = defaultdict(set)
@@ -411,63 +422,84 @@ class IntronGraph:
     def attach_terminal_positions(self):
         # logger.debug("Setting terminal positions paths for %s" % self.gene_info.gene_db_list[0].id)
         polya_ends, read_ends, polyt_starts, read_starts = self.collect_terminal_positions()
+        introns = sorted(self.intron_collector.clustered_introns)
+        self._attach_side(introns, polya_ends, read_ends, read_end=True)
+        self._attach_side(introns, polyt_starts, read_starts, read_end=False)
 
-        for intron in sorted(self.intron_collector.clustered_introns):
-            self.attach_transcpt_ends(intron, polya_ends, read_ends, read_end=True)
-            self.attach_transcpt_ends(intron, polyt_starts, read_starts, read_end=False)
+    def _attach_side(self, introns: List, polya_confirmed_positions: dict,
+                     read_terminal_positions: dict, read_end: bool) -> None:
+        # Clustering stays the vertex SOURCE (recall identical to the ad-hoc
+        # method); the predicted polyA / TSS sites (reused from the per-gene
+        # terminal-position counters) only REFINE vertex coordinates, so we
+        # never emit fewer terminal vertices than clustering alone.
 
-    def attach_transcpt_ends(self, intron, polya_confirmed_positions, read_terminal_positions, read_end=True):
-        read_ends_cutoff = self.params.terminal_position_abs
-        logger.debug(str(intron) + " => " + str(polya_confirmed_positions[intron]))
-        clustered_polyas = self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
-        if clustered_polyas:
-            read_ends_cutoff = max(read_ends_cutoff, max(clustered_polyas.values()) * self.params.terminal_position_rel)
-            extra_end_positions = {}
-            furtherst_confirmed_position = max(clustered_polyas.keys()) if read_end else min(clustered_polyas.keys())
-            for position, count in read_terminal_positions[intron].items():
-                if read_end and position >= furtherst_confirmed_position + self.params.apa_delta:
-                    extra_end_positions[position] = count
-                elif not read_end and position <= furtherst_confirmed_position - self.params.apa_delta :
-                    extra_end_positions[position] = count
-        else:
-            extra_end_positions = read_terminal_positions[intron]
+        # Step 1: polyA / polyT confirmed terminal positions per intron.
+        polya_positions = {}
+        for intron in introns:
+            clustered = self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
+            polya_positions[intron] = self._refine_positions(clustered, self.polya_predictions)
 
-        if read_end and intron in self.outgoing_edges and len(self.outgoing_edges[intron]) > 0:
-            # intron has outgoing edges, hard cut off
-            neighboring_cov = max(self.intron_collector.clustered_introns[i] for i in self.outgoing_edges[intron])
-            read_ends_cutoff = max(read_ends_cutoff, neighboring_cov * self.params.terminal_internal_position_rel)
-        elif not read_end and intron in self.incoming_edges and len(self.incoming_edges[intron]) > 0:
-            # intron has incoming edges, hard cut off
-            neighboring_cov = max(self.intron_collector.clustered_introns[i] for i in self.incoming_edges[intron])
-            read_ends_cutoff = max(read_ends_cutoff, neighboring_cov * self.params.terminal_internal_position_rel)
+        # Step 2: per-intron read-end cutoff and the extra (non-polyA) positions.
+        cutoffs = {}
+        extra_positions = {}
+        for intron in introns:
+            clustered_polyas = polya_positions[intron]
+            cutoff = self.params.terminal_position_abs
+            if clustered_polyas:
+                cutoff = max(cutoff, max(clustered_polyas.values()) * self.params.terminal_position_rel)
+                extra = {}
+                furthest = max(clustered_polyas.keys()) if read_end else min(clustered_polyas.keys())
+                for position, count in read_terminal_positions[intron].items():
+                    if read_end and position >= furthest + self.params.apa_delta:
+                        extra[position] = count
+                    elif not read_end and position <= furthest - self.params.apa_delta:
+                        extra[position] = count
+            else:
+                extra = read_terminal_positions[intron]
 
-        logger.debug(str(intron) + " +> " + str(extra_end_positions))
+            neighbors = self.outgoing_edges if read_end else self.incoming_edges
+            if intron in neighbors and len(neighbors[intron]) > 0:
+                # intron has neighboring edges -> hard cutoff relative to their coverage
+                neighboring_cov = max(self.intron_collector.clustered_introns[i] for i in neighbors[intron])
+                cutoff = max(cutoff, neighboring_cov * self.params.terminal_internal_position_rel)
 
-        terminal_positions = self.cluster_terminal_positions(extra_end_positions,
-                                                             read_end=read_end,
-                                                             cutoff=read_ends_cutoff)
-        logger.debug("POLYAs clustered:")
-        logger.debug(clustered_polyas)
-        logger.debug("Teminal clustered:")
-        logger.debug(terminal_positions)
-        if read_end:
-            # if intron in self.terminal_known_positions:
-            #    logger.debug("Annotated terminal positions: " + str(sorted(self.terminal_known_positions[intron])))
-            # logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
-            # logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
-            for pos in clustered_polyas.keys():
-                self.outgoing_edges[intron].add((VERTEX_polya, pos))
-            for pos in terminal_positions.keys():
-                self.outgoing_edges[intron].add((VERTEX_read_end, pos))
-        else:
-            # if intron in self.starting_known_positions:
-            #    logger.debug("Annotated terminal positions: " + str(sorted(self.starting_known_positions[intron])))
-            # logger.debug("PolyA terminal positions: " + str(sorted(clustered_polyas.keys())))
-            # logger.debug("Simple terminal positions: " + str(sorted(terminal_positions.keys())))
-            for pos in clustered_polyas.keys():
-                self.incoming_edges[intron].add((VERTEX_polyt, pos))
-            for pos in terminal_positions.keys():
-                self.incoming_edges[intron].add((VERTEX_read_start, pos))
+            cutoffs[intron] = cutoff
+            extra_positions[intron] = extra
+
+        # Step 3: read-end / TSS terminal positions per intron. Refine toward
+        # the prediction set for THIS genomic side: polyA (3') for read ends
+        # (read_end=True), TSS (5') for read starts (read_end=False). Using TSS
+        # for both sides would snap 3' read ends onto 5' sites.
+        terminal_predictions = self.polya_predictions if read_end else self.tss_predictions
+        terminal_positions = {}
+        for intron in introns:
+            clustered = self.cluster_terminal_positions(extra_positions[intron],
+                                                        read_end=read_end, cutoff=cutoffs[intron])
+            terminal_positions[intron] = self._refine_positions(clustered, terminal_predictions)
+
+        # Step 4: attach terminal vertices.
+        polya_vertex = VERTEX_polya if read_end else VERTEX_polyt
+        read_vertex = VERTEX_read_end if read_end else VERTEX_read_start
+        edges = self.outgoing_edges if read_end else self.incoming_edges
+        for intron in introns:
+            for pos in polya_positions[intron].keys():
+                edges[intron].add((polya_vertex, pos))
+            for pos in terminal_positions[intron].keys():
+                edges[intron].add((read_vertex, pos))
+
+    def _refine_positions(self, clustered: Dict[int, int],
+                          predicted_positions: Optional[List[int]]) -> Dict[int, int]:
+        # Snap each clustered terminal position to the nearest predicted polyA /
+        # TSS site within apa_delta. Keeps every clustering vertex (recall-safe),
+        # only nudging coordinates toward the predicted site.
+        if not clustered or not predicted_positions:
+            return clustered
+        refined = {}
+        for pos, count in clustered.items():
+            nearest, diff = find_closest(pos, predicted_positions)
+            new_pos = nearest if (nearest is not None and diff <= self.params.apa_delta) else pos
+            refined[new_pos] = refined.get(new_pos, 0) + count
+        return refined
 
     def collect_terminal_positions(self):
         polya_ends = defaultdict(lambda: defaultdict(int))
