@@ -210,6 +210,12 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="require polyA tails to be present when reporting transcripts; "
                                         "default: auto (requires polyA only when polyA percentage is >= 70%%)",
                                    default=PolyAUsageStrategies.auto.name)
+    # Alternative-polyA/TSS isoform discovery is default ON when an annotation is
+    # given (--genedb). --novel_apa (default off) extends it to novel
+    # (non-reference) transcripts, not only known ones.
+    add_additional_option_to_group(algo_args_group, "--novel_apa", action="store_true", default=False,
+                                   help="Developer: extend alternative-end isoform creation to novel transcripts too.")
+
 
     add_additional_option_to_group(algo_args_group, "--transcript_quantification", choices=COUNTING_STRATEGIES,
                                    help="transcript quantification strategy", type=str,
@@ -359,12 +365,6 @@ def parse_args(cmd_args=None, namespace=None):
                       help="Developer: dump per-peak features + true_peak label for polyA training to this CSV path.")
     add_hidden_option("--collect_tss_training", type=str, default=None,
                       help="Developer: dump per-peak features + true_peak label for TSS training to this CSV path.")
-
-    # Alternative-polyA/TSS isoform discovery is default ON when an annotation is
-    # given (--genedb). --novel_apa (default off) extends it to novel
-    # (non-reference) transcripts, not only known ones.
-    add_hidden_option("--novel_apa", action="store_true", default=False,
-                      help="Developer: extend alternative-end isoform creation to novel transcripts too.")
 
     isoquant_version = "3.12.0"
     try:
