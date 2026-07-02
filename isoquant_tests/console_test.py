@@ -58,7 +58,7 @@ def test_clean_start():
                        "splice_junction_counts.tsv", "splice_junction_grouped_file0_col1_counts.linear.tsv",
                        "intron_retention_counts.tsv", "intron_retention_grouped_file0_col1_counts.linear.tsv",
                        "read_info.tsv.gz",
-                       "intron_grouped_file0_col1_counts.tsv",
+                       "splice_junction_grouped_file0_col1_counts.tsv",
                        "novel_vs_known.SQANTI-like.tsv",
                        "transcript_counts.tsv", "transcript_grouped_file0_col1_counts.tsv",
                        "discovered_transcript_counts.tsv", "transcript_models.gtf",
