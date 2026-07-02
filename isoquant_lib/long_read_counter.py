@@ -5,10 +5,7 @@
 # See file LICENSE for details.
 ############################################################################
 
-import gzip
 import logging
-import os
-import shutil
 from collections import defaultdict, OrderedDict
 from enum import Enum, unique
 
@@ -805,10 +802,10 @@ DEFAULT_EXCLUSION_MARGIN = 50
 
 
 # Exon splice-site counts (see spec): groups a gene's overlapping candidate exons
-# into regions and, per read, reports per-candidate full / left-half / right-half
-# inclusion or per-region exclusion / ambiguous counts, with per-read group lists.
-# Produced ungrouped (bulk) and once per grouping strategy, like the other exon
-# counters. Counting runs post-UMI-dedup, so each read is already a unique molecule.
+# into regions and reports per-candidate full / left-half / right-half inclusion or
+# per-region exclusion / ambiguous counts. One row per (feature, group), so it
+# scales like the other grouped counters. Produced ungrouped (bulk) and once per
+# grouping strategy. Counting runs post-UMI-dedup, so each read is a unique molecule.
 class ExonSpliceSiteCounter(AbstractCounter):
     def __init__(self, output_prefix, string_pools=None, group_index: int = 0,
                  delta: int = 6, exclusion_margin: int = DEFAULT_EXCLUSION_MARGIN,
@@ -821,19 +818,22 @@ class ExonSpliceSiteCounter(AbstractCounter):
         self.emit_read_ids: bool = emit_read_ids
         # region_key = (chr, region_start, region_end, strand, gene_id) ->
         #   {"cands": {(start,end): {"full":bucket, "left":bucket, "right":bucket}},
-        #    "excl": bucket, "amb": bucket}   where bucket = [count, [group_ids], [read_ids]]
+        #    "excl": bucket, "amb": bucket}
+        # bucket = dict group_id -> [count, [read_ids]]
         self.regions: dict = {}
 
     @staticmethod
-    def _new_bucket() -> list:
-        return [0, [], []]
+    def _new_bucket() -> dict:
+        return {}
 
-    def _bump(self, bucket: list, group_id: int, read_id: str) -> None:
-        bucket[0] += 1
-        if not self.ignore_read_groups:
-            bucket[1].append(group_id)
+    def _bump(self, bucket: dict, group_id: int, read_id: str) -> None:
+        entry = bucket.get(group_id)
+        if entry is None:
+            entry = [0, []]
+            bucket[group_id] = entry
+        entry[0] += 1
         if self.emit_read_ids:
-            bucket[2].append(read_id)
+            entry[1].append(read_id)
 
     def _get_region_record(self, region) -> dict:
         key = (region.chr_id, region.start, region.end, region.strand, region.gene_id)
@@ -843,7 +843,7 @@ class ExonSpliceSiteCounter(AbstractCounter):
             self.regions[key] = rec
         return rec
 
-    def _get_cand_bucket(self, rec: dict, cand: tuple, side: str) -> list:
+    def _get_cand_bucket(self, rec: dict, cand: tuple, side: str) -> dict:
         cand_rec = rec["cands"].get(cand)
         if cand_rec is None:
             cand_rec = {"full": self._new_bucket(), "left": self._new_bucket(),
@@ -982,8 +982,7 @@ class ExonSpliceSiteCounter(AbstractCounter):
         return self.string_pools.get_read_group_pool(self.group_index).get_str(group_id)
 
     def _header(self) -> str:
-        cols = ["region_gene_candidate", "n_full", "n_left", "n_right",
-                "groups_full", "groups_left", "groups_right"]
+        cols = ["region_gene_candidate", "n_full", "n_left", "n_right", "group_id"]
         if self.emit_read_ids:
             cols += ["read_ids_full", "read_ids_left", "read_ids_right"]
         return "\t".join(cols) + "\n"
@@ -992,25 +991,27 @@ class ExonSpliceSiteCounter(AbstractCounter):
     def _fmt_list(items: list) -> str:
         return ";".join(items) if items else "NA"
 
-    def _fmt_groups(self, group_ids: list) -> str:
-        # ungrouped / bulk carries no per-read groups -> NA
-        if self.ignore_read_groups or not group_ids:
-            return "NA"
-        return ";".join(self._get_group_name(g) for g in group_ids)
+    def _write_inclusion_rows(self, f, feature_id: str, full: dict, left: dict, right: dict) -> None:
+        # one row per group present in any of the three buckets
+        for gid in sorted(set(full) | set(left) | set(right)):
+            fe, le, re = full.get(gid), left.get(gid), right.get(gid)
+            fields = [feature_id,
+                      str(fe[0] if fe else 0), str(le[0] if le else 0), str(re[0] if re else 0),
+                      self._get_group_name(gid)]
+            if self.emit_read_ids:
+                fields += [self._fmt_list(fe[1] if fe else []),
+                           self._fmt_list(le[1] if le else []),
+                           self._fmt_list(re[1] if re else [])]
+            f.write("\t".join(fields) + "\n")
 
-    def _write_inclusion_row(self, f, feature_id: str, full: list, left: list, right: list) -> None:
-        fields = [feature_id, str(full[0]), str(left[0]), str(right[0]),
-                  self._fmt_groups(full[1]), self._fmt_groups(left[1]), self._fmt_groups(right[1])]
-        if self.emit_read_ids:
-            fields += [self._fmt_list(full[2]), self._fmt_list(left[2]), self._fmt_list(right[2])]
-        f.write("\t".join(fields) + "\n")
-
-    def _write_region_row(self, f, feature_id: str, bucket: list) -> None:
-        # exclusion / ambiguous: count goes in n_full, other columns are empty
-        fields = [feature_id, str(bucket[0]), "0", "0", self._fmt_groups(bucket[1]), "NA", "NA"]
-        if self.emit_read_ids:
-            fields += [self._fmt_list(bucket[2]), "NA", "NA"]
-        f.write("\t".join(fields) + "\n")
+    def _write_region_rows(self, f, feature_id: str, bucket: dict) -> None:
+        # exclusion / ambiguous: count goes in n_full, one row per group
+        for gid in sorted(bucket):
+            entry = bucket[gid]
+            fields = [feature_id, str(entry[0]), "0", "0", self._get_group_name(gid)]
+            if self.emit_read_ids:
+                fields += [self._fmt_list(entry[1]), "NA", "NA"]
+            f.write("\t".join(fields) + "\n")
 
     def dump(self) -> None:
         with open(self.output_counts_file_name, "w") as f:
@@ -1022,24 +1023,19 @@ class ExonSpliceSiteCounter(AbstractCounter):
                 for cand in sorted(rec["cands"].keys()):
                     buckets = rec["cands"][cand]
                     full, left, right = buckets["full"], buckets["left"], buckets["right"]
-                    if full[0] == 0 and left[0] == 0 and right[0] == 0:
+                    if not full and not left and not right:
                         continue
                     cand_str = "%s_%d_%d_%s" % (chr_id, cand[0], cand[1], strand)
                     feature_id = "%s__%s__%s" % (region_coord, gene_id, cand_str)
-                    self._write_inclusion_row(f, feature_id, full, left, right)
-                if rec["excl"][0] > 0:
-                    self._write_region_row(f, "%s__%s__exclusion" % (region_coord, gene_id), rec["excl"])
-                if rec["amb"][0] > 0:
-                    self._write_region_row(f, "%s__%s__ambiguous" % (region_coord, gene_id), rec["amb"])
+                    self._write_inclusion_rows(f, feature_id, full, left, right)
+                if rec["excl"]:
+                    self._write_region_rows(f, "%s__%s__exclusion" % (region_coord, gene_id), rec["excl"])
+                if rec["amb"]:
+                    self._write_region_rows(f, "%s__%s__ambiguous" % (region_coord, gene_id), rec["amb"])
 
     def finalize(self, args=None) -> None:
-        # gzip the merged output by default (mostly group columns; compresses well)
-        src = self.output_counts_file_name
-        if not os.path.exists(src):
-            return
-        with open(src, "rb") as f_in, gzip.open(src + ".gz", "wb") as f_out:
-            shutil.copyfileobj(f_in, f_out)
-        os.remove(src)
+        # per-group rows scale like the other grouped counters; kept as plain TSV
+        return
 
     def add_read_info_raw(self, read_id, feature_ids, group_ids):
         return

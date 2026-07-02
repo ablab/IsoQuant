@@ -191,18 +191,21 @@ region-level exclusion row. Tab-separated values, the columns are:
 
 ## Exon splice-site count format
 
-This is the format of `exon_splice_site_counts.tsv.gz`. Overlapping candidate
-exons of a gene are grouped into regions; for each read the counter records
-whether it demonstrates a candidate exon's splice sites fully, only on the left,
-or only on the right, plus per-region exclusion and ambiguous outcomes.
-Tab-separated values, the columns are:
+This is the format of `exon_splice_site_counts.tsv`. Overlapping candidate exons
+of a gene are grouped into regions; for each read the counter records whether it
+demonstrates a candidate exon's splice sites fully, only on the left, or only on
+the right, plus per-region exclusion and ambiguous outcomes. There is **one row
+per feature and group** (like the other grouped counts). Tab-separated values,
+the columns are:
 
 * `region_gene_candidate` - composite key `{chr}_{region_start}_{region_end}_{strand}__{gene_id}__{candidate}`, where `candidate` is `{chr}_{exon_start}_{exon_end}_{strand}` for an exon variant, or the literal `exclusion` / `ambiguous` for the region-level rows;
-* `n_full` - reads demonstrating both splice sites of the candidate (for `exclusion`/`ambiguous` rows this column holds the exclusion/ambiguous count);
+* `n_full` - reads demonstrating both splice sites of the candidate in this group (for `exclusion`/`ambiguous` rows this column holds the exclusion/ambiguous count);
 * `n_left` - reads demonstrating only the candidate's left splice site (0 for `exclusion`/`ambiguous` rows);
 * `n_right` - reads demonstrating only the candidate's right splice site (0 for `exclusion`/`ambiguous` rows);
-* `groups_full`, `groups_left`, `groups_right` - `;`-separated read group per contributing read (e.g. barcodes when grouping by barcode); `NA` when ungrouped or empty. `groups_left`/`groups_right` are `NA` on `exclusion`/`ambiguous` rows;
-* `read_ids_full`, `read_ids_left`, `read_ids_right` - optional read-id lists, only with `--emit_read_ids`.
+* `group_id` - read group (`NA` when ungrouped);
+* `read_ids_full`, `read_ids_left`, `read_ids_right` - optional read-id lists for this feature and group, only with `--emit_read_ids`.
+
+To reconstruct the per-molecule group-list format (columns `groups_full` / `groups_left` / `groups_right`, one entry per read — e.g. barcodes for downstream cell/cell-type aggregation) run `misc/exon_splice_site_to_group_lists.py`.
 
 ## Transcript models format
 
