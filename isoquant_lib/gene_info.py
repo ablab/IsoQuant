@@ -141,10 +141,7 @@ class FeatureInfo:
 
 # group of overlapping annotated exons treated as a single quantification unit
 class ExonRegion:
-    region_id_counter = SimpleIDDistributor()
-
     def __init__(self, chr_id: str, start: int, end: int, strand: str):
-        self.id: int = ExonRegion.region_id_counter.increment()
         self.chr_id: str = chr_id
         self.start: int = start
         self.end: int = end
@@ -152,6 +149,13 @@ class ExonRegion:
         self.member_exon_indices: list = []
         # union of gene_ids across member exons; populated by build_exon_overlap_regions
         self.gene_ids: set = set()
+
+    @property
+    def id(self):
+        # coordinate-based identity (matches FeatureInfo) so the same region merges
+        # across separate GeneInfo builds; computed lazily since `end` grows during
+        # region construction
+        return (self.chr_id, self.start, self.end, self.strand)
 
 
 # overlapping candidate exons of a single gene on one strand, treated as one
