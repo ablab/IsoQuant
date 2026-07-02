@@ -150,8 +150,10 @@ Coordinate lists use `;%;` as the element separator.
 
 An accompanying `SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` file contains summary statistics of the UMI filtering process.
 
-## Exon and splice junction count format
+## Splice junction and legacy exon count format
 
+This is the format of `splice_junction_counts.tsv`, `intron_retention_counts.tsv`
+and the legacy `old_exon_counts.tsv` (only with `--old_exon_count_format`).
 Tab-separated values, the columns are:
 
 * `chr` - chromosome ID;
@@ -170,6 +172,37 @@ Tab-separated values, the columns are:
 * `group_id` - read group if provided (NA by default);
 * `include_counts` - number of reads that include this feature;
 * `exclude_counts` - number of reads that span, but do not include this feature;
+
+## Exon count format
+
+This is the format of `exon_counts.tsv`. Overlapping reference exons are grouped
+into regions; each region emits one row per included exon variant plus one
+region-level exclusion row. Tab-separated values, the columns are:
+
+* `chr` - chromosome ID;
+* `region_start` - region leftmost 1-based position;
+* `region_end` - region rightmost 1-based position;
+* `strand` - region strand;
+* `exon_start`, `exon_end` - exon variant coordinates for `inclusion` rows, `.` for `exclusion` rows;
+* `gene_id` - gene the read was assigned to;
+* `feature_kind` - `inclusion` (read selects this exon variant) or `exclusion` (read skips the whole region);
+* `group_id` - read group if provided (NA by default);
+* `count` - read count.
+
+## Exon splice-site count format
+
+This is the format of `exon_splice_site_counts.tsv.gz`. Overlapping candidate
+exons of a gene are grouped into regions; for each read the counter records
+whether it demonstrates a candidate exon's splice sites fully, only on the left,
+or only on the right, plus per-region exclusion and ambiguous outcomes.
+Tab-separated values, the columns are:
+
+* `region_gene_candidate` - composite key `{chr}_{region_start}_{region_end}_{strand}__{gene_id}__{candidate}`, where `candidate` is `{chr}_{exon_start}_{exon_end}_{strand}` for an exon variant, or the literal `exclusion` / `ambiguous` for the region-level rows;
+* `n_full` - reads demonstrating both splice sites of the candidate (for `exclusion`/`ambiguous` rows this column holds the exclusion/ambiguous count);
+* `n_left` - reads demonstrating only the candidate's left splice site (0 for `exclusion`/`ambiguous` rows);
+* `n_right` - reads demonstrating only the candidate's right splice site (0 for `exclusion`/`ambiguous` rows);
+* `groups_full`, `groups_left`, `groups_right` - `;`-separated read group per contributing read (e.g. barcodes when grouping by barcode); `NA` when ungrouped or empty. `groups_left`/`groups_right` are `NA` on `exclusion`/`ambiguous` rows;
+* `read_ids_full`, `read_ids_left`, `read_ids_right` - optional read-id lists, only with `--emit_read_ids`.
 
 ## Transcript models format
 

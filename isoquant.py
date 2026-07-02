@@ -277,6 +277,11 @@ def parse_args(cmd_args=None, namespace=None):
     output_setup_args_group.add_argument("--count_intron_retentions",
                                      help="count intron retention events per reference intron",
                                      action='store_true', default=False)
+    add_additional_option_to_group(output_setup_args_group, "--emit_read_ids", action='store_true', default=False,
+                                   help="add read id columns to exon splice-site counts output")
+    add_additional_option_to_group(output_setup_args_group, "--old_exon_count_format", action='store_true', default=False,
+                                   help="also output legacy per-exon inclusion/exclusion counts as old_exon_counts "
+                                        "(deprecated, will be removed in a future release)")
     add_additional_option_to_group(output_setup_args_group,"--bam_tags",
                                    help="comma separated list of BAM tags to be imported to read_assignments.tsv",
                                    type=str)

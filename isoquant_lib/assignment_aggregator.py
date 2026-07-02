@@ -11,6 +11,7 @@ from .stats import EnumStats
 from .long_read_counter import (
     ExonCounter,
     JointExonCounter,
+    ExonSpliceSiteCounter,
     IntronCounter,
     IntronRetentionCounter,
     CompositeCounter,
@@ -105,13 +106,25 @@ class ReadAssignmentAggregator:
         if self.args.count_exons and self.args.genedb:
             exon_counts_path = sample.get_exon_counts_file(chr_id) if chr_id else sample.out_exon_counts_tsv
             intron_counts_path = sample.get_intron_counts_file(chr_id) if chr_id else sample.out_intron_counts_tsv
-            joint_exon_counts_path = (sample.get_joint_exon_counts_file(chr_id)
-                                      if chr_id else sample.out_joint_exon_counts_tsv)
+            exon_splice_site_counts_path = (sample.get_exon_splice_site_counts_file(chr_id)
+                                            if chr_id else sample.out_exon_splice_site_counts_tsv)
             # string_pools=None means ungrouped counting
-            self.exon_counter = ExonCounter(exon_counts_path)
+            # region-based counts are the default "exon" output now
+            self.exon_counter = JointExonCounter(exon_counts_path)
             self.intron_counter = IntronCounter(intron_counts_path)
-            self.joint_exon_counter = JointExonCounter(joint_exon_counts_path)
-            self.global_counter.add_counters([self.exon_counter, self.intron_counter, self.joint_exon_counter])
+            self.exon_splice_site_counter = ExonSpliceSiteCounter(
+                exon_splice_site_counts_path,
+                delta=self.args.delta,
+                emit_read_ids=getattr(self.args, "emit_read_ids", False))
+            ungrouped_exon_counters = [self.exon_counter, self.intron_counter,
+                                       self.exon_splice_site_counter]
+            # legacy per-exon inclusion/exclusion counts (deprecated) only on request
+            if getattr(self.args, "old_exon_count_format", False):
+                old_exon_counts_path = (sample.get_old_exon_counts_file(chr_id)
+                                        if chr_id else sample.out_old_exon_counts_tsv)
+                self.old_exon_counter = ExonCounter(old_exon_counts_path)
+                ungrouped_exon_counters.append(self.old_exon_counter)
+            self.global_counter.add_counters(ungrouped_exon_counters)
 
         # polyA / TSS terminal-position prediction (ungrouped). PolyA requires
         # only the gene annotation; TSS also requires --fl_data because read
@@ -157,16 +170,28 @@ class ReadAssignmentAggregator:
                     if chr_id:
                         exon_out_file = sample.get_grouped_counts_file(chr_id, "exon", strategy_name)
                         intron_out_file = sample.get_grouped_counts_file(chr_id, "splice_junction", strategy_name)
-                        joint_exon_out_file = sample.get_grouped_counts_file(chr_id, "joint_exon", strategy_name)
+                        exon_splice_site_out_file = sample.get_grouped_counts_file(chr_id, "exon_splice_site", strategy_name)
                     else:
                         exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
                         intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
-                        joint_exon_out_file = f"{sample.out_joint_exon_grouped_counts_tsv}_{strategy_name}"
-                    exon_counter = ExonCounter(exon_out_file, string_pools=self.string_pools, group_index=group_idx)
+                        exon_splice_site_out_file = f"{sample.out_exon_splice_site_grouped_counts_tsv}_{strategy_name}"
+                    # region-based counts are the default "exon" output now
+                    exon_counter = JointExonCounter(exon_out_file,
+                                                    string_pools=self.string_pools, group_index=group_idx)
                     intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx)
-                    joint_exon_counter = JointExonCounter(joint_exon_out_file,
-                                                          string_pools=self.string_pools, group_index=group_idx)
-                    self.global_counter.add_counters([exon_counter, intron_counter, joint_exon_counter])
+                    exon_splice_site_counter = ExonSpliceSiteCounter(
+                        exon_splice_site_out_file, string_pools=self.string_pools, group_index=group_idx,
+                        delta=self.args.delta, emit_read_ids=getattr(self.args, "emit_read_ids", False))
+                    grouped_exon_counters = [exon_counter, intron_counter, exon_splice_site_counter]
+                    if getattr(self.args, "old_exon_count_format", False):
+                        if chr_id:
+                            old_exon_out_file = sample.get_grouped_counts_file(chr_id, "old_exon", strategy_name)
+                        else:
+                            old_exon_out_file = f"{sample.out_old_exon_grouped_counts_tsv}_{strategy_name}"
+                        old_exon_counter = ExonCounter(old_exon_out_file,
+                                                       string_pools=self.string_pools, group_index=group_idx)
+                        grouped_exon_counters.append(old_exon_counter)
+                    self.global_counter.add_counters(grouped_exon_counters)
 
                 # Grouped polyA / TSS prediction (one file per grouping strategy).
                 # Skipped in training-collection mode -- only the ungrouped counter
