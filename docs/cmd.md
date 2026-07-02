@@ -160,7 +160,7 @@ original file name, and barcode property (e.g. cell type).
 `--count_exons`
     Perform exon and splice junction counting in addition to gene and transcript counting.
     Produces region-based exon counts (`exon_counts.tsv`), exon splice-site counts
-    (`exon_splice_site_counts.tsv.gz`) and splice junction counts (`splice_junction_counts.tsv`).
+    (`exon_splice_site_counts.tsv`) and splice junction counts (`splice_junction_counts.tsv`).
     The legacy per-exon inclusion/exclusion format is no longer produced by default; add the
     (deprecated) `--old_exon_count_format` option to also write it as `old_exon_counts.tsv`.
     Will take effect only when reference annotation is provided.

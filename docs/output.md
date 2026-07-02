@@ -28,7 +28,7 @@ If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://gi
 If `--count_exons` is set, exon and splice junction counts will be produced:
 
 * `SAMPLE_ID.exon_counts.tsv` - region-based exon counts: overlapping reference exons are grouped into regions, and each region reports per-variant inclusion counts plus one region-level exclusion count;
-* `SAMPLE_ID.exon_splice_site_counts.tsv.gz` - exon splice-site counts: per-candidate full / left / right splice-site support and per-region exclusion / ambiguous counts, with per-read group lists (gzipped);
+* `SAMPLE_ID.exon_splice_site_counts.tsv` - exon splice-site counts: per-candidate full / left / right splice-site support and per-region exclusion / ambiguous counts, one row per feature and group;
 * `SAMPLE_ID.splice_junction_counts.tsv` - reference splice junction inclusion/exclusion read counts;
 
 The legacy per-exon inclusion/exclusion counts (previous IsoQuant exon format) are no longer produced by default. Use `--old_exon_count_format` to additionally output them as `SAMPLE_ID.old_exon_counts.tsv` (deprecated, will be removed in a future release).
@@ -66,10 +66,10 @@ If `--read_group` is set or multiple files are provided, the per-group expressio
 * `SAMPLE_ID.gene_grouped_counts.linear.tsv`
 * `SAMPLE_ID.transcript_grouped_counts.linear.tsv`
 * `SAMPLE_ID.exon_grouped_counts.linear.tsv`
-* `SAMPLE_ID.exon_splice_site_grouped_counts.linear.tsv.gz`
+* `SAMPLE_ID.exon_splice_site_grouped_counts.linear.tsv`
 * `SAMPLE_ID.splice_junction_grouped_counts.linear.tsv`
 
-For the exon splice-site counts the grouping is embedded directly in the per-sample file via the `groups_*` columns (one group entry per read), so its grouped files carry the same schema as the ungrouped one.
+The exon splice-site counts carry a `group_id` column (one row per feature and group; `NA` when ungrouped). To reconstruct the per-molecule group-list format (one entry per read, e.g. barcodes for downstream cell/cell-type aggregation) use `misc/exon_splice_site_to_group_lists.py`.
 
 Note that grouped counts can be converted to any format using `{IsoQuant intsllation folder}/isoquant_lib/convert_grouped_counts.py`.
 The script accepts the following arguments:
