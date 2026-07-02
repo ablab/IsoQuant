@@ -390,7 +390,6 @@ def test_dump_zero_peak_fallback_uses_histogram_mode(stub_model, tmp_path):
 def test_no_op_methods_do_not_raise(stub_model, tmp_path):
     counter = tc.PolyACounter(_make_args(), str(tmp_path / "p.tsv"))
     counter.add_read_info(None)
-    counter.add_read_info_raw("rid", ["F1"], [0])
     counter.add_confirmed_features({"F1"})
     counter.add_unassigned(_make_read_assignment())
     counter.add_unaligned(3)

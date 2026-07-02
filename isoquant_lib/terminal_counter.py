@@ -139,9 +139,6 @@ class TerminalCounter(AbstractCounter):
     # read assignments and emits its own TSV; it does not participate in the
     # confirmed-feature / unassigned / raw-feature flows.
 
-    def add_read_info_raw(self, read_id, feature_ids, group_ids) -> None:
-        return
-
     def add_confirmed_features(self, features) -> None:
         return
 
