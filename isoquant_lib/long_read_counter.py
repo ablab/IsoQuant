@@ -179,9 +179,6 @@ class AbstractCounter:
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
 
-    def add_read_info_raw(self, read_id, feature_ids, group_ids):
-        raise NotImplementedError()
-
     def add_confirmed_features(self, features):
         raise NotImplementedError()
 
@@ -219,10 +216,6 @@ class CompositeCounter:
     def add_read_info(self, read_assignment):
         for p in self.counters:
             p.add_read_info(read_assignment)
-
-    def add_read_info_raw(self, read_id, feature_ids, group_ids):
-        for p in self.counters:
-            p.add_read_info_raw(read_id, feature_ids, group_ids)
 
     def add_confirmed_features(self, features):
         for p in self.counters:
@@ -318,29 +311,6 @@ class AssignedFeatureCounter(AbstractCounter):
             self.all_features.add(feature_id)
             if self.assignment_extractor.confirms_feature(read_assignment):
                 self.confirmed_features.add(feature_id)
-
-    def add_read_info_raw(self, read_id, feature_ids, group_ids):
-        # group_ids is now a list of integers (pool indices)
-        if self.ignore_read_groups or group_ids is None:
-            group_id = 0  # Default group index
-        else:
-            group_id = group_ids[self.group_index]
-        if not read_id:
-            self.not_aligned_reads += 1
-        elif not feature_ids:
-            self.not_assigned_reads += 1
-            self.reads_for_tpm[group_id] += 1
-        elif len(feature_ids) > 1:
-            self.ambiguous_reads += 1
-            self.reads_for_tpm[group_id] += 1
-            for feature_id in feature_ids:
-                count_value = self.read_counter.process_ambiguous(len(feature_ids))
-                self.feature_counter[feature_id].inc(group_id, count_value)
-                self.all_features.add(feature_id)
-        else:
-            self.feature_counter[feature_ids[0]].inc(group_id, 1.0)
-            self.all_features.add(feature_ids[0])
-            self.reads_for_tpm[group_id] += 1
 
     def add_unassigned(self, read_assignment):
         # Use read_group_ids directly (integers)

@@ -180,37 +180,69 @@ class GraphBasedModelConstructor:
         if self.args.sqanti_output:
             self.compare_models_with_known()
 
+    def _log_uniqueknown_on_novel(self, transcript2type: Dict[str, TranscriptModelType]) -> None:
+        # Diagnostic: how often a read the reference step assigned uniquely to a
+        # known isoform ends up on a *novel* model. After the re-assignment gate
+        # this can only happen while the read is consumed building that model
+        # (FL path / alt-end), so the count isolates the construction-phase drag.
+        dragged = 0
+        for t_id, reads in self.transcript_read_ids.items():
+            if transcript2type.get(t_id) == TranscriptModelType.known:
+                continue
+            for a in reads:
+                x = self._reference_unique_known_isoform(a)
+                if x is not None and x != t_id:
+                    dragged += 1
+                    logger.debug("Read %s uniquely assigned to known %s now on novel model %s" %
+                                 (a.read_id, x, t_id))
+        if dragged:
+            logger.debug("%d uniquely-known reads bound to novel models (construction-phase)" % dragged)
+
     def forward_counts(self, read_assignments):
-        transcript2gene = {}
-        for t in self.transcript_model_storage:
-            transcript2gene[t.transcript_id] = t.gene_id
+        transcript2gene = {t.transcript_id: t.gene_id for t in self.transcript_model_storage}
+        transcript2type = {t.transcript_id: t.transcript_type for t in self.transcript_model_storage}
+        self._log_uniqueknown_on_novel(transcript2type)
 
-        ambiguous_assignments = {}
-        for transcript_id in self.transcript_read_ids.keys():
-            gene_id = transcript2gene[transcript_id]
-            for read_assignment in self.transcript_read_ids[transcript_id]:
-                read_id = read_assignment.read_id
-                if self.read_assignment_counts[read_id] == 1:
-                    # Add to ungrouped counters - use read_group_ids (integers) directly
-                    self.transcript_counter.add_read_info_raw(read_id, [transcript_id], read_assignment.read_group_ids)
-                    self.gene_counter.add_read_info_raw(read_id, [gene_id], read_assignment.read_group_ids)
-                    continue
+        # model_gene_info lets the counters' confirms_feature read
+        # all_isoforms_introns for the (model) transcript ids without a None
+        # gene_info; the per-read confirmation result is moot because every
+        # constructed model is force-confirmed below.
+        model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.args.delta)
 
-                if read_id not in ambiguous_assignments:
-                    ambiguous_assignments[read_id] = [read_assignment.read_group_ids]
-                ambiguous_assignments[read_id].append(transcript_id)
+        # Collapse per-transcript membership into one entry per read; every read
+        # stored in transcript_read_ids is an original reference ReadAssignment,
+        # so it still carries read_group_ids and corrected_exons.
+        per_read = {}  # read_id -> [source_assignment, [transcript_id, ...]]
+        for transcript_id, assignments in self.transcript_read_ids.items():
+            for ra in assignments:
+                entry = per_read.setdefault(ra.read_id, [ra, []])
+                entry[1].append(transcript_id)
 
-        for read_id in ambiguous_assignments.keys():
-            read_group_ids = ambiguous_assignments[read_id][0]
-            transcript_ids = ambiguous_assignments[read_id][1:]
-            gene_ids = [transcript2gene[transcript_id] for transcript_id in transcript_ids]
-            # Add to ungrouped counters - use read_group_ids (integers) directly
-            self.transcript_counter.add_read_info_raw(read_id, transcript_ids, read_group_ids)
-            self.gene_counter.add_read_info_raw(read_id, gene_ids, read_group_ids)
+        for read_id, (source, transcript_ids) in per_read.items():
+            matches = [IsoformMatch(MatchClassification.undefined, self.string_pools,
+                                    assigned_gene=transcript2gene[t],
+                                    assigned_transcript=t)
+                       for t in transcript_ids]
+            atype = ReadAssignmentType.unique if len(matches) == 1 else ReadAssignmentType.ambiguous
+            ma = ReadAssignment(read_id, atype, self.string_pools, match=matches)
+            ma.gene_info = model_gene_info
+            ma.read_group_ids = source.read_group_ids
+            ma.corrected_exons = source.corrected_exons
+            self.transcript_counter.add_read_info(ma)
+            self.gene_counter.add_read_info(ma)
 
+        # Reads not assigned to any model (including gate-dropped reads) are
+        # counted as not-assigned in both model composites, matching the
+        # reference path where every read passes through the counters.
         for r in read_assignments:
-            if self.read_assignment_counts[r.read_id] > 0: continue
-            self.transcript_counter.add_unassigned(r)
+            if self.read_assignment_counts[r.read_id] > 0:
+                continue
+            ma = ReadAssignment(r.read_id, ReadAssignmentType.noninformative, self.string_pools)
+            ma.read_group_ids = r.read_group_ids
+            ma.gene_info = model_gene_info
+            self.transcript_counter.add_read_info(ma)
+            self.gene_counter.add_read_info(ma)
+
         self.transcript_counter.add_confirmed_features([model.transcript_id for model in self.transcript_model_storage])
         self.gene_counter.add_confirmed_features({transcript2gene[model.transcript_id] for model in self.transcript_model_storage})
 
@@ -841,6 +873,16 @@ class GraphBasedModelConstructor:
     def transcript_from_reference(self, isoform_id):
         return TranscriptModel.from_reference_transcript(self.gene_info, isoform_id)
 
+    @staticmethod
+    def _reference_unique_known_isoform(assignment: ReadAssignment) -> Optional[str]:
+        # The known reference isoform this read was uniquely assigned to by the
+        # reference step, or None. All unique reference assignments target an
+        # annotated (known) isoform, so the returned id also names the model
+        # built from it (from_reference_transcript keeps the reference id).
+        if assignment.assignment_type.is_unique() and assignment.isoform_matches:
+            return assignment.isoform_matches[0].assigned_transcript
+        return None
+
     # assign reads back to constructed isoforms
     def assign_reads_to_models(self, read_assignments):
         if not self.transcript_model_storage:
@@ -854,11 +896,34 @@ class GraphBasedModelConstructor:
         transcript_model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.args.delta)
         assigner = LongReadAssigner(transcript_model_gene_info, self.args, self.string_pools, quick_mode=True)
         profile_constructor = CombinedProfileConstructor(transcript_model_gene_info, self.args)
+        # ids of the isoforms actually built as models here; a known reference
+        # isoform keeps its id (from_reference_transcript), so this doubles as
+        # the set of surviving known isoforms.
+        model_ids = set(transcript_model_gene_info.all_isoforms_exons.keys())
+        kept_on_known = 0
+        dropped_no_model = 0
 
         for assignment in read_assignments:
             read_id = assignment.read_id
             if self.read_assignment_counts[read_id] > 0:
                 # logger.debug("# Read %s was assigned to based on path construction" % read_id)
+                continue
+
+            # Consistency gate: a read the reference step assigned uniquely to a
+            # known isoform stays on that isoform and is never re-profiled onto a
+            # different model. If that isoform was not built as a model (filtered
+            # out / unsupported), the read is left unassigned rather than dragged
+            # elsewhere. Inert without --genedb (no known reference isoforms).
+            known_iso = self._reference_unique_known_isoform(assignment)
+            if known_iso is not None:
+                if known_iso in model_ids:
+                    self.transcript_read_ids[known_iso].append(assignment)
+                    self.internal_counter[known_iso] += 1
+                    self.read_assignment_counts[read_id] += 1
+                    kept_on_known += 1
+                else:
+                    self.read_assignment_counts[read_id] = 0
+                    dropped_no_model += 1
                 continue
 
             read_exons = assignment.corrected_exons
@@ -877,6 +942,9 @@ class GraphBasedModelConstructor:
                     self.transcript_read_ids[m.assigned_transcript].append(assignment)
             else:
                 self.read_assignment_counts[read_id] = 0
+
+        logger.debug("Gated re-assignment: kept %d reads on their unique known isoform, "
+                     "dropped %d (known isoform not built)" % (kept_on_known, dropped_no_model))
 
     def correct_novel_transcript_ends(self, transcript_model: TranscriptModel,
                                       assigned_reads: List[ReadAssignment]) -> None:
