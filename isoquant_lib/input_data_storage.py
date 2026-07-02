@@ -67,15 +67,19 @@ class SampleData:
         self.out_gene_model_counts_tsv = self._make_path(self.prefix + ".discovered_gene")
         self.out_transcript_model_grouped_counts_tsv = self._make_path(self.prefix + ".discovered_transcript_grouped")
         self.out_gene_model_grouped_counts_tsv = self._make_path(self.prefix + ".discovered_gene_grouped")
+        # region-based ("joint") counts are the default exon counts output
         self.out_exon_counts_tsv = self._make_path(self.prefix + ".exon")
-        self.out_joint_exon_counts_tsv = self._make_path(self.prefix + ".joint_exon")
+        self.out_exon_splice_site_counts_tsv = self._make_path(self.prefix + ".exon_splice_site")
+        # legacy per-exon inclusion/exclusion counts, only with --old_exon_count_format
+        self.out_old_exon_counts_tsv = self._make_path(self.prefix + ".old_exon")
         self.out_intron_counts_tsv = self._make_path(self.prefix + ".splice_junction")
         self.out_intron_retention_counts_tsv = self._make_path(self.prefix + ".intron_retention")
         self.out_intron_retention_grouped_counts_tsv = self._make_path(self.prefix + ".intron_retention_grouped")
         self.out_gene_grouped_counts_tsv = self._make_path(self.prefix + ".gene_grouped")
         self.out_transcript_grouped_counts_tsv = self._make_path(self.prefix + ".transcript_grouped")
         self.out_exon_grouped_counts_tsv = self._make_path(self.prefix + ".exon_grouped")
-        self.out_joint_exon_grouped_counts_tsv = self._make_path(self.prefix + ".joint_exon_grouped")
+        self.out_exon_splice_site_grouped_counts_tsv = self._make_path(self.prefix + ".exon_splice_site_grouped")
+        self.out_old_exon_grouped_counts_tsv = self._make_path(self.prefix + ".old_exon_grouped")
         self.out_intron_grouped_counts_tsv = self._make_path(self.prefix + ".splice_junction_grouped")
         self.out_t2t_tsv = self._make_path(self.prefix + ".novel_vs_known.SQANTI-like.tsv")
         self.out_polya_prediction_tsv = self._make_path(self.prefix + ".polyA_prediction.tsv")
@@ -179,9 +183,13 @@ class SampleData:
         """Get path to exon counts file for a chromosome."""
         return self._make_path(self.get_chr_prefix(chr_id) + ".exon")
 
-    def get_joint_exon_counts_file(self, chr_id: str) -> str:
-        """Get path to joint (overlap-region) exon counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".joint_exon")
+    def get_old_exon_counts_file(self, chr_id: str) -> str:
+        """Get path to legacy per-exon counts file for a chromosome (--old_exon_count_format)."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".old_exon")
+
+    def get_exon_splice_site_counts_file(self, chr_id: str) -> str:
+        """Get path to exon splice-site counts file for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".exon_splice_site")
 
     def get_intron_counts_file(self, chr_id: str) -> str:
         """Get path to intron counts file for a chromosome."""

@@ -154,6 +154,22 @@ class ExonRegion:
         self.gene_ids: set = set()
 
 
+# overlapping candidate exons of a single gene on one strand, treated as one
+# quantification unit for exon splice-site testing (see exon splice-site counts spec)
+class ExonSpliceSiteRegion:
+    def __init__(self, chr_id: str, start: int, end: int, strand: str, gene_id: str):
+        self.chr_id: str = chr_id
+        self.start: int = start
+        self.end: int = end
+        self.strand: str = strand
+        self.gene_id: str = gene_id
+        # candidate exons as (start, end) tuples, sorted
+        self.candidates: list = []
+        # per-candidate: is the candidate's left/right coordinate unique in the region
+        self.left_unique: list = []
+        self.right_unique: list = []
+
+
 class GeneList:
     def __init__(self, gene_id_list, delta, chr_id, start, end):
         self.gene_id_set = set(gene_id_list)
@@ -713,6 +729,59 @@ class GeneInfo:
                 current.gene_ids.update(exon_property_map[i].gene_ids)
                 region_map[i] = len(regions) - 1
         return regions, region_map
+
+    def build_exon_splice_site_regions(self) -> list:
+        """Build per-gene exon splice-site regions for the exon splice-site counts output.
+
+        For each gene: take the union of exons across its isoforms, drop
+        intron-retention exons (an exon that spans an annotated intron of the same
+        gene end-to-end), then group the remaining candidate exons into connected
+        components by overlap on the same strand. Regions are never merged across
+        genes. Returns a list of ExonSpliceSiteRegion with precomputed edge-uniqueness.
+        """
+        regions: list = []
+        if not self.all_isoforms_exons:
+            return regions
+
+        gene_to_transcripts = defaultdict(list)
+        for t_id, gene_id in self.gene_id_map.items():
+            gene_to_transcripts[gene_id].append(t_id)
+
+        for gene_id, t_ids in gene_to_transcripts.items():
+            strand = self.gene_strands.get(gene_id, ".")
+            exon_set = set()
+            intron_set = set()
+            for t_id in t_ids:
+                exon_set.update(self.all_isoforms_exons.get(t_id, []))
+                intron_set.update(self.all_isoforms_introns.get(t_id, []))
+            if not exon_set:
+                continue
+            introns = sorted(intron_set)
+            # drop intron-retention exons: candidate E spans some gene intron I end-to-end
+            candidates = [e for e in sorted(exon_set)
+                          if not any(e[0] <= i[0] and e[1] >= i[1] for i in introns)]
+            if not candidates:
+                continue
+            # connected components by overlap (candidates are sorted by start)
+            current = None
+            for e in candidates:
+                if current is None or e[0] > current.end:
+                    current = ExonSpliceSiteRegion(self.chr_id, e[0], e[1], strand, gene_id)
+                    regions.append(current)
+                else:
+                    current.end = max(current.end, e[1])
+                current.candidates.append(e)
+
+        # precompute edge uniqueness within each region (exact coordinate match)
+        for region in regions:
+            left_counts = defaultdict(int)
+            right_counts = defaultdict(int)
+            for (s, e) in region.candidates:
+                left_counts[s] += 1
+                right_counts[e] += 1
+            region.left_unique = [left_counts[s] == 1 for (s, e) in region.candidates]
+            region.right_unique = [right_counts[e] == 1 for (s, e) in region.candidates]
+        return regions
 
     # split exons into non-overlapping covering blocks
     @staticmethod

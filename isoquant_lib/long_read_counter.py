@@ -5,7 +5,10 @@
 # See file LICENSE for details.
 ############################################################################
 
+import gzip
 import logging
+import os
+import shutil
 from collections import defaultdict, OrderedDict
 from enum import Enum, unique
 
@@ -13,6 +16,7 @@ from .isoform_assignment import (
     MatchEventSubtype,
     ReadAssignmentType,
 )
+from .common import junctions_from_blocks
 from .gene_info import FeatureInfo
 from .read_groups import AbstractReadGrouper
 from .convert_grouped_counts import (
@@ -770,6 +774,272 @@ class JointExonCounter(AbstractCounter):
         # 9-column schema does not match the include/exclude pair layout used by
         # convert_profile_to_matrix. Linear TSV is the primary output.
         return
+
+    def add_read_info_raw(self, read_id, feature_ids, group_ids):
+        return
+
+    def add_confirmed_features(self, features):
+        return
+
+    def add_unassigned(self, read_assignment):
+        return
+
+    def add_unaligned(self, n_reads=1):
+        return
+
+
+# TSS (5') anchoring events. terminal_site_match_left denotes a TSS match on '+'
+# but a TES match on '-' (and vice versa), so the relevant set is strand-dependent.
+_TSS_MATCH_LEFT = frozenset({
+    MatchEventSubtype.terminal_site_match_left,
+    MatchEventSubtype.terminal_site_match_left_precise,
+})
+_TSS_MATCH_RIGHT = frozenset({
+    MatchEventSubtype.terminal_site_match_right,
+    MatchEventSubtype.terminal_site_match_right_precise,
+})
+
+
+# Conservatism buffer (bp) for the region-exclusion test; code parameter only.
+DEFAULT_EXCLUSION_MARGIN = 50
+
+
+# Exon splice-site counts (see spec): groups a gene's overlapping candidate exons
+# into regions and, per read, reports per-candidate full / left-half / right-half
+# inclusion or per-region exclusion / ambiguous counts, with per-read group lists.
+# Produced ungrouped (bulk) and once per grouping strategy, like the other exon
+# counters. Counting runs post-UMI-dedup, so each read is already a unique molecule.
+class ExonSpliceSiteCounter(AbstractCounter):
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0,
+                 delta: int = 6, exclusion_margin: int = DEFAULT_EXCLUSION_MARGIN,
+                 emit_read_ids: bool = False):
+        AbstractCounter.__init__(self, output_prefix, string_pools is None)
+        self.string_pools = string_pools
+        self.group_index: int = group_index
+        self.delta: int = delta
+        self.exclusion_margin: int = exclusion_margin
+        self.emit_read_ids: bool = emit_read_ids
+        # region_key = (chr, region_start, region_end, strand, gene_id) ->
+        #   {"cands": {(start,end): {"full":bucket, "left":bucket, "right":bucket}},
+        #    "excl": bucket, "amb": bucket}   where bucket = [count, [group_ids], [read_ids]]
+        self.regions: dict = {}
+
+    @staticmethod
+    def _new_bucket() -> list:
+        return [0, [], []]
+
+    def _bump(self, bucket: list, group_id: int, read_id: str) -> None:
+        bucket[0] += 1
+        if not self.ignore_read_groups:
+            bucket[1].append(group_id)
+        if self.emit_read_ids:
+            bucket[2].append(read_id)
+
+    def _get_region_record(self, region) -> dict:
+        key = (region.chr_id, region.start, region.end, region.strand, region.gene_id)
+        rec = self.regions.get(key)
+        if rec is None:
+            rec = {"cands": {}, "excl": self._new_bucket(), "amb": self._new_bucket()}
+            self.regions[key] = rec
+        return rec
+
+    def _get_cand_bucket(self, rec: dict, cand: tuple, side: str) -> list:
+        cand_rec = rec["cands"].get(cand)
+        if cand_rec is None:
+            cand_rec = {"full": self._new_bucket(), "left": self._new_bucket(),
+                        "right": self._new_bucket()}
+            rec["cands"][cand] = cand_rec
+        return cand_rec[side]
+
+    def add_read_info(self, read_assignment):
+        if not ProfileFeatureCounter.is_valid(read_assignment):
+            return
+        if not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
+            return
+        gene_info = read_assignment.gene_info
+        read_gene = None
+        for m in read_assignment.isoform_matches:
+            if m.assigned_gene:
+                read_gene = m.assigned_gene
+                break
+        if read_gene is None:
+            return
+
+        regions = getattr(gene_info, "_exon_splice_site_regions", None)
+        if regions is None:
+            regions = gene_info.build_exon_splice_site_regions()
+            gene_info._exon_splice_site_regions = regions
+        if not regions:
+            return
+
+        blocks = read_assignment.corrected_exons if read_assignment.corrected_exons else read_assignment.exons
+        if not blocks:
+            return
+        introns = junctions_from_blocks(blocks)
+        strand = read_assignment.strand
+        tss_anchored, polya_anchored = self._get_anchoring(read_assignment, strand)
+        read_id = read_assignment.read_id
+        # per-strategy group id (0 / default when ungrouped)
+        if self.ignore_read_groups or not read_assignment.read_group_ids:
+            group_id = 0
+        else:
+            group_id = read_assignment.read_group_ids[self.group_index]
+
+        for region in regions:
+            if region.gene_id != read_gene:
+                continue
+            if strand != region.strand:
+                # disagreeing strand is skipped, not counted as ambiguous (per spec)
+                continue
+            self._classify_region(region, blocks, introns, strand,
+                                   tss_anchored, polya_anchored, group_id, read_id)
+
+    def _get_anchoring(self, read_assignment, strand: str):
+        # 3' polyA anchoring: read-level polyA tail flag
+        polya_anchored = bool(read_assignment.polyA_found)
+        # 5' TSS anchoring: strand-aware terminal-site-match events
+        tss_events = _TSS_MATCH_LEFT if strand == "+" else _TSS_MATCH_RIGHT
+        tss_anchored = False
+        for m in read_assignment.isoform_matches:
+            if any(e.event_type in tss_events for e in m.match_subclassifications):
+                tss_anchored = True
+                break
+        return tss_anchored, polya_anchored
+
+    def _classify_region(self, region, blocks, introns, strand,
+                         tss_anchored, polya_anchored, group_id, read_id) -> None:
+        delta = self.delta
+        n = len(blocks)
+        cands = region.candidates
+        rstart, rend = region.start, region.end
+
+        # anchoring of the two external (terminal) block edges of the read
+        left_ext_anchored = tss_anchored if strand == "+" else polya_anchored
+        right_ext_anchored = polya_anchored if strand == "+" else tss_anchored
+
+        def left_demonstrated(j: int) -> bool:
+            # block j's left edge is a splice site (interior) or an anchored terminal
+            return j > 0 or left_ext_anchored
+
+        def right_demonstrated(j: int) -> bool:
+            return j < n - 1 or right_ext_anchored
+
+        # ---- full inclusion: a single block demonstrates both edges of a candidate ----
+        full_hits = []
+        for k, (xs, xe) in enumerate(cands):
+            for j, b in enumerate(blocks):
+                if abs(b[0] - xs) <= delta and abs(b[1] - xe) <= delta:
+                    has_splice_edge = (j > 0) or (j < n - 1)
+                    if has_splice_edge and left_demonstrated(j) and right_demonstrated(j):
+                        full_hits.append((xs, xe))
+                        break
+
+        if len(full_hits) == 1:
+            rec = self._get_region_record(region)
+            self._bump(self._get_cand_bucket(rec, full_hits[0], "full"), group_id, read_id)
+            return
+        if len(full_hits) > 1:
+            self._bump(self._get_region_record(region)["amb"], group_id, read_id)
+            return
+
+        # ---- region exclusion: an intron interior contains the whole region envelope ----
+        margin = self.exclusion_margin
+        for i in introns:
+            if i[0] + margin <= rstart and i[1] - margin >= rend:
+                self._bump(self._get_region_record(region)["excl"], group_id, read_id)
+                return
+
+        # ---- read must actually overlap the region to be full/half/ambiguous ----
+        if not any(b[0] <= rend and b[1] >= rstart for b in blocks):
+            return
+
+        # ---- unique half-inclusion ----
+        half_hits = []  # (candidate (xs,xe), side)
+        for k, (xs, xe) in enumerate(cands):
+            if region.left_unique[k]:
+                for j, b in enumerate(blocks):
+                    if (abs(b[0] - xs) <= delta and abs(b[1] - xe) > delta
+                            and b[1] < xe and left_demonstrated(j)):
+                        half_hits.append(((xs, xe), "left"))
+                        break
+            if region.right_unique[k]:
+                for j, b in enumerate(blocks):
+                    if (abs(b[1] - xe) <= delta and abs(b[0] - xs) > delta
+                            and b[0] > xs and right_demonstrated(j)):
+                        half_hits.append(((xs, xe), "right"))
+                        break
+
+        rec = self._get_region_record(region)
+        if len(half_hits) == 1:
+            cand, side = half_hits[0]
+            self._bump(self._get_cand_bucket(rec, cand, side), group_id, read_id)
+        else:
+            self._bump(rec["amb"], group_id, read_id)
+
+    def _get_group_name(self, group_id: int) -> str:
+        if self.string_pools is None:
+            return AbstractReadGrouper.default_group_id
+        return self.string_pools.get_read_group_pool(self.group_index).get_str(group_id)
+
+    def _header(self) -> str:
+        cols = ["region_gene_candidate", "n_full", "n_left", "n_right",
+                "groups_full", "groups_left", "groups_right"]
+        if self.emit_read_ids:
+            cols += ["read_ids_full", "read_ids_left", "read_ids_right"]
+        return "\t".join(cols) + "\n"
+
+    @staticmethod
+    def _fmt_list(items: list) -> str:
+        return ";".join(items) if items else "NA"
+
+    def _fmt_groups(self, group_ids: list) -> str:
+        # ungrouped / bulk carries no per-read groups -> NA
+        if self.ignore_read_groups or not group_ids:
+            return "NA"
+        return ";".join(self._get_group_name(g) for g in group_ids)
+
+    def _write_inclusion_row(self, f, feature_id: str, full: list, left: list, right: list) -> None:
+        fields = [feature_id, str(full[0]), str(left[0]), str(right[0]),
+                  self._fmt_groups(full[1]), self._fmt_groups(left[1]), self._fmt_groups(right[1])]
+        if self.emit_read_ids:
+            fields += [self._fmt_list(full[2]), self._fmt_list(left[2]), self._fmt_list(right[2])]
+        f.write("\t".join(fields) + "\n")
+
+    def _write_region_row(self, f, feature_id: str, bucket: list) -> None:
+        # exclusion / ambiguous: count goes in n_full, other columns are empty
+        fields = [feature_id, str(bucket[0]), "0", "0", self._fmt_groups(bucket[1]), "NA", "NA"]
+        if self.emit_read_ids:
+            fields += [self._fmt_list(bucket[2]), "NA", "NA"]
+        f.write("\t".join(fields) + "\n")
+
+    def dump(self) -> None:
+        with open(self.output_counts_file_name, "w") as f:
+            f.write(self._header())
+            for key in sorted(self.regions.keys(), key=lambda k: (k[0], k[1], k[2], k[4])):
+                chr_id, rstart, rend, strand, gene_id = key
+                rec = self.regions[key]
+                region_coord = "%s_%d_%d_%s" % (chr_id, rstart, rend, strand)
+                for cand in sorted(rec["cands"].keys()):
+                    buckets = rec["cands"][cand]
+                    full, left, right = buckets["full"], buckets["left"], buckets["right"]
+                    if full[0] == 0 and left[0] == 0 and right[0] == 0:
+                        continue
+                    cand_str = "%s_%d_%d_%s" % (chr_id, cand[0], cand[1], strand)
+                    feature_id = "%s__%s__%s" % (region_coord, gene_id, cand_str)
+                    self._write_inclusion_row(f, feature_id, full, left, right)
+                if rec["excl"][0] > 0:
+                    self._write_region_row(f, "%s__%s__exclusion" % (region_coord, gene_id), rec["excl"])
+                if rec["amb"][0] > 0:
+                    self._write_region_row(f, "%s__%s__ambiguous" % (region_coord, gene_id), rec["amb"])
+
+    def finalize(self, args=None) -> None:
+        # gzip the merged output by default (mostly group columns; compresses well)
+        src = self.output_counts_file_name
+        if not os.path.exists(src):
+            return
+        with open(src, "rb") as f_in, gzip.open(src + ".gz", "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        os.remove(src)
 
     def add_read_info_raw(self, read_id, feature_ids, group_ids):
         return
