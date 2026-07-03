@@ -140,6 +140,18 @@ class TestIntronRetentionCounter:
         assert self.counter.inclusion_feature_counter[0].get(0) == 1
         assert self.counter.inclusion_feature_counter[1].get(0) == 1
 
+    def test_builds_and_reuses_feature_index_cache(self):
+        # coords -> feature index map is built once and reused across reads
+        ra = self._make_ra_with_ir(MatchEventSubtype.intron_retention, (0, 0))
+        self.counter.add_read_info(ra)
+        cached = self.gene_info._intron_feature_index
+        assert cached == {(200, 300): 0, (400, 500): 1}
+        ra2 = self._make_ra_with_ir(MatchEventSubtype.unspliced_intron_retention, (1, 1))
+        self.counter.add_read_info(ra2)
+        assert self.gene_info._intron_feature_index is cached  # not rebuilt
+        assert self.counter.inclusion_feature_counter[0].get(0) == 1
+        assert self.counter.inclusion_feature_counter[1].get(0) == 1
+
     def test_ignores_incomplete_retention(self):
         ra = self._make_ra_with_ir(MatchEventSubtype.incomplete_intron_retention_left, (0, 0))
         self.counter.add_read_info(ra)
