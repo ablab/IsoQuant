@@ -1100,6 +1100,13 @@ class IntronRetentionCounter(ProfileFeatureCounter):
         if not property_map:
             return
 
+        # coords -> gene intron feature index, built once per gene_info and shared
+        # across ungrouped + grouped IR counters (replaces per-lookup O(n) .index())
+        feature_index = getattr(gene_info, "_intron_feature_index", None)
+        if feature_index is None:
+            feature_index = {coords: i for i, coords in enumerate(intron_features)}
+            gene_info._intron_feature_index = feature_index
+
         for match in read_assignment.isoform_matches:
             if match.assigned_transcript is None:
                 continue
@@ -1111,9 +1118,8 @@ class IntronRetentionCounter(ProfileFeatureCounter):
                     if idx >= len(isoform_introns):
                         continue
                     intron_coords = isoform_introns[idx]
-                    try:
-                        feature_idx = intron_features.index(intron_coords)
-                    except ValueError:
+                    feature_idx = feature_index.get(intron_coords)
+                    if feature_idx is None:
                         continue
                     feature_id = property_map[feature_idx].id
                     self.inclusion_feature_counter[feature_id].inc(group_id)
