@@ -92,23 +92,19 @@ def _format_coord(chr_id: str, start: int, end: int, strand: str) -> str:
 def convert_to_read_assignments(read_info_path: str, output_path: str):
     """Convert read_info.tsv to legacy read_assignments.tsv format."""
     with _open_file(read_info_path) as inf, _open_file(output_path, "w") as outf:
-        # Copy comment lines from read_info header
+        header_written = False
         for line in inf:
+            # Copy comment lines from read_info header through unchanged
             if line.startswith("#"):
                 outf.write(line)
-            else:
-                break  # first non-comment line is the header, skip it
-
-        # Write read_assignments header
-        outf.write("read_id\tchr\tstrand\tisoform_id\tgene_id"
-                    "\tassignment_type\tassignment_events\texons\tadditional_info\tgroups\n")
-
-        # Process the first data line (already read above)
-        if not line.startswith("#"):
-            _convert_ra_line(line, outf)
-
-        for line in inf:
-            if line.startswith("#"):
+                continue
+            # Write the read_assignments header once, before any data
+            if not header_written:
+                outf.write("read_id\tchr\tstrand\tisoform_id\tgene_id"
+                           "\tassignment_type\tassignment_events\texons\tadditional_info\tgroups\n")
+                header_written = True
+            # Skip the read_info column header row
+            if line.startswith("read_id"):
                 continue
             _convert_ra_line(line, outf)
 

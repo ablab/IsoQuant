@@ -126,10 +126,28 @@ class AssignmentData:
     ALL_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous", "inconsistent"}
 
     def __init__(self, tsv_file, preset='isoquant', assignment_types = UNIQUE_ASSIGNMENTS_TYPES):
+        self.preset = preset
         self.parse_params = self.PRESETS[preset]
         self.assigned_isoforms = defaultdict(str)
         self.assignment_types = assignment_types
         self.parse_tsv(tsv_file)
+
+    def _detect_params_from_header(self, tokens):
+        # For IsoQuant per-read output, derive column indices from the header row
+        # so both read_info and legacy read_assignments parse correctly regardless
+        # of the --tool value. Returns None for non-IsoQuant / headerless input.
+        if self.preset not in ('isoquant', 'isoquant_legacy'):
+            return None
+        if not tokens or tokens[0] != "read_id":
+            return None
+        col = {name: i for i, name in enumerate(tokens)}
+        if "isoform_id" not in col:
+            return None
+        if "isoform_assignment_type" in col:  # read_info format
+            return self.ParseParams(col["read_id"], col["isoform_id"], col["isoform_assignment_type"])
+        if "assignment_type" in col:  # legacy read_assignments format
+            return self.ParseParams(col["read_id"], col["isoform_id"], col["assignment_type"])
+        return None
 
     def parse_tsv(self, tsv_file):
         logger.info("Reading assignments from %s" % tsv_file)
@@ -137,10 +155,17 @@ class AssignmentData:
             handler = gzip.open(tsv_file, "rt")
         else:
             handler = open(tsv_file, "rt")
+        header_checked = False
         for l in handler:
             if l.startswith('#'):
                 continue
             tokens = l.strip().split()
+            if not header_checked:
+                header_checked = True
+                detected = self._detect_params_from_header(tokens)
+                if detected is not None:
+                    self.parse_params = detected
+                    continue  # header row, not data
             seq_id = tokens[self.parse_params.read_id_column] # if is_real_data else id_pattern.search(tokens[0]).group(1)
             assignment_type = tokens[self.parse_params.assignment_type_column]
             if assignment_type in self.assignment_types:

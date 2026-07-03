@@ -258,15 +258,50 @@ class TestConvertToReadAssignments:
 
             # Header line
             assert lines[0].startswith("read_id\tchr\tstrand")
-            # Find actual data line (skip header-like lines)
-            data_lines = [l for l in lines[1:] if not l.startswith("read_id")]
-            assert len(data_lines) >= 1
+            # Exactly one data line -- the read_info column header must NOT be
+            # emitted as a spurious record (only lines[0] may start with read_id)
+            assert all(not l.startswith("read_id") for l in lines[1:])
+            data_lines = lines[1:]
+            assert len(data_lines) == 1
             cols = data_lines[0].strip().split("\t")
             assert cols[0] == "r1"
             assert cols[1] == "chr1"
             assert cols[3] == "TX1"  # isoform_id
             assert cols[4] == "GENE1"  # gene_id
             assert cols[5] == "unique"  # assignment_type
+        finally:
+            os.unlink(input_path)
+            if os.path.exists(output_path):
+                os.unlink(output_path)
+
+    def test_comment_lines_preserved_and_no_duplicate_header(self):
+        """Leading '#' comments pass through; the header is not duplicated as data."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.tsv', delete=False) as f:
+            f.write("# Command line: isoquant.py ...\n")
+            f.write("# IsoQuant version: 3.x\n")
+            f.write("read_id\tchr\tstrand\tgene_id\tgene_assignment_type\tisoform_id\t"
+                    "isoform_assignment_type\tassignment_events\tclassification\texons\t"
+                    "polyA\tCAGE\tcanonical\tbarcode\tumi\tcell_type\tgroups\tadditional\n")
+            f.write("r1\tchr1\t+\tGENE1\tunique\tTX1\tunique\texon_match(0,0)\t"
+                    "full_splice_match\t100-200,300-400\tTrue\t.\tTrue\t"
+                    "ACGT\tUMI1\t.\t.\t*\n")
+            input_path = f.name
+
+        output_path = input_path + ".ra.tsv"
+        try:
+            convert_to_read_assignments(input_path, output_path)
+            with open(output_path) as out:
+                lines = out.readlines()
+
+            comment_lines = [l for l in lines if l.startswith("#")]
+            assert len(comment_lines) == 2
+            # Comments precede the single header line
+            header_idx = [i for i, l in enumerate(lines) if l.startswith("read_id")]
+            assert header_idx == [2]
+            # Exactly one converted data row
+            data_lines = [l for l in lines if not l.startswith("#") and not l.startswith("read_id")]
+            assert len(data_lines) == 1
+            assert data_lines[0].split("\t")[0] == "r1"
         finally:
             os.unlink(input_path)
             if os.path.exists(output_path):
