@@ -270,11 +270,6 @@ class GeneInfo:
         if prepare_profiles:
             self.exon_property_map = self.set_feature_properties(self.all_isoforms_exons, self.exon_profiles)
             self.intron_property_map = self.set_feature_properties(self.all_isoforms_introns, self.intron_profiles)
-            self.exon_overlap_regions, self.exon_overlap_region_map = \
-                self.build_exon_overlap_regions(self.exon_profiles.features, self.exon_property_map)
-        else:
-            self.exon_overlap_regions = []
-            self.exon_overlap_region_map = None
 
     @classmethod
     def from_models(cls, transcript_model_storage, delta=0):
@@ -333,8 +328,6 @@ class GeneInfo:
         gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
-        gene_info.exon_overlap_regions = []
-        gene_info.exon_overlap_region_map = None
 
         # additional info for canonical splice site detection
         gene_info.all_read_region_start = gene_info.start
@@ -388,8 +381,6 @@ class GeneInfo:
         gene_info.regions_for_bam_fetch = [(gene_info.start, gene_info.end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
-        gene_info.exon_overlap_regions = []
-        gene_info.exon_overlap_region_map = None
 
         # additional info for canonical splice site detection
         gene_info.all_read_region_start = gene_info.start
@@ -427,8 +418,6 @@ class GeneInfo:
         gene_info.regions_for_bam_fetch = [(start, end)]
         gene_info.exon_property_map = None
         gene_info.intron_property_map = None
-        gene_info.exon_overlap_regions = []
-        gene_info.exon_overlap_region_map = None
 
         # additional info for canonical splice site detection
         gene_info.all_read_region_start = gene_info.start
@@ -487,8 +476,6 @@ class GeneInfo:
         gene_info.set_gene_attributes()
         gene_info.exon_property_map = gene_info.set_feature_properties(gene_info.all_isoforms_exons, gene_info.exon_profiles)
         gene_info.intron_property_map = gene_info.set_feature_properties(gene_info.all_isoforms_introns, gene_info.intron_profiles)
-        gene_info.exon_overlap_regions, gene_info.exon_overlap_region_map = \
-            gene_info.build_exon_overlap_regions(gene_info.exon_profiles.features, gene_info.exon_property_map)
         return gene_info
 
     def serialize(self, outfile):
@@ -707,6 +694,40 @@ class GeneInfo:
         assert len(feature_properties) == len(feature_profiles.features)
         return feature_properties
 
+    @staticmethod
+    def _group_overlapping_intervals(intervals):
+        # Group intervals (each a (start, end) tuple, sorted by start) into
+        # overlap-connected components. Returns a list of [region_start, region_end,
+        # positions] where positions are indices into `intervals`. Shared sweep kernel
+        # for build_exon_overlap_regions and build_exon_splice_site_regions.
+        groups = []
+        current = None  # [region_start, region_end, [positions]]
+        for pos, (s, e) in enumerate(intervals):
+            if current is None or s > current[1]:
+                current = [s, e, [pos]]
+                groups.append(current)
+            else:
+                current[2].append(pos)
+                if e > current[1]:
+                    current[1] = e
+        return groups
+
+    # Lazily built and cached view over exon_profiles.features: overlapping annotated
+    # exons grouped (within a strand) into ExonRegions. Empty when there are no exon
+    # profiles (e.g. de-novo gene_info). Consumed by JointExonCounter under --count_exons.
+    @property
+    def exon_overlap_regions(self):
+        regions = getattr(self, "_exon_overlap_regions", None)
+        if regions is None:
+            exon_property_map = getattr(self, "exon_property_map", None)
+            exon_profiles = getattr(self, "exon_profiles", None)
+            if not exon_property_map or exon_profiles is None or not exon_profiles.features:
+                regions = []
+            else:
+                regions, _ = self.build_exon_overlap_regions(exon_profiles.features, exon_property_map)
+            self._exon_overlap_regions = regions
+        return regions
+
     # group annotated exons that mutually overlap (within a strand) into ExonRegions.
     # Returns (regions, region_map) where region_map[i] gives the index into `regions`
     # for the exon at exon_profiles.features[i].
@@ -720,18 +741,16 @@ class GeneInfo:
             by_strand[exon_property_map[i].strand].append(i)
 
         for strand, idx_list in by_strand.items():
-            current = None
-            for i in idx_list:
-                exon = exon_features[i]
-                if current is None or exon[0] > current.end:
-                    current = ExonRegion(self.chr_id, exon[0], exon[1], strand)
-                    regions.append(current)
-                else:
-                    if exon[1] > current.end:
-                        current.end = exon[1]
-                current.member_exon_indices.append(i)
-                current.gene_ids.update(exon_property_map[i].gene_ids)
-                region_map[i] = len(regions) - 1
+            intervals = [exon_features[i] for i in idx_list]
+            for region_start, region_end, positions in self._group_overlapping_intervals(intervals):
+                region = ExonRegion(self.chr_id, region_start, region_end, strand)
+                region_index = len(regions)
+                regions.append(region)
+                for pos in positions:
+                    i = idx_list[pos]
+                    region.member_exon_indices.append(i)
+                    region.gene_ids.update(exon_property_map[i].gene_ids)
+                    region_map[i] = region_index
         return regions, region_map
 
     def build_exon_splice_site_regions(self) -> list:
@@ -767,14 +786,10 @@ class GeneInfo:
             if not candidates:
                 continue
             # connected components by overlap (candidates are sorted by start)
-            current = None
-            for e in candidates:
-                if current is None or e[0] > current.end:
-                    current = ExonSpliceSiteRegion(self.chr_id, e[0], e[1], strand, gene_id)
-                    regions.append(current)
-                else:
-                    current.end = max(current.end, e[1])
-                current.candidates.append(e)
+            for region_start, region_end, positions in self._group_overlapping_intervals(candidates):
+                region = ExonSpliceSiteRegion(self.chr_id, region_start, region_end, strand, gene_id)
+                region.candidates = [candidates[p] for p in positions]
+                regions.append(region)
 
         # precompute edge uniqueness within each region (exact coordinate match)
         for region in regions:
