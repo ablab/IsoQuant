@@ -69,8 +69,10 @@ def stub_models(monkeypatch):
 # -- static helpers -----------------------------------------------------------
 
 def test_intron_chain_key_multi_exon():
+    # introns follow the project-wide junctions_from_blocks convention (+1/-1):
+    # actual first..last intronic base between consecutive exon blocks.
     m = _model([(100, 200), (300, 400), (500, 600)])
-    assert gbmc.GraphBasedModelConstructor._intron_chain_key(m) == ((200, 300), (400, 500))
+    assert gbmc.GraphBasedModelConstructor._intron_chain_key(m) == ((201, 299), (401, 499))
 
 
 def test_intron_chain_key_monoexon_is_empty():

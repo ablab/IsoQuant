@@ -1077,9 +1077,10 @@ class GraphBasedModelConstructor:
     @staticmethod
     def _intron_chain_key(model: TranscriptModel) -> Tuple[Tuple[int, int], ...]:
         # Terminal-end-independent identity of a transcript: the tuple of its
-        # introns derived from exon blocks. Monoexon -> empty tuple.
-        eb = model.exon_blocks
-        return tuple((eb[i][1], eb[i + 1][0]) for i in range(len(eb) - 1))
+        # introns derived from exon blocks, using the project-wide
+        # junctions_from_blocks convention (actual intron coordinates, +1/-1).
+        # Monoexon -> empty tuple.
+        return tuple(junctions_from_blocks(model.exon_blocks))
 
     def _add_known_alternative_end_models(self) -> None:
         # Part 2: for each known (reference) model, peak-call its own assigned
@@ -1093,7 +1094,7 @@ class GraphBasedModelConstructor:
         # a novel end, so it must be suppressed even if that reference was not
         # emitted as a model in this locus.
         for ref_exons in self.gene_info.all_isoforms_exons.values():
-            ck = tuple((ref_exons[i][1], ref_exons[i + 1][0]) for i in range(len(ref_exons) - 1))
+            ck = tuple(junctions_from_blocks(ref_exons))
             existing_pairs[ck].append((ref_exons[0][0], ref_exons[-1][1]))
         for m in self.transcript_model_storage:
             existing_pairs[self._intron_chain_key(m)].append(
@@ -1128,7 +1129,7 @@ class GraphBasedModelConstructor:
         # duplicate an already-kept one.
         ref_pairs = defaultdict(list)
         for ref_exons in self.gene_info.all_isoforms_exons.values():
-            ck = tuple((ref_exons[i][1], ref_exons[i + 1][0]) for i in range(len(ref_exons) - 1))
+            ck = tuple(junctions_from_blocks(ref_exons))
             ref_pairs[ck].append((ref_exons[0][0], ref_exons[-1][1]))
 
         d = self.args.apa_delta
