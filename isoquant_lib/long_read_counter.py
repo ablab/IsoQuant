@@ -751,9 +751,6 @@ class JointExonCounter(AbstractCounter):
         # convert_profile_to_matrix. Linear TSV is the primary output.
         return
 
-    def add_read_info_raw(self, read_id, feature_ids, group_ids):
-        return
-
     def add_confirmed_features(self, features):
         return
 
@@ -1014,9 +1011,6 @@ class ExonSpliceSiteCounter(AbstractCounter):
 
     def finalize(self, args=None) -> None:
         # per-group rows scale like the other grouped counters; kept as plain TSV
-        return
-
-    def add_read_info_raw(self, read_id, feature_ids, group_ids):
         return
 
     def add_confirmed_features(self, features):
