@@ -18,7 +18,6 @@ from .common import (
     intersection_len,
     interval_len,
     junctions_from_blocks,
-    jaccard_similarity,
 )
 from .assignment_io import ReadAssignmentType
 from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
@@ -35,6 +34,7 @@ from .long_read_assigner import LongReadAssigner
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
 from .terminal_peaks import detect_peaks, get_polya_model, get_tss_model
+from .transcript_to_gene_joiner import TranscriptToGeneJoiner
 
 if TYPE_CHECKING:
     from xgboost import XGBClassifier
@@ -1364,102 +1364,3 @@ class IntronPathProcessor:
                 (len(all_possible_starts) <= 1 or start < all_possible_starts[1][1]):
             return leftmost_start
         return None
-
-
-class TranscriptToGeneJoiner:
-    def __init__(self, transcipt_model_storage, gene_info):
-        self.gene_info = gene_info
-        self.transcipt_model_storage = transcipt_model_storage
-        self.gene_introns = defaultdict(set)
-        self.gene_strands = {}
-        self.gene_regions = {}
-        self.gene_to_transcripts = defaultdict(set)
-
-        for gene_id in self.gene_info.gene_strands.keys():
-            self.gene_strands[gene_id] = self.gene_info.gene_strands[gene_id]
-            self.gene_regions[gene_id] = self.gene_info.get_gene_regions()[gene_id]
-        for transcript_id in self.gene_info.gene_id_map.keys():
-            gene_id = self.gene_info.gene_id_map[transcript_id]
-            self.gene_introns[gene_id].update(self.gene_info.all_isoforms_introns[transcript_id])
-            self.gene_to_transcripts[gene_id].add(transcript_id)
-
-        for t in self.transcipt_model_storage:
-            if t.transcript_type == TranscriptModelType.known:
-                continue
-
-            if t.gene_id not in self.gene_regions:
-                self.gene_regions[t.gene_id] = (t.exon_blocks[0][0], t.exon_blocks[-1][1])
-                self.gene_strands[t.gene_id] = t.strand
-            else:
-                self.gene_regions[t.gene_id] = (min(self.gene_regions[t.gene_id][0], t.exon_blocks[0][0]),
-                                                max(self.gene_regions[t.gene_id][1], t.exon_blocks[-1][1]))
-                assert self.gene_strands[t.gene_id] == t.strand
-            self.gene_introns[t.gene_id].update(junctions_from_blocks(t.exon_blocks))
-            self.gene_to_transcripts[t.gene_id].add(t.transcript_id)
-        self.scores = {}
-
-    def count_score(self, gene1, gene2):
-        logger.debug("Counting score %s %s" % (gene2, gene1))
-        if self.gene_strands[gene1] != self.gene_strands[gene2]:
-            return 0.0
-        intronic_overlap = (len(self.gene_introns[gene1].intersection(self.gene_introns[gene2])) /
-                            max(1, len(self.gene_introns[gene1].union(self.gene_introns[gene2]))))
-        gene_range1 = self.gene_regions[gene1]
-        gene_range2 = self.gene_regions[gene2]
-        position_overlap = jaccard_similarity([gene_range1], [gene_range2])
-        return position_overlap + intronic_overlap
-
-    def count_scores(self):
-        for g1_id in self.gene_to_transcripts.keys():
-            for g2_id in self.gene_to_transcripts.keys():
-                if g1_id == g2_id or (g1_id in self.gene_info.gene_strands and g2_id in self.gene_info.gene_strands):
-                    continue
-                gene_pair = tuple(sorted([g1_id, g2_id]))
-                if gene_pair not in self.scores:
-                    self.scores[gene_pair] = self.count_score(g1_id, g2_id)
-
-    def merge_genes(self, gene1, gene2):
-        logger.debug("Merging %s into %s" % (gene2, gene1))
-        self.gene_regions[gene1] = (min(self.gene_regions[gene1][0], self.gene_regions[gene2][0]),
-                                    max(self.gene_regions[gene1][1], self.gene_regions[gene2][1]))
-        self.gene_introns[gene1].update(self.gene_introns[gene2])
-        self.gene_to_transcripts[gene1].update(self.gene_to_transcripts[gene2])
-        if self.gene_strands[gene2] != self.gene_strands[gene1]:
-            logger.error("Merging genes with different strands: %s, %s" % (gene1, gene2))
-        del self.gene_regions[gene2]
-        del self.gene_introns[gene2]
-        del self.gene_to_transcripts[gene2]
-        del self.gene_strands[gene2]
-
-        # update scores
-        new_scores = {}
-        for gene_pair in self.scores.keys():
-            if gene2 in gene_pair:
-                continue
-            elif gene1 in gene_pair:
-                new_scores[gene_pair] = self.count_score(*gene_pair)
-            else:
-                new_scores[gene_pair] = self.scores[gene_pair]
-        self.scores = new_scores
-
-    def join_transcripts(self):
-        self.count_scores()
-        while len(self.scores) > 1:
-            best_gene_pair = max(self.scores, key=self.scores.get)
-            if self.scores[best_gene_pair] < 0.1:
-                break
-            if best_gene_pair[0] in self.gene_info.gene_strands:
-                assert best_gene_pair[1] not in self.gene_info.gene_strands
-                self.merge_genes(best_gene_pair[0], best_gene_pair[1])
-            else:
-                assert best_gene_pair[0] not in self.gene_info.gene_strands
-                self.merge_genes(best_gene_pair[1], best_gene_pair[0])
-
-        transcript_to_new_gene_id = {}
-        for gene_id, t_list in self.gene_to_transcripts.items():
-            for transcript_id in t_list:
-                transcript_to_new_gene_id[transcript_id] = gene_id
-        for model in self.transcipt_model_storage:
-            model.gene_id = transcript_to_new_gene_id[model.transcript_id]
-
-        return self.transcipt_model_storage
