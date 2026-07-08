@@ -9,7 +9,6 @@ import logging
 import os
 from collections import defaultdict
 from collections import namedtuple
-import gzip
 
 from .common import max_range
 from .gene_info import TranscriptModel, GeneInfo
@@ -31,11 +30,8 @@ class GFFPrinter:
 
     def __init__(self, outf_prefix, sample_name, exon_id_storage,
                  gtf_suffix = ".transcript_models.gtf",
-                 r2t_suffix = ".transcript_model_reads.tsv",
-                 output_r2t = True,
                  check_canonical = False,
-                 header = "",
-                 gzipped = False):
+                 header = ""):
         self.model_fname = os.path.join(outf_prefix, sample_name + gtf_suffix)
         self.exon_id_storage = exon_id_storage
         self.printed_gene_ids = set()
@@ -44,22 +40,10 @@ class GFFPrinter:
             self.out_gff.write("# " + sample_name + " IsoQuant generated GTF\n" + header)
             self.out_gff.flush()
 
-        self.output_r2t = output_r2t
-        if self.output_r2t:
-            self.r2t_fname = os.path.join(outf_prefix, sample_name + r2t_suffix)
-            if gzipped:
-                self.out_r2t = gzip.open(self.r2t_fname + ".gz", "wt")
-            else:
-                self.out_r2t = open(self.r2t_fname, "w")
-            if header:
-                self.out_r2t.write("read_id\ttranscript_id\n")
-
         self.check_canonical = check_canonical
 
     def __del__(self):
         self.out_gff.close()
-        if self.output_r2t:
-            self.out_r2t.close()
 
     def dump(self, gene_info, transcript_model_storage):
         if not transcript_model_storage:
@@ -146,18 +130,6 @@ class GFFPrinter:
                     self.out_gff.write(prefix_columns + "%s\t%d\t%d\t" % (feature_type, e[0], e[1]) + suffix_columns +
                                        ' exon_number "%d"; exon_id "%s"; %s\n' % ((i + 1), exon_str_id, exon_additiional_info))
         self.out_gff.flush()
-
-    def dump_read_assignments(self, transcript_model_constructor):
-        # write read_id -> transcript_id map
-        if not self.output_r2t:
-            return
-        for model_id in transcript_model_constructor.transcript_read_ids.keys():
-            read_assignments = transcript_model_constructor.transcript_read_ids[model_id]
-            for a in read_assignments:
-                self.out_r2t.write("%s\t%s\n" % (a.read_id, model_id))
-        for read_id in transcript_model_constructor.read_assignment_counts.keys():
-            if transcript_model_constructor.read_assignment_counts[read_id] == 0:
-                self.out_r2t.write("%s\t%s\n" % (read_id, "*"))
 
 
 def create_extended_storage(genedb, chr_id, chr_record, novel_model_storage):
