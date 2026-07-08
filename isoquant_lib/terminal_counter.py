@@ -130,7 +130,7 @@ class TerminalCounter(AbstractCounter):
     @property
     def model(self) -> XGBClassifier:
         if self._model is None:
-            self._model = XGBClassifier()
+            self._model = XGBClassifier(n_jobs=1)
             self._model.load_model(str(self._model_path))
         return self._model
 

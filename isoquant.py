@@ -6,6 +6,17 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
+# Cap per-process math-library thread pools to 1 BEFORE importing numpy /
+# scipy / xgboost (OpenBLAS/OpenMP read these at import time). IsoQuant already
+# parallelizes at the chromosome/process level, so letting each forked worker
+# spin up an all-cores BLAS/OpenMP team only oversubscribes the CPU: massive
+# cpu_time inflation (idle OpenMP spin-wait) with no wall-clock gain.
+# setdefault() leaves any user-provided override in place.
+import os as _os
+for _thread_env in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                    "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+    _os.environ.setdefault(_thread_env, "1")
+############################################################################
 import argparse
 import glob
 import json

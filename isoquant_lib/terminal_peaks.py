@@ -59,7 +59,7 @@ def _get_model(model_path: Path) -> XGBClassifier:
     key = str(model_path)
     model = _MODEL_CACHE.get(key)
     if model is None:
-        model = XGBClassifier()
+        model = XGBClassifier(n_jobs=1)
         model.load_model(key)
         _MODEL_CACHE[key] = model
     return model
