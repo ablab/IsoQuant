@@ -124,9 +124,9 @@ class RNAVelocityCounter(AbstractCounter):
                                             shape=(self.total_genes, self.total_cells)
                                         )
 
-        row_attrs = {'gene_id': self.unique_genes.to_numpy()}
+        row_attrs = {'Gene': self.unique_genes.to_numpy()}
 
-        col_attrs = {'cell_id': self.unique_cells.to_numpy()}
+        col_attrs = {'CellID': self.unique_cells.to_numpy()}
 
         loom_file = self.output_file + ".loom"
         # loompy.create() refuses to overwrite; remove any stale file from a
