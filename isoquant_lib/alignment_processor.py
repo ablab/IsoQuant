@@ -27,6 +27,7 @@ from .polya_verification import PolyAFixer
 from .exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
 from .illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
+from .transcript_splice_site_corrector import extract_relevant_deletions
 from .stats import EnumStats
 from enum import Enum, unique
 
@@ -393,6 +394,8 @@ class AlignmentCollector:
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.genomic_region = region
             read_assignment.exons = alignment_info.read_exons
+            read_assignment.boundary_deletions = extract_relevant_deletions(
+                alignment.cigartuples, alignment_info.read_exons[0][0], alignment_info.read_exons)
             read_assignment.corrected_exons = corrector.correct_read(alignment_info)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
 
@@ -469,6 +472,8 @@ class AlignmentCollector:
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.genomic_region = region
             read_assignment.exons = alignment_info.read_exons
+            read_assignment.boundary_deletions = extract_relevant_deletions(
+                alignment.cigartuples, alignment_info.read_exons[0][0], alignment_info.read_exons)
             read_assignment.corrected_exons = exon_corrector.correct_assigned_read(alignment_info,
                                                                                    read_assignment)
             read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
