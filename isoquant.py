@@ -227,6 +227,12 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(algo_args_group, "--novel_apa", action="store_true", default=False,
                                    help="Developer: extend alternative-end isoform creation to novel transcripts too.")
 
+    # Splice-site correction shifts novel transcript-model junctions onto canonical
+    # motifs using clustered read deletions near junctions; default ON.
+    add_additional_option_to_group(algo_args_group, "--no_splice_site_correction", action="store_true",
+                                   default=False,
+                                   help="Developer: disable canonical splice-site correction of novel transcript models.")
+
 
     add_additional_option_to_group(algo_args_group, "--transcript_quantification", choices=COUNTING_STRATEGIES,
                                    help="transcript quantification strategy", type=str,

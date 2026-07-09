@@ -703,7 +703,8 @@ class BasicReadAssignment:
         exons = read_list_of_pairs(infile, read_int)
         read_assignment.start = exons[0][0]
         read_assignment.end = exons[-1][1]
-        read_list_of_pairs(infile, read_int)
+        read_list_of_pairs(infile, read_int)  # boundary_deletions (skipped)
+        read_list_of_pairs(infile, read_int)  # corrected_exons (skipped)
         bool_arr = read_bool_array(infile, 3)
         read_assignment.multimapper = bool_arr[0]
         read_assignment.polyA_found = bool_arr[1]
@@ -774,6 +775,8 @@ class ReadAssignment:
         self.read_id = read_id
         self.genomic_region = (0, 0)
         self.exons = None
+        # boundary-proximal deletions (ref_pos, length) for splice-site correction
+        self.boundary_deletions = None
         self.corrected_exons = None
         self.corrected_introns = None
         self.gene_info = None
@@ -876,6 +879,7 @@ class ReadAssignment:
         read_assignment.read_id = read_string(infile)
         read_assignment.genomic_region = (read_int(infile), read_int(infile))
         read_assignment.exons = read_list_of_pairs(infile, read_int)
+        read_assignment.boundary_deletions = read_list_of_pairs(infile, read_int)
         read_assignment.corrected_exons = read_list_of_pairs(infile, read_int)
         read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
         read_assignment.gene_info = gene_info
@@ -909,6 +913,7 @@ class ReadAssignment:
         write_int(self.genomic_region[0], outfile)
         write_int(self.genomic_region[1], outfile)
         write_list_of_pairs(self.exons, outfile, write_int)
+        write_list_of_pairs(self.boundary_deletions or [], outfile, write_int)
         write_list_of_pairs(self.corrected_exons, outfile, write_int)
         write_bool_array([self.multimapper, self.polyA_found, self.cage_found], outfile)
         write_int_neg(self.polya_info.external_polya_pos, outfile)

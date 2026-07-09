@@ -31,6 +31,12 @@ from .isoform_assignment import (
     IsoformMatch
 )
 from .long_read_assigner import LongReadAssigner
+from .transcript_splice_site_corrector import (
+    count_deletions_for_splice_site_locations,
+    correct_splice_site_errors,
+    generate_updated_exon_list,
+    SUPPORTED_STRANDS,
+)
 from .long_read_profiles import CombinedProfileConstructor
 from .polya_finder import PolyAInfo
 from .terminal_peaks import detect_peaks, get_polya_model, get_tss_model
@@ -170,6 +176,7 @@ class GraphBasedModelConstructor:
         self.pre_filter_transcripts()
         self.assign_reads_to_models(read_assignment_storage)
         self.filter_transcripts()
+        self.correct_transcript_splice_sites()
         # reassign reads
         self.assign_reads_to_models(read_assignment_storage)
 
@@ -430,6 +437,57 @@ class GraphBasedModelConstructor:
         if self.create_nics or self.novel_apa:
             self._add_known_alternative_end_models()
             self._drop_duplicate_alt_end_models()
+
+    def correct_transcript_splice_sites(self) -> None:
+        """Shift novel transcript-model splice sites onto canonical motifs when a
+        consistent cluster of read deletions next to a junction indicates the
+        aligner mis-placed it. Known reference junctions come from the annotation
+        and are left untouched."""
+        if getattr(self.args, "no_splice_site_correction", False):
+            return
+        for model in self.transcript_model_storage:
+            if model.transcript_type == TranscriptModelType.known:
+                continue
+            corrected_exons = self._correct_one_model_splice_sites(
+                model, self.transcript_read_ids[model.transcript_id])
+            if corrected_exons and corrected_exons != model.exon_blocks and \
+                    self._valid_exon_chain(corrected_exons):
+                logger.debug("Corrected splice sites for %s: %s -> %s" %
+                             (model.transcript_id, model.exon_blocks, corrected_exons))
+                model.exon_blocks = corrected_exons
+
+    def _correct_one_model_splice_sites(self, model, reads):
+        """Return a corrected exon-block list for a single model, or None."""
+        exons = model.exon_blocks
+        if len(exons) < 2 or not reads or model.strand not in SUPPORTED_STRANDS:
+            return None
+
+        splice_site_cases = {}
+        for read in reads:
+            if not read.exons:
+                continue
+            count_deletions_for_splice_site_locations(
+                read.exons[0][0], read.exons[-1][1], read.boundary_deletions or [],
+                exons, splice_site_cases)
+
+        if not splice_site_cases:
+            return None
+        locations_with_errors = correct_splice_site_errors(
+            splice_site_cases, self.chr_record, model.strand)
+        if not locations_with_errors:
+            return None
+        return generate_updated_exon_list(splice_site_cases, locations_with_errors, exons)
+
+    @staticmethod
+    def _valid_exon_chain(exons) -> bool:
+        """Guard against a correction that inverts an exon or collides with a
+        neighbour (introns must keep at least one base)."""
+        for i, (start, end) in enumerate(exons):
+            if start > end:
+                return False
+            if i > 0 and start <= exons[i - 1][1]:
+                return False
+        return True
 
     def mapping_quality(self, transcript_id):
         mapq = 0
