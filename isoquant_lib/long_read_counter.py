@@ -280,14 +280,16 @@ class AssignedFeatureCounter(AbstractCounter):
             self.not_assigned_reads += 1
             self.reads_for_tpm[group_id] += 1
             return
-        elif read_assignment.isoform_matches and read_assignment.isoform_matches[0].assigned_transcript is None:
+
+        # Extractor-aware: a read may carry a feature for one counter but not the
+        # other (e.g. a gene-only assignment has no transcript). If this counter
+        # has no feature for the read, it is not-assigned here (only).
+        feature_ids = self.assignment_extractor.get_features(read_assignment)
+        if not feature_ids:
             self.not_assigned_reads += 1
             self.reads_for_tpm[group_id] += 1
-            logger.warning("Assigned feature for read %s is None, will be skipped. "
-                           "This message may be reported to the developers." % read_assignment.read_id)
             return
 
-        feature_ids = self.assignment_extractor.get_features(read_assignment)
         assignment_type = self.assignment_extractor.get_assignment_type(read_assignment)
         self.reads_for_tpm[group_id] += 1
         if assignment_type == ReadAssignmentType.ambiguous:

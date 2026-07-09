@@ -310,8 +310,9 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
             tmp_gff_printer.dump(model_constructor.gene_info, model_constructor.transcript_model_storage)
+            # process() already built the honest per-read model assignments (and fed
+            # them to the counters); print them when read2transcripts is enabled.
             if large_output_enabled(args, "read2transcripts"):
-                model_constructor.populate_model_read_assignments(assignment_storage)
                 for ma in model_constructor.model_read_assignments:
                     model_reads_printer.add_read_info(ma)
             for m in model_constructor.transcript_model_storage:
