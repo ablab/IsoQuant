@@ -122,7 +122,7 @@ _Will not be produced if `--no_model_construction` is set._
 File names typically contain `transcript_model` in their name.
 
 * `SAMPLE_ID.transcript_models.gtf` - GTF file with discovered expressed transcript (both known and novel transcripts);
-* `SAMPLE_ID.transcript_model_reads.tsv.gz` - TSV file indicating which reads contributed to transcript models (gzipped by default);
+* `SAMPLE_ID.transcript_model_reads.tsv.gz` - which reads contributed to which transcript models, in the same unified read_info format as `SAMPLE_ID.read_info.tsv` (columns: read_id, chr, strand, gene_id, isoform_id, assignment types, exons, polyA/CAGE/barcode/UMI/groups, etc.); the `isoform_id` column holds the assigned transcript model, and reads on no model appear as noninformative (gzipped by default);
 * `SAMPLE_ID.discovered_transcript_counts.tsv` - raw read counts for discovered transcript models (corresponds to `SAMPLE_ID.transcript_models.gtf`);
 * `SAMPLE_ID.discovered_gene_counts.tsv` - raw read counts for discovered genes (corresponds to `SAMPLE_ID.transcript_models.gtf`);
 * `SAMPLE_ID.discovered_transcript_tpm.tsv` - expression of discovered transcripts models in TPM (corresponds to `SAMPLE_ID.transcript_models.gtf`);

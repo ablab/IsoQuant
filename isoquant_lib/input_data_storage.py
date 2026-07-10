@@ -57,6 +57,7 @@ class SampleData:
         self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
         self.out_assigned_tsv_result = self.out_assigned_tsv
         self.out_read_info_tsv = self._make_path(self.prefix + ".read_info.tsv")
+        self.out_transcript_model_reads_tsv = self._make_path(self.prefix + ".transcript_model_reads.tsv")
         self.out_raw_file = self._make_aux_path(self.prefix + ".save")
         self.read_group_file = self._make_aux_path(self.prefix + ".read_group")
         self.out_corrected_bed = self._make_path(self.prefix + ".corrected_reads.bed")
@@ -170,6 +171,10 @@ class SampleData:
     def get_read_info_tsv_file(self, chr_id: str) -> str:
         """Get path to read_info TSV for a chromosome."""
         return self._make_path(self.get_chr_prefix(chr_id) + ".read_info.tsv")
+
+    def get_transcript_model_reads_file(self, chr_id: str) -> str:
+        """Get path to transcript-model read_info TSV for a chromosome."""
+        return self._make_path(self.get_chr_prefix(chr_id) + ".transcript_model_reads.tsv")
 
     def get_gene_counts_file(self, chr_id: str) -> str:
         """Get path to gene counts file for a chromosome."""
