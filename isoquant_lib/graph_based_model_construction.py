@@ -5,6 +5,7 @@
 # See file LICENSE for details.
 ############################################################################
 
+import copy
 import logging
 from collections import defaultdict
 from functools import cmp_to_key
@@ -118,6 +119,15 @@ class GraphBasedModelConstructor:
         self.internal_counter = defaultdict(int)
         self.read_assignment_counts = defaultdict(int)
         self.transcript2transcript = []
+        # read_id -> transcript id the read was bound to during construction
+        # (via save_assigned_read). Lets build_model_read_assignments tell
+        # construction-supported reads (kept unique/umd) apart from reads that
+        # only reach the re-profiling step (classified honestly).
+        self.construction_assignment: Dict[str, str] = {}
+        # Honest per-read ReadAssignments against the final model set, produced by
+        # build_model_read_assignments; fed to the discovered-model counters and,
+        # when read2transcripts is on, to the model read_info printer.
+        self.model_read_assignments: List[ReadAssignment] = []
 
     def get_transcript_id(self):
         return self.id_distributor.increment()
@@ -182,7 +192,7 @@ class GraphBasedModelConstructor:
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
-        self.forward_counts(read_assignment_storage)
+        self.build_model_read_assignments(read_assignment_storage)
 
         if self.args.sqanti_output:
             self.compare_models_with_known()
@@ -205,53 +215,146 @@ class GraphBasedModelConstructor:
         if dragged:
             logger.debug("%d uniquely-known reads bound to novel models (construction-phase)" % dragged)
 
-    def forward_counts(self, read_assignments):
+    def _single_model_assigner(self, model, cache):
+        # Cache one (assigner, profile_constructor) per model over a single-isoform
+        # GeneInfo, using the graph vertex-collapse tolerance (graph_clustering_distance)
+        # as the junction delta so a construction read whose splice sites the intron
+        # graph snapped within that reach still matches its model, instead of being
+        # rejected at the tighter assignment delta. quick_mode=False for real events.
+        entry = cache.get(model.transcript_id)
+        if entry is None:
+            gi = GeneInfo.from_models([model], self.args.delta)
+            entry = (LongReadAssigner(gi, self._graph_tolerance_args, self.string_pools, quick_mode=False),
+                     CombinedProfileConstructor(gi, self._graph_tolerance_args))
+            cache[model.transcript_id] = entry
+        return entry
+
+    def _model_read_assignment_single(self, source, transcript_id, model_by_id, cache):
+        # A read that supports this model must count toward it. Reuse the source
+        # match when the read was reference unique/umd on a *known* model (real
+        # classification + events, no re-profiling). Otherwise re-profile against
+        # the single model at the graph tolerance; keep the result when it is a
+        # clean consistent match (real classification + events), else force the
+        # read onto the model as unique_minor_difference (events dropped) so it
+        # still counts as unique and points at the model it built.
+        model = model_by_id[transcript_id]
+        if (model.transcript_type == TranscriptModelType.known and
+                source.assignment_type in (ReadAssignmentType.unique,
+                                           ReadAssignmentType.unique_minor_difference)):
+            reuse_match = next((m for m in source.isoform_matches
+                                if m.assigned_transcript == transcript_id), None)
+            if reuse_match is not None:
+                return ReadAssignment(source.read_id, source.assignment_type,
+                                      self.string_pools, match=[reuse_match])
+        assigner, profile_constructor = self._single_model_assigner(model, cache)
+        profile = profile_constructor.construct_profiles(source.corrected_exons, source.polya_info, [])
+        ra = assigner.assign_to_isoform(source.read_id, profile)
+        if (ra.assignment_type.is_consistent() and ra.isoform_matches and
+                ra.isoform_matches[0].assigned_transcript == transcript_id):
+            return ra
+        forced_match = IsoformMatch(MatchClassification.full_splice_match, self.string_pools,
+                                    assigned_gene=model.gene_id, assigned_transcript=transcript_id)
+        return ReadAssignment(source.read_id, ReadAssignmentType.unique_minor_difference,
+                              self.string_pools, match=[forced_match])
+
+    def _build_dropped_assignment(self, read_id, gene, surviving_genes):
+        # A read whose reference-unique known isoform was dropped: no transcript.
+        # It still belongs to its gene, so it counts toward that gene when the gene
+        # has a surviving model (gene_assignment_type=unique makes the gene counter
+        # count it); otherwise it is not assigned anywhere.
+        if gene is not None and gene in surviving_genes:
+            match = IsoformMatch(MatchClassification.genic, self.string_pools, assigned_gene=gene)
+            ra = ReadAssignment(read_id, ReadAssignmentType.dropped, self.string_pools, match=[match])
+            ra.gene_assignment_type = ReadAssignmentType.unique
+            return ra
+        return ReadAssignment(read_id, ReadAssignmentType.dropped, self.string_pools)
+
+    def build_model_read_assignments(self, read_assignments):
+        """Produce one honest ReadAssignment per read against the final model set,
+        feed each to the discovered transcript & gene counters (which apply the
+        per-type counting strategy) and collect them for the model read_info
+        printer. Replaces the artificial forward_counts, so read2transcripts comes
+        for free. Categories (construction checked first, mirroring the pipeline
+        where construction-bound reads skip the re-profiling gate):
+
+        1. construction member  -> re-profile vs the single model it built at the
+           graph tolerance, forced onto it as unique/umd (it must count toward the
+           model it contributed to).
+        2. reference-unique member on a *kept* known isoform -> reuse source match.
+        3. dropped (reference-unique to a *dropped* known isoform) -> no transcript;
+           counts toward the gene only if that gene still has a surviving model.
+        4. leftover -> assign vs the full model set (quick_mode=False): honest
+           unique/umd/ambiguous/inconsistent, kept regardless of consistency.
+        """
+        self.model_read_assignments = []
+        # Junction delta for the single-model (construction/known) re-profiling:
+        # the intron graph's vertex-collapse tolerance, so reads snapped within it
+        # match their model. Never below the assignment delta.
+        self._graph_tolerance_args = copy.copy(self.args)
+        _gcd = getattr(self.args, "graph_clustering_distance", None)
+        self._graph_tolerance_args.delta = max(self.args.delta, _gcd) if _gcd else self.args.delta
         transcript2gene = {t.transcript_id: t.gene_id for t in self.transcript_model_storage}
         transcript2type = {t.transcript_id: t.transcript_type for t in self.transcript_model_storage}
         self._log_uniqueknown_on_novel(transcript2type)
 
-        # model_gene_info lets the counters' confirms_feature read
-        # all_isoforms_introns for the (model) transcript ids without a None
-        # gene_info; the per-read confirmation result is moot because every
-        # constructed model is force-confirmed below.
         model_gene_info = GeneInfo.from_models(self.transcript_model_storage, self.args.delta)
+        model_by_id = {t.transcript_id: t for t in self.transcript_model_storage}
+        model_ids = set(model_by_id.keys())
+        surviving_genes = set(transcript2gene.values())
 
-        # Collapse per-transcript membership into one entry per read; every read
-        # stored in transcript_read_ids is an original reference ReadAssignment,
-        # so it still carries read_group_ids and corrected_exons.
-        per_read = {}  # read_id -> [source_assignment, [transcript_id, ...]]
-        for transcript_id, assignments in self.transcript_read_ids.items():
-            for ra in assignments:
-                entry = per_read.setdefault(ra.read_id, [ra, []])
-                entry[1].append(transcript_id)
+        single_cache = {}
+        full_assigner = None
+        full_profile_constructor = None
 
-        for read_id, (source, transcript_ids) in per_read.items():
-            matches = [IsoformMatch(MatchClassification.undefined, self.string_pools,
-                                    assigned_gene=transcript2gene[t],
-                                    assigned_transcript=t)
-                       for t in transcript_ids]
-            atype = ReadAssignmentType.unique if len(matches) == 1 else ReadAssignmentType.ambiguous
-            ma = ReadAssignment(read_id, atype, self.string_pools, match=matches)
-            ma.gene_info = model_gene_info
-            ma.read_group_ids = source.read_group_ids
-            ma.corrected_exons = source.corrected_exons
-            self.transcript_counter.add_read_info(ma)
-            self.gene_counter.add_read_info(ma)
+        for source in read_assignments:
+            read_id = source.read_id
+            constr_tid = self.construction_assignment.get(read_id)
+            if constr_tid is not None and constr_tid in model_ids:
+                ra = self._model_read_assignment_single(source, constr_tid, model_by_id, single_cache)
+            else:
+                known_iso = self._reference_unique_known_isoform(source)
+                if known_iso is not None and known_iso in model_ids:
+                    ra = self._model_read_assignment_single(source, known_iso, model_by_id, single_cache)
+                elif known_iso is not None:
+                    gene = self.gene_info.gene_id_map.get(known_iso)
+                    ra = self._build_dropped_assignment(read_id, gene, surviving_genes)
+                elif model_ids:
+                    if full_assigner is None:
+                        full_assigner = LongReadAssigner(model_gene_info, self.args,
+                                                         self.string_pools, quick_mode=False)
+                        full_profile_constructor = CombinedProfileConstructor(model_gene_info, self.args)
+                    profile = full_profile_constructor.construct_profiles(source.corrected_exons,
+                                                                          source.polya_info, [])
+                    ra = full_assigner.assign_to_isoform(read_id, profile)
+                else:
+                    ra = ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools)
 
-        # Reads not assigned to any model (including gate-dropped reads) are
-        # counted as not-assigned in both model composites, matching the
-        # reference path where every read passes through the counters.
-        for r in read_assignments:
-            if self.read_assignment_counts[r.read_id] > 0:
-                continue
-            ma = ReadAssignment(r.read_id, ReadAssignmentType.noninformative, self.string_pools)
-            ma.read_group_ids = r.read_group_ids
-            ma.gene_info = model_gene_info
-            self.transcript_counter.add_read_info(ma)
-            self.gene_counter.add_read_info(ma)
+            ra.gene_info = model_gene_info
+            self._copy_read_aux(ra, source)
+            self.model_read_assignments.append(ra)
+            self.transcript_counter.add_read_info(ra)
+            self.gene_counter.add_read_info(ra)
 
-        self.transcript_counter.add_confirmed_features([model.transcript_id for model in self.transcript_model_storage])
-        self.gene_counter.add_confirmed_features({transcript2gene[model.transcript_id] for model in self.transcript_model_storage})
+        self.transcript_counter.add_confirmed_features([m.transcript_id for m in self.transcript_model_storage])
+        self.gene_counter.add_confirmed_features({transcript2gene[m.transcript_id] for m in self.transcript_model_storage})
+
+    @staticmethod
+    def _copy_read_aux(ra: ReadAssignment, source: ReadAssignment) -> None:
+        # Carry every read_info aux field over from the source reference
+        # assignment so the model read_info output matches the main read_info
+        # format. ra shares the source's string pools, so the interned integer
+        # ids (chr/barcode/umi/read_group) can be copied directly.
+        ra.chr_id_int = source.chr_id_int
+        ra.strand = source.strand
+        ra.exons = source.exons
+        ra.corrected_exons = source.corrected_exons
+        ra.polyA_found = source.polyA_found
+        ra.cage_found = source.cage_found
+        ra.polya_info = source.polya_info
+        ra.barcode_id = source.barcode_id
+        ra.umi_id = source.umi_id
+        ra.read_group_ids = source.read_group_ids
+        ra.additional_attributes = source.additional_attributes
 
     def compare_models_with_known(self):
         if not self.gene_info.all_isoforms_exons:
@@ -541,6 +644,19 @@ class GraphBasedModelConstructor:
         self.transcript_read_ids[transcript_id].append(read_assignment)
         self.internal_counter[transcript_id] += 1
         self.read_assignment_counts[read_id] += 1
+        self.construction_assignment[read_id] = transcript_id
+
+    def _move_read_to_model(self, read_assignment: ReadAssignment,
+                            source_id: str, target_id: str) -> None:
+        # Move one read's construction membership from source_id to target_id (an
+        # alternative-end NIC derived from it). ReadAssignment has no __eq__, so
+        # list.remove strips the exact object; net read_assignment_counts is
+        # unchanged (-1 here, +1 in save_assigned_read). Keeps the counting
+        # invariants so the NIC is no longer a zero-read phantom.
+        self.transcript_read_ids[source_id].remove(read_assignment)
+        self.internal_counter[source_id] -= 1
+        self.read_assignment_counts[read_assignment.read_id] -= 1
+        self.save_assigned_read(read_assignment, target_id)
 
     def _reference_isoform_for_path(self, assignment: ReadAssignment, path: tuple, intron_path: tuple,
                                     transcript_range: Tuple[int, int]) -> Optional[str]:
@@ -1099,38 +1215,41 @@ class GraphBasedModelConstructor:
         return None
 
     def _terminal_histograms(self, source_model: TranscriptModel,
-                             assigned_reads: List[ReadAssignment]) -> Tuple[Dict[int, int], Dict[int, int]]:
-        # Build genomic-left (start) and genomic-right (end) read-terminus
-        # histograms matching what each trained model was fit on:
+                             assigned_reads: List[ReadAssignment]) \
+            -> Tuple[Dict[int, List[ReadAssignment]], Dict[int, List[ReadAssignment]]]:
+        # Build genomic-left (start) and genomic-right (end) read-terminus maps
+        # matching what each trained model was fit on:
         #   - 3' polyA side: polyA-CONFIRMED reads at the detected cleavage site
         #     (so a low overall polyA rate naturally raises the support bar);
         #   - 5' TSS side: all stranded reads' alignment ends.
         # Unstranded -> alignment ends on both sides (no polyA orientation).
+        # Each map is position -> the reads terminating there, so a peak's reads
+        # can later be moved onto the alternative-end model derived from it.
         strand = source_model.strand
         first_exon_right = source_model.exon_blocks[0][1]
         last_exon_left = source_model.exon_blocks[-1][0]
-        start_hist = defaultdict(int)
-        end_hist = defaultdict(int)
+        start_reads = defaultdict(list)
+        end_reads = defaultdict(list)
         for a in assigned_reads:
             ex = a.corrected_exons
             if strand == '+':
                 if ex[0][0] < first_exon_right:           # 5' TSS (all reads)
-                    start_hist[ex[0][0]] += 1
+                    start_reads[ex[0][0]].append(a)
                 pos = self._confirmed_polya_pos(a, '+')   # 3' polyA (confirmed)
                 if pos is not None and pos > last_exon_left:
-                    end_hist[pos] += 1
+                    end_reads[pos].append(a)
             elif strand == '-':
                 pos = self._confirmed_polya_pos(a, '-')   # 3' polyA (confirmed)
                 if pos is not None and pos < first_exon_right:
-                    start_hist[pos] += 1
+                    start_reads[pos].append(a)
                 if ex[-1][1] > last_exon_left:            # 5' TSS (all reads)
-                    end_hist[ex[-1][1]] += 1
+                    end_reads[ex[-1][1]].append(a)
             else:
                 if ex[0][0] < first_exon_right:
-                    start_hist[ex[0][0]] += 1
+                    start_reads[ex[0][0]].append(a)
                 if ex[-1][1] > last_exon_left:
-                    end_hist[ex[-1][1]] += 1
-        return start_hist, end_hist
+                    end_reads[ex[-1][1]].append(a)
+        return start_reads, end_reads
 
     @staticmethod
     def _intron_chain_key(model: TranscriptModel) -> Tuple[Tuple[int, int], ...]:
@@ -1166,8 +1285,9 @@ class GraphBasedModelConstructor:
                 # Part 2 default: known transcripts only. Part 3 (--novel_apa)
                 # also spins off alternative-end siblings for novel chains.
                 continue
-            for nic in self.derive_alternative_end_models(
-                    model, self.transcript_read_ids[model.transcript_id]):
+            source_id = model.transcript_id
+            for nic, nic_reads in self.derive_alternative_end_models(
+                    model, self.transcript_read_ids[source_id]):
                 ck = self._intron_chain_key(nic)
                 ns, ne = nic.exon_blocks[0][0], nic.exon_blocks[-1][1]
                 if any(abs(ns - s) <= self.args.apa_delta and abs(ne - e) <= self.args.apa_delta
@@ -1175,6 +1295,12 @@ class GraphBasedModelConstructor:
                     continue
                 existing_pairs[ck].append((ns, ne))
                 new_models.append(nic)
+                # Hand the alternative-end peak's reads to the NIC so it is not a
+                # zero-read phantom; keep at least one read on the source.
+                for read in nic_reads:
+                    if len(self.transcript_read_ids[source_id]) <= 1:
+                        break
+                    self._move_read_to_model(read, source_id, nic.transcript_id)
         if new_models:
             logger.debug("Added %d known alternative-end NICs" % len(new_models))
             self.transcript_model_storage.extend(new_models)
@@ -1215,12 +1341,15 @@ class GraphBasedModelConstructor:
         self.transcript_model_storage = kept
 
     def derive_alternative_end_models(self, source_model: TranscriptModel,
-                                      assigned_reads: List[ReadAssignment]) -> List[TranscriptModel]:
+                                      assigned_reads: List[ReadAssignment]) \
+            -> List[Tuple[TranscriptModel, List[ReadAssignment]]]:
         # Confident alternative polyA/TSS ends for a transcript, from its own
-        # reads (per-transcript, so 5'/3' stay concordant). Returns a list of new
-        # alternative-end TranscriptModel objects (one per alternative end, each
-        # changing a single terminal); the source model is left untouched. polyA
-        # always; TSS only when use_tss_model (--fl_data). A known source yields
+        # reads (per-transcript, so 5'/3' stay concordant). Returns (new model,
+        # supporting reads) per alternative end, each model changing a single
+        # terminal. The supporting reads are the source reads whose terminus sits
+        # at that peak (within apa_delta); the caller moves them onto the NIC so it
+        # is not a zero-read phantom. Each read backs at most one NIC. polyA always;
+        # TSS only when use_tss_model (--fl_data). A known source yields
         # novel-in-catalog siblings; a novel source keeps its own type.
         if not assigned_reads:
             return []
@@ -1234,19 +1363,47 @@ class GraphBasedModelConstructor:
                         if source_model.transcript_type == TranscriptModelType.known
                         else source_model.transcript_type)
 
-        start_hist, end_hist = self._terminal_histograms(source_model, assigned_reads)
+        start_reads, end_reads = self._terminal_histograms(source_model, assigned_reads)
+        start_hist = {p: len(rs) for p, rs in start_reads.items()}
+        end_hist = {p: len(rs) for p, rs in end_reads.items()}
+
+        claimed = set()  # id(read) already routed to a NIC (one NIC per read, both sides)
+
+        def assign_to_peaks(reads_map, alt_peaks, annotated_pos):
+            # Route each read to the *nearest* terminus among the annotated end and
+            # the alternative-end peaks (within apa_delta). Reads nearest the
+            # annotated end stay on the source; reads nearest an alt peak back that
+            # peak's NIC. Nearest (not first-within-window) avoids a peak greedily
+            # claiming a neighbour's reads and starving it; the shared claimed set
+            # keeps a both-ends-alternative read on a single NIC (it is moved once).
+            per_peak = {p: [] for p in alt_peaks}
+            candidates = list(alt_peaks) + [annotated_pos]
+            for p, rs in reads_map.items():
+                nearest = min(candidates, key=lambda c: (abs(c - p), c))
+                if nearest != annotated_pos and abs(nearest - p) <= self.args.apa_delta:
+                    for r in rs:
+                        if id(r) not in claimed:
+                            claimed.add(id(r))
+                            per_peak[nearest].append(r)
+            return per_peak
 
         new_models = []
         start_model = self._terminal_model(strand, left=True)
         if start_model is not None:
-            for pos in self._alternative_end_positions(start_hist, start_model, annotated_start,
-                                                       lambda p: p < first_exon_right):
-                new_models.append(self._nic_model_with_boundary(source_model, sibling_type, start=pos))
+            start_peaks = self._alternative_end_positions(start_hist, start_model, annotated_start,
+                                                          lambda p: p < first_exon_right)
+            per_peak = assign_to_peaks(start_reads, start_peaks, annotated_start)
+            for pos in start_peaks:
+                nic = self._nic_model_with_boundary(source_model, sibling_type, start=pos)
+                new_models.append((nic, per_peak[pos]))
         end_model = self._terminal_model(strand, left=False)
         if end_model is not None:
-            for pos in self._alternative_end_positions(end_hist, end_model, annotated_end,
-                                                       lambda p: p > last_exon_left):
-                new_models.append(self._nic_model_with_boundary(source_model, sibling_type, end=pos))
+            end_peaks = self._alternative_end_positions(end_hist, end_model, annotated_end,
+                                                        lambda p: p > last_exon_left)
+            per_peak = assign_to_peaks(end_reads, end_peaks, annotated_end)
+            for pos in end_peaks:
+                nic = self._nic_model_with_boundary(source_model, sibling_type, end=pos)
+                new_models.append((nic, per_peak[pos]))
         return new_models
 
     def _alternative_end_positions(self, histogram: Dict[int, int], model: "XGBClassifier",

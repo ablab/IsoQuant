@@ -30,7 +30,7 @@ from .file_utils import merge_files, merge_counts
 from .input_data_storage import SampleData
 from .alignment_processor import AlignmentType
 from .read_groups import prepare_read_groups, get_grouping_strategy_names
-from .assignment_io import IOSupport
+from .assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
 from .id_policy import SimpleIDDistributor, FeatureIdStorage
 from .file_naming import *
@@ -396,6 +396,7 @@ class DatasetProcessor:
 
         gff_printer = VoidTranscriptPrinter()
         extended_gff_printer = VoidTranscriptPrinter()
+        model_reads_printer = VoidPrinter()
         if not self.args.no_model_construction:
             logger.info("Transcript construction options:")
             logger.info("  Novel monoexonic transcripts will be reported: %s"
@@ -414,14 +415,18 @@ class DatasetProcessor:
             exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
             gff_printer = GFFPrinter(
                 sample.out_dir, sample.prefix, exon_id_storage,
-                output_r2t=large_output_enabled(self.args, "read2transcripts"),
-                header=self.common_header,
-                gzipped=self.args.gzipped
+                header=self.common_header
             )
+            if large_output_enabled(self.args, "read2transcripts"):
+                # Final merge target for the per-chromosome model read_info files.
+                model_reads_printer = ReadInfoPrinter(sample.out_transcript_model_reads_tsv,
+                                                      self.args, IOSupport(self.args),
+                                                      additional_header=self.common_header,
+                                                      gzipped=self.args.gzipped)
             if self.args.genedb:
                 extended_gff_printer = GFFPrinter(
                     sample.out_dir, sample.prefix, exon_id_storage,
-                    gtf_suffix=".extended_annotation.gtf", output_r2t=False,
+                    gtf_suffix=".extended_annotation.gtf",
                     header=self.common_header
                 )
 
@@ -462,7 +467,7 @@ class DatasetProcessor:
 
         if not self.args.no_model_construction:
             transcript_stat_counter.print_start("Transcript model statistics")
-            self.merge_transcript_models(sample.prefix, aggregator, chr_ids, gff_printer)
+            self.merge_transcript_models(sample, aggregator, chr_ids, gff_printer, model_reads_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
             if self.args.genedb:
                 merge_files(extended_gff_printer.model_fname, sample.prefix, chr_ids,
@@ -761,10 +766,17 @@ class DatasetProcessor:
                             sample.prefix, chr_ids, fh, header_lines=1)
             logger.info("TSS training features written to %s", tss_csv)
 
-    def merge_transcript_models(self, label, aggregator, chr_ids, gff_printer):
+    def merge_transcript_models(self, sample, aggregator, chr_ids, gff_printer, model_reads_printer):
+        label = sample.prefix
         merge_files(gff_printer.model_fname, label, chr_ids, gff_printer.out_gff, copy_header=False)
-        if gff_printer.output_r2t:
-            merge_files(gff_printer.r2t_fname, label, chr_ids, gff_printer.out_r2t, copy_header=False)
+        if large_output_enabled(self.args, "read2transcripts"):
+            # Per-chr model read_info files carry common_header (2) + column header
+            # (1) = 3 header lines, matching the main read_info merge. The base
+            # (ungzipped) path names the per-chr files; the final handle may be gzip.
+            merge_files(sample.out_transcript_model_reads_tsv, label, chr_ids,
+                        model_reads_printer.output_file, copy_header=False, header_lines=3)
+            model_reads_printer.output_file.close()
+            logger.info("Reads to transcript models are stored in " + model_reads_printer.output_file_name)
         for counter in aggregator.transcript_model_global_counter.counters:
             unaligned = self.alignment_stat_counter.stats_dict[AlignmentType.unaligned]
             merge_counts(counter, label, chr_ids, unaligned)

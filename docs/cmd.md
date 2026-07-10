@@ -483,7 +483,7 @@ See more information [here](output.md#default-grouped-counts-in-linear-format).
 * `read_info` - unified per-read information file (`*.read_info.tsv`, default);
 * `read_assignments` - legacy TSV file with read-to-isoform assignments (`*.read_assignments.tsv`);
 * `corrected_bed` - BED file with corrected read exon coordinates (`*.corrected_reads.bed`);
-* `read2transcripts` - TSV file mapping reads to discovered transcript models (`*.transcript_model_reads.tsv`);
+* `read2transcripts` - reads assigned to discovered transcript models, in the unified read_info format (`*.transcript_model_reads.tsv`; the `isoform_id` column holds the transcript model);
 * `allinfo` - detailed UMI filtering information for single-cell/spatial modes (`*.allinfo`);
 * `none` - do not generate any large output files.
 

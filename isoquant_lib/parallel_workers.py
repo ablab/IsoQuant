@@ -14,7 +14,7 @@ from pyfaidx import Fasta
 
 from .stats import EnumStats
 from .alignment_processor import AlignmentCollector
-from .assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter
+from .assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter, ReadInfoPrinter, VoidPrinter
 from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
 from .file_naming import (
@@ -250,14 +250,24 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
 
     if construct_models:
         tmp_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
-                                     output_r2t=large_output_enabled(args, "read2transcripts"),
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
+
+    # Per-chromosome model read_info output: one read_info line per read assigned
+    # to a constructed model (plus noninformative reads on no model). Written
+    # ungzipped and merged into the final file later, mirroring the main
+    # read_info. Header matches ReadInfoPrinter (common_header + column header).
+    if construct_models and large_output_enabled(args, "read2transcripts"):
+        model_reads_printer = ReadInfoPrinter(sample.get_transcript_model_reads_file(chr_id),
+                                              args, io_support,
+                                              additional_header=aggregator.common_header)
+    else:
+        model_reads_printer = VoidPrinter()
     if construct_models and args.genedb:
         tmp_extended_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
                                               gtf_suffix=".extended_annotation.gtf",
-                                              output_r2t=False, check_canonical=args.check_canonical)
+                                              check_canonical=args.check_canonical)
     else:
         tmp_extended_gff_printer = VoidTranscriptPrinter()
 
@@ -300,7 +310,11 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
             tmp_gff_printer.dump(model_constructor.gene_info, model_constructor.transcript_model_storage)
-            tmp_gff_printer.dump_read_assignments(model_constructor)
+            # process() already built the honest per-read model assignments (and fed
+            # them to the counters); print them when read2transcripts is enabled.
+            if large_output_enabled(args, "read2transcripts"):
+                for ma in model_constructor.model_read_assignments:
+                    model_reads_printer.add_read_info(ma)
             for m in model_constructor.transcript_model_storage:
                 if m.transcript_type != TranscriptModelType.known:
                     novel_model_storage.append(m)
@@ -320,6 +334,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
         aggregator.transcript_model_global_counter.dump()
         aggregator.gene_model_global_counter.dump()
         transcript_stat_counter.dump(chr_transcript_stat_file)
+        model_reads_printer.flush()
     logger.info("Finished processing chromosome " + chr_id)
     open(lock_file, "w").close()
 
