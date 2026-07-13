@@ -1206,7 +1206,12 @@ class GraphBasedModelConstructor:
         last_exon_left = transcript_model.exon_blocks[-1][0]
         strand = transcript_model.strand
 
-        start_hist, end_hist = self._terminal_histograms(transcript_model, assigned_reads)
+        start_reads, end_reads = self._terminal_histograms(transcript_model, assigned_reads)
+        # _terminal_histograms maps position -> reads; detect_peaks / _peak_boundary and
+        # _closest_inward want position -> count, so collapse the read lists to counts
+        # (same as derive_alternative_end_models).
+        start_hist = {p: len(rs) for p, rs in start_reads.items()}
+        end_hist = {p: len(rs) for p, rs in end_reads.items()}
         start_supported = any(abs(p - transcript_start) <= self.args.apa_delta for p in start_hist)
         end_supported = any(abs(p - transcript_end) <= self.args.apa_delta for p in end_hist)
 
