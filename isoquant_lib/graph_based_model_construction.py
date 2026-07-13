@@ -572,11 +572,12 @@ class GraphBasedModelConstructor:
 
             # TODO: correct ends for known
             self.correct_novel_transcript_ends(model, self.transcript_read_ids[model.transcript_id])
+            self._mark_terminal_confirmation(model)
             pre_filtered_storage.append(model)
 
 
         filtered_storage = []
-        to_substitute = self.detect_similar_isoforms(pre_filtered_storage)
+        to_substitute = self.detect_similar_isoforms(pre_filtered_storage, remove_unconfirmed=True)
 
         for model in pre_filtered_storage:
             if model.transcript_type == TranscriptModelType.known:
@@ -652,7 +653,7 @@ class GraphBasedModelConstructor:
             mapq += a.mapping_quality
         return mapq / len(self.transcript_read_ids[transcript_id])
 
-    def detect_similar_isoforms(self, model_storage):
+    def detect_similar_isoforms(self, model_storage, remove_unconfirmed=False):
         to_substitute = {}
         for model in model_storage:
             if len(model.exon_blocks) <= 2 or model.transcript_id in to_substitute:
@@ -677,6 +678,17 @@ class GraphBasedModelConstructor:
                 assignment = assigner.assign_to_isoform(m.transcript_id, combined_profile)
 
                 if is_matching_assignment(assignment):
+                    to_substitute[m.transcript_id] = model.transcript_id
+                elif (remove_unconfirmed and
+                      assignment.assignment_type in (ReadAssignmentType.unique_minor_difference,
+                                                     ReadAssignmentType.inconsistent_non_intronic) and
+                      not (m.polya_confirmed or (self.use_tss_model and m.tss_confirmed))):
+                    # m is a terminal/ISM sub-structure of the longer model: its intron chain is a
+                    # subset and only the terminal exons differ (unique_minor_difference with an
+                    # ISM/elongation event, or inconsistent_non_intronic), and its polyA/TSS
+                    # terminus is not confirmed by a read-terminus peak -> truncation artifact, not
+                    # a real alternative-end transcript. A genuinely different intron chain gives
+                    # plain `inconsistent` and is left alone. Remove it (reads reassigned to model).
                     to_substitute[m.transcript_id] = model.transcript_id
 
         return to_substitute
@@ -1219,6 +1231,27 @@ class GraphBasedModelConstructor:
                 logger.debug("Changed end for transcript %s: from %d to %d" %
                              (transcript_model.transcript_id, transcript_end, new_end))
                 transcript_model.exon_blocks[-1] = (last_exon_left, new_end)
+
+    def _mark_terminal_confirmation(self, model: TranscriptModel) -> None:
+        # Record whether the model's polyA (3') / TSS (5') terminus is supported by a
+        # read-terminus peak among its own reads, using the same histograms as
+        # correct_novel_transcript_ends (the 3' side counts polyA-confirmed reads only).
+        # Called after end refinement so the check uses the model's final ends.
+        reads = self.transcript_read_ids[model.transcript_id]
+        if not reads:
+            model.polya_confirmed = model.tss_confirmed = False
+            return
+        start_reads, end_reads = self._terminal_histograms(model, reads)
+        model_start = model.exon_blocks[0][0]
+        model_end = model.exon_blocks[-1][1]
+        start_supported = any(abs(p - model_start) <= self.args.apa_delta for p in start_reads)
+        end_supported = any(abs(p - model_end) <= self.args.apa_delta for p in end_reads)
+        if model.strand == '+':      # genomic-left = 5' TSS, genomic-right = 3' polyA
+            model.tss_confirmed, model.polya_confirmed = start_supported, end_supported
+        elif model.strand == '-':    # reversed
+            model.polya_confirmed, model.tss_confirmed = start_supported, end_supported
+        else:                        # unstranded: no polyA orientation
+            model.polya_confirmed = model.tss_confirmed = False
 
     def _terminal_model(self, strand: str, left: bool) -> Optional["XGBClassifier"]:
         # Which trained model applies to a genomic-side boundary. For '+' the
