@@ -44,6 +44,10 @@ class TranscriptModel:
         self.other_features = [] if not other_features else other_features
         self.additional_info = OrderedDict()
         self.intron_path = ()
+        # set by GraphBasedModelConstructor for novel models: whether the model's
+        # 3' (polyA) / 5' (TSS) terminus is supported by a confident read-terminus peak.
+        self.polya_confirmed = False
+        self.tss_confirmed = False
 
     @classmethod
     def from_reference_transcript(cls, gene_info, isoform_id):
@@ -58,6 +62,8 @@ class TranscriptModel:
         transcript_model.other_features = gene_info.other_features[isoform_id]
         transcript_model.additional_info = OrderedDict()
         transcript_model.intron_path = ()
+        transcript_model.polya_confirmed = False
+        transcript_model.tss_confirmed = False
         return transcript_model
 
     def get_start(self):
