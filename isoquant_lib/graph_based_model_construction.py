@@ -126,7 +126,7 @@ class GraphBasedModelConstructor:
         self.construction_assignment: Dict[str, str] = {}
         # known transcript id -> reads that were used to build it as a non-FL model
         # (construct_nonfl_isoforms). Includes reads already bound to a novel FL model;
-        # resolve_novel_known_read_conflicts uses this after filtering to hand any read
+        # resolve_read_ownership_conflicts uses this after filtering to hand any read
         # still shared with a surviving novel back to that novel.
         self.nonfl_known_reads: Dict[str, List[ReadAssignment]] = {}
         # Honest per-read ReadAssignments against the final model set, produced by
@@ -194,8 +194,9 @@ class GraphBasedModelConstructor:
         self.correct_transcript_splice_sites()
         # reassign reads
         self.assign_reads_to_models(read_assignment_storage)
-        # hand reads still shared between a surviving novel and a known back to the novel
-        self.resolve_novel_known_read_conflicts()
+        # hand reads shared between an FL-path model and an assignment-based known back
+        # to the FL-path model (novel-vs-known and known-vs-known), dropping empty knowns
+        self.resolve_read_ownership_conflicts()
 
         transcript_joiner = TranscriptToGeneJoiner(self.transcript_model_storage, self.gene_info)
         self.transcript_model_storage = transcript_joiner.join_transcripts()
@@ -484,24 +485,38 @@ class GraphBasedModelConstructor:
         del self.transcript_read_ids[transcript_id]
         del self.internal_counter[transcript_id]
 
-    def resolve_novel_known_read_conflicts(self) -> None:
-        # A read bound to a novel FL model in construct_fl_isoforms and then re-bound to
-        # a known non-FL model in construct_nonfl_isoforms ends up owned by the known
-        # (save_assigned_read overwrote construction_assignment). After filtering has
-        # removed the ISM artifacts (Commit 2), a read still shared between a *surviving*
-        # novel and a *surviving* known means the novel passed every filter, so it should
-        # own the read. Hand such reads back to the novel and drop knowns left empty.
+    def resolve_read_ownership_conflicts(self) -> None:
+        # construct_nonfl_isoforms builds an assignment-based known model and re-binds
+        # (save_assigned_read overwrites construction_assignment) reads that an FL path
+        # already bound to another model. Hand such reads back to the FL-path model when
+        # the assignment-based known would otherwise steal the FL model's only support:
+        #   - a novel FL model (novel-vs-known): the novel is a distinct discovered
+        #     transcript and always wins its reads;
+        #   - an FL-path known left with zero owned reads (known-vs-known): a near-identical
+        #     sibling of the assignment-based known (their intron chains differ by a few bp
+        #     at one splice site, collapsed in the intron graph) stole all its reads, so it
+        #     is a zero-count phantom -> reclaim them. An FL known that still owns reads is
+        #     a legitimate co-expressed isoform and is left alone (no sibling consolidation).
+        # After filtering, drop assignment-based knowns left with no reads.
         if not self.nonfl_known_reads:
             return
-        surviving_ids = {m.transcript_id for m in self.transcript_model_storage}
-        # read_id -> a surviving novel model that contains it
-        read_to_novel: Dict[str, str] = {}
+        # reads currently owned by each model (its construction_assignment target)
+        owned = defaultdict(int)
+        for mid in self.construction_assignment.values():
+            owned[mid] += 1
+        # read_id -> a surviving winner model that should reclaim it: a novel FL model,
+        # or an FL-path known that is currently a zero-count phantom (0 owned reads).
+        read_to_fl: Dict[str, str] = {}
         for model in self.transcript_model_storage:
-            if model.transcript_type == TranscriptModelType.known:
-                continue
+            if model.transcript_id in self.nonfl_known_reads:
+                continue  # assignment-based known: a potential loser, never a winner
+            if (model.transcript_type == TranscriptModelType.known and
+                    owned.get(model.transcript_id, 0) > 0):
+                continue  # FL-path known that still owns reads: co-expressed, leave it
             for a in self.transcript_read_ids[model.transcript_id]:
-                read_to_novel.setdefault(a.read_id, model.transcript_id)
+                read_to_fl.setdefault(a.read_id, model.transcript_id)
 
+        surviving_ids = {m.transcript_id for m in self.transcript_model_storage}
         emptied_knowns = []
         for known_id, reads in self.nonfl_known_reads.items():
             if known_id not in surviving_ids:
@@ -510,11 +525,11 @@ class GraphBasedModelConstructor:
                 if self.construction_assignment.get(a.read_id) != known_id:
                     # read no longer owned by this known (e.g. moved to an alt-end NIC)
                     continue
-                novel_id = read_to_novel.get(a.read_id)
-                if novel_id is None or novel_id == known_id:
+                fl_id = read_to_fl.get(a.read_id)
+                if fl_id is None or fl_id == known_id:
                     continue
-                # still shared with a surviving novel -> the novel wins
-                self.construction_assignment[a.read_id] = novel_id
+                # still shared with a surviving FL-path model -> the FL model wins
+                self.construction_assignment[a.read_id] = fl_id
                 if a in self.transcript_read_ids[known_id]:
                     self.transcript_read_ids[known_id].remove(a)
                     self.internal_counter[known_id] -= 1
@@ -528,7 +543,7 @@ class GraphBasedModelConstructor:
                 self.delete_from_storage(known_id)
             self.transcript_model_storage = [m for m in self.transcript_model_storage
                                              if m.transcript_id not in drop]
-            logger.debug("resolve_novel_known_read_conflicts: dropped %d empty known non-FL models"
+            logger.debug("resolve_read_ownership_conflicts: dropped %d empty assignment-based knowns"
                          % len(drop))
 
     def filter_transcripts(self):
@@ -1107,7 +1122,7 @@ class GraphBasedModelConstructor:
                 self.transcript_model_storage.append(new_model)
                 GraphBasedModelConstructor.detected_known_isoforms.add(isoform_id)
                 # Remember which reads built this known so that, after filtering,
-                # resolve_novel_known_read_conflicts can hand back any read still
+                # resolve_read_ownership_conflicts can hand back any read still
                 # shared with a surviving novel FL model.
                 self.nonfl_known_reads[new_model.transcript_id] = list(spliced_isoform_reads[isoform_id])
                 for read_assignment in spliced_isoform_reads[isoform_id]:
