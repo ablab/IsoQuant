@@ -772,13 +772,17 @@ class GraphBasedModelConstructor:
         if path[-1][0] == TerminalVertex.polya and right_diff:
             return None
 
-        # TSS side: only with full-length evidence (--fl_data). The 5' end is the
-        # genomic-left read_start for '+' and the genomic-right read_end for '-'.
+        # TSS side (only with --fl_data): a *confirmed* TSS vertex (snapped to a TSS
+        # prediction, tss_left on the genomic-left 5' end of a '+' transcript /
+        # tss_right on the genomic-right 5' end of a '-' transcript) that disagrees
+        # with the annotation -> alternative-TSS NIC. Symmetric to the polyA block:
+        # a bare read_start / read_end never triggers, so ordinary 5' read-start
+        # scatter/extension does not spawn a NIC that steals the known's reads.
         if self.use_tss_model:
             strand = self.gene_info.isoform_strands.get(matched_reference_id, '.')
-            if strand == '+' and path[0][0] == TerminalVertex.read_start and left_diff:
+            if strand == '+' and path[0][0] == TerminalVertex.tss_left and left_diff:
                 return None
-            if strand == '-' and path[-1][0] == TerminalVertex.read_end and right_diff:
+            if strand == '-' and path[-1][0] == TerminalVertex.tss_right and right_diff:
                 return None
 
         return matched_reference_id
@@ -1646,8 +1650,10 @@ class IntronPathProcessor:
                 # read end lies within next exon and has no polyA
                 return None
 
-        # consider all terminal position available for intron
+        # consider all terminal position available for intron (bare read ends,
+        # confirmed 5' TSS ends for '-' transcripts, and confirmed polyA ends)
         all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, TerminalVertex.read_end)) +
+                                   list(self.intron_graph.get_outgoing(intron, TerminalVertex.tss_right)) +
                                    list(possible_polyas), key=lambda x:x[1])
         if len(all_possible_ends) == 0:
             return None
@@ -1679,6 +1685,7 @@ class IntronPathProcessor:
                 return None
 
         all_possible_starts = sorted(list(self.intron_graph.get_incoming(intron, TerminalVertex.read_start)) +
+                                     list(self.intron_graph.get_incoming(intron, TerminalVertex.tss_left)) +
                                      list(possible_polyas), key=lambda x: x[1])
         if len(all_possible_starts) == 0:
             return None
