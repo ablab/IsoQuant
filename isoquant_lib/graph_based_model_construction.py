@@ -22,7 +22,7 @@ from .common import (
 )
 from .assignment_io import ReadAssignmentType
 from .gene_info import GeneInfo, StrandDetector, TranscriptModel, TranscriptModelType
-from .intron_graph import IntronGraph, VERTEX_polya, VERTEX_polyt, VERTEX_read_end, VERTEX_read_start
+from .intron_graph import IntronGraph, TerminalVertex
 from .isoform_assignment import (
     is_matching_assignment,
     match_subtype_to_str_with_additional_info,
@@ -683,9 +683,9 @@ class GraphBasedModelConstructor:
                         len(m.exon_blocks) > len(model.exon_blocks):
                     continue
 
-                if m.intron_path[0][0] == VERTEX_polyt:
+                if m.intron_path[0][0] == TerminalVertex.polyt:
                     polya_info = PolyAInfo(-1, m.intron_path[0][1], -1, -1)
-                elif m.intron_path[-1][0] == VERTEX_polya:
+                elif m.intron_path[-1][0] == TerminalVertex.polya:
                     polya_info = PolyAInfo(m.intron_path[-1][1], -1, -1, -1)
                 else:
                     polya_info = PolyAInfo(-1, -1, -1, -1)
@@ -743,7 +743,7 @@ class GraphBasedModelConstructor:
                                     transcript_range: Tuple[int, int]) -> Optional[str]:
         # Reference isoform whose intron chain matches this path. It is reported
         # as the annotated known UNLESS a *detected polyA* terminal vertex
-        # (VERTEX_polya / VERTEX_polyt) disagrees with the annotated end by more
+        # (TerminalVertex.polya / TerminalVertex.polyt) disagrees with the annotated end by more
         # than apa_delta -> then the caller emits a novel-in-catalog isoform with
         # the refined ends. A bare read_end / read_start (no polyA evidence, e.g.
         # a degraded ONT terminus) never triggers reclassification, so known
@@ -763,22 +763,22 @@ class GraphBasedModelConstructor:
         left_diff = abs(transcript_range[0] - ref_exons[0][0]) > self.args.apa_delta
         right_diff = abs(transcript_range[1] - ref_exons[-1][1]) > self.args.apa_delta
 
-        # PolyA side: a detected polyA vertex (VERTEX_polyt on the genomic-left
-        # 3' end of a '-' transcript, VERTEX_polya on the genomic-right 3' end of
+        # PolyA side: a detected polyA vertex (TerminalVertex.polyt on the genomic-left
+        # 3' end of a '-' transcript, TerminalVertex.polya on the genomic-right 3' end of
         # a '+' transcript) that disagrees with the annotation -> alternative
         # polyA NIC. Bare read termini never trigger here (degraded-end safety).
-        if path[0][0] == VERTEX_polyt and left_diff:
+        if path[0][0] == TerminalVertex.polyt and left_diff:
             return None
-        if path[-1][0] == VERTEX_polya and right_diff:
+        if path[-1][0] == TerminalVertex.polya and right_diff:
             return None
 
         # TSS side: only with full-length evidence (--fl_data). The 5' end is the
         # genomic-left read_start for '+' and the genomic-right read_end for '-'.
         if self.use_tss_model:
             strand = self.gene_info.isoform_strands.get(matched_reference_id, '.')
-            if strand == '+' and path[0][0] == VERTEX_read_start and left_diff:
+            if strand == '+' and path[0][0] == TerminalVertex.read_start and left_diff:
                 return None
-            if strand == '-' and path[-1][0] == VERTEX_read_end and right_diff:
+            if strand == '-' and path[-1][0] == TerminalVertex.read_end and right_diff:
                 return None
 
         return matched_reference_id
@@ -800,9 +800,9 @@ class GraphBasedModelConstructor:
 
             reference_isoform = None
             # check if new transcript matches a reference one
-            if intron_path[0][0] == VERTEX_polyt:
+            if intron_path[0][0] == TerminalVertex.polyt:
                 polya_info = PolyAInfo(-1, intron_path[0][1], -1, -1)
-            elif intron_path[-1][0] == VERTEX_polya:
+            elif intron_path[-1][0] == TerminalVertex.polya:
                 polya_info = PolyAInfo(intron_path[-1][1], -1, -1, -1)
             else:
                 polya_info = PolyAInfo(-1, -1, -1, -1)
@@ -843,8 +843,8 @@ class GraphBasedModelConstructor:
                 # component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
                 novel_isoform_cutoff = self.args.min_novel_count
 
-                has_polyt = path[0][0] == VERTEX_polyt
-                has_polya = path[-1][0] == VERTEX_polya
+                has_polyt = path[0][0] == TerminalVertex.polyt
+                has_polya = path[-1][0] == TerminalVertex.polya
                 polya_site = has_polya or has_polyt
                 transcript_strand = self.strand_detector.get_strand(intron_path, has_polya, has_polyt)
                 transcript_clean_strand = self.strand_detector.get_clean_strand(intron_path)
@@ -982,11 +982,11 @@ class GraphBasedModelConstructor:
         polyt_exons = []
         for intron in self.intron_graph.outgoing_edges.keys():
             for v in self.intron_graph.outgoing_edges[intron]:
-                if v[0] == VERTEX_polya:
+                if v[0] == TerminalVertex.polya:
                     polya_exons.append((intron[1], v[1]))
         for intron in self.intron_graph.incoming_edges.keys():
             for v in self.intron_graph.incoming_edges[intron]:
-                if v[0] == VERTEX_polyt:
+                if v[0] == TerminalVertex.polyt:
                     polyt_exons.append((v[1], intron[0]))
         # logger.debug("PolyA terminal exons: " + str(polya_exons))
         # logger.debug("PolyT terminal exons: " + str(polyt_exons))
@@ -1597,7 +1597,7 @@ class IntronPathStorage:
             self.paths[path_tuple] += 1
             if terminal_vertex and starting_vertex:
                 if not self.params.requires_polya_for_construction or\
-                        (terminal_vertex[0] == VERTEX_polya or starting_vertex[0] == VERTEX_polyt):
+                        (terminal_vertex[0] == TerminalVertex.polya or starting_vertex[0] == TerminalVertex.polyt):
                     self.fl_paths.add(path_tuple)
             self.paths_to_reads[path_tuple].append(a)
 
@@ -1631,7 +1631,7 @@ class IntronPathProcessor:
         return path
 
     def thread_ends(self, intron, end, trusted=False):
-        possible_polyas = self.intron_graph.get_outgoing(intron, VERTEX_polya)
+        possible_polyas = self.intron_graph.get_outgoing(intron, TerminalVertex.polya)
         if trusted:
             # find closes polyA
             for v in possible_polyas:
@@ -1647,13 +1647,13 @@ class IntronPathProcessor:
                 return None
 
         # consider all terminal position available for intron
-        all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, VERTEX_read_end)) +
+        all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, TerminalVertex.read_end)) +
                                    list(possible_polyas), key=lambda x:x[1])
         if len(all_possible_ends) == 0:
             return None
 
         rightmost_end = all_possible_ends[-1]
-        if trusted and end >= rightmost_end[1] and rightmost_end[0] == VERTEX_read_end:
+        if trusted and end >= rightmost_end[1] and rightmost_end[0] == TerminalVertex.read_end:
             # if we have trusted read, in cannot stop earlier that rightmost end (otherwise it should match polyA)
             return rightmost_end
         elif not trusted and end <= rightmost_end[1] + self.params.apa_delta and \
@@ -1663,7 +1663,7 @@ class IntronPathProcessor:
         return None
 
     def thread_starts(self, intron, start, trusted=False):
-        possible_polyas = self.intron_graph.get_incoming(intron, VERTEX_polyt)
+        possible_polyas = self.intron_graph.get_incoming(intron, TerminalVertex.polyt)
         if trusted:
             # find closes polyT
             for v in possible_polyas:
@@ -1678,13 +1678,13 @@ class IntronPathProcessor:
                 # read start lies within previous exon and has no polyA
                 return None
 
-        all_possible_starts = sorted(list(self.intron_graph.get_incoming(intron, VERTEX_read_start)) +
+        all_possible_starts = sorted(list(self.intron_graph.get_incoming(intron, TerminalVertex.read_start)) +
                                      list(possible_polyas), key=lambda x: x[1])
         if len(all_possible_starts) == 0:
             return None
 
         leftmost_start = all_possible_starts[0]
-        if trusted and start <= leftmost_start[1] and leftmost_start[0] == VERTEX_read_start:
+        if trusted and start <= leftmost_start[1] and leftmost_start[0] == TerminalVertex.read_start:
             return leftmost_start
         elif not trusted and start >= leftmost_start[1] and \
                 (len(all_possible_starts) <= 1 or start < all_possible_starts[1][1]):

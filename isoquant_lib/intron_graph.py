@@ -14,18 +14,27 @@ from .common import find_closest, overlaps
 
 logger = logging.getLogger('IsoQuant')
 
-VERTEX_polya = -10
-VERTEX_read_end = -11
-VERTEX_polyt = -20
-VERTEX_read_start = -21
+class TerminalVertex:
+    # Terminal (read-terminus) vertex type codes stored as tuple[0] in (code, position).
+    # genomic-right (read-end) side:
+    polya = -10        # confirmed 3' polyA (polyA tail)                (+ strand 3')
+    read_end = -11     # bare read end (no tail / TSS evidence)
+    tss_right = -12    # confirmed 5' TSS (TSS prediction)             (- strand 5')
+    # genomic-left (read-start) side:
+    polyt = -20        # confirmed 3' polyA (polyT tail)                (- strand 3')
+    read_start = -21   # bare read start (no tail / TSS evidence)
+    tss_left = -22     # confirmed 5' TSS (TSS prediction)             (+ strand 5')
+
+    right = (polya, read_end, tss_right)   # genomic-right terminal vertices
+    left = (polyt, read_start, tss_left)   # genomic-left terminal vertices
 
 
 def is_terminal_vertex(v):
-    return v[0] in [VERTEX_polya, VERTEX_read_end]
+    return v[0] in TerminalVertex.right
 
 
 def is_starting_vertex(v):
-    return v[0] in [VERTEX_polyt, VERTEX_read_start]
+    return v[0] in TerminalVertex.left
 
 
 class IntronCollector:
@@ -478,8 +487,8 @@ class IntronGraph:
             terminal_positions[intron] = self._refine_positions(clustered, terminal_predictions)
 
         # Step 4: attach terminal vertices.
-        polya_vertex = VERTEX_polya if read_end else VERTEX_polyt
-        read_vertex = VERTEX_read_end if read_end else VERTEX_read_start
+        polya_vertex = TerminalVertex.polya if read_end else TerminalVertex.polyt
+        read_vertex = TerminalVertex.read_end if read_end else TerminalVertex.read_start
         edges = self.outgoing_edges if read_end else self.incoming_edges
         for intron in introns:
             for pos in polya_positions[intron].keys():
