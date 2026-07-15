@@ -448,6 +448,28 @@ class IntronGraph:
             clustered = self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
             polya_positions[intron] = self._refine_positions(clustered, self.polya_predictions)
 
+        # Step 1.5: TSS-prediction-confirmed terminal positions. Symmetric to the
+        # tail-confirmed polyA vertices above: a read terminus at a predicted TSS is
+        # attached ALWAYS (no read-count cutoff), so a base-isoform TSS supported by
+        # few reads keeps its own vertex instead of being absorbed into a dominant
+        # alt-TSS peak. TSS is genomic-left for '+' and genomic-right for '-', so
+        # tss_predictions are honoured on both sides; confirmed positions are pulled
+        # out of the cutoff path. Inert without --fl_data (tss_predictions is None).
+        tss_positions = {}
+        remaining_terminal_positions = {}
+        for intron in introns:
+            confirmed = {}
+            remaining = {}
+            for position, count in read_terminal_positions[intron].items():
+                nearest, diff = (find_closest(position, self.tss_predictions)
+                                 if self.tss_predictions else (None, None))
+                if nearest is not None and diff <= self.params.apa_delta:
+                    confirmed[nearest] = confirmed.get(nearest, 0) + count  # snap to prediction
+                else:
+                    remaining[position] = count
+            tss_positions[intron] = confirmed
+            remaining_terminal_positions[intron] = remaining
+
         # Step 2: per-intron read-end cutoff and the extra (non-polyA) positions.
         cutoffs = {}
         extra_positions = {}
@@ -458,13 +480,13 @@ class IntronGraph:
                 cutoff = max(cutoff, max(clustered_polyas.values()) * self.params.terminal_position_rel)
                 extra = {}
                 furthest = max(clustered_polyas.keys()) if read_end else min(clustered_polyas.keys())
-                for position, count in read_terminal_positions[intron].items():
+                for position, count in remaining_terminal_positions[intron].items():
                     if read_end and position >= furthest + self.params.apa_delta:
                         extra[position] = count
                     elif not read_end and position <= furthest - self.params.apa_delta:
                         extra[position] = count
             else:
-                extra = read_terminal_positions[intron]
+                extra = remaining_terminal_positions[intron]
 
             neighbors = self.outgoing_edges if read_end else self.incoming_edges
             if intron in neighbors and len(neighbors[intron]) > 0:
@@ -489,10 +511,13 @@ class IntronGraph:
         # Step 4: attach terminal vertices.
         polya_vertex = TerminalVertex.polya if read_end else TerminalVertex.polyt
         read_vertex = TerminalVertex.read_end if read_end else TerminalVertex.read_start
+        tss_vertex = TerminalVertex.tss_right if read_end else TerminalVertex.tss_left
         edges = self.outgoing_edges if read_end else self.incoming_edges
         for intron in introns:
             for pos in polya_positions[intron].keys():
                 edges[intron].add((polya_vertex, pos))
+            for pos in tss_positions[intron].keys():
+                edges[intron].add((tss_vertex, pos))
             for pos in terminal_positions[intron].keys():
                 edges[intron].add((read_vertex, pos))
 
