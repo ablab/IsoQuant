@@ -382,14 +382,17 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
                 parts.append("%s=%s;" % (attr, val))
         return " ".join(parts) if parts else "*"
 
-    def _write_unmatched(self, read_assignment, classification: str = "."):
+    def _write_unmatched(self, read_assignment, classification: str = ".", gene_id: str = "."):
+        # gene_id is "." unless the read has no transcript but still belongs to a
+        # gene (e.g. a dropped read whose isoform was filtered while its gene
+        # survives): the caller passes the match's gene so it is not lost.
         read_introns = junctions_from_blocks(read_assignment.exons) if read_assignment.exons else []
         strand = read_assignment.strand
         fields = [
             read_assignment.read_id,
             read_assignment.chr_id,
             strand,
-            ".",                                                        # gene_id
+            gene_id,                                                    # gene_id
             read_assignment.gene_assignment_type.name,                  # gene_assignment_type
             ".",                                                        # isoform_id
             read_assignment.assignment_type.name,                       # isoform_assignment_type
@@ -429,7 +432,8 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
 
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
-                self._write_unmatched(read_assignment, m.match_classification.name)
+                self._write_unmatched(read_assignment, m.match_classification.name,
+                                      m.assigned_gene if m.assigned_gene else ".")
                 continue
 
             isoform_introns = read_assignment.gene_info.all_isoforms_introns[m.assigned_transcript]
