@@ -171,7 +171,8 @@ def test_derive_alternative_end_models_known_source(monkeypatch, stub_models):
     out = c.derive_alternative_end_models(source, reads)
 
     assert len(out) == 1
-    nic = out[0]
+    nic, nic_reads = out[0]                                # (model, supporting reads)
+    assert len(nic_reads) == len(reads)                   # source reads at the alt polyA are moved onto the NIC
     assert nic.exon_blocks[0] == (100, 200)               # start unchanged
     assert nic.exon_blocks[-1] == (300, 500)              # 3' end moved to alt polyA
     assert nic.transcript_type == TranscriptModelType.novel_in_catalog
