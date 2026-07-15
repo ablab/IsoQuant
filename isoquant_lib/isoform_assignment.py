@@ -25,7 +25,7 @@ class ReadAssignmentType(Enum):
     inconsistent = 30
     inconsistent_non_intronic = 31
     inconsistent_ambiguous = 32
-    dropped = 40
+    discarded = 40
     suspended = 255
 
     def is_inconsistent(self):

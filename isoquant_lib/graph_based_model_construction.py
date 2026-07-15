@@ -265,17 +265,17 @@ class GraphBasedModelConstructor:
         return ReadAssignment(source.read_id, ReadAssignmentType.unique_minor_difference,
                               self.string_pools, match=[forced_match])
 
-    def _build_dropped_assignment(self, read_id, gene, surviving_genes):
+    def _build_discarded_assignment(self, read_id, gene, surviving_genes):
         # A read whose reference-unique known isoform was dropped: no transcript.
         # It still belongs to its gene, so it counts toward that gene when the gene
         # has a surviving model (gene_assignment_type=unique makes the gene counter
         # count it); otherwise it is not assigned anywhere.
         if gene is not None and gene in surviving_genes:
             match = IsoformMatch(MatchClassification.genic, self.string_pools, assigned_gene=gene)
-            ra = ReadAssignment(read_id, ReadAssignmentType.dropped, self.string_pools, match=[match])
+            ra = ReadAssignment(read_id, ReadAssignmentType.discarded, self.string_pools, match=[match])
             ra.gene_assignment_type = ReadAssignmentType.unique
             return ra
-        return ReadAssignment(read_id, ReadAssignmentType.dropped, self.string_pools)
+        return ReadAssignment(read_id, ReadAssignmentType.discarded, self.string_pools)
 
     def build_model_read_assignments(self, read_assignments):
         """Produce one honest ReadAssignment per read against the final model set,
@@ -289,7 +289,7 @@ class GraphBasedModelConstructor:
            graph tolerance, forced onto it as unique/umd (it must count toward the
            model it contributed to).
         2. reference-unique member on a *kept* known isoform -> reuse source match.
-        3. dropped (reference-unique to a *dropped* known isoform) -> no transcript;
+        3. discarded (reference-unique to a *dropped* known isoform) -> no transcript;
            counts toward the gene only if that gene still has a surviving model.
         4. leftover -> assign vs the full model set (quick_mode=False): honest
            unique/umd/ambiguous/inconsistent, kept regardless of consistency.
@@ -325,7 +325,7 @@ class GraphBasedModelConstructor:
                     ra = self._model_read_assignment_single(source, known_iso, model_by_id, single_cache)
                 elif known_iso is not None:
                     gene = self.gene_info.gene_id_map.get(known_iso)
-                    ra = self._build_dropped_assignment(read_id, gene, surviving_genes)
+                    ra = self._build_discarded_assignment(read_id, gene, surviving_genes)
                 elif model_ids:
                     if full_assigner is None:
                         full_assigner = LongReadAssigner(model_gene_info, self.args,

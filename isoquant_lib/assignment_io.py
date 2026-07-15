@@ -384,7 +384,7 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
 
     def _write_unmatched(self, read_assignment, classification: str = ".", gene_id: str = "."):
         # gene_id is "." unless the read has no transcript but still belongs to a
-        # gene (e.g. a dropped read whose isoform was filtered while its gene
+        # gene (e.g. a discarded read whose isoform was filtered while its gene
         # survives): the caller passes the match's gene so it is not lost.
         read_introns = junctions_from_blocks(read_assignment.exons) if read_assignment.exons else []
         strand = read_assignment.strand
