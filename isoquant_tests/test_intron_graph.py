@@ -7,7 +7,7 @@
 #
 # import unittest
 # from unittest.mock import Mock
-# from isoquant_lib.intron_graph import *
+# from isoquant_lib.intron_graph import *, TerminalVertex
 # from isoquant_lib.gene_info import GeneInfo
 # from isoquant_lib.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, PolyAInfo
 # from isoquant_lib.common import junctions_from_blocks
@@ -238,14 +238,14 @@
 #
 #     def test_is_terminal_vertex(self):
 #         """Test identifying terminal vertices"""
-#         self.assertTrue(is_terminal_vertex(VERTEX_polya))
-#         self.assertTrue(is_terminal_vertex(VERTEX_read_end))
+#         self.assertTrue(is_terminal_vertex(TerminalVertex.polya))
+#         self.assertTrue(is_terminal_vertex(TerminalVertex.read_end))
 #         self.assertFalse(is_terminal_vertex((100, 'L')))
 #
 #     def test_is_starting_vertex(self):
 #         """Test identifying starting vertices"""
-#         self.assertTrue(is_starting_vertex(VERTEX_polyt))
-#         self.assertTrue(is_starting_vertex(VERTEX_read_start))
+#         self.assertTrue(is_starting_vertex(TerminalVertex.polyt))
+#         self.assertTrue(is_starting_vertex(TerminalVertex.read_start))
 #         self.assertFalse(is_starting_vertex((100, 'R')))
 #
 #

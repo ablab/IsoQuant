@@ -15,7 +15,7 @@ created with ``__new__`` plus the few attributes/stubs they touch.
 import types
 from collections import defaultdict
 
-from isoquant_lib.intron_graph import IntronGraph, VERTEX_read_end
+from isoquant_lib.intron_graph import IntronGraph, TerminalVertex
 
 
 def _bare_graph(apa_delta=10, polya_predictions=None, tss_predictions=None):
@@ -59,7 +59,7 @@ def test_refine_positions_identity_without_predictions():
 # -- _attach_side side-selection (regression for review fix #1) ----------------
 
 def test_attach_side_3prime_readend_refines_with_polya_not_tss():
-    # read_end=True is the genomic 3' side: a VERTEX_read_end position must be
+    # read_end=True is the genomic 3' side: a TerminalVertex.read_end position must be
     # refined toward the polyA predictions, never the (5') TSS predictions.
     # Place the read-end cluster at 1005, equidistant from polya (1000) and tss
     # (1010); the chosen target tells us which set was used.
@@ -75,6 +75,6 @@ def test_attach_side_3prime_readend_refines_with_polya_not_tss():
     g._attach_side([intron], polya_confirmed, read_terminal, read_end=True)
 
     vertices = g.outgoing_edges[intron]
-    assert (VERTEX_read_end, 1000) in vertices    # snapped to polyA prediction
-    assert (VERTEX_read_end, 1010) not in vertices  # NOT the TSS prediction
-    assert (VERTEX_read_end, 1005) not in vertices  # and it was refined, not left raw
+    assert (TerminalVertex.read_end, 1000) in vertices    # snapped to polyA prediction
+    assert (TerminalVertex.read_end, 1010) not in vertices  # NOT the TSS prediction
+    assert (TerminalVertex.read_end, 1005) not in vertices  # and it was refined, not left raw
