@@ -25,7 +25,7 @@ import gzip
 import sys
 from typing import TextIO
 
-from .common import junctions_from_blocks
+from isoquant_lib.common import junctions_from_blocks
 
 
 # read_info column indices

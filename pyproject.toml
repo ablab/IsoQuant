@@ -59,7 +59,7 @@ isoquant-visualize = "isoquant_visualize:main"
 py-modules = ["isoquant", "isoquant_detect_barcodes", "isoquant_visualize"]
 
 [tool.setuptools.packages.find]
-include = ["isoquant_lib*"]
+include = ["isoquant_lib*", "scripts"]
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}

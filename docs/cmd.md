@@ -277,7 +277,7 @@ However, only the main (sequence-based) UMI-deduplicated reads will be used for 
 
 When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
 
-For Visium HD composite barcodes, use `misc/prepare_visium_spot_ids.py` to generate the mapping file.
+For Visium HD composite barcodes, use `scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 
 `--molecule`
 Path to a molecule description file (MDF) for `custom_sc` mode.
@@ -504,8 +504,8 @@ isoquant.py ...
 
 The `read_info.tsv` format can be converted to legacy formats using the conversion script:
 ```bash
-python -m isoquant_lib.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
-python -m isoquant_lib.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
+python -m scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
+python -m scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
 ```
 
 Note: large output files are gzipped by default unless `--no_gzip` is specified.
