@@ -20,7 +20,7 @@ import logging
 
 import yaml
 
-from error_codes import IsoQuantExitCode
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 
 
 _quote = {"'": "|'", "|": "||", "\n": "|n", "\r": "|r", '[': '|[', ']': '|]'}
