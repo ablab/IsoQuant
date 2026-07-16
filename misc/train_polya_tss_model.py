@@ -40,7 +40,7 @@ from xgboost import XGBClassifier
 
 # Importable so we always train on the same feature set the runtime expects.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from isoquant_lib.terminal_counter import FEATURE_COLUMNS  # noqa: E402
+from isoquant_lib.terminal_prediction.terminal_counter import FEATURE_COLUMNS  # noqa: E402
 
 logger = logging.getLogger("train_polya_tss_model")
 

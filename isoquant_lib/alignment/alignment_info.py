@@ -8,8 +8,8 @@
 import logging
 
 from isoquant_lib.common import get_read_blocks
-from isoquant_lib.polya_finder import PolyAInfo
-from isoquant_lib.polya_verification import shift_polya, shift_polyt
+from isoquant_lib.terminal_prediction.polya_finder import PolyAInfo
+from isoquant_lib.terminal_prediction.polya_verification import shift_polya, shift_polyt
 
 logger = logging.getLogger('IsoQuant')
 

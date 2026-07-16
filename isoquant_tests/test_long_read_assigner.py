@@ -26,7 +26,7 @@ from isoquant_lib.assignment.long_read_profiles import (
     NonOverlappingFeaturesProfileConstructor,
 )
 from isoquant_lib.gene_info import GeneInfo
-from isoquant_lib.polya_finder import PolyAInfo
+from isoquant_lib.terminal_prediction.polya_finder import PolyAInfo
 from isoquant_lib.utils.string_pools import StringPoolManager
 
 

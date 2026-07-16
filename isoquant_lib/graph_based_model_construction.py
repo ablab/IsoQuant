@@ -17,7 +17,7 @@ from .assignment.isoform_assignment import (
     MatchClassification,
     IsoformMatch,
 )
-from .polya_finder import PolyAInfo
+from .terminal_prediction.polya_finder import PolyAInfo
 from isoquant_lib.model_construction.transcript_to_gene_joiner import TranscriptToGeneJoiner
 from .model_construction.context import ModelStore, ModelConstructionContext
 # Re-exported for isoquant.py's `from ...graph_based_model_construction import StrandnessReportingLevel`.

@@ -8,8 +8,8 @@
 import pytest
 
 from isoquant_lib.alignment.alignment_info import AlignmentInfo
-from isoquant_lib.polya_finder import PolyAFinder
-from isoquant_lib.polya_verification import PolyAFixer
+from isoquant_lib.terminal_prediction.polya_finder import PolyAFinder
+from isoquant_lib.terminal_prediction.polya_verification import PolyAFixer
 
 SEQ1 = 'CTCAAGACCAAGAAGGACGACATGACCATGGCTTAAAAGAGTCTGCTCCCCACAGCCCCCTGCGAT' \
        'GGATGGACGGAGGAACCAGGGTCGGACGACCTCCGATGCTAAGAGCACTCCAACTGCTGCAAACCG' \

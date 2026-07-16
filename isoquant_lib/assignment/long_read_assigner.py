@@ -37,7 +37,7 @@ from .isoform_assignment import (
 )
 from .long_read_profiles import OverlappingFeaturesProfileConstructor
 from .junction_comparator import JunctionComparator
-from isoquant_lib.polya_verification import PolyAVerifier
+from isoquant_lib.terminal_prediction.polya_verification import PolyAVerifier
 
 
 logger = logging.getLogger('IsoQuant')

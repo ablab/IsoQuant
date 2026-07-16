@@ -10,8 +10,8 @@ from collections import namedtuple
 
 import pytest
 
-from isoquant_lib.polya_finder import PolyAFinder
-from isoquant_lib.cage_finder import CagePeakFinder
+from isoquant_lib.terminal_prediction.polya_finder import PolyAFinder
+from isoquant_lib.terminal_prediction.cage_finder import CagePeakFinder
 
 
 PolyAAlignment = namedtuple('PolyAAlignment', ('query_name', 'cigartuples', 'seq', 'reference_start', 'reference_end'))
