@@ -8,8 +8,8 @@
 import logging
 from collections import defaultdict
 
-from .common import intersection_len, interval_len, junctions_from_blocks
-from .gene_info import TranscriptModelType
+from isoquant_lib.common import intersection_len, interval_len, junctions_from_blocks
+from isoquant_lib.gene_info import TranscriptModelType
 
 logger = logging.getLogger('IsoQuant')
 

@@ -10,8 +10,8 @@ import os
 from collections import defaultdict
 from collections import namedtuple
 
-from .common import max_range
-from .gene_info import TranscriptModel, GeneInfo
+from isoquant_lib.common import max_range
+from isoquant_lib.gene_info import TranscriptModel, GeneInfo
 
 logger = logging.getLogger('IsoQuant')
 

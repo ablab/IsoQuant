@@ -27,14 +27,13 @@ from .error_codes import IsoQuantExitCode
 from .serialization import *
 from .stats import EnumStats
 from .file_utils import merge_files, merge_counts
-from .input_data_storage import SampleData
 from .alignment_processor import AlignmentType
 from .read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
 from .id_policy import SimpleIDDistributor, FeatureIdStorage
 from .file_naming import *
-from .transcript_printer import GFFPrinter, VoidTranscriptPrinter
+from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
 from .table_splitter import split_read_table_parallel
 from .assignment_aggregator import ReadAssignmentAggregator

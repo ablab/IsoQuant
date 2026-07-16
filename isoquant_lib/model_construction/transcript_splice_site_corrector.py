@@ -28,7 +28,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
-from .common import CANONICAL_FWD_SITES, CANONICAL_REV_SITES
+from isoquant_lib.common import CANONICAL_FWD_SITES, CANONICAL_REV_SITES
 
 logger = logging.getLogger('IsoQuant')
 

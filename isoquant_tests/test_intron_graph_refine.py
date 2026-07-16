@@ -15,7 +15,7 @@ created with ``__new__`` plus the few attributes/stubs they touch.
 import types
 from collections import defaultdict
 
-from isoquant_lib.intron_graph import IntronGraph, TerminalVertex
+from isoquant_lib.model_construction.intron_graph import IntronGraph, TerminalVertex
 
 
 def _bare_graph(apa_delta=10, polya_predictions=None, tss_predictions=None):

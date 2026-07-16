@@ -9,7 +9,7 @@ import pysam
 import logging
 
 from .common import overlaps, junctions_from_blocks, get_exons
-from .transcript_printer import  validate_exons
+from isoquant_lib.model_construction.transcript_printer import  validate_exons
 
 logger = logging.getLogger('IsoQuant')
 

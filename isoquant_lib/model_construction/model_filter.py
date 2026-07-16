@@ -13,12 +13,12 @@
 import logging
 
 from ..gene_info import GeneInfo, TranscriptModelType
-from ..intron_graph import TerminalVertex
+from isoquant_lib.model_construction.intron_graph import TerminalVertex
 from ..isoform_assignment import is_matching_assignment, ReadAssignmentType
 from ..long_read_assigner import LongReadAssigner
 from ..long_read_profiles import CombinedProfileConstructor
 from ..polya_finder import PolyAInfo
-from ..transcript_splice_site_corrector import (
+from isoquant_lib.model_construction.transcript_splice_site_corrector import (
     count_deletions_for_splice_site_locations,
     correct_splice_site_errors,
     generate_updated_exon_list,
