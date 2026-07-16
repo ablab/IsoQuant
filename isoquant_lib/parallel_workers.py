@@ -31,7 +31,7 @@ from isoquant_lib.utils.file_naming import (
     allinfo_stats_file_name,
 )
 from .gene_info import TranscriptModelType
-from .graph_based_model_construction import GraphBasedModelConstructor
+from .model_construction.model_construction import GraphBasedModelConstructor
 from isoquant_lib.utils.id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
 from .assignment.read_groups import create_read_grouper, get_grouping_strategy_names
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage

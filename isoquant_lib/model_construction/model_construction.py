@@ -8,26 +8,26 @@
 import logging
 from collections import defaultdict
 
-from .common import junctions_from_blocks
-from .assignment.assignment_io import ReadAssignmentType
-from .gene_info import TranscriptModelType
-from .assignment.isoform_assignment import (
+from isoquant_lib.common import junctions_from_blocks
+from isoquant_lib.assignment.assignment_io import ReadAssignmentType
+from isoquant_lib.gene_info import TranscriptModelType
+from isoquant_lib.assignment.isoform_assignment import (
     match_subtype_to_str_with_additional_info,
     ReadAssignment,
     MatchClassification,
     IsoformMatch,
 )
-from .terminal_prediction.polya_finder import PolyAInfo
+from isoquant_lib.terminal_prediction.polya_finder import PolyAInfo
 from isoquant_lib.model_construction.transcript_to_gene_joiner import TranscriptToGeneJoiner
-from .model_construction.context import ModelStore, ModelConstructionContext
+from isoquant_lib.model_construction.context import ModelStore, ModelConstructionContext
 # Re-exported for isoquant.py's `from ...graph_based_model_construction import StrandnessReportingLevel`.
-from .model_construction.context import StrandnessReportingLevel  # noqa: F401
-from .model_construction.fl_graph_constructor import FLGraphConstructor
-from .model_construction.assignment_based_constructor import AssignmentBasedConstructor
-from .model_construction.end_processor import TranscriptEndProcessor
-from .model_construction.model_filter import ModelFilter
-from .model_construction.read_assigner import ConstructionReadAssigner
-from .model_construction.model_read_counter import ModelReadCounter
+from isoquant_lib.model_construction.context import StrandnessReportingLevel  # noqa: F401
+from isoquant_lib.model_construction.fl_graph_constructor import FLGraphConstructor
+from isoquant_lib.model_construction.assignment_based_constructor import AssignmentBasedConstructor
+from isoquant_lib.model_construction.end_processor import TranscriptEndProcessor
+from isoquant_lib.model_construction.model_filter import ModelFilter
+from isoquant_lib.model_construction.read_assigner import ConstructionReadAssigner
+from isoquant_lib.model_construction.model_read_counter import ModelReadCounter
 
 logger = logging.getLogger('IsoQuant')
 
