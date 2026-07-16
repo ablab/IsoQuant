@@ -40,7 +40,7 @@ import pyfaidx
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.modes import IsoQuantMode, ISOQUANT_MODES
 from isoquant_lib.gtf2db import convert_gtf_to_db
-from isoquant_lib.read_mapper import (
+from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
     SUPPORTED_STRANDEDNESS,
     SUPPORTED_ALIGNERS,
@@ -54,7 +54,7 @@ from isoquant_lib.dataset_processor import DatasetProcessor, PolyAUsageStrategie
 from isoquant_lib.graph_based_model_construction import StrandnessReportingLevel
 from isoquant_lib.assignment.long_read_assigner import AmbiguityResolvingMethod
 from isoquant_lib.quantification.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
-from isoquant_lib.input_data_storage import InputDataStorage, InputDataType
+from isoquant_lib.utils.input_data_storage import InputDataStorage, InputDataType
 from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
 from isoquant_lib.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
