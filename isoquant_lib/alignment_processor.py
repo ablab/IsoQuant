@@ -27,7 +27,7 @@ from .polya_verification import PolyAFixer
 from .exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
 from .illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
-from .transcript_splice_site_corrector import extract_relevant_deletions
+from isoquant_lib.model_construction.transcript_splice_site_corrector import extract_relevant_deletions
 from .stats import EnumStats
 from enum import Enum, unique
 

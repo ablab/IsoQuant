@@ -18,7 +18,7 @@ from enum import Enum, unique
 from typing import Dict, List
 
 from ..gene_info import StrandDetector, TranscriptModel
-from ..intron_graph import IntronGraph
+from isoquant_lib.model_construction.intron_graph import IntronGraph
 from ..isoform_assignment import ReadAssignment
 from ..long_read_assigner import LongReadAssigner
 from ..long_read_profiles import CombinedProfileConstructor

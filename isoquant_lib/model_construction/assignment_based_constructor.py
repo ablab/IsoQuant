@@ -14,7 +14,7 @@ from collections import defaultdict
 
 from ..common import TranscriptNaming, interval_len, intersection_len
 from ..gene_info import TranscriptModel, TranscriptModelType
-from ..intron_graph import TerminalVertex
+from isoquant_lib.model_construction.intron_graph import TerminalVertex
 from ..isoform_assignment import MatchEventSubtype
 
 logger = logging.getLogger('IsoQuant')

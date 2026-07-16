@@ -11,7 +11,7 @@
 
 from collections import defaultdict
 
-from ..intron_graph import TerminalVertex
+from isoquant_lib.model_construction.intron_graph import TerminalVertex
 
 
 class IntronPathStorage:

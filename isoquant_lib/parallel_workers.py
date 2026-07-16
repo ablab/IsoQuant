@@ -33,8 +33,8 @@ from .file_naming import (
 from .gene_info import TranscriptModelType
 from .graph_based_model_construction import GraphBasedModelConstructor
 from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
-from .read_groups import create_read_grouper, get_grouping_strategy_names, load_table
-from .transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
+from .read_groups import create_read_grouper, get_grouping_strategy_names
+from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .assignment_aggregator import ReadAssignmentAggregator
 from .string_pools import setup_string_pools
 from .common import large_output_enabled

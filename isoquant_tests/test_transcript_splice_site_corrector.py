@@ -17,7 +17,7 @@ import pytest
 
 from isoquant_lib.gene_info import TranscriptModelType
 from isoquant_lib.model_construction.model_filter import ModelFilter
-from isoquant_lib.transcript_splice_site_corrector import (
+from isoquant_lib.model_construction.transcript_splice_site_corrector import (
     SpliceSiteCase,
     extract_relevant_deletions,
     extract_splice_site_locations_within_aligned_read,

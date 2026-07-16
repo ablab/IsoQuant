@@ -10,7 +10,7 @@ import queue
 from collections import defaultdict
 from typing import Dict, List, Optional
 
-from .common import find_closest, overlaps
+from isoquant_lib.common import find_closest, overlaps
 
 logger = logging.getLogger('IsoQuant')
 

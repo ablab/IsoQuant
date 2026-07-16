@@ -27,7 +27,7 @@ from .assignment_io import (
     SqantiTSVPrinter,
     BasicTSVAssignmentPrinter,
 )
-from .transcript_printer import VoidTranscriptPrinter
+from isoquant_lib.model_construction.transcript_printer import VoidTranscriptPrinter
 from .gene_info import get_all_chromosome_genes, get_all_chromosome_transcripts
 from .common import large_output_enabled
 
