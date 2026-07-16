@@ -9,7 +9,7 @@ import pytest
 import gffutils
 from unittest.mock import Mock, MagicMock, patch
 
-from isoquant_lib.genomic_interval_index import GenomicIntervalIndex
+from isoquant_lib.fusion.genomic_interval_index import GenomicIntervalIndex
 
 
 class TestGenomicIntervalIndex:
@@ -349,7 +349,7 @@ class TestGenomicIntervalIndex:
 
     def test_interval_tree_import_availability(self):
         """Test handling when intervaltree is not available."""
-        with patch('isoquant_lib.genomic_interval_index.IntervalTree', None):
+        with patch('isoquant_lib.fusion.genomic_interval_index.IntervalTree', None):
             index = GenomicIntervalIndex.__new__(GenomicIntervalIndex)
             index.db = self.gffutils_db
             index.gene_trees = {}
