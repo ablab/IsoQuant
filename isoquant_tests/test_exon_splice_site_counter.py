@@ -325,7 +325,7 @@ class TestOutput:
 # ── conversion script: per-group -> per-molecule group lists ───────────────
 
 def _load_convert():
-    path = os.path.join(os.path.dirname(__file__), "..", "misc",
+    path = os.path.join(os.path.dirname(__file__), "..", "scripts",
                         "exon_splice_site_to_group_lists.py")
     spec = importlib.util.spec_from_file_location("ess_convert", path)
     mod = importlib.util.module_from_spec(spec)
