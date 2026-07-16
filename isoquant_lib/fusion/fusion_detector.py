@@ -7,7 +7,7 @@ import pysam
 import mappy as mp
 from intervaltree import IntervalTree
 from .fusion_validator import FusionValidator
-from isoquant_lib.genomic_interval_index import GenomicIntervalIndex
+from isoquant_lib.fusion.genomic_interval_index import GenomicIntervalIndex
 
 logger = logging.getLogger('IsoQuant')
 ANTISENSE_SUFFIX_RE = re.compile(r"-(AS\d+|DT|DIVERGENT|NAT)$", re.IGNORECASE)
