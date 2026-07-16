@@ -9,7 +9,7 @@ import pytest
 from functools import partial
 
 from isoquant_lib.common import equal_ranges, overlaps_at_least
-from isoquant_lib.long_read_profiles import (
+from isoquant_lib.assignment.long_read_profiles import (
     OverlappingFeaturesProfileConstructor,
     NonOverlappingFeaturesProfileConstructor,
 )

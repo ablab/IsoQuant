@@ -10,7 +10,7 @@ from isoquant_lib.barcode_calling.umi_filtering import (
     format_read_assignment_for_output,
 
 )
-from isoquant_lib.isoform_assignment import ReadAssignment, ReadAssignmentType
+from isoquant_lib.assignment.isoform_assignment import ReadAssignment, ReadAssignmentType
 from isoquant_lib.common import junctions_from_blocks
 from isoquant_lib.utils.string_pools import StringPoolManager
 

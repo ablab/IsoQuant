@@ -19,9 +19,9 @@ from typing import Dict, List
 
 from ..gene_info import StrandDetector, TranscriptModel
 from isoquant_lib.model_construction.intron_graph import IntronGraph
-from ..isoform_assignment import ReadAssignment
-from ..long_read_assigner import LongReadAssigner
-from ..long_read_profiles import CombinedProfileConstructor
+from ..assignment.isoform_assignment import ReadAssignment
+from ..assignment.long_read_assigner import LongReadAssigner
+from ..assignment.long_read_profiles import CombinedProfileConstructor
 from .intron_path import IntronPathProcessor, IntronPathStorage
 
 

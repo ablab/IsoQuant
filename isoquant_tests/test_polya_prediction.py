@@ -20,7 +20,7 @@ import pandas as pd
 import pytest
 
 from isoquant_lib import terminal_counter as tc
-from isoquant_lib.isoform_assignment import ReadAssignmentType
+from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
 
 
 class _StubModel:

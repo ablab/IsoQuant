@@ -8,7 +8,7 @@
 import logging
 
 from isoquant_lib.utils.stats import EnumStats
-from .long_read_counter import (
+from isoquant_lib.long_read_counter import (
     ExonCounter,
     JointExonCounter,
     ExonSpliceSiteCounter,
@@ -18,7 +18,7 @@ from .long_read_counter import (
     create_gene_counter,
     create_transcript_counter,
 )
-from .terminal_counter import PolyACounter, TSSCounter
+from isoquant_lib.terminal_counter import PolyACounter, TSSCounter
 from .assignment_io import (
     IOSupport,
     BEDPrinter,
@@ -28,8 +28,8 @@ from .assignment_io import (
     BasicTSVAssignmentPrinter,
 )
 from isoquant_lib.model_construction.transcript_printer import VoidTranscriptPrinter
-from .gene_info import get_all_chromosome_genes, get_all_chromosome_transcripts
-from .common import large_output_enabled
+from isoquant_lib.gene_info import get_all_chromosome_genes, get_all_chromosome_transcripts
+from isoquant_lib.common import large_output_enabled
 
 logger = logging.getLogger('IsoQuant')
 

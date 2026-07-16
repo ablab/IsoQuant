@@ -28,15 +28,15 @@ from isoquant_lib.utils.serialization import *
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.utils.file_utils import merge_files, merge_counts
 from .alignment_processor import AlignmentType
-from .read_groups import prepare_read_groups, get_grouping_strategy_names
-from .assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
+from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_names
+from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
 from isoquant_lib.utils.id_policy import SimpleIDDistributor, FeatureIdStorage
 from isoquant_lib.utils.file_naming import *
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
 from isoquant_lib.utils.table_splitter import split_read_table_parallel
-from .assignment_aggregator import ReadAssignmentAggregator
+from .assignment.assignment_aggregator import ReadAssignmentAggregator
 from isoquant_lib.utils.string_pools import setup_string_pools
 from .parallel_workers import (
     collect_reads_in_parallel,
@@ -616,7 +616,7 @@ class DatasetProcessor:
 
         # Barcode2barcode spot-based UMI dedup rounds
         if hasattr(self.args, 'barcode2barcode') and self.args.barcode2barcode:
-            from .read_groups import parse_barcode2spot_spec, load_barcode2barcode_mapping
+            from .assignment.read_groups import parse_barcode2spot_spec, load_barcode2barcode_mapping
             filename, barcode_col, spot_cols = parse_barcode2spot_spec(self.args.barcode2barcode)
             full_mapping = load_barcode2barcode_mapping(filename, barcode_col, spot_cols)
 

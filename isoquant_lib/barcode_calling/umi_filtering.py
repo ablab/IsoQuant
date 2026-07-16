@@ -19,8 +19,8 @@ import logging
 import editdistance
 import gffutils
 
-from ..assignment_loader import create_merging_assignment_loader
-from ..isoform_assignment import MatchEventSubtype, ReadAssignment
+from ..assignment.assignment_loader import create_merging_assignment_loader
+from ..assignment.isoform_assignment import MatchEventSubtype, ReadAssignment
 
 logger = logging.getLogger('IsoQuant')
 

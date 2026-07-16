@@ -13,13 +13,13 @@ import os
 from functools import partial
 
 from isoquant_lib.common import equal_ranges, overlaps_at_least
-from isoquant_lib.isoform_assignment import MatchEventSubtype, ReadAssignmentType
-from isoquant_lib.long_read_assigner import (
+from isoquant_lib.assignment.isoform_assignment import MatchEventSubtype, ReadAssignmentType
+from isoquant_lib.assignment.long_read_assigner import (
     AmbiguityResolvingMethod,
     IsoformDiff,
     LongReadAssigner,
 )
-from isoquant_lib.long_read_profiles import (
+from isoquant_lib.assignment.long_read_profiles import (
     CombinedReadProfiles,
     OverlappingFeaturesProfileConstructor,
     MappedReadProfile,

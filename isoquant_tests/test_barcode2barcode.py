@@ -8,14 +8,14 @@ import os
 import pytest
 import tempfile
 
-from isoquant_lib.read_groups import (
+from isoquant_lib.assignment.read_groups import (
     parse_barcode2spot_spec,
     load_barcode2barcode_mapping,
     BarcodeSpotGrouper,
     SharedTableData,
 )
 from isoquant_lib.barcode_calling.umi_filtering import UMIFilter
-from isoquant_lib.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, MatchClassification
+from isoquant_lib.assignment.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, MatchClassification
 from isoquant_lib.common import junctions_from_blocks
 from isoquant_lib.utils.string_pools import StringPoolManager
 from isoquant_lib.utils.file_naming import umi_barcode2barcode_prefix, umi_barcode2barcode_global_lock
@@ -219,7 +219,7 @@ class TestParseGroupingSpecBarcode2Barcode:
         barcodes_split_reads = "some_file"
 
     def test_single_column(self):
-        from isoquant_lib.read_groups import parse_grouping_spec
+        from isoquant_lib.assignment.read_groups import parse_grouping_spec
 
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
             f.write("AAAA\tspot_A\n")
@@ -237,7 +237,7 @@ class TestParseGroupingSpecBarcode2Barcode:
             os.unlink(fname)
 
     def test_multi_column_returns_list(self):
-        from isoquant_lib.read_groups import parse_grouping_spec
+        from isoquant_lib.assignment.read_groups import parse_grouping_spec
 
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
             f.write("AAAA\tspot_A\tregion_1\n")
@@ -257,7 +257,7 @@ class TestParseGroupingSpecBarcode2Barcode:
             os.unlink(fname)
 
     def test_missing_arg_exits(self):
-        from isoquant_lib.read_groups import parse_grouping_spec
+        from isoquant_lib.assignment.read_groups import parse_grouping_spec
 
         args = self.MockArgs()
         args.barcode2barcode = None
@@ -267,7 +267,7 @@ class TestParseGroupingSpecBarcode2Barcode:
             parse_grouping_spec("barcode_barcode", args, sample, "chr1")
 
     def test_missing_barcoded_reads_exits(self):
-        from isoquant_lib.read_groups import parse_grouping_spec
+        from isoquant_lib.assignment.read_groups import parse_grouping_spec
 
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
             f.write("AAAA\tspot_A\n")
@@ -294,7 +294,7 @@ class TestGetGroupingStrategyNamesBarcode2Barcode:
         read_group = None
 
     def test_single_column_name(self):
-        from isoquant_lib.read_groups import get_grouping_strategy_names
+        from isoquant_lib.assignment.read_groups import get_grouping_strategy_names
 
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
             f.write("AAAA\tspot_A\n")
@@ -311,7 +311,7 @@ class TestGetGroupingStrategyNamesBarcode2Barcode:
             os.unlink(fname)
 
     def test_multi_column_names(self):
-        from isoquant_lib.read_groups import get_grouping_strategy_names
+        from isoquant_lib.assignment.read_groups import get_grouping_strategy_names
 
         args = self.MockArgs()
         args.barcode2barcode = "file.tsv:0:1,2,3"
@@ -330,7 +330,7 @@ class TestGetGroupingPoolTypesBarcode2Barcode:
         read_group = None
 
     def test_single_column_pool(self):
-        from isoquant_lib.read_groups import get_grouping_pool_types
+        from isoquant_lib.assignment.read_groups import get_grouping_pool_types
 
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.tsv') as f:
             f.write("AAAA\tspot_A\n")
@@ -347,7 +347,7 @@ class TestGetGroupingPoolTypesBarcode2Barcode:
             os.unlink(fname)
 
     def test_multi_column_pools(self):
-        from isoquant_lib.read_groups import get_grouping_pool_types
+        from isoquant_lib.assignment.read_groups import get_grouping_pool_types
 
         args = self.MockArgs()
         args.barcode2barcode = "file.tsv:0:1,2"

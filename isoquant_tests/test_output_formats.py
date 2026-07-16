@@ -15,7 +15,7 @@ import tempfile
 
 import pytest
 
-from isoquant_lib.isoform_assignment import (
+from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignment, ReadAssignmentType, IsoformMatch,
     MatchClassification, MatchEvent, MatchEventSubtype,
 )

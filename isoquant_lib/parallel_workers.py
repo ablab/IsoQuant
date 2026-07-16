@@ -14,8 +14,8 @@ from pyfaidx import Fasta
 
 from isoquant_lib.utils.stats import EnumStats
 from .alignment_processor import AlignmentCollector
-from .assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter, ReadInfoPrinter, VoidPrinter
-from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
+from .assignment.assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter, ReadInfoPrinter, VoidPrinter
+from .assignment.assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
 from isoquant_lib.utils.file_naming import (
     read_groups_file_name,
@@ -33,9 +33,9 @@ from isoquant_lib.utils.file_naming import (
 from .gene_info import TranscriptModelType
 from .graph_based_model_construction import GraphBasedModelConstructor
 from isoquant_lib.utils.id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
-from .read_groups import create_read_grouper, get_grouping_strategy_names
+from .assignment.read_groups import create_read_grouper, get_grouping_strategy_names
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
-from .assignment_aggregator import ReadAssignmentAggregator
+from .assignment.assignment_aggregator import ReadAssignmentAggregator
 from isoquant_lib.utils.string_pools import setup_string_pools
 from .common import large_output_enabled
 
@@ -201,7 +201,7 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
 
 
 def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, read_groups):
-    from .read_groups import get_grouping_pool_types
+    from .assignment.read_groups import get_grouping_pool_types
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
@@ -357,7 +357,7 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
     logger.info("Filtering PCR duplicates for chromosome " + chr_id)
     barcode_feature_table = {}
     if args.barcode2spot:
-        from .read_groups import parse_barcode2spot_spec
+        from .assignment.read_groups import parse_barcode2spot_spec
         filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
         with open(filename, 'r') as f:
             for line in f:

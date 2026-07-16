@@ -37,8 +37,8 @@ import re
 import logging
 from typing import List, Dict
 
-from isoquant_lib.read_groups import AbstractReadGrouper, get_grouping_pool_types
-from isoquant_lib.assignment_loader import load_genedb
+from isoquant_lib.assignment.read_groups import AbstractReadGrouper, get_grouping_pool_types
+from isoquant_lib.assignment.assignment_loader import load_genedb
 from .serialization import write_int, write_string, read_int, read_string
 
 logger = logging.getLogger('IsoQuant')
@@ -613,7 +613,7 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
     # Build barcode_spot pools if needed (supports multi-column)
     if any(pt == 'barcode_spot' or pt.startswith('barcode_spot:') for pt in pool_types.values()):
         if args.barcode2spot:
-            from .read_groups import parse_barcode2spot_spec
+            from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
             filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
             for col_idx, file_col in enumerate(spot_cols):
                 string_pools.build_barcode_spot_pool(args.barcode2spot, column_index=col_idx,

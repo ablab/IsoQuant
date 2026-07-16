@@ -7,7 +7,7 @@
 
 import unittest
 from isoquant_lib.common import junctions_from_blocks
-from isoquant_lib.junction_comparator import *
+from isoquant_lib.assignment.junction_comparator import *
 
 
 class TestJunctionComparator(unittest.TestCase):

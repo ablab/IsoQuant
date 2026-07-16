@@ -13,7 +13,7 @@ import pytest
 
 from isoquant_lib.gene_info import ExonRegion, GeneInfo
 from isoquant_lib.long_read_counter import JointExonCounter
-from isoquant_lib.isoform_assignment import (
+from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignment, ReadAssignmentType, IsoformMatch, MatchClassification,
 )
 from isoquant_lib.utils.string_pools import StringPoolManager

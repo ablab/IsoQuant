@@ -11,9 +11,9 @@ from queue import PriorityQueue
 
 from .common import interval_len, junctions_from_blocks, overlaps
 from .gene_info import GeneInfo, StrandDetector
-from .long_read_assigner import LongReadAssigner
-from .long_read_profiles import CombinedProfileConstructor
-from .isoform_assignment import (
+from .assignment.long_read_assigner import LongReadAssigner
+from .assignment.long_read_profiles import CombinedProfileConstructor
+from .assignment.isoform_assignment import (
     IsoformMatch,
     MatchClassification,
     MatchEvent,
@@ -21,12 +21,12 @@ from .isoform_assignment import (
     ReadAssignment,
     ReadAssignmentType,
 )
-from .read_groups import DefaultReadGrouper
+from .assignment.read_groups import DefaultReadGrouper
 from .polya_finder import PolyAFinder
 from .polya_verification import PolyAFixer
-from .exon_corrector import ExonCorrector
+from .assignment.exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
-from .illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
+from .assignment.illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
 from isoquant_lib.model_construction.transcript_splice_site_corrector import extract_relevant_deletions
 from isoquant_lib.utils.stats import EnumStats
 from enum import Enum, unique

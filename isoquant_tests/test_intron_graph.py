@@ -9,7 +9,7 @@
 # from unittest.mock import Mock
 # from isoquant_lib.intron_graph import *, TerminalVertex
 # from isoquant_lib.gene_info import GeneInfo
-# from isoquant_lib.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, PolyAInfo
+# from isoquant_lib.assignment.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, PolyAInfo
 # from isoquant_lib.common import junctions_from_blocks
 #
 #

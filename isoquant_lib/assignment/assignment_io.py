@@ -8,7 +8,7 @@
 import logging
 import gzip
 
-from .common import (
+from isoquant_lib.common import (
     CANONICAL_FWD_SITES,
     CANONICAL_REV_SITES,
     argmin,
@@ -27,7 +27,7 @@ from .isoform_assignment import (match_subtype_to_str_with_additional_info,
                                  BasicReadAssignment,
                                  MatchClassification,
                                  ReadAssignmentType)
-from .gene_info import GeneInfo, GeneList
+from isoquant_lib.gene_info import GeneInfo, GeneList
 
 
 logger = logging.getLogger('IsoQuant')

@@ -11,9 +11,9 @@ from collections import defaultdict
 
 from isoquant_lib.utils.file_naming import saves_file_name, multimappers_file_name, dynamic_pools_file_name
 from isoquant_lib.utils.serialization import *
-from .isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
-from .multimap_resolver import MultimapResolver
-from .assignment_loader import BasicReadAssignmentLoader, load_genedb
+from .assignment.isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
+from .assignment.multimap_resolver import MultimapResolver
+from .assignment.assignment_loader import BasicReadAssignmentLoader, load_genedb
 from isoquant_lib.utils.string_pools import StringPoolManager
 
 logger = logging.getLogger('IsoQuant')
