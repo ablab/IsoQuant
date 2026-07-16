@@ -2,8 +2,6 @@ name: Mouse ONT simulated polyA prediction
 
 on:
   workflow_dispatch:
-  schedule:
-  - cron: '0 6 * * 5'
 
 env:
   RUN_NAME: Mouse.ONT_simulated.polyA
