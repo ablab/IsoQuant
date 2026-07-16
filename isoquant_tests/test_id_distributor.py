@@ -7,8 +7,8 @@
 
 import unittest
 import threading
-from unittest.mock import MagicMock, patch
-from isoquant_lib.id_policy import (
+from unittest.mock import MagicMock
+from isoquant_lib.utils.id_policy import (
     SimpleIDDistributor,
     ExcludingIdDistributor,
     FeatureIdStorage,

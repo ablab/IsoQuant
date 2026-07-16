@@ -23,21 +23,21 @@ from pyfaidx import Fasta
 
 from .modes import IsoQuantMode
 from .common import proper_plural_form, large_output_enabled, setup_worker_logging, _get_log_params
-from .error_codes import IsoQuantExitCode
-from .serialization import *
-from .stats import EnumStats
-from .file_utils import merge_files, merge_counts
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
+from isoquant_lib.utils.serialization import *
+from isoquant_lib.utils.stats import EnumStats
+from isoquant_lib.utils.file_utils import merge_files, merge_counts
 from .alignment_processor import AlignmentType
 from .read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
-from .id_policy import SimpleIDDistributor, FeatureIdStorage
-from .file_naming import *
+from isoquant_lib.utils.id_policy import SimpleIDDistributor, FeatureIdStorage
+from isoquant_lib.utils.file_naming import *
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
-from .table_splitter import split_read_table_parallel
+from isoquant_lib.utils.table_splitter import split_read_table_parallel
 from .assignment_aggregator import ReadAssignmentAggregator
-from .string_pools import setup_string_pools
+from isoquant_lib.utils.string_pools import setup_string_pools
 from .parallel_workers import (
     collect_reads_in_parallel,
     construct_models_in_parallel,

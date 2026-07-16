@@ -19,7 +19,7 @@ import sys
 from traceback import print_exc
 
 from isoquant_lib.modes import IsoQuantMode
-from isoquant_lib.error_codes import IsoQuantExitCode
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.barcode_calling.detect_barcodes import (
     process_single_thread,
     process_in_parallel,

@@ -16,7 +16,7 @@ from isoquant_lib.long_read_counter import JointExonCounter
 from isoquant_lib.isoform_assignment import (
     ReadAssignment, ReadAssignmentType, IsoformMatch, MatchClassification,
 )
-from isoquant_lib.string_pools import StringPoolManager
+from isoquant_lib.utils.string_pools import StringPoolManager
 
 
 # ── helpers ──────────────────────────────────────────────────────────────

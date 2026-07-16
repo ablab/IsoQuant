@@ -12,7 +12,7 @@ import numpy
 import math
 from ssw import AlignmentMgr
 
-from ..error_codes import IsoQuantExitCode
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 
 
 logger = logging.getLogger('IsoQuant')

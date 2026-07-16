@@ -17,7 +17,7 @@ from .common import (
     sum_intervals_from_point,
     sum_intervals_to_point
 )
-from .serialization import (
+from isoquant_lib.utils.serialization import (
     write_short_int,
     read_short_int,
     SHORT_TERMINATION_INT

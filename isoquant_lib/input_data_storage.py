@@ -12,8 +12,8 @@ import yaml
 from collections import defaultdict
 from enum import Enum, unique
 
-from .error_codes import IsoQuantExitCode
-from .file_utils import normalize_path
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
+from isoquant_lib.utils.file_utils import normalize_path
 
 
 logger = logging.getLogger('IsoQuant')
@@ -99,37 +99,37 @@ class SampleData:
 
     def get_save_file(self, chr_id: str) -> str:
         """Get path to serialized read assignments for a chromosome."""
-        from .file_naming import saves_file_name
+        from isoquant_lib.utils.file_naming import saves_file_name
         return saves_file_name(self.out_raw_file, chr_id)
 
     def get_multimappers_file(self, chr_id: str) -> str:
         """Get path to multimapper assignments for a chromosome."""
-        from .file_naming import multimappers_file_name
+        from isoquant_lib.utils.file_naming import multimappers_file_name
         return multimappers_file_name(self.out_raw_file, chr_id)
 
     def get_filtered_reads_file(self, chr_id: str) -> str:
         """Get path to filtered reads for a chromosome."""
-        from .file_naming import filtered_reads_file_name
+        from isoquant_lib.utils.file_naming import filtered_reads_file_name
         return filtered_reads_file_name(self.out_raw_file, chr_id)
 
     def get_dynamic_pools_file(self, chr_id: str) -> str:
         """Get path to dynamic string pools for a chromosome."""
-        from .file_naming import dynamic_pools_file_name
+        from isoquant_lib.utils.file_naming import dynamic_pools_file_name
         return dynamic_pools_file_name(self.out_raw_file, chr_id)
 
     def get_barcode_pools_file(self, chr_id: str) -> str:
         """Get path to barcode/UMI pools for a chromosome (--barcoded_bam mode)."""
-        from .file_naming import barcode_pools_file_name
+        from isoquant_lib.utils.file_naming import barcode_pools_file_name
         return barcode_pools_file_name(self.out_raw_file, chr_id)
 
     def get_collected_lock_file(self, chr_id: str) -> str:
         """Get path to lock file indicating reads collected for a chromosome."""
-        from .file_naming import reads_collected_lock_file_name
+        from isoquant_lib.utils.file_naming import reads_collected_lock_file_name
         return reads_collected_lock_file_name(self.out_raw_file, chr_id)
 
     def get_processed_lock_file(self, chr_id: str) -> str:
         """Get path to lock file indicating reads processed for a chromosome."""
-        from .file_naming import reads_processed_lock_file_name
+        from isoquant_lib.utils.file_naming import reads_processed_lock_file_name
         return reads_processed_lock_file_name(self.out_raw_file, chr_id)
 
     def get_read_group_split_file(self, chr_id: str, spec_index: int = None) -> str:
@@ -142,7 +142,7 @@ class SampleData:
         Returns:
             Path like 'prefix.read_group_spec0_chr1' or 'prefix.read_group_chr1'
         """
-        from .file_naming import convert_chr_id_to_file_name_str
+        from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
         chr_str = convert_chr_id_to_file_name_str(chr_id)
         if spec_index is not None:
             return f"{self.read_group_file}_spec{spec_index}_{chr_str}"
@@ -150,14 +150,14 @@ class SampleData:
 
     def get_barcodes_split_file(self, chr_id: str) -> str:
         """Get path to split barcodes file for a chromosome."""
-        from .file_naming import convert_chr_id_to_file_name_str
+        from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
         return self.barcodes_split_reads + "_" + convert_chr_id_to_file_name_str(chr_id)
 
     # Chromosome-specific output file getters (for parallel processing)
 
     def get_chr_prefix(self, chr_id: str) -> str:
         """Get chromosome-specific prefix for output files."""
-        from .file_naming import convert_chr_id_to_file_name_str
+        from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
         return f"{self.prefix}_{convert_chr_id_to_file_name_str(chr_id)}"
 
     def get_corrected_bed_file(self, chr_id: str) -> str:
@@ -238,12 +238,12 @@ class SampleData:
 
     def get_info_file(self) -> str:
         """Get path to sample collection info file."""
-        from .file_naming import info_file_name
+        from isoquant_lib.utils.file_naming import info_file_name
         return info_file_name(self.out_raw_file)
 
     def get_collection_lock_file(self) -> str:
         """Get path to sample collection lock file."""
-        from .file_naming import collection_lock_file_name
+        from isoquant_lib.utils.file_naming import collection_lock_file_name
         return collection_lock_file_name(self.out_raw_file)
 
 

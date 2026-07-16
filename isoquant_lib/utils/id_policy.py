@@ -5,7 +5,7 @@
 ############################################################################
 import threading
 
-from .common import TranscriptNaming
+from isoquant_lib.common import TranscriptNaming
 
 
 class SimpleIDDistributor(object):

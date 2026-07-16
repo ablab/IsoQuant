@@ -9,16 +9,16 @@ import logging
 from collections import defaultdict
 
 import gffutils
-from pyfaidx import Fasta, UnsupportedCompressionFormat
+from pyfaidx import Fasta
 
-from .serialization import *
-from .file_naming import *
+from isoquant_lib.utils.serialization import *
+from isoquant_lib.utils.file_naming import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .assignment_io import (
     NormalTmpFileAssignmentLoader,
     QuickTmpFileAssignmentLoader, GeneListTmpFileAssignmentLoader
 )
-from .gene_info import GeneList, GeneInfo
+from .gene_info import GeneInfo
 
 logger = logging.getLogger('IsoQuant')
 

@@ -37,8 +37,8 @@ import re
 import logging
 from typing import List, Dict
 
-from .read_groups import AbstractReadGrouper, get_grouping_pool_types
-from .assignment_loader import load_genedb
+from isoquant_lib.read_groups import AbstractReadGrouper, get_grouping_pool_types
+from isoquant_lib.assignment_loader import load_genedb
 from .serialization import write_int, write_string, read_int, read_string
 
 logger = logging.getLogger('IsoQuant')

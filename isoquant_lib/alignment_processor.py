@@ -28,7 +28,7 @@ from .exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
 from .illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
 from isoquant_lib.model_construction.transcript_splice_site_corrector import extract_relevant_deletions
-from .stats import EnumStats
+from isoquant_lib.utils.stats import EnumStats
 from enum import Enum, unique
 
 logger = logging.getLogger('IsoQuant')

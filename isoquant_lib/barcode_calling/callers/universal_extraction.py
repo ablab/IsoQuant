@@ -10,7 +10,7 @@ import sys
 
 from ..indexers import ArrayKmerIndexer, Array2BitKmerIndexer, Dict2BitKmerIndexer, KmerIndexer
 from ..common import batch_str_to_2bit
-from ...error_codes import IsoQuantExitCode
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from .extraction_result import DetectedElement, ExtractionResult
 from ..common import (
     find_polyt,

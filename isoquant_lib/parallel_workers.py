@@ -12,12 +12,12 @@ import gffutils
 import pysam
 from pyfaidx import Fasta
 
-from .stats import EnumStats
+from isoquant_lib.utils.stats import EnumStats
 from .alignment_processor import AlignmentCollector
 from .assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter, ReadInfoPrinter, VoidPrinter
 from .assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
-from .file_naming import (
+from isoquant_lib.utils.file_naming import (
     read_groups_file_name,
     bamstat_file_name,
     read_group_file_from_saves,
@@ -32,11 +32,11 @@ from .file_naming import (
 )
 from .gene_info import TranscriptModelType
 from .graph_based_model_construction import GraphBasedModelConstructor
-from .id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
+from isoquant_lib.utils.id_policy import SimpleIDDistributor, ExcludingIdDistributor, FeatureIdStorage
 from .read_groups import create_read_grouper, get_grouping_strategy_names
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .assignment_aggregator import ReadAssignmentAggregator
-from .string_pools import setup_string_pools
+from isoquant_lib.utils.string_pools import setup_string_pools
 from .common import large_output_enabled
 
 logger = logging.getLogger('IsoQuant')

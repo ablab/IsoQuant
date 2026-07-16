@@ -11,10 +11,9 @@ import os
 import sys
 
 import pysam
-from collections import defaultdict
 
-from .error_codes import IsoQuantExitCode
-from .table_splitter import split_read_table_parallel
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
+from isoquant_lib.utils.table_splitter import split_read_table_parallel
 
 
 logger = logging.getLogger('IsoQuant')

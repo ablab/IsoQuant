@@ -15,7 +15,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import pysam
 
-from .common import setup_worker_logging, _get_log_params
+from isoquant_lib.common import setup_worker_logging, _get_log_params
 
 logger = logging.getLogger('IsoQuant')
 

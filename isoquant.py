@@ -37,7 +37,7 @@ import pysam
 import gffutils
 import pyfaidx
 
-from isoquant_lib.error_codes import IsoQuantExitCode
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.modes import IsoQuantMode, ISOQUANT_MODES
 from isoquant_lib.gtf2db import convert_gtf_to_db
 from isoquant_lib.read_mapper import (
@@ -56,7 +56,7 @@ from isoquant_lib.long_read_assigner import AmbiguityResolvingMethod
 from isoquant_lib.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
 from isoquant_lib.input_data_storage import InputDataStorage, InputDataType
 from isoquant_lib.multimap_resolver import MultimapResolvingStrategy
-from isoquant_lib.stats import combine_counts
+from isoquant_lib.utils.stats import combine_counts
 from isoquant_lib.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
 from isoquant_lib.common import setup_worker_logging, _get_log_params
 
@@ -1248,7 +1248,7 @@ def run_pipeline(args):
             logger.warning("No BAM files available for fusion detection; skipping")
         else:
             try:
-                from isoquant_lib.fusion_detector import FusionDetector
+                from isoquant_lib.fusion.fusion_detector import FusionDetector
                 fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
                 summary = run_fusion_detection_on_bams(fd, bam_files, args.output)
                 logger.info("Fusion detection summary: %d total, %d successful, %d failed" %

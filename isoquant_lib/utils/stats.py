@@ -12,7 +12,7 @@ import pickle
 
 import pandas as pd
 
-from .common import proper_plural_form
+from isoquant_lib.common import proper_plural_form
 
 
 logger = logging.getLogger('IsoQuant')

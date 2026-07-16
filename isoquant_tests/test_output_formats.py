@@ -20,8 +20,7 @@ from isoquant_lib.isoform_assignment import (
     MatchClassification, MatchEvent, MatchEventSubtype,
 )
 from isoquant_lib.long_read_counter import IntronRetentionCounter, INTRON_RETENTION_EVENT_TYPES
-from isoquant_lib.string_pools import StringPoolManager
-from isoquant_lib.gene_info import FeatureInfo, FeatureProfiles
+from isoquant_lib.utils.string_pools import StringPoolManager
 from isoquant_lib.convert_read_info import (
     _parse_exons, _exons_to_range_str, _assignment_type_to_read_type,
     convert_to_read_assignments, convert_to_allinfo,
