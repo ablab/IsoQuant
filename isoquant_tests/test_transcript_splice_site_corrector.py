@@ -16,7 +16,7 @@ from unittest import TestCase
 import pytest
 
 from isoquant_lib.gene_info import TranscriptModelType
-from isoquant_lib.graph_based_model_construction import GraphBasedModelConstructor
+from isoquant_lib.model_construction.model_filter import ModelFilter
 from isoquant_lib.transcript_splice_site_corrector import (
     SpliceSiteCase,
     extract_relevant_deletions,
@@ -210,9 +210,12 @@ class TestSpliceSiteCorrectionFlow(TestCase):
 class TestGBMCIntegration(TestCase):
 
     def _make_constructor(self, chr_record, disabled=False):
-        gbmc = GraphBasedModelConstructor.__new__(GraphBasedModelConstructor)
+        # correct_transcript_splice_sites now lives on ModelFilter (stage 4a)
+        gbmc = ModelFilter.__new__(ModelFilter)
         gbmc.chr_record = chr_record
         gbmc.args = SimpleNamespace(no_splice_site_correction=disabled)
+        # model list + read bindings now live on the shared ModelStore
+        gbmc.store = SimpleNamespace()
         return gbmc
 
     def _model(self, model_type):
@@ -222,24 +225,24 @@ class TestGBMCIntegration(TestCase):
     def test_novel_model_end_is_corrected(self):
         gbmc = self._make_constructor("C" * 10 + "GT" + "C" * 20)
         model = self._model(TranscriptModelType.novel_not_in_catalog)
-        gbmc.transcript_model_storage = [model]
-        gbmc.transcript_read_ids = {"t1": _reads([(10, 4)], 30)}
+        gbmc.store.transcript_model_storage = [model]
+        gbmc.store.transcript_read_ids = {"t1": _reads([(10, 4)], 30)}
         gbmc.correct_transcript_splice_sites()
         self.assertEqual(model.exon_blocks, [(0, 10), (20, 30)])
 
     def test_known_model_is_untouched(self):
         gbmc = self._make_constructor("C" * 10 + "GT" + "C" * 20)
         model = self._model(TranscriptModelType.known)
-        gbmc.transcript_model_storage = [model]
-        gbmc.transcript_read_ids = {"t1": _reads([(10, 4)], 30)}
+        gbmc.store.transcript_model_storage = [model]
+        gbmc.store.transcript_read_ids = {"t1": _reads([(10, 4)], 30)}
         gbmc.correct_transcript_splice_sites()
         self.assertEqual(model.exon_blocks, [(0, 14), (20, 30)])
 
     def test_disabled_flag_skips_correction(self):
         gbmc = self._make_constructor("C" * 10 + "GT" + "C" * 20, disabled=True)
         model = self._model(TranscriptModelType.novel_not_in_catalog)
-        gbmc.transcript_model_storage = [model]
-        gbmc.transcript_read_ids = {"t1": _reads([(10, 4)], 30)}
+        gbmc.store.transcript_model_storage = [model]
+        gbmc.store.transcript_read_ids = {"t1": _reads([(10, 4)], 30)}
         gbmc.correct_transcript_splice_sites()
         self.assertEqual(model.exon_blocks, [(0, 14), (20, 30)])
 
