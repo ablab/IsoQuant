@@ -10,7 +10,7 @@ from enum import Enum, unique
 from isoquant_lib.common import junctions_from_blocks
 from isoquant_lib.utils.id_policy import SimpleIDDistributor
 from isoquant_lib.utils.serialization import *
-from isoquant_lib.polya_finder import PolyAInfo
+from isoquant_lib.terminal_prediction.polya_finder import PolyAInfo
 
 logger = logging.getLogger('IsoQuant')
 

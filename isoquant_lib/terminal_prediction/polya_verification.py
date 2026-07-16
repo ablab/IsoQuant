@@ -8,8 +8,8 @@
 import logging
 import math
 
-from .common import interval_len, intervals_total_length
-from .assignment.isoform_assignment import MatchEvent, MatchEventSubtype
+from isoquant_lib.common import interval_len, intervals_total_length
+from isoquant_lib.assignment.isoform_assignment import MatchEvent, MatchEventSubtype
 
 logger = logging.getLogger('IsoQuant')
 

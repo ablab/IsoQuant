@@ -22,8 +22,8 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.assignment.read_groups import DefaultReadGrouper
-from isoquant_lib.polya_finder import PolyAFinder
-from isoquant_lib.polya_verification import PolyAFixer
+from isoquant_lib.terminal_prediction.polya_finder import PolyAFinder
+from isoquant_lib.terminal_prediction.polya_verification import PolyAFixer
 from isoquant_lib.assignment.exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
 from isoquant_lib.assignment.illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector

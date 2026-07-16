@@ -24,7 +24,7 @@ from isoquant_lib import graph_based_model_construction as gbmc
 from isoquant_lib.model_construction import end_processor as ep_mod
 from isoquant_lib.model_construction.end_processor import TranscriptEndProcessor
 from isoquant_lib.gene_info import TranscriptModel, TranscriptModelType
-from isoquant_lib.terminal_peaks import Peak
+from isoquant_lib.terminal_prediction.terminal_peaks import Peak
 
 # Reuse the polyA-counter harness (stub model + read-assignment builder).
 from isoquant_tests.test_polya_prediction import _StubModel, _make_read_assignment

@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger('IsoQuant')
 
 
-from .common import reverse_complement
+from isoquant_lib.common import reverse_complement
 
 
 # given a cigar string of an alignment, move shift bases along the alignment from the start

@@ -18,8 +18,8 @@ from collections import Counter
 import numpy as np
 import pytest
 
-from isoquant_lib import terminal_counter as tc
-from isoquant_lib import terminal_peaks as tp
+from isoquant_lib.terminal_prediction import terminal_counter as tc
+from isoquant_lib.terminal_prediction import terminal_peaks as tp
 from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
 
 # Reuse the counter test harness (stub model + read-assignment builders).

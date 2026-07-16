@@ -17,7 +17,7 @@ from ..common import TranscriptNaming, cmp, get_exons
 from ..gene_info import TranscriptModel, TranscriptModelType
 from isoquant_lib.model_construction.intron_graph import TerminalVertex
 from ..assignment.isoform_assignment import is_matching_assignment, ReadAssignment
-from ..polya_finder import PolyAInfo
+from ..terminal_prediction.polya_finder import PolyAInfo
 from .context import StrandnessReportingLevel
 
 logger = logging.getLogger('IsoQuant')

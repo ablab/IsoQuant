@@ -18,7 +18,7 @@ from isoquant_lib.quantification.long_read_counter import (
     create_gene_counter,
     create_transcript_counter,
 )
-from isoquant_lib.terminal_counter import PolyACounter, TSSCounter
+from isoquant_lib.terminal_prediction.terminal_counter import PolyACounter, TSSCounter
 from .assignment_io import (
     IOSupport,
     BEDPrinter,
