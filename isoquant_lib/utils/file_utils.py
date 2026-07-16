@@ -38,7 +38,8 @@ def merge_files(file_name, label, chr_ids, merged_file_handler, copy_header=True
                     f.readline()
             shutil.copyfileobj(f, merged_file_handler)
     for file_name in file_names:
-        os.remove(file_name)
+        if os.path.exists(file_name):
+            os.remove(file_name)
 
 
 def merge_counts(counter, label, chr_ids, unaligned_reads=0):
