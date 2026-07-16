@@ -8,7 +8,7 @@
 import pysam
 import gffutils
 
-from .common import junctions_from_blocks
+from isoquant_lib.common import junctions_from_blocks
 
 
 def get_region_from_db(db, region): 

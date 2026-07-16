@@ -7,7 +7,7 @@
 
 from enum import Enum, unique
 
-from .common import junctions_from_blocks, overlaps
+from isoquant_lib.common import junctions_from_blocks, overlaps
 
 
 @unique
