@@ -7,7 +7,7 @@
 
 import logging
 
-from .common import (
+from isoquant_lib.common import (
     contains,
     contains_approx,
     contains_well_inside,

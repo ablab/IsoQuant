@@ -18,7 +18,7 @@ from typing import Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from ..common import TranscriptNaming, junctions_from_blocks
 from ..gene_info import TranscriptModel, TranscriptModelType
-from ..isoform_assignment import ReadAssignment
+from ..assignment.isoform_assignment import ReadAssignment
 from ..terminal_peaks import detect_peaks, get_polya_model, get_tss_model
 
 if TYPE_CHECKING:

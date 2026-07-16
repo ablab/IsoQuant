@@ -7,10 +7,10 @@
 
 import logging
 from enum import Enum, unique
-from .common import junctions_from_blocks
+from isoquant_lib.common import junctions_from_blocks
 from isoquant_lib.utils.id_policy import SimpleIDDistributor
 from isoquant_lib.utils.serialization import *
-from .polya_finder import PolyAInfo
+from isoquant_lib.polya_finder import PolyAInfo
 
 logger = logging.getLogger('IsoQuant')
 

@@ -52,10 +52,10 @@ from isoquant_lib.read_mapper import (
 from isoquant_lib.alignment_processor import PolyATrimmed
 from isoquant_lib.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from isoquant_lib.graph_based_model_construction import StrandnessReportingLevel
-from isoquant_lib.long_read_assigner import AmbiguityResolvingMethod
+from isoquant_lib.assignment.long_read_assigner import AmbiguityResolvingMethod
 from isoquant_lib.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
 from isoquant_lib.input_data_storage import InputDataStorage, InputDataType
-from isoquant_lib.multimap_resolver import MultimapResolvingStrategy
+from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
 from isoquant_lib.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
 from isoquant_lib.common import setup_worker_logging, _get_log_params
@@ -766,13 +766,13 @@ def check_input_files(args):
 
     # Check barcode2spot file (parse spec to extract filename)
     if hasattr(args, 'barcode2spot') and args.barcode2spot:
-        from isoquant_lib.read_groups import parse_barcode2spot_spec
+        from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
         bc2spot_file, _, _ = parse_barcode2spot_spec(args.barcode2spot)
         check_file_exists(bc2spot_file, "Barcode to spot mapping file")
 
     # Check barcode2barcode file (parse spec to extract filename)
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
-        from isoquant_lib.read_groups import parse_barcode2spot_spec
+        from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
         bc2bc_file, _, _ = parse_barcode2spot_spec(args.barcode2barcode)
         check_file_exists(bc2bc_file, "Barcode to barcode mapping file")
 

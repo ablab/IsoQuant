@@ -8,7 +8,7 @@
 import logging
 from functools import partial
 
-from .common import equal_ranges, junctions_from_blocks, contains_well_inside
+from isoquant_lib.common import equal_ranges, junctions_from_blocks, contains_well_inside
 from .isoform_assignment import ReadAssignmentType, MatchEventSubtype, SupplementaryMatchConstants
 from .long_read_profiles import OverlappingFeaturesProfileConstructor
 

@@ -10,7 +10,7 @@ import pysam
 import gffutils
 import os
 
-from isoquant_lib.illumina_exon_corrector import IlluminaExonCorrector
+from isoquant_lib.assignment.illumina_exon_corrector import IlluminaExonCorrector
 from isoquant_lib.alignment_info import AlignmentInfo
 from isoquant_lib.common import junctions_from_blocks, overlaps
 from isoquant_lib.short_utils import get_region_from_db

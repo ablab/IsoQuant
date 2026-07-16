@@ -26,13 +26,13 @@ from scipy import stats
 from scipy.signal import find_peaks, peak_prominences, peak_widths
 from xgboost import XGBClassifier
 
-from .isoform_assignment import (
+from .assignment.isoform_assignment import (
     IsoformMatch,
     ReadAssignment,
     ReadAssignmentType,
 )
 from .long_read_counter import AbstractCounter
-from .read_groups import AbstractReadGrouper
+from .assignment.read_groups import AbstractReadGrouper
 from .terminal_peaks import (
     ANNOTATION_TOLERANCE,
     FEATURE_COLUMNS,

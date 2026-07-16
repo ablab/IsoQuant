@@ -10,7 +10,7 @@ import math
 from enum import Enum
 
 from .isoform_assignment import ReadAssignmentType
-from .common import intersection_len
+from isoquant_lib.common import intersection_len
 
 
 logger = logging.getLogger('IsoQuant')

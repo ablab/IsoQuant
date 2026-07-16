@@ -9,9 +9,9 @@ import logging
 from collections import defaultdict
 
 from .common import junctions_from_blocks
-from .assignment_io import ReadAssignmentType
+from .assignment.assignment_io import ReadAssignmentType
 from .gene_info import TranscriptModelType
-from .isoform_assignment import (
+from .assignment.isoform_assignment import (
     match_subtype_to_str_with_additional_info,
     ReadAssignment,
     MatchClassification,

@@ -15,14 +15,14 @@ import logging
 from typing import Dict, List
 
 from ..gene_info import GeneInfo, TranscriptModelType
-from ..isoform_assignment import (
+from ..assignment.isoform_assignment import (
     ReadAssignment,
     ReadAssignmentType,
     MatchClassification,
     IsoformMatch,
 )
-from ..long_read_assigner import LongReadAssigner
-from ..long_read_profiles import CombinedProfileConstructor
+from ..assignment.long_read_assigner import LongReadAssigner
+from ..assignment.long_read_profiles import CombinedProfileConstructor
 from .context import reference_unique_known_isoform
 
 logger = logging.getLogger('IsoQuant')

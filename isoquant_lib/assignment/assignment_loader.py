@@ -18,7 +18,7 @@ from .assignment_io import (
     NormalTmpFileAssignmentLoader,
     QuickTmpFileAssignmentLoader, GeneListTmpFileAssignmentLoader
 )
-from .gene_info import GeneInfo
+from isoquant_lib.gene_info import GeneInfo
 
 logger = logging.getLogger('IsoQuant')
 

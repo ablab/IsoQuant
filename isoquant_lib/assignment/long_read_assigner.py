@@ -10,7 +10,7 @@ from collections import namedtuple
 from enum import Enum, unique
 from functools import partial
 
-from .common import (
+from isoquant_lib.common import (
     contains,
     contains_approx,
     difference_in_present_features,
@@ -37,7 +37,7 @@ from .isoform_assignment import (
 )
 from .long_read_profiles import OverlappingFeaturesProfileConstructor
 from .junction_comparator import JunctionComparator
-from .polya_verification import PolyAVerifier
+from isoquant_lib.polya_verification import PolyAVerifier
 
 
 logger = logging.getLogger('IsoQuant')

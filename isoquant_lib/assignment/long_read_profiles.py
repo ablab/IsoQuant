@@ -9,7 +9,7 @@ import logging
 from functools import partial
 from collections import defaultdict
 
-from .common import (
+from isoquant_lib.common import (
     contains,
     equal_ranges,
     junctions_from_blocks,

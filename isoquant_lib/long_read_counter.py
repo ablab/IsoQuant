@@ -9,13 +9,13 @@ import logging
 from collections import defaultdict, OrderedDict
 from enum import Enum, unique
 
-from .isoform_assignment import (
+from .assignment.isoform_assignment import (
     MatchEventSubtype,
     ReadAssignmentType,
 )
 from .common import junctions_from_blocks
 from .gene_info import FeatureInfo
-from .read_groups import AbstractReadGrouper
+from .assignment.read_groups import AbstractReadGrouper
 from .convert_grouped_counts import (
     GROUP_COUNT_CUTOFF, convert_to_mtx, convert_to_matrix,
     convert_profile_to_matrix, convert_profile_to_mtx,

@@ -14,9 +14,9 @@ import logging
 
 from ..gene_info import GeneInfo, TranscriptModelType
 from isoquant_lib.model_construction.intron_graph import TerminalVertex
-from ..isoform_assignment import is_matching_assignment, ReadAssignmentType
-from ..long_read_assigner import LongReadAssigner
-from ..long_read_profiles import CombinedProfileConstructor
+from ..assignment.isoform_assignment import is_matching_assignment, ReadAssignmentType
+from ..assignment.long_read_assigner import LongReadAssigner
+from ..assignment.long_read_profiles import CombinedProfileConstructor
 from ..polya_finder import PolyAInfo
 from isoquant_lib.model_construction.transcript_splice_site_corrector import (
     count_deletions_for_splice_site_locations,
