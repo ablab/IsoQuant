@@ -20,7 +20,7 @@ import os
 import gffutils
 
 from isoquant_lib.gene_info import GeneInfo, FeatureInfo
-from isoquant_lib.long_read_counter import ExonCounter, IntronCounter
+from isoquant_lib.quantification.long_read_counter import ExonCounter, IntronCounter
 
 SOURCE_DIR = os.path.dirname(os.path.realpath(__file__))
 GENE_ID = "ENSMUSG00000020196.10"

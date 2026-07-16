@@ -12,7 +12,7 @@ import tempfile
 import pytest
 
 from isoquant_lib.gene_info import ExonRegion, GeneInfo
-from isoquant_lib.long_read_counter import JointExonCounter
+from isoquant_lib.quantification.long_read_counter import JointExonCounter
 from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignment, ReadAssignmentType, IsoformMatch, MatchClassification,
 )
