@@ -8,7 +8,7 @@
 import logging
 
 from isoquant_lib.utils.stats import EnumStats
-from isoquant_lib.long_read_counter import (
+from isoquant_lib.quantification.long_read_counter import (
     ExonCounter,
     JointExonCounter,
     ExonSpliceSiteCounter,

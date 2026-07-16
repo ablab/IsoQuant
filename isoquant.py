@@ -53,7 +53,7 @@ from isoquant_lib.alignment.alignment_processor import PolyATrimmed
 from isoquant_lib.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from isoquant_lib.graph_based_model_construction import StrandnessReportingLevel
 from isoquant_lib.assignment.long_read_assigner import AmbiguityResolvingMethod
-from isoquant_lib.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
+from isoquant_lib.quantification.long_read_counter import COUNTING_STRATEGIES, CountingStrategy, GroupedOutputFormat, NormalizationMethod
 from isoquant_lib.input_data_storage import InputDataStorage, InputDataType
 from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts

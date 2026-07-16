@@ -15,7 +15,7 @@ import pytest
 
 from isoquant_lib.common import junctions_from_blocks
 from isoquant_lib.gene_info import ExonSpliceSiteRegion, GeneInfo
-from isoquant_lib.long_read_counter import ExonSpliceSiteCounter
+from isoquant_lib.quantification.long_read_counter import ExonSpliceSiteCounter
 from isoquant_lib.assignment.isoform_assignment import MatchEventSubtype
 from isoquant_lib.utils.string_pools import StringPoolManager
 

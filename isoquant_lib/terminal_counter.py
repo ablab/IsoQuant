@@ -31,7 +31,7 @@ from .assignment.isoform_assignment import (
     ReadAssignment,
     ReadAssignmentType,
 )
-from .long_read_counter import AbstractCounter
+from .quantification.long_read_counter import AbstractCounter
 from .assignment.read_groups import AbstractReadGrouper
 from .terminal_peaks import (
     ANNOTATION_TOLERANCE,
