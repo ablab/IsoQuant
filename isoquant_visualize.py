@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from isoquant_lib.post_process import OutputConfig, DictionaryBuilder
-from isoquant_lib.plot_output import PlotOutput
+from isoquant_lib.visualizer.post_process import OutputConfig, DictionaryBuilder
+from isoquant_lib.visualizer.plot_output import PlotOutput
 import argparse
-from isoquant_lib.process_dict import simplify_and_sum_transcripts
-from isoquant_lib.gene_model import rank_and_visualize_genes
+from isoquant_lib.visualizer.process_dict import simplify_and_sum_transcripts
+from isoquant_lib.visualizer.gene_model import rank_and_visualize_genes
 
 
 class FindGenesAction(argparse.Action):
