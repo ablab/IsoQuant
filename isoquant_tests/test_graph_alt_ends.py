@@ -21,6 +21,8 @@ from argparse import Namespace
 import pytest
 
 from isoquant_lib import graph_based_model_construction as gbmc
+from isoquant_lib.model_construction import end_processor as ep_mod
+from isoquant_lib.model_construction.end_processor import TranscriptEndProcessor
 from isoquant_lib.gene_info import TranscriptModel, TranscriptModelType
 from isoquant_lib.terminal_peaks import Peak
 
@@ -39,16 +41,17 @@ class _IdDist:
 
 def _make_constructor(use_tss_model=True, apa_delta=10, min_novel_count=2,
                       terminal_position_rel=0.1, chr_id="chr1", all_isoforms_exons=None):
-    c = gbmc.GraphBasedModelConstructor.__new__(gbmc.GraphBasedModelConstructor)
+    c = TranscriptEndProcessor.__new__(TranscriptEndProcessor)
     c.args = Namespace(apa_delta=apa_delta, min_novel_count=min_novel_count,
                        terminal_position_rel=terminal_position_rel)
     c.use_tss_model = use_tss_model
-    c.create_nics = True
     c.novel_apa = False
-    c.id_distributor = _IdDist()
     c.gene_info = types.SimpleNamespace(chr_id=chr_id,
                                         all_isoforms_exons=all_isoforms_exons or {})
-    c.internal_counter = {}
+    # model list + read bindings live on the shared ModelStore
+    c.store = gbmc.ModelStore(c.gene_info)
+    # ctx supplies get_transcript_id for _nic_model_with_boundary
+    c.ctx = types.SimpleNamespace(get_transcript_id=_IdDist().increment)
     return c
 
 
@@ -61,8 +64,8 @@ def _model(exon_blocks, strand="+", ttype=TranscriptModelType.known, tid="T1",
 @pytest.fixture
 def stub_models(monkeypatch):
     model = _StubModel(accept=True)
-    monkeypatch.setattr(gbmc, "get_polya_model", lambda: model)
-    monkeypatch.setattr(gbmc, "get_tss_model", lambda: model)
+    monkeypatch.setattr(ep_mod, "get_polya_model", lambda: model)
+    monkeypatch.setattr(ep_mod, "get_tss_model", lambda: model)
     return model
 
 
@@ -72,15 +75,15 @@ def test_intron_chain_key_multi_exon():
     # introns follow the project-wide junctions_from_blocks convention (+1/-1):
     # actual first..last intronic base between consecutive exon blocks.
     m = _model([(100, 200), (300, 400), (500, 600)])
-    assert gbmc.GraphBasedModelConstructor._intron_chain_key(m) == ((201, 299), (401, 499))
+    assert TranscriptEndProcessor._intron_chain_key(m) == ((201, 299), (401, 499))
 
 
 def test_intron_chain_key_monoexon_is_empty():
-    assert gbmc.GraphBasedModelConstructor._intron_chain_key(_model([(100, 600)])) == ()
+    assert TranscriptEndProcessor._intron_chain_key(_model([(100, 600)])) == ()
 
 
 def test_closest_inward_greater_and_less():
-    f = gbmc.GraphBasedModelConstructor._closest_inward
+    f = TranscriptEndProcessor._closest_inward
     assert f([10, 20, 30], 15, True) == 20      # first strictly greater (ascending)
     assert f([10, 20, 30], 30, True) is None
     assert f([30, 20, 10], 25, False) == 20     # first strictly less (descending)
@@ -88,20 +91,20 @@ def test_closest_inward_greater_and_less():
 
 
 def test_confirmed_polya_pos_plus_and_minus():
-    f = gbmc.GraphBasedModelConstructor._confirmed_polya_pos
+    f = TranscriptEndProcessor._confirmed_polya_pos
     assert f(_make_read_assignment(strand="+", polya_pos=500), "+") == 500
     assert f(_make_read_assignment(strand="-", polya_pos=120), "-") == 120
 
 
 def test_confirmed_polya_pos_requires_polya_found():
     a = _make_read_assignment(strand="+", polya_pos=500, polyA_found=False)
-    assert gbmc.GraphBasedModelConstructor._confirmed_polya_pos(a, "+") is None
+    assert TranscriptEndProcessor._confirmed_polya_pos(a, "+") is None
 
 
 def test_confirmed_polya_pos_missing_strand_field_returns_none():
     # '+' read carries external_polya_pos but external_polyt_pos == -1
     a = _make_read_assignment(strand="+", polya_pos=500)
-    assert gbmc.GraphBasedModelConstructor._confirmed_polya_pos(a, "-") is None
+    assert TranscriptEndProcessor._confirmed_polya_pos(a, "-") is None
 
 
 # -- _terminal_model ----------------------------------------------------------
@@ -133,7 +136,7 @@ def test_alternative_end_positions_gate(monkeypatch):
         Peak(position=600, count=3, left=595, right=605),    # minor -> below cutoff -> drop
         Peak(position=405, count=40, left=400, right=410),   # within apa_delta of annotated -> drop
     ]
-    monkeypatch.setattr(gbmc, "detect_peaks", lambda hist, model: peaks)
+    monkeypatch.setattr(ep_mod, "detect_peaks", lambda hist, model: peaks)
     out = c._alternative_end_positions({1: 1}, _StubModel(), annotated_pos=400, clamp=lambda p: True)
     assert out == [500]
 
@@ -141,7 +144,7 @@ def test_alternative_end_positions_gate(monkeypatch):
 def test_alternative_end_positions_respects_clamp(monkeypatch):
     c = _make_constructor(apa_delta=10, min_novel_count=2, terminal_position_rel=0.1)
     peaks = [Peak(400, 50, 395, 405), Peak(500, 8, 495, 505)]
-    monkeypatch.setattr(gbmc, "detect_peaks", lambda hist, model: peaks)
+    monkeypatch.setattr(ep_mod, "detect_peaks", lambda hist, model: peaks)
     # clamp rejects the 500 peak -> nothing left
     out = c._alternative_end_positions({1: 1}, _StubModel(), annotated_pos=400, clamp=lambda p: p < 450)
     assert out == []
@@ -162,7 +165,7 @@ def _fake_detect(hist, model):
 def test_derive_alternative_end_models_known_source(monkeypatch, stub_models):
     c = _make_constructor(use_tss_model=True, apa_delta=10, min_novel_count=2,
                           terminal_position_rel=0.1)
-    monkeypatch.setattr(gbmc, "detect_peaks", _fake_detect)
+    monkeypatch.setattr(ep_mod, "detect_peaks", _fake_detect)
     source = _model([(100, 200), (300, 400)], strand="+",
                     ttype=TranscriptModelType.known, tid="ENST1")
     reads = [_make_read_assignment(strand="+", polya_pos=500, exons=[(100, 200), (300, 500)])
@@ -214,9 +217,9 @@ def test_drop_duplicate_alt_end_models():
     dup = _model([(105, 200), (300, 398)], ttype=TranscriptModelType.novel_in_catalog, tid="DUP")
     # genuinely different 3' end -> a real alt-end NIC -> keep
     keep = _model([(100, 200), (300, 800)], ttype=TranscriptModelType.novel_in_catalog, tid="KEEP")
-    c.transcript_model_storage = [known, dup, keep]
+    c.store.transcript_model_storage = [known, dup, keep]
 
     c._drop_duplicate_alt_end_models()
 
-    ids = {m.transcript_id for m in c.transcript_model_storage}
+    ids = {m.transcript_id for m in c.store.transcript_model_storage}
     assert ids == {"REF1", "KEEP"}
