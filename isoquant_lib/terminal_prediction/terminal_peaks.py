@@ -32,7 +32,7 @@ from xgboost import XGBClassifier
 
 logger = logging.getLogger('IsoQuant')
 
-_DATA_DIR = Path(__file__).parent / "data"
+_DATA_DIR = Path(__file__).parent.parent / "data"
 POLYA_MODEL_PATH = _DATA_DIR / "model_polya.json"
 TSS_MODEL_PATH = _DATA_DIR / "model_tss.json"
 
