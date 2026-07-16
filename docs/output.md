@@ -69,7 +69,7 @@ If `--read_group` is set or multiple files are provided, the per-group expressio
 * `SAMPLE_ID.exon_splice_site_grouped_counts.linear.tsv`
 * `SAMPLE_ID.splice_junction_grouped_counts.linear.tsv`
 
-The exon splice-site counts carry a `group_id` column (one row per feature and group; `NA` when ungrouped). To reconstruct the per-molecule group-list format (one entry per read, e.g. barcodes for downstream cell/cell-type aggregation) use `misc/exon_splice_site_to_group_lists.py`.
+The exon splice-site counts carry a `group_id` column (one row per feature and group; `NA` when ungrouped). To reconstruct the per-molecule group-list format (one entry per read, e.g. barcodes for downstream cell/cell-type aggregation) use `scripts/exon_splice_site_to_group_lists.py`.
 
 Note that grouped counts can be converted to any format using `{IsoQuant intsllation folder}/isoquant_lib/quantification/convert_grouped_counts.py`.
 The script accepts the following arguments:
