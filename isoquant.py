@@ -49,7 +49,7 @@ from isoquant_lib.read_mapper import (
     NANOPORE_DATA,
     DataSetReadMapper
 )
-from isoquant_lib.alignment_processor import PolyATrimmed
+from isoquant_lib.alignment.alignment_processor import PolyATrimmed
 from isoquant_lib.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from isoquant_lib.graph_based_model_construction import StrandnessReportingLevel
 from isoquant_lib.assignment.long_read_assigner import AmbiguityResolvingMethod

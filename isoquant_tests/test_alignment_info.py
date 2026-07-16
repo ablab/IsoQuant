@@ -7,7 +7,7 @@
 
 import pytest
 
-from isoquant_lib.alignment_info import AlignmentInfo
+from isoquant_lib.alignment.alignment_info import AlignmentInfo
 from isoquant_lib.polya_finder import PolyAFinder
 from isoquant_lib.polya_verification import PolyAFixer
 

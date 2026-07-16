@@ -13,7 +13,7 @@ import pysam
 from pyfaidx import Fasta
 
 from isoquant_lib.utils.stats import EnumStats
-from .alignment_processor import AlignmentCollector
+from .alignment.alignment_processor import AlignmentCollector
 from .assignment.assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter, ReadInfoPrinter, VoidPrinter
 from .assignment.assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter

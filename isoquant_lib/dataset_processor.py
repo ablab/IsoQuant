@@ -27,7 +27,7 @@ from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.utils.serialization import *
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.utils.file_utils import merge_files, merge_counts
-from .alignment_processor import AlignmentType
+from .alignment.alignment_processor import AlignmentType
 from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
