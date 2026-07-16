@@ -9,12 +9,12 @@ import logging
 import os
 from collections import defaultdict
 
-from .file_naming import saves_file_name, multimappers_file_name, dynamic_pools_file_name
-from .serialization import *
+from isoquant_lib.utils.file_naming import saves_file_name, multimappers_file_name, dynamic_pools_file_name
+from isoquant_lib.utils.serialization import *
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
 from .multimap_resolver import MultimapResolver
 from .assignment_loader import BasicReadAssignmentLoader, load_genedb
-from .string_pools import StringPoolManager
+from isoquant_lib.utils.string_pools import StringPoolManager
 
 logger = logging.getLogger('IsoQuant')
 

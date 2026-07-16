@@ -6,7 +6,6 @@
 ############################################################################
 
 import os
-import pytest
 import gffutils
 from isoquant_lib.gene_info import *
 
@@ -81,7 +80,6 @@ class TestGeneInfo:
 
     def test_serialization(self):
         import io
-        from isoquant_lib.serialization import write_int, write_string
 
         # Create test gene info
         gene_info = GeneInfo([self.gene_db], self.gffutils_db)

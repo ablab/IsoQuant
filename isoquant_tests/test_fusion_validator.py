@@ -1,6 +1,5 @@
 import pytest
-from unittest.mock import Mock, MagicMock
-from isoquant_lib.fusion_validator import FusionValidator
+from isoquant_lib.fusion.fusion_validator import FusionValidator
 
 
 class MockDetector:

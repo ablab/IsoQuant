@@ -1,5 +1,5 @@
 import pytest
-from isoquant_lib.fusion_metadata import FusionMetadata
+from isoquant_lib.fusion.fusion_metadata import FusionMetadata
 
 
 class FakeDetector:

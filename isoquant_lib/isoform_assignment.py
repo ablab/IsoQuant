@@ -8,8 +8,8 @@
 import logging
 from enum import Enum, unique
 from .common import junctions_from_blocks
-from .id_policy import SimpleIDDistributor
-from .serialization import *
+from isoquant_lib.utils.id_policy import SimpleIDDistributor
+from isoquant_lib.utils.serialization import *
 from .polya_finder import PolyAInfo
 
 logger = logging.getLogger('IsoQuant')

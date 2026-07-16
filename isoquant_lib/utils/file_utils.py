@@ -11,7 +11,7 @@ import re
 import shutil
 from collections import defaultdict
 
-from .common import  rreplace
+from isoquant_lib.common import  rreplace
 
 logger = logging.getLogger('IsoQuant')
 

@@ -17,8 +17,8 @@ from isoquant_lib.read_groups import (
 from isoquant_lib.barcode_calling.umi_filtering import UMIFilter
 from isoquant_lib.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, MatchClassification
 from isoquant_lib.common import junctions_from_blocks
-from isoquant_lib.string_pools import StringPoolManager
-from isoquant_lib.file_naming import umi_barcode2barcode_prefix, umi_barcode2barcode_global_lock
+from isoquant_lib.utils.string_pools import StringPoolManager
+from isoquant_lib.utils.file_naming import umi_barcode2barcode_prefix, umi_barcode2barcode_global_lock
 
 
 # -- Helpers / Mocks --

@@ -27,7 +27,7 @@ from isoquant_lib.long_read_profiles import (
 )
 from isoquant_lib.gene_info import GeneInfo
 from isoquant_lib.polya_finder import PolyAInfo
-from isoquant_lib.string_pools import StringPoolManager
+from isoquant_lib.utils.string_pools import StringPoolManager
 
 
 class Params:

@@ -26,7 +26,7 @@ import pysam
 from Bio import SeqIO, Seq, SeqRecord
 
 from ..modes import IsoQuantMode
-from ..error_codes import IsoQuantExitCode
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from ..common import setup_worker_logging, _get_log_params
 from .common import reverese_complement, load_barcodes
 from . import (

@@ -17,15 +17,15 @@ import gzip
 import gffutils
 
 try:
-    from .error_codes import IsoQuantExitCode
-    from .file_naming import (
+    from isoquant_lib.utils.error_codes import IsoQuantExitCode
+    from isoquant_lib.utils.file_naming import (
         mtx_matrix_file, mtx_features_file, mtx_barcodes_file,
         mtx_include_matrix_file, mtx_exclude_matrix_file,
     )
 except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from error_codes import IsoQuantExitCode
-    from file_naming import (
+    from isoquant_lib.utils.error_codes import IsoQuantExitCode
+    from isoquant_lib.utils.file_naming import (
         mtx_matrix_file, mtx_features_file, mtx_barcodes_file,
         mtx_include_matrix_file, mtx_exclude_matrix_file,
     )

@@ -1,7 +1,7 @@
 import pytest
 import logging
 from unittest.mock import MagicMock, patch
-from isoquant_lib.fusion_detector import FusionDetector, _CIGAR_CACHE, _ALIGNER_MAP_CACHE
+from isoquant_lib.fusion.fusion_detector import FusionDetector, _CIGAR_CACHE
 
 logger = logging.getLogger('IsoQuant')
 
@@ -9,9 +9,9 @@ logger = logging.getLogger('IsoQuant')
 class TestFusionDetectorInitialization:
     """Test FusionDetector initialization."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.mp.Aligner')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.mp.Aligner')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_init_with_reference(self, mock_interval_index, mock_aligner, mock_featuredb):
         """Test initialization with reference FASTA file."""
         mock_db = MagicMock()
@@ -28,8 +28,8 @@ class TestFusionDetectorInitialization:
         assert isinstance(detector.fusion_candidates, dict)
         assert isinstance(detector.fusion_breakpoints, dict)
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_init_without_reference(self, mock_interval_index, mock_featuredb):
         """Test initialization without reference FASTA file."""
         mock_db = MagicMock()
@@ -42,8 +42,8 @@ class TestFusionDetectorInitialization:
         assert detector.reference_fasta is None
         assert detector.aligner is None
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_init_creates_empty_collections(self, mock_interval_index, mock_featuredb):
         """Test that initialization creates empty collections."""
         mock_db = MagicMock()
@@ -62,8 +62,8 @@ class TestFusionDetectorInitialization:
 
 class TestCIGARParsing:
     """Test CIGAR string and tuple parsing."""
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_aligned_len_from_cigartuples_basic(self, mock_interval_index, mock_featuredb):
         """Test aligned length from CIGAR tuples with basic operations."""
         mock_db = MagicMock()
@@ -83,8 +83,8 @@ class TestCIGARParsing:
         cigartuples = [(0, 20), (1, 5), (0, 10)]
         assert detector.aligned_len_from_cigartuples(cigartuples) == 30
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_aligned_len_from_cigartuples_empty(self, mock_interval_index, mock_featuredb):
         """Test aligned length from empty CIGAR tuples."""
         mock_db = MagicMock()
@@ -97,8 +97,8 @@ class TestCIGARParsing:
         assert detector.aligned_len_from_cigartuples([]) == 0
         assert detector.aligned_len_from_cigartuples(None) == 0
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_aligned_len_from_cigarstring_basic(self, mock_interval_index, mock_featuredb):
         """Test aligned length from CIGAR strings."""
         mock_db = MagicMock()
@@ -119,8 +119,8 @@ class TestCIGARParsing:
         # Sequence match operators: 20=5I10X
         assert detector.aligned_len_from_cigarstring("20=5I10X") == 30
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_aligned_len_from_cigarstring_empty(self, mock_interval_index, mock_featuredb):
         """Test aligned length from empty/None CIGAR strings."""
         mock_db = MagicMock()
@@ -134,8 +134,8 @@ class TestCIGARParsing:
         assert detector.aligned_len_from_cigarstring("") == 0
         assert detector.aligned_len_from_cigarstring(None) == 0
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_aligned_len_cigar_caching(self, mock_interval_index, mock_featuredb):
         """Test that CIGAR parsing results are cached."""
         mock_db = MagicMock()
@@ -156,8 +156,8 @@ class TestCIGARParsing:
 class TestSoftClipDetection:
     """Test soft-clip detection from CIGAR."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_detect_softclip_from_cigartuples_left(self, mock_interval_index, mock_featuredb):
         """Test detection of left soft-clip from CIGAR tuples."""
         mock_db = MagicMock()
@@ -174,8 +174,8 @@ class TestSoftClipDetection:
         assert side == "left"
         assert length == 60
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_detect_softclip_from_cigartuples_right(self, mock_interval_index, mock_featuredb):
         """Test detection of right soft-clip from CIGAR tuples."""
         mock_db = MagicMock()
@@ -192,8 +192,8 @@ class TestSoftClipDetection:
         assert side == "right"
         assert length == 60
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_detect_softclip_both_ends_ambiguous(self, mock_interval_index, mock_featuredb):
         """Test that dual soft-clips return ambiguous (None, 0)."""
         mock_db = MagicMock()
@@ -210,8 +210,8 @@ class TestSoftClipDetection:
         assert side is None
         assert length == 0
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_detect_softclip_below_threshold(self, mock_interval_index, mock_featuredb):
         """Test that soft-clips below min_len threshold are ignored."""
         mock_db = MagicMock()
@@ -228,8 +228,8 @@ class TestSoftClipDetection:
         assert side is None
         assert length == 0
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_detect_softclip_fallback_cigarstring(self, mock_interval_index, mock_featuredb):
         """Test soft-clip detection fallback to CIGAR string."""
         mock_db = MagicMock()
@@ -251,8 +251,8 @@ class TestSoftClipDetection:
 class TestSATagParsing:
     """Test SA tag parsing."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_parse_sa_entries_single(self, mock_interval_index, mock_featuredb):
         """Test parsing of single SA entry."""
         mock_db = MagicMock()
@@ -272,8 +272,8 @@ class TestSATagParsing:
         assert entries[0][4] == 30
         assert entries[0][5] == 0
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_parse_sa_entries_multiple(self, mock_interval_index, mock_featuredb):
         """Test parsing of multiple SA entries."""
         mock_db = MagicMock()
@@ -292,8 +292,8 @@ class TestSATagParsing:
         assert entries[1][1] == 2000
         assert entries[1][2] == "-"
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_parse_sa_entries_empty(self, mock_interval_index, mock_featuredb):
         """Test parsing of empty/None SA tag."""
         mock_db = MagicMock()
@@ -306,8 +306,8 @@ class TestSATagParsing:
         assert detector.parse_sa_entries(None) == []
         assert detector.parse_sa_entries("") == []
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_parse_sa_entries_partial_fields(self, mock_interval_index, mock_featuredb):
         """Test parsing of SA entry with missing fields."""
         mock_db = MagicMock()
@@ -328,8 +328,8 @@ class TestSATagParsing:
 class TestBreakpointEstimation:
     """Test breakpoint estimation."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_estimate_breakpoint_with_right_clip(self, mock_interval_index, mock_featuredb):
         """Test breakpoint estimation with right soft-clip."""
         mock_db = MagicMock()
@@ -353,8 +353,8 @@ class TestBreakpointEstimation:
         assert right_chr == "chr1"
         assert right_pos == 1000  # sa_pos start
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_estimate_breakpoint_with_left_clip(self, mock_interval_index, mock_featuredb):
         """Test breakpoint estimation with left soft-clip."""
         mock_db = MagicMock()
@@ -380,8 +380,8 @@ class TestBreakpointEstimation:
 class TestGeneNameNormalization:
     """Test gene name normalization and resolution."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_normalize_gene_label_none_input(self, mock_interval_index, mock_featuredb):
         """Test normalization of None gene label."""
         mock_db = MagicMock()
@@ -394,8 +394,8 @@ class TestGeneNameNormalization:
         result = detector.normalize_gene_label(None)
         assert result == "intergenic"
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_normalize_gene_label_unresolved_identifier(self, mock_interval_index, mock_featuredb):
         """Test normalization of unresolved identifiers."""
         mock_db = MagicMock()
@@ -411,8 +411,8 @@ class TestGeneNameNormalization:
         result = detector.normalize_gene_label("ENSG00000000001")
         assert result == "intergenic"  # Unresolved ENSGs become intergenic
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_has_antisense_suffix(self, mock_interval_index, mock_featuredb):
         """Test detection of antisense suffix."""
         mock_db = MagicMock()
@@ -429,8 +429,8 @@ class TestGeneNameNormalization:
         assert detector.has_antisense_suffix(None) is False
         assert detector.has_antisense_suffix("") is False
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_strip_antisense_suffix(self, mock_interval_index, mock_featuredb):
         """Test stripping of antisense suffix."""
         mock_db = MagicMock()
@@ -450,8 +450,8 @@ class TestGeneNameNormalization:
 class TestFusionRecording:
     """Test fusion recording functionality."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_record_fusion_basic(self, mock_interval_index, mock_featuredb):
         """Test basic fusion recording."""
         mock_db = MagicMock()
@@ -480,8 +480,8 @@ class TestFusionRecording:
         assert "GENE1--GENE2" in detector.fusion_metadata
         assert detector.fusion_metadata["GENE1--GENE2"]["support"] == 1
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_record_fusion_sorted_genes(self, mock_interval_index, mock_featuredb):
         """Test that genes are sorted alphabetically in fusion keys."""
         mock_db = MagicMock()
@@ -506,8 +506,8 @@ class TestFusionRecording:
         # Should be sorted as GENE1--GENE2
         assert "GENE1--GENE2" in detector.fusion_candidates
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_record_fusion_with_scores(self, mock_interval_index, mock_featuredb):
         """Test fusion recording with per-read scores."""
         mock_db = MagicMock()
@@ -533,8 +533,8 @@ class TestFusionRecording:
         assert "GENE1--GENE2" in detector.fusion_read_scores
         assert detector.fusion_read_scores["GENE1--GENE2"]["read1"] == (0.9, 0.8)
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_record_fusion_mitochondrial_filtered(self, mock_interval_index, mock_featuredb):
         """Test that mitochondrial fusions are filtered."""
         mock_db = MagicMock()
@@ -560,8 +560,8 @@ class TestFusionRecording:
 
 class TestUtilityFunctions:
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_safe_reference_start(self, mock_interval_index, mock_featuredb):
         """Test safe reference start extraction."""
         mock_db = MagicMock()
@@ -579,8 +579,8 @@ class TestUtilityFunctions:
         read.reference_start = None
         assert detector.safe_reference_start(read) is None
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_safe_gene_token(self, mock_interval_index, mock_featuredb):
         """Test safe gene token conversion."""
         mock_db = MagicMock()
@@ -595,8 +595,8 @@ class TestUtilityFunctions:
         assert detector._safe_gene_token("") == "intergenic"
         assert detector._safe_gene_token("   ") == "intergenic"
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_compute_aligned_length(self, mock_interval_index, mock_featuredb):
         """Test aligned length computation from read."""
         mock_db = MagicMock()
@@ -621,8 +621,8 @@ class TestUtilityFunctions:
 class TestStateManagement:
     """Test state management."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_clear_state(self, mock_interval_index, mock_featuredb):
         """Test clearing of detector state."""
         mock_db = MagicMock()
@@ -649,8 +649,8 @@ class TestStateManagement:
 class TestClusterBreakpoints:
     """Test breakpoint clustering."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_cluster_breakpoints_single(self, mock_interval_index, mock_featuredb):
         """Test clustering of single breakpoint."""
         mock_db = MagicMock()
@@ -670,8 +670,8 @@ class TestClusterBreakpoints:
         assert c2 == "chr2"
         assert total == 10
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_cluster_breakpoints_multiple(self, mock_interval_index, mock_featuredb):
         """Test clustering of multiple nearby breakpoints."""
         mock_db = MagicMock()
@@ -692,8 +692,8 @@ class TestClusterBreakpoints:
         # Should cluster the two closer breakpoints
         assert total == 13
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_cluster_breakpoints_empty(self, mock_interval_index, mock_featuredb):
         """Test clustering of empty breakpoint dictionary."""
         mock_db = MagicMock()
@@ -710,8 +710,8 @@ class TestClusterBreakpoints:
 class TestReadFiltering:
     """Test read filtering."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_passes_read_filters_unmapped(self, mock_interval_index, mock_featuredb):
         """Test filtering of unmapped reads."""
         mock_db = MagicMock()
@@ -728,8 +728,8 @@ class TestReadFiltering:
         passes, clip_side, clip_len = detector._passes_read_filters(read, 50, 20)
         assert passes is False
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_passes_read_filters_short_alignment(self, mock_interval_index, mock_featuredb):
         """Test filtering of short alignments."""
         mock_db = MagicMock()
@@ -749,8 +749,8 @@ class TestReadFiltering:
         passes, clip_side, clip_len = detector._passes_read_filters(read, 50, 20)
         assert passes is False
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_passes_read_filters_valid(self, mock_interval_index, mock_featuredb):
         """Test valid read passes filters."""
         mock_db = MagicMock()
@@ -774,8 +774,8 @@ class TestReadFiltering:
 class TestMitochondrialFiltering:
     """Test mitochondrial fusion filtering."""
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_is_mitochondrial_chrM(self, mock_interval_index, mock_featuredb):
         """Test detection of mitochondrial chromosome."""
         mock_db = MagicMock()
@@ -788,8 +788,8 @@ class TestMitochondrialFiltering:
         assert detector._is_mitochondrial_candidate("chrM", "chr1", None, None) is True
         assert detector._is_mitochondrial_candidate("chr1", "MT", None, None) is True
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_is_mitochondrial_gene_name(self, mock_interval_index, mock_featuredb):
         """Test detection of mitochondrial gene names."""
         mock_db = MagicMock()
@@ -802,8 +802,8 @@ class TestMitochondrialFiltering:
         assert detector._is_mitochondrial_candidate("chr1", "chr2", "MT-ND1", None) is True
         assert detector._is_mitochondrial_candidate("chr1", "chr2", None, "MT-TS1") is True
 
-    @patch('isoquant_lib.fusion_detector.gffutils.FeatureDB')
-    @patch('isoquant_lib.fusion_detector.GenomicIntervalIndex')
+    @patch('isoquant_lib.fusion.fusion_detector.gffutils.FeatureDB')
+    @patch('isoquant_lib.fusion.fusion_detector.GenomicIntervalIndex')
     def test_is_mitochondrial_not_mitochondrial(self, mock_interval_index, mock_featuredb):
         """Test non-mitochondrial fusions."""
         mock_db = MagicMock()

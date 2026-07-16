@@ -16,7 +16,7 @@ import gzip
 import sys
 
 from .common import get_path_to_program
-from .error_codes import IsoQuantExitCode
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from .gtf2db import convert_db_to_gtf, db2bed
 from .input_data_storage import SampleData, InputDataType
 

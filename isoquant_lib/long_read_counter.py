@@ -20,7 +20,7 @@ from .convert_grouped_counts import (
     GROUP_COUNT_CUTOFF, convert_to_mtx, convert_to_matrix,
     convert_profile_to_matrix, convert_profile_to_mtx,
 )
-from .file_naming import (
+from isoquant_lib.utils.file_naming import (
     counts_prefix, tpm_prefix, counts_file_name, tpm_file_name,
     counts_stats_file_name, counts_usable_file_name
 )

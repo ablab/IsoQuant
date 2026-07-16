@@ -10,7 +10,7 @@ from enum import unique, Enum
 from typing import Iterator, List
 from collections import defaultdict
 
-from ...error_codes import IsoQuantExitCode
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from ..common import load_barcodes
 
 logger = logging.getLogger('IsoQuant')
