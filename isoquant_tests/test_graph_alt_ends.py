@@ -20,7 +20,7 @@ from argparse import Namespace
 
 import pytest
 
-from isoquant_lib import graph_based_model_construction as gbmc
+from isoquant_lib.model_construction import model_construction as gbmc
 from isoquant_lib.model_construction import end_processor as ep_mod
 from isoquant_lib.model_construction.end_processor import TranscriptEndProcessor
 from isoquant_lib.gene_info import TranscriptModel, TranscriptModelType
