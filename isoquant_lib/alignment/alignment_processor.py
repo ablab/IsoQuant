@@ -9,11 +9,11 @@ import math
 from collections import defaultdict
 from queue import PriorityQueue
 
-from .common import interval_len, junctions_from_blocks, overlaps
-from .gene_info import GeneInfo, StrandDetector
-from .assignment.long_read_assigner import LongReadAssigner
-from .assignment.long_read_profiles import CombinedProfileConstructor
-from .assignment.isoform_assignment import (
+from isoquant_lib.common import interval_len, junctions_from_blocks, overlaps
+from isoquant_lib.gene_info import GeneInfo, StrandDetector
+from isoquant_lib.assignment.long_read_assigner import LongReadAssigner
+from isoquant_lib.assignment.long_read_profiles import CombinedProfileConstructor
+from isoquant_lib.assignment.isoform_assignment import (
     IsoformMatch,
     MatchClassification,
     MatchEvent,
@@ -21,12 +21,12 @@ from .assignment.isoform_assignment import (
     ReadAssignment,
     ReadAssignmentType,
 )
-from .assignment.read_groups import DefaultReadGrouper
-from .polya_finder import PolyAFinder
-from .polya_verification import PolyAFixer
-from .assignment.exon_corrector import ExonCorrector
+from isoquant_lib.assignment.read_groups import DefaultReadGrouper
+from isoquant_lib.polya_finder import PolyAFinder
+from isoquant_lib.polya_verification import PolyAFixer
+from isoquant_lib.assignment.exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
-from .assignment.illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
+from isoquant_lib.assignment.illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
 from isoquant_lib.model_construction.transcript_splice_site_corrector import extract_relevant_deletions
 from isoquant_lib.utils.stats import EnumStats
 from enum import Enum, unique
