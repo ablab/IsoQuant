@@ -415,6 +415,8 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
             return AlignmentTagReadGrouper(tag="RG")
         return AlignmentTagReadGrouper(tag=values[1])
     elif values[0] == 'read_id':
+        if len(values) < 2:
+            return ReadIdSplitReadGrouper(delim="_")
         return ReadIdSplitReadGrouper(delim=values[1])
     elif values[0] == 'file':
         # Format: file:filename:read_col:group_cols:delim
