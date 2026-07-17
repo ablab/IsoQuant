@@ -158,6 +158,7 @@ original file name, and barcode property (e.g. cell type).
     Report whether read or constructed transcript model contains non-canonical splice junction (requires more time).
 
 `--count_exons`
+    **Deprecated: use `--analysis exon_quantification` instead.**
     Perform exon and splice junction counting in addition to gene and transcript counting.
     Produces region-based exon counts (`exon_counts.tsv`), exon splice-site counts
     (`exon_splice_site_counts.tsv`) and splice junction counts (`splice_junction_counts.tsv`).
@@ -166,6 +167,8 @@ original file name, and barcode property (e.g. cell type).
     Will take effect only when reference annotation is provided.
 
 `--count_intron_retentions`
+    **Deprecated: use `--analysis exon_quantification` instead** (intron retention counting is
+    now part of exon quantification).
     Count intron retention events per reference intron. Only non-ambiguous reads are counted.
     Will take effect only when reference annotation is provided.
 
@@ -185,11 +188,38 @@ original file name, and barcode property (e.g. cell type).
 `--threads` or `-t`
     Number of threads to use, 16 by default.
 
+`--analysis`
+    Space-separated list of analyses to run. Supported values (short aliases in brackets):
+
+    * `quantification` (`quant`) — gene and transcript quantification (counts/TPM). Also
+      produces polyA/TSS site prediction. Requires a reference annotation (`--genedb`).
+    * `transcript_discovery` (`td`) — discover novel transcript models. Also produces
+      polyA/TSS site prediction.
+    * `exon_quantification` (`ex_quant`) — exon, splice junction and intron retention
+      counting. Requires a reference annotation (`--genedb`).
+    * `fusion` — fusion gene detection. Requires a reference annotation (`--genedb`).
+
+    Defaults when `--analysis` is not given:
+
+    * with `--genedb`: `quantification transcript_discovery`;
+    * without `--genedb`: `transcript_discovery` only;
+    * single-cell/spatial modes: `quantification` only.
+
+    Analyses that require a reference annotation are skipped with a warning (the run is not
+    aborted) when `--genedb` is not provided. Requesting `transcript_discovery` in a
+    single-cell/spatial mode is allowed but warns that model construction runs after UMI
+    deduplication and may be incomplete — a pseudo-bulk run is recommended for discovery.
+
 `--clean_start`
     Do not use previously generated gene database, genome indices or BAM files, run pipeline from the very beginning (will take more time).
 
 `--no_model_construction`
+    **Deprecated: omit `transcript_discovery` from `--analysis` instead.**
     Do not report transcript models, run read assignment and quantification of reference features only.
+
+`--fusion`
+    **Deprecated: use `--analysis fusion` instead.**
+    Run fusion gene detection after isoform detection. Requires a reference annotation (`--genedb`).
 
 `--run_aligner_only`
     Align reads to the reference without running IsoQuant itself.

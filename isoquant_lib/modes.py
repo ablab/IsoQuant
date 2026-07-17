@@ -58,3 +58,25 @@ class IsoQuantMode(Enum):
 
 
 ISOQUANT_MODES = [x.name for x in IsoQuantMode]
+
+
+@unique
+class AnalysisType(Enum):
+    quantification = 1
+    exon_quantification = 2
+    fusion = 3
+    transcript_discovery = 4
+
+
+# Maps user-facing analysis names (and their short aliases) to AnalysisType.
+ANALYSIS_ALIASES = {
+    "quantification": AnalysisType.quantification,
+    "quant": AnalysisType.quantification,
+    "exon_quantification": AnalysisType.exon_quantification,
+    "ex_quant": AnalysisType.exon_quantification,
+    "fusion": AnalysisType.fusion,
+    "transcript_discovery": AnalysisType.transcript_discovery,
+    "td": AnalysisType.transcript_discovery,
+}
+
+ANALYSIS_CHOICES = list(ANALYSIS_ALIASES.keys())

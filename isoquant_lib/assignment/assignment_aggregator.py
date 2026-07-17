@@ -79,7 +79,7 @@ class ReadAssignmentAggregator:
         self.global_printer = ReadAssignmentCompositePrinter(printer_list)
 
         self.global_counter = CompositeCounter()
-        if self.args.genedb:
+        if self.args.genedb and self.args.run_quantification:
             gene_counts_path = sample.get_gene_counts_file(chr_id) if chr_id else sample.out_gene_counts_tsv
             transcript_counts_path = sample.get_transcript_counts_file(chr_id) if chr_id else sample.out_transcript_counts_tsv
             self.gene_counter = create_gene_counter(gene_counts_path,
@@ -126,10 +126,11 @@ class ReadAssignmentAggregator:
                 ungrouped_exon_counters.append(self.old_exon_counter)
             self.global_counter.add_counters(ungrouped_exon_counters)
 
-        # polyA / TSS terminal-position prediction (ungrouped). PolyA requires
-        # only the gene annotation; TSS also requires --fl_data because read
-        # start coordinates without full-length evidence are unreliable.
-        if self.args.genedb:
+        # polyA / TSS terminal-position prediction (ungrouped). Runs as part of
+        # quantification and is also required for model construction; gated by the
+        # gene annotation. TSS also requires --fl_data because read start
+        # coordinates without full-length evidence are unreliable.
+        if self.args.predict_terminal_sites:
             polya_path = sample.get_polya_prediction_file(chr_id) if chr_id else sample.out_polya_prediction_tsv
             self.polya_counter = PolyACounter(self.args, polya_path)
             self.global_counter.add_counter(self.polya_counter)
@@ -153,18 +154,19 @@ class ReadAssignmentAggregator:
                     gene_out_file = f"{sample.out_gene_grouped_counts_tsv}_{strategy_name}"
                     transcript_out_file = f"{sample.out_transcript_grouped_counts_tsv}_{strategy_name}"
 
-                gene_counter = create_gene_counter(gene_out_file,
-                                                   self.args.gene_quantification,
-                                                   complete_feature_list=self.gene_set,
-                                                   string_pools=self.string_pools,
-                                                   group_index=group_idx)
-                transcript_counter = create_transcript_counter(transcript_out_file,
-                                                              self.args.transcript_quantification,
-                                                              complete_feature_list=self.transcript_set,
-                                                              string_pools=self.string_pools,
-                                                              group_index=group_idx)
+                if self.args.run_quantification:
+                    gene_counter = create_gene_counter(gene_out_file,
+                                                       self.args.gene_quantification,
+                                                       complete_feature_list=self.gene_set,
+                                                       string_pools=self.string_pools,
+                                                       group_index=group_idx)
+                    transcript_counter = create_transcript_counter(transcript_out_file,
+                                                                  self.args.transcript_quantification,
+                                                                  complete_feature_list=self.transcript_set,
+                                                                  string_pools=self.string_pools,
+                                                                  group_index=group_idx)
 
-                self.global_counter.add_counters([gene_counter, transcript_counter])
+                    self.global_counter.add_counters([gene_counter, transcript_counter])
 
                 if self.args.count_exons:
                     if chr_id:
@@ -197,7 +199,7 @@ class ReadAssignmentAggregator:
                 # Skipped in training-collection mode -- only the ungrouped counter
                 # writes the per-chr training fragment, and grouped predictions
                 # are not produced in dev mode.
-                if not getattr(self.args, "collect_polya_training", None):
+                if self.args.predict_terminal_sites and not getattr(self.args, "collect_polya_training", None):
                     if chr_id:
                         polya_out_file = sample.get_grouped_counts_file(chr_id, "polyA_prediction", strategy_name)
                     else:
@@ -206,7 +208,7 @@ class ReadAssignmentAggregator:
                                                          string_pools=self.string_pools,
                                                          group_index=group_idx)
                     self.global_counter.add_counter(grouped_polya_counter)
-                if self.args.fl_data and not getattr(self.args, "collect_tss_training", None):
+                if self.args.predict_terminal_sites and self.args.fl_data and not getattr(self.args, "collect_tss_training", None):
                     if chr_id:
                         tss_out_file = sample.get_grouped_counts_file(chr_id, "TSS_prediction", strategy_name)
                     else:
