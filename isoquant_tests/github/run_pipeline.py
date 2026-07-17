@@ -20,6 +20,10 @@ import logging
 
 import yaml
 
+# Run by absolute path from CI, so the repo root is not on sys.path by default;
+# prepend it so isoquant_lib resolves to this checkout, not an installed copy.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..")))
+
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 
 
