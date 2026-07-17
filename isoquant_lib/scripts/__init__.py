@@ -5,4 +5,4 @@
 ############################################################################
 
 # User-facing conversion utilities shipped with IsoQuant (not called by the
-# pipeline). Run e.g. `python -m scripts.convert_read_info --help`.
+# pipeline). Run e.g. `python -m isoquant_lib.scripts.convert_read_info --help`.
