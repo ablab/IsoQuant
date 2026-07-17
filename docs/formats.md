@@ -29,8 +29,8 @@ A single read may occur more than once if assigned ambiguously.
 
 To convert `read_info.tsv` to legacy formats, use the conversion script:
 ```
-python -m scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
-python -m scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
+python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
+python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
 ```
 
 ## Read to isoform assignment (legacy)
@@ -205,7 +205,7 @@ the columns are:
 * `group_id` - read group (`NA` when ungrouped);
 * `read_ids_full`, `read_ids_left`, `read_ids_right` - optional read-id lists for this feature and group, only with `--emit_read_ids`.
 
-To reconstruct the per-molecule group-list format (columns `groups_full` / `groups_left` / `groups_right`, one entry per read — e.g. barcodes for downstream cell/cell-type aggregation) run `scripts/exon_splice_site_to_group_lists.py`.
+To reconstruct the per-molecule group-list format (columns `groups_full` / `groups_left` / `groups_right`, one entry per read — e.g. barcodes for downstream cell/cell-type aggregation) run `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
 
 ## Transcript models format
 

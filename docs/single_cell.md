@@ -161,7 +161,7 @@ However, only the main (sequence-based) UMI-deduplicated reads will be used for 
 
 When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
 
-For Visium HD composite barcodes, use `scripts/prepare_visium_spot_ids.py` to generate the mapping file.
+For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 
 `--molecule`
 Path to a molecule description format (MDF) file for `custom_sc` mode.
@@ -330,10 +330,10 @@ isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
 For Visium HD, generate the mapping file from per-part coordinate files:
 
 ```bash
-python scripts/prepare_visium_spot_ids.py part1_to_y.tsv part2_to_x.tsv -o barcode2spot.tsv
+python isoquant_lib/scripts/prepare_visium_spot_ids.py part1_to_y.tsv part2_to_x.tsv -o barcode2spot.tsv
 ```
 
-See `python scripts/prepare_visium_spot_ids.py --help` for custom prefix/delimiter options.
+See `python isoquant_lib/scripts/prepare_visium_spot_ids.py --help` for custom prefix/delimiter options.
 
 ## Output
 
