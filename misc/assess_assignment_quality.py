@@ -24,7 +24,7 @@ import logging
 
 logger = logging.getLogger('IsoQuantQA')
 
-id_pattern = re.compile("[A-Z]+\.?(\d+\.\d+)")
+id_pattern = re.compile(r"[A-Z]+\.?(\d+\.\d+)")
 
 
 def overlaps(range1, range2):
