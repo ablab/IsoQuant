@@ -117,7 +117,6 @@ class ModelFilter:
                     self.store.delete_from_storage(model.transcript_id)
                     continue
 
-            # TODO: correct ends for known
             self.end_processor.correct_novel_transcript_ends(model, self.store.transcript_read_ids[model.transcript_id])
             self.end_processor._mark_terminal_confirmation(model)
             pre_filtered_storage.append(model)
