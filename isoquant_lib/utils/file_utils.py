@@ -17,6 +17,17 @@ logger = logging.getLogger('IsoQuant')
 
 
 def merge_file_list(fname, label, chr_ids):
+    # Per-chromosome files are written as "<label>_<chr_id><rest>" (see
+    # SampleData.get_chr_prefix). The label prefixes the *basename*, so insert
+    # "_<chr_id>" right after it there. Using rreplace on the whole path would
+    # match the label anywhere (e.g. a short prefix like "p" inside
+    # "...transcript...") and reconstruct the wrong per-chr name, silently
+    # dropping counts and crashing on the missing files.
+    directory, base = os.path.split(fname)
+    if base.startswith(label):
+        return [os.path.join(directory, f"{label}_{chr_id}{base[len(label):]}") for chr_id in chr_ids]
+    # Defensive fallback for unexpected callers where the label is not a
+    # basename prefix.
     return [rreplace(fname, label, f"{label}_{chr_id}") for chr_id in chr_ids]
 
 

@@ -27,6 +27,20 @@ class TestFileUtils(unittest.TestCase):
         result = merge_file_list(fname, label, self.chr_ids)
         self.assertEqual(result, expected)
 
+    def test_merge_file_list_short_prefix_collision(self):
+        # A short prefix that also occurs inside the filename body ("p" in
+        # "transcript"/".tsv") must still be split right after the basename
+        # prefix, not at the last occurrence of the substring.
+        result = merge_file_list("/out/p.transcript_counts.tsv", "p", ["chr1", "chr9"])
+        self.assertEqual(result, ["/out/p_chr1.transcript_counts.tsv",
+                                  "/out/p_chr9.transcript_counts.tsv"])
+        # usable sidecar and gene counts for the same prefix
+        self.assertEqual(merge_file_list("/out/p.transcript_counts.tsv.usable", "p", ["chr9"]),
+                         ["/out/p_chr9.transcript_counts.tsv.usable"])
+        # a directory component containing the prefix must be left untouched
+        self.assertEqual(merge_file_list("/out/p/p.gene_counts.tsv", "p", ["chr9"]),
+                         ["/out/p/p_chr9.gene_counts.tsv"])
+
     def test_merge_files(self):
         # Create test files
         test_files = []
