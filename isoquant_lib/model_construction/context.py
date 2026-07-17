@@ -140,7 +140,7 @@ class ModelConstructionContext:
         # Constructed (novel) model ends are always refined to the trained
         # polyA/TSS peaks. Alternative-end NIC *creation* needs an annotation to
         # refine against, so it is gated on --genedb.
-        self.create_nics = bool(getattr(args, 'genedb', None))
+        self.create_alt_ts_nics = bool(getattr(args, 'genedb', None))
         # TSS model is used only with full-length evidence; read starts are
         # unreliable otherwise.
         self.use_tss_model = bool(getattr(args, 'fl_data', False))
