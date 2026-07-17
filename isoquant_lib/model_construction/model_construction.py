@@ -22,7 +22,7 @@ from isoquant_lib.model_construction.transcript_to_gene_joiner import Transcript
 from isoquant_lib.model_construction.context import ModelStore, ModelConstructionContext
 # Re-exported for isoquant.py's `from ...graph_based_model_construction import StrandnessReportingLevel`.
 from isoquant_lib.model_construction.context import StrandnessReportingLevel  # noqa: F401
-from isoquant_lib.model_construction.fl_graph_constructor import FLGraphConstructor
+from isoquant_lib.model_construction.fl_graph_constructor import GraphBasedConstructor
 from isoquant_lib.model_construction.assignment_based_constructor import AssignmentBasedConstructor
 from isoquant_lib.model_construction.end_processor import TranscriptEndProcessor
 from isoquant_lib.model_construction.model_filter import ModelFilter
@@ -62,7 +62,7 @@ class GraphBasedModelConstructor:
 
         # Construction stages, each operating on the shared ctx / ctx.store.
         # Stage 1: full-length isoforms from intron-graph paths.
-        self.fl_constructor = FLGraphConstructor(ctx)
+        self.fl_constructor = GraphBasedConstructor(ctx)
         # Stage 2: models from per-read reference assignments.
         self.assignment_constructor = AssignmentBasedConstructor(ctx)
         # Stage 3: polyA/TSS end refinement + alternative-end NIC discovery.

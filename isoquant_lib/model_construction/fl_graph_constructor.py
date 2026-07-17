@@ -23,7 +23,7 @@ from .context import StrandnessReportingLevel
 logger = logging.getLogger('IsoQuant')
 
 
-class FLGraphConstructor:
+class GraphBasedConstructor:
     """Builds full-length transcript models from intron-graph FL paths."""
 
     def __init__(self, ctx):
@@ -32,7 +32,7 @@ class FLGraphConstructor:
         self.args = ctx.args
         self.gene_info = ctx.gene_info
         self.use_tss_model = ctx.use_tss_model
-        self.create_nics = ctx.create_nics
+        self.create_alt_ts_nics = ctx.create_alt_ts_nics
         self.assigner = ctx.assigner
         self.profile_constructor = ctx.profile_constructor
         self.strand_detector = ctx.strand_detector
@@ -116,7 +116,7 @@ class FLGraphConstructor:
             # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %
             #             (new_transcript_id, str(novel_exons), str(assignment.assignment_type)))
 
-            if self.create_nics:
+            if self.create_alt_ts_nics:
                 # use the path's goal-1-refined terminal vertices: keep the
                 # reference only when both ends agree with the annotation within
                 # apa_delta, otherwise fall through to the novel branch below to

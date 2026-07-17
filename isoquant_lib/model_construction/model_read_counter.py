@@ -41,24 +41,6 @@ class ModelReadCounter:
         self.gene_counter = gene_counter
         self.model_read_assignments: List[ReadAssignment] = []
 
-    def _log_uniqueknown_on_novel(self, transcript2type: Dict[str, TranscriptModelType]) -> None:
-        # Diagnostic: how often a read the reference step assigned uniquely to a
-        # known isoform ends up on a *novel* model. After the re-assignment gate
-        # this can only happen while the read is consumed building that model
-        # (FL path / alt-end), so the count isolates the construction-phase drag.
-        dragged = 0
-        for t_id, reads in self.store.transcript_read_ids.items():
-            if transcript2type.get(t_id) == TranscriptModelType.known:
-                continue
-            for a in reads:
-                x = reference_unique_known_isoform(a)
-                if x is not None and x != t_id:
-                    dragged += 1
-                    logger.debug("Read %s uniquely assigned to known %s now on novel model %s" %
-                                 (a.read_id, x, t_id))
-        if dragged:
-            logger.debug("%d uniquely-known reads bound to novel models (construction-phase)" % dragged)
-
     def _single_model_assigner(self, model, cache):
         # Cache one (assigner, profile_constructor) per model over a single-isoform
         # GeneInfo, using the graph vertex-collapse tolerance (graph_clustering_distance)
@@ -138,8 +120,6 @@ class ModelReadCounter:
         _gcd = getattr(self.args, "graph_clustering_distance", None)
         self._graph_tolerance_args.delta = max(self.args.delta, _gcd) if _gcd else self.args.delta
         transcript2gene = {t.transcript_id: t.gene_id for t in self.store.transcript_model_storage}
-        transcript2type = {t.transcript_id: t.transcript_type for t in self.store.transcript_model_storage}
-        self._log_uniqueknown_on_novel(transcript2type)
 
         model_gene_info = GeneInfo.from_models(self.store.transcript_model_storage, self.args.delta)
         model_by_id = {t.transcript_id: t for t in self.store.transcript_model_storage}

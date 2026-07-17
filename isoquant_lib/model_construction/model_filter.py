@@ -41,7 +41,7 @@ class ModelFilter:
         self.args = ctx.args
         self.chr_record = ctx.chr_record
         self.string_pools = ctx.string_pools
-        self.create_nics = ctx.create_nics
+        self.create_nics = ctx.create_alt_ts_nics
         self.novel_apa = ctx.novel_apa
         self.use_tss_model = ctx.use_tss_model
         self.end_processor = end_processor
