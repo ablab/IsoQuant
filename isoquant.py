@@ -38,7 +38,7 @@ import gffutils
 import pyfaidx
 
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
-from isoquant_lib.modes import IsoQuantMode, ISOQUANT_MODES
+from isoquant_lib.modes import IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANALYSIS_ALIASES, ANALYSIS_CHOICES
 from isoquant_lib.gtf2db import convert_gtf_to_db
 from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
@@ -264,9 +264,20 @@ def parse_args(cmd_args=None, namespace=None):
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
                                      default="16")
 
-    # add fusion flag: runs fusion detection in addition to the default isoform pipeline
+    pipeline_args_group.add_argument("--analysis", nargs='+', type=str, choices=ANALYSIS_CHOICES, default=None,
+                                     metavar="ANALYSIS",
+                                     help="analyses to run (space-separated); supported values: "
+                                          "quantification (quant) - gene/transcript counts; "
+                                          "transcript_discovery (td) - discover novel transcript models; "
+                                          "exon_quantification (ex_quant) - exon, splice junction and intron retention counts; "
+                                          "fusion - fusion gene detection. "
+                                          "Defaults: quantification + transcript_discovery with --genedb, "
+                                          "transcript_discovery without --genedb, "
+                                          "quantification for single-cell/spatial modes")
+
+    # deprecated: superseded by --analysis fusion
     add_additional_option_to_group(pipeline_args_group, "--fusion", action='store_true', default=False,
-                                   help="run fusion gene detection after isoform detection; requires --genedb.")
+                                   help="deprecated: use --analysis fusion")
 
     resume_args = pipeline_args_group.add_mutually_exclusive_group()
     resume_args.add_argument("--resume", action="store_true", default=False,
@@ -277,7 +288,7 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(pipeline_args_group, '--clean_start', action='store_true', default=False,
                                    help='Do not use previously generated index, feature db or alignments.')
     add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
-                                   default=False, help="run only read assignment and quantification")
+                                   default=False, help="deprecated: omit transcript_discovery from --analysis")
     add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
                                    help="align reads to reference without running further analysis")
     add_additional_option_to_group(pipeline_args_group, "--no_gtf_check", help="do not perform GTF checks",
@@ -295,11 +306,12 @@ def parse_args(cmd_args=None, namespace=None):
                                      help="report whether splice junctions are canonical")
     output_setup_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
                                      action='store_true', default=False)
-    output_setup_args_group.add_argument("--count_exons", help="perform exon and splice junction counting",
-                                     action='store_true', default=False)
-    output_setup_args_group.add_argument("--count_intron_retentions",
-                                     help="count intron retention events per reference intron",
-                                     action='store_true', default=False)
+    add_additional_option_to_group(output_setup_args_group, "--count_exons",
+                                   help="deprecated: use --analysis exon_quantification",
+                                   action='store_true', default=False)
+    add_additional_option_to_group(output_setup_args_group, "--count_intron_retentions",
+                                   help="deprecated: use --analysis exon_quantification",
+                                   action='store_true', default=False)
     add_additional_option_to_group(output_setup_args_group, "--emit_read_ids", action='store_true', default=False,
                                    help="add read id columns to exon splice-site counts output")
     add_additional_option_to_group(output_setup_args_group, "--old_exon_count_format", action='store_true', default=False,
@@ -588,6 +600,71 @@ def save_params(args):
     pass
 
 
+# Translate the --analysis option (and the deprecated stage flags) into the
+# internal boolean flags consumed across the pipeline. Requires args.mode and
+# args.genedb to already be resolved. Warns but never aborts on infeasible
+# combinations.
+def resolve_analyses(args):
+    is_single_cell = args.mode.needs_barcode_calling()
+
+    # capture legacy stage flags before they are overwritten below
+    legacy_count_exons = args.count_exons
+    legacy_intron_retentions = args.count_intron_retentions
+    legacy_fusion = args.fusion
+    legacy_no_model = args.no_model_construction
+
+    if args.analysis is not None:
+        analyses = {ANALYSIS_ALIASES[a] for a in args.analysis}
+    elif is_single_cell:
+        analyses = {AnalysisType.quantification}
+    elif args.genedb:
+        analyses = {AnalysisType.quantification, AnalysisType.transcript_discovery}
+    else:
+        analyses = {AnalysisType.transcript_discovery}
+
+    # apply deprecated stage flags additively, on top of the chosen analyses
+    if legacy_fusion:
+        logger.warning("--fusion is deprecated, use --analysis fusion")
+        analyses.add(AnalysisType.fusion)
+    if legacy_count_exons:
+        logger.warning("--count_exons is deprecated, use --analysis exon_quantification")
+        analyses.add(AnalysisType.exon_quantification)
+    if legacy_intron_retentions:
+        logger.warning("--count_intron_retentions is deprecated, use --analysis exon_quantification")
+    if legacy_no_model:
+        logger.warning("--no_model_construction is deprecated, omit transcript_discovery from --analysis")
+        analyses.discard(AnalysisType.transcript_discovery)
+
+    # feasibility: annotation-dependent analyses cannot run without a gene database
+    if not args.genedb:
+        for analysis in (AnalysisType.quantification, AnalysisType.exon_quantification, AnalysisType.fusion):
+            if analysis in analyses:
+                logger.warning("%s requires a reference annotation (--genedb) and will not be run" % analysis.name)
+                analyses.discard(analysis)
+        # without an annotation transcript discovery is the only available analysis
+        if not analyses and not legacy_no_model:
+            logger.info("Without a reference annotation only transcript discovery is available; "
+                        "running transcript_discovery")
+            analyses.add(AnalysisType.transcript_discovery)
+
+    # feasibility: model construction in single-cell/spatial modes is limited
+    if is_single_cell and AnalysisType.transcript_discovery in analyses:
+        logger.warning("transcript_discovery in single-cell/spatial mode runs after UMI deduplication: "
+                       "it will not yield novel genes and may be incomplete; "
+                       "consider a pseudo-bulk run for transcript discovery")
+
+    # canonical internal flags (names reused across the pipeline)
+    args.run_quantification = AnalysisType.quantification in analyses
+    args.count_exons = AnalysisType.exon_quantification in analyses or legacy_count_exons
+    args.count_intron_retentions = AnalysisType.exon_quantification in analyses or legacy_intron_retentions
+    args.fusion = AnalysisType.fusion in analyses
+    args.no_model_construction = AnalysisType.transcript_discovery not in analyses
+    # polyA/TSS site prediction is part of quantification and is also needed for
+    # model construction; gated by the annotation (TSS additionally needs --fl_data)
+    args.predict_terminal_sites = bool(args.genedb) and (args.run_quantification or not args.no_model_construction)
+    args.analyses = analyses
+
+
 # Check user's params
 def check_input_params(args):
     if not args.reference:
@@ -621,17 +698,15 @@ def check_input_params(args):
         logger.error("Unsupported strandness " + args.stranded + ", choose one of: " + " ".join(SUPPORTED_STRANDEDNESS))
         return False
 
-    if not args.genedb:
-        if args.count_exons:
-            logger.warning("--count_exons option has no effect without gene annotation")
-        if args.count_intron_retentions:
-            logger.warning("--count_intron_retentions option has no effect without gene annotation")
-        if args.sqanti_output:
-            args.sqanti_output = False
-            logger.warning("--sqanti_output option has no effect without gene annotation")
-        if args.no_model_construction:
-            logger.warning("Setting --no_model_construction without providing a gene "
-                           "annotation will not produce any meaningful results")
+    if not isinstance(args.mode, IsoQuantMode):
+        args.mode = IsoQuantMode[args.mode]
+
+    # translate --analysis (and the deprecated stage flags) into internal booleans
+    resolve_analyses(args)
+
+    if not args.genedb and args.sqanti_output:
+        args.sqanti_output = False
+        logger.warning("--sqanti_output option has no effect without gene annotation")
 
     if args.no_model_construction and args.sqanti_output:
         args.sqanti_output = False
@@ -654,9 +729,6 @@ def check_input_params(args):
             updated_specs.append(spec)
             spec_set.add(spec)
         args.read_group = updated_specs
-
-    if not isinstance(args.mode, IsoQuantMode):
-        args.mode = IsoQuantMode[args.mode]
 
     args.umi_length = 0
     if args.mode.needs_barcode_calling():
@@ -1235,7 +1307,7 @@ def run_pipeline(args):
     dataset_processor.process_all_samples(args.input_data)
 
     # aggregate counts for all samples
-    if len(args.input_data.samples) > 1 and args.genedb:
+    if len(args.input_data.samples) > 1 and args.genedb and args.run_quantification:
         combine_counts(args.input_data, args.output)
 
     # Run fusion detection after isoform detection when --fusion is enabled

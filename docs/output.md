@@ -25,7 +25,7 @@ If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://gi
 
 * `SAMPLE_ID.novel_vs_known.SQANTI-like.tsv` - discovered novel transcripts vs reference transcripts (similar, but not identical to SQANTI `classification.txt`);
 
-If `--count_exons` is set, exon and splice junction counts will be produced:
+If `--analysis exon_quantification` is set (or the deprecated `--count_exons`), exon, splice junction and intron retention counts will be produced:
 
 * `SAMPLE_ID.exon_counts.tsv` - region-based exon counts: overlapping reference exons are grouped into regions, and each region reports per-variant inclusion counts plus one region-level exclusion count;
 * `SAMPLE_ID.exon_splice_site_counts.tsv` - exon splice-site counts: per-candidate full / left / right splice-site support and per-region exclusion / ambiguous counts, one row per feature and group;
@@ -117,7 +117,7 @@ See [options](cmd.md#specific-output-options) for details.
 
 ## Transcript discovery output
 
-_Will not be produced if `--no_model_construction` is set._
+_Produced only when `transcript_discovery` is among the requested `--analysis` values (on by default with `--genedb` in bulk mode, and without `--genedb`). Not produced when transcript discovery is disabled (e.g. `--analysis quant`, or the deprecated `--no_model_construction`)._
 
 File names typically contain `transcript_model` in their name.
 

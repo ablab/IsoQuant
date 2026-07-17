@@ -512,8 +512,9 @@ class DatasetProcessor:
         if self.args.genedb:
             aggregator.read_stat_counter.print_start("Read assignment statistics")
 
-            logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
-            logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
+            if self.args.run_quantification:
+                logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)
+                logger.info("Transcript counts are stored in " + aggregator.transcript_counter.output_counts_file_name)
             if self.args.read_group:
                 for counter in aggregator.global_counter.counters:
                     if counter.ignore_read_groups:
