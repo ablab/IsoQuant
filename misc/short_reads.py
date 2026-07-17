@@ -14,8 +14,8 @@ import networkx as nx
 from networkx.algorithms import bipartite
 from enum import Enum, unique
 
-from .common import *
-from .gtf2db import *
+from isoquant_lib.common import *
+from isoquant_lib.gtf2db import *
 
 ABSENT_PAIR = (-1,-1)
 
