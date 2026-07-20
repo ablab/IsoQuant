@@ -61,7 +61,7 @@ When multiple input files are provided, outputs are numbered: `<prefix>_0.barcod
 
 One or more barcode whitelist files. The number of files depends on the mode:
 
-* 1 file: `tenX_v3`, `tenX_v3_split`, `tenX_v2_split`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio`
+* 1 file: `tenX_v3`, `tenX_v2`, `tenX_v3_split`, `tenX_v2_split`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio`
 * 2 files: `visium_hd`
 * Not needed for `custom_sc` (barcodes defined in MDF file)
 
@@ -74,12 +74,12 @@ If you have a subset of barcodes from short-read data, provide them instead of t
 
 `--mode`
 
-Barcode calling mode. Available modes: `tenX_v3`, `tenX_v3_split`, `tenX_v2_split`, `curio`, `stereoseq`, `stereoseq_nosplit`,
+Barcode calling mode. Available modes: `tenX_v3`, `tenX_v2`, `tenX_v3_split`, `tenX_v2_split`, `curio`, `stereoseq`, `stereoseq_nosplit`,
 `visium_5prime`, `visium_hd`, `custom_sc`.
 
 `--molecule`
 Path to a molecule description format (MDF) file for `custom_sc` mode.
-This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA)ю
+This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA).
 See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for the format specification.
 
 `--threads` or `-t`

@@ -56,7 +56,7 @@ Alternatively, you can install the requirements manually:
 pip install -r requirements.txt
 ```
 
-Add [samtools](http://www.htslib.org/download/) and [minimap2](https://github.com/lh3/minimap2) to the `$PATH` variable and run IsoQuant without intalling it.
+Add [samtools](http://www.htslib.org/download/) and [minimap2](https://github.com/lh3/minimap2) to the `$PATH` variable and run IsoQuant without installing it.
 
 Typically, the whole installation takes a few minutes regardless of the method.
 

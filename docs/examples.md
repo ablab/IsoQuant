@@ -29,8 +29,8 @@ isoquant -d pacbio_ccs --fl_data --fastq CCS.fastq \
 * Nanopore cDNA reads, multiple samples/replicas within a single experiment; official annotation in GTF format:
 ```bash
 isoquant -d nanopore --bam ONT.cDNA_1.bam ONT.cDNA_2.bam ONT.cDNA_3.bam \
- --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir
- --predix ONT_3samples --labels A1 A2 A3
+ --reference reference.fasta --genedb annotation.gtf --complete_genedb --output output_dir \
+ --prefix ONT_3samples --labels A1 A2 A3
 ```
 
 * ONT cDNA reads; 2 experiments with 3 replicates; official annotation in GTF format:
@@ -59,7 +59,7 @@ dataset.yaml file :
     ]
   },
   {
-    name: "Experiment1",
+    name: "Experiment2",
     long read files: [
       "/PATH/TO/SAMPLE2/file1.fastq",
       "/PATH/TO/SAMPLE2/file2.fastq",
@@ -101,7 +101,7 @@ isoquant -d nanopore --yaml dataset.yaml  \
       "/PATH/TO/SAMPLE1/file1.fastq",
       "/PATH/TO/SAMPLE1/file2.fastq",
       "/PATH/TO/SAMPLE1/file3.fastq",
-      "/PATH/TO/SAMPLE1/file3.fastq"
+      "/PATH/TO/SAMPLE1/file4.fastq"
     ],
     labels: [
       "Replicate1",

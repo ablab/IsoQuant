@@ -108,7 +108,6 @@ If multiple BAM/FASTQ files are provided, IsoQuant will add `--read_group file_n
 
  * `tag:TAG` - groups reads by BAM file read tag, where `TAG` is the tag name
 (e.g. `tag:RG` uses `RG` tag values as groups, commonly used for read group information).
-q
  * `read_id:DELIM` - groups reads by read name suffix, where `DELIM` is the
 symbol/string by which the read id will be split
 (e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will be `NEU`).
@@ -237,6 +236,7 @@ IsoQuant mode for processing single-cell or spatial transcriptomics data. Availa
 
 * `bulk` - standard bulk RNA-seq mode (default)
 * `tenX_v3` - 10x Genomics single-cell 3' gene expression
+* `tenX_v2` - 10x Genomics single-cell 3' v2 gene expression
 * `tenX_v3_split` - 10x Genomics 3' v3 with [read splitting](single_cell.md#read-splitting-modes) for concatenated reads
 * `tenX_v2_split` - 10x Genomics 3' v2 with [read splitting](single_cell.md#read-splitting-modes) for concatenated reads
 * `visium_5prime` - 10x Genomics Visium 5' spatial transcriptomics
@@ -422,7 +422,7 @@ We recommend _not_ to modify these options unless you are clearly aware of their
     A list of chromosomes to skip during the analysis. Has no effect when `--process_only_chr` is used.
 
 `--delta`
-    Delta for inexact splice junction comparison, chosen automatically based on data type (e.g. 4bp for PacBio, 6pb for ONT).
+    Delta for inexact splice junction comparison, chosen automatically based on data type (e.g. 4bp for PacBio, 6bp for ONT).
 
 `--genedb_output`
     If your output folder is located on a shared storage (e.g. NFS share), use this option to set another path

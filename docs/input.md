@@ -29,7 +29,7 @@ These options accept one or multiple files separated by space.
 All provided files are treated as a single experiment, which means a single combined GTF will
 be generated. If multiple files are provided, IsoQuant will compute tables with each column
 corresponding to an individual file (per-sample counts).
-To set a specific label for each sample use the `--label` option. Number of labels must be equal to the number of files.
+To set a specific label for each sample use the `--labels` option. Number of labels must be equal to the number of files.
 To a set a prefix for the output files use the `--prefix` option.
 
 This pipeline is typical for the cases when a user is
@@ -44,7 +44,7 @@ The option accepts one or multiple bam files separated by space. All files will 
 ## Specifying input data via yaml file
 
 To provide all input files in a single description file, you can use a [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) file via `--yaml` (see description below).
-You can provide multiple experiments in a single YAML file with each experiment containing an arbitrary number of smaples/replicas.
+You can provide multiple experiments in a single YAML file with each experiment containing an arbitrary number of samples/replicas.
 A distinct output folder with individual GTFs and abundance tables will be generated for each experiment.
 In this option, BAM files with short reads for correction can be provided for each experiment.
 
@@ -93,8 +93,8 @@ For example:
 
 Output sub-folders will be named `Experiment1` and `Experiment2`.
 Both sub-folders will contain predicted transcript models and abundance tables.
-Abundance table for `Experiment2` with have columns "Sample1" and "Sample2".
+Abundance table for `Experiment1` will have columns "Sample1" and "Sample2".
 
-Note, that  `--bam`, `--unmapped_bam`, `--fastq` and `--label` options are not compatible with `--yaml`.
+Note, that  `--bam`, `--unmapped_bam`, `--fastq` and `--labels` options are not compatible with `--yaml`.
 See more in [examples](examples.md).
 

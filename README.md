@@ -49,7 +49,7 @@ IsoQuant supports all kinds of long RNA data:
 
 Reads must be provided in FASTQ/FASTA format (can be gzipped) or unmapped BAM format. 
 If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
-IsoQuant expect reads to contain polyA tails. For more reliable transcript model construction do not trim polyA tails.
+IsoQuant expects reads to contain polyA tails. For more reliable transcript model construction do not trim polyA tails.
 
 IsoQuant can also take aligned Illumina reads to correct long-read spliced alignments. However, short reads are _not_
 used to discover transcript models or compute abundances.
@@ -135,11 +135,11 @@ All required Python libraries can be installed via:
 
 * If using official annotations containing `gene` and `transcript` features use `--complete_genedb` to save time.
 
-* Using reference annotation is optional since version 3.0, you may preform de novo transcript discovery without providing `--genedb` option':
+* Using reference annotation is optional since version 3.0, you may preform de novo transcript discovery without providing `--genedb` option:
 
         isoquant --reference /PATH/TO/reference_genome.fasta \
         --fastq /PATH/TO/sample1.fastq.gz /PATH/TO/sample2.fastq.gz \
-        --data_type (assembly|pacbio|nanopore) -o OUTPUT_FOLDER
+        --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
 * If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
 

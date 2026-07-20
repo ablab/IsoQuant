@@ -27,6 +27,7 @@ which can also be used as a standalone tool.
 | Mode                | Platform               | Barcode whitelist files | UMI length | Notes                                                                     |
 |---------------------|------------------------|-------------------------|------------|---------------------------------------------------------------------------|
 | `tenX_v3`           | 10x Genomics 3' v3     | 1                       | 12         | Single 16bp barcode                                                       |
+| `tenX_v2`           | 10x Genomics 3' v2     | 1                       | 10         | Single 16bp barcode (v2 chemistry)                                        |
 | `tenX_v3_split`     | 10x Genomics 3' v3     | 1                       | 12         | Concatenated reads: splits into individual cDNA molecules                 |
 | `tenX_v2_split`     | 10x Genomics 3' v2     | 1                       | 10         | Concatenated reads: splits into individual cDNA molecules (v2 chemistry)  |
 | `visium_5prime`     | 10x Genomics Visium 5' | 1                       | 12         | Same detector as tenX_v3                                                  |
@@ -78,6 +79,7 @@ IsoQuant processing mode. Available modes:
 
 * `bulk` -- standard bulk RNA-seq mode (default)
 * `tenX_v3` -- 10x Genomics single-cell 3' gene expression
+* `tenX_v2` -- 10x Genomics single-cell 3' v2 gene expression
 * `tenX_v3_split` -- 10x Genomics 3' v3 with read splitting for concatenated reads (see [below](#read-splitting-modes))
 * `tenX_v2_split` -- 10x Genomics 3' v2 with read splitting for concatenated reads
 * `curio` -- Curio Bioscience single-cell
@@ -92,7 +94,7 @@ All modes except `bulk` enable automatic barcode calling and UMI-based deduplica
 
 `--barcode_whitelist`
 Path to file(s) with barcode whitelist(s) for barcode calling.
-Required for single-cell/spatial modes unless `--barcoded_reads` is provided.
+Required for single-cell/spatial modes unless `--barcoded_reads` or `--barcoded_bam` is provided.
 
 File should contain one barcode sequence per line. 
 More than 1 tab-separated column is allowed, but only the first will be used.
@@ -107,7 +109,7 @@ Use `--read_group barcode` to group reads by barcode explicitly. In case of a la
 
 The number of whitelist files depends on the mode:
 
-* 1 file: `tenX_v3`, `tenX_v3_split`, `tenX_v2_split`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio` (combined 14bp barcodes)
+* 1 file: `tenX_v3`, `tenX_v2`, `tenX_v3_split`, `tenX_v2_split`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio` (combined 14bp barcodes)
 * 2 files: `visium_hd` (part 1 and part 2 barcode lists)
 * Not needed: `custom_sc` (barcode lists are specified inside the MDF file)
 
@@ -119,7 +121,7 @@ More than 3 columns are allowed, but only the first 3 will be used.
 
 _Notes:_
 - IsoQuant does not read barcodes or UMIs from BAM file tags;
-- soQuant will perform per-barcode quantification automatically **only** if no barcode-related
+- IsoQuant will perform per-barcode quantification automatically **only** if no barcode-related
 grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified. 
 Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 
@@ -290,7 +292,7 @@ isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
   -o split_output
 ```
 
-The split modes produce an additional output file (`*.split_reads.fasta`)
+The split modes produce an additional output file (`*.split_reads`)
 containing the extracted cDNA segments. Each segment is named with
 the original read ID plus coordinates and strand: `{read_id}_{start}_{end}_{strand}`.
 
@@ -349,7 +351,7 @@ Use `--counts_format` to control the output format:
 
 Grouped counts can also be converted after the run using `isoquant_lib/quantification/convert_grouped_counts.py`.
 
-### Grouping сcounts
+### Grouping counts
 
 Use `--read_group` to control how reads are grouped for quantification.
 Multiple grouping strategies can be combined (space-separated), producing separate count tables for each.
