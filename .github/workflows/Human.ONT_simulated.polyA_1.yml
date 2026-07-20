@@ -3,7 +3,7 @@ name: Human ONT R10 simulated polyA 1 (discovery + prediction)
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 5 * * 1'
+  - cron: '0 5 8,22 * *'
 
 env:
   RUN_NAME: Human.ONT_simulated.polyA_1
@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 'Check for commits in last 7 days'
+      - name: 'Check for commits in last 14 days'
         id: check
         run: |
           # Always run on manual trigger
@@ -37,13 +37,13 @@ jobs:
             echo "has_changes=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          # Check for commits in last 7 days
-          COMMITS=$(git log --oneline --since="7 days ago" | wc -l)
+          # Check for commits in last 14 days
+          COMMITS=$(git log --oneline --since="14 days ago" | wc -l)
           if [ "$COMMITS" -gt 0 ]; then
-            echo "Found $COMMITS commits in last 7 days"
+            echo "Found $COMMITS commits in last 14 days"
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
-            echo "No commits in last 7 days, skipping"
+            echo "No commits in last 14 days, skipping"
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
 
