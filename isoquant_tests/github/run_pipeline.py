@@ -27,6 +27,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.realpath
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 
 
+# CI hosts fill the root filesystem (which holds /tmp); redirect all temp files
+# (Python tempfile, sqlite/gffutils gene-db build) to a roomy filesystem so runs
+# do not die with "database or disk is full". Override via ISOQUANT_CI_TMPDIR.
+_ci_tmpdir = os.environ.get("ISOQUANT_CI_TMPDIR", "/abga/work/andreyp/ci_isoquant/_temp")
+try:
+    os.makedirs(_ci_tmpdir, exist_ok=True)
+    for _tmp_var in ("TMPDIR", "TMP", "TEMP", "SQLITE_TMPDIR"):
+        os.environ[_tmp_var] = _ci_tmpdir
+except OSError:
+    pass
+
+
 _quote = {"'": "|'", "|": "||", "\n": "|n", "\r": "|r", '[': '|[', ']': '|]'}
 
 

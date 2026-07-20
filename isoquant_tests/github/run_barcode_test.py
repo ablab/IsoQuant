@@ -27,6 +27,18 @@ from traceback import print_exc
 import yaml
 
 
+# CI hosts fill the root filesystem (which holds /tmp); redirect all temp files
+# (Python tempfile, sqlite/gffutils gene-db build) to a roomy filesystem so runs
+# do not die with "database or disk is full". Override via ISOQUANT_CI_TMPDIR.
+_ci_tmpdir = os.environ.get("ISOQUANT_CI_TMPDIR", "/abga/work/andreyp/ci_isoquant/_temp")
+try:
+    os.makedirs(_ci_tmpdir, exist_ok=True)
+    for _tmp_var in ("TMPDIR", "TMP", "TEMP", "SQLITE_TMPDIR"):
+        os.environ[_tmp_var] = _ci_tmpdir
+except OSError:
+    pass
+
+
 # Run types
 RT_VOID = "void"           # Just run detect_barcodes, no quality check
 RT_SINGLE = "single"       # Single barcode per read (10x, curio, stereo)
