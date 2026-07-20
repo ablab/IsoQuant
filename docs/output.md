@@ -33,7 +33,7 @@ If `--analysis exon_quantification` is set (or the deprecated `--count_exons`), 
 
 The legacy per-exon inclusion/exclusion counts (previous IsoQuant exon format) are no longer produced by default. Use `--old_exon_count_format` to additionally output them as `SAMPLE_ID.old_exon_counts.tsv` (deprecated, will be removed in a future release).
 
-If `--count_intron_retentions` is set, intron retention counts will be produced:
+As part of exon quantification (`--analysis exon_quantification`; deprecated aliases `--count_exons` / `--count_intron_retentions`), intron retention counts are also produced:
 
 * `SAMPLE_ID.intron_retention_counts.tsv` - intron retention event counts per reference intron (same format as exon/splice junction counts);
 
@@ -63,11 +63,18 @@ grouping strategy is produced with two extra columns, `counts_byGroup` and
 If `--read_group` is set or multiple files are provided, the per-group expression values for reference features will be also computed:
 
 #### Default grouped counts in linear format
-* `SAMPLE_ID.gene_grouped_counts.linear.tsv`
-* `SAMPLE_ID.transcript_grouped_counts.linear.tsv`
-* `SAMPLE_ID.exon_grouped_counts.linear.tsv`
-* `SAMPLE_ID.exon_splice_site_grouped_counts.linear.tsv`
-* `SAMPLE_ID.splice_junction_grouped_counts.linear.tsv`
+
+Grouped count file names contain the grouping strategy as `<strategy>` (e.g. `file_name`, `barcode`, `barcode_spot`, or `file0_col1` for a `file:...:0:1` group). When several `--read_group` strategies are given, one set of files is produced per strategy.
+
+* `SAMPLE_ID.gene_grouped_<strategy>_counts.linear.tsv`
+* `SAMPLE_ID.transcript_grouped_<strategy>_counts.linear.tsv`
+* `SAMPLE_ID.exon_grouped_<strategy>_counts.linear.tsv`
+* `SAMPLE_ID.exon_splice_site_grouped_<strategy>_counts.linear.tsv`
+* `SAMPLE_ID.splice_junction_grouped_<strategy>_counts.linear.tsv`
+* `SAMPLE_ID.intron_retention_grouped_<strategy>_counts.linear.tsv` (only with exon quantification)
+* `SAMPLE_ID.old_exon_grouped_<strategy>_counts.linear.tsv` (only with `--old_exon_count_format`)
+
+The region-based `exon` and `exon_splice_site` grouped counts are produced in linear format only (they are not converted to matrix/MTX format).
 
 The exon splice-site counts carry a `group_id` column (one row per feature and group; `NA` when ungrouped). To reconstruct the per-molecule group-list format (one entry per read, e.g. barcodes for downstream cell/cell-type aggregation) use `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
 
@@ -100,19 +107,21 @@ By default, IsoQuant converts grouped counts with small number of groups/samples
 larger matrices (e.g. for single-cell experiments) will be saved to MTX.
 See [options](cmd.md#specific-output-options) for details.
 
-* `SAMPLE_ID.gene_grouped_counts.tsv` - grouped gene counts in standard matrix format;
-* `SAMPLE_ID.transcript_grouped_counts.tsv` - grouped transcript counts in standard matrix format;
-* `SAMPLE_ID.gene_grouped_tpm.tsv` - grouped gene TPM values in standard matrix format;
-* `SAMPLE_ID.transcript_grouped_tpm.tsv` - grouped TPM values counts in standard matrix format;
-* `SAMPLE_ID.exon_grouped_counts.tsv` - grouped exon counts in standard matrix format; row IDs are `chr:start-end:strand`, each cell holds `include,exclude` (comma-separated);
-* `SAMPLE_ID.intron_grouped_counts.tsv` - grouped intron counts in standard matrix format; same layout as exon counts;
+* `SAMPLE_ID.gene_grouped_<strategy>_counts.tsv` - grouped gene counts in standard matrix format;
+* `SAMPLE_ID.transcript_grouped_<strategy>_counts.tsv` - grouped transcript counts in standard matrix format;
+* `SAMPLE_ID.gene_grouped_<strategy>_tpm.tsv` - grouped gene TPM values in standard matrix format;
+* `SAMPLE_ID.transcript_grouped_<strategy>_tpm.tsv` - grouped transcript TPM values in standard matrix format;
+* `SAMPLE_ID.splice_junction_grouped_<strategy>_counts.tsv` - grouped splice junction counts in standard matrix format; row IDs are `chr:start-end:strand`, each cell holds `include,exclude` (comma-separated); produced with exon quantification;
+* `SAMPLE_ID.intron_retention_grouped_<strategy>_counts.tsv` - grouped intron retention counts in standard matrix format; same layout as splice junction counts; produced with exon quantification;
+* `SAMPLE_ID.old_exon_grouped_<strategy>_counts.tsv` - grouped legacy per-exon counts in standard matrix format; same layout; only with `--old_exon_count_format`;
 
-* `SAMPLE_ID.gene_grouped_counts.matrix.mtx`, `SAMPLE_ID.gene_grouped_counts.features.tsv`, `SAMPLE_ID.gene_grouped_counts.barcodes.tsv` - grouped gene counts in Seurat-compatible MTX format;
-* `SAMPLE_ID.transcript_grouped_counts.matrix.mtx`, `SAMPLE_ID.transcript_grouped_counts.features.tsv`, `SAMPLE_ID.transcript_grouped_counts.barcodes.tsv` - grouped transcript counts in Seurat-compatible MTX format;
-* `SAMPLE_ID.gene_grouped_tpm.matrix.mtx`, `SAMPLE_ID.gene_grouped_tpm.features.tsv`, `SAMPLE_ID.gene_grouped_tpm.barcodes.tsv` - grouped gene TPM values in Seurat-compatible MTX format;
-* `SAMPLE_ID.transcript_grouped_tpm.matrix.mtx`, `SAMPLE_ID.transcript_grouped_tpm.features.tsv`, `SAMPLE_ID.transcript_grouped_tpm.barcodes.tsv` - grouped transcript TPM values in Seurat-compatible MTX format;
-* `SAMPLE_ID.exon_grouped_counts.include.matrix.mtx`, `SAMPLE_ID.exon_grouped_counts.exclude.matrix.mtx`, `SAMPLE_ID.exon_grouped_counts.features.tsv`, `SAMPLE_ID.exon_grouped_counts.barcodes.tsv` - grouped exon counts in Seurat-compatible MTX format; one features file and one barcodes file are shared between the include and exclude matrices;
-* `SAMPLE_ID.intron_grouped_counts.include.matrix.mtx`, `SAMPLE_ID.intron_grouped_counts.exclude.matrix.mtx`, `SAMPLE_ID.intron_grouped_counts.features.tsv`, `SAMPLE_ID.intron_grouped_counts.barcodes.tsv` - grouped intron counts in Seurat-compatible MTX format;
+* `SAMPLE_ID.gene_grouped_<strategy>_counts.matrix.mtx`, `SAMPLE_ID.gene_grouped_<strategy>_counts.features.tsv`, `SAMPLE_ID.gene_grouped_<strategy>_counts.barcodes.tsv` - grouped gene counts in Seurat-compatible MTX format;
+* `SAMPLE_ID.transcript_grouped_<strategy>_counts.matrix.mtx`, `SAMPLE_ID.transcript_grouped_<strategy>_counts.features.tsv`, `SAMPLE_ID.transcript_grouped_<strategy>_counts.barcodes.tsv` - grouped transcript counts in Seurat-compatible MTX format;
+* `SAMPLE_ID.gene_grouped_<strategy>_tpm.matrix.mtx`, `SAMPLE_ID.gene_grouped_<strategy>_tpm.features.tsv`, `SAMPLE_ID.gene_grouped_<strategy>_tpm.barcodes.tsv` - grouped gene TPM values in Seurat-compatible MTX format;
+* `SAMPLE_ID.transcript_grouped_<strategy>_tpm.matrix.mtx`, `SAMPLE_ID.transcript_grouped_<strategy>_tpm.features.tsv`, `SAMPLE_ID.transcript_grouped_<strategy>_tpm.barcodes.tsv` - grouped transcript TPM values in Seurat-compatible MTX format;
+* `SAMPLE_ID.splice_junction_grouped_<strategy>_counts.include.matrix.mtx`, `SAMPLE_ID.splice_junction_grouped_<strategy>_counts.exclude.matrix.mtx`, `SAMPLE_ID.splice_junction_grouped_<strategy>_counts.features.tsv`, `SAMPLE_ID.splice_junction_grouped_<strategy>_counts.barcodes.tsv` - grouped splice junction counts in Seurat-compatible MTX format; one features file and one barcodes file are shared between the include and exclude matrices; produced with exon quantification;
+* `SAMPLE_ID.intron_retention_grouped_<strategy>_counts.include.matrix.mtx`, `SAMPLE_ID.intron_retention_grouped_<strategy>_counts.exclude.matrix.mtx`, `SAMPLE_ID.intron_retention_grouped_<strategy>_counts.features.tsv`, `SAMPLE_ID.intron_retention_grouped_<strategy>_counts.barcodes.tsv` - grouped intron retention counts in Seurat-compatible MTX format; produced with exon quantification;
+* `SAMPLE_ID.old_exon_grouped_<strategy>_counts.include.matrix.mtx`, `SAMPLE_ID.old_exon_grouped_<strategy>_counts.exclude.matrix.mtx`, `SAMPLE_ID.old_exon_grouped_<strategy>_counts.features.tsv`, `SAMPLE_ID.old_exon_grouped_<strategy>_counts.barcodes.tsv` - grouped legacy per-exon counts in Seurat-compatible MTX format; only with `--old_exon_count_format`;
 
 
 ## Transcript discovery output
@@ -132,8 +141,8 @@ File names typically contain `transcript_model` in their name.
 
 If `--read_group` is set, the per-group counts for discovered transcripts will be also computed:
 
-* `SAMPLE_ID.discovered_transcript_grouped_counts.linear.tsv`
-* `SAMPLE_ID.discovered_gene_grouped_counts.linear.tsv`
+* `SAMPLE_ID.discovered_transcript_grouped_<strategy>_counts.linear.tsv`
+* `SAMPLE_ID.discovered_gene_grouped_<strategy>_counts.linear.tsv`
 
 Similarly to the reference-based counts, these counts are converted to other formats as described [above](#other-formats).
 
