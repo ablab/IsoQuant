@@ -13,6 +13,10 @@ You will also need
 -   [editdistance](https://pypi.org/project/editdistance/)
 -   [biopython](https://biopython.org/)
 -   [numba](https://numba.pydata.org/)
+-   [mappy](https://pypi.org/project/mappy/)
+-   [intervaltree](https://pypi.org/project/intervaltree/)
+-   [xgboost](https://xgboost.readthedocs.io/)
+-   [scikit-learn](https://scikit-learn.org/)
 -   [pyyaml](https://pyyaml.org/)
 -   [pandas](https://pandas.pydata.org/)
 -   [numpy](https://numpy.org/)
@@ -23,7 +27,6 @@ You will also need
 -   [samtools](http://www.htslib.org/download/)
 -   [STAR](https://github.com/alexdobin/STAR) (optional)
 
-and some other common Python libraries. 
 The full requirements list can be found in [requirements.txt](https://github.com/ablab/IsoQuant/blob/master/requirements.txt).
 
 ## Installing via pip
