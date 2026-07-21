@@ -11,6 +11,7 @@ import gzip
 import itertools
 import logging
 import multiprocessing
+import os
 import shutil
 import sys
 from enum import Enum, unique
@@ -24,7 +25,14 @@ from pyfaidx import Fasta
 from .modes import IsoQuantMode
 from .common import proper_plural_form, large_output_enabled, setup_worker_logging, _get_log_params
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
-from isoquant_lib.utils.serialization import *
+from isoquant_lib.utils.serialization import (
+    read_int,
+    read_list,
+    read_string,
+    write_int,
+    write_list,
+    write_string,
+)
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.utils.file_utils import merge_files, merge_counts
 from .alignment.alignment_processor import AlignmentType
@@ -32,7 +40,19 @@ from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_n
 from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
 from isoquant_lib.utils.id_policy import SimpleIDDistributor, FeatureIdStorage
-from isoquant_lib.utils.file_naming import *
+from isoquant_lib.utils.file_naming import (
+    clean_locks,
+    info_file_name,
+    read_group_lock_filename,
+    reads_collected_lock_file_name,
+    reads_processed_lock_file_name,
+    split_barcodes_lock_filename,
+    umi_barcode2barcode_global_lock,
+    umi_barcode2barcode_prefix,
+    umi_filtered_global_lock_file_name,
+    umi_filtered_lock_file_name,
+    umi_output_prefix,
+)
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
 from isoquant_lib.utils.table_splitter import split_read_table_parallel

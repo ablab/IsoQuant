@@ -6,13 +6,18 @@
 ############################################################################
 
 import logging
+import os
 from collections import defaultdict
 
 import gffutils
 from pyfaidx import Fasta
 
-from isoquant_lib.utils.serialization import *
-from isoquant_lib.utils.file_naming import *
+from isoquant_lib.utils.serialization import TERMINATION_INT, read_int
+from isoquant_lib.utils.file_naming import (
+    filtered_reads_file_name,
+    multimappers_file_name,
+    saves_file_name,
+)
 from .isoform_assignment import BasicReadAssignment, ReadAssignmentType
 from .assignment_io import (
     NormalTmpFileAssignmentLoader,

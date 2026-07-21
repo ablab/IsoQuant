@@ -9,7 +9,28 @@ import logging
 from enum import Enum, unique
 from isoquant_lib.common import junctions_from_blocks
 from isoquant_lib.utils.id_policy import SimpleIDDistributor
-from isoquant_lib.utils.serialization import *
+from isoquant_lib.utils.serialization import (
+    SHORT_FLOAT_MULTIPLIER,
+    SHORT_INT_BYTES,
+    read_bool_array,
+    read_dict,
+    read_int,
+    read_int_neg,
+    read_int_or_none,
+    read_list,
+    read_list_of_pairs,
+    read_short_int,
+    read_string,
+    write_bool_array,
+    write_dict,
+    write_int,
+    write_int_neg,
+    write_int_or_none,
+    write_list,
+    write_list_of_pairs,
+    write_short_int,
+    write_string,
+)
 from isoquant_lib.terminal_prediction.polya_finder import PolyAInfo
 
 logger = logging.getLogger('IsoQuant')

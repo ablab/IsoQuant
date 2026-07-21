@@ -10,7 +10,7 @@ from enum import Enum, unique
 from functools import partial
 from collections import OrderedDict, defaultdict
 
-from isoquant_lib.utils.serialization import *
+from isoquant_lib.utils.serialization import read_int, read_string, write_int, write_string
 from .common import (
     contains,
     equal_ranges,
