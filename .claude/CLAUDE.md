@@ -153,6 +153,7 @@ Different modes trigger different processing pipelines (barcode calling, UMI ded
 **CountingStrategy** (`src/long_read_counter.py`):
 - `unique_only` - Only uniquely assigned reads
 - `with_ambiguous` - Include ambiguous assignments
+- `fsm_only` - Only full splice matches (subset of unique_only): reads with an `fsm` or `mono_exon_match` event
 - `all` - Include inconsistent reads
 
 **AmbiguityResolvingMethod** (`src/long_read_assigner.py`):

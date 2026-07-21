@@ -32,6 +32,7 @@ logger = logging.getLogger('IsoQuant')
 class CountingStrategy(Enum):
     unique_only = 1
     with_ambiguous = 2
+    fsm_only = 3
     unique_splicing_consistent = 10
     unique_inconsistent = 11
     # all_splicing_consistent = 19
@@ -53,6 +54,7 @@ class CountingStrategy(Enum):
 
 COUNTING_STRATEGIES = [CountingStrategy.unique_only.name,
                        CountingStrategy.with_ambiguous.name,
+                       CountingStrategy.fsm_only.name,
                        CountingStrategy.unique_splicing_consistent.name,
                        CountingStrategy.unique_inconsistent.name,
                        CountingStrategy.all.name]
@@ -63,6 +65,7 @@ class CountingStrategyFlags:
         self.use_ambiguous = counting_strategy.ambiguous()
         self.use_inconsistent_minor = counting_strategy.inconsistent_minor()
         self.use_inconsistent = counting_strategy.inconsistent()
+        self.fsm_only = counting_strategy == CountingStrategy.fsm_only
 
 
 @unique
@@ -131,6 +134,11 @@ class TranscriptAssignmentExtractor:
                  len(read_assignment.corrected_exons) > 1))
 
 
+# full-length unique match events for the fsm_only strategy:
+# spliced full splice match, or a monoexon read matching a monoexon isoform
+_FSM_ONLY_EVENTS = frozenset({MatchEventSubtype.fsm, MatchEventSubtype.mono_exon_match})
+
+
 class ReadWeightCounter:
     def __init__(self, strategy_str):
         self.strategy = CountingStrategy[strategy_str]
@@ -158,6 +166,17 @@ class ReadWeightCounter:
             return 1.0 / float(feature_count)
         else:
             return 0.0
+
+    def process_unique(self, read_assignment):
+        # use only for unique assignments
+        if not self.strategy_flags.fsm_only:
+            return 1.0
+        # fsm_only: count a read only if it fully represents a transcript -- a spliced
+        # full splice match, or a monoexon read on a monoexon isoform (mono_exon_match)
+        is_full_match = any(e.event_type in _FSM_ONLY_EVENTS
+                            for m in read_assignment.isoform_matches
+                            for e in m.match_subclassifications)
+        return 1.0 if is_full_match else 0.0
 
 
 class AbstractCounter:
@@ -313,10 +332,12 @@ class AssignedFeatureCounter(AbstractCounter):
 
         elif assignment_type.is_unique():
             feature_id = list(feature_ids)[0]
-            self.feature_counter[feature_id].inc(group_id, 1.0)
-            self.all_features.add(feature_id)
-            if self.assignment_extractor.confirms_feature(read_assignment):
-                self.confirmed_features.add(feature_id)
+            count_value = self.read_counter.process_unique(read_assignment)
+            if count_value > 0:
+                self.feature_counter[feature_id].inc(group_id, count_value)
+                self.all_features.add(feature_id)
+                if self.assignment_extractor.confirms_feature(read_assignment):
+                    self.confirmed_features.add(feature_id)
 
     def add_unassigned(self, read_assignment):
         # Use read_group_ids directly (integers)

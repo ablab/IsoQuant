@@ -16,6 +16,7 @@ from isoquant_lib.common import equal_ranges, overlaps_at_least
 from isoquant_lib.assignment.isoform_assignment import (
     IsoformMatch,
     MatchClassification,
+    MatchEvent,
     MatchEventSubtype,
     ReadAssignment,
     ReadAssignmentType,
@@ -24,6 +25,11 @@ from isoquant_lib.assignment.long_read_assigner import (
     AmbiguityResolvingMethod,
     IsoformDiff,
     LongReadAssigner,
+)
+from isoquant_lib.quantification.long_read_counter import (
+    CountingStrategy,
+    CountingStrategyFlags,
+    ReadWeightCounter,
 )
 from isoquant_lib.assignment.long_read_profiles import (
     CombinedReadProfiles,
@@ -621,3 +627,33 @@ class TestGeneAssignmentTypeDerivation:
         match = IsoformMatch(MatchClassification.intergenic, self.string_pools)
         ra = ReadAssignment("r", ReadAssignmentType.noninformative, self.string_pools, match=[match])
         assert ra.gene_assignment_type == ReadAssignmentType.noninformative
+
+
+class TestFsmOnlyStrategy:
+    string_pools = StringPoolManager()
+
+    def _unique_read(self, event_type):
+        match = IsoformMatch(MatchClassification.full_splice_match, self.string_pools,
+                             assigned_gene="g", assigned_transcript="t",
+                             match_subclassification=MatchEvent(event_type))
+        return ReadAssignment("r", ReadAssignmentType.unique, self.string_pools, match=[match])
+
+    def test_flag(self):
+        assert CountingStrategyFlags(CountingStrategy.fsm_only).fsm_only is True
+        for s in (CountingStrategy.unique_only, CountingStrategy.all,
+                  CountingStrategy.with_ambiguous):
+            assert CountingStrategyFlags(s).fsm_only is False
+
+    def test_fsm_only_counts_full_matches_only(self):
+        counter = ReadWeightCounter("fsm_only")
+        assert counter.process_unique(self._unique_read(MatchEventSubtype.fsm)) == 1.0
+        assert counter.process_unique(self._unique_read(MatchEventSubtype.mono_exon_match)) == 1.0
+        assert counter.process_unique(self._unique_read(MatchEventSubtype.mono_exonic)) == 0.0
+        assert counter.process_unique(self._unique_read(MatchEventSubtype.ism_left)) == 0.0
+
+    def test_other_strategies_count_all_unique(self):
+        for strategy in ("unique_only", "all", "with_ambiguous"):
+            counter = ReadWeightCounter(strategy)
+            for event in (MatchEventSubtype.fsm, MatchEventSubtype.mono_exon_match,
+                          MatchEventSubtype.mono_exonic, MatchEventSubtype.ism_left):
+                assert counter.process_unique(self._unique_read(event)) == 1.0
