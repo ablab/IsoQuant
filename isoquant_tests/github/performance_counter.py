@@ -230,5 +230,3 @@ if __name__ == "__main__":
     except Exception:
         print_exc()
         sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)
-
-

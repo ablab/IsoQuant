@@ -19,14 +19,14 @@ class Stats(Enum):
 
 
 class CorrectionStats:
-    
+
     def __init__(self, reference_db, long_reads):
-        
+
         self.reference = reference_db
         self.long_reads = long_reads
-        
+
         self.name_map = self.map_names(self.reference, self.long_reads)
-    
+
     def map_names(self, ref, long_reads):
         transcripts = list(ref.features_of_type('transcript', order_by=('seqid', 'start')))
         names = {}
@@ -39,7 +39,7 @@ class CorrectionStats:
                         names[name] = t
                         break
         return names
-    
+
     def get_introns_from_transcript(self, transcript):
         exons = []
         for e in self.reference.children(transcript, order_by='start'):
@@ -48,7 +48,7 @@ class CorrectionStats:
         introns= junctions_from_blocks(exons)
         introns = set(introns)
         return introns
-        
+
     def read_stats(self, introns, corrected_introns, alignment):
         name = alignment.query_name
         name = name.split('_')[0]
@@ -84,7 +84,7 @@ class CorrectionStats:
                 return Stats.false_negative
             else:
                 return Stats.true_negative
-                
+
     def stats_single(self, before, after, reference_introns):
         if before in reference_introns:
             print("False positive, before:", before, "after:", after)
@@ -95,7 +95,7 @@ class CorrectionStats:
         else:
             print("False negative with change, before:", before, "after:", after)
             return Stats.false_negative
-        
+
     def intron_stats(self, introns, corrected_introns, alignment):
         classification = []
         name = alignment.query_name

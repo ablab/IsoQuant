@@ -1126,4 +1126,3 @@ class IntronRetentionCounter(ProfileFeatureCounter):
                     self.encountered_group_ids.add(group_id)
                     if feature_id not in self.feature_name_dict:
                         self.feature_name_dict[feature_id] = property_map[feature_idx].to_str()
-

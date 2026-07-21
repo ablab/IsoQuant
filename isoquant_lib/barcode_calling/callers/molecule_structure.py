@@ -274,4 +274,3 @@ class MoleculeStructure:
     def __iter__(self) -> Iterator[MoleculeElement]:
         for e in self.ordered_elements:
             yield e
-

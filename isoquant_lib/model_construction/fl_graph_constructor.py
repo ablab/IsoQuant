@@ -204,4 +204,3 @@ class GraphBasedConstructor:
                 self.store.transcript_model_storage.append(new_model)
                 for read_assignment in self.ctx.path_storage.paths_to_reads[path]:
                     self.store.save_assigned_read(read_assignment, new_model.transcript_id)
-

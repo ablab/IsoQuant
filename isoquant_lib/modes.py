@@ -54,7 +54,7 @@ class IsoQuantMode(Enum):
         return self in [IsoQuantMode.stereoseq_nosplit, IsoQuantMode.stereoseq]
 
     def enforces_single_thread(self):
-        return False 
+        return False
 
 
 ISOQUANT_MODES = [x.name for x in IsoQuantMode]

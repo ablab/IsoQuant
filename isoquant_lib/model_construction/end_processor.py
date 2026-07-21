@@ -392,4 +392,3 @@ class TranscriptEndProcessor:
         logger.debug("Adding alternative-end model %s from %s (start=%s, end=%s)" %
                      (new_model.transcript_id, source_model.transcript_id, str(start), str(end)))
         return new_model
-

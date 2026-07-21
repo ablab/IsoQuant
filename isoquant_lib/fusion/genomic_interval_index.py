@@ -10,7 +10,7 @@ class GenomicIntervalIndex:
 
     Pre-builds interval trees for genes and exons to eliminate repeated database queries.
     """
-    
+
     def __init__(self, genedb, chromosomes: Optional[List[str]] = None):
         self.db = genedb
         self.gene_trees: dict = {}

@@ -25,7 +25,7 @@ class IntronType(Enum):
 	only_isoquant = 3
 	short_contains_iso = 6
 	iso_contains_short = 5
-	
+
 @unique
 class IntronReference(Enum):
 	short_right = 1
@@ -36,9 +36,9 @@ class IntronReference(Enum):
 # just doing everything here now to avoid messing with anything
 def parse_args():
 	parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-	parser.add_argument("--short", "-s", help="input sam/bam file containing alignment of the short reads", 
+	parser.add_argument("--short", "-s", help="input sam/bam file containing alignment of the short reads",
 						type=str, dest = "short", required = True)
-	parser.add_argument("--isoquant", "-i", help="input isoquant annotation", 
+	parser.add_argument("--isoquant", "-i", help="input isoquant annotation",
 						type=str, dest = "iso", required = True)
 	parser.add_argument("--reference", "-r", help="input reference gtf file",
                         type=str, dest = "ref", default = "")
@@ -47,7 +47,7 @@ def parse_args():
 	return parser.parse_args()
 
 def get_introns_old(f):
-	samfile = pysam.AlignmentFile(f, "rb") 
+	samfile = pysam.AlignmentFile(f, "rb")
 	introns = samfile.find_introns(read for read in samfile.fetch())
 	samfile.close()
 	i_list = set()
@@ -55,53 +55,53 @@ def get_introns_old(f):
 		#i_list.append((i[0]+1,i[1]+1))
 		i_list.add(i)
 	return i_list
-	
+
 def get_introns(f, chromosome, start, end):
-		samfile = pysam.AlignmentFile(f, "rb") 
+		samfile = pysam.AlignmentFile(f, "rb")
 		intr = samfile.find_introns(samfile.fetch(self.chromosome, start = self.start, stop = self.end))
 		samfile.close()
 		i_list = set()
 		for i in intr.keys():
-			if(type(i)!="int"): 
+			if(type(i)!="int"):
 				i_list.add((i[0]+1,i[1]))
-		return i_list	
+		return i_list
 
 def introns_from_gene(db, gene, f):
 	all_isoforms_introns = {}
 	all_isoforms_exons = {}
 	s = gene.start
 	end = gene.end  # probably not just in the gene right? maybe also slightly before and slightly after?
-	
+
 	for t in db.children(gene, featuretype=('transcript', 'mRNA'), order_by='start'):
 		all_isoforms_exons[t.id] = []
 		for e in db.children(t, order_by='start'):
 			if e.featuretype == 'exon':
 				all_isoforms_exons[t.id].append((e.start, e.end))
-				
+
 		all_isoforms_introns[t.id] = junctions_from_blocks(all_isoforms_exons[t.id])
-		
+
 	introns = []
 	for i in all_isoforms_introns.keys():
 		introns.extend(all_isoforms_introns[i])
-	
-	samfile = pysam.AlignmentFile(f, "rb") 
+
+	samfile = pysam.AlignmentFile(f, "rb")
 	intr = samfile.find_introns(samfile.fetch(start = s, stop = end))
 	samfile.close()
 	i_list = []
 	for i in intr.keys():
 		#i_list.append((i[0]+1,i[1]+1))
-		if(type(i)!="int"): 
+		if(type(i)!="int"):
 			i_list.append((i[0]+1,i[1]))
-		
+
 	return introns, i_list
-	
+
 def introns_from_region(db, gene_list, current_region, f): # Kann ich das aus der reference auch selektiv rausbekommen? Vielleicht kann ich mir ne Liste ausgeben lassen innerhalb bestimmter Grenzen
-	
+
 	chromosome = gene_list[0].seqid
-	
+
 	all_isoforms_introns = {}
 	all_isoforms_exons = {}
-	
+
 	for gene_db in gene_list:
 		for t in db.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
 			all_isoforms_exons[t.id] = []
@@ -110,27 +110,27 @@ def introns_from_region(db, gene_list, current_region, f): # Kann ich das aus de
 					all_isoforms_exons[t.id].append((e.start, e.end))
 
 			all_isoforms_introns[t.id] = junctions_from_blocks(all_isoforms_exons[t.id])
-	
+
 	introns = set()
 	for i in all_isoforms_introns.keys():
 		introns.update(all_isoforms_introns[i])
-		
-	samfile = pysam.AlignmentFile(f, "rb") 
+
+	samfile = pysam.AlignmentFile(f, "rb")
 	intr = samfile.find_introns(samfile.fetch(chromosome, start = current_region[0], stop = current_region[1]))
 	samfile.close()
 	i_list = set()
 	for i in intr.keys():
-		if(type(i)!="int"): 
+		if(type(i)!="int"):
 			i_list.add((i[0]+1,i[1]))
 	return introns, i_list, intr
-	
-def ref_from_region(reference, region): 
-	
+
+def ref_from_region(reference, region):
+
 	gene_list = list(reference.features_of_type('gene', limit = region, order_by=('seqid', 'start')))
-	
+
 	all_isoforms_introns = {}
 	all_isoforms_exons = {}
-	
+
 	for gene_db in gene_list:
 		if gene_db.seqid == chromosome:
 			for t in reference.children(gene_db, featuretype=('transcript', 'mRNA'), order_by='start'):
@@ -140,13 +140,13 @@ def ref_from_region(reference, region):
 						all_isoforms_exons[t.id].append((e.start, e.end))
 
 				all_isoforms_introns[t.id] = junctions_from_blocks(all_isoforms_exons[t.id])
-	
+
 	introns = set()
 	for i in all_isoforms_introns.keys():
 		introns.update(all_isoforms_introns[i])
 		#print(i)
 		#print(all_isoforms_introns[i])
-		
+
 	return introns
 
 # from gene_info.py
@@ -166,11 +166,11 @@ def introns_from_db(db):
 
 	if db and not all_isoforms_exons:
 		logger.warning("Gene %s has no exons / transcripts, check your input annotation" % gene_list[0].id)
-	
+
 	introns = set()
 	for i in all_isoforms_introns.keys():
 		introns.update(all_isoforms_introns[i])
-	
+
 	return introns
 
 def compare_introns(short, iso):
@@ -179,7 +179,7 @@ def compare_introns(short, iso):
 	found_iso = [False]*len(iso)
 	#print(len(short))
 	#print(len(iso))
-	for i in range(len(short)): 
+	for i in range(len(short)):
 		for j in range(len(iso)):
 			#print(short[i][1])
 			#print(iso[j][0])
@@ -218,7 +218,7 @@ def compare_introns(short, iso):
 			classification[(ABSENT_PAIR,iso[j])] = IntronType.only_isoquant
 			#print("not found in short")
 	return classification
-	
+
 def classify_introns(iso, short):
 	if (short[0] <= iso[0] and short[1] <= iso[1]) or (short[0] >= iso[0] and short[1] >= iso[1]):
 		return IntronType.overlap
@@ -227,11 +227,11 @@ def classify_introns(iso, short):
 	elif short[0] <= iso[0] and short[1] >= iso[1]:
 		return IntronType.short_contains_iso
 	return IntronType.only_isoquant
-	
+
 def classify_reference(iso, short, ref, chromosome, counts):
 	#if iso in ref and any(sh in ref for sh in short):
 	if iso in ref and short in ref:
-		print("both:", chromosome, ":" , iso, ",", short, "count:", counts[(short[0]-1,short[1])]) 
+		print("both:", chromosome, ":" , iso, ",", short, "count:", counts[(short[0]-1,short[1])])
 		return IntronReference.both
 	elif iso in ref:
 		print("iso:", chromosome, ":" , iso, ",", short, "count:", counts[(short[0]-1,short[1])])
@@ -243,7 +243,7 @@ def classify_reference(iso, short, ref, chromosome, counts):
 	else:
 		print("none:", chromosome, ":" , iso, ",", short, "count:", counts[(short[0]-1,short[1])])
 		return IntronReference.none
-	
+
 def compare_alg(short, iso, counts, ref, chromosome):
 	equal = iso.intersection(short)
 	short = short.difference(equal)
@@ -260,7 +260,7 @@ def compare_alg(short, iso, counts, ref, chromosome):
 	classification = {}
 	scounts = []
 	for i in iso:
-		for s in short: 
+		for s in short:
 			x = abs(i[0] - s[0]) + abs(i[1] - s[1])
 			if (overlaps(i, s) and abs(i[0] - s[0]) <= 12 and abs(i[1] - s[1]) <= 12):
 				# if x < score[0]:
@@ -305,8 +305,8 @@ def compare_alg(short, iso, counts, ref, chromosome):
 	excounts = []
 	#for i in extra:
 		#excounts.append(counts[(i[0]-1,i[1])])
-	
-	ex_only = len(extra.intersection(ref))		
+
+	ex_only = len(extra.intersection(ref))
 	#print("Counts in equal introns: ", eqcounts)
 	#print("Counts in extra introns: ", excounts)
 	#print("Counts in paired introns: ", scounts)
@@ -353,7 +353,7 @@ for gene in gene_list:
 		genes.append(gene)
 		current_region = (current_region[0], max(current_region[1], gene.end))
 	else:
-		if genes : 
+		if genes :
 			iso_int, short_int, counts = introns_from_region(db, genes, current_region, args.short)
 			ref_int = ref_from_region(ref_db, (chromosome, current_region[0], current_region[1]))
 			#print(len(iso_int.difference(ref_int)))
@@ -372,4 +372,3 @@ print("Number of correct introns only found in Illumina:", onlyshort)
 print("Number of Introns equal in IsoQuant and Illumina:", equal_c)
 end = time.time()
 print(end - start)
-

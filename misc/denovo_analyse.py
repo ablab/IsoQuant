@@ -36,7 +36,7 @@ def filter_gtf(ingtf_path, isoform_ids, out_full_path):
             continue
         idpos = tpos + len(' transcript_id') + 2
         endpos = l.find(";", idpos)
-        
+
         if endpos == -1:
             print("Warning, unable to find ;")
         tid = l[idpos:endpos-1]

@@ -15,18 +15,18 @@ class TestJunctionComparator(unittest.TestCase):
         junction1 = (100, 200)
         junction2 = (150, 250)
         self.assertTrue(overlaps_at_least(junction1, junction2, 10))
-        
+
     def test_equal_ranges_with_delta(self):
         junction1 = (100, 200)
         junction2 = (102, 198)
         self.assertTrue(equal_ranges(junction1, junction2, delta=5))
         self.assertFalse(equal_ranges(junction1, junction2, delta=1))
-        
+
     def test_junctions_from_blocks(self):
         blocks = [(100, 200), (300, 400), (500, 600)]
         junctions = junctions_from_blocks(blocks)
         self.assertEqual(junctions, [(201, 299), (401, 499)])
-        
+
     def test_junctions_from_single_block(self):
         blocks = [(100, 200)]
         junctions = junctions_from_blocks(blocks)
