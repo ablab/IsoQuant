@@ -35,7 +35,7 @@ class FusionMetadata:
         left_gene = meta.get("left_gene")
         right_gene = meta.get("right_gene")
         original_key = fusion_key
-        new_key = self._update_fusion_key_mappings(original_key, left_gene, right_gene, meta)
+        self._update_fusion_key_mappings(original_key, left_gene, right_gene, meta)
         self._compute_biotypes(meta, left_gene, right_gene, left_chr, left_pos, right_chr, right_pos)
         meta["is_valid"] = True
         meta.setdefault("reasons", [])

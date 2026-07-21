@@ -155,7 +155,6 @@ def track_disk_usage(folder, interval, outfile, res_stats):
         outf.write("%d\t%d\n" % (current_time, disk_usage))
         sleep(interval)
     outf.close()
-    res_stats = "Maximum disk space taken: %.3f GB" % to_gb(max_usage)
 
 
 def parse_args():

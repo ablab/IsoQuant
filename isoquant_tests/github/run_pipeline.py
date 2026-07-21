@@ -676,7 +676,6 @@ def run_fusion_quality(args, config_dict, baselines=None):
     isoquant_dir = os.path.join(source_dir, "../../")
 
     name = config_dict["name"]
-    label = name if "label" not in config_dict else config_dict["label"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
 
     fusion_files = glob.glob(os.path.join(output_folder, "fusion_*.tsv"))

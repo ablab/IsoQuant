@@ -258,7 +258,6 @@ def compare_alg(short, iso, counts, ref, chromosome):
 	chosen = []
 	additional = []
 	classification = {}
-	cl_ref = {}
 	scounts = []
 	for i in iso:
 		for s in short: 
@@ -298,7 +297,6 @@ def compare_alg(short, iso, counts, ref, chromosome):
 		#sh = [(0,0),(0,0),(0,0)]
 		score = 1000000000000
 		sh = (0,0)
-	eqcounts = []
 	#for i in equal:
 	#	classification[(i,i)] = IntronType.equal
 	#	eqcounts.append(counts[(i[0]-1,i[1])])

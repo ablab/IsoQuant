@@ -324,7 +324,6 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
     alignment_bam_path = str(os.path.join(out_dir, label + '_' + prefix_name + '_%s_%s%s.bam' % (hash_fastq, hash_index, hash_annotation)))
     logger.info("Aligning %s to the reference, alignments will be saved to %s" % (os.path.abspath(reads_path),
                                                                                   os.path.abspath(alignment_bam_path)))
-    alignment_sam_path = alignment_bam_path[:-4] + '.sam'
 
     log_fpath = os.path.join(args.output, "alignment.log")
     if aligner == "starlong":
