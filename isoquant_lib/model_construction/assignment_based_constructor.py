@@ -237,7 +237,6 @@ class AssignmentBasedConstructor:
                 #logger.debug("<< Isoform %s has %d assignments but is not in the graph" % (isoform_id, count))
                 continue
 
-            intron_path = self.ctx.known_isoforms_in_graph_ids[isoform_id]
             #logger.debug("Known non-FL spliced isoform %s" % isoform_id)
             if count < self.args.min_known_count or \
                     spliced_isoform_left_support[isoform_id] < 1 or \

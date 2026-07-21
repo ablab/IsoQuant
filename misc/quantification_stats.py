@@ -71,7 +71,6 @@ def count_stats(joint_dict):
     real_tpms = []
     n_isoforms = 0
     counts_reported = 0
-    full_matches = 0
     close_matches_10 = 0
     close_matches_20 = 0
     false_detected = 0

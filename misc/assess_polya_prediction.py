@@ -187,7 +187,7 @@ def load_expressed_transcripts(counts_path: str) -> set:
     (``base_<digits>``) are mapped to their base GENCODE ID."""
     expressed: set = set()
     with open(counts_path) as fh:
-        header = fh.readline()
+        fh.readline()  # skip header
         for line in fh:
             parts = line.rstrip("\n").split("\t")
             if len(parts) >= 2 and float(parts[1]) > 0:

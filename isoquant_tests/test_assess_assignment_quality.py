@@ -80,7 +80,7 @@ class TestHeaderDetection:
         # talon/sqanti presets must never be overridden by a read_id header.
         qa = _load_qa()
         with tempfile.TemporaryDirectory() as tmp:
-            path = _write(tmp, READ_INFO_HEADER + READ_INFO_ROW)
+            _write(tmp, READ_INFO_HEADER + READ_INFO_ROW)
             for preset in ("talon", "sqanti"):
                 data = qa.AssignmentData.__new__(qa.AssignmentData)
                 data.preset = preset

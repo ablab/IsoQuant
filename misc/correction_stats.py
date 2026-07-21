@@ -54,7 +54,6 @@ class CorrectionStats:
         name = name.split('_')[0]
         transcript = self.name_map[name]
         reference_introns = self.get_introns_from_transcript(transcript)
-        n_ref = len(reference_introns)
         n_before = len(introns.intersection(reference_introns))
         n_after = len(corrected_introns.intersection(reference_introns))
         changed = not(introns == corrected_introns)
@@ -103,8 +102,6 @@ class CorrectionStats:
         name = name.split('_')[0]
         transcript = self.name_map[name]
         reference_introns = self.get_introns_from_transcript(transcript)
-        n_ref = len(reference_introns)
-        changed = not(introns == corrected_introns)
         unchanged_introns = [intron for intron in introns if intron in corrected_introns]
         #unchanged_introns = introns.intersection(corrected_introns)
         for intron in unchanged_introns:
