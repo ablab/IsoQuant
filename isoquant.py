@@ -1403,7 +1403,7 @@ def main_entry():
         raise
     except KeyboardInterrupt:
         raise
-    except:
+    except Exception:
         if logger.handlers:
             strout = StringIO()
             print_exc(file=strout)
@@ -1428,7 +1428,7 @@ if __name__ == "__main__":
         raise
     except KeyboardInterrupt:
         raise
-    except:
+    except Exception:
         if logger.handlers:
             strout = StringIO()
             print_exc(file=strout)

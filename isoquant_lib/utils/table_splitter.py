@@ -53,10 +53,10 @@ def get_chromosome_read_counts(bam_files, chromosomes):
                         try:
                             count = bam.count(chr_id)
                             chr_counts[chr_id] += count
-                        except:
+                        except Exception:
                             pass
                 bam.close()
-            except:
+            except Exception:
                 pass
 
     return chr_counts

@@ -10,6 +10,6 @@ def define_env(env):
             if version.find("dev") != -1:
                 version = "3.4.2"
             return version
-        except:
+        except Exception:
             return "3.4.2"
 

@@ -106,7 +106,7 @@ def main_entry():
         main(sys.argv[1:])
     except SystemExit:
         raise
-    except:
+    except Exception:
         print_exc()
         sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)
 
@@ -117,6 +117,6 @@ if __name__ == "__main__":
         main(sys.argv[1:])
     except SystemExit:
         raise
-    except:
+    except Exception:
         print_exc()
         sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

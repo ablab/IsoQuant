@@ -290,7 +290,7 @@ def prepare_read_groups(args, sample):
             bam = pysam.AlignmentFile(bam_file, "rb")
             chromosomes.update(bam.references)
             bam.close()
-        except:
+        except Exception:
             pass
     chromosomes = list(chromosomes)
 
