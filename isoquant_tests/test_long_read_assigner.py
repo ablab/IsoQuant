@@ -143,7 +143,7 @@ class TestCompareJunctions:
                               ([(48, 61), (80, 98), (200, 210)], (0, 1), 3, True),
                               ([(48, 61), (80, 98), (160, 220)], (0, 1), 3, True),
                               ([(48, 66), (80, 99), (200, 210)], (0, 1), 3, False)])
-    def test_profile_for_junctions_introns(self, junctions, region, delta, expected):
+    def test_are_known_introns(self, junctions, region, delta, expected):
         assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assert assigner.intron_comparator.are_known_introns(junctions, region) == expected
 
@@ -164,7 +164,7 @@ class TestCompareJunctions:
                               ((0, 300), [(48, 61), (80, 98), (200, 210)], (0, 1), 3, True),
                               ((0, 300), [(38, 61), (80, 98), (160, 220)], (0, 0), 3, False),
                               ((50, 300), [(58, 76), (80, 97), (130, 210)], (0, 1), 3, False)])
-    def test_profile_for_junctions_introns(self, read_region, junctions, region, delta, expected):
+    def test_are_suspicious_introns(self, read_region, junctions, region, delta, expected):
         assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         assigner.params.max_suspicious_intron_abs_len = 20
         assigner.params.max_suspicious_intron_rel_len = 0.2

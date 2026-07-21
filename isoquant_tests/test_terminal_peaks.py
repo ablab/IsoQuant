@@ -58,7 +58,7 @@ def _detect_peaks(positions, accept=True):
     [500 + i % 3 for i in range(20)],                        # two peaks (ranking)
     [400, 401],                                              # adjacent-bin plateau
 ])
-def test_detect_peaks_parity_with_counter(stub_model, tmp_path, positions):
+def test_detect_peaks_parity_with_counter(stub_model, tmp_path, positions):  # noqa: F811  (pytest fixture)
     counter_peaks = _counter_peaks(positions, tmp_path, "parity.tsv")
     assert _detect_peaks(positions) == counter_peaks
     # And the union of supporting counts is conserved either way.

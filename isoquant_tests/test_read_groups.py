@@ -106,7 +106,7 @@ class TestReadTableGrouper:
             temp_file = f.name
 
         try:
-            from isoquant_lib.assignment.read_groups import SharedTableData, ReadTableGrouper
+            from isoquant_lib.assignment.read_groups import SharedTableData
 
             # Create shared data with single column
             shared_data = SharedTableData(temp_file,
@@ -132,7 +132,7 @@ class TestReadTableGrouper:
             temp_file = f.name
 
         try:
-            from isoquant_lib.assignment.read_groups import SharedTableData, ReadTableGrouper
+            from isoquant_lib.assignment.read_groups import SharedTableData
 
             # Create shared data with single column
             shared_data = SharedTableData(temp_file,
@@ -162,7 +162,7 @@ class TestSharedTableData:
             temp_file = f.name
 
         try:
-            from isoquant_lib.assignment.read_groups import SharedTableData, ReadTableGrouper
+            from isoquant_lib.assignment.read_groups import SharedTableData
 
             # Create shared data with 3 group columns (indices 1, 2, 3)
             shared_data = SharedTableData(temp_file,
@@ -209,7 +209,7 @@ class TestSharedTableData:
             temp_file = f.name
 
         try:
-            from isoquant_lib.assignment.read_groups import SharedTableData, ReadTableGrouper
+            from isoquant_lib.assignment.read_groups import SharedTableData
 
             shared_data = SharedTableData(temp_file,
                                          read_id_column_index=0,
@@ -246,7 +246,7 @@ class TestParseGroupingSpec:
             f.write("read_002\tcell_B\tspot_2\n")
 
         try:
-            from isoquant_lib.assignment.read_groups import parse_grouping_spec, ReadTableGrouper
+            from isoquant_lib.assignment.read_groups import parse_grouping_spec
 
             # Mock args and sample objects
             class MockArgs:
@@ -312,7 +312,7 @@ class TestParseGroupingSpec:
             f.write("read_002\tgroupY\n")
 
         try:
-            from isoquant_lib.assignment.read_groups import parse_grouping_spec, ReadTableGrouper
+            from isoquant_lib.assignment.read_groups import parse_grouping_spec
 
             class MockArgs:
                 pass
