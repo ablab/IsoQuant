@@ -65,6 +65,7 @@ expression tables with "per-file" columns will be computed. See more about [inpu
     Path to dataset description file in [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) format. The file should contain a list with `data format` property,
 which can be `fastq` or `bam` and an individual entry for experiment.
 Each experiment is represented as set of parameters (e.g. in curly brackets):
+
 - `name` - experiment name, string (optional);
 - `long read files` - a list of paths to long read files matching the specified format;
 - `lables` - a list labels for long read files for expression table (optional, must be equal to the number of long read files)
@@ -82,6 +83,7 @@ See more in [examples](examples.md).
 
 `--polya_trimmed`
     Indicate that reads were poly-A trimmed. Possible values are:
+
 - `none`: poly-A tails were not trimmed and will be detected automatically based on reads sequences (default);
 - `stranded`: reads that have an assigned strand (based on splice sites and assigned gene) will be marked 
 as having a poly-A tail on the 3' end;
@@ -156,6 +158,11 @@ original file name, and barcode property (e.g. cell type).
 `--check_canonical`
     Report whether read or constructed transcript model contains non-canonical splice junction (requires more time).
 
+
+`--bam_tags`
+    Comma separated list of BAM tags that will be imported into `read_assignments.tsv
+
+
 `--count_exons`
     **Deprecated: use `--analysis exon_quantification` instead.**
     Perform exon and splice junction counting in addition to gene and transcript counting.
@@ -170,11 +177,30 @@ original file name, and barcode property (e.g. cell type).
     now part of exon quantification).
     Count intron retention events per reference intron. Only non-ambiguous reads are counted.
     Will take effect only when reference annotation is provided.
-
-`--bam_tags`
-    Comma separated list of BAM tags that will be imported into `read_assignments.tsv`.
+`.
 
 ## Pipeline options
+
+`--analysis`
+    Space-separated list of analyses to run. Supported values (short aliases in brackets):
+
+* `quantification` (or `quant`) - gene and transcript quantification, polyA/TSS prediction. 
+Requires a reference annotation (`--genedb`);
+* `transcript_discovery` (`td`) - discover novel transcript models;
+* `exon_quantification` (`ex_quant`) - exon, splice junction and intron retention
+  counting. Requires a reference annotation (`--genedb`);
+* `fusion` - fusion gene detection. Requires a reference annotation (`--genedb`).
+
+Defaults when `--analysis` is not set:
+
+* with `--genedb`: `quantification transcript_discovery`;
+* without `--genedb`: `transcript_discovery` only;
+* single-cell/spatial modes: `quantification` only.
+
+Note: requesting `transcript_discovery` in a
+single-cell/spatial mode is allowed, but since it runs after UMI deduplication it will not detect novel genes. 
+Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for fully transcript discovery.
+
 
 `--resume`
     Resume a previously unfinished run. Output folder with previous run must be specified.
@@ -186,28 +212,6 @@ original file name, and barcode property (e.g. cell type).
 
 `--threads` or `-t`
     Number of threads to use, 16 by default.
-
-`--analysis`
-    Space-separated list of analyses to run. Supported values (short aliases in brackets):
-
-    * `quantification` (`quant`) — gene and transcript quantification (counts/TPM). Also
-      produces polyA/TSS site prediction. Requires a reference annotation (`--genedb`).
-    * `transcript_discovery` (`td`) — discover novel transcript models. Also produces
-      polyA/TSS site prediction.
-    * `exon_quantification` (`ex_quant`) — exon, splice junction and intron retention
-      counting. Requires a reference annotation (`--genedb`).
-    * `fusion` — fusion gene detection. Requires a reference annotation (`--genedb`).
-
-    Defaults when `--analysis` is not given:
-
-    * with `--genedb`: `quantification transcript_discovery`;
-    * without `--genedb`: `transcript_discovery` only;
-    * single-cell/spatial modes: `quantification` only.
-
-    Analyses that require a reference annotation are skipped with a warning (the run is not
-    aborted) when `--genedb` is not provided. Requesting `transcript_discovery` in a
-    single-cell/spatial mode is allowed but warns that model construction runs after UMI
-    deduplication and may be incomplete — a pseudo-bulk run is recommended for discovery.
 
 `--clean_start`
     Do not use previously generated gene database, genome indices or BAM files, run pipeline from the very beginning (will take more time).

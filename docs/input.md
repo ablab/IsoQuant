@@ -24,16 +24,18 @@ The ways of providing input files are described below.
 
 ## Specifying input data via command line
 
-The main options are `--fastq`, `--unmapped_bam` and `--bam` (see description below). 
+The main options are `--fastq`, `--unmapped_bam` and `--bam` (see description [here](cmd.md)). 
 These options accept one or multiple files separated by space.
-All provided files are treated as a single experiment, which means a single combined GTF will
-be generated. If multiple files are provided, IsoQuant will compute tables with each column
+All provided files are treated as a single experiment, which means a single combined analysis will
+be performed using these files. If multiple files are provided, IsoQuant will compute tables with each column
 corresponding to an individual file (per-sample counts).
 To set a specific label for each sample use the `--labels` option. Number of labels must be equal to the number of files.
 To a set a prefix for the output files use the `--prefix` option.
 
 This pipeline is typical for the cases when a user is
 interested in comparing expression between different replicas/conditions within the same experiment.
+
+For other input-related parameters, see [full option list](cmd.md). For providing additional data for single-cell and spatial data, read [this section](single_cell.md). 
 
 ### Short reads for alignment correction
 

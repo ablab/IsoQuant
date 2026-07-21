@@ -34,7 +34,7 @@ Oxford Nanopores. IsoQuant can perform the following analysis:
   - _De novo_ transcript and gene discovery;
   - Fusion gene discovery;
 - **Single-cell and spatial transcriptomic analysis**:
-  - Barcode calling for 10x single-cell, 10x Visisum and Visium HD, Curio, Stereo-seq;
+  - Barcode calling for 10x single-cell, 10x Visium and Visium HD, Curio, Stereo-seq;
   - Universal barcode calling for user-specified protocols;
   - PCR deduplication;
   - Per-barcode and per-cell-type quantification;
@@ -51,6 +51,10 @@ IsoQuant supports all kinds of long RNA data:
 * PacBio CCS;
 * ONT dRNA / ONT cDNA;
 * Assembled / corrected transcript sequences.
+
+IsoQuant can process bulk, single-cell and spatial long-read data. 
+It supports 10x single-cell v2/v3/v4, 10x Visium/VisiumHD, Curio, Stereo-seq and arbitrary user-defined protocols. 
+See [the user manual](https://ablab.github.io/IsoQuant/single_cell.html) for details.
 
 Reads must be provided in FASTQ/FASTA format (can be gzipped) or unmapped BAM format. 
 If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.

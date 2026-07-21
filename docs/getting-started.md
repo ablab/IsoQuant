@@ -1,14 +1,14 @@
 # Quick start
 
-*   IsoQuant can installed via pip:
+* IsoQuant can installed via pip:
 
         pip install isoquant
 
-*   Via conda (bioconda channel):
+* Via conda (bioconda channel):
 
         conda create -c conda-forge -c bioconda -n isoquant python=3.12 isoquant
 
-*   Or from GitHub:
+* Or from GitHub:
 
         git clone https://github.com/ablab/IsoQuant.git 
         cd IsoQuant
@@ -17,19 +17,33 @@
 
 Installation typically takes no more than a few minutes.
 
-*   If running simply from [the source archive](https://github.com/ablab/IsoQuant/releases/), 
-you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [biopython](https://biopython.org/), [pyfaidx](https://pypi.org/project/pyfaidx/),
- [ssw-py](https://pypi.org/project/ssw-py/), [editdistance](https://pypi.org/project/editdistance/) and some other common Python libraries to be installed. See `requirements.txt` for details. 
+* If running simply from [the source archive](https://github.com/ablab/IsoQuant/releases/) you will need:
+  - Python3 (3.8 or higher)
+  - [gffutils](https://pythonhosted.org/gffutils/installation.html)
+  - [pysam](https://pysam.readthedocs.io/en/latest/index.html)
+  - [biopython](https://biopython.org/)
+  - [pyfaidx](https://pypi.org/project/pyfaidx/)
+  - [ssw-py](https://pypi.org/project/ssw-py/)
+  - [editdistance](https://pypi.org/project/editdistance/)
+  - [numba](https://numba.pydata.org/)
+  - [mappy](https://pypi.org/project/mappy/)
+  - [intervaltree](https://pypi.org/project/intervaltree/)
+  - [xgboost](https://xgboost.readthedocs.io/)
+  - [scikit-learn](https://scikit-learn.org/)
+
+and some other common Python libraries to be installed. See `requirements.txt` for details. 
+  
 You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
-All required Python libraries can be installed via: 
 
-        pip install -r requirements.txt
+* All required Python libraries can be installed via: 
 
-*   Verify your installation by running (typically takes less than 1 minute):
+      pip install -r requirements.txt
+
+* Verify your installation by running (typically takes less than 1 minute):
 
         isoquant --test
 
-*   To run IsoQuant on raw FASTQ/FASTA files, use the following command
+* To run IsoQuant on raw FASTQ/FASTA files, use the following command
 
         isoquant --reference /PATH/TO/reference_genome.fasta \
         --genedb /PATH/TO/gene_annotation.gtf \
@@ -60,3 +74,7 @@ All required Python libraries can be installed via:
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
 * If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
+
+* To perform different types of analysis, check out `--analysis` option.
+
+* For single-cell and spatial transcriptomic data, check out `--mode` option.

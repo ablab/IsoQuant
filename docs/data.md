@@ -8,6 +8,10 @@ IsoQuant supports all kinds of long RNA data:
 * ONT dRNA / ONT cDNA
 * Assembled / corrected transcript sequences
 
+IsoQuant can process bulk, single-cell and spatial long-read data. 
+It supports 10x single-cell v2/v3/v4, 10x Visium/VisiumHD, Curio, Stereo-seq and arbitrary user-defined protocols. 
+See [this section](https://ablab.github.io/IsoQuant/single_cell.html) for details.
+
 Reads must be provided in FASTQ/FASTA format (can be gzipped) or unmapped BAM format.  
 If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
 
@@ -24,7 +28,8 @@ Reference genome is mandatory even when BAM files are provided.
 
 Reference gene annotation is not mandatory, but is likely to increase precision and recall.
 It can be provided in GFF/GTF format (can be gzipped).
-In this case it will be converted to [gffutils](https://pythonhosted.org/gffutils/installation.html) database. Information on converted databases will be stored in your `~/.config/IsoQuant/db_config.json` to increase speed of future runs. You can also provide gffutils database manually. Make sure that chromosome/scaffold names are identical in FASTA file and gene annotation.
+In this case it will be converted to [gffutils](https://pythonhosted.org/gffutils/installation.html) database. Information on converted databases will be stored in your `~/.config/IsoQuant/db_config.json` to increase speed of future runs. 
+You can also provide gffutils database manually. Make sure that chromosome/scaffold names are identical in FASTA file and gene annotation.
 Note, that gffutils databases may not work correctly on NFS shares. It is possible to set a designated folder for 
 the database with `--genedb_output` (different from the output directory).
 
