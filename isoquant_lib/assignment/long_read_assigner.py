@@ -415,6 +415,26 @@ class LongReadAssigner:
 
     # =========== MAIN PART ============
 
+    def assign_to_overlapping_genes(self, read_id, read_region, match_classification):
+        """ build a noninformative assignment that records the gene(s) the read overlaps
+
+        Transcript stays unassigned; gene_assignment_type is derived from the number
+        of distinct overlapping genes (inconsistent for one, inconsistent_ambiguous
+        for several) in ReadAssignment.__init__.
+        """
+        gene_matches = [
+            IsoformMatch(match_classification, self.string_pools,
+                         assigned_gene=gene_id,
+                         transcript_strand=self.gene_info.gene_strands.get(gene_id, '.'))
+            for gene_id, gene_region in self.gene_info.get_gene_regions().items()
+            if overlaps(read_region, gene_region)
+        ]
+        if not gene_matches:
+            # no overlapping gene -> keep the prior single, gene-less classification
+            gene_matches = IsoformMatch(match_classification, string_pools=self.string_pools)
+        return ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
+                              match=gene_matches)
+
     # === Isoform matching function ===
     def assign_to_isoform(self, read_id, combined_read_profile):
         """ assign read to isoform according to it
@@ -456,13 +476,12 @@ class LongReadAssigner:
                                           match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
             elif all(el != 1 for el in read_split_exon_profile.gene_profile):
                 # logger.debug("EMPTY - intronic")
-                # TODO: match to a gene
-                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
-                                          match=IsoformMatch(MatchClassification.genic_intron, string_pools=self.string_pools))
+                assignment = self.assign_to_overlapping_genes(read_id, read_region,
+                                                              MatchClassification.genic_intron)
             else:
                 # logger.debug("EMPTY - genic")
-                assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
-                                          match=IsoformMatch(MatchClassification.genic, string_pools=self.string_pools))
+                assignment = self.assign_to_overlapping_genes(read_id, read_region,
+                                                              MatchClassification.genic)
             return assignment
 
         elif any(el == -1 for el in read_intron_profile.read_profile) \
@@ -599,23 +618,25 @@ class LongReadAssigner:
             return ReadAssignment(read_id, ReadAssignmentType.inconsistent, self.string_pools,
                                 match=IsoformMatch(MatchClassification.genic, string_pools=self.string_pools))
 
+        read_features = combined_read_profile.read_split_exon_profile.read_features
+        read_region = (read_features[0][0], read_features[-1][1])
+
         # select most similar isoforms based on multiple criteria
         best_candidates = self.select_similar_isoforms(combined_read_profile)
         if not best_candidates:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
-                                match=IsoformMatch(MatchClassification.genic, string_pools=self.string_pools))
+            return self.assign_to_overlapping_genes(read_id, read_region, MatchClassification.genic)
 
         # logger.debug("* Best candidates for inconsistency detection: " + str(best_candidates))
         # detect inconsistency for each one
         read_matches = self.detect_inconsistensies(read_id, combined_read_profile, best_candidates)
         if not read_matches:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools)
+            return self.assign_to_overlapping_genes(read_id, read_region, MatchClassification.genic)
         # logger.debug("* Inconsistencies detected: " + str(read_matches))
 
         # select ones with the least number of inconsistent events
         best_isoforms, penalty_score = self.select_best_among_inconsistent(combined_read_profile, read_matches)
         if not best_isoforms:
-            return ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools)
+            return self.assign_to_overlapping_genes(read_id, read_region, MatchClassification.genic)
         # logger.debug("* Selected isoforms: " + str(best_isoforms))
 
         best_isoforms = sorted(best_isoforms)

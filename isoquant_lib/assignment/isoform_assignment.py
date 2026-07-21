@@ -811,6 +811,16 @@ class ReadAssignment:
             assigned_genes = set([m.assigned_gene for m in self.isoform_matches])
             self.gene_assignment_type = ReadAssignmentType.inconsistent_ambiguous if len(
                 assigned_genes) > 1 else ReadAssignmentType.inconsistent
+        elif self.assignment_type.is_unassigned():
+            # noninformative/intergenic read that still overlaps annotated gene(s):
+            # keep transcript unassigned but record gene-level (in)consistency
+            assigned_genes = set([m.assigned_gene for m in self.isoform_matches if m.assigned_gene])
+            if len(assigned_genes) > 1:
+                self.gene_assignment_type = ReadAssignmentType.inconsistent_ambiguous
+            elif len(assigned_genes) == 1:
+                self.gene_assignment_type = ReadAssignmentType.inconsistent
+            else:
+                self.gene_assignment_type = self.assignment_type
         else:
             self.gene_assignment_type = self.assignment_type
 

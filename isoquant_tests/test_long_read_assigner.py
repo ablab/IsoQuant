@@ -13,7 +13,13 @@ import os
 from functools import partial
 
 from isoquant_lib.common import equal_ranges, overlaps_at_least
-from isoquant_lib.assignment.isoform_assignment import MatchEventSubtype, ReadAssignmentType
+from isoquant_lib.assignment.isoform_assignment import (
+    IsoformMatch,
+    MatchClassification,
+    MatchEventSubtype,
+    ReadAssignment,
+    ReadAssignmentType,
+)
 from isoquant_lib.assignment.long_read_assigner import (
     AmbiguityResolvingMethod,
     IsoformDiff,
@@ -559,3 +565,54 @@ class TestAssignIsoform:
             assert isoform_id in {im.assigned_transcript for im in read_assignment.isoform_matches}
         if expected_event:
             assert expected_event in {e.event_type for e in read_assignment.isoform_matches[0].match_subclassifications}
+
+    def _assign(self, sorted_blocks):
+        intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks, -1, -1)
+        exon_profile = self.exon_profile_constructor.construct_exon_profile(sorted_blocks, -1, -1)
+        split_exon_profile = self.split_exon_profile_constructor.construct_profile(sorted_blocks, -1, -1)
+        combined_profile = CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
+                                                PolyAInfo(-1, -1, -1, -1))
+        return self.assigner.assign_to_isoform("read_id", combined_profile)
+
+    def test_assign_genic_intron_keeps_gene(self):
+        # read fully inside a gene intron -> noninformative transcript, but gene recorded
+        read_assignment = self._assign([(4000, 4100)])
+        assert read_assignment.assignment_type == ReadAssignmentType.noninformative
+        assert read_assignment.gene_assignment_type == ReadAssignmentType.inconsistent
+        assert len(read_assignment.isoform_matches) == 1
+        match = read_assignment.isoform_matches[0]
+        assert match.assigned_gene == "ENSMUSG00000020196.10"
+        assert match.assigned_transcript is None
+        assert match.match_classification == MatchClassification.genic_intron
+
+    def test_assign_intergenic_unchanged(self):
+        # read outside the gene span -> stays intergenic with no gene
+        far_start = self.gene_region[1] + 500
+        read_assignment = self._assign([(far_start, far_start + 100)])
+        assert read_assignment.assignment_type == ReadAssignmentType.noninformative
+        assert read_assignment.gene_assignment_type.is_unassigned()
+        assert all(m.assigned_gene is None for m in read_assignment.isoform_matches)
+
+
+class TestGeneAssignmentTypeDerivation:
+    string_pools = StringPoolManager()
+
+    def test_single_gene_is_inconsistent(self):
+        match = IsoformMatch(MatchClassification.genic, self.string_pools, assigned_gene="geneA")
+        ra = ReadAssignment("r", ReadAssignmentType.noninformative, self.string_pools, match=[match])
+        assert ra.assignment_type == ReadAssignmentType.noninformative
+        assert ra.gene_assignment_type == ReadAssignmentType.inconsistent
+        assert ra.isoform_matches[0].assigned_transcript is None
+
+    def test_multiple_genes_is_inconsistent_ambiguous(self):
+        matches = [IsoformMatch(MatchClassification.genic, self.string_pools, assigned_gene=g)
+                   for g in ("geneA", "geneB")]
+        ra = ReadAssignment("r", ReadAssignmentType.noninformative, self.string_pools, match=matches)
+        assert ra.assignment_type == ReadAssignmentType.noninformative
+        assert ra.gene_assignment_type == ReadAssignmentType.inconsistent_ambiguous
+        assert len(ra.isoform_matches) == 2
+
+    def test_no_gene_stays_unassigned(self):
+        match = IsoformMatch(MatchClassification.intergenic, self.string_pools)
+        ra = ReadAssignment("r", ReadAssignmentType.noninformative, self.string_pools, match=[match])
+        assert ra.gene_assignment_type == ReadAssignmentType.noninformative
