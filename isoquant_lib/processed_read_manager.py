@@ -10,7 +10,7 @@ import os
 from collections import defaultdict
 
 from isoquant_lib.utils.file_naming import saves_file_name, multimappers_file_name, dynamic_pools_file_name
-from isoquant_lib.utils.serialization import *
+from isoquant_lib.utils.serialization import TERMINATION_INT, write_int, write_list
 from .assignment.isoform_assignment import BasicReadAssignment, ReadAssignmentType, ReadAssignment
 from .assignment.multimap_resolver import MultimapResolver
 from .assignment.assignment_loader import BasicReadAssignmentLoader, load_genedb
