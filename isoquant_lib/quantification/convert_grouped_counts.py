@@ -404,6 +404,6 @@ if __name__ == "__main__":
         main()
     except SystemExit:
         raise
-    except:
+    except Exception:
         print_exc()
         sys.exit(IsoQuantExitCode.UNCAUGHT_EXCEPTION)

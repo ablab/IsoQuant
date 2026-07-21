@@ -172,7 +172,7 @@ class StringPoolManager:
             try:
                 for transcript in gffutils_db.features_of_type(feature_type):
                     transcript_ids.add(transcript.id)
-            except:
+            except Exception:
                 pass  # Feature type might not exist
         for transcript_id in sorted(transcript_ids):
             self.transcript_pool.add(transcript_id)
