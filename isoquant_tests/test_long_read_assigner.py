@@ -578,7 +578,8 @@ class TestAssignIsoform:
         # read fully inside a gene intron -> noninformative transcript, but gene recorded
         read_assignment = self._assign([(4000, 4100)])
         assert read_assignment.assignment_type == ReadAssignmentType.noninformative
-        assert read_assignment.gene_assignment_type == ReadAssignmentType.inconsistent
+        assert read_assignment.gene_assignment_type == ReadAssignmentType.inconsistent_genic
+        assert read_assignment.gene_assignment_type.is_inconsistent()
         assert len(read_assignment.isoform_matches) == 1
         match = read_assignment.isoform_matches[0]
         assert match.assigned_gene == "ENSMUSG00000020196.10"
@@ -597,19 +598,23 @@ class TestAssignIsoform:
 class TestGeneAssignmentTypeDerivation:
     string_pools = StringPoolManager()
 
-    def test_single_gene_is_inconsistent(self):
+    def test_single_gene_is_inconsistent_genic(self):
         match = IsoformMatch(MatchClassification.genic, self.string_pools, assigned_gene="geneA")
         ra = ReadAssignment("r", ReadAssignmentType.noninformative, self.string_pools, match=[match])
         assert ra.assignment_type == ReadAssignmentType.noninformative
-        assert ra.gene_assignment_type == ReadAssignmentType.inconsistent
+        assert ra.gene_assignment_type == ReadAssignmentType.inconsistent_genic
+        assert ra.gene_assignment_type.is_inconsistent()
+        assert not ra.gene_assignment_type.is_ambiguous()
         assert ra.isoform_matches[0].assigned_transcript is None
 
-    def test_multiple_genes_is_inconsistent_ambiguous(self):
+    def test_multiple_genes_is_inconsistent_multigenic(self):
         matches = [IsoformMatch(MatchClassification.genic, self.string_pools, assigned_gene=g)
                    for g in ("geneA", "geneB")]
         ra = ReadAssignment("r", ReadAssignmentType.noninformative, self.string_pools, match=matches)
         assert ra.assignment_type == ReadAssignmentType.noninformative
-        assert ra.gene_assignment_type == ReadAssignmentType.inconsistent_ambiguous
+        assert ra.gene_assignment_type == ReadAssignmentType.inconsistent_multigenic
+        assert ra.gene_assignment_type.is_inconsistent()
+        assert ra.gene_assignment_type.is_ambiguous()
         assert len(ra.isoform_matches) == 2
 
     def test_no_gene_stays_unassigned(self):

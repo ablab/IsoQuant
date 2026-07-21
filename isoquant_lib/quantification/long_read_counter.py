@@ -276,7 +276,11 @@ class AssignedFeatureCounter(AbstractCounter):
         if not read_assignment:
             self.not_aligned_reads += 1
             return
-        elif read_assignment.assignment_type.is_unassigned() or not read_assignment.isoform_matches:
+        elif self.assignment_extractor.get_assignment_type(read_assignment).is_unassigned() \
+                or not read_assignment.isoform_matches:
+            # extractor-aware: the gene counter keys on gene_assignment_type, so a
+            # transcript-unassigned read that overlaps gene(s) (inconsistent_genic /
+            # inconsistent_multigenic) is still counted for the gene
             self.not_assigned_reads += 1
             self.reads_for_tpm[group_id] += 1
             return

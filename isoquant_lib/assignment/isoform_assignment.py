@@ -25,13 +25,18 @@ class ReadAssignmentType(Enum):
     inconsistent = 30
     inconsistent_non_intronic = 31
     inconsistent_ambiguous = 32
+    # read does not resemble any isoform, only overlaps gene body/bodies
+    inconsistent_genic = 33          # a single overlapping gene (mirrors inconsistent)
+    inconsistent_multigenic = 34     # several overlapping genes (mirrors inconsistent_ambiguous)
     discarded = 40
     suspended = 255
 
     def is_inconsistent(self):
         return self in [ReadAssignmentType.inconsistent,
                         ReadAssignmentType.inconsistent_ambiguous,
-                        ReadAssignmentType.inconsistent_non_intronic]
+                        ReadAssignmentType.inconsistent_non_intronic,
+                        ReadAssignmentType.inconsistent_genic,
+                        ReadAssignmentType.inconsistent_multigenic]
 
     def is_consistent(self):
         return self in [ReadAssignmentType.unique,
@@ -48,7 +53,8 @@ class ReadAssignmentType(Enum):
 
     def is_ambiguous(self):
         return self in [ReadAssignmentType.ambiguous,
-                        ReadAssignmentType.inconsistent_ambiguous]
+                        ReadAssignmentType.inconsistent_ambiguous,
+                        ReadAssignmentType.inconsistent_multigenic]
 
 # SQANTI-like
 @unique
@@ -813,12 +819,13 @@ class ReadAssignment:
                 assigned_genes) > 1 else ReadAssignmentType.inconsistent
         elif self.assignment_type.is_unassigned():
             # noninformative/intergenic read that still overlaps annotated gene(s):
-            # keep transcript unassigned but record gene-level (in)consistency
+            # transcript stays unassigned; the gene(s) are genic-inconsistent (the
+            # read does not resemble any isoform, it only overlaps gene bodies)
             assigned_genes = set([m.assigned_gene for m in self.isoform_matches if m.assigned_gene])
             if len(assigned_genes) > 1:
-                self.gene_assignment_type = ReadAssignmentType.inconsistent_ambiguous
+                self.gene_assignment_type = ReadAssignmentType.inconsistent_multigenic
             elif len(assigned_genes) == 1:
-                self.gene_assignment_type = ReadAssignmentType.inconsistent
+                self.gene_assignment_type = ReadAssignmentType.inconsistent_genic
             else:
                 self.gene_assignment_type = self.assignment_type
         else:
