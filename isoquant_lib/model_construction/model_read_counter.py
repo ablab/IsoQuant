@@ -179,4 +179,3 @@ class ModelReadCounter:
         ra.umi_id = source.umi_id
         ra.read_group_ids = source.read_group_ids
         ra.additional_attributes = source.additional_attributes
-

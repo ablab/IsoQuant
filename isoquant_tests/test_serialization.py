@@ -130,4 +130,3 @@ class TestSerialization:
         self.filehandler.seek(0)
         value = read_int(self.filehandler)
         assert value == TERMINATION_INT
-

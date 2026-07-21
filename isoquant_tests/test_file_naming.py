@@ -22,14 +22,14 @@ class TestFileNaming(unittest.TestCase):
         result = multimappers_file_name(base_name, chr_id)
         self.assertIn(base_name, result)
         self.assertIn("multimappers", result)
-        
+
     def test_filtered_reads_file_name(self):
         base_name = "test_output"
         chr_id = "chr1"
         result = filtered_reads_file_name(base_name, chr_id)
         self.assertIn(base_name, result)
         self.assertIn("filtered", result)
-        
+
     def test_chromosome_id_sanitization(self):
         # Test that special characters in chromosome IDs are handled
         chr_id = "chr1:1000-2000"

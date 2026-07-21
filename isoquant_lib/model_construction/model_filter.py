@@ -232,4 +232,3 @@ class ModelFilter:
                     to_substitute[m.transcript_id] = model.transcript_id
 
         return to_substitute
-

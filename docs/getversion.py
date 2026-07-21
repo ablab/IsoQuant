@@ -12,4 +12,3 @@ def define_env(env):
             return version
         except Exception:
             return "3.4.2"
-

@@ -828,6 +828,3 @@ class LongReadAssigner:
             match_dict[match.assigned_transcript] = match.match_subclassifications
 
         assignment.assignment_type = self.classify_assignment(match_dict.keys(), match_dict)
-
-
-

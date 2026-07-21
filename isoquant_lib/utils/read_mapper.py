@@ -438,4 +438,3 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
         sys.exit(IsoQuantExitCode.SUBPROCESS_FAILED)
 
     return alignment_bam_path
-

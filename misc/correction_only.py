@@ -19,9 +19,9 @@ from isoquant_lib.gtf2db import gtf2db
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--short", "-s", help="input sam/bam file containing alignment of the short reads", 
+    parser.add_argument("--short", "-s", help="input sam/bam file containing alignment of the short reads",
                         type=str, dest = "short", required = True)
-    parser.add_argument("--ont", "-i", help="input sam/bam file containing alignment of the long reads", 
+    parser.add_argument("--ont", "-i", help="input sam/bam file containing alignment of the long reads",
                         type=str, dest = "ont", required = True)
     parser.add_argument("--reference", "-r", help="input reference gtf file",
                         type=str, dest = "ref", required = True)
@@ -98,11 +98,10 @@ if genes:
         #categorized.append(correction.read_stats(introns, corrected_introns, alignment))
         categorized.extend(correction.intron_stats(junctions_from_blocks(exons), junctions_from_blocks(corrected_exons), alignment))
         print("corrected exons:", corrected_exons)
-        
+
 print("Number of correct introns before correction:", before)
 print("Number of correct introns after correction:", after)
 print("Number of true positive reads:", categorized.count(Stats.true_positive))
 print("Number of false positive reads:", categorized.count(Stats.false_positive))
 print("Number of true negative reads:", categorized.count(Stats.true_negative))
 print("Number of false negative reads:", categorized.count(Stats.false_negative))
-

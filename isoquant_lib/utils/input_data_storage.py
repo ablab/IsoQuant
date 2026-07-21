@@ -322,7 +322,7 @@ class InputDataStorage:
             for i, save_file in enumerate(args.read_assignments):
                 sample_files.append([[save_file]])
                 experiment_names.append(self.experiment_prefix + str(i))
-        
+
         elif args.yaml is not None:
             sample_files, experiment_names, readable_names_dict, illumina_bam = self.get_samples_from_yaml(args.yaml)
             if args.labels:
@@ -395,7 +395,7 @@ class InputDataStorage:
 
     def has_replicas(self):
         return any(len(sample.file_list) > 1 for sample in self.samples)
-        
+
     def get_samples_from_yaml(self, yaml_file_path):
         sample_files = []
         experiment_names = []
@@ -461,28 +461,28 @@ class InputDataStorage:
                     illumina_bam.append([normalize_path(yaml_file_path, ib) for ib in sample['illumina bam']])
                 else:
                     illumina_bam.append(None)
-            
+
         for sample in sample_files:
             for lib in sample:
                 for in_file in lib:
                     check_input_type(in_file, self.input_type)
         return sample_files, experiment_names, readable_names_dict, illumina_bam
-        
+
 # not functional yet
 # idea for the future to name unnamed samples by their last common folder
     # def get_sample_name(names, index):
         # common_characters = len(names[0])
         # common_name = names[0]
-        
+
         # for i in range(1, len(names)):
             # p = mismatch(common_name, names[i])
             # if p[0] < common_characters:
                 # common_characters = p[0]
-                
+
         # found = common_names.rfind('/', 0, common_characters)
-        
+
         # common_name = common_name[:found]
-        
+
         # sample_name = common_name + str(index)
         # return sample_name
 
@@ -501,4 +501,3 @@ def check_input_type(fname, input_type):
             raise Exception("Wrong file extension was detected for file %s. Use only BAM files with --bam option." % fname)
     else:
         raise Exception("File format " + fasta_ext + " is not supported! Supported formats: FASTQ, FASTA, BAM")
-

@@ -211,5 +211,3 @@ class ExonCorrector:
             i = event.read_region[1] + 1
 
         return corrected_read_region, new_introns
-
-

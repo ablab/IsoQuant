@@ -118,4 +118,3 @@ class TestCagePeakFinder:
                               CageAlignment('aligned_segment2', 'chr11', 11, 126, True)])
     def test_several_hits(self, alignment):
         assert len(self.cage_peak_finder.find_cage_peak(alignment)) > 1
-

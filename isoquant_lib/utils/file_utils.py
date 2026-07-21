@@ -83,4 +83,3 @@ def normalize_path(config_path, file_path):
         return os.path.normpath(file_path)
     else:
         return os.path.normpath(os.path.join(os.path.dirname(config_path), file_path))
-

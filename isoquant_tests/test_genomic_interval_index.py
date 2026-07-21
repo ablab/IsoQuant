@@ -21,7 +21,7 @@ class TestGenomicIntervalIndex:
     def test_initialization_with_all_chromosomes(self):
         """Test GenomicIntervalIndex initialization with no chromosome filtering."""
         index = GenomicIntervalIndex(self.gffutils_db)
-        
+
         assert index.db == self.gffutils_db
         assert index.gene_trees is not None
         assert index.exon_trees is not None
@@ -131,7 +131,7 @@ class TestGenomicIntervalIndex:
     def test_get_exons_at_single_position(self):
         """Test retrieving exons at a single genomic position."""
         index = GenomicIntervalIndex(self.gffutils_db)
-        
+
         # Get a known exon
         exon = list(self.gffutils_db.features_of_type('exon'))[0]
         chrom = str(exon.chrom)
@@ -367,4 +367,3 @@ class TestGenomicIntervalIndex:
         for pos in range(int(gene.start), int(gene.end), 100):
             genes = index.get_genes_at(chrom, pos)
             assert isinstance(genes, list)
-

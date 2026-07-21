@@ -635,4 +635,3 @@ class TestFusionMetadataEdgeCases:
         meta = detector.fusion_metadata["None--None"]
         assert meta["left_gene"] == "None"
         assert meta["right_gene"] == "None"
-        

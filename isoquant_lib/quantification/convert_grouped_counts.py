@@ -111,7 +111,7 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
     if cols != 3:
         logger.error("Unexpected number of columns in %s: %d" % (input_linear_counts, cols))
         return
-    
+
     df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1, keep_default_na=False,
                          names=['gene_id', 'group_id', 'count'],
                          dtype={'gene_id': str, 'group_id': str, 'count': float})

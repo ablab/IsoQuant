@@ -236,4 +236,3 @@ def test_with_yaml():
     #                    "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
     # for f in resulting_files:
     #     assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
-

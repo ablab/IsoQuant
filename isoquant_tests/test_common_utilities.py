@@ -20,12 +20,12 @@ class TestAdditionalCommon(unittest.TestCase):
         self.assertEqual(rreplace("test_string", "string", "replaced"), "test_replaced")
         self.assertEqual(rreplace("test_string_string", "string", "replaced"), "test_string_replaced")
         self.assertEqual(rreplace("no_match", "other", "replaced"), "no_match")
-        
+
     def test_list_to_str(self):
         self.assertEqual(list_to_str([1, 2, 3]), "1,2,3")
         self.assertEqual(list_to_str(["a", "b", "c"]), "a,b,c")
         self.assertEqual(list_to_str([]), ".")
-        
+
     def test_get_path_to_program(self):
         # Test existing program (assuming 'python' exists)
         path = get_path_to_program("python")
