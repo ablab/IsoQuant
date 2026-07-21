@@ -131,8 +131,8 @@ class TestCompareJunctions:
     string_pools = StringPoolManager()
 
     @pytest.mark.parametrize("junctions, region, delta, expected",
-                             [([(50, 60), (80, 100), (200, 210)], (1, 1), 3, [0, 1, -1, 0]),
-                              ([(50, 60), (80, 100), (200, 210)], (0, 1), 3, [1, 1, -1, 0])])
+                             [([(50, 60), (80, 100), (200, 210)], (1, 1), 3, [0, 1, 0, 0, 0]),
+                              ([(50, 60), (80, 100), (200, 210)], (0, 1), 3, [1, 1, 0, 0, 0])])
     def test_profile_for_junctions_introns(self, junctions, region, delta,  expected):
         assigner = LongReadAssigner(self.gene_info, Params(delta), self.string_pools)
         profile = assigner.intron_comparator.profile_for_junctions_introns(junctions, region)
