@@ -11,7 +11,7 @@ Curio platform uses double barcodes split by a linker sequence.
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 
 from ..indexers import Array2BitKmerIndexer
 from ..indexers import KmerIndexer, ArrayKmerIndexer

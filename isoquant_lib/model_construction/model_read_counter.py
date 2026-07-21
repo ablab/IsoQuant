@@ -12,7 +12,7 @@
 
 import copy
 import logging
-from typing import Dict, List
+from typing import List
 
 from ..gene_info import GeneInfo, TranscriptModelType
 from ..assignment.isoform_assignment import (

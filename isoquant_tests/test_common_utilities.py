@@ -8,7 +8,6 @@
 
 import unittest
 import os
-import tempfile
 from isoquant_lib.common import *
 
 

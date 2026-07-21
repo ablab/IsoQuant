@@ -9,7 +9,6 @@ in the universal barcode calling algorithm.
 
 import os
 import random
-import sys
 
 NUCLEOTIDES = "ACGT"
 DATA_DIR = "/abga/work/andreyp/ci_isoquant/data/barcodes"

@@ -15,12 +15,10 @@ not silently drift between the two call sites.
 
 from collections import Counter
 
-import numpy as np
 import pytest
 
 from isoquant_lib.terminal_prediction import terminal_counter as tc
 from isoquant_lib.terminal_prediction import terminal_peaks as tp
-from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
 
 # Reuse the counter test harness (stub model + read-assignment builders).
 from isoquant_tests.test_polya_prediction import (
@@ -28,8 +26,8 @@ from isoquant_tests.test_polya_prediction import (
     _make_args,
     _make_read_assignment,
     _read_tsv,
-    stub_model,  # noqa: F401  (pytest fixture)
 )
+from isoquant_tests.test_polya_prediction import stub_model  # noqa: F401  (pytest fixture)
 
 
 def _counter_peaks(positions, tmp_path, name):

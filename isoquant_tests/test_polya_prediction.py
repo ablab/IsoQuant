@@ -11,7 +11,6 @@ peak. This keeps the tests independent of the shipped model file and lets us
 exercise the counter's bookkeeping, feature extraction, and output layout.
 """
 
-import os
 import types
 from argparse import Namespace
 

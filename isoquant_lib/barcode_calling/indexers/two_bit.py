@@ -12,7 +12,7 @@ Array2BitKmerIndexer: Flat array with range indexing for large barcode sets
 """
 
 import math
-from typing import List, Tuple, Iterable, Dict, DefaultDict
+from typing import List, Tuple, Iterable, DefaultDict
 from collections import defaultdict
 from ..common import bit_to_str, str_to_2bit
 

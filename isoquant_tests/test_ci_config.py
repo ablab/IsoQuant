@@ -33,7 +33,6 @@ from cfg2yaml import (
 )
 from update_defaults import (
     update_yaml_baselines,
-    load_tsv_config as defaults_load_tsv,
 )
 
 

@@ -19,7 +19,7 @@ import os
 
 import gffutils
 
-from isoquant_lib.gene_info import GeneInfo, FeatureInfo
+from isoquant_lib.gene_info import GeneInfo
 from isoquant_lib.quantification.long_read_counter import ExonCounter, IntronCounter
 
 SOURCE_DIR = os.path.dirname(os.path.realpath(__file__))

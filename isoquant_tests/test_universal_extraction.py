@@ -23,8 +23,6 @@ from isoquant_lib.barcode_calling.callers.extraction_result import (
     ReadStats
 )
 from isoquant_lib.barcode_calling.callers.molecule_structure import (
-    ElementType,
-    MoleculeElement,
     MoleculeStructure
 )
 from isoquant_lib.barcode_calling.callers.universal_extraction import (

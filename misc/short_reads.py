@@ -6,12 +6,10 @@
 ############################################################################
 
 import pysam
-import sys
 import argparse
 import gffutils
 import time
 import networkx as nx
-from networkx.algorithms import bipartite
 from enum import Enum, unique
 
 from isoquant_lib.common import *

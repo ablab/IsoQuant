@@ -22,7 +22,6 @@ from isoquant_lib.common import (
     overlap_intervals,
     overlaps,
     read_coverage_fraction,
-    rindex,
 )
 from .isoform_assignment import (
     IsoformMatch,

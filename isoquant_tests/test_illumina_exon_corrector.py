@@ -8,7 +8,7 @@
 import pytest
 import os
 
-from isoquant_lib.assignment.illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
+from isoquant_lib.assignment.illumina_exon_corrector import IlluminaExonCorrector
 
 class TestExonCorrection:
     
