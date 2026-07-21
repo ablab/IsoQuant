@@ -119,11 +119,11 @@ Installation typically takes no more than a few minutes.
   - [pyfaidx](https://pypi.org/project/pyfaidx/)
   - [ssw-py](https://pypi.org/project/ssw-py/)
   - [editdistance](https://pypi.org/project/editdistance/)
-  - numba
-  - mappy
-  - intervaltree
-  - xgboost
-  - scikit-learn
+  - [numba](https://numba.pydata.org/)
+  - [mappy](https://pypi.org/project/mappy/)
+  - [intervaltree](https://pypi.org/project/intervaltree/)
+  - [xgboost](https://xgboost.readthedocs.io/)
+  - [scikit-learn](https://scikit-learn.org/)
 
 and some other common Python libraries to be installed. See `requirements.txt` for details. 
   
