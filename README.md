@@ -23,18 +23,23 @@ Current version: see `VERSION` file.
 ## About IsoQuant
 
 IsoQuant is a tool for the genome-based analysis of long RNA reads, such as PacBio or
-Oxford Nanopores. IsoQuant allows reconstructing and quantifying transcript models with
-high precision and decent recall. If the reference annotation is given, IsoQuant also
-assigns reads to the annotated isoforms based on their intron and exon structure.
-IsoQuant further performs annotated gene, isoform, exon, and intron quantification.
-If reads are grouped (e.g. according to a cell type), counts are reported according to the provided grouping.
+Oxford Nanopores. IsoQuant can perform the following analysis:
+- **Quantification**:
+  - Gene and transcript quantification;
+  - Exon, splice junction, and intron retention quantification;
+  - Detecting PolyA site and TSS;
+  - Per-condition quantification (counts grouping);
+- **Isoform and gene discovery**:
+  - Annotation-based isoform discovery;
+  - _De novo_ transcript and gene discovery;
+  - Fusion gene discovery;
+- **Single-cell and spatial transcriptomic analysis**:
+  - Barcode calling for 10x single-cell, 10x Visisum and Visium HD, Curio, Stereo-seq;
+  - Universal barcode calling for user-specified protocols;
+  - PCR deduplication;
+  - Per-barcode and per-cell-type quantification;
 
-When a reference annotation is supplied, IsoQuant additionally predicts polyA cleavage
-sites per transcript by clustering read end positions, filtering peaks with a
-pre-trained XGBoost classifier, and flagging each peak as `Known` (within 10 bp of the
-annotated transcript end) or `Novel`. Passing `--fl_data` enables the same prediction
-for transcription start sites. Results are written to `*.polyA_prediction.tsv` and
-`*.TSS_prediction.tsv` alongside the standard counts files (see [docs/output.md](docs/output.md)).
+All algorithms implemented within IsoQuant have been rigorously tested on real and simulated data and exhibit strong performance.
 
 The latest IsoQuant version can be downloaded from [github.com/ablab/IsoQuant/releases/latest](https://github.com/ablab/IsoQuant/releases/latest).
 
@@ -43,9 +48,9 @@ Full IsoQuant documentation is available at [ablab.github.io/IsoQuant](https://a
 ## Supported sequencing data
 
 IsoQuant supports all kinds of long RNA data:
-* PacBio CCS
-* ONT dRNA / ONT cDNA
-* Assembled / corrected transcript sequences
+* PacBio CCS;
+* ONT dRNA / ONT cDNA;
+* Assembled / corrected transcript sequences.
 
 Reads must be provided in FASTQ/FASTA format (can be gzipped) or unmapped BAM format. 
 If you have already aligned your reads to the reference genome, simply provide sorted and indexed BAM files.
@@ -66,9 +71,16 @@ Pre-constructed `minimap2` index can also be provided to reduce mapping time.
 
 
 ## Citation
-The paper describing IsoQuant algorithms and benchmarking is available at [10.1038/s41587-022-01565-y](https://doi.org/10.1038/s41587-022-01565-y).
 
-To try IsoQuant, you can use the data that was used in the publication [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
+If you use IsoQuant's transcript discovery and quantification in your research, please cite 
+[Prjibelski, Mikheenko et al., 2023](https://doi.org/10.1038/s41587-022-01565-y).
+Simulated data used in this paper is available here [zenodo.org/record/7611877](https://zenodo.org/record/7611877).
+
+If you use IsoQuant for analysing Curio spatial data, please cite
+[Foord, Prjibelski, Hu et al., 2025](https://doi.org/10.1038/s41467-025-63301-9).
+
+If you use IsoQuant for processing Stereo-seq, 10x singlce-cell or 10x Visium/VisiumHD data, please cite 
+[Michielsen, Prjibelski, Foord et al., 2026](https://www.biorxiv.org/content/10.1101/2025.06.25.661563v3).
 
 
 ## Feedback and bug reports
@@ -99,13 +111,27 @@ You can leave your comments and bug reports at our [GitHub repository tracker](h
 
 Installation typically takes no more than a few minutes.
 
-*   If running simply from [the source archive](https://github.com/ablab/IsoQuant/releases/), 
-you will need Python3 (3.8 or higher), [gffutils](https://pythonhosted.org/gffutils/installation.html), [pysam](https://pysam.readthedocs.io/en/latest/index.html), [biopython](https://biopython.org/), [pyfaidx](https://pypi.org/project/pyfaidx/),
- [ssw-py](https://pypi.org/project/ssw-py/), [editdistance](https://pypi.org/project/editdistance/) and some other common Python libraries to be installed. See `requirements.txt` for details. 
-You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
-All required Python libraries can be installed via: 
+* If running simply from [the source archive](https://github.com/ablab/IsoQuant/releases/) you will need:
+  - Python3 (3.8 or higher)
+  - [gffutils](https://pythonhosted.org/gffutils/installation.html)
+  - [pysam](https://pysam.readthedocs.io/en/latest/index.html)
+  - [biopython](https://biopython.org/)
+  - [pyfaidx](https://pypi.org/project/pyfaidx/)
+  - [ssw-py](https://pypi.org/project/ssw-py/)
+  - [editdistance](https://pypi.org/project/editdistance/)
+  - numba
+  - mappy
+  - intervaltree
+  - xgboost
+  - scikit-learn
 
-        pip install -r requirements.txt
+and some other common Python libraries to be installed. See `requirements.txt` for details. 
+  
+You will also need to have [minimap2](https://github.com/lh3/minimap2) and [samtools](http://www.htslib.org/download/) to be in your `$PATH` variable.
+
+* All required Python libraries can be installed via: 
+
+      pip install -r requirements.txt
 
 *   Verify your installation by running (typically takes less than 1 minute):
 
@@ -126,7 +152,7 @@ All required Python libraries can be installed via:
         --data_type nanopore --complete_genedb -p TEST_DATA --output isoquant_test 
 
 
-* To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed) use the following command:
+* To run IsoQuant on aligned reads (make sure your BAM is sorted and indexed), use the following command:
 
         isoquant --reference /PATH/TO/reference_genome.fasta \
         --genedb /PATH/TO/gene_annotation.gtf \
@@ -142,4 +168,8 @@ All required Python libraries can be installed via:
         --data_type (assembly|pacbio_ccs|nanopore) -o OUTPUT_FOLDER
 
 * If multiple files are provided, IsoQuant will create a single output annotation and a single set of gene/transcript expression tables.
+
+* To perform different types of analysis, check out `--analysis` option.
+
+* For single-cell and spatial transcriptomic data, check out `--mode` option.
 
