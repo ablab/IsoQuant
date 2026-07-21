@@ -10,7 +10,7 @@ The default per-read output format. Tab-separated values, the columns are:
 * `chr` - chromosome id;
 * `strand` - strand of the assigned isoform (not to be confused with read mapping strand);
 * `gene_id` - gene id to which the read was assigned;
-* `gene_assignment_type` - gene-level assignment type;
+* `gene_assignment_type` - gene-level assignment type; same values as `assignment_type` below, plus two gene-only values for reads that overlap a gene body but resemble no isoform: `inconsistent_genic` (a single overlapping gene) and `inconsistent_multigenic` (several overlapping genes);
 * `isoform_id` - isoform id to which the read was assigned;
 * `isoform_assignment_type` - transcript-level assignment type (same values as `assignment_type` below);
 * `assignment_events` - list of detected events (same format as below);
@@ -51,6 +51,10 @@ Tab-separated values, the columns are:
     - `ambiguous` - read was assigned to multiple isoforms equally well;
     - `noninfomative` - reads is intronic or has an insignificant overlap with a known gene;
     - `intergenic` - read is intergenic.
+
+    The following two values appear only in the gene-level `gene_assignment_type` column (never as a transcript `assignment_type`); such reads have no transcript assignment but overlap a gene body:
+    - `inconsistent_genic` - read overlaps a single gene but resembles no isoform (counts toward the gene like `inconsistent`);
+    - `inconsistent_multigenic` - read overlaps several genes but resembles no isoform (behaves like `inconsistent_ambiguous`, split across the genes);
 * `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible events are (see graphical representation below):
     - consistent events:
         - `none` / `.` / `undefined` - no special event detected;

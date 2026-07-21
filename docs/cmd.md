@@ -329,6 +329,8 @@ Available options for quantification:
 (i.e. flagged as unique/unique_minor_difference), default fot transcript quantification;
 * `with_ambiguous` - in addition to unique reads, ambiguously assigned consistent reads are split between features with equal weights 
 (e.g. 1/2 when a read is assigned to 2 features simultaneously);
+* `fsm_only` - a stricter subset of `unique_only`: uses only reads that fully represent a transcript, i.e. full splice matches
+(all annotated introns present) and monoexonic reads matching monoexonic transcripts; incomplete splice matches are excluded;
 * `unique_splicing_consistent` - uses uniquely assigned reads that do not contradict annotated splice sites
 (i.e. flagged as unique/unique_minor_difference or inconsistent_non_intronic), default for gene quantification;
 * `unique_inconsistent` - uses uniquely assigned reads allowing any kind of inconsistency;
