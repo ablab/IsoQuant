@@ -139,6 +139,12 @@ Different modes trigger different processing pipelines (barcode calling, UMI ded
 - `ambiguous` - Multiple equally good matches
 - `inconsistent` - Mismatches with reference
 - `intergenic`, `noninformative` - Unassigned reads
+- `inconsistent_genic` / `inconsistent_multigenic` - transcript-unassigned reads that
+  overlap gene body/bodies but resemble no isoform. Only ever set as
+  `gene_assignment_type` (transcript `assignment_type` stays `noninformative`); the
+  `_genic` variant mirrors `inconsistent` (one gene), `_multigenic` mirrors
+  `inconsistent_ambiguous` (>1 gene, so it's in both `is_inconsistent()` and
+  `is_ambiguous()`). See `.claude/READ_ASSIGNMENT_LIFECYCLE.md`.
 
 **MatchClassification** (SQANTI-like categories):
 - `full_splice_match` (FSM), `incomplete_splice_match` (ISM)

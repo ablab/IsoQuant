@@ -28,6 +28,32 @@ compares each read's profile to the reference `gene_info`:
 The resulting `ReadAssignment` ("source") is serialized (carries `corrected_exons`,
 `polya_info`, barcode/UMI, read groups, …) and is the input to construction.
 
+### Genic reads without a transcript — the two `gene_assignment_type` tiers
+
+A read can overlap a gene body yet resemble no isoform: the `genic` / `genic_intron`
+branches of `assign_to_isoform`, plus the three empty exits of `match_inconsistent`
+(`select_similar_isoforms` / `detect_inconsistensies` / `select_best_among_inconsistent`
+all empty). These go through `assign_to_overlapping_genes`, which keeps the transcript
+**unassigned** (`assignment_type = noninformative`, no `assigned_transcript`) but attaches
+one `IsoformMatch` per overlapping gene (via `gene_info.get_gene_regions()`), classed
+`genic` / `genic_intron`.
+
+`ReadAssignment.__init__` then derives `gene_assignment_type` from the distinct gene count:
+- 1 gene  → `inconsistent_genic`     (mirrors `inconsistent`)
+- >1 gene → `inconsistent_multigenic` (mirrors `inconsistent_ambiguous`; in `is_ambiguous()`)
+- 0 genes (true intergenic) → stays `noninformative` / `intergenic`
+
+Both new types are in `is_inconsistent()`, so the **gene** counter counts them under the
+`use_inconsistent` strategies (`all`, `unique_inconsistent`): 1.0 for one gene, 1/N split
+across N genes. This works because `AssignedFeatureCounter.add_read_info` short-circuits on
+the **extractor's** assignment type (`GeneAssignmentExtractor.get_assignment_type` →
+`gene_assignment_type`), not the raw transcript `assignment_type`. Transcript counting and
+model construction key on `assignment_type` (still `noninformative`), so they are unaffected;
+default `--gene_quantification` (`unique_splicing_consistent`) leaves per-gene counts
+unchanged (these reads weigh 0 there — only the `__no_feature` summary row shrinks, since
+they now carry a gene). History: gene attribution added in b2895a7d; the two dedicated
+`inconsistent_*genic` types + gene counting in 5ea2b554.
+
 ## Phase 2 — Model construction & filtering (`GraphBasedModelConstructor.process`, per gene block)
 
 ```
