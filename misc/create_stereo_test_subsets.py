@@ -13,7 +13,6 @@ Barcode is field 3 (0-indexed, underscore-delimited).
 
 import os
 import random
-import sys
 
 DATA_DIR = "/abga/work/andreyp/ci_isoquant/data/barcodes"
 

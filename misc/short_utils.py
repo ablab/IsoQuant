@@ -5,8 +5,6 @@
 # See file LICENSE for details.
 ############################################################################
 
-import pysam
-import gffutils
 
 from isoquant_lib.common import junctions_from_blocks
 

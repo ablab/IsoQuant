@@ -15,7 +15,6 @@ Tests the universal barcode calling infrastructure:
 
 import os
 import pytest
-from io import StringIO
 
 from isoquant_lib.barcode_calling.callers.molecule_structure import (
     ElementType,

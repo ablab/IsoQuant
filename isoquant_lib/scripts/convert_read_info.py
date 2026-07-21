@@ -22,7 +22,6 @@ Usage:
 
 import argparse
 import gzip
-import sys
 from typing import TextIO
 
 from isoquant_lib.common import junctions_from_blocks

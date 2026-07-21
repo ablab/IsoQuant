@@ -5,7 +5,6 @@
 # See file LICENSE for details.
 ############################################################################
 
-import sys
 from enum import IntEnum
 
 

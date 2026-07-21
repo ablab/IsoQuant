@@ -11,7 +11,7 @@ Supports 10x Genomics v3 single-cell and Visium HD spatial platforms.
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 
 from .. import ArrayKmerIndexer, Array2BitKmerIndexer
 from ..indexers import KmerIndexer

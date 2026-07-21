@@ -17,7 +17,6 @@ Usage:
 
 import glob
 import os
-import shutil
 import sys
 import argparse
 import logging

@@ -8,7 +8,6 @@
 #!/usr/bin/env python3
 import argparse
 import csv
-import os
 
 def load_mapping(file):
     """Load simple 2-column mapping into dict."""

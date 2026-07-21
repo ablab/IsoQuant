@@ -261,8 +261,7 @@ class TestNumba2BitEncoding:
 
     def test_numba_consistency_with_numpy(self):
         """Test that Numba and NumPy fallback produce identical results."""
-        import numpy as np
-        from isoquant_lib.barcode_calling.common import NUMBA_AVAILABLE, _convert_chunk_to_2bit
+        from isoquant_lib.barcode_calling.common import _convert_chunk_to_2bit
 
         barcodes = [
             "ACTGACTGACTGACTGACTGACTGA",
@@ -290,7 +289,7 @@ class TestNumba2BitEncoding:
 
         # If numba is importable without errors, flag should be True
         try:
-            from numba import njit, prange
+            from numba import njit, prange  # noqa: F401  (import probe for availability)
             assert NUMBA_AVAILABLE is True
         except (ImportError, SystemError):
             # SystemError can occur with broken numba installations

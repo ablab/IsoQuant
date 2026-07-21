@@ -11,7 +11,7 @@ Stereo-seq uses spatial barcodes with linker sequences and optional TSO detectio
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 
 from ..indexers import ArrayKmerIndexer, Dict2BitKmerIndexer, SharedMemoryArray2BitKmerIndexer
 from ..common import (
