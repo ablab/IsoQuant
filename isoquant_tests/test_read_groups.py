@@ -261,7 +261,7 @@ class TestParseGroupingSpec:
 
             # Parse specification with comma-separated columns: file:path:0:1,2
             # Note: the file path in spec_string is ignored, sample.read_group_file is used
-            spec_string = f"file:dummy:0:1,2"
+            spec_string = "file:dummy:0:1,2"
             result = parse_grouping_spec(spec_string, args, sample, chr_id, spec_index)
 
             # Should return a list of two groupers

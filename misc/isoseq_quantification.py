@@ -150,9 +150,9 @@ class QuantificationConfig:
                f'--reference {self.reference} ' \
                f'-t {self.num_threads} '
         if self.clean_start:
-            cmnd += f'--clean-start'
+            cmnd += '--clean-start'
         if self.complete:
-            cmnd += f' --complete_genedb'
+            cmnd += ' --complete_genedb'
         return cmnd.split()
 
 
