@@ -3,13 +3,13 @@
 
 ## Basic options
 `--output` (or `-o`)
-    Output folder, will be created automatically.
+    Output folder; will be created automatically.
 
 Note: if your output folder is located on a shared disk, use `--genedb_output` for storing
-reference annotation database.
+the reference annotation database.
 
 `--help` (or `-h`)
-    Prints help message.
+    Prints the basic help message.
 
 `--full_help`
     Prints all available options (including hidden ones).
@@ -17,14 +17,18 @@ reference annotation database.
 `--test`
     Runs IsoQuant on the toy data set.   
 
+`--version`
+    Print IsoQuant version and exit.
 
 ## Input options
+
 `--data_type` or `-d`
     Type of data to process, supported values are:  `pacbio_ccs` (same as `pacbio`), `nanopore` (same as `ont`)
 and  `assembly` (same as `transcripts`). This option affects the algorithm parameters.
 
-Note, that for novel mono-exonic transcripts are not reported for ONT data by default, use `--report_novel_unspliced true`.
+Note that for novel mono-exonic transcripts are not reported for ONT data by default, use `--report_novel_unspliced true`.
 
+### Reference input options:
 `--reference` or `-r`
     Reference genome in FASTA format (can be gzipped), required even when BAM files are provided.
 
@@ -34,20 +38,20 @@ can be provided only when raw reads are used as an input (constructed automatica
 
 `--genedb` or `-g`
     Gene database in gffutils database format or GTF/GFF format (can be gzipped).
-If you use official gene annotations we recommend to set `--complete_genedb` option.
+If you use an official gene annotation with transcript and gene features, we recommend to set `--complete_genedb` option.
 
 You can convert a GTF/GFF to a gffutils database (or vise versa) via `isoquant_lib/gtf2db.py` script.
 
 `--complete_genedb`
     Set this flag if gene annotation contains transcript and gene meta-features.
-Use this flag when providing official annotations, e.g. GENCODE.
+Use this flag when providing official annotations, e.g., GENCODE, Ensembl or RefSeq.
 This option will set `disable_infer_transcripts` and `disable_infer_genes` gffutils options,
 which dramatically speeds up gene database conversion (see more [here](https://daler.github.io/gffutils/autodocs/gffutils.create.create_db.html)).
 
 ### Providing input reads via command line option:
 
 `--fastq`
-    Input FASTQ/FASTA file(s), can be gzipped;  a single GTF will be generated for all files. If multiple files are provided,
+    Input FASTQ/FASTA file(s); can be gzipped; a single GTF will be generated for all files. If multiple files are provided,
 expression tables with "per-file" columns will be computed. See more about [input data](input.md).
 
 `--unmapped_bam`
@@ -62,13 +66,13 @@ expression tables with "per-file" columns will be computed. See more about [inpu
 ### Providing input reads via YAML configuration file:
 
 `--yaml`
-    Path to dataset description file in [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) format. The file should contain a list with `data format` property,
+    Path to the dataset description file in [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) format. The file should contain a list with `data format` property,
 which can be `fastq` or `bam` and an individual entry for experiment.
-Each experiment is represented as set of parameters (e.g. in curly brackets):
+Each experiment is represented as a set of parameters (e.g. in curly brackets):
 
 - `name` - experiment name, string (optional);
 - `long read files` - a list of paths to long read files matching the specified format;
-- `lables` - a list labels for long read files for expression table (optional, must be equal to the number of long read files)
+- `lables` - a list of labels for long read files for expression table (optional, must be equal to the number of long read files);
 - `illumina bam` - a list of paths to short read BAM files for splice site correction (optional).
 
 All paths should be either absolute or relative to the YAML file.
@@ -84,112 +88,138 @@ See more in [examples](examples.md).
 `--polya_trimmed`
     Indicate that reads were poly-A trimmed. Possible values are:
 
-- `none`: poly-A tails were not trimmed and will be detected automatically based on reads sequences (default);
-- `stranded`: reads that have an assigned strand (based on splice sites and assigned gene) will be marked 
-as having a poly-A tail on the 3' end;
-- `all`: all reads will be considered to be poly-A-trimmed and will be marked as 
-having a poly-A tail on the 3'; read direction will be based on the alignment strand flag. 
-Thus, when using this options, make sure read sequences are properly oriented, i.e. match the original mRNA strand.
-Use this option at your own risk.
+  - `none`: poly-A tails were not trimmed and will be detected automatically based on reads sequences (default);
+  - `stranded`: reads that have an assigned strand (based on splice sites and assigned gene) will be marked 
+  as having a poly-A tail on the 3' end;
+  - `all`: all reads will be considered to be poly-A-trimmed and will be marked as 
+  having a poly-A tail on the 3'; read direction will be based on the alignment strand flag. 
+  Thus, when using this option, make sure read sequences are properly oriented, i.e. match the original mRNA strand.
+  Use this option at your own risk.
 
 `--prefix` or `-p`
-    Prefix for all output files and sub-folder name. `OUT` if not set.
+    Prefix for all output files and subfolder name. `OUT` if not set.
 
 `--labels` or `-l`
     Sets space-separated sample names. Make sure that the number of labels is equal to the number of files.
 Input file names are used as labels if not set.
 
 `--read_group`
- Sets one or more ways to group feature counts (e.g. by cell type, file name, BAM tag or barcode).
+ Sets one or more rules to group feature counts (e.g. by cell type, file name, BAM tag, or barcode).
  Multiple grouping strategies can be combined (space-separated).
  Available grouping options:
 
- * `file_name` - groups reads by their original file names (or file name labels) within an experiment.
+   * `file_name` - groups reads by their original file names (or file name labels) within an experiment.
 This option makes sense when multiple files are provided.
 If multiple BAM/FASTQ files are provided, IsoQuant will add `--read_group file_name` automatically.
 
- * `tag:TAG` - groups reads by BAM file read tag, where `TAG` is the tag name
+   * `tag:TAG` - groups reads by BAM file read tag, where `TAG` is the tag name
 (e.g. `tag:RG` uses `RG` tag values as groups, commonly used for read group information).
- * `read_id:DELIM` - groups reads by read name suffix, where `DELIM` is the
+
+   * `read_id:DELIM` - groups reads by read name suffix, where `DELIM` is the
 symbol/string by which the read id will be split
 (e.g. if `DELIM` is `_`, for read `m54158_180727_042959_59310706_ccs_NEU` the group will be `NEU`).
 
- * `file:FILE:READ_COL:GROUP_COL(S):DELIM` - uses additional TSV file with group information for every read,
+   * `file:FILE:READ_COL:GROUP_COL(S):DELIM` - uses the TSV file with group information for every read id,
 where `FILE` is the file path, `READ_COL` is column with read ids (default: 0),
 `GROUP_COL(S)` is column(s) with group ids (default: 1; use comma-separated columns for multi-column grouping, e.g., `1,2,3`),
 `DELIM` is separator symbol (default: tab). File can be gzipped.
 
- * `barcode_spot` - group by barcode properties, such as spots/cell types.
+   * `barcode_spot` - group by barcode properties, such as spots/cell types.
 Set barcode-to-spot mapping via `--barcode2spot` option.
 IsoQuant will add `--read_group barcode_spot` automatically if `--barcode2spot` is set.
 Useful for grouping single-cell/spatial data by cell type or spatial region instead of individual barcodes.
 
- * `barcode_barcode` - group by spot-level barcode mapping for UMI deduplication.
+   * `barcode_barcode` - group by spot-level barcode mapping for UMI deduplication.
 Set barcode-to-spot mapping via `--barcode2barcode` option.
 IsoQuant will add `--read_group barcode_barcode` automatically if `--barcode2barcode` is set.
 Multiple barcodes mapping to the same spot are grouped together.
 
-* `barcode` - groups reads by cell barcode.
-When the number of barcodes is large, grouping counts by individual barcodes may take a long time.
-It is recommended to use `--barcode2spot` file instead.
-In single-cell/spatial modes, `barcode` grouping is added automatically if no barcode-related
-grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
+   * `barcode` - groups reads by cell barcode.
+   When the number of barcodes is large, grouping counts by individual barcodes may take a long time.
+   It is recommended to use `--barcode2spot` file instead.
+   In single-cell/spatial modes, `barcode` grouping is added automatically if no barcode-related
+   grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
 
-* `no_auto` - disable automatic read grouping.
-By default, IsoQuant automatically adds grouping in certain cases
-(e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
-This option will enforce only explicitly stated grouping rules. 
+   * `no_auto` - disable automatic read grouping.
+   By default, IsoQuant automatically adds grouping in certain cases
+   (e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
+   This option will enforce only explicitly stated grouping rules. 
 
-* `none` - disable all read grouping (not compatible with other options).
-By default, IsoQuant automatically adds grouping in certain cases
-(e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
-Use `--read_group none` to suppress all read grouping and produce only bulk counts.
+   * `none` - disable read grouping completely (not compatible with other options).
+   By default, IsoQuant automatically adds grouping in certain cases
+   (e.g. `file_name` for multiple files, `barcode` for single-cell/spatial modes).
+   Use `--read_group none` to suppress read grouping and produce only bulk counts.
 
 **Example**: `--read_group tag:RG file_name barcode_spot` creates multi-level grouping by read group tag,
 original file name, and barcode property (e.g. cell type).
 
 
-### Output options
+## Output options
 
 `--sqanti_output`
     Produce comparison between novel and known transcripts in SQANTI-like format.
-    Will take effect only when reference annotation is provided.
+    Will take effect only when the reference annotation is provided.
 
 `--check_canonical`
-    Report whether read or constructed transcript model contains non-canonical splice junction (requires more time).
-
+    Report whether a read or constructed transcript model contains non-canonical splice junction (requires more time).
 
 `--bam_tags`
-    Comma separated list of BAM tags that will be imported into `read_assignments.tsv
+    Comma separated list of BAM tags that will be imported into `*.read_info.tsv`.
 
+`--large_output`
+    Controls which large per-read output files are generated.
+    By default, only `read_info` and `read2transcripts` are generated (read assignments).
+    Accepts a space-separated list of the following values:
 
-`--count_exons`
-    **Deprecated: use `--analysis exon_quantification` instead.**
-    Perform exon and splice junction counting in addition to gene and transcript counting.
-    Produces region-based exon counts (`exon_counts.tsv`), exon splice-site counts
-    (`exon_splice_site_counts.tsv`) and splice junction counts (`splice_junction_counts.tsv`).
-    The legacy per-exon inclusion/exclusion format is no longer produced by default; add the
-    (deprecated) `--old_exon_count_format` option to also write it as `old_exon_counts.tsv`.
-    Will take effect only when reference annotation is provided.
+  * `read_info` - unified per-read information file (`*.read_info.tsv.gz`, default);
+  * `read_assignments` - old TSV file with read-to-isoform assignments (`*.read_assignments.tsv.gz`);
+  * `corrected_bed` - BED file with corrected read exon coordinates (`*.corrected_reads.bed.gz`);
+  * `read2transcripts` - reads assigned to discovered transcript models, in the unified read_info format (`*.transcript_model_reads.tsv.gz`);
+  * `allinfo` - old format for UMI filtered reads for single-cell/spatial modes (`*.allinfo`);
+  * `none` - do not generate any large output files (not compatible with other values).
 
-`--count_intron_retentions`
-    **Deprecated: use `--analysis exon_quantification` instead** (intron retention counting is
-    now part of exon quantification).
-    Count intron retention events per reference intron. Only non-ambiguous reads are counted.
-    Will take effect only when reference annotation is provided.
-`.
+Example usage:
+```bash
+# Generate read_info (default) plus legacy read_assignments
+# Generate all large output files
+isoquant.py --large_output read_info read_assignments corrected_bed read2transcripts allinfo ...
+
+# Disable all large output files
+isoquant.py --large_output none ...
+```
+
+The `read_info.tsv` format can be also converted to old formats using the conversion script:
+```bash
+python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
+python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
+```
+
+Note that large output files are gzipped by default unless `--no_gzip` is specified.
 
 ## Pipeline options
 
 `--analysis`
     Space-separated list of analyses to run. Supported values (short aliases in brackets):
 
-* `quantification` (or `quant`) - gene and transcript quantification, polyA/TSS prediction. 
-Requires a reference annotation (`--genedb`);
-* `transcript_discovery` (`td`) - discover novel transcript models;
-* `exon_quantification` (`ex_quant`) - exon, splice junction and intron retention
-  counting. Requires a reference annotation (`--genedb`);
-* `fusion` - fusion gene detection. Requires a reference annotation (`--genedb`).
+* `quantification` (or `quant`): reference-based quantification (requires gene annotation), produces:
+  - Gene and transcript quantification (`*.gene_counts.tsv`, `*.transcript_counts.tsv`, etc);
+  - PolyA/TSS predictions (`*polyA_prediction.tsv`, `*TSS_prediction.tsv`).
+  
+* `transcript_discovery` (or `td`): discover novel transcript models, produces:
+  - GTF files with novel transcripts (`*.transcript_models.gtf`, `*.extended_annotation.gtf`);
+  - Quantification for discovered transcripts (`*.discovered_gene_counts.tsv`, `*.discovered_transcript_counts.tsv`, etc);
+  - Read assignments for discovered transcripts (`*.transcript_model_reads.tsv.gz`).
+
+* `exon_quantification` (or `ex_quant`): reference-based exon, splice junction, and intron retention
+  counting (requires gene annotation), produces:
+  - Exon counts (`*.exon_counts.tsv`);
+  - Exon splice-site counts (`*.exon_splice_site_counts.tsv`);
+  - Splice junction counts (`*.splice_junction_counts.tsv`);
+  - Intron retention counts (`*.intron_retention_counts.tsv`);
+  
+* `fusion`:fusion gene detection, (requires gene annotation), produces:
+  - Fusion gene predictions (`*.fusions.tsv`).
+
 
 Defaults when `--analysis` is not set:
 
@@ -197,40 +227,36 @@ Defaults when `--analysis` is not set:
 * without `--genedb`: `transcript_discovery` only;
 * single-cell/spatial modes: `quantification` only.
 
-Note: requesting `transcript_discovery` in a
-single-cell/spatial mode is allowed, but since it runs after UMI deduplication it will not detect novel genes. 
-Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for fully transcript discovery.
-
+Note that requesting `transcript_discovery` in a
+single-cell/spatial mode is allowed, but since it runs after UMI deduplication, it will not detect novel genes. 
+Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for full transcript discovery.
 
 `--resume`
-    Resume a previously unfinished run. Output folder with previous run must be specified.
-    Allowed options are `--threads` and `--debug`, other options cannot be changed.
+    Resume a previously unfinished run. The output folder with the previous run must be specified.
+    Allowed options are `--threads`, `--debug`, `--high_memory`; other options cannot be changed.
     IsoQuant will run from the beginning if the output folder does not contain the previous run.
 
 `--force`
-    force to overwrite the folder with previous run.
+    Force to overwrite the folder with previous run.
 
 `--threads` or `-t`
     Number of threads to use, 16 by default.
 
-`--clean_start`
-    Do not use previously generated gene database, genome indices or BAM files, run pipeline from the very beginning (will take more time).
-
 `--no_model_construction`
-    **Deprecated: omit `transcript_discovery` from `--analysis` instead.**
-    Do not report transcript models, run read assignment and quantification of reference features only.
+    _Deprecated_: omit `transcript_discovery` from `--analysis` instead.
+    Do not perform transcript model discovery.
 
-`--fusion`
-    **Deprecated: use `--analysis fusion` instead.**
-    Run fusion gene detection after isoform detection. Requires a reference annotation (`--genedb`).
+`--count_exons`
+    _Deprecated_: use `--analysis exon_quantification` instead.
+    Perform exon and splice junction counting.
 
-`--run_aligner_only`
-    Align reads to the reference without running IsoQuant itself.
+`--count_intron_retentions`
+    _Deprecated_: use `--analysis exon_quantification` instead.
+    Count intron retention events per reference intron. 
+`.
 
 
 ## Single-cell and spatial transcriptomics options
-
-**NB! This feature is experimental and is not part of the official IsoQuant release.**
 
 See [single-cell and spatial transcriptomics](single_cell.md) for a detailed guide on
 supported platforms, examples, molecule description format, and UMI deduplication.
@@ -263,7 +289,7 @@ Supports plain text and gzipped files.
 _Notes:_
 - Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
 If you have a subset of barcodes, for example, from short-read data, provide them instead of the full whitelist;
-- IsoQuant will not perform per-barcode quantification automatically, use `--read_group barcode` to group reads by barcode.
+- IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
 
 `--barcoded_reads`
 Path to TSV file(s) with pre-called barcoded reads.
@@ -271,7 +297,7 @@ Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
 If provided, IsoQuant skips barcode calling and uses these assignments directly.
 More than 3 columns are allowed, but only the first 3 will be used.
 
-Note: IsoQuant will perform per-barcode quantification automatically.
+Note that IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
 
 
 `--barcoded_bam`
@@ -280,7 +306,7 @@ Uses `CB` (cell barcode) and `UB` (UMI) tags by default (standard 10x Genomics /
 Mutually exclusive with `--barcode_whitelist` and `--barcoded_reads`.
 This option is a flag, not a way to provide the file (use `--bam` to set the input BAM).
 
-Note: IsoQuant will perform per-barcode quantification automatically.
+Note that IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
 
 `--barcode_tag`
 BAM tag for cell barcode (default: CB), requires `--barcoded_bam` flag.
@@ -292,24 +318,26 @@ BAM tag for UMI (default: UB), requires `--barcoded_bam` flag.
 Remove suffix after dash from barcodes extracted from BAM tag (e.g. ACGT-1 -> ACGT), requires `--barcoded_bam` flag.
 
 `--barcode2spot`
-Path to TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
+Path to a TSV file with mapping barcodes to cell types, spatial spots, or other barcode properties.
 By default, barcode is in the first column, cell type in the second.
 However, you can specify one or more columns via colon symbol (similar to `--read_group`): 
 `file.tsv:barcode_column:spot_column(s)` (e.g., `cell_types.tsv:0:1,2,3` for multiple barcode properties).
 
 When `--barcode2spot` is set, `--read_group barcode_spot` will be set automatically
-to group counts by cell type, spatial regions, or other provided properties.
+to group counts by cell type, spatial regions, or other provided properties. 
+Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
 
 `--barcode2barcode`
-Path to TSV file mapping barcodes to spot IDs for spot-level UMI deduplication.
+Path to a TSV file with mapping barcodes to spot IDs for spot-level UMI deduplication.
 When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
-this option groups them together during UMI deduplication, collapsing duplicates across the entire spot.
+this option groups them together during UMI deduplication, collapsing duplicates across the entire spot (not just the barcode).
 
 Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
 When multiple spot columns are provided, a separate UMI deduplication round is performed for each column.
 However, only the main (sequence-based) UMI-deduplicated reads will be used for quantification.
 
 When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
+Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
 
 For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 
@@ -317,7 +345,6 @@ For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_
 Path to a molecule description file (MDF) for `custom_sc` mode.
 Defines molecule structure for universal barcode extraction from any platform.
 See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for details.
-
 
 
 ## Algorithm parameters
@@ -329,33 +356,33 @@ See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for details
 
 Available options for quantification:
 
+* `fsm_only` - a stricter subset of `unique_only`: uses only full-splice match reads 
+(all annotated splice junctions present) and monoexonic reads matching monoexonic transcripts; 
 * `unique_only` - use only reads that are uniquely assigned and consistent with a transcript/gene
 (i.e. flagged as unique/unique_minor_difference), default fot transcript quantification;
-* `with_ambiguous` - in addition to unique reads, ambiguously assigned consistent reads are split between features with equal weights 
-(e.g. 1/2 when a read is assigned to 2 features simultaneously);
-* `fsm_only` - a stricter subset of `unique_only`: uses only reads that fully represent a transcript, i.e. full splice matches
-(all annotated introns present) and monoexonic reads matching monoexonic transcripts; incomplete splice matches are excluded;
 * `unique_splicing_consistent` - uses uniquely assigned reads that do not contradict annotated splice sites
 (i.e. flagged as unique/unique_minor_difference or inconsistent_non_intronic), default for gene quantification;
+* `with_ambiguous` - in addition to unique reads, ambiguously assigned consistent reads are split between features with equal weights 
+(e.g. 1/2 when a read is assigned to 2 features simultaneously);
 * `unique_inconsistent` - uses uniquely assigned reads allowing any kind of inconsistency;
 * `all` - all of the above.
 
 
 ### Read to isoform matching:
 
-`--matching_strategy` A preset of parameters for read-to-isoform matching algorithm, should be one of:
+`--matching_strategy` A preset of parameters for read-to-isoform matching algorithm; should be one of:
 
 * `exact` - delta = 0, all minor errors are treated as inconsistencies;  
 * `precise` - delta = 4, only minor alignment errors are allowed, default for PacBio data;  
 * `default` - delta = 6, alignment errors typical for Nanopore reads are allowed, short novel introns are treated as deletions;   
 * `loose` - delta = 12, even more serious inconsistencies are ignored, ambiguity is resolved based on nucleotide similarity.
 
-Matching strategy is chosen automatically based on specified data type.
+Matching strategy is chosen automatically based on the specified data type.
 However, the parameters will be overridden if the matching strategy is set manually.
 
 ### Read alignment correction:
 
-`--splice_correction_strategy` A preset of parameters for read alignment correction algorithms, should be one of:
+`--splice_correction_strategy` A preset of parameters for read alignment correction algorithms; should be one of:
 
 * `none` - no correction is applied;  
 * `default_pacbio` - optimal settings for PacBio CCS reads;
@@ -364,26 +391,26 @@ However, the parameters will be overridden if the matching strategy is set manua
 * `assembly` - optimal settings for a transcriptome assembly;    
 * `all` - correct all discovered minor inconsistencies, may result in overcorrection.
 
-This option is chosen automatically based on specified data type, but will be overridden if set manually.
+This option is chosen automatically based on the specified data type but will be overridden if set manually.
 
 ### Transcript model construction:
-`--model_construction_strategy` A preset of parameters for transcript model construction algorithm, should be one of
+`--model_construction_strategy` A preset of parameters for transcript model construction algorithm; should be one of
 
 * `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive;  
 * `default_pacbio` - optimal settings for PacBio CCS reads;
 * `sensitive_pacbio` - sensitive settings for PacBio CCS reads, more transcripts are reported possibly at a cost of precision;
-* `fl_pacbio` - optimal settings for full-length PacBio CCS reads, will be used if `--data_type pacbio_ccs` and `--fl_data` options are set;
+* `fl_pacbio` - optimal settings for full-length PacBio CCS reads; will be used if `--data_type pacbio_ccs` and `--fl_data` options are set;
 * `default_ont` - optimal settings for ONT reads, novel mono-exonic transcripts are not reported (use `--report_novel_unspliced true`);
 * `sensitive_ont` - sensitive settings for ONT reads, more transcripts are reported possibly at a cost of precision (including novel mono-exonic isoforms);
 * `assembly` - optimal settings for a transcriptome assembly: input sequences are considered to be reliable and each transcript to be represented only once, so abundance is not considered;    
 * `all` - reports almost all novel transcripts, loses precision in favor to recall.
 
-This option is chosen automatically based on specified data type, but will be overridden if set manually.
+This option is chosen automatically based on the specified data type, but will be overridden if set manually.
 
 
 `--report_novel_unspliced` Report novel mono-exonic transcripts (set `true` or `false`).
 The default value is `false` for Nanopore data and `true` for other data types.
-The main explanation that some aligners report a lot of false unspliced alignments
+The main explanation here is that some aligners report a lot of false unspliced alignments
 for ONT reads.
 
 
@@ -399,18 +426,18 @@ presence of a polyA tail, allowing some splice sites to be non-canonical;
 
 `--polya_requirement` Strategy for using polyA tails during transcript model construction, should be one of:
 
-* `auto` - default behaviour: polyA tails are required if at least 70% of the reads have polyA tail; 
+* `auto` - default behavior: polyA tails are required if at least 70% of the reads have polyA tail; 
 polyA tails are always required for 1/2-exon transcripts when using ONT data (this is caused by elevated number of false 1/2-exonic alignments reported by minimap2); 
 * `never` - polyA tails are never required; use this option **at your own risk** as it may noticeably increase false discovery rate, especially for ONT data;
 * `always` - reported transcripts are always required to have polyA support in the reads.
 
-Note, that polyA tails are always required for reporting novel unspliced isoforms. 
+Note that polyA tails are always required for reporting novel unspliced isoforms. 
 
 
 
 ## Hidden options
 
-Options below are shown only with `--full_help` option.
+The options below are shown only with `--full_help` option.
 We recommend _not_ to modify these options unless you are clearly aware of their effect.
 
 #### Pipeline settings
@@ -430,9 +457,15 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 `--delta`
     Delta for inexact splice junction comparison, chosen automatically based on data type (e.g. 4bp for PacBio, 6bp for ONT).
 
+`--clean_start`
+    Do not use previously generated gene database, genome indices, or BAM files, run the pipeline from the very beginning (will take more time).
+
+`--run_aligner_only`
+    Align reads to the reference without running IsoQuant itself.
+
 `--genedb_output`
     If your output folder is located on a shared storage (e.g. NFS share), use this option to set another path
-    for storing the annotation database, because SQLite database cannot be created on a shared disks.
+    for storing the annotation database, because SQLite database cannot be created on a shared disk.
     The folder will be created automatically.
 
 `--high_memory`
@@ -443,7 +476,8 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 #### Aligner settings
 
 `--aligner`
-    Force to use this alignment method, can be `starlong` or `minimap2`; `minimap2` is currently used as default. Make sure the specified aligner is in the `$PATH` variable.
+    Force to use this alignment method, can be `starlong` or `minimap2`; default is `minimap2`. 
+    Make sure the specified aligner is in the `$PATH` variable.
 
 `--no_junc_bed`
     Do not use gene annotation for read mapping.
@@ -457,27 +491,25 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 `--mapping_options`
     Additional options that will be passed to the aligner.
 
+
 #### Read filtering
 
 `--use_secondary`
-    Use secondary alignments. This will result in longer processing time, but might recover some reads, whose primary 
+    Use secondary alignments. This will result in longer processing time but might recover reads, whose primary 
 alignments are located on an incorrect gene.
 
-`--no_secondary`
-    Deprecated, secondary alignments are not used by default (option is kept for user convenience).
-
 `--min_mapq`
-    Filers out all alignments with MAPQ less than this value (will also filter all secondary alignments, as they typically have MAPQ = 0).
+    Filers out all alignments with MAPQ less than this cutoff (will also filter all secondary alignments, as they typically have MAPQ = 0).
 
 `--inconsistent_mapq_cutoff`
-    Filers out inconsistent alignments with MAPQ less than this value (works when the reference annotation is provided, default is 5).
+    Filers out inconsistent alignments with MAPQ less than this cutoff (works when the reference annotation is provided, default is 5).
 
 `--simple_alignments_mapq_cutoff`
-    Filers out alignments with 1 or 2 exons and MAPQ less than this value (works only in annotation-free mode, default is 1).
+    Filers out alignments with 1 or 2 exons and MAPQ less than this cutoff (works only in annotation-free mode, default is 1).
 
 `--max_coverage_small_chr`
     Process only a fraction of reads for high-coverage loci on small chromosomes, e.g. mitochondrial (default value is 1000000).
-    Using this cut-off may significantly improve running time and RAM. Set to -1 to turn the off this filtering.
+    Using this cut-off may significantly improve running time and RAM. Set to -1 to turn off this filtering.
     The fraction of reads is defined as `1 / ceil(max_coverage_small_chr / max_coverage)`.
 
 `--max_coverage_normal_chr`
@@ -490,19 +522,19 @@ alignments are located on an incorrect gene.
 `--normalization_method`
     Method for normalizing non-grouped counts into TPMs:
 * `none` - do not perform TPM normalization;
-* `simple` - standard method, scale factor equals to 1 million divided by the counts sum (default);
+* `simple` - standard method, the scale factor equals to 1 million divided by the sum of counts (default);
 * `usable_reads` - includes all reads assigned to a feature including the ones that were filtered out
 during quantification (i.e. inconsistent or ambiguous);
 scale factor equals to 1 million divided by the number of all assigned reads.
 In this case the sum of all gene/transcript TPMs may not add up to 1 million.
 Experiments with simulated data show that this method could give more accurate estimations.
-However, normalization method does not affect correlation/relative proportions.
+However, the normalization method does not affect correlation/relative proportions.
 
 `--counts_format`
     By default, IsoQuant outputs counts in internal linear format (see [formats](formats.md#expression-table-format) and [output](output.md#default-feature-counts-in-linear-format)).
     Use this option to convert grouped counts to other format(s). You can provide a list with the following values:
 
-* `matrix` - standard matrix format with genes as rows and groups as columns;
+* `matrix` - standard explicit TSV matrix format with genes as rows and groups as columns;
 * `mtx` - MTX format compatible with Seurat;
 * `default` - with small number of groups/samples (<=100), counts will be converted to standard matrix;
 larger matrices (e.g. for single-cell experiments) will be saved to MTX (default).
@@ -510,38 +542,3 @@ larger matrices (e.g. for single-cell experiments) will be saved to MTX (default
 
 Note that grouped counts can be converted to any format using `{IsoQuant intsllation folder}/isoquant_lib/quantification/convert_grouped_counts.py`.
 See more information [here](output.md#default-grouped-counts-in-linear-format).
-
-`--large_output`
-    Controls which large per-read output files are generated.
-    By default, only `read_info` is generated — a unified format containing assignments, corrected exon coordinates, and barcode/UMI data.
-    Accepts a space-separated list of the following values:
-
-* `read_info` - unified per-read information file (`*.read_info.tsv`, default);
-* `read_assignments` - legacy TSV file with read-to-isoform assignments (`*.read_assignments.tsv`);
-* `corrected_bed` - BED file with corrected read exon coordinates (`*.corrected_reads.bed`);
-* `read2transcripts` - reads assigned to discovered transcript models, in the unified read_info format (`*.transcript_model_reads.tsv`; the `isoform_id` column holds the transcript model);
-* `allinfo` - detailed UMI filtering information for single-cell/spatial modes (`*.allinfo`);
-* `none` - do not generate any large output files.
-
-Example usage:
-```bash
-# Generate read_info (default) plus legacy read_assignments
-isoquant.py --large_output read_info read_assignments ...
-
-# Generate all large output files
-isoquant.py --large_output read_info read_assignments corrected_bed read2transcripts allinfo ...
-
-# Disable all large output files
-isoquant.py --large_output none ...
-
-# Default behavior (read_info only)
-isoquant.py ...
-```
-
-The `read_info.tsv` format can be converted to legacy formats using the conversion script:
-```bash
-python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
-python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
-```
-
-Note: large output files are gzipped by default unless `--no_gzip` is specified.

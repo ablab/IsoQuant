@@ -1,7 +1,5 @@
 # Single-cell and spatial transcriptomics
 
-**NB! This feature is experimental and is not part of the official IsoQuant release.**
-
 IsoQuant supports single-cell and spatial transcriptomics data from multiple platforms.
 When a single-cell or spatial mode is selected, IsoQuant automatically performs
 barcode calling and UMI-based PCR deduplication as part of the pipeline.
