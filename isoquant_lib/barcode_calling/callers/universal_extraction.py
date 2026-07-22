@@ -44,6 +44,18 @@ class UniversalSingleMoleculeExtractor:
         self.elements_to_extract = set()
         self.elements_to_correct = set()
 
+        self._classify_elements()
+
+        if self.correct_sequences:
+            self._build_concatenated_indexes()
+            self._build_duplicated_indexes()
+
+        if not self.has_cdna:
+            logger.critical("Molecule must include a cDNA")
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+
+    def _classify_elements(self):
+        """Walk the molecule structure and register constant/extract/correct elements."""
         for el in self.molecule_structure:
             if el.element_type == ElementType.PolyT:
                 if self.has_polyt:
@@ -64,49 +76,49 @@ class UniversalSingleMoleculeExtractor:
             elif el.element_type.needs_sequence_extraction():
                 self.elements_to_extract.add(el.element_name)
             elif el.element_type.needs_correction():
-                if el.element_name in self.molecule_structure.elements_to_concatenate:
-                    # Concatenated parts: skip individual index, handled after loop
-                    pass
-                elif el.element_name in self.molecule_structure.duplicated_elements:
-                    # Duplicated parts: skip individual index, handled after loop
-                    pass
-                elif self.correct_sequences:
-                    self.prepare_barcode_index_for_element(el)
-                    self.elements_to_correct.add(el.element_name)
-                else:
-                    self.elements_to_extract.add(el.element_name)
+                self._handle_correction_element(el)
 
+    def _handle_correction_element(self, el):
+        """Decide how a correction-requiring element is indexed (concatenated/duplicated parts deferred)."""
+        if el.element_name in self.molecule_structure.elements_to_concatenate:
+            # Concatenated parts: skip individual index, handled after loop
+            pass
+        elif el.element_name in self.molecule_structure.duplicated_elements:
+            # Duplicated parts: skip individual index, handled after loop
+            pass
+        elif self.correct_sequences:
+            self.prepare_barcode_index_for_element(el)
+            self.elements_to_correct.add(el.element_name)
+        else:
+            self.elements_to_extract.add(el.element_name)
+
+    def _build_concatenated_indexes(self):
         # Build one index per concatenated base element using the full whitelist
-        if self.correct_sequences:
-            for base_name, count in self.molecule_structure.concatenated_elements_counts.items():
-                first_part_el = None
-                total_length = 0
-                for el in self.molecule_structure:
-                    if el.element_name in self.molecule_structure.elements_to_concatenate:
-                        if self.molecule_structure.elements_to_concatenate[el.element_name][0] == base_name:
-                            if first_part_el is None:
-                                first_part_el = el
-                            total_length += el.element_length
-                if first_part_el is not None and first_part_el.element_value is not None:
-                    barcode_list = first_part_el.element_value
-                    self.prepare_barcode_index(base_name, barcode_list, total_length)
-
-        # Build one index per duplicated base element using the full whitelist
-        if self.correct_sequences:
-            for base_name, count in self.molecule_structure.duplicated_elements_counts.items():
-                first_part_el = None
-                for el in self.molecule_structure:
-                    if el.element_name in self.molecule_structure.duplicated_elements:
-                        if self.molecule_structure.duplicated_elements[el.element_name][0] == base_name:
+        for base_name, count in self.molecule_structure.concatenated_elements_counts.items():
+            first_part_el = None
+            total_length = 0
+            for el in self.molecule_structure:
+                if el.element_name in self.molecule_structure.elements_to_concatenate:
+                    if self.molecule_structure.elements_to_concatenate[el.element_name][0] == base_name:
+                        if first_part_el is None:
                             first_part_el = el
-                            break
-                if first_part_el is not None and first_part_el.element_value is not None:
-                    barcode_list = first_part_el.element_value
-                    self.prepare_barcode_index(base_name, barcode_list, first_part_el.element_length)
+                        total_length += el.element_length
+            if first_part_el is not None and first_part_el.element_value is not None:
+                barcode_list = first_part_el.element_value
+                self.prepare_barcode_index(base_name, barcode_list, total_length)
 
-        if not self.has_cdna:
-            logger.critical("Molecule must include a cDNA")
-            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+    def _build_duplicated_indexes(self):
+        # Build one index per duplicated base element using the full whitelist
+        for base_name, count in self.molecule_structure.duplicated_elements_counts.items():
+            first_part_el = None
+            for el in self.molecule_structure:
+                if el.element_name in self.molecule_structure.duplicated_elements:
+                    if self.molecule_structure.duplicated_elements[el.element_name][0] == base_name:
+                        first_part_el = el
+                        break
+            if first_part_el is not None and first_part_el.element_value is not None:
+                barcode_list = first_part_el.element_value
+                self.prepare_barcode_index(base_name, barcode_list, first_part_el.element_length)
 
     def prepare_barcode_index(self, base_name, barcode_list, barcode_length):
         # Check whether all barcodes have the same length
