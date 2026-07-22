@@ -54,11 +54,11 @@ def parse_args(sys_argv):
     parser.add_argument("--mode", type=str, help="mode to be used", choices=[x.name for x in BARCODE_CALLING_MODES.keys()])
     parser.add_argument("--molecule", type=str, help="MDF files with molecule description (for custom_sc mode only)")
 
-    parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM, SAM",
+    parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM",
                         required=True)
-    parser.add_argument("--threads", "-t", type=int, help="threads to use (16)", default=16)
+    parser.add_argument("--threads", "-t", type=int, help="threads to use [16]", default=16)
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
-    add_hidden_option('--debug', action='store_true', default=False, help='Debug log output.')
+    add_hidden_option('--debug', action='store_true', default=False, help='debug log output.')
 
     args = parser.parse_args(sys_argv)
     args.mode = IsoQuantMode[args.mode]

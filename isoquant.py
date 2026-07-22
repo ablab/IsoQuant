@@ -13,6 +13,8 @@
 # cpu_time inflation (idle OpenMP spin-wait) with no wall-clock gain.
 # setdefault() leaves any user-provided override in place.
 import os as _os
+from random import choices
+
 for _thread_env in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
                     "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
     _os.environ.setdefault(_thread_env, "1")
@@ -86,13 +88,7 @@ def parse_args(cmd_args=None, namespace=None):
     filer_args_group = parser.add_argument_group('Read filtering options')
     sc_args_group = parser.add_argument_group('Single-cell/spatial-related options:')
 
-    other_options = parser.add_argument_group("Additional options:")
     show_full_help = '--full_help' in cmd_args
-
-    def add_additional_option(*args, **kwargs):  # show command only with --full-help
-        if not show_full_help:
-            kwargs['help'] = argparse.SUPPRESS
-        other_options.add_argument(*args, **kwargs)
 
     def add_option_to_group(opt_group, *args, **kwargs):  # show command only with --full-help
         opt_group.add_argument(*args, **kwargs)
@@ -109,104 +105,206 @@ def parse_args(cmd_args=None, namespace=None):
     parser.add_argument("--full_help", action='help', help="show full list of options")
 
     parser.add_argument("--test", action=TestMode, nargs=0, help="run IsoQuant on toy dataset")
-    add_hidden_option('--debug', action='store_true', default=False,
-                      help='Debug log output.')
 
-    output_args_group.add_argument("--output", "-o", help="output folder, will be created automatically "
-                                                          "[default=isoquant_output]",
-                                   type=str, default="isoquant_output")
-    output_args_group.add_argument('--prefix', '-p', type=str,
-                                   help='experiment name; to be used for folder and file naming; default is OUT',
-                                   default="OUT")
-    output_args_group.add_argument('--labels', '-l', nargs='+', type=str,
-                                   help='sample/replica labels to be used as column names; input file names are used '
-                                        'if not set; must be equal to the number of input files given via --fastq/--bam')
+    add_hidden_option('--debug', action='store_true', default=False,
+                      help='debug log output.')
+
     # REFERENCE
-    ref_args_group.add_argument("--reference", "-r", help="reference genome in FASTA format (can be gzipped)",
-                                type=str)
-    ref_args_group.add_argument("--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF "
-                                                       "format (optional)", type=str)
-    ref_args_group.add_argument('--complete_genedb', action='store_true', default=False,
-                                help="use this flag if gene annotation contains transcript and gene metafeatures, "
-                                     "e.g. with official annotations, such as GENCODE; "
-                                     "speeds up gene database conversion")
-    add_additional_option_to_group(ref_args_group, "--discard_chr", nargs="+", help="chromosome IDs to ignore", type=str, default=[])
+    add_option_to_group(ref_args_group,"--reference", "-r",
+                        help="reference genome in FASTA format (can be gzipped)",
+                        type=str)
+    add_option_to_group(ref_args_group,"--genedb", "-g", help="gene database in gffutils DB format or GTF/GFF "
+                                                              "format (optional)", type=str)
+    add_option_to_group(ref_args_group,'--complete_genedb', action='store_true', default=False,
+                        help="use this flag if gene annotation contains transcript and gene features (e.g. for official annotations)")
+    add_additional_option_to_group(ref_args_group, "--discard_chr", nargs="+", help="chromosome IDs to ignore",
+                                   type=str, default=[])
     add_additional_option_to_group(ref_args_group, "--process_only_chr", nargs="+", help="chromosome IDs to process",
                                    type=str, default=None)
     add_additional_option_to_group(ref_args_group, "--index", help="genome index for specified aligner (optional)",
                                    type=str)
 
     # INPUT READS
-
+    add_option_to_group(input_args_group, "--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
+                        help="type of data to process")
     input_args = input_args_group.add_mutually_exclusive_group()
     input_args.add_argument('--bam', nargs='+', type=str,
                             help='sorted and indexed BAM file(s), each file will be treated as a separate sample')
     input_args.add_argument('--fastq', nargs='+', type=str,
-                            help='input FASTQ/FASTA file(s) with reads, each file will be treated as a separate sample; '
-                                 'reference genome should be provided when using reads as input')
+                            help='input FASTQ/FASTA file(s) with reads, each file will be treated as a separate sample')
     input_args.add_argument('--unmapped_bam', nargs='+', type=str,
                             help='unmapped BAM file(s), each file will be treated as a separate sample')
-    input_args.add_argument('--yaml', type=str, help='yaml file containing all input files, one entry per sample'
-                                                     ', check readme for format info')
+    input_args.add_argument('--yaml', type=str, help='yaml file containing all input files, one entry per sample')
 
-    input_args_group.add_argument('--illumina_bam', nargs='+', type=str,
+    add_option_to_group(input_args_group, '--illumina_bam', nargs='+', type=str,
                                   help='sorted and indexed file(s) with Illumina reads from the same sample')
 
-    input_args_group.add_argument("--read_group", nargs='+', type=str,
-                                  help="one or more ways to group feature counts (no grouping by default); "
-                                       "multiple grouping strategies can be specified (space-separated); "
-                                       "supported formats: "
-                                       "tag:TAG (BAM tag), "
-                                       "file:FILE:READ_COL:GROUP_COL(S):DELIM (TSV file, use comma-separated columns for multi-column grouping, e.g., file:table.tsv:0:1,2,3), "
-                                       "read_id:DELIM (read ID suffix), "
-                                       "file_name (original filename), "
-                                       "barcode_spot (map barcodes to spots/cell types using --barcode2spot), "
-                                       "barcode_barcode (map barcodes to spots using --barcode2barcode), "
-                                       "barcode (group by barcode from --barcoded_reads), "
-                                       "no_auto (use only explicitly stated read grouping rules), "
-                                       "none (no grouping)")
+    add_option_to_group(input_args_group, "--read_group", nargs='+', type=str,
+                        help="read grouping rules (space-separated); supported values: "
+                             "tag:TAG (BAM tag), "
+                             "file:FILE:READ_COLUMNS:GROUP_COLUMNS:DELIM (TSV file), "
+                             "read_id:DELIM (read ID suffix), "
+                             "file_name (filename), "
+                             "barcode_spot (barcodes to spots/cell via --barcode2spot), "
+                             "barcode_barcode (barcodes to spots via --barcode2barcode), "
+                             "barcode (barcode--barcoded_reads), "
+                             "no_auto (only explicitly stated rules), "
+                             "none (disable grouping)")
 
     add_additional_option_to_group(input_args_group, "--read_assignments", nargs='+', type=str,
                                    help="reuse read assignments (binary format)", default=None)
 
     # INPUT PROPERTIES
-    input_args_group.add_argument("--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
-                                  help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
-    input_args_group.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
-                                  ", ".join(SUPPORTED_STRANDEDNESS), default="none")
-    input_args_group.add_argument('--polya_trimmed', default=PolyATrimmed.none.name, type=str,
-                                  choices=[e.name for e in PolyATrimmed],
-                                  help="define reads which had polyA tail trimmed")
-    input_args_group.add_argument('--fl_data', action='store_true', default=False,
-                                  help="reads represent FL transcripts; both ends of the read are considered to be reliable")
+    add_option_to_group(input_args_group, '--stranded',  type=str, choices=SUPPORTED_STRANDEDNESS,
+                        help="reads strandness type [none]", default="none")
+    add_option_to_group(input_args_group, '--polya_trimmed', default=PolyATrimmed.none.name, type=str,
+                        choices=[e.name for e in PolyATrimmed],
+                        help="define reads which had polyA tail trimmed [%s]" % PolyATrimmed.none.name)
+    add_option_to_group(input_args_group, '--fl_data', action='store_true', default=False,
+                        help="reads represent FL transcripts; both ends of the read are considered to be reliable")
+
+    # OUTPUT
+    add_option_to_group(output_args_group, "--output", "-o",
+                        help="output folder, will be created automatically [isoquant_output]",
+                        type=str, default="isoquant_output")
+    add_option_to_group(output_args_group,'--prefix', '-p', type=str,
+                        help='experiment name; to be used for folder and file naming [OUT]',
+                        default="OUT")
+    add_option_to_group(output_args_group,'--labels', '-l', nargs='+', type=str,
+                        help='sample/replica labels to be used as column names; input file names are used '
+                             'if not set; must be equal to the number of input files given via --fastq/--bam')
+
+    # PIPELINE STEPS
+    add_option_to_group(pipeline_args_group, "--analysis", nargs='+', type=str,
+                        choices=ANALYSIS_CHOICES, default=None,
+                        metavar="ANALYSIS",
+                        help="analyses to run (space-separated); supported values: "
+                             "quantification/quant, transcript_discovery/td, "
+                             "exon_quantification/ex_quant, fusion [auto]")
+
+    add_option_to_group(pipeline_args_group, "--threads", "-t", help="number of threads [16]", type=int,
+                        default="16")
+
+    # deprecated
+    add_additional_option_to_group(pipeline_args_group, "--count_exons",
+                                   help="deprecated: use --analysis exon_quantification",
+                                   action='store_true', default=False)
+    add_additional_option_to_group(pipeline_args_group, "--count_intron_retentions",
+                                   help="deprecated: use --analysis exon_quantification",
+                                   action='store_true', default=False)
+    add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
+                                   default=False, help="deprecated: omit transcript_discovery from --analysis")
+
+    resume_args = pipeline_args_group.add_mutually_exclusive_group()
+    resume_args.add_argument("--resume", action="store_true", default=False,
+                             help="resume failed run, specify output folder, input options are not allowed")
+    resume_args.add_argument("--force", action="store_true", default=False,
+                             help="force to overwrite the previous run")
+
+    add_additional_option_to_group(pipeline_args_group, '--clean_start', action='store_true', default=False,
+                                   help='Do not use previously generated index, feature db or alignments.')
+
+    add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
+                                   help="align reads to reference without running further analysis")
+    add_additional_option_to_group(pipeline_args_group, "--no_gtf_check", help="do not perform GTF checks",
+                                   dest="gtf_check",
+                                   action='store_false', default=True)
+    add_additional_option_to_group(pipeline_args_group, "--high_memory",
+                                   help="increase RAM consumption (store alignment and the genome in RAM)",
+                                   action='store_true', default=False)
+    add_additional_option_to_group(pipeline_args_group, "--keep_tmp", help="do not remove temporary files "
+                                                                           "in the end", action='store_true',
+                                   default=False)
+
+    # OUTPUT SETUP
+    add_option_to_group(output_setup_args_group, '--check_canonical', action='store_true', default=False,
+                                     help="report whether splice junctions are canonical")
+    add_option_to_group(output_setup_args_group, "--sqanti_output", help="produce SQANTI-like TSV output",
+                                     action='store_true', default=False)
+    add_option_to_group(output_setup_args_group, "--bam_tags",
+                                         help="comma separated list of BAM tags to be imported to read_assignments.tsv",
+                                         type=str)
+    add_option_to_group(output_setup_args_group, "--large_output", nargs='+', type=str,
+                                         choices=LARGE_OUTPUT_TYPES,
+                                         default=["read_info", "read2transcripts"],
+                                         help="large output files to generate [read_info read2transcripts]")
+
+    add_additional_option_to_group(output_setup_args_group, "--genedb_output", help="output folder for converted gene "
+                                                                                    "database, will be created automatically "
+                                                                                    " (same as output by default)", type=str)
+
+    add_additional_option_to_group(output_setup_args_group, "--no_gzip", help="do not gzip large output files",
+                                   dest="gzipped", action='store_false', default=True)
+    add_additional_option_to_group(output_setup_args_group, "--normalization_method",
+                                   type=str, choices=[e.name for e in NormalizationMethod],
+                                   help="TPM normalization method",
+                                   default=NormalizationMethod.simple.name)
+    add_additional_option_to_group(output_setup_args_group, "--counts_format", type=str, nargs='+',
+                                   choices=[e.name for e in GroupedOutputFormat],
+                                   help="output format for grouped counts",
+                                   default=[GroupedOutputFormat.default.name])
+    add_additional_option_to_group(output_setup_args_group, "--emit_read_ids", action='store_true', default=False,
+                                   help="add read id columns to exon splice-site counts output")
+    add_additional_option_to_group(output_setup_args_group, "--old_exon_count_format", action='store_true', default=False,
+                                   help="output old exon inclusion/exclusion counts (deprecated)")
+
+    # ALIGNER
+    add_additional_option_to_group(align_args_group, "--aligner", choices=SUPPORTED_ALIGNERS,
+                                   help="use this alignmer method, can be [minimap2]", type=str)
+    add_additional_option_to_group(align_args_group, "--no_junc_bed", action="store_true", default=False,
+                                   help="do NOT use annotation for read mapping")
+    add_additional_option_to_group(align_args_group, "--junc_bed_file", type=str,
+                                   help="annotation in BED format produced by minimap's paftools.js gff2bed "
+                                        "(will be created automatically if not given)")
+    add_additional_option_to_group(align_args_group, "--indexing_options", type=str,
+                                   help="additional options that will be passed to the aligner indexer")
+    add_additional_option_to_group(align_args_group, "--mapping_options", type=str,
+                                   help="additional options that will be passed to the aligner")
+
+
+    # READ FILTERING
+    add_additional_option_to_group(filer_args_group, "--use_secondary",
+                                   help="use secondary alignments (slower processing)",
+                                   action='store_true', default=False)
+    add_additional_option_to_group(filer_args_group, "--min_mapq",
+                                   help="ignore alignments with MAPQ < this (including secondary alignments) [None]", type=int)
+    add_additional_option_to_group(filer_args_group, "--inconsistent_mapq_cutoff",
+                                   help="ignore inconsistent alignments with MAPQ < cutoff (works only with the reference annotation) [5]",
+                                   type=int, default=5)
+    add_additional_option_to_group(filer_args_group, "--simple_alignments_mapq_cutoff",
+                                   help="ignore alignments with 1 or 2 exons and MAPQ < cutoff "
+                                        "(works only in annotation-free mode) [1]", type=int, default=1)
+    add_additional_option_to_group(filer_args_group, "--max_coverage_small_chr",
+                                   help="process only a fraction of reads for high-coverage loci on small chromosomes (e.g. MT), "
+                                        "improves running time and RAM [1000000]",
+                                   type=int, default=1000000)
+    add_additional_option_to_group(filer_args_group, "--max_coverage_normal_chr",
+                                   help="process only a fraction of reads for high-coverage loci on usual chromosomes, "
+                                        "improves running time and RAM [-1]",
+                                   type=int, default=-1)
 
     # SC ARGUMENTS
-    add_additional_option_to_group(sc_args_group, "--mode", "-m", type=str, choices=ISOQUANT_MODES,
-                                   help="IsoQuant modes: " + ", ".join(ISOQUANT_MODES) +
-                                        "; default:%s" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
-    add_additional_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
+    add_option_to_group(sc_args_group, "--mode", "-m", type=str, choices=ISOQUANT_MODES,
+                                   help="IsoQuant mode [%s]" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
+    add_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
                                    help='file(s) with barcode whitelist(s) for barcode calling')
-    add_additional_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
-                                   help='TSV file(s) with barcoded reads; barcodes will be called automatically if not provided')
-    add_additional_option_to_group(sc_args_group, "--barcoded_bam", action='store_true', default=False,
-                                   help='extract barcodes and UMIs from BAM tags (CB/UB by default); '
-                                        'bypasses barcode calling')
-    add_additional_option_to_group(sc_args_group, "--barcode_tag", type=str, default="CB",
-                                   help='BAM tag for cell barcode (default: CB)')
-    add_additional_option_to_group(sc_args_group, "--umi_tag", type=str, default="UB",
-                                   help='BAM tag for UMI (default: UB)')
-    add_additional_option_to_group(sc_args_group, "--strip_barcode_suffix", action='store_true', default=False,
-                                   help='remove suffix after dash from barcodes extracted from BAM tag (e.g. ACGT-1 -> ACGT)')
-    add_additional_option_to_group(sc_args_group, "--barcode2spot", type=str,
-                                   help='TSV file mapping barcode to cell type / spot id. '
-                                        'Format: file.tsv or file.tsv:barcode_col:spot_cols '
-                                        '(e.g., file.tsv:0:1,2,3 for multiple spot columns)')
-    add_additional_option_to_group(sc_args_group, "--barcode2barcode", type=str,
-                                   help='TSV file mapping barcode to spot IDs for UMI deduplication; '
-                                        'format: file.tsv or file.tsv:barcode_col:spot_cols')
-    add_additional_option_to_group(sc_args_group, "--molecule", type=str,
-                                   help='molecule definition file (MDF) for custom_sc mode; '
+    add_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
+                                   help='TSV file(s) with barcoded reads')
+    add_option_to_group(sc_args_group, "--barcoded_bam", action='store_true', default=False,
+                                   help='extract barcodes and UMIs from BAM tags (CB/UB by default)')
+    add_option_to_group(sc_args_group, "--barcode2spot", type=str,
+                                   help='TSV file mapping barcode to cell type / spot id.')
+    add_option_to_group(sc_args_group, "--barcode2barcode", type=str,
+                                   help='TSV file mapping barcode to spot IDs for UMI deduplication')
+    add_option_to_group(sc_args_group, "--molecule", type=str,
+                                   help='molecule definition file (MDF) for custom_sc mode: '
                                         'defines molecule structure for universal barcode extraction')
+    add_additional_option_to_group(sc_args_group, "--barcode_tag", type=str, default="CB",
+                                   help='BAM tag for cell barcode [CB]')
+    add_additional_option_to_group(sc_args_group, "--umi_tag", type=str, default="UB",
+                                   help='BAM tag for UMI [UB]')
+    add_additional_option_to_group(sc_args_group, "--strip_barcode_suffix", action='store_true', default=False,
+                                   help='remove suffix after dash from barcodes extracted from BAM tag')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
@@ -214,8 +312,8 @@ def parse_args(cmd_args=None, namespace=None):
                                         "default: false for ONT, true for other data types")
     add_additional_option_to_group(algo_args_group, "--report_canonical",  type=str,
                                    choices=[e.name for e in StrandnessReportingLevel],
-                                   help="reporting level for novel transcripts based on canonical splice sites;"
-                                        " default: " + StrandnessReportingLevel.auto.name,
+                                   help="reporting level for novel transcripts based on canonical splice sites "
+                                        "[%s]" % StrandnessReportingLevel.auto.name,
                                    default=StrandnessReportingLevel.auto.name)
     add_additional_option_to_group(algo_args_group, "--polya_requirement", type=str,
                                    choices=[e.name for e in PolyAUsageStrategies],
@@ -226,20 +324,20 @@ def parse_args(cmd_args=None, namespace=None):
     # given (--genedb). --novel_apa (default off) extends it to novel
     # (non-reference) transcripts, not only known ones.
     add_additional_option_to_group(algo_args_group, "--novel_apa", action="store_true", default=False,
-                                   help="Developer: extend alternative-end isoform creation to novel transcripts too.")
+                                   help="generate novel isoforms with identical intron chain but distinct polyA sites")
 
     # Splice-site correction shifts novel transcript-model junctions onto canonical
     # motifs using clustered read deletions near junctions; default ON.
     add_additional_option_to_group(algo_args_group, "--no_splice_site_correction", action="store_true",
                                    default=False,
-                                   help="Developer: disable canonical splice-site correction of novel transcript models.")
+                                   help="disable canonical splice-site correction for novel transcript models")
 
     add_additional_option_to_group(algo_args_group, "--transcript_quantification", choices=COUNTING_STRATEGIES,
-                                   help="transcript quantification strategy", type=str,
-                                   default=CountingStrategy.unique_only.name)
+                                   help="transcript quantification strategy [%s]" % CountingStrategy.unique_only.name,
+                                   type=str, default=CountingStrategy.unique_only.name)
     add_additional_option_to_group(algo_args_group, "--gene_quantification", choices=COUNTING_STRATEGIES,
-                                   help="gene quantification strategy", type=str,
-                                   default=CountingStrategy.unique_splicing_consistent.name)
+                                   help="gene quantification strategy [%s]" % CountingStrategy.unique_splicing_consistent.name,
+                                   type=str, default=CountingStrategy.unique_splicing_consistent.name)
 
     add_additional_option_to_group(algo_args_group, "--matching_strategy",
                                    choices=["exact", "precise", "default", "loose"],
@@ -254,127 +352,10 @@ def parse_args(cmd_args=None, namespace=None):
                                             "default_ont", "sensitive_ont", "all", "assembly"],
                                    help="transcript model construction strategy to use", type=str, default=None)
     add_additional_option_to_group(algo_args_group, "--delta", type=int, default=None,
-                                   help="delta for inexact splice junction comparison, chosen automatically based on data type")
+                                   help="delta for inexact splice junction comparison [auto]")
     add_additional_option_to_group(algo_args_group, "--use_replicas", type=bool_str, default=True,
                                    help="require novel transcripts to be confirmed by multiple files "
-                                        "when file_name grouping is used (default: true)")
-
-    # PIPELINE STEPS
-    pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
-                                     default="16")
-
-    pipeline_args_group.add_argument("--analysis", nargs='+', type=str, choices=ANALYSIS_CHOICES, default=None,
-                                     metavar="ANALYSIS",
-                                     help="analyses to run (space-separated); supported values: "
-                                          "quantification (quant) - gene/transcript counts; "
-                                          "transcript_discovery (td) - discover novel transcript models; "
-                                          "exon_quantification (ex_quant) - exon, splice junction and intron retention counts; "
-                                          "fusion - fusion gene detection. "
-                                          "Defaults: quantification + transcript_discovery with --genedb, "
-                                          "transcript_discovery without --genedb, "
-                                          "quantification for single-cell/spatial modes")
-
-    # deprecated: superseded by --analysis fusion
-    add_additional_option_to_group(pipeline_args_group, "--fusion", action='store_true', default=False,
-                                   help="deprecated: use --analysis fusion")
-
-    resume_args = pipeline_args_group.add_mutually_exclusive_group()
-    resume_args.add_argument("--resume", action="store_true", default=False,
-                             help="resume failed run, specify output folder, input options are not allowed")
-    resume_args.add_argument("--force", action="store_true", default=False,
-                             help="force to overwrite the previous run")
-
-    add_additional_option_to_group(pipeline_args_group, '--clean_start', action='store_true', default=False,
-                                   help='Do not use previously generated index, feature db or alignments.')
-    add_additional_option_to_group(pipeline_args_group, "--no_model_construction", action="store_true",
-                                   default=False, help="deprecated: omit transcript_discovery from --analysis")
-    add_additional_option_to_group(pipeline_args_group, "--run_aligner_only", action="store_true", default=False,
-                                   help="align reads to reference without running further analysis")
-    add_additional_option_to_group(pipeline_args_group, "--no_gtf_check", help="do not perform GTF checks",
-                                   dest="gtf_check",
-                                   action='store_false', default=True)
-    add_additional_option_to_group(pipeline_args_group, "--high_memory",
-                                   help="increase RAM consumption (store alignment and the genome in RAM)",
-                                   action='store_true', default=False)
-    add_additional_option_to_group(pipeline_args_group, "--keep_tmp", help="do not remove temporary files "
-                                                                           "in the end", action='store_true',
-                                   default=False)
-
-    # OUTPUT SETUP
-    output_setup_args_group.add_argument('--check_canonical', action='store_true', default=False,
-                                         help="report whether splice junctions are canonical")
-    output_setup_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
-                                         action='store_true', default=False)
-    add_additional_option_to_group(output_setup_args_group, "--count_exons",
-                                   help="deprecated: use --analysis exon_quantification",
-                                   action='store_true', default=False)
-    add_additional_option_to_group(output_setup_args_group, "--count_intron_retentions",
-                                   help="deprecated: use --analysis exon_quantification",
-                                   action='store_true', default=False)
-    add_additional_option_to_group(output_setup_args_group, "--emit_read_ids", action='store_true', default=False,
-                                   help="add read id columns to exon splice-site counts output")
-    add_additional_option_to_group(output_setup_args_group, "--old_exon_count_format", action='store_true', default=False,
-                                   help="also output legacy per-exon inclusion/exclusion counts as old_exon_counts "
-                                        "(deprecated, will be removed in a future release)")
-    add_additional_option_to_group(output_setup_args_group, "--bam_tags",
-                                   help="comma separated list of BAM tags to be imported to read_assignments.tsv",
-                                   type=str)
-    add_additional_option_to_group(output_setup_args_group, "--no_gzip", help="do not gzip large output files", dest="gzipped",
-                                   action='store_false', default=True)
-    add_additional_option_to_group(output_setup_args_group, "--large_output", nargs='*', type=str,
-                                   default=["read_info"],
-                                   help="large output files to generate: " + ", ".join(LARGE_OUTPUT_TYPES) +
-                                        " (default: read_info)")
-    add_additional_option_to_group(output_setup_args_group, "--normalization_method", type=str, choices=[e.name for e in NormalizationMethod],
-                                   help="TPM normalization method: simple - conventional normalization using all counted reads;"
-                                        "usable_reads - includes all assigned reads;"
-                                        "none - do not convert counts to TPM.",
-                                   default=NormalizationMethod.simple.name)
-    add_additional_option_to_group(output_setup_args_group, "--counts_format", type=str, nargs='+',
-                                   choices=[e.name for e in GroupedOutputFormat],
-                                   help="output format for grouped counts",
-                                   default=[GroupedOutputFormat.default.name])
-
-    add_additional_option_to_group(output_setup_args_group, "--genedb_output", help="output folder for converted gene "
-                                                                                    "database, will be created automatically "
-                                                                                    " (same as output by default)", type=str)
-
-    # ALIGNER
-    add_additional_option_to_group(align_args_group, "--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS)
-                                   + "; chosen based on data type if not set", type=str)
-    add_additional_option_to_group(align_args_group,  "--no_junc_bed", action="store_true", default=False,
-                                   help="do NOT use annotation for read mapping")
-    add_additional_option_to_group(align_args_group, "--junc_bed_file", type=str,
-                                   help="annotation in BED format produced by minimap's paftools.js gff2bed "
-                                   "(will be created automatically if not given)")
-    add_additional_option_to_group(align_args_group, "--indexing_options", type=str,
-                                   help="additional options that will be passed to the aligner indexer")
-    add_additional_option_to_group(align_args_group, "--mapping_options", type=str,
-                                   help="additional options that will be passed to the aligner")
-
-    # READ FILTERING
-    add_additional_option_to_group(filer_args_group, "--use_secondary",
-                                   help="use secondary alignments (slower processing)",
-                                   action='store_true', default=False)
-    add_additional_option_to_group(filer_args_group, "--no_secondary",
-                                   help="deprecated, secondary alignments are not used by default (kept for user convenience)",
-                                   action='store_true', default=False)
-    add_additional_option_to_group(filer_args_group, "--min_mapq",
-                                   help="ignore alignments with MAPQ < this (also filters out secondary alignments, default: None)", type=int)
-    add_additional_option_to_group(filer_args_group, "--inconsistent_mapq_cutoff",
-                                   help="ignore inconsistent alignments with MAPQ < this (works only with the reference annotation, default=5)",
-                                   type=int, default=5)
-    add_additional_option_to_group(filer_args_group, "--simple_alignments_mapq_cutoff",
-                                   help="ignore alignments with 1 or 2 exons and MAPQ < this "
-                                        "(works only in annotation-free mode, default=1)", type=int, default=1)
-    add_additional_option_to_group(filer_args_group, "--max_coverage_small_chr",
-                                   help="process only a fraction of reads for high-coverage loci on small chromosomes, "
-                                        "e.g. mitochondrial (default 1000000); significantly improves running time and RAM",
-                                   type=int, default=1000000)
-    add_additional_option_to_group(filer_args_group, "--max_coverage_normal_chr",
-                                   help="process only a fraction of reads for high-coverage loci on usual chromosomes"
-                                        " (default -1 = infinity);  improves running time and RAM",
-                                   type=int, default=-1)
+                                        "when file_name grouping is used [true]")
 
     # REST
     add_hidden_option("--graph_clustering_distance", type=int, default=None,
@@ -398,9 +379,9 @@ def parse_args(cmd_args=None, namespace=None):
     # These flags are intentionally hidden from --help/--full_help; the run
     # emits a clearly marked warning when they are used.
     add_hidden_option("--collect_polya_training", type=str, default=None,
-                      help="Developer: dump per-peak features + true_peak label for polyA training to this CSV path.")
+                      help="developer: dump per-peak features + true_peak label for polyA training to this CSV path.")
     add_hidden_option("--collect_tss_training", type=str, default=None,
-                      help="Developer: dump per-peak features + true_peak label for TSS training to this CSV path.")
+                      help="developer: dump per-peak features + true_peak label for TSS training to this CSV path.")
 
     isoquant_version = "3.12.0"
     try:
@@ -412,7 +393,8 @@ def parse_args(cmd_args=None, namespace=None):
             isoquant_version = _get_version("isoquant")
         except Exception:
             pass
-    parser.add_argument('--version', '-v', action='version', version='IsoQuant ' + isoquant_version)
+    parser.add_argument('--version', '-v', action='version', version='IsoQuant ' + isoquant_version,
+                        help="show IsoQuant version and exit")
 
     args = parser.parse_args(cmd_args, namespace)
 
@@ -422,10 +404,10 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="resume failed run, specify only output folder, "
                                         "input options are not allowed")
         resume_parser.add_argument("--output", "-o",
-                                   help="output folder, will be created automatically [default=isoquant_output]",
+                                   help="output folder, will be created automatically [isoquant_output]",
                                    type=str, required=True)
         resume_parser.add_argument('--debug', action='store_true', default=argparse.SUPPRESS,
-                                   help='Debug log output.')
+                                   help='debug log output.')
         resume_parser.add_argument("--threads", "-t", help="number of threads to use",
                                    type=int, default=argparse.SUPPRESS)
         resume_parser.add_argument("--high_memory",
@@ -718,9 +700,6 @@ def _apply_stage_warnings(args):
     if args.no_model_construction and args.sqanti_output:
         args.sqanti_output = False
         logger.warning("--sqanti_output option has no effect without model construction")
-
-    if args.no_secondary:
-        logger.info("--no_secondary option has no effect and will be deprecated, secondary alignments are not used by default")
 
     if args.process_only_chr and args.discard_chr:
         args.discard_chr = []
