@@ -14,6 +14,7 @@ from isoquant_lib.common import find_closest, overlaps
 
 logger = logging.getLogger('IsoQuant')
 
+
 class TerminalVertex:
     # Terminal (read-terminus) vertex type codes stored as tuple[0] in (code, position).
     # genomic-right (read-end) side:
@@ -280,7 +281,7 @@ class IntronGraph:
                 intron2 = assignment.corrected_introns[i + 1]
                 self.add_edge(intron1, intron2)
 
-        self.max_coverage =  max(self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
+        self.max_coverage = max(self.intron_collector.clustered_introns.values()) if self.intron_collector.clustered_introns else 0
 
     def simplify(self):
         logger.debug("Simplifying graph")
@@ -554,8 +555,8 @@ class IntronGraph:
                 # corner case when substituted intron appears to be shifted to the left
                 continue
             polyt_detected = assignment.strand == '-' and \
-                             (assignment.polya_info.external_polyt_pos != -1 or
-                              assignment.polya_info.internal_polyt_pos != -1)
+                (assignment.polya_info.external_polyt_pos != -1 or
+                 assignment.polya_info.internal_polyt_pos != -1)
             if polyt_detected:
                 polyt_starts[starting_intron][read_start] += 1
             elif not self.is_start_internal(starting_intron, read_start):
@@ -567,8 +568,8 @@ class IntronGraph:
                 # corner case when substituted intron appears to be shifted to the right
                 continue
             polya_detected = assignment.strand == '+' and \
-                             (assignment.polya_info.external_polya_pos != -1 or
-                              assignment.polya_info.internal_polya_pos != -1)
+                (assignment.polya_info.external_polya_pos != -1 or
+                 assignment.polya_info.internal_polya_pos != -1)
             if polya_detected:
                 polya_ends[terminating_intron][read_end] += 1
             elif not self.is_end_internal(terminating_intron, read_end):
@@ -588,7 +589,7 @@ class IntronGraph:
 
         known_positions = self.terminal_known_positions[intron] if read_end else self.starting_known_positions[intron]
         while position_dict:
-            best_pair = max(position_dict.items(), key=lambda x:x[1])
+            best_pair = max(position_dict.items(), key=lambda x: x[1])
             top_position = best_pair[0]
             nearest_position, diff_to_nearest_position = find_closest(top_position, known_positions)
             if nearest_position and diff_to_nearest_position <= self.params.apa_delta:
@@ -610,7 +611,7 @@ class IntronGraph:
             return clustered_counts
         cutoff = max(max_count * self.params.terminal_position_rel, self.params.terminal_position_abs)
         result = {}
-        for k,v in clustered_counts.items():
+        for k, v in clustered_counts.items():
             if v >= cutoff:
                 result[k] = v
         return result

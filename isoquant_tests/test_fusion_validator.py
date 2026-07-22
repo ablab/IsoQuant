@@ -635,6 +635,7 @@ class TestMergeFusions:
         assert fusion2 in fusions_to_discard
         assert len(self.detector.fusion_candidates[fusion1]) == 3
 
+
 class TestFilterEarlyNonCodingGenes:
     """Test the filter_early_non_coding_genes method."""
 

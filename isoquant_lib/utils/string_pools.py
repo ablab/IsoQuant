@@ -247,7 +247,7 @@ class StringPoolManager:
         logger.debug(f"File name pool: {len(self.file_name_pool)} unique readable names")
 
     def build_barcode_spot_pool(self, barcode2spot_spec: str, column_index: int = 0,
-                                 file_column: int = 1):
+                                file_column: int = 1):
         """
         Build barcode-to-spot pool for a specific column.
 
@@ -499,7 +499,7 @@ class StringPoolManager:
 
         # Only serialize non-empty dynamic pools
         non_empty_pools = {idx: pool for idx, pool in self.read_group_dynamic_pools.items()
-                          if len(pool) > 0}
+                           if len(pool) > 0}
 
         write_int(len(non_empty_pools), outfile)
         for spec_index in sorted(non_empty_pools.keys()):
@@ -617,7 +617,7 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
             filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
             for col_idx, file_col in enumerate(spot_cols):
                 string_pools.build_barcode_spot_pool(args.barcode2spot, column_index=col_idx,
-                                                      file_column=file_col)
+                                                     file_column=file_col)
 
     # Load per-chromosome pools if requested
     if chr_id:

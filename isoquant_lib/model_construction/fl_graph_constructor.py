@@ -91,7 +91,7 @@ class GraphBasedConstructor:
         # a minor trick to compare tuples of pairs, whose starting and terminating elements have different type
         logger.debug("Total FL paths %d" % len(self.ctx.path_storage.fl_paths))
         for path in sorted(self.ctx.path_storage.fl_paths,
-                           key=cmp_to_key(lambda x,y: cmp(x,y) if len(x)==len(y) else cmp(len(y), len(x)))):
+                           key=cmp_to_key(lambda x, y: cmp(x, y) if len(x) == len(y) else cmp(len(y), len(x)))):
             # do not include terminal vertices
             # logger.debug(">>> Considering path " + str(path))
             intron_path = path[1:-1]
@@ -135,13 +135,13 @@ class GraphBasedConstructor:
                 if reference_isoform in self.store.detected_known_isoforms:
                     pass
                 elif count < self.args.min_known_count:
-                    pass # logger.debug("uuu Isoform %s has low coverage %d" % (reference_isoform, count))
+                    pass  # logger.debug("uuu Isoform %s has low coverage %d" % (reference_isoform, count))
                 else:
                     new_model = self.store.transcript_from_reference(reference_isoform)
                     self.store.detected_known_isoforms.add(reference_isoform)
-                    #logger.debug("Adding known spliced isoform %s" % reference_isoform)
-                    #logger.debug("Annotated positions: %d, %d, %s" % (new_model.exon_blocks[0][0], new_model.exon_blocks[-1][1], new_model.strand))
-                    #logger.debug("Graph positions: %s, %s" % (str(path[0]), str(path[-1])))
+                    # logger.debug("Adding known spliced isoform %s" % reference_isoform)
+                    # logger.debug("Annotated positions: %d, %d, %s" % (new_model.exon_blocks[0][0], new_model.exon_blocks[-1][1], new_model.strand))
+                    # logger.debug("Graph positions: %s, %s" % (str(path[0]), str(path[-1])))
             else:
                 # adding FL novel isoform
                 # component_coverage = self.intron_graph.get_max_component_coverage(intron_path)
@@ -153,7 +153,7 @@ class GraphBasedConstructor:
                 transcript_strand = self.strand_detector.get_strand(intron_path, has_polya, has_polyt)
                 transcript_clean_strand = self.strand_detector.get_clean_strand(intron_path)
 
-                #logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
+                # logger.debug("uuu Novel isoform %s has coverage: %d cutoff = %d, component cov = %d, max_coverage = %d"
                 #             % (new_transcript_id, count, novel_isoform_cutoff, component_coverage, self.intron_graph.max_coverage))
                 if count < novel_isoform_cutoff:
                     # logger.debug("uuu Novel isoform %s has low coverage: %d\t%d" % (new_transcript_id, count, novel_isoform_cutoff))
@@ -174,10 +174,10 @@ class GraphBasedConstructor:
                         read_assignments = self.ctx.path_storage.paths_to_reads[path]
                         if read_assignments:
                             file_groups = set([a.read_group[self.file_name_group_idx]
-                                             for a in read_assignments
-                                             if self.file_name_group_idx < len(a.read_group)])
+                                               for a in read_assignments
+                                               if self.file_name_group_idx < len(a.read_group)])
                             if len(file_groups) <= 1:
-                                #logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
+                                # logger.debug("%s was suspended due to technical replicas check" % new_transcript_id)
                                 continue
 
                     transcript_gene = self.ctx.select_reference_gene(intron_path, transcript_range, transcript_strand)

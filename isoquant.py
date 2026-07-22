@@ -66,6 +66,7 @@ logger = logging.getLogger('IsoQuant')
 # Large output file types for --large_output option
 LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
 
+
 def bool_str(s):
     s = s.lower()
     if s not in {'false', 'true', '0', '1'}:
@@ -170,14 +171,14 @@ def parse_args(cmd_args=None, namespace=None):
 
     # INPUT PROPERTIES
     input_args_group.add_argument("--data_type", "-d", type=str, choices=DATA_TYPE_ALIASES.keys(),
-                        help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
+                                  help="type of data to process, supported types are: " + ", ".join(DATA_TYPE_ALIASES.keys()))
     input_args_group.add_argument('--stranded',  type=str, help="reads strandness type, supported values are: " +
-                        ", ".join(SUPPORTED_STRANDEDNESS), default="none")
+                                  ", ".join(SUPPORTED_STRANDEDNESS), default="none")
     input_args_group.add_argument('--polya_trimmed', default=PolyATrimmed.none.name, type=str,
                                   choices=[e.name for e in PolyATrimmed],
                                   help="define reads which had polyA tail trimmed")
     input_args_group.add_argument('--fl_data', action='store_true', default=False,
-                        help="reads represent FL transcripts; both ends of the read are considered to be reliable")
+                                  help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
     # SC ARGUMENTS
     add_additional_option_to_group(sc_args_group, "--mode", "-m", type=str, choices=ISOQUANT_MODES,
@@ -233,7 +234,6 @@ def parse_args(cmd_args=None, namespace=None):
                                    default=False,
                                    help="Developer: disable canonical splice-site correction of novel transcript models.")
 
-
     add_additional_option_to_group(algo_args_group, "--transcript_quantification", choices=COUNTING_STRATEGIES,
                                    help="transcript quantification strategy", type=str,
                                    default=CountingStrategy.unique_only.name)
@@ -258,7 +258,6 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(algo_args_group, "--use_replicas", type=bool_str, default=True,
                                    help="require novel transcripts to be confirmed by multiple files "
                                         "when file_name grouping is used (default: true)")
-
 
     # PIPELINE STEPS
     pipeline_args_group.add_argument("--threads", "-t", help="number of threads to use", type=int,
@@ -303,9 +302,9 @@ def parse_args(cmd_args=None, namespace=None):
 
     # OUTPUT SETUP
     output_setup_args_group.add_argument('--check_canonical', action='store_true', default=False,
-                                     help="report whether splice junctions are canonical")
+                                         help="report whether splice junctions are canonical")
     output_setup_args_group.add_argument("--sqanti_output", help="produce SQANTI-like TSV output",
-                                     action='store_true', default=False)
+                                         action='store_true', default=False)
     add_additional_option_to_group(output_setup_args_group, "--count_exons",
                                    help="deprecated: use --analysis exon_quantification",
                                    action='store_true', default=False)
@@ -317,7 +316,7 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(output_setup_args_group, "--old_exon_count_format", action='store_true', default=False,
                                    help="also output legacy per-exon inclusion/exclusion counts as old_exon_counts "
                                         "(deprecated, will be removed in a future release)")
-    add_additional_option_to_group(output_setup_args_group,"--bam_tags",
+    add_additional_option_to_group(output_setup_args_group, "--bam_tags",
                                    help="comma separated list of BAM tags to be imported to read_assignments.tsv",
                                    type=str)
     add_additional_option_to_group(output_setup_args_group, "--no_gzip", help="do not gzip large output files", dest="gzipped",
@@ -342,12 +341,12 @@ def parse_args(cmd_args=None, namespace=None):
 
     # ALIGNER
     add_additional_option_to_group(align_args_group, "--aligner", help="force to use this alignment method, can be " + ", ".join(SUPPORTED_ALIGNERS)
-                                        + "; chosen based on data type if not set", type=str)
+                                   + "; chosen based on data type if not set", type=str)
     add_additional_option_to_group(align_args_group,  "--no_junc_bed", action="store_true", default=False,
-                          help="do NOT use annotation for read mapping")
+                                   help="do NOT use annotation for read mapping")
     add_additional_option_to_group(align_args_group, "--junc_bed_file", type=str,
-                          help="annotation in BED format produced by minimap's paftools.js gff2bed "
-                               "(will be created automatically if not given)")
+                                   help="annotation in BED format produced by minimap's paftools.js gff2bed "
+                                   "(will be created automatically if not given)")
     add_additional_option_to_group(align_args_group, "--indexing_options", type=str,
                                    help="additional options that will be passed to the aligner indexer")
     add_additional_option_to_group(align_args_group, "--mapping_options", type=str,
@@ -454,7 +453,7 @@ def parse_args(cmd_args=None, namespace=None):
 
 def get_bam_files_from_samples(input_data) -> list:
     """Extract all BAM file paths from input_data.samples.
-    
+
     Returns a list of BAM file paths (long-read and Illumina).
     """
     bam_files: list[str] = []
@@ -1066,8 +1065,8 @@ def set_model_construction_options(args):
                                                      True, False, True, True, StrandnessReportingLevel.only_canonical),
         'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100,
                                                      False, True, False, True, StrandnessReportingLevel.only_canonical),
-        'sensitive_pacbio':ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100,
-                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
+        'sensitive_pacbio': ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100,
+                                                      False, True, False, False, StrandnessReportingLevel.only_stranded),
         'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10,
                                                      False, False, True, True, StrandnessReportingLevel.only_canonical),
         'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10,
@@ -1324,7 +1323,7 @@ def run_pipeline(args):
                 fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
                 summary = run_fusion_detection_on_bams(fd, bam_files, args.output)
                 logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
-                           (summary["total"], summary["successful"], summary["failed"]))
+                            (summary["total"], summary["successful"], summary["failed"]))
                 logger.info(" === Fusion detection finished === ")
             except Exception as e:
                 logger.warning("Fusion detection encountered an error and was skipped: %s" % str(e))
@@ -1364,7 +1363,6 @@ class TestMode(argparse.Action):
             logger.error(' === TEST FAILED ===')
             sys.exit(IsoQuantExitCode.TEST_FAILED)
         parser.exit()
-
 
     def _check_log(self):
         with open(os.path.join(self.out_dir, 'isoquant.log'), 'r') as f:

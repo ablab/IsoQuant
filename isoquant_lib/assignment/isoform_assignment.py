@@ -78,6 +78,8 @@ class ReadAssignmentType(Enum):
                         ReadAssignmentType.inconsistent_multigenic]
 
 # SQANTI-like
+
+
 @unique
 class MatchClassification(Enum):
     undefined = 0
@@ -267,80 +269,80 @@ class MatchEventSubtype(Enum):
 
 
 event_subtype_cost = {
-    MatchEventSubtype.none:0,
-    MatchEventSubtype.undefined:0,
-    MatchEventSubtype.mono_exonic:0,
-    MatchEventSubtype.fsm:0,
-    MatchEventSubtype.ism_left:0,
-    MatchEventSubtype.ism_right:0,
-    MatchEventSubtype.ism_internal:0,
-    MatchEventSubtype.mono_exon_match:0,
-    MatchEventSubtype.intron_shift:0.1,
-    MatchEventSubtype.exon_misalignment:0.1,
-    MatchEventSubtype.terminal_exon_misalignment_right:0.1,
-    MatchEventSubtype.terminal_exon_misalignment_left:0.1,
-    MatchEventSubtype.fake_terminal_exon_left:0.2,
-    MatchEventSubtype.fake_terminal_exon_right:0.2,
+    MatchEventSubtype.none: 0,
+    MatchEventSubtype.undefined: 0,
+    MatchEventSubtype.mono_exonic: 0,
+    MatchEventSubtype.fsm: 0,
+    MatchEventSubtype.ism_left: 0,
+    MatchEventSubtype.ism_right: 0,
+    MatchEventSubtype.ism_internal: 0,
+    MatchEventSubtype.mono_exon_match: 0,
+    MatchEventSubtype.intron_shift: 0.1,
+    MatchEventSubtype.exon_misalignment: 0.1,
+    MatchEventSubtype.terminal_exon_misalignment_right: 0.1,
+    MatchEventSubtype.terminal_exon_misalignment_left: 0.1,
+    MatchEventSubtype.fake_terminal_exon_left: 0.2,
+    MatchEventSubtype.fake_terminal_exon_right: 0.2,
     # minor alternations
-    MatchEventSubtype.exon_elongation_left:0.1,
-    MatchEventSubtype.exon_elongation_right:0.1,
+    MatchEventSubtype.exon_elongation_left: 0.1,
+    MatchEventSubtype.exon_elongation_right: 0.1,
     # intron retentions
-    MatchEventSubtype.intron_retention:0.6,
-    MatchEventSubtype.unspliced_intron_retention:0.6,
-    MatchEventSubtype.incomplete_intron_retention_left:0.7,
-    MatchEventSubtype.incomplete_intron_retention_right:0.7,
-    MatchEventSubtype.fake_micro_intron_retention:0.1,
+    MatchEventSubtype.intron_retention: 0.6,
+    MatchEventSubtype.unspliced_intron_retention: 0.6,
+    MatchEventSubtype.incomplete_intron_retention_left: 0.7,
+    MatchEventSubtype.incomplete_intron_retention_right: 0.7,
+    MatchEventSubtype.fake_micro_intron_retention: 0.1,
     # major alternation
     # alternative donor/acceptor sites
-    MatchEventSubtype.alt_left_site_known:1,
-    MatchEventSubtype.alt_right_site_known:1,
-    MatchEventSubtype.alt_left_site_novel:1,
-    MatchEventSubtype.alt_right_site_novel:1,
+    MatchEventSubtype.alt_left_site_known: 1,
+    MatchEventSubtype.alt_right_site_known: 1,
+    MatchEventSubtype.alt_left_site_novel: 1,
+    MatchEventSubtype.alt_right_site_novel: 1,
     # additional introns in the middle
-    MatchEventSubtype.extra_intron_novel:1,
-    MatchEventSubtype.extra_intron_known:1,
+    MatchEventSubtype.extra_intron_novel: 1,
+    MatchEventSubtype.extra_intron_known: 1,
     # extra inrons on the sides
-    MatchEventSubtype.extra_intron_flanking_left:1,
-    MatchEventSubtype.extra_intron_flanking_right:1,
+    MatchEventSubtype.extra_intron_flanking_left: 1,
+    MatchEventSubtype.extra_intron_flanking_right: 1,
     # significant exon elongation, more than allowed
-    MatchEventSubtype.major_exon_elongation_left:0.6,
-    MatchEventSubtype.major_exon_elongation_right:0.6,
+    MatchEventSubtype.major_exon_elongation_left: 0.6,
+    MatchEventSubtype.major_exon_elongation_right: 0.6,
     # other intron modifications
-    MatchEventSubtype.intron_migration:1,
-    MatchEventSubtype.intron_alternation_novel:1,
-    MatchEventSubtype.intron_alternation_known:1,
+    MatchEventSubtype.intron_migration: 1,
+    MatchEventSubtype.intron_alternation_novel: 1,
+    MatchEventSubtype.intron_alternation_known: 1,
     # mutually exclusive
-    MatchEventSubtype.mutually_exclusive_exons_novel:0.8,
-    MatchEventSubtype.mutually_exclusive_exons_known:0.8,
+    MatchEventSubtype.mutually_exclusive_exons_novel: 0.8,
+    MatchEventSubtype.mutually_exclusive_exons_known: 0.8,
     # exon skipping
-    MatchEventSubtype.exon_skipping_known:1,
-    MatchEventSubtype.exon_skipping_novel:1,
-    MatchEventSubtype.exon_merge_known:0.75,
-    MatchEventSubtype.exon_merge_novel:0.75,
+    MatchEventSubtype.exon_skipping_known: 1,
+    MatchEventSubtype.exon_skipping_novel: 1,
+    MatchEventSubtype.exon_merge_known: 0.75,
+    MatchEventSubtype.exon_merge_novel: 0.75,
     # exon gain
-    MatchEventSubtype.exon_gain_known:1,
-    MatchEventSubtype.exon_gain_novel:1,
-    MatchEventSubtype.exon_detach_known:0.75,
-    MatchEventSubtype.exon_detach_novel:0.75,
-    MatchEventSubtype.terminal_exon_shift_known:0.5,
-    MatchEventSubtype.terminal_exon_shift_novel:0.5,
+    MatchEventSubtype.exon_gain_known: 1,
+    MatchEventSubtype.exon_gain_novel: 1,
+    MatchEventSubtype.exon_detach_known: 0.75,
+    MatchEventSubtype.exon_detach_novel: 0.75,
+    MatchEventSubtype.terminal_exon_shift_known: 0.5,
+    MatchEventSubtype.terminal_exon_shift_novel: 0.5,
     # other
-    MatchEventSubtype.alternative_structure_novel:1,
-    MatchEventSubtype.alternative_structure_known:1,
+    MatchEventSubtype.alternative_structure_novel: 1,
+    MatchEventSubtype.alternative_structure_known: 1,
     # TTS and TSS
-    MatchEventSubtype.alternative_polya_site_left:0.6,
-    MatchEventSubtype.alternative_polya_site_right:0.6,
-    MatchEventSubtype.internal_polya_left:0.5,
-    MatchEventSubtype.internal_polya_right:0.5,
-    MatchEventSubtype.alternative_tss_left :0.6,
-    MatchEventSubtype.alternative_tss_right :0.6,
-    MatchEventSubtype.correct_polya_site_left:0,
-    MatchEventSubtype.correct_polya_site_right:0,
-    MatchEventSubtype.aligned_polya_tail:0,
-    MatchEventSubtype.terminal_site_match_left:0,
-    MatchEventSubtype.terminal_site_match_right:0,
-    MatchEventSubtype.terminal_site_match_left_precise:0,
-    MatchEventSubtype.terminal_site_match_right_precise:0
+    MatchEventSubtype.alternative_polya_site_left: 0.6,
+    MatchEventSubtype.alternative_polya_site_right: 0.6,
+    MatchEventSubtype.internal_polya_left: 0.5,
+    MatchEventSubtype.internal_polya_right: 0.5,
+    MatchEventSubtype.alternative_tss_left: 0.6,
+    MatchEventSubtype.alternative_tss_right: 0.6,
+    MatchEventSubtype.correct_polya_site_left: 0,
+    MatchEventSubtype.correct_polya_site_right: 0,
+    MatchEventSubtype.aligned_polya_tail: 0,
+    MatchEventSubtype.terminal_site_match_left: 0,
+    MatchEventSubtype.terminal_site_match_right: 0,
+    MatchEventSubtype.terminal_site_match_left_precise: 0,
+    MatchEventSubtype.terminal_site_match_right_precise: 0
 }
 
 
@@ -414,9 +416,9 @@ class SupplementaryMatchConstants:
 
 
 class MatchEvent:
-    def __init__(self, event_type:MatchEventSubtype,
-                 isoform_region:tuple=SupplementaryMatchConstants.undefined_region,
-                 read_region:tuple=SupplementaryMatchConstants.undefined_region,
+    def __init__(self, event_type: MatchEventSubtype,
+                 isoform_region: tuple = SupplementaryMatchConstants.undefined_region,
+                 read_region: tuple = SupplementaryMatchConstants.undefined_region,
                  event_info=0):
         self.event_type = event_type
         self.isoform_region = isoform_region
@@ -454,8 +456,9 @@ class IsoformMatch:
         Gene and transcript IDs are stored as integers referencing
         shared string pools (string_pools parameter required).
     """
+
     def __init__(self, match_classification, string_pools, assigned_gene=None, assigned_transcript=None,
-                 match_subclassification = None, transcript_strand='.', penalty_score=0):
+                 match_subclassification=None, transcript_strand='.', penalty_score=0):
         # Store string pools reference (required for memory optimization)
         assert string_pools is not None, "string_pools is required"
         self._string_pools = string_pools
@@ -539,6 +542,7 @@ class BasicReadAssignment:
         chr_id, barcode, umi, gene IDs, and isoform IDs are stored as integers
         referencing shared string pools (string_pools parameter required).
     """
+
     def __init__(self, read_assignment):
         self.assignment_id = read_assignment.assignment_id
         self.read_id = read_assignment.read_id
@@ -1007,16 +1011,16 @@ class ReadAssignment:
 
 
 match_subtype_printable_names = \
-    {MatchEventSubtype.ism_left : ('ism_5', 'ism_3', 'ism'),
-     MatchEventSubtype.ism_right : ('ism_3', 'ism_5', 'ism'),
-     MatchEventSubtype.exon_elongation_left : ('exon_elongation_5', 'exon_elongation_3', 'exon_elongation'),
-     MatchEventSubtype.exon_elongation_right : ('exon_elongation_3', 'exon_elongation_5', 'exon_elongation'),
+    {MatchEventSubtype.ism_left: ('ism_5', 'ism_3', 'ism'),
+     MatchEventSubtype.ism_right: ('ism_3', 'ism_5', 'ism'),
+     MatchEventSubtype.exon_elongation_left: ('exon_elongation_5', 'exon_elongation_3', 'exon_elongation'),
+     MatchEventSubtype.exon_elongation_right: ('exon_elongation_3', 'exon_elongation_5', 'exon_elongation'),
      MatchEventSubtype.major_exon_elongation_left: ('major_exon_elongation_5', 'major_exon_elongation_3', 'major_exon_elongation'),
      MatchEventSubtype.major_exon_elongation_right: ('major_exon_elongation_3', 'major_exon_elongation_5', 'major_exon_elongation'),
-     MatchEventSubtype.fake_terminal_exon_left : ('fake_terminal_exon_5', 'fake_terminal_exon_3', 'fake_terminal_exon'),
-     MatchEventSubtype.fake_terminal_exon_right : ('fake_terminal_exon_3', 'fake_terminal_exon_5', 'fake_terminal_exon'),
-     MatchEventSubtype.terminal_exon_misalignment_left : ('terminal_exon_misalignment_5', 'terminal_exon_misalignment_3', 'terminal_exon_misalignment'),
-     MatchEventSubtype.terminal_exon_misalignment_right : ('terminal_exon_misalignment_3', 'terminal_exon_misalignment_5', 'terminal_exon_misalignment'),
+     MatchEventSubtype.fake_terminal_exon_left: ('fake_terminal_exon_5', 'fake_terminal_exon_3', 'fake_terminal_exon'),
+     MatchEventSubtype.fake_terminal_exon_right: ('fake_terminal_exon_3', 'fake_terminal_exon_5', 'fake_terminal_exon'),
+     MatchEventSubtype.terminal_exon_misalignment_left: ('terminal_exon_misalignment_5', 'terminal_exon_misalignment_3', 'terminal_exon_misalignment'),
+     MatchEventSubtype.terminal_exon_misalignment_right: ('terminal_exon_misalignment_3', 'terminal_exon_misalignment_5', 'terminal_exon_misalignment'),
      MatchEventSubtype.incomplete_intron_retention_left: ('incomplete_intron_retention_5', 'incomplete_intron_retention_3', 'incomplete_intron_retention'),
      MatchEventSubtype.incomplete_intron_retention_right: ('incomplete_intron_retention_3', 'incomplete_intron_retention_5', 'incomplete_intron_retention'),
      MatchEventSubtype.extra_intron_flanking_left: ('extra_intron_5', 'extra_intron_3', 'extra_intron'),
@@ -1030,14 +1034,14 @@ match_subtype_printable_names = \
      MatchEventSubtype.terminal_site_match_left_precise: ('tss_match_precise', 'tes_match_precise', 'terminal_position_match_precise'),
      MatchEventSubtype.terminal_site_match_right_precise: ('tes_match_precise', 'tss_match_precise', 'terminal_position_match_precise')
      }
-     #MatchEventSubtype.alternative_polya_site_left: ('alternative_polya_site_5', 'alternative_polya_site_3'),
-     #MatchEventSubtype.alternative_polya_site_right: ('alternative_polya_site_3', 'alternative_polya_site_5'),
-     #MatchEventSubtype.internal_polya_left: ('internal_polya_site_5', 'internal_polya_site_3'),
-     #MatchEventSubtype.internal_polya_right: ('internal_polya_site_3', 'internal_polya_site_5'),
-     #MatchEventSubtype.correct_polya_site_left: ('correct_polya_site_5', 'correct_polya_site_3'),
-     #MatchEventSubtype.correct_polya_site_right: ('correct_polya_site_3', 'correct_polya_site_5'),
-     #MatchEventSubtype.alternative_tss_left: ('alternative_tss_5', 'alternative_tss_3'),
-     #MatchEventSubtype.alternative_tss_right: ('alternative_tss_3', 'alternative_tss_5')}
+# MatchEventSubtype.alternative_polya_site_left: ('alternative_polya_site_5', 'alternative_polya_site_3'),
+# MatchEventSubtype.alternative_polya_site_right: ('alternative_polya_site_3', 'alternative_polya_site_5'),
+# MatchEventSubtype.internal_polya_left: ('internal_polya_site_5', 'internal_polya_site_3'),
+# MatchEventSubtype.internal_polya_right: ('internal_polya_site_3', 'internal_polya_site_5'),
+# MatchEventSubtype.correct_polya_site_left: ('correct_polya_site_5', 'correct_polya_site_3'),
+# MatchEventSubtype.correct_polya_site_right: ('correct_polya_site_3', 'correct_polya_site_5'),
+# MatchEventSubtype.alternative_tss_left: ('alternative_tss_5', 'alternative_tss_3'),
+# MatchEventSubtype.alternative_tss_right: ('alternative_tss_3', 'alternative_tss_5')}
 
 
 def match_subtype_to_str(event, strand):

@@ -238,7 +238,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
 
     grouping_strategy_names = get_grouping_strategy_names(args)
     aggregator = ReadAssignmentAggregator(args, sample, string_pools, loader.genedb, chr_id,
-                                         grouping_strategy_names=grouping_strategy_names)
+                                          grouping_strategy_names=grouping_strategy_names)
 
     transcript_stat_counter = EnumStats()
     io_support = IOSupport(args)

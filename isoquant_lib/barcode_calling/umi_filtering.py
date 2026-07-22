@@ -346,7 +346,7 @@ class UMIFilter:
                 yield r
 
     def _process_chunk(self, gene_barcode_dict: Dict[str, Dict[str, List[ReadAssignment]]],
-                      allinfo_outf, read_ids_outf=None) -> Tuple[int, int]:
+                       allinfo_outf, read_ids_outf=None) -> Tuple[int, int]:
         """
         Process a chunk of reads grouped by gene and barcode.
 
@@ -421,9 +421,9 @@ class UMIFilter:
                 self.stats["Uniquely assigned and spliced and barcoded"] += 1
 
     def process_single_chr(self, chr_id: str, saves_prefix: str, transcript_type_dict: Dict[str, Tuple[str, int]],
-                          barcode_feature_table: Dict[str, str],
-                          all_info_file_name: str, filtered_reads_file_name: Optional[str],
-                          stats_output_file_name: str, string_pools=None) -> Tuple[str, str]:
+                           barcode_feature_table: Dict[str, str],
+                           all_info_file_name: str, filtered_reads_file_name: Optional[str],
+                           stats_output_file_name: str, string_pools=None) -> Tuple[str, str]:
         """
         Process UMI filtering for a single chromosome.
 

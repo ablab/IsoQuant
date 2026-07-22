@@ -29,7 +29,7 @@ ASSEMBLY = 'assembly'
 DATA_TYPE_ALIASES = {PACBIO_CCS_DATA: PACBIO_CCS_DATA, "pacbio": PACBIO_CCS_DATA, NANOPORE_DATA: NANOPORE_DATA,
                      "ont": NANOPORE_DATA, ASSEMBLY: ASSEMBLY, "transcripts": ASSEMBLY}
 DATATYPE_TO_ALIGNER = {ASSEMBLY: 'minimap2', PACBIO_CCS_DATA: 'minimap2', NANOPORE_DATA: 'minimap2'}
-                       # 'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
+# 'barcoded_se_reads' : 'star', 'barcoded_pe_reads' : 'star'}
 
 SUPPORTED_ALIGNERS = ['starlong', 'minimap2']
 SUPPORTED_STRANDEDNESS = ['forward', 'reverse', 'none']
@@ -37,6 +37,7 @@ SUPPORTED_STRANDEDNESS = ['forward', 'reverse', 'none']
 KMER_SIZE = {ASSEMBLY: '15', PACBIO_CCS_DATA: '15', NANOPORE_DATA: '14'}
 # CANONICAL_SITE_BONUS = {ASSEMBLY: '5', PACBIO_CCS_DATA: '5', NANOPORE_DATA: '9'}
 MINIMAP_PRESET = {ASSEMBLY: 'splice:hq', PACBIO_CCS_DATA: 'splice:hq', NANOPORE_DATA: 'splice'}
+
 
 class DataSetReadMapper:
     def __init__(self, args):
@@ -151,8 +152,8 @@ def find_stored_bed(args):
     reference_mtime = converted_beds.get(genedb_filename, {}).get('reference_mtime')
     if os.path.exists(genedb_filename) and os.path.getmtime(genedb_filename) == reference_mtime:
         if os.path.exists(bed_filename) and os.path.getmtime(bed_filename) == bed_mtime:
-                logger.info('BED file found. Using {}'.format(bed_filename))
-                return bed_filename
+            logger.info('BED file found. Using {}'.format(bed_filename))
+            return bed_filename
     return None
 
 

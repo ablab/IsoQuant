@@ -91,8 +91,8 @@ class PolyAFixer:
         # correcting fake terminal exons
         return polya_exon_count
 
-
     # correct polyT position when fake terminal exons are present or isoform has short terminal exons
+
     def count_polyt_exons(self, read_exons, internal_polyt_pos):
         # find exons beyond internal polyT
         if internal_polyt_pos == -1:
@@ -105,7 +105,7 @@ class PolyAFixer:
             len_to_polyt = exon[1] - internal_polyt_pos
             if len_to_polyt <= 0 or \
                     (len_to_polyt <= self.params.max_fake_terminal_exon_len and
-                    2 * len_to_polyt < internal_polyt_pos - exon[0]):
+                     2 * len_to_polyt < internal_polyt_pos - exon[0]):
                 # more than 2/3 of the exon is polyT
                 polya_exon_count += 1
 
@@ -305,14 +305,14 @@ class PolyAVerifier:
         assert fake_terminal_exon_count < len(read_exons)
 
         return shift_polya(read_exons, fake_terminal_exon_count, polya_info.external_polya_pos), \
-               shift_polya(read_exons, fake_terminal_exon_count, polya_info.internal_polya_pos)
+            shift_polya(read_exons, fake_terminal_exon_count, polya_info.internal_polya_pos)
 
     # correct polyT position when fake terminal exons are present or isoform has short terminal exons
     def correct_polyt_positions(self, read_exons, fake_terminal_exon_count, polya_info):
         assert fake_terminal_exon_count < len(read_exons)
 
         return shift_polyt(read_exons, fake_terminal_exon_count, polya_info.external_polyt_pos), \
-               shift_polyt(read_exons, fake_terminal_exon_count, polya_info.internal_polyt_pos)
+            shift_polyt(read_exons, fake_terminal_exon_count, polya_info.internal_polyt_pos)
 
     # check isoform exons beyond polyA
     def detect_reference_exons_beyond_polya(self, isoform_exons, external_polya_pos, internal_polya_pos, matching_events):
@@ -377,7 +377,7 @@ class PolyAVerifier:
         dist_to_internal_polya = abs(isoform_end - internal_polya_pos) if internal_polya_pos != -1 else math.inf
 
         # polyA position is close, we are satisfied
-        if  dist_to_internal_polya <= self.params.apa_delta and dist_to_internal_polya <= dist_to_external_polya:
+        if dist_to_internal_polya <= self.params.apa_delta and dist_to_internal_polya <= dist_to_external_polya:
             logger.debug("Internal polyAT is good %d, distance %d" %
                          (internal_polya_pos, dist_to_internal_polya))
             matching_events.append(MatchEvent(event_type, event_info=internal_polya_pos))

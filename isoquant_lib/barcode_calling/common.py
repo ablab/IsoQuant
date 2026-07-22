@@ -38,7 +38,7 @@ if NUMBA_AVAILABLE:
         return result
 
 
-def find_polyt_start(seq, window_size = 16, polya_fraction = 0.75):
+def find_polyt_start(seq, window_size=16, polya_fraction=0.75):
     polyA_count = int(window_size * polya_fraction)
 
     if len(seq) < window_size:
@@ -62,7 +62,7 @@ def find_polyt_start(seq, window_size = 16, polya_fraction = 0.75):
     return i + max(0, seq[i:].find('TTTT'))
 
 
-def find_polyt(seq, window_size = 16, polya_fraction = 0.75):
+def find_polyt(seq, window_size=16, polya_fraction=0.75):
     polyA_count = int(window_size * polya_fraction)
 
     if len(seq) < window_size:
@@ -107,7 +107,7 @@ def find_polyt(seq, window_size = 16, polya_fraction = 0.75):
 base_comp = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', " ": " "}
 
 
-def reverese_complement(my_seq):  ## obtain reverse complement of a sequence
+def reverese_complement(my_seq):  # obtain reverse complement of a sequence
     lms = list(map(lambda x: base_comp[x], my_seq))[::-1]
     return ''.join(lms)
 
@@ -144,7 +144,7 @@ def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_
             best_match[0] = alignment.optimal_score
             best_match[1] = alignment.reference_start - alignment.read_start
             best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
-        elif alignment.optimal_score  == best_match[0] and alignment.reference_start < best_match[1]:
+        elif alignment.optimal_score == best_match[0] and alignment.reference_start < best_match[1]:
             best_barcode = barcode
             second_best_score = best_match[0]
             best_match[1] = alignment.reference_start - alignment.read_start
@@ -205,7 +205,7 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
     if pattern_index is None:
         return None, None
 
-    start_pos, end_pos, pattern_start, pattern_end, score  = None, None, None, None, 0
+    start_pos, end_pos, pattern_start, pattern_end, score = None, None, None, None, 0
     last_potential_pos = -2*len(pattern)
     for match_position in pattern_occurrences[pattern_index][2]:
         if match_position - last_potential_pos < len(pattern):
@@ -233,7 +233,7 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
 
 
 def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences: list,
-                           min_score=0, start_delta=-1, end_delta=-1):
+                                 min_score=0, start_delta=-1, end_delta=-1):
     pattern_index = None
     for i, p in enumerate(pattern_occurrences):
         if p[0] == pattern:
@@ -242,7 +242,7 @@ def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, patte
     if pattern_index is None:
         return None, None
 
-    start_pos, end_pos, pattern_start, pattern_end, score  = None, None, None, None, 0
+    start_pos, end_pos, pattern_start, pattern_end, score = None, None, None, None, 0
     last_potential_pos = -2*len(pattern)
     for match_position in pattern_occurrences[pattern_index][2]:
         if match_position - last_potential_pos < len(pattern):
@@ -419,7 +419,6 @@ def bit_to_str(seq, seq_len):
     return str_seq
 
 
-
 def load_h5_barcodes_bit(h5_file_path, dataset_name='bpMatrix_1'):
     raise NotImplementedError()
     import h5py
@@ -454,7 +453,7 @@ def load_barcodes(inf, needs_iterator=False):
 
 def find_optimal_kmer_size(bc_len, bc_count, min_k=6, max_k=14, kmer_density=50):
     k = min_k
-    while bc_count * (bc_len - k + 1)  * (bc_len - k + 1) > math.pow(4, k) * kmer_density:
+    while bc_count * (bc_len - k + 1) * (bc_len - k + 1) > math.pow(4, k) * kmer_density:
         k += 1
 
     return min(k, max_k)

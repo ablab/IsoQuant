@@ -32,16 +32,16 @@ class IntronPathStorage:
                 continue
             read_end = a.corrected_exons[-1][1]
             is_end_trusted = a.strand == '+' and \
-                             (a.polya_info.external_polya_pos != -1 or
-                              a.polya_info.internal_polya_pos != -1)
+                (a.polya_info.external_polya_pos != -1 or
+                 a.polya_info.internal_polya_pos != -1)
             terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted)
             if terminal_vertex:
                 intron_path.append(terminal_vertex)
 
             read_start = a.corrected_exons[0][0]
             is_start_trusted = a.strand == '-' and \
-                               (a.polya_info.external_polyt_pos != -1 or
-                                a.polya_info.internal_polyt_pos != -1)
+                (a.polya_info.external_polyt_pos != -1 or
+                 a.polya_info.internal_polyt_pos != -1)
             starting_vertex = self.path_processor.thread_starts(intron_path[0], read_start, is_start_trusted)
             if starting_vertex:
                 intron_path = [starting_vertex] + intron_path
@@ -103,7 +103,7 @@ class IntronPathProcessor:
         # confirmed 5' TSS ends for '-' transcripts, and confirmed polyA ends)
         all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, TerminalVertex.read_end)) +
                                    list(self.intron_graph.get_outgoing(intron, TerminalVertex.tss_right)) +
-                                   list(possible_polyas), key=lambda x:x[1])
+                                   list(possible_polyas), key=lambda x: x[1])
         if len(all_possible_ends) == 0:
             return None
 

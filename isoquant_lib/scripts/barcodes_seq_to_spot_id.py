@@ -9,6 +9,7 @@
 import argparse
 import csv
 
+
 def load_mapping(file):
     """Load simple 2-column mapping into dict."""
     mapping = {}
@@ -19,6 +20,7 @@ def load_mapping(file):
                 continue
             mapping[row[0]] = row[1]
     return mapping
+
 
 def load_spot_map(file):
     """Load mapping 2um -> (8um, 16um)."""
@@ -31,6 +33,7 @@ def load_spot_map(file):
             spot2um, spot8um, spot16um = row
             mapping[spot2um[:-2]] = {"8um": spot8um[:-2], "16um": spot16um[:-2]}
     return mapping
+
 
 def convert_barcode(barcode, part1_to_y, part2_to_x, spot_map):
     """Convert barcode (p1|p2) to 2um/8um/16um spot ids."""
@@ -50,6 +53,7 @@ def convert_barcode(barcode, part1_to_y, part2_to_x, spot_map):
         return spot2um, None, None
 
     return spot2um, spot_map[spot2um]["8um"], spot_map[spot2um]["16um"]
+
 
 def transform_reads(reads_file, barcode_col, part1_to_y, part2_to_x, spot_map, output_prefix):
     with open(reads_file, newline='') as infile, \
@@ -80,6 +84,7 @@ def transform_reads(reads_file, barcode_col, part1_to_y, part2_to_x, spot_map, o
             w8.writerow(row8)
             w16.writerow(row16)
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Replace barcodes with 2um, 8um, 16um spot IDs in separate TSV files."
@@ -102,6 +107,7 @@ def main():
     spot_map = load_spot_map(args.spot_map)
 
     transform_reads(args.reads_tsv, barcode_col, part1_to_y, part2_to_x, spot_map, args.output_prefix)
+
 
 if __name__ == "__main__":
     main()

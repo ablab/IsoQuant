@@ -262,7 +262,7 @@ class AlignmentCollector:
                                           multiple_iterators=not self.params.high_memory)
         self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
-        self.barcode_dict = barcode_dict # read_id -> (barcode, umi)
+        self.barcode_dict = barcode_dict  # read_id -> (barcode, umi)
         self.barcode_tag = params.barcode_tag if getattr(params, 'barcoded_bam', False) else None
         self.umi_tag = params.umi_tag if getattr(params, 'barcoded_bam', False) else None
         self.strip_barcode_suffix = getattr(params, 'strip_barcode_suffix', False)
@@ -551,7 +551,7 @@ class AlignmentCollector:
                 alignment.cigartuples[i - 1][0] in [0, 7, 8] and
                 alignment.cigartuples[i - 1][1] <= self.params.indel_near_splice_site_dist) or \
                     (i < cigar_event_count - 2 and alignment.cigartuples[i + 2][0] in indel_events and
-                     alignment.cigartuples[i + 1][0]  in [0, 7, 8] and
+                     alignment.cigartuples[i + 1][0] in [0, 7, 8] and
                      alignment.cigartuples[i + 1][1] <= self.params.indel_near_splice_site_dist):
                 junctions_with_indels += 1
 

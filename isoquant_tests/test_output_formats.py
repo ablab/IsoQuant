@@ -40,6 +40,7 @@ def _make_string_pools(genes=("gene1",), transcripts=("tx1",)):
 
 class _FakeGeneInfo:
     """Minimal GeneInfo stand-in for counter tests."""
+
     def __init__(self, intron_features, intron_property_map, all_isoforms_introns):
         self.intron_profiles = _FakeProfiles(intron_features)
         self.intron_property_map = intron_property_map
@@ -54,6 +55,7 @@ class _FakeProfiles:
 
 class _FakeFeatureProperty:
     """Minimal FeatureInfo stand-in."""
+
     def __init__(self, fid, name_str):
         self.id = fid
         self._name = name_str

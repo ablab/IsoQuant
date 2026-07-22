@@ -110,9 +110,9 @@ class TestReadTableGrouper:
 
             # Create shared data with single column
             shared_data = SharedTableData(temp_file,
-                                         read_id_column_index=0,
-                                         group_id_column_indices=[1],
-                                         delim='\t')
+                                          read_id_column_index=0,
+                                          group_id_column_indices=[1],
+                                          delim='\t')
             grouper = ReadTableGrouper(shared_data, 0)
 
             alignment1 = MockAlignment(read_id="read_001")
@@ -136,9 +136,9 @@ class TestReadTableGrouper:
 
             # Create shared data with single column
             shared_data = SharedTableData(temp_file,
-                                         read_id_column_index=0,
-                                         group_id_column_indices=[1],
-                                         delim='\t')
+                                          read_id_column_index=0,
+                                          group_id_column_indices=[1],
+                                          delim='\t')
             grouper = ReadTableGrouper(shared_data, 0)
 
             alignment = MockAlignment(read_id="read_999")
@@ -166,9 +166,9 @@ class TestSharedTableData:
 
             # Create shared data with 3 group columns (indices 1, 2, 3)
             shared_data = SharedTableData(temp_file,
-                                         read_id_column_index=0,
-                                         group_id_column_indices=[1, 2, 3],
-                                         delim='\t')
+                                          read_id_column_index=0,
+                                          group_id_column_indices=[1, 2, 3],
+                                          delim='\t')
 
             # Create separate groupers for each column
             grouper_col1 = ReadTableGrouper(shared_data, 0)  # cell type
@@ -212,9 +212,9 @@ class TestSharedTableData:
             from isoquant_lib.assignment.read_groups import SharedTableData
 
             shared_data = SharedTableData(temp_file,
-                                         read_id_column_index=0,
-                                         group_id_column_indices=[1, 2],
-                                         delim='\t')
+                                          read_id_column_index=0,
+                                          group_id_column_indices=[1, 2],
+                                          delim='\t')
 
             grouper = ReadTableGrouper(shared_data, 0)
             alignment = MockAlignment(read_id="read_999")
@@ -418,9 +418,9 @@ class TestBarcodeSpotGrouper:
 
             # Create shared data (barcode col 0, spot col 1)
             shared_data = SharedTableData(temp_file,
-                                         read_id_column_index=0,
-                                         group_id_column_indices=[1],
-                                         delim='\t')
+                                          read_id_column_index=0,
+                                          group_id_column_indices=[1],
+                                          delim='\t')
             grouper = BarcodeSpotGrouper(shared_data, column_index=0)
 
             # Create read assignments with barcodes
@@ -448,9 +448,9 @@ class TestBarcodeSpotGrouper:
             from isoquant_lib.assignment.read_groups import SharedTableData, BarcodeSpotGrouper
 
             shared_data = SharedTableData(temp_file,
-                                         read_id_column_index=0,
-                                         group_id_column_indices=[1],
-                                         delim='\t')
+                                          read_id_column_index=0,
+                                          group_id_column_indices=[1],
+                                          delim='\t')
             grouper = BarcodeSpotGrouper(shared_data, column_index=0)
 
             # Unknown barcode
@@ -473,9 +473,9 @@ class TestBarcodeSpotGrouper:
             from isoquant_lib.assignment.read_groups import SharedTableData, BarcodeSpotGrouper
 
             shared_data = SharedTableData(temp_file,
-                                         read_id_column_index=0,
-                                         group_id_column_indices=[1],
-                                         delim='\t')
+                                          read_id_column_index=0,
+                                          group_id_column_indices=[1],
+                                          delim='\t')
             grouper = BarcodeSpotGrouper(shared_data, column_index=0)
 
             # No barcode
@@ -500,9 +500,9 @@ class TestBarcodeSpotGrouper:
 
             # Create shared data with 3 spot columns
             shared_data = SharedTableData(temp_file,
-                                         read_id_column_index=0,
-                                         group_id_column_indices=[1, 2, 3],
-                                         delim='\t')
+                                          read_id_column_index=0,
+                                          group_id_column_indices=[1, 2, 3],
+                                          delim='\t')
 
             # Create groupers for each column
             grouper_col0 = BarcodeSpotGrouper(shared_data, column_index=0)

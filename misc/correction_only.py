@@ -17,20 +17,22 @@ from short_utils import get_region_from_db
 from correction_stats import CorrectionStats, Stats
 from isoquant_lib.gtf2db import gtf2db
 
+
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--short", "-s", help="input sam/bam file containing alignment of the short reads",
-                        type=str, dest = "short", required = True)
+                        type=str, dest="short", required=True)
     parser.add_argument("--ont", "-i", help="input sam/bam file containing alignment of the long reads",
-                        type=str, dest = "ont", required = True)
+                        type=str, dest="ont", required=True)
     parser.add_argument("--reference", "-r", help="input reference gtf file",
-                        type=str, dest = "ref", required = True)
+                        type=str, dest="ref", required=True)
     parser.add_argument("--output", "-o", help="output folder location",
-                        type=str, dest = "out", required = True)
+                        type=str, dest="out", required=True)
     return parser.parse_args()
 
+
 def get_reference_db(ref_file, out_folder):
-    if(ref_file[-2:] != "db"):
+    if (ref_file[-2:] != "db"):
         gtf = ref_file
         args.output_exists = os.path.exists(out_folder)
         if not args.output_exists:
@@ -49,20 +51,20 @@ ref_db = get_reference_db(args.ref, args.out)
 gene_list = list(ref_db.features_of_type('gene', order_by=('seqid', 'start')))
 correction = CorrectionStats(ref_db, long_file)
 categorized = []
-current_region = (0,0)
+current_region = (0, 0)
 chromosome = 0
 genes = []
 before = 0
 after = 0
 for gene in gene_list:
-    if overlaps((gene.start,gene.end), current_region) and gene.seqid == chromosome:
+    if overlaps((gene.start, gene.end), current_region) and gene.seqid == chromosome:
         genes.append(gene)
         current_region = (current_region[0], max(current_region[1], gene.end))
     else:
-        if genes :
+        if genes:
             corrector = IlluminaExonCorrector(chromosome, current_region[0], current_region[1], short_file)
             reference_introns = get_region_from_db(ref_db, (chromosome, current_region[0], current_region[1]))
-            for alignment in long_file.fetch(chromosome, start = current_region[0], stop = current_region[1]):
+            for alignment in long_file.fetch(chromosome, start=current_region[0], stop=current_region[1]):
                 ai = AlignmentInfo(alignment)
                 if not ai.read_exons:
                     print("Read has no aligned exons")
@@ -74,7 +76,7 @@ for gene in gene_list:
                 before += len(introns.intersection(reference_introns))
                 after += len(corrected_introns.intersection(reference_introns))
                 print("Chromosome:", chromosome)
-                #categorized.append(correction.read_stats(introns, corrected_introns, alignment))
+                # categorized.append(correction.read_stats(introns, corrected_introns, alignment))
                 categorized.extend(correction.intron_stats(junctions_from_blocks(exons), junctions_from_blocks(corrected_exons), alignment))
                 print("corrected exons:", corrected_exons)
         genes = [gene]
@@ -83,7 +85,7 @@ for gene in gene_list:
 if genes:
     corrector = IlluminaExonCorrector(chromosome, current_region[0], current_region[1], short_file)
     reference_introns = get_region_from_db(ref_db, (chromosome, current_region[0], current_region[1]))
-    for alignment in long_file.fetch(chromosome, start = current_region[0], stop = current_region[1]):
+    for alignment in long_file.fetch(chromosome, start=current_region[0], stop=current_region[1]):
         ai = AlignmentInfo(alignment)
         if not ai.read_exons:
             print("Read has no aligned exons")
@@ -95,7 +97,7 @@ if genes:
         before += len(introns.intersection(reference_introns))
         after += len(corrected_introns.intersection(reference_introns))
         print("Chromosome:", chromosome)
-        #categorized.append(correction.read_stats(introns, corrected_introns, alignment))
+        # categorized.append(correction.read_stats(introns, corrected_introns, alignment))
         categorized.extend(correction.intron_stats(junctions_from_blocks(exons), junctions_from_blocks(corrected_exons), alignment))
         print("corrected exons:", corrected_exons)
 

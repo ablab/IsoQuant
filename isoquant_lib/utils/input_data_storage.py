@@ -92,7 +92,7 @@ class SampleData:
         self.barcodes_split_reads = self._make_aux_path(self.prefix + ".split_barcodes")
         self.out_umi_filtered = self._make_path(self.prefix + ".UMI_filtered")
         self.out_umi_filtered_tmp = self._make_aux_path(self.prefix + ".UMI_filtered")
-        self.out_umi_filtered_done= self._make_aux_path(self.prefix + ".UMI_filtered.done")
+        self.out_umi_filtered_done = self._make_aux_path(self.prefix + ".UMI_filtered.done")
         self.split_reads_fasta = self._make_path(self.prefix + ".split_reads")
 
     # Chromosome-specific path methods (delegate to file_naming.py)
@@ -269,7 +269,7 @@ class InputDataStorage:
             for i, fq in enumerate(args.fastq):
                 check_input_type(fq, self.input_type)
                 if fq in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fq)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fq)
                     sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([fq])
                 readable_names_dict[experiment_name][fq] = args.labels[i] if args.labels else \
@@ -291,7 +291,7 @@ class InputDataStorage:
             for i, bam in enumerate(args.bam):
                 check_input_type(bam, self.input_type)
                 if bam in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %bam)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
                     sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
@@ -309,7 +309,7 @@ class InputDataStorage:
             for i, bam in enumerate(args.unmapped_bam):
                 check_input_type(bam, self.input_type)
                 if bam in readable_names_dict[experiment_name]:
-                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %bam)
+                    logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % bam)
                     sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                 sample_files[0].append([bam])
                 readable_names_dict[experiment_name][bam] = args.labels[i] if args.labels else \
@@ -377,7 +377,7 @@ class InputDataStorage:
                 current_sample.append(files)
                 for fname in files:
                     if fname in readable_names_dict[current_sample_name]:
-                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fname)
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
                         sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     readable_names_dict[current_sample_name][fname] = readable_name
 
@@ -411,7 +411,7 @@ class InputDataStorage:
         else:
             if len(t.keys()) > 1:
                 logger.warning("The first entry should only specify the input data format. Any additional info will be ignored")
-            if  t['data format'] == "bam":
+            if t['data format'] == "bam":
                 self.input_type = InputDataType.bam
             elif t['data format'] == "unmapped_bam":
                 self.input_type = InputDataType.unmapped_bam
@@ -426,16 +426,16 @@ class InputDataStorage:
             else:
                 current_sample_name = sample['name']
             if current_sample_name in experiment_names:
-                    new_sample_name = self.experiment_prefix + str(current_index)
-                    if current_sample_name == new_sample_name:
-                        logger.critical("Change experiment name %s and rerun IsoQuant" % current_sample_name)
-                        sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
-                    logger.warning("Duplicate folder prefix %s, will change to %s" %
-                                   (current_sample_name, new_sample_name))
-                    current_sample_name = new_sample_name
+                new_sample_name = self.experiment_prefix + str(current_index)
+                if current_sample_name == new_sample_name:
+                    logger.critical("Change experiment name %s and rerun IsoQuant" % current_sample_name)
+                    sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
+                logger.warning("Duplicate folder prefix %s, will change to %s" %
+                               (current_sample_name, new_sample_name))
+                current_sample_name = new_sample_name
             current_index += 1
             if 'long read files' not in sample.keys():
-                logger.critical("Experiment %s does not contain any files" %current_sample_name)
+                logger.critical("Experiment %s does not contain any files" % current_sample_name)
                 sys.exit(IsoQuantExitCode.YAML_PARSING_ERROR)
             else:
                 current_sample = [normalize_path(yaml_file_path, b) for b in sample['long read files']]
@@ -450,7 +450,7 @@ class InputDataStorage:
                     else:
                         readable_name = os.path.splitext(os.path.basename(fname))[0]
                     if fname in readable_names_dict[current_sample_name]:
-                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" %fname)
+                        logger.critical("File %s is used multiple times in a single experiment, which is not allowed" % fname)
                         sys.exit(IsoQuantExitCode.DUPLICATE_FILES)
                     readable_names_dict[current_sample_name][fname] = readable_name
             if len(current_sample) > 0:
@@ -475,9 +475,9 @@ class InputDataStorage:
         # common_name = names[0]
 
         # for i in range(1, len(names)):
-            # p = mismatch(common_name, names[i])
-            # if p[0] < common_characters:
-                # common_characters = p[0]
+        # p = mismatch(common_name, names[i])
+        # if p[0] < common_characters:
+        # common_characters = p[0]
 
         # found = common_names.rfind('/', 0, common_characters)
 

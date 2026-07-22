@@ -256,7 +256,7 @@ def find_bam(output_folder, label):
     return None
 
 
-def     run_assignment_quality(args, config_dict, baselines=None):
+def run_assignment_quality(args, config_dict, baselines=None):
     log.info('== Running quality assessment ==')
     config_file = args.config_file
     source_dir = os.path.dirname(os.path.realpath(__file__))

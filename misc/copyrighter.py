@@ -24,6 +24,7 @@ def parse_args(argv):
     args = parser.parse_args(argv)
     return args
 
+
 current_year = str(datetime.now().year)
 hu_year = '2022'
 copyright_str = 'Copyright (c)'
@@ -159,7 +160,7 @@ def main():
 
 
 if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
+    # stuff only to run when not called via 'import' here
     try:
         main()
     except SystemExit:

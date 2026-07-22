@@ -23,7 +23,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
     cigar_tuples = alignment.cigartuples
     assert cigar_tuples
 
-    direction = 1 if shift > 0 else -1 # 1 for forward -1 for backward
+    direction = 1 if shift > 0 else -1  # 1 for forward -1 for backward
     shift = abs(shift)
 
     if direction == 1:
@@ -45,7 +45,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
 
     read_length_consumed = 0
     reference_length_consumed = 0
-    shift += 1 # a hack to jump to the next event
+    shift += 1  # a hack to jump to the next event
     while current_pos < len(cigar_tuples) and current_pos >= -len(cigar_tuples) and read_length_consumed < shift:
         cigar_event = cigar_tuples[current_pos][0]
         event_len = cigar_tuples[current_pos][1]
@@ -57,8 +57,8 @@ def move_ref_coord_alogn_alignment(alignment, shift):
             reference_length_consumed += event_len
         elif cigar_event in [0, 7, 8]:
             # match
-            remaining_bases = shift - read_length_consumed # how many nucleotides in read to complete shift
-            #logger.debug("%d" % remaining_bases)
+            remaining_bases = shift - read_length_consumed  # how many nucleotides in read to complete shift
+            # logger.debug("%d" % remaining_bases)
             if event_len < remaining_bases:
                 reference_length_consumed += event_len
                 read_length_consumed += event_len
@@ -71,7 +71,7 @@ def move_ref_coord_alogn_alignment(alignment, shift):
         else:
             # unexpected event
             logger.warning("Unexpected event: " + cigar_event)
-        #logger.debug("%d, %d, %d, %d" % (cigar_event, event_len, read_length_consumed, reference_length_consumed))
+        # logger.debug("%d, %d, %d, %d" % (cigar_event, event_len, read_length_consumed, reference_length_consumed))
 
         current_pos += direction
 
@@ -132,8 +132,8 @@ class PolyAFinder:
         sequence_to_check = alignment.seq[to_check_start:to_check_end].upper()
         pos = self.find_polya(sequence_to_check)
 
-        #logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_end, to_check_start, to_check_end, pos))
-        #logger.debug(sequence_to_check)
+        # logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_end, to_check_start, to_check_end, pos))
+        # logger.debug(sequence_to_check)
         if check_entire_tail and pos != -1:
             entire_tail = sequence_to_check[pos:]
             if entire_tail.count('A') < len(entire_tail) * self.min_polya_fraction:
@@ -146,14 +146,14 @@ class PolyAFinder:
 
         # add position of the region we check
         pos = to_check_start + pos
-        if pos >= read_mapped_region_end: # poly A starts after last mapped base
+        if pos >= read_mapped_region_end:  # poly A starts after last mapped base
             shift = pos - read_mapped_region_end
             reference_polya_start = alignment.reference_end + shift
         else:
             shift = pos - read_mapped_region_end
             ref_shift = move_ref_coord_alogn_alignment(alignment, shift)
             reference_polya_start = alignment.reference_end - ref_shift
-            #logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polya_start))
+            # logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polya_start))
 
         logger.debug("PolyA found at position %d" % reference_polya_start)
         return reference_polya_start
@@ -181,13 +181,13 @@ class PolyAFinder:
         sequence_to_check = reverse_complement(str(alignment.seq[to_check_start:to_check_end])).upper()
 
         pos = self.find_polya(sequence_to_check)
-        #logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_start, to_check_start, to_check_end, pos))
-        #logger.debug(sequence_to_check)
+        # logger.debug("read start: %d, ckeck start: %d, check end: %d, pos: %d" % (read_mapped_region_start, to_check_start, to_check_end, pos))
+        # logger.debug(sequence_to_check)
 
         if check_entire_head and pos != -1:
             entire_tail = sequence_to_check[pos:]
             if entire_tail.count('A') < len(entire_tail) * self.min_polya_fraction:
-                #logger.debug("Internal polyT seems unreliable")
+                # logger.debug("Internal polyT seems unreliable")
                 pos = -1
 
         if pos == -1:
@@ -203,7 +203,7 @@ class PolyAFinder:
             shift = pos - read_mapped_region_start
             ref_shift = move_ref_coord_alogn_alignment(alignment, shift)
             reference_polyt_end = alignment.reference_start + ref_shift
-            #logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polyt_end))
+            # logger.debug("shift: %d, ref shift: %d, reference: %d" % (shift, ref_shift, reference_polyt_end))
 
         logger.debug("PolyT found at position %d" % reference_polyt_end)
         return max(1, reference_polyt_end)

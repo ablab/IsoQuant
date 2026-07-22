@@ -75,7 +75,7 @@ class MappingData:
 
         for record in SeqIO.parse(fasta, data_type):
             if is_real_data:
-                #TODO: check SQANTI seq names
+                # TODO: check SQANTI seq names
                 seq_id = record.id
             else:
                 seq_id = record.id
@@ -120,12 +120,12 @@ class AssignmentData:
     # read id column, isoform id column, assignment type column
     ParseParams = namedtuple("ParseParams", ("read_id_column", "isoform_id_column", "assignment_type_column"))
     PRESETS = {'isoquant': ParseParams(0, 5, 6), 'isoquant_legacy': ParseParams(0, 3, 5),
-                'talon': ParseParams(0, 12, 16), 'sqanti': ParseParams(0, 7, 5)}
+               'talon': ParseParams(0, 12, 16), 'sqanti': ParseParams(0, 7, 5)}
     UNIQUE_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "Known", "ISM", "full-splice_match", "incomplete-splice_match"}
     AMB_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous"}
     ALL_ASSIGNMENTS_TYPES = {"unique", "unique_minor_difference", "ambiguous", "inconsistent"}
 
-    def __init__(self, tsv_file, preset='isoquant', assignment_types = UNIQUE_ASSIGNMENTS_TYPES):
+    def __init__(self, tsv_file, preset='isoquant', assignment_types=UNIQUE_ASSIGNMENTS_TYPES):
         self.preset = preset
         self.parse_params = self.PRESETS[preset]
         self.assigned_isoforms = defaultdict(str)
@@ -166,7 +166,7 @@ class AssignmentData:
                 if detected is not None:
                     self.parse_params = detected
                     continue  # header row, not data
-            seq_id = tokens[self.parse_params.read_id_column] # if is_real_data else id_pattern.search(tokens[0]).group(1)
+            seq_id = tokens[self.parse_params.read_id_column]  # if is_real_data else id_pattern.search(tokens[0]).group(1)
             assignment_type = tokens[self.parse_params.assignment_type_column]
             if assignment_type in self.assignment_types:
                 isoform_id = tokens[self.parse_params.isoform_id_column]
@@ -337,12 +337,13 @@ def compare_real_results(data_a, data_b):
                 'only %s assignments: %d, only %s assignments: %d, both not assigned: %d' %
                 (ab, diff_ab, label_a, a, label_b, b, not_ab))
 
+
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="Output file name")
     parser.add_argument("--detailed_output", type=str, help="Output folder for detailed information on every read")
     parser.add_argument("--fasta", "-f", type=str, help="initial file with sequences")
-    parser.add_argument("--mapping", "-m", type=str, help="mapped sequences (SAM or BAM format)") ## SQANTI2 output
+    parser.add_argument("--mapping", "-m", type=str, help="mapped sequences (SAM or BAM format)")  # SQANTI2 output
     parser.add_argument("--tsv", "-t", type=str, nargs='+', help="assigned isoforms, max number of files to compare: 2")
     parser.add_argument("--gene_db", "-g", type=str, help="gene database")
     parser.add_argument("--tool", type=str, choices=['isoquant', 'isoquant_legacy', 'talon', 'sqanti'], default='isoquant',
@@ -376,7 +377,7 @@ def main():
         detailed_output_dir = args.detailed_output
 
     for tsv_file in args.tsv:
-        #TODO: diff bams
+        # TODO: diff bams
         logger.info("Calculating stats for %s" % tsv_file)
         assignment_data = AssignmentData(tsv_file, args.tool)
         prefix = os.path.splitext(os.path.basename(tsv_file))[0]
@@ -387,7 +388,7 @@ def main():
 
         logger.info("   Counting mapping stats...")
         stat_counter.count_mapping_stats(db)
-        #stat_counter.count_mapping_stats(db, assignment_data.assigned_isoforms.keys())
+        # stat_counter.count_mapping_stats(db, assignment_data.assigned_isoforms.keys())
         total_reads = len(stat_counter.mapping_data.seq_set)
         correctly_mapped = len(stat_counter.correct_seqs)
         secondary_mapped = len(stat_counter.secondary_mapped)
@@ -431,7 +432,7 @@ def main():
 
 
 if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
+    # stuff only to run when not called via 'import' here
     try:
         main()
     except SystemExit:

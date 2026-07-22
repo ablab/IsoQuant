@@ -24,7 +24,7 @@ def parse_args():
 
 def filter_gtf(ingtf_path, isoform_ids, out_full_path):
     print("Filtering %d transcripts from %s to %s" % (len(isoform_ids), ingtf_path, out_full_path))
-    #print(list(isoform_ids)[:10])
+    # print(list(isoform_ids)[:10])
     out_full = open(out_full_path, "w")
     count = 0
     for line in open(ingtf_path):
@@ -106,7 +106,7 @@ def main():
 
 
 if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
+    # stuff only to run when not called via 'import' here
     try:
         main()
     except SystemExit:

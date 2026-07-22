@@ -38,6 +38,7 @@ def dump_dict_to_tsv(table, outf):
 
 class AnnotationStats:
     canonical_splic_sites = {("GT", "AG"), ("GC", "AG"), ("AT", "AC")}
+
     def __init__(self, gene_db, reference_record_dict):
         self.gene_db = gene_db
         self.reference_record_dict = reference_record_dict
@@ -97,7 +98,6 @@ class AnnotationStats:
             self.exon_lengths_no_dup.append(e[1] - e[0] + 1)
         self.transcripts_per_gene.append(transcript_count)
 
-
     def count_gene_stats(self, gene_data, current_chr_record):
         exon_set = set()
         transcript_count = 0
@@ -155,6 +155,7 @@ class AnnotationStats:
                 outf.write(t + ":\t")
                 outf.write("\t".join(list(map(str, self.transcripts_with_non_canonical[t]))) + "\n")
         outf.close()
+
 
 def parse_args(args=None, namespace=None):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)

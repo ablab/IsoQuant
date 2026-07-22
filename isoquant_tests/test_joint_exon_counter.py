@@ -43,6 +43,7 @@ class _FakeExonProfiles:
 
 class _FakeGeneInfo:
     """Minimal GeneInfo stand-in carrying just what JointExonCounter touches."""
+
     def __init__(self, exon_features, exon_property_map, exon_overlap_regions):
         self.exon_profiles = _FakeExonProfiles(exon_features)
         self.exon_property_map = exon_property_map

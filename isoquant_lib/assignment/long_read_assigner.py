@@ -246,7 +246,7 @@ class LongReadAssigner:
             extra_right = last_read_exon[1] - split_exons[common_last_exon][1]
             if common_last_exon == isoform_last_exon:
                 # logger.debug("+ + Right: %d %d" % (common_last_exon, isoform_last_exon))
-                if  abs(extra_right) <= self.params.minor_exon_extension:
+                if abs(extra_right) <= self.params.minor_exon_extension:
                     if abs(extra_right) <= self.params.delta:
                         right_match_event = MatchEventSubtype.terminal_site_match_right_precise
                     else:
@@ -278,8 +278,8 @@ class LongReadAssigner:
             isoform_exons = self.gene_info.all_isoforms_exons[isoform_id]
             scores.append((isoform_id, similarity_function(read_exons, isoform_exons)))
 
-        #logger.debug("Scores: " + str(scores))
-        scores = sorted(scores, key=lambda x:x[1], reverse=True)
+        # logger.debug("Scores: " + str(scores))
+        scores = sorted(scores, key=lambda x: x[1], reverse=True)
         best_score = scores[0][1]
         if top_scored_factor == 0:
             top_scored = sorted(filter(lambda x: x[1] >= min_similarity, scores))
@@ -467,12 +467,12 @@ class LongReadAssigner:
                 or all(el == 0 or el == -2 for el in read_split_exon_profile.gene_profile):
             read_region = (read_split_exon_profile.read_features[0][0], read_split_exon_profile.read_features[-1][1])
             gene_region = (self.gene_info.split_exon_profiles.features[0][0],
-                              self.gene_info.split_exon_profiles.features[-1][1])
+                           self.gene_info.split_exon_profiles.features[-1][1])
             # none of the blocks matched
             if not overlaps(read_region, gene_region):
                 # logger.debug("EMPTY - noninformative")
                 assignment = ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools,
-                                          match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
+                                            match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
             elif all(el != 1 for el in read_split_exon_profile.gene_profile):
                 # logger.debug("EMPTY - intronic")
                 assignment = self.assign_to_overlapping_genes(read_id, read_region,
@@ -565,7 +565,7 @@ class LongReadAssigner:
             read_region = (read_exons[0][0], read_exons[-1][1])
             if self.params.resolve_ambiguous == AmbiguityResolvingMethod.all or \
                (self.params.resolve_ambiguous == AmbiguityResolvingMethod.monoexon_and_fsm and
-                any(self.is_fsm(read_region, isoform_id) for isoform_id in matched_isoforms)):
+                    any(self.is_fsm(read_region, isoform_id) for isoform_id in matched_isoforms)):
                 # resolve spliced using nucleotide score
                 matched_isoforms = \
                     self.resolve_by_nucleotide_score(combined_read_profile, matched_isoforms,
@@ -577,13 +577,13 @@ class LongReadAssigner:
             # logger.debug("+ + UNIQUE intron match found " + isoform_id)
             isoform_match = self.categorize_correct_splice_match(combined_read_profile, isoform_id)
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, self.string_pools,
-                                            match=isoform_match)
+                                             match=isoform_match)
 
         elif len(matched_isoforms) > 1:
             # logger.debug("+ + Ambiguous read")
             isoform_matches = self.categorize_multiple_splice_matches(combined_read_profile, matched_isoforms)
             return ReadAssignment(read_id, ReadAssignmentType.ambiguous, self.string_pools,
-                                match=isoform_matches)
+                                  match=isoform_matches)
 
         return read_assignment
 
@@ -591,7 +591,7 @@ class LongReadAssigner:
         # logger.debug("+  Resolving monoexonic read")
 
         matched_isoforms = consistent_isoforms
-        if len(consistent_isoforms) > 1  and self.params.resolve_ambiguous != AmbiguityResolvingMethod.none:
+        if len(consistent_isoforms) > 1 and self.params.resolve_ambiguous != AmbiguityResolvingMethod.none:
             matched_isoforms = self.resolve_by_nucleotide_score(combined_read_profile, sorted(consistent_isoforms),
                                                                 similarity_function=self.jaccard_based_nucleotide_score)
 
@@ -601,13 +601,13 @@ class LongReadAssigner:
             # logger.debug("Single monoexonic match: %s" % isoform_id)
             isoform_match = self.categorize_correct_unspliced_match(combined_read_profile, isoform_id)
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.unique, self.string_pools,
-                                            match=isoform_match)
+                                             match=isoform_match)
 
         elif len(matched_isoforms) > 1:
             # logger.debug("Nucleotide similarity picked multiple isoforms")
             isoform_matches = self.categorize_multiple_unspliced_matches(combined_read_profile, matched_isoforms)
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.ambiguous, self.string_pools,
-                                            match=isoform_matches)
+                                             match=isoform_matches)
 
         return read_assignment
 
@@ -615,7 +615,7 @@ class LongReadAssigner:
     def match_inconsistent(self, read_id, combined_read_profile):
         if self.quick_mode:
             return ReadAssignment(read_id, ReadAssignmentType.inconsistent, self.string_pools,
-                                match=IsoformMatch(MatchClassification.genic, string_pools=self.string_pools))
+                                  match=IsoformMatch(MatchClassification.genic, string_pools=self.string_pools))
 
         read_features = combined_read_profile.read_split_exon_profile.read_features
         read_region = (read_features[0][0], read_features[-1][1])
@@ -655,19 +655,19 @@ class LongReadAssigner:
             for e in read_matches[isoform_id]:
                 all_event_types.add(e.event_type)
 
-        #logger.debug("* All events: " + str(all_event_types))
+        # logger.debug("* All events: " + str(all_event_types))
         if all(MatchEventSubtype.is_consistent(e) for e in all_event_types):
-            #logger.debug("* * Assignment seems to be consistent")
+            # logger.debug("* * Assignment seems to be consistent")
             assignment_type = ReadAssignmentType.ambiguous if is_abmiguous else ReadAssignmentType.unique
         elif any(MatchEventSubtype.is_major_inconsistency(e) for e in all_event_types):
-            #logger.debug("* * Assignment is inconsistent")
+            # logger.debug("* * Assignment is inconsistent")
             if any(MatchEventSubtype.is_intronic_inconsistency(e) for e in all_event_types):
                 inconsistency_type = ReadAssignmentType.inconsistent
             else:
                 inconsistency_type = ReadAssignmentType.inconsistent_non_intronic
             assignment_type = ReadAssignmentType.inconsistent_ambiguous if is_abmiguous else inconsistency_type
         elif any(MatchEventSubtype.is_minor_error(e) for e in all_event_types):
-            #logger.debug("* * Assignment has minor errors")
+            # logger.debug("* * Assignment has minor errors")
             assignment_type = ReadAssignmentType.ambiguous if is_abmiguous else ReadAssignmentType.unique_minor_difference
         else:
             logger.warning("Unexpected event reported: " + str(all_event_types))
@@ -726,11 +726,11 @@ class LongReadAssigner:
         result: list of tuples (isoform_id, list of events)
         """
         # get isoforms that have closes intron and exon profiles
-        #logger.debug("Detecting difference for %s, %d matched isoforms" % (read_id, len(matched_isoforms)))
+        # logger.debug("Detecting difference for %s, %d matched isoforms" % (read_id, len(matched_isoforms)))
         read_intron_profile = combined_read_profile.read_intron_profile
         read_split_exon_profile = combined_read_profile.read_split_exon_profile
 
-        #logger.debug("+ + Closest matching isoforms " + str(matched_isoforms))
+        # logger.debug("+ + Closest matching isoforms " + str(matched_isoforms))
         # isoform_id = best_isoform_ids[0]
         # logger.debug(str(self.gene_info.split_exon_profiles.profiles[isoform_id]))
         # logger.debug(str(self.gene_info.intron_profiles.profiles[isoform_id]))
@@ -796,16 +796,16 @@ class LongReadAssigner:
                                     MatchEventSubtype.exon_elongation_left}:
                     event_cost = elongation_cost(self.params, e.event_info)
 
-                penalty_score +=  event_cost * event_count
+                penalty_score += event_cost * event_count
                 # logger.debug("* * * Event " + str(e.event_type) + ", introns affected " + str(event_count) +
                 #             ", event cost " + str(event_cost) +
                 #             ". Updated penalty_score: " + str(penalty_score))
             # logger.debug("* * Final penalty_score for isoform " + isoform_id + ": " + str(penalty_score))
             isoform_scores.append((isoform_id, penalty_score))
 
-        min_penalty_score = min(isoform_scores, key=lambda x:x[1])[1]
+        min_penalty_score = min(isoform_scores, key=lambda x: x[1])[1]
         # logger.debug("* * Best penalty_score " + str(min_penalty_score))
-        best_isoforms = [x[0] for x in filter(lambda x:x[1] == min_penalty_score, isoform_scores)]
+        best_isoforms = [x[0] for x in filter(lambda x: x[1] == min_penalty_score, isoform_scores)]
         # logger.debug("* * Best isoforms " + str(best_isoforms))
 
         # if several isoforms are tied select the best according to nucl penalty_score

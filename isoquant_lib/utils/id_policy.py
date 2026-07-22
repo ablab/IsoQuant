@@ -53,7 +53,7 @@ class ExcludingIdDistributor(SimpleIDDistributor):
 
 
 class FeatureIdStorage:
-    def __init__(self, id_distributor, genedb = None, chr_id = None, feature = "exon"):
+    def __init__(self, id_distributor, genedb=None, chr_id=None, feature="exon"):
         self.id_distributor = id_distributor
         self.id_dict = {}
         self.feature_name = feature
@@ -75,7 +75,7 @@ class FeatureIdStorage:
             feature_id = self.id_distributor.increment()
             self.id_dict[feature_tuple] = chr_id + ".%d" % feature_id
         else:
-            feature_id =  self.id_dict[feature_tuple]
+            feature_id = self.id_dict[feature_tuple]
 
         return feature_id
 

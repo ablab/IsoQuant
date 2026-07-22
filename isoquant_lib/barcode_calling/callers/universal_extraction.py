@@ -29,7 +29,7 @@ class UniversalSingleMoleculeExtractor:
     MIN_SCORE_COEFF_TERMMINAL = 0.5
     TERMINAL_MATCH_DELTA = 3
     MAX_LEN_DIFF = 0.25
-    DEFAULT_ERROR_RATE = 0.03 # rought estimate for modern nanopore, doesn't matter that much
+    DEFAULT_ERROR_RATE = 0.03  # rought estimate for modern nanopore, doesn't matter that much
     MAX_HITS = 10
     SCORE_DIFF = 1
 
@@ -449,7 +449,6 @@ class UniversalSingleMoleculeExtractor:
                                                       len_diff_threshold=self.MAX_LEN_DIFF)
             current_pos = el_end + 1
 
-
     def extract_variable_elements3(self, sequence, detected_elements, concat_element_storage, dupl_element_storage):
         last_detected_const_element = None
         for i in range(len(self.molecule_structure.ordered_elements) - 1, -1, -1):
@@ -540,7 +539,6 @@ class UniversalSingleMoleculeExtractor:
                                                                 min_score=min_score,
                                                                 start_delta=start_delta,
                                                                 end_delta=self.TERMINAL_MATCH_DELTA)
-
 
             if element_start is not None:
                 current_search_start = element_end

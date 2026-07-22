@@ -618,6 +618,7 @@ class TestUtilityFunctions:
         result = detector.compute_aligned_length(read)
         assert result == 50
 
+
 class TestStateManagement:
     """Test state management."""
 
@@ -814,6 +815,7 @@ class TestMitochondrialFiltering:
             reference_fasta=None
         )
         assert detector._is_mitochondrial_candidate("chr1", "chr2", "BRCA1", "TP53") is False
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

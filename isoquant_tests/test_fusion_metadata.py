@@ -190,6 +190,7 @@ class TestFusionMetadataInitialization:
 
 class TestFusionMetadataGeneAssignment:
     """Test gene assignment from fusion key."""
+
     def test_gene_assignment_from_sorted_key(self):
         """Genes should be extracted correctly from alphabetically sorted key."""
         detector = FakeDetector()
@@ -306,6 +307,7 @@ class TestFusionMetadataBiotypes:
         # Track calls to get_gene_biotype
         calls = []
         original_get_biotype = detector.get_gene_biotype
+
         def tracked_get_biotype(gene, chrom=None, pos=None):
             calls.append((gene, chrom, pos))
             return original_get_biotype(gene, chrom, pos)

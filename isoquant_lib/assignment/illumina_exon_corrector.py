@@ -9,7 +9,7 @@ import pysam
 import logging
 
 from isoquant_lib.common import overlaps, junctions_from_blocks, get_exons
-from isoquant_lib.model_construction.transcript_printer import  validate_exons
+from isoquant_lib.model_construction.transcript_printer import validate_exons
 
 logger = logging.getLogger('IsoQuant')
 
@@ -26,7 +26,7 @@ class VoidExonCorrector:
 class IlluminaExonCorrector:
 
     MAX_SCORE = 1000000000000
-    ABSENT_INTRON = (0,0)
+    ABSENT_INTRON = (0, 0)
     EXON_LENGTH = 50
     SIDE_DIFF = 25
 
@@ -53,15 +53,15 @@ class IlluminaExonCorrector:
         introns = dict()
         for f in files:
             samfile = pysam.AlignmentFile(f, "rb")
-            intr = samfile.find_introns(samfile.fetch(chromosome, start = start, stop = end))
+            intr = samfile.find_introns(samfile.fetch(chromosome, start=start, stop=end))
             introns = self.merge_dictionaries(introns, intr)
             samfile.close()
             # in some cases counts might be necessary, so original is also saved
         i_list = set()
         for i in introns.keys():
-            if(type(i)!="int"):
+            if (type(i) != "int"):
                 # gtf files start with 1, bam with 0, we use gtf as standard
-                i_list.add((i[0]+1,i[1]))
+                i_list.add((i[0]+1, i[1]))
         return i_list, introns
 
     @staticmethod
@@ -93,8 +93,8 @@ class IlluminaExonCorrector:
         right_side = abs(right[1] - old[1]) <= IlluminaExonCorrector.SIDE_DIFF
         return (middle and left_side and right_side)
 
-    #only one side of the new introns is allowed to be the same as the old intron
-    #when both the left and the right end are the same it is often a false positive
+    # only one side of the new introns is allowed to be the same as the old intron
+    # when both the left and the right end are the same it is often a false positive
     @staticmethod
     def one_differs(left, right, old):
         return (not left[0] == old[0] or not right[1] == old[1])
@@ -110,25 +110,25 @@ class IlluminaExonCorrector:
             for s in self.short_introns:
                 x = abs(i[0] - s[0]) + abs(i[1] - s[1])
                 if overlaps(i, s):
-                    #collect all overlapping introns to look for skipped exons
-                    #still test if it is the best single match
+                    # collect all overlapping introns to look for skipped exons
+                    # still test if it is the best single match
                     overlapping.append(s)
                     if x < score:
                         score = x
                         sh = s
-            #if (i[0] == sh[0] or i[1] == sh[1]) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1] and self.counts[(sh[0]-1,sh[1])] > 100:
+            # if (i[0] == sh[0] or i[1] == sh[1]) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1] and self.counts[(sh[0]-1,sh[1])] > 100:
 
             # if the best single match differs by 4 it is usually good to correct
             if ((i[0] == sh[0] and i[1] == sh[1]-4) or (i[1] == sh[1] and sh[0] == i[0]-4)):
-            #if ((i[1] == sh[1]-4) or (sh[0] == i[0]-4)) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1]:
+                # if ((i[1] == sh[1]-4) or (sh[0] == i[0]-4)) and sh[0] >= exons[0][0] and sh[1] <= exons[-1][1]:
                 corrected_introns.append(sh)
                 appended = True
-            #if nothing has been corrected yet check if there might be a skipped exon
+            # if nothing has been corrected yet check if there might be a skipped exon
             if len(overlapping) > 1 and not appended:
                 score = IlluminaExonCorrector.MAX_SCORE
                 left = IlluminaExonCorrector.ABSENT_INTRON
                 right = IlluminaExonCorrector.ABSENT_INTRON
-                for k in range(0, len(overlapping) -1):
+                for k in range(0, len(overlapping) - 1):
                     x = overlapping[k]
                     for j in range(k, len(overlapping)):
                         y = overlapping[j]
@@ -156,7 +156,7 @@ class IlluminaExonCorrector:
                     appended = True
             # if neither of the options lead to a correction the original intron is kept
             if not appended:
-               corrected_introns.append(i)
+                corrected_introns.append(i)
             sh = IlluminaExonCorrector.ABSENT_INTRON
             score = IlluminaExonCorrector.MAX_SCORE
             overlapping = []

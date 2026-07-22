@@ -12,10 +12,10 @@ from isoquant_lib.common import junctions_from_blocks, overlaps
 
 @unique
 class Stats(Enum):
-    true_negative = 1  #correct before and not changed
-    false_negative = 2 #either changed but not correct after or not correct before and not changed
-    true_positive = 3  #changed and it is correct after
-    false_positive = 4 #changed and it is not correct after but was correct before
+    true_negative = 1  # correct before and not changed
+    false_negative = 2  # either changed but not correct after or not correct before and not changed
+    true_positive = 3  # changed and it is correct after
+    false_positive = 4  # changed and it is not correct after but was correct before
 
 
 class CorrectionStats:
@@ -44,8 +44,8 @@ class CorrectionStats:
         exons = []
         for e in self.reference.children(transcript, order_by='start'):
             if e.featuretype == 'exon':
-                    exons.append((e.start, e.end))
-        introns= junctions_from_blocks(exons)
+                exons.append((e.start, e.end))
+        introns = junctions_from_blocks(exons)
         introns = set(introns)
         return introns
 
@@ -56,19 +56,19 @@ class CorrectionStats:
         reference_introns = self.get_introns_from_transcript(transcript)
         n_before = len(introns.intersection(reference_introns))
         n_after = len(corrected_introns.intersection(reference_introns))
-        changed = not(introns == corrected_introns)
+        changed = not (introns == corrected_introns)
         correct_before = (n_before == len(introns))
         correct_after = (n_after == len(corrected_introns))
         if changed:
             if correct_after:
                 return Stats.true_positive
             elif not correct_before:
-                #if len(introns.intersection(reference_introns)) > len(corrected_introns.intersection(reference_introns)):
+                # if len(introns.intersection(reference_introns)) > len(corrected_introns.intersection(reference_introns)):
                 #    print("False Positive in Read", alignment.query_name)
                 #    print("Before:", sorted(introns))
                 #    print("After:", sorted(corrected_introns))
                 #    return Stats.false_positive
-                #else:
+                # else:
                 print("Change but wrong before and after in Read", alignment.query_name, "Correct before:", len(introns.intersection(reference_introns)), "Correct after:", len(corrected_introns.intersection(reference_introns)))
                 return Stats.false_negative
             else:
@@ -103,15 +103,15 @@ class CorrectionStats:
         transcript = self.name_map[name]
         reference_introns = self.get_introns_from_transcript(transcript)
         unchanged_introns = [intron for intron in introns if intron in corrected_introns]
-        #unchanged_introns = introns.intersection(corrected_introns)
+        # unchanged_introns = introns.intersection(corrected_introns)
         for intron in unchanged_introns:
             if intron in reference_introns:
                 print("True negative", intron)
                 classification.append(Stats.true_negative)
             else:
                 classification.append(Stats.false_negative)
-        #diff_before = list(sorted(introns - unchanged_introns))
-        #diff_after = list(sorted(corrected_introns - unchanged_introns))
+        # diff_before = list(sorted(introns - unchanged_introns))
+        # diff_after = list(sorted(corrected_introns - unchanged_introns))
         diff_before = [intron for intron in introns if intron not in unchanged_introns]
         diff_after = [intron for intron in corrected_introns if intron not in unchanged_introns]
         if len(diff_before) == len(diff_after):
