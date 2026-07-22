@@ -114,6 +114,27 @@ class MoleculeStructure:
         self._barcode_elements: List[str] = []
         self._umi_elements: List[str] = []
 
+        elements, element_properties = self._parse_element_properties(str_iterator)
+
+        element_name: str
+        for element_name in elements:
+            element_type = self._make_element(element_name, element_properties)
+            if self.CONCAT_DELIM in element_name:
+                self.elements_to_concatenate[element_name] = self._parse_linked_element(
+                    element_name, element_type, self.CONCAT_DELIM, "concatenated")
+            elif self.DUPL_DELIM in element_name:
+                self.duplicated_elements[element_name] = self._parse_linked_element(
+                    element_name, element_type, self.DUPL_DELIM, "duplicated")
+
+        self._check_linked_elements(self.elements_to_concatenate)
+        self.concatenated_elements_counts = self._check_indices(self.elements_to_concatenate)
+        self._check_linked_elements(self.duplicated_elements)
+        self.duplicated_elements_counts = self._check_indices(self.duplicated_elements)
+        self._identify_barcode_umi_elements()
+
+    @staticmethod
+    def _parse_element_properties(str_iterator):
+        """Read the format spec: first line lists the elements, the rest describe their properties."""
         line = next(str_iterator)
         elements = list(map(lambda x: x.strip(), line.strip().split(':')))
         element_properties = {}
@@ -133,56 +154,41 @@ class MoleculeStructure:
             else:
                 logger.critical("Incorrect number of properties in line %s" % line.strip())
                 sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+        return elements, element_properties
 
-        element_name: str
-        for element_name in elements:
-            if element_name not in element_properties:
-                if element_name not in (ElementType.cDNA.name, ElementType.PolyT.name):
-                    logger.critical("Molecule element %s was not described in the format file" % element_name)
-                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-                element_type = ElementType[element_name]
-                self.ordered_elements.append(MoleculeElement(element_name, element_type))
-            else:
-                element_type, element_val1, element_val2 = element_properties[element_name]
-                if element_type not in ElementType.__dict__:
-                    logger.critical("Molecule element type %s is not among the possible types" % element_type)
-                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-                element_type = ElementType[element_type]
-                self.ordered_elements.append(MoleculeElement(element_name, element_type, element_val1, element_val2))
+    def _make_element(self, element_name, element_properties):
+        """Append the MoleculeElement for a name and return its resolved element type."""
+        if element_name not in element_properties:
+            if element_name not in (ElementType.cDNA.name, ElementType.PolyT.name):
+                logger.critical("Molecule element %s was not described in the format file" % element_name)
+                sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+            element_type = ElementType[element_name]
+            self.ordered_elements.append(MoleculeElement(element_name, element_type))
+            return element_type
 
-            if self.CONCAT_DELIM in element_name:
-                if not (element_type.needs_sequence_extraction() or element_type.needs_correction()):
-                    logger.critical("Concatenated elements must be variable (fix element %s)" % element_name)
-                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-                v = element_name.split(self.CONCAT_DELIM)
-                if len(v) != 2:
-                    logger.critical("Incorrect concatenated element %s" % element_name)
-                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-                try:
-                    self.elements_to_concatenate[element_name] = (v[0], int(v[1]))
-                except ValueError:
-                    logger.critical("Incorrectly specified index for concatenated element %s: %s" % (element_name, v[1]))
-                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+        element_type, element_val1, element_val2 = element_properties[element_name]
+        if element_type not in ElementType.__dict__:
+            logger.critical("Molecule element type %s is not among the possible types" % element_type)
+            sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+        element_type = ElementType[element_type]
+        self.ordered_elements.append(MoleculeElement(element_name, element_type, element_val1, element_val2))
+        return element_type
 
-            elif self.DUPL_DELIM in element_name:
-                if not (element_type.needs_sequence_extraction() or element_type.needs_correction()):
-                    logger.critical("Concatenated elements must be variable (fix element %s)" % element_name)
-                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-                v = element_name.split(self.DUPL_DELIM)
-                if len(v) != 2:
-                    logger.critical("Incorrect duplicated element %s" % element_name)
-                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-                try:
-                    self.duplicated_elements[element_name] = (v[0], int(v[1]))
-                except ValueError:
-                    logger.critical("Incorrectly specified index for duplicated element %s: %s" % (element_name, v[1]))
-                    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
-
-        self._check_linked_elements(self.elements_to_concatenate)
-        self.concatenated_elements_counts = self._check_indices(self.elements_to_concatenate)
-        self._check_linked_elements(self.duplicated_elements)
-        self.duplicated_elements_counts = self._check_indices(self.duplicated_elements)
-        self._identify_barcode_umi_elements()
+    @staticmethod
+    def _parse_linked_element(element_name, element_type, delim, kind):
+        """Parse a concatenated/duplicated element name (e.g. 'base|1') into (base, index). Exits on error."""
+        if not (element_type.needs_sequence_extraction() or element_type.needs_correction()):
+            logger.critical("Concatenated elements must be variable (fix element %s)" % element_name)
+            sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+        v = element_name.split(delim)
+        if len(v) != 2:
+            logger.critical("Incorrect %s element %s" % (kind, element_name))
+            sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+        try:
+            return (v[0], int(v[1]))
+        except ValueError:
+            logger.critical("Incorrectly specified index for %s element %s: %s" % (kind, element_name, v[1]))
+            sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
     def _check_linked_elements(self, element_dict):
         # check that duplicated or concatenated elements have the same values (e.g. barcode whitelist)
