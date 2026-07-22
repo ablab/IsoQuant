@@ -1,13 +1,12 @@
 # Examples
 
 * Mapped PacBio CCS reads in BAM format; pre-converted gene annotation:
-
 ```bash
 isoquant -d pacbio_ccs --bam mapped_reads.bam \
  --genedb annotation.db --output output_dir
 ```
 
-* Nanopore dRNA stranded reads; official annotation in GTF format, use custon prefix for output:
+* Nanopore dRNA stranded reads; official annotation in GTF format, use custom prefix for output:
 ```bash
 isoquant -d nanopore --stranded forward --fastq ONT.raw.fastq.gz \
  --reference reference.fasta --genedb annotation.gtf --complete_genedb \
