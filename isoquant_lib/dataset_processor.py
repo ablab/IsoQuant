@@ -613,8 +613,8 @@ class DatasetProcessor:
             for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                 if save_allinfo:
                     shutil.copyfileobj(open(all_info_file_name, "r"), allinfo_outf)
-                for l in open(stats_output_file_name, "r"):
-                    v = l.strip().split("\t")
+                for line in open(stats_output_file_name, "r"):
+                    v = line.strip().split("\t")
                     if len(v) != 2:
                         continue
                     stat_dict[v[0]] += int(v[1])
@@ -703,8 +703,8 @@ class DatasetProcessor:
                     for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                         if save_allinfo:
                             shutil.copyfileobj(open(all_info_file_name, "r"), allinfo_outf)
-                        for l in open(stats_output_file_name, "r"):
-                            v = l.strip().split("\t")
+                        for line in open(stats_output_file_name, "r"):
+                            v = line.strip().split("\t")
                             if len(v) != 2:
                                 continue
                             stat_dict[v[0]] += int(v[1])

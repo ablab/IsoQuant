@@ -152,8 +152,8 @@ class Array2BitKmerIndexer:
         # Flatten index for better cache performance
         self.index: List[int] = []
         self.index_ranges: List[int] = [0]
-        for l in tmp_index:
-            self.index += l
+        for entry in tmp_index:
+            self.index += entry
             self.index_ranges.append(len(self.index))
 
     def _get_kmer_bin_indexes(self, bin_seq: int) -> Iterable[int]:

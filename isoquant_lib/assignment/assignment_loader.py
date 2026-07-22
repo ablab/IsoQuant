@@ -215,8 +215,8 @@ def prepare_read_filter(chr_id, saves_prefix, use_filtered_reads):
     if not use_filtered_reads:
         return None
     filtered_reads = set()
-    for l in open(filtered_reads_file_name(saves_prefix, chr_id), "r"):
-        filtered_reads.add(l.rstrip())
+    for line in open(filtered_reads_file_name(saves_prefix, chr_id), "r"):
+        filtered_reads.add(line.rstrip())
     return filtered_reads
 
 

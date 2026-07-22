@@ -271,7 +271,7 @@ class TestConvertToReadAssignments:
             assert lines[0].startswith("read_id\tchr\tstrand")
             # Exactly one data line -- the read_info column header must NOT be
             # emitted as a spurious record (only lines[0] may start with read_id)
-            assert all(not l.startswith("read_id") for l in lines[1:])
+            assert all(not line.startswith("read_id") for line in lines[1:])
             data_lines = lines[1:]
             assert len(data_lines) == 1
             cols = data_lines[0].strip().split("\t")
@@ -304,13 +304,13 @@ class TestConvertToReadAssignments:
             with open(output_path) as out:
                 lines = out.readlines()
 
-            comment_lines = [l for l in lines if l.startswith("#")]
+            comment_lines = [line for line in lines if line.startswith("#")]
             assert len(comment_lines) == 2
             # Comments precede the single header line
-            header_idx = [i for i, l in enumerate(lines) if l.startswith("read_id")]
+            header_idx = [i for i, line in enumerate(lines) if line.startswith("read_id")]
             assert header_idx == [2]
             # Exactly one converted data row
-            data_lines = [l for l in lines if not l.startswith("#") and not l.startswith("read_id")]
+            data_lines = [line for line in lines if not line.startswith("#") and not line.startswith("read_id")]
             assert len(data_lines) == 1
             assert data_lines[0].split("\t")[0] == "r1"
         finally:

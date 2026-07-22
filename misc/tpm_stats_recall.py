@@ -25,10 +25,10 @@ def parse_args():
 
 def load_counts(counts_file):
     count_dict = {}
-    for l in open(counts_file):
-        if l.startswith("#") or l.startswith("feature_id\t"):
+    for line in open(counts_file):
+        if line.startswith("#") or line.startswith("feature_id\t"):
             continue
-        t = l.strip().split()
+        t = line.strip().split()
         if len(t) < 3:
             continue
         count_dict[t[0]] = float(t[2])
@@ -38,10 +38,10 @@ def load_counts(counts_file):
 
 def load_transcripts(gtf_file):
     transcripts = set()
-    for l in open(gtf_file):
-        if l.startswith("#"):
+    for line in open(gtf_file):
+        if line.startswith("#"):
             continue
-        t = l.strip().split()
+        t = line.strip().split()
         if len(t) < 9:
             continue
         if t[2] not in {'transcript', 'mRNA'}:
@@ -58,8 +58,8 @@ def load_transcripts(gtf_file):
 def count_stats(tracking_file, count_dict, transcript_set, bins):
     transcript_hist = defaultdict(int)
     processed_transcripts = set()
-    for l in open(tracking_file):
-        t = l.strip().split()
+    for line in open(tracking_file):
+        t = line.strip().split()
         if t[2] == '-' or t[3] != '=':
             continue
         transcript_id = t[2].split('|')[1]

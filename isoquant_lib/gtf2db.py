@@ -177,14 +177,14 @@ def check_gtf_duplicates(gtf):
         return check_gff3_duplicates(handle)
 
     gff3_checked = False
-    for l in handle.readlines():
+    for line in handle.readlines():
         line_count += 1
-        if l.startswith("#"):
-            corrected_gtf += l
+        if line.startswith("#"):
+            corrected_gtf += line
             continue
-        v = l.strip().split("\t")
+        v = line.strip().split("\t")
         if len(v) < 9:
-            corrected_gtf += l
+            corrected_gtf += line
             continue
 
         attribute_column = v[8]
@@ -202,7 +202,7 @@ def check_gtf_duplicates(gtf):
                 gene_id_pos = i
         if gene_id_pos in [-1, len(attrs) - 1]:
             logger.warning("Malformed GTF line %d (gene_id attribute value cannot be found)" % line_count)
-            logger.warning(l.strip())
+            logger.warning(line.strip())
             gtf_correct = False
             continue
 
@@ -228,7 +228,7 @@ def check_gtf_duplicates(gtf):
                 transcript_id_pos = i
         if feature_type != "gene" and transcript_id_pos in [-1, len(attrs) - 1]:
             logger.warning("Malformed GTF line %d (transcript_id attribute value cannot be found)" % line_count)
-            logger.warning(l.strip())
+            logger.warning(line.strip())
             gtf_correct = False
             continue
 
@@ -283,11 +283,11 @@ def check_gff3_duplicates(handle):
     line_count = 0
     feature_ids = {}
 
-    for l in handle.readlines():
+    for line in handle.readlines():
         line_count += 1
-        if l.startswith("#"):
+        if line.startswith("#"):
             continue
-        v = l.strip().split("\t")
+        v = line.strip().split("\t")
         if len(v) < 9:
             continue
 
@@ -305,7 +305,7 @@ def check_gff3_duplicates(handle):
         if id_pos == -1:
             if feature_type in ["gene", "transcript", "mRNA"]:
                 logger.warning("Malformed GTF line %d (ID attribute value cannot be found)" % line_count)
-                logger.warning(l.strip())
+                logger.warning(line.strip())
                 gtf_correct = False
             continue
 

@@ -75,9 +75,9 @@ def read_short_int(inf):
     return read_int(inf, SHORT_INT_BYTES)
 
 
-def write_list(l, outf, func):
-    write_int(len(l), outf)
-    for val in l:
+def write_list(lst, outf, func):
+    write_int(len(lst), outf)
+    for val in lst:
         func(val, outf)
 
 
@@ -89,9 +89,9 @@ def read_list(inf, func):
     return result
 
 
-def write_list_of_pairs(l, outf, func):
-    write_int(len(l), outf)
-    for val in l:
+def write_list_of_pairs(lst, outf, func):
+    write_int(len(lst), outf)
+    for val in lst:
         func(val[0], outf)
         func(val[1], outf)
 

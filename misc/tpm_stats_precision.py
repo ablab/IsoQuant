@@ -43,10 +43,10 @@ def convert_dict_to_tpm(count_dict):
 
 def load_counts(counts_file, tid_column=1, count_column=3, convert_to_tpm=True, split_func=default_split_func):
     count_dict = {}
-    for l in open(counts_file):
-        if l.startswith("#") or l.startswith('TXNAME') or l.startswith('feature_id') or l.startswith('gene_ID') or l.startswith('ids'):
+    for line in open(counts_file):
+        if line.startswith("#") or line.startswith('TXNAME') or line.startswith('feature_id') or line.startswith('gene_ID') or line.startswith('ids'):
             continue
-        t = l.strip().split()
+        t = line.strip().split()
         if len(t) < count_column:
             continue
         tid = split_func(t[tid_column-1])
@@ -60,10 +60,10 @@ def load_counts(counts_file, tid_column=1, count_column=3, convert_to_tpm=True, 
 def load_transcripts(gtf_file, load_tpm=False):
     transcripts = set()
     count_dict = {}
-    for l in open(gtf_file):
-        if l.startswith("#"):
+    for line in open(gtf_file):
+        if line.startswith("#"):
             continue
-        t = l.strip().split()
+        t = line.strip().split()
         if len(t) < 9:
             continue
         if t[2] not in {'transcript', 'mRNA'}:
@@ -87,8 +87,8 @@ def load_transcripts(gtf_file, load_tpm=False):
 def count_stats(tracking_file, count_dict, transcript_set, bins):
     transcript_hist = defaultdict(int)
     processed_transcripts = set()
-    for l in open(tracking_file):
-        t = l.strip().split()
+    for line in open(tracking_file):
+        t = line.strip().split()
         if t[2] == '-' or t[3] != '=' or t[4] == '-':
             continue
         transcript_id = t[4].split('|')[1]

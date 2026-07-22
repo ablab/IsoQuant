@@ -28,8 +28,8 @@ def process_tracking(gffcompare_output_prefix, gtf_num):
     missed_transcripts = [0] * gtf_num
     total_transcripts = [0] * gtf_num
 
-    for l in open(gffcompare_output_prefix + ".tracking", "r"):
-        vals = l.strip().split()[4:]
+    for line in open(gffcompare_output_prefix + ".tracking", "r"):
+        vals = line.strip().split()[4:]
         assert len(vals) == gtf_num
         equality_vector = [0 if vals[i] == '-' else 1 for i in range(gtf_num)]
         for i, e in enumerate(equality_vector):
@@ -70,8 +70,8 @@ def split_all(args):
     full_gtfs = []
     known_gtfs = []
     novel_gtfs = []
-    for l in open(args.gtf_list):
-        v = l.strip().split()
+    for line in open(args.gtf_list):
+        v = line.strip().split()
 
         if len(v) < 2:
             continue

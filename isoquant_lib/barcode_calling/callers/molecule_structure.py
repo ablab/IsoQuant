@@ -114,11 +114,11 @@ class MoleculeStructure:
         self._barcode_elements: List[str] = []
         self._umi_elements: List[str] = []
 
-        l = next(str_iterator)
-        elements = list(map(lambda x: x.strip(), l.strip().split(':')))
+        line = next(str_iterator)
+        elements = list(map(lambda x: x.strip(), line.strip().split(':')))
         element_properties = {}
-        for l in str_iterator:
-            v = l.strip().split()
+        for line in str_iterator:
+            v = line.strip().split()
             if not v:
                 continue
             element_name = v[0]
@@ -131,7 +131,7 @@ class MoleculeStructure:
             elif len(v) == 4:
                 element_properties[element_name] = (v[1], v[2], v[3])
             else:
-                logger.critical("Incorrect number of properties in line %s" % l.strip())
+                logger.critical("Incorrect number of properties in line %s" % line.strip())
                 sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
         element_name: str

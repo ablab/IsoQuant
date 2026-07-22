@@ -348,14 +348,14 @@ class InputDataStorage:
         current_sample_name = self.experiment_prefix
         current_index = 0
 
-        for l in inf:
-            if len(l.strip()) == 0 or l.startswith("#"):
+        for line in inf:
+            if len(line.strip()) == 0 or line.startswith("#"):
                 if len(current_sample) > 0:
                     sample_files.append(current_sample)
                     experiment_names.append(current_sample_name)
                     illumina_bam.append(None)
                 current_sample = []
-                current_sample_name = l.strip()[1:]
+                current_sample_name = line.strip()[1:]
                 if not current_sample_name:
                     current_sample_name = self.experiment_prefix + str(current_index)
                 if current_sample_name in experiment_names:
@@ -368,7 +368,7 @@ class InputDataStorage:
                     current_sample_name = new_sample_name
                 current_index += 1
             else:
-                vals = l.strip().split(':')
+                vals = line.strip().split(':')
                 files = vals[0].split()
                 if len(vals) > 1:
                     readable_name = vals[-1]

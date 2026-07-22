@@ -445,7 +445,7 @@ def load_barcodes(inf, needs_iterator=False):
     else:
         handle = open(inf, "r")
 
-    barcode_iterator = iter(l.strip().split()[0] for l in handle)
+    barcode_iterator = iter(line.strip().split()[0] for line in handle)
     if needs_iterator:
         return barcode_iterator
 

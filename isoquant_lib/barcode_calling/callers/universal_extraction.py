@@ -115,7 +115,7 @@ class UniversalSingleMoleculeExtractor:
         if variable_length:
             logger.warning("Barcodes for element %s have variable lengths (%s), "
                            "performance may be suboptimal" %
-                           (base_name, ", ".join(str(l) for l in sorted(barcode_lengths))))
+                           (base_name, ", ".join(str(length) for length in sorted(barcode_lengths))))
             barcode_length = min(barcode_lengths)
 
         barcode_count = len(barcode_list)

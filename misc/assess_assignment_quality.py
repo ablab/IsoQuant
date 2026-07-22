@@ -156,10 +156,10 @@ class AssignmentData:
         else:
             handler = open(tsv_file, "rt")
         header_checked = False
-        for l in handler:
-            if l.startswith('#'):
+        for line in handler:
+            if line.startswith('#'):
                 continue
-            tokens = l.strip().split()
+            tokens = line.strip().split()
             if not header_checked:
                 header_checked = True
                 detected = self._detect_params_from_header(tokens)

@@ -435,13 +435,13 @@ class AssignedFeatureCounter(AbstractCounter):
     def load_usable(self, usable_file_name):
         if self.string_pools is None:
             # Ungrouped: just load into default group
-            for l in open(usable_file_name, "r"):
-                v = l.strip().split('\t')
+            for line in open(usable_file_name, "r"):
+                v = line.strip().split('\t')
                 self.reads_for_tpm[0] += int(v[1])
         else:
             pool = self.string_pools.get_read_group_pool(self.group_index)
-            for l in open(usable_file_name, "r"):
-                v = l.strip().split('\t')
+            for line in open(usable_file_name, "r"):
+                v = line.strip().split('\t')
                 group_name = v[0]
                 if group_name in pool.str_to_int:
                     group_id = pool.str_to_int[group_name]

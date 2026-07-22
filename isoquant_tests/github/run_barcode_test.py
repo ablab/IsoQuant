@@ -56,11 +56,11 @@ def load_tsv_config(config_file):
         log.error("Config file %s was not found" % config_file)
         return {}
     config_dict = {}
-    for l in open(config_file):
-        if l.startswith("#"):
+    for line in open(config_file):
+        if line.startswith("#"):
             continue
 
-        tokens = l.strip().split('\t')
+        tokens = line.strip().split('\t')
         if len(tokens) < 2:
             continue
 
