@@ -12,8 +12,8 @@ import isoquant_lib.common as c
 
 class TestMiscFunction:
     def test_get_first(self):
-        assert c.get_first_best_from_sorted([(1,1), (2,2), (3,3)]) == [1]
-        assert c.get_first_best_from_sorted([(1,1), (2,1), (3,3)]) == [1, 2]
+        assert c.get_first_best_from_sorted([(1, 1), (2, 2), (3, 3)]) == [1]
+        assert c.get_first_best_from_sorted([(1, 1), (2, 1), (3, 3)]) == [1, 2]
 
     @pytest.mark.parametrize("collection, elem, expected",
                              [([0, 1, 2], 2, 2), ([0, 1, 2], 0, 0), ([0, 1, 2], 1, 1), ([1, 1, 0], 1, 1),
@@ -108,7 +108,7 @@ class TestSimilarityFunctions:
                              [([(1, 100)], [(31, 110)], 0.7),
                               ([(1, 20), (41, 50), (61, 70)], [(1, 20), (41, 50), (61, 70)], 1.0),
                               ([(1, 20), (41, 50), (61, 80)], [(41, 50), (61, 70), (101, 110)], 0.4),
-                              ([(1, 20), (41, 50), (61, 80)], [(0, 0), (46, 55), (60, 62), (70, 74), (80,82), (101, 110)], 0.26),
+                              ([(1, 20), (41, 50), (61, 80)], [(0, 0), (46, 55), (60, 62), (70, 74), (80, 82), (101, 110)], 0.26),
                               ([(1, 20), (41, 50), (61, 80)], [(146, 155), (160, 172)], 0.0),
                               ([(146, 155), (160, 172)], [(1, 20), (41, 50), (61, 70)], 0.0),
                               ([(11, 20), (41, 50), (61, 70), (201, 220)], [(1, 4), (10, 12), (14, 16), (19, 30), (30, 34), (60, 70), (101, 109)], 0.34)])
@@ -248,8 +248,8 @@ class TestProfiles:
         assert c.has_inconsistent_features(profile1, profile2) == expected
 
     @pytest.mark.parametrize("profile1, mask, expected", [([1], [1], [1]), ([0, 1], [1, 1], [0, 1]),
-                                                              ([0, 1, 1, 0], [1, 1, 0, 0], [0, 1, 0, 0]),
-                                                              ([-2, -1, 1, 0], [1, 1, 0, 1], [-2, -1, 0, 0])])
+                                                          ([0, 1, 1, 0], [1, 1, 0, 0], [0, 1, 0, 0]),
+                                                          ([-2, -1, 1, 0], [1, 1, 0, 1], [-2, -1, 0, 0])])
     def test_mask_profile(self, profile1, mask, expected):
         assert c.mask_profile(profile1, mask) == expected
 

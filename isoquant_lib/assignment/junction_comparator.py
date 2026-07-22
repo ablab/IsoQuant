@@ -80,7 +80,7 @@ class JunctionComparator:
                     current_contradictory_region = ((read_pos, read_pos), (isoform_pos, isoform_pos))
                 else:
                     current_contradictory_region = (
-                    (current_contradictory_region[0][0], read_pos), (current_contradictory_region[1][0], isoform_pos))
+                        (current_contradictory_region[0][0], read_pos), (current_contradictory_region[1][0], isoform_pos))
                 if read_junctions[read_pos][1] < isoform_junctions[isoform_pos][1]:
                     read_pos += 1
                 else:
@@ -280,7 +280,7 @@ class JunctionComparator:
         elif surrounded_by_exons and similar_bounds and \
                 read_cregion[1] - read_cregion[0] == isoform_cregion[1] - isoform_cregion[0] >= 1 and \
                 total_intron_len_diff <= 2 * self.params.delta:
-                # FIXME: increase threshold when re-alignment is implemented
+            # FIXME: increase threshold when re-alignment is implemented
             # several introns of the same total length as reference onces
             if read_introns_known:
                 event = MatchEventSubtype.mutually_exclusive_exons_known
@@ -366,14 +366,14 @@ class JunctionComparator:
                 preceding_read_exon = get_preceding_exon_from_junctions(read_region, read_junctions, read_cpos)
                 preceding_isoform_exon = get_preceding_exon_from_junctions(isoform_region, isoform_junctions, isoform_cpos)
                 min_overlap = max(1, min(self.params.min_abs_exon_overlap,
-                                      round(self.params.min_rel_exon_overlap * interval_len(preceding_isoform_exon))))
+                                         round(self.params.min_rel_exon_overlap * interval_len(preceding_isoform_exon))))
                 if overlaps_at_least(preceding_read_exon, preceding_isoform_exon, min_overlap):
                     event = alternative_sites[("left", read_introns_known)]
 
             if event in {MatchEventSubtype.intron_alternation_novel,
                          MatchEventSubtype.alt_left_site_novel,
                          MatchEventSubtype.alt_right_site_novel} and \
-                self.are_suspicious_introns(read_region, read_junctions, (read_cpos, read_cpos)):
+                    self.are_suspicious_introns(read_region, read_junctions, (read_cpos, read_cpos)):
                 event = MatchEventSubtype.intron_retention
 
         return event

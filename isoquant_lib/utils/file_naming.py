@@ -48,7 +48,7 @@ def filtered_reads_file_name(out_raw_file: str, chr_id: str):
     return out_raw_file + "_filtered_" + chr_id
 
 
-def umi_filtered_reads_file_name(out_umi_filtered_tmp: str, chr_id:str, edit_distance:int):
+def umi_filtered_reads_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distance: int):
     return out_umi_filtered_tmp + ("_%s_ED%d" % (chr_id, edit_distance))
 
 

@@ -410,7 +410,7 @@ class DatasetProcessor:
 
         # set up aggregators and outputs
         aggregator = ReadAssignmentAggregator(self.args, sample, string_pools, gzipped=self.args.gzipped,
-                                             grouping_strategy_names=self.grouping_strategy_names)
+                                              grouping_strategy_names=self.grouping_strategy_names)
         transcript_stat_counter = EnumStats()
 
         gff_printer = VoidTranscriptPrinter()
@@ -737,7 +737,6 @@ class DatasetProcessor:
         split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
                                   read_column=0, group_columns=(1, 2), delim='\t')
         logger.info("Read barcode table was split")
-
 
     @staticmethod
     def load_read_info(dump_filename):

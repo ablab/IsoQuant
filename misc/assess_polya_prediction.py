@@ -203,6 +203,7 @@ def read_predictions(path: str) -> list:
     rows = []
     if path.endswith(".gz"):
         import gzip
+
         def opener(p):
             return gzip.open(p, "rt")
     else:

@@ -30,9 +30,6 @@ def increase_if_valid(val: Optional[int], delta: int) -> Optional[int]:
     return val
 
 
-
-
-
 class BarcodeDetectionResult:
     """
     Base class for barcode detection results.

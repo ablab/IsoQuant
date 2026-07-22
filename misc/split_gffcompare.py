@@ -37,7 +37,7 @@ def main():
 
     out_full_path = os.path.join(args.output, args.tool + ".full.gtf")
     out_known_path = os.path.join(args.output, args.tool + ".known.gtf")
-    out_novel_path= os.path.join(args.output, args.tool + ".novel.gtf")
+    out_novel_path = os.path.join(args.output, args.tool + ".novel.gtf")
     print("Seprating known and novel transcripts")
     separator = SEPARATE_FUNCTORS[args.tool](args.gtf)
     split_gtf(args.gtf, separator, out_full_path, out_known_path, out_novel_path)
@@ -51,7 +51,7 @@ def main():
 
 
 if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
+    # stuff only to run when not called via 'import' here
     try:
         main()
     except SystemExit:

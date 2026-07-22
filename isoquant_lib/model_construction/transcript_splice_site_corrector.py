@@ -42,6 +42,7 @@ class SpliceSiteCase:
     deletions: Dict[int, int] = field(default_factory=dict)
     most_common_del: int = -1
 
+
 # --- Tunable constants ---------------------------------------------------------
 # Accepted absolute deletion shifts (in bp) considered real splice-site errors.
 ACCEPTED_DEL_CASES: Tuple[int, ...] = (3, 4, 5, 6)

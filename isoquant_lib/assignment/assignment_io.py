@@ -125,12 +125,12 @@ class BEDPrinter(TextFileAssignmentPrinter):
         exon_blocks = read_assignment.corrected_exons if self.print_corrected else read_assignment.exons
 
         self.output_file.write("%s\t%d\t%d\t%s\t0\t%s\t%d\t%d\t%d\t%d\t%s\t%s\n" %
-                           (chr_id, exon_blocks[0][0] - 1, exon_blocks[-1][1],
-                            read_assignment.read_id, strand,
-                            exon_blocks[0][0] - 1, exon_blocks[0][0] - 1, 0,
-                            len(exon_blocks),
-                            ",".join([str(e[1] - e[0] + 1) for e in exon_blocks]),
-                            ",".join([str(e[0] - exon_blocks[0][0]) for e in exon_blocks])))
+                               (chr_id, exon_blocks[0][0] - 1, exon_blocks[-1][1],
+                                read_assignment.read_id, strand,
+                                exon_blocks[0][0] - 1, exon_blocks[0][0] - 1, 0,
+                                len(exon_blocks),
+                                ",".join([str(e[1] - e[0] + 1) for e in exon_blocks]),
+                                ",".join([str(e[0] - exon_blocks[0][0]) for e in exon_blocks])))
 
 
 class TmpFileAssignmentPrinter(AbstractAssignmentPrinter):
@@ -250,7 +250,7 @@ class QuickTmpFileAssignmentLoader(BaseTmpFileAssignmentLoader):
 
 
 class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
-    def __init__(self, output_file_name, params, io_support, additional_header = "", gzipped=False):
+    def __init__(self, output_file_name, params, io_support, additional_header="", gzipped=False):
         TextFileAssignmentPrinter.__init__(self, output_file_name, params, gzipped=gzipped)
         self.header = "read_id\tchr\tstrand\tisoform_id\tgene_id" \
                       "\tassignment_type\tassignment_events\texons\tadditional_info\tgroups\n"
@@ -263,7 +263,7 @@ class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
         read_exons = read_assignment.exons
         strand = read_assignment.strand
         line = read_assignment.read_id + "\t" + read_assignment.chr_id + "\t" + strand + "\t.\t.\t" + \
-               read_assignment.assignment_type.name + "\t.\t" + range_list_to_str(read_exons)
+            read_assignment.assignment_type.name + "\t.\t" + range_list_to_str(read_exons)
 
         for attr in read_assignment.additional_attributes.keys():
             val = read_assignment.additional_attributes[attr]
@@ -282,7 +282,7 @@ class BasicTSVAssignmentPrinter(TextFileAssignmentPrinter):
             return
 
         if read_assignment.assignment_type is None:
-            logger.warning("Empty assignment read id %s" %  (read_assignment.read_id))
+            logger.warning("Empty assignment read id %s" % (read_assignment.read_id))
             return
         elif read_assignment.exons is None:
             logger.warning("Empty combined profile, read id %s, assignment type %s" %
@@ -401,7 +401,7 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
             self._get_exons_str(read_assignment),                       # exons
             str(read_assignment.polyA_found),                           # polyA
             str(read_assignment.cage_found) if self.params.cage is not None else ".",  # CAGE
-            self._get_canonical(read_introns, read_assignment, strand), # canonical
+            self._get_canonical(read_introns, read_assignment, strand),  # canonical
             self._get_barcode(read_assignment),                         # barcode
             self._get_umi(read_assignment),                             # umi
             self._get_cell_type(read_assignment),                       # cell_type
@@ -466,7 +466,6 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
                 self._get_additional(read_assignment, {'cell_type'}),   # additional
             ]
             self.output_file.write("\t".join(fields) + "\n")
-
 
     """ sqanti output
     
@@ -604,7 +603,7 @@ class SqantiTSVPrinter(TextFileAssignmentPrinter):
 
         # TODO
         RTS = "FALSE"
-        min_sample_cov  = "NA"
+        min_sample_cov = "NA"
         min_cov = "NA"
         min_cov_pos = "NA"
         sd_cov = "NA"

@@ -29,9 +29,9 @@ class GFFPrinter:
     exon_id_dict = {}
 
     def __init__(self, outf_prefix, sample_name, exon_id_storage,
-                 gtf_suffix = ".transcript_models.gtf",
-                 check_canonical = False,
-                 header = ""):
+                 gtf_suffix=".transcript_models.gtf",
+                 check_canonical=False,
+                 header=""):
         self.model_fname = os.path.join(outf_prefix, sample_name + gtf_suffix)
         self.exon_id_storage = exon_id_storage
         self.printed_gene_ids = set()
@@ -78,7 +78,7 @@ class GFFPrinter:
                 gene_info_dict[gene_id] = GFFGeneInfo(model.chr_id, model.strand,
                                                       max_range(gene_record.gene_region, transcript_region))
 
-        gene_order = sorted([(g, gene_info_dict[g].gene_region) for g in gene_info_dict.keys()], key=lambda x:x[1])
+        gene_order = sorted([(g, gene_info_dict[g].gene_region) for g in gene_info_dict.keys()], key=lambda x: x[1])
 
         for gene_id, coords in gene_order:
             if gene_id not in self.printed_gene_ids:
@@ -89,8 +89,8 @@ class GFFPrinter:
                 if gene_info and gene_id in gene_info.sources:
                     source = gene_info.sources[gene_id]
                 gene_line = '%s\t%s\tgene\t%d\t%d\t.\t%s\t.\tgene_id "%s"; transcripts "%d"; %s\n' % \
-                        (gene_info_dict[gene_id].chr_id, source, coords[0], coords[1], gene_info_dict[gene_id].strand,
-                         gene_id, len(gene_to_model_dict[gene_id]), gene_additiional_info)
+                    (gene_info_dict[gene_id].chr_id, source, coords[0], coords[1], gene_info_dict[gene_id].strand,
+                     gene_id, len(gene_to_model_dict[gene_id]), gene_additiional_info)
                 self.out_gff.write(gene_line)
                 self.printed_gene_ids.add(gene_id)
 

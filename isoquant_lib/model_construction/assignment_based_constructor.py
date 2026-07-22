@@ -197,7 +197,7 @@ class AssignmentBasedConstructor:
     def cluster_monoexons(self, grouped_reads):
         clustered_counts = defaultdict(list)
         while grouped_reads:
-            best_pair = max(grouped_reads.items(), key=lambda x:len(x[1]))
+            best_pair = max(grouped_reads.items(), key=lambda x: len(x[1]))
             top_position = best_pair[0]
             for pos in range(top_position - self.args.apa_delta, top_position + self.args.apa_delta + 1):
                 if pos in grouped_reads:
@@ -210,13 +210,13 @@ class AssignmentBasedConstructor:
         for isoform_id in mono_exon_isoform_reads.keys():
             count = len(mono_exon_isoform_reads[isoform_id])
             coverage = float(mono_exon_isoform_coverage[isoform_id].count(1)) / \
-                       float(len(mono_exon_isoform_coverage[isoform_id]))
+                float(len(mono_exon_isoform_coverage[isoform_id]))
             polya_support = polya_sites[isoform_id]
 
             # logger.debug(">> Monoexon transcript %s: %d\t%d\t%.4f\t%d" % (isoform_id, self.ctx.intron_graph.max_coverage, count, coverage, polya_support))
             if (count < self.args.min_known_count or coverage < self.args.min_mono_exon_coverage or
                     (self.args.require_monoexonic_polya and polya_support == 0)):
-                pass # logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
+                pass  # logger.debug(">> Will NOT be added, abs cutoff=%d" % (self.params.min_known_count))
             elif isoform_id not in self.store.detected_known_isoforms:
                 new_model = self.store.transcript_from_reference(isoform_id)
                 self.store.transcript_model_storage.append(new_model)
@@ -234,10 +234,10 @@ class AssignmentBasedConstructor:
                 continue
             count = len(spliced_isoform_reads[isoform_id])
             if isoform_id not in self.ctx.known_isoforms_in_graph_ids:
-                #logger.debug("<< Isoform %s has %d assignments but is not in the graph" % (isoform_id, count))
+                # logger.debug("<< Isoform %s has %d assignments but is not in the graph" % (isoform_id, count))
                 continue
 
-            #logger.debug("Known non-FL spliced isoform %s" % isoform_id)
+            # logger.debug("Known non-FL spliced isoform %s" % isoform_id)
             if count < self.args.min_known_count or \
                     spliced_isoform_left_support[isoform_id] < 1 or \
                     spliced_isoform_right_support[isoform_id] < 1:

@@ -458,9 +458,9 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
 
         r1_occurrences = self.r1_indexer.get_occurrences(sequence[0:polyt_start + 1])
         r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
-                                                   self.r1_indexer.k, self.R1,
-                                                   r1_occurrences, min_score=11,
-                                                   end_delta=self.TERMINAL_MATCH_DELTA)
+                                                  self.r1_indexer.k, self.R1,
+                                                  r1_occurrences, min_score=11,
+                                                  end_delta=self.TERMINAL_MATCH_DELTA)
 
         if r1_start is None:
             r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
@@ -499,7 +499,7 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
                                           polyT=polyt_start, r1=r1_end)
 
     def _find_barcode_umi_split_fwd(self, read_id: str, sequence: str,
-                                     offset: int = 0) -> TenXSplitBarcodeDetectionResult:
+                                    offset: int = 0) -> TenXSplitBarcodeDetectionResult:
         """Detect one barcode+UMI+TSO pattern in the forward-oriented subsequence."""
         base_result = self._find_barcode_umi_fwd_local(read_id, sequence)
 

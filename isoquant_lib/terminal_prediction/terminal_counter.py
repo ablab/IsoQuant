@@ -293,7 +293,7 @@ class TerminalCounter(AbstractCounter):
                                 + result['start'].astype(int))
         result['flag'] = (
             (result['prediction'] - result['annotated']).abs()
-                .gt(ANNOTATION_TOLERANCE).map({True: 'Novel', False: 'Known'}))
+            .gt(ANNOTATION_TOLERANCE).map({True: 'Novel', False: 'Known'}))
         result['counts'] = result.apply(self._counts_for_peak, axis=1)
         return result
 
@@ -403,7 +403,7 @@ class TerminalCounter(AbstractCounter):
                               + rows['start'].astype(int))
         rows = rows.assign(true_peak=(
             (genomic_prediction - rows['annotated']).abs()
-                .le(ANNOTATION_TOLERANCE).astype(int)))
+            .le(ANNOTATION_TOLERANCE).astype(int)))
         rows[TRAINING_COLUMNS].to_csv(
             self._training_csv_path, sep=",", index=False, mode="w",
             header=True)

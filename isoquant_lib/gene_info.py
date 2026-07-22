@@ -79,7 +79,7 @@ class TranscriptModel:
         self.additional_info[attribute] = value
 
     def additional_attributes_str(self):
-        return " ".join(['%s "%s";' % (k, v) for k,v in self.additional_info.items()])
+        return " ".join(['%s "%s";' % (k, v) for k, v in self.additional_info.items()])
 
 
 # storage for feature profiles of all known isoforms of a gene or a set of overlapping genes
@@ -934,7 +934,7 @@ class StrandDetector:
     def get_clean_strand(self, introns):
         count_fwd, count_rev = self.count_canonical_sites(introns)
         if count_fwd == 0 and count_rev > 0:
-            return  '-'
+            return '-'
         elif count_fwd > 0 and count_rev == 0:
             return '+'
         return '.'

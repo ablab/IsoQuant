@@ -30,6 +30,7 @@ class MockAlignment:
 
 class MockReadAssignment:
     """Lightweight mock used only for grouper tests (no string_pools needed)."""
+
     def __init__(self, barcode=None):
         self.barcode = barcode
 

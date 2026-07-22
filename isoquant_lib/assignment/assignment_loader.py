@@ -198,9 +198,9 @@ class BasicReadAssignmentLoader(BasicAssignmentLoader):
             yield self.unpickler.get_object()
 
 
-def prepare_multimapped_reads(saves_prefix ,chr_id, string_pools):
+def prepare_multimapped_reads(saves_prefix, chr_id, string_pools):
     multimapped_reads = defaultdict(list)
-    multimap_loader = open(multimappers_file_name(saves_prefix ,chr_id), "rb")
+    multimap_loader = open(multimappers_file_name(saves_prefix, chr_id), "rb")
     list_size = read_int(multimap_loader)
     while list_size != TERMINATION_INT:
         for i in range(list_size):

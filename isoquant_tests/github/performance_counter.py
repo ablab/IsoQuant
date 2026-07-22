@@ -84,7 +84,7 @@ def track_ram_and_cpu(task_subprocess, interval, outfile):
 
     task_pid = task_subprocess.pid
     task_process_obj = psutil.Process(task_pid)
-    all_pids = {task_pid : task_process_obj}
+    all_pids = {task_pid: task_process_obj}
     start_time = time()
     max_rss = 0
     max_uss = 0
@@ -131,10 +131,10 @@ def track_ram_and_cpu(task_subprocess, interval, outfile):
                  "max_effective\t%d\t%.3fGB\n"
                  "cpu_time\t%.0f\t%s\n"
                  "clock_time\t%.0f\t%s") % (max_rss, to_gb(max_rss),
-                                             max_uss, to_gb(max_uss),
-                                             max_effective, to_gb(max_effective),
-                                             cpu_time, human_readable_time(cpu_time),
-                                             wall_clock_time, human_readable_time(wall_clock_time))
+                                            max_uss, to_gb(max_uss),
+                                            max_effective, to_gb(max_effective),
+                                            cpu_time, human_readable_time(cpu_time),
+                                            wall_clock_time, human_readable_time(wall_clock_time))
 
     return human_readable_stats, tsv_stats
 
@@ -151,7 +151,7 @@ def track_disk_usage(folder, interval, outfile, res_stats):
 
         disk_usage = int(subprocess.check_output(['du', '-s', folder]).split()[0].decode('utf-8'))
         current_time = time() - start_time
-        max_usage =max(max_usage, disk_usage)
+        max_usage = max(max_usage, disk_usage)
         outf.write("%d\t%d\n" % (current_time, disk_usage))
         sleep(interval)
     outf.close()
@@ -222,7 +222,7 @@ def main():
 
 
 if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
+    # stuff only to run when not called via 'import' here
     try:
         main()
     except SystemExit:

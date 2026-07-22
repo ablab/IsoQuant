@@ -8,6 +8,7 @@
 import subprocess
 import sys
 
+
 def run_until_output(command, stop_string):
     """
     Run a command and terminate it as soon as its output contains stop_string.
@@ -42,6 +43,7 @@ def run_until_output(command, stop_string):
     finally:
         if process.poll() is None:
             process.kill()
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

@@ -248,7 +248,7 @@ def check_gtf_duplicates(gtf):
             transcript_id += ".%d" % transcript_ids[transcript_id]
 
         if gene_id == transcript_id:
-            logger.warning("Transcript id and gene id are identical (%s) at line %d"  % (transcript_id, line_count))
+            logger.warning("Transcript id and gene id are identical (%s) at line %d" % (transcript_id, line_count))
             gtf_correct = False
             transcript_id += ".RNA.IsoQuant_corrected"
 
@@ -374,7 +374,7 @@ def convert_db(gtf_filename, genedb_filename, convert_fn, args):
     return gtf_filename, genedb_filename
 
 
-mode_dict = {"gtf2db" : gtf2db, "db2gtf" : db2gtf, "db2bed" : db2bed}
+mode_dict = {"gtf2db": gtf2db, "db2gtf": db2gtf, "db2bed": db2bed}
 
 
 def parse_args():
@@ -386,7 +386,6 @@ def parse_args():
                              "e.g. with official annotations, such as GENCODE; "
                              "speeds up gene database conversion")
     parser.add_argument("--mode", "-m", type=str, default="gtf2db", help="[gtf2db|db2gtf|db2bed]")
-
 
     args = parser.parse_args()
     if not args.output or not args.input:

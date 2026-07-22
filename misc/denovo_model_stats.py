@@ -12,6 +12,7 @@ import argparse
 from traceback import print_exc
 from common import *
 
+
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--gtf_list", "-g", help="list of GTFs to process", type=str, required=True)
@@ -23,7 +24,7 @@ def parse_args():
 
 def process_tracking(gffcompare_output_prefix, gtf_num):
     reliable_transcripts = 0
-    almost_reliable = [0] * gtf_num # supported by gtf_num - 2 tools
+    almost_reliable = [0] * gtf_num  # supported by gtf_num - 2 tools
     unique_transcripts = [0] * gtf_num
     missed_transcripts = [0] * gtf_num
     total_transcripts = [0] * gtf_num
@@ -81,7 +82,7 @@ def split_all(args):
             gtf_id = v[2]
         else:
             gtf_id = tool
-        #print(gtf_path, gtf_id)
+        # print(gtf_path, gtf_id)
 
         out_full_path = os.path.join(args.output, gtf_id + ".full.gtf")
         out_known_path = os.path.join(args.output, gtf_id + ".known.gtf")
@@ -94,7 +95,7 @@ def split_all(args):
         known_gtfs.append(out_known_path)
         novel_gtfs.append(out_novel_path)
 
-    return {"full" : full_gtfs, "known" : known_gtfs, "novel" : novel_gtfs}
+    return {"full": full_gtfs, "known": known_gtfs, "novel": novel_gtfs}
 
 
 def main():
@@ -103,7 +104,7 @@ def main():
         os.makedirs(args.output)
 
     gtfs = split_all(args)
-    #print(gtfs)
+    # print(gtfs)
     out_stats = open(os.path.join(args.output, "all_stats.tsv"), "w")
     for name, gtf_list in gtfs.items():
         gff_compare_out = os.path.join(args.output, name)
@@ -117,7 +118,7 @@ def main():
 
 
 if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
+    # stuff only to run when not called via 'import' here
     try:
         main()
     except SystemExit:

@@ -331,7 +331,6 @@ class FusionDetector:
                 exonic_genes.append((gene, gene_name, gene_type, gene_start, gene_end, exons))
         return exonic_genes
 
-
     def _compute_gene_distances(self, g, pos):
         """Compute exon and body distances for a gene relative to pos."""
         exon_min_dist = None
@@ -418,8 +417,8 @@ class FusionDetector:
             attrs = getattr(g, "attributes", {}) or {}
             gname = attrs.get("gene_name", [getattr(g, "id", None)])[0]
             gtype = (attrs.get("gene_type", [None])[0]
-                    or attrs.get("gene_biotype", [None])[0]
-                    or attrs.get("transcript_biotype", [None])[0])
+                     or attrs.get("gene_biotype", [None])[0]
+                     or attrs.get("transcript_biotype", [None])[0])
             gstart = int(getattr(g, "start", 0))
             gend = int(getattr(g, "end", 0))
             exon_min_dist, boundary_min_dist, exonic_hit, body_dist, exons = self._compute_gene_distances(g, pos)
@@ -513,7 +512,7 @@ class FusionDetector:
             if left_pos is None or right_pos is None:
                 continue
             key = (left_chr, (left_pos // jitter_window),
-                sa_chr, (right_pos // jitter_window))
+                   sa_chr, (right_pos // jitter_window))
             if key in seen_pairs:
                 continue
             seen_pairs.add(key)
@@ -649,9 +648,9 @@ class FusionDetector:
         return str(g)
 
     def record_fusion(self, context1: Optional[str], context2: Optional[str],
-                       read_name: str, chrom1: str, pos1: int, chrom2: str, pos2: int,
-                       left_score: Optional[float] = None,
-                       right_score: Optional[float] = None) -> None:
+                      read_name: str, chrom1: str, pos1: int, chrom2: str, pos2: int,
+                      left_score: Optional[float] = None,
+                      right_score: Optional[float] = None) -> None:
         """Record a fusion observation: register supporting read, breakpoint, and per-read scores."""
         if self._is_mitochondrial_candidate(chrom1, chrom2, context1, context2):
             return
@@ -671,7 +670,7 @@ class FusionDetector:
         meta = self.fusion_metadata.setdefault(
             fusion_key,
             {"supporting_reads": set(), "consensus_bp": None,
-            "left_gene": None, "right_gene": None, "support": 0}
+             "left_gene": None, "right_gene": None, "support": 0}
         )
         meta["supporting_reads"].add(read_name)
         meta["support"] = len(meta["supporting_reads"])
@@ -780,8 +779,8 @@ class FusionDetector:
         return entries
 
     def estimate_breakpoint(self, read, sa_pos: Optional[int],
-                             clip_side: Optional[str] = None,
-                             sa_cigar: Optional[str] = None) -> tuple:
+                            clip_side: Optional[str] = None,
+                            sa_cigar: Optional[str] = None) -> tuple:
         """Estimate left/right fusion breakpoints from a read and its SA mate."""
         left_chr = read.reference_name
         prim_start = self.safe_reference_start(read)
@@ -809,8 +808,8 @@ class FusionDetector:
                 right_chr, int(right_pos) if right_pos is not None else None)
 
     def realign_softclip(self, read, clip_side, clip_len,
-                                seen_pairs, jitter_window=25,
-                                min_sa_mapq=20):
+                         seen_pairs, jitter_window=25,
+                         min_sa_mapq=20):
         seq = read.query_sequence
         if not seq:
             return
@@ -832,14 +831,14 @@ class FusionDetector:
         if left_pos is None or right_pos is None:
             return
         key = (left_chr, (left_pos // jitter_window),
-            sa_chr, (right_pos // jitter_window))
+               sa_chr, (right_pos // jitter_window))
         if key in seen_pairs:
             return
         left_gene, left_score = self.assign_fusion_gene_cached(left_chr, left_pos)
         right_gene, right_score = self.assign_fusion_gene_cached(sa_chr, right_pos)
         if left_gene is not None and right_gene is not None and left_gene != right_gene:
             self.record_fusion(left_gene, right_gene, read.query_name, left_chr, left_pos, sa_chr, right_pos,
-                             left_score=left_score, right_score=right_score)
+                               left_score=left_score, right_score=right_score)
 
     def detect_fusions(self,
                        min_al_len_primary: int = 50,
@@ -876,8 +875,8 @@ class FusionDetector:
                     )
 
     def reconstruct_fusion_transcript(self, c1: str, p1: int, c2: str, p2: int,
-        exon_padding: int = 100,
-    ):
+                                      exon_padding: int = 100,
+                                      ):
         """
         Attempt to reconstruct a fusion transcript sequence by concatenating
         exon sequences in the vicinity of two breakpoints.
@@ -928,7 +927,7 @@ class FusionDetector:
             return None, None, None
 
     def realign_fusion_transcript(self, fusion_seq, min_match_len=30, min_mapq=10):
-        #Returns list of hits or empty list if alignment fails or is weak.
+        # Returns list of hits or empty list if alignment fails or is weak.
         if not self.aligner or not fusion_seq or len(fusion_seq) < min_match_len:
             logger.debug("Realign skipped: missing aligner or sequence too short")
             return []
@@ -965,8 +964,8 @@ class FusionDetector:
             return []
 
     def _is_mitochondrial_candidate(self, c1: str, c2: str,
-                                     left_gene: Optional[str],
-                                     right_gene: Optional[str]) -> bool:
+                                    left_gene: Optional[str],
+                                    right_gene: Optional[str]) -> bool:
         """Return True if either side of a fusion candidate appears mitochondrial."""
         mito_chrs = {"chrM", "MT", "M", "chrMT", "mitochondrion"}
         if (c1 in mito_chrs) or (c2 in mito_chrs):
@@ -1116,8 +1115,8 @@ class FusionDetector:
         return None
 
     def get_gene_biotype(self, gene_name: Optional[str],
-                          chrom: Optional[str] = None,
-                          pos: Optional[int] = None) -> Optional[str]:
+                         chrom: Optional[str] = None,
+                         pos: Optional[int] = None) -> Optional[str]:
         """Retrieve the biotype for a gene name, optionally disambiguating by ``(chrom, pos)``."""
         if not gene_name:
             return None
@@ -1202,10 +1201,10 @@ class FusionDetector:
             self._update_metadata_flags(meta, flags, confidence=conf)
 
     def report(self, output_path: str = "fusion_candidates.tsv",
-                min_support: int = 2,
-                include_classes: tuple = ("canonical", "cis-SAGe"),
-                min_confidence: float = 0.3,
-                only_valid: bool = False) -> None:
+               min_support: int = 2,
+               include_classes: tuple = ("canonical", "cis-SAGe"),
+               min_confidence: float = 0.3,
+               only_valid: bool = False) -> None:
         """Validate candidates and write the fusion report TSV."""
         self.validate_candidates(min_support=min_support)
         # Merge only fully identical fusions (exact duplicates)

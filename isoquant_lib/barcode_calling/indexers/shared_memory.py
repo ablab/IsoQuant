@@ -285,7 +285,7 @@ class SharedMemoryArray2BitKmerIndexer:
         return len(self.known_bin_seq) == 0
 
     def get_occurrences(self, sequence: str, max_hits: int = 0, min_kmers: int = 1,
-                       hits_delta: int = 1, ignore_equal: bool = False) -> List[Tuple[str, int, List[int]]]:
+                        hits_delta: int = 1, ignore_equal: bool = False) -> List[Tuple[str, int, List[int]]]:
         """
         Find indexed sequences with shared k-mers.
 

@@ -38,7 +38,7 @@ def convert_dict_to_tpm(count_dict):
     scale_factor = 1000000.0 / sum(count_dict.values())
     for k in count_dict.keys():
         count_dict[k] *= scale_factor
-    return  count_dict
+    return count_dict
 
 
 def load_counts(counts_file, tid_column=1, count_column=3, convert_to_tpm=True, split_func=default_split_func):
@@ -135,7 +135,7 @@ def main():
         transcript_set, count_dict = load_transcripts(args.genedb, load_tpm=False)
         normalize = args.tool in {'bambu', 'talon'}
         # 1 base column index
-        if  args.tool in {'isoquant', 'flair'}:
+        if args.tool in {'isoquant', 'flair'}:
             count_column = 2
             tid_column = 1
         elif args.tool in {'talon'}:
@@ -160,7 +160,7 @@ def main():
 
 
 if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
+    # stuff only to run when not called via 'import' here
     try:
         main()
     except SystemExit:

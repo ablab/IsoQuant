@@ -77,7 +77,6 @@ class ModelFilter:
 
         self.store.transcript_model_storage = filtered_storage
 
-
     def filter_transcripts(self):
         pre_filtered_storage = []
         to_substitute = self.detect_similar_isoforms(self.store.transcript_model_storage)
@@ -98,12 +97,12 @@ class ModelFilter:
                                            self.args.min_novel_count_rel * component_coverage)
 
             if model.transcript_id in to_substitute:
-                #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
+                # logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
                 self.store.delete_from_storage(model.transcript_id)
                 continue
 
             if self.store.internal_counter[model.transcript_id] < novel_isoform_cutoff:
-                #logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
+                # logger.debug("Novel model %s has coverage %d < %.2f, component cov = %d" % (model.transcript_id,
                 #                                                        self.store.internal_counter[model.transcript_id],
                 #                                                        novel_isoform_cutoff, component_coverage))
                 self.store.delete_from_storage(model.transcript_id)
@@ -111,16 +110,15 @@ class ModelFilter:
 
             if len(model.exon_blocks) <= 2:
                 mapq = self.store.mapping_quality(model.transcript_id)
-                #logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
+                # logger.debug("Novel model %s has quality %.2f" % (model.transcript_id, mapq))
                 if mapq < self.args.simple_models_mapq_cutoff:
-                    #logger.debug("Novel model %s has poor quality" % model.transcript_id)
+                    # logger.debug("Novel model %s has poor quality" % model.transcript_id)
                     self.store.delete_from_storage(model.transcript_id)
                     continue
 
             self.end_processor.correct_novel_transcript_ends(model, self.store.transcript_read_ids[model.transcript_id])
             self.end_processor._mark_terminal_confirmation(model)
             pre_filtered_storage.append(model)
-
 
         filtered_storage = []
         to_substitute = self.detect_similar_isoforms(pre_filtered_storage, remove_unconfirmed=True)
@@ -131,7 +129,7 @@ class ModelFilter:
                 continue
 
             if model.transcript_id in to_substitute:
-                #logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
+                # logger.debug("Novel model %s has a similar isoform %s" % (model.transcript_id, to_substitute[model.transcript_id]))
                 self.store.delete_from_storage(model.transcript_id)
                 continue
 

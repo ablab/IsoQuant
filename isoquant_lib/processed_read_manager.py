@@ -58,7 +58,6 @@ def prepare_multimapper_dict(chr_ids, sample, multimappers_counts, all_chr_ids, 
     return multimapped_reads, unique_assignments, polya_unique_assignments
 
 
-
 def resolve_multimappers(chr_ids, sample, multimapped_reads, strategy):
     multimap_resolver = MultimapResolver(strategy)
     multimap_dumper = {}
@@ -180,8 +179,8 @@ class ProcessedReadsManagerNoSecondary(ProcessedReadsManager):
         multimapped_reads_dict, unique_assignments, polya_unique_assignments   \
             = prepare_multimapper_dict([chr_id], self.sample, self.read_storage, self.all_chr_ids, self.genedb)
         self.total_assignments, self.polya_assignments = resolve_multimappers([chr_id], self.sample,
-                                                                            multimapped_reads_dict,
-                                                                            self.multimap_strategy)
+                                                                              multimapped_reads_dict,
+                                                                              self.multimap_strategy)
         self.total_assignments += unique_assignments
         self.polya_assignments += polya_unique_assignments
         self.read_storage.clear()

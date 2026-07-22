@@ -60,9 +60,9 @@ class TranscriptIdSeparator:
         pass
 
     def separate(self, line):
-        if line.find('transcript_id "SIRV') != -1: # for SIRVs
+        if line.find('transcript_id "SIRV') != -1:  # for SIRVs
             return TranscriptType.known
-        elif line.find('transcript_id "ENS') != -1 and line.find("aligned_") == -1 and line.find("PB.") == -1: # for simulated data
+        elif line.find('transcript_id "ENS') != -1 and line.find("aligned_") == -1 and line.find("PB.") == -1:  # for simulated data
             return TranscriptType.known
         else:
             return TranscriptType.novel
@@ -109,13 +109,13 @@ class CountTranscriptIdSeparator:
             return TranscriptType.novel
 
 
-SEPARATE_FUNCTORS = {'isoquant':IsoQuantSeparator,
-                     'stringtie':StringTieSeparator,
-                     'flair':TranscriptIdSeparator,
-                     'talon':TranscriptIdSeparator,
-                     'bambu':CountTranscriptIdSeparator,
-                     'flames':FlamesSeparator,
-                     'isatools':IsaToolsSeparator}
+SEPARATE_FUNCTORS = {'isoquant': IsoQuantSeparator,
+                     'stringtie': StringTieSeparator,
+                     'flair': TranscriptIdSeparator,
+                     'talon': TranscriptIdSeparator,
+                     'bambu': CountTranscriptIdSeparator,
+                     'flames': FlamesSeparator,
+                     'isatools': IsaToolsSeparator}
 
 
 def split_gtf(ingtf_path, seaprator, out_full_path, out_known_path, out_novel_path):

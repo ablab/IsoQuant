@@ -87,10 +87,9 @@ class ConstructionReadAssigner:
             for known_id in drop:
                 self.store.delete_from_storage(known_id)
             self.store.transcript_model_storage = [m for m in self.store.transcript_model_storage
-                                             if m.transcript_id not in drop]
+                                                   if m.transcript_id not in drop]
             logger.debug("resolve_read_ownership_conflicts: dropped %d empty assignment-based knowns"
                          % len(drop))
-
 
     def assign_reads_to_models(self, read_assignments):
         if not self.store.transcript_model_storage:

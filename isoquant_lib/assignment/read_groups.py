@@ -128,6 +128,7 @@ def parse_barcode2spot_spec(spec: str):
 
 class BarcodeSpotGrouper(AbstractReadGrouper):
     """Grouper that uses a single column from shared barcode-to-spot data."""
+
     def __init__(self, shared_data: 'SharedTableData', column_index: int):
         """
         Initialize barcode-to-spot grouper.
@@ -163,6 +164,7 @@ class BarcodeSpotGrouper(AbstractReadGrouper):
 
 class BarcodeGrouper(AbstractReadGrouper):
     """Grouper that uses barcode directly from read_assignment"""
+
     def __init__(self):
         AbstractReadGrouper.__init__(self)
 
@@ -185,6 +187,7 @@ class SharedTableData:
     loaded table data, reducing memory usage and I/O when using multiple columns
     from the same file.
     """
+
     def __init__(self, table_tsv_file, read_id_column_index=0, group_id_column_indices=None, delim='\t'):
         """
         Load table data once for sharing across multiple groupers.
@@ -211,6 +214,7 @@ class ReadTableGrouper(AbstractReadGrouper):
     Multiple instances can reference the same SharedTableData to avoid
     redundant file loading and memory usage.
     """
+
     def __init__(self, shared_data, column_index):
         """
         Initialize grouper for a specific column.
@@ -237,6 +241,7 @@ class ReadTableGrouper(AbstractReadGrouper):
 
 class MultiReadGrouper:
     """Manages multiple read groupers and returns list of group IDs"""
+
     def __init__(self, groupers):
         """
         Initialize with a list of groupers
@@ -312,18 +317,18 @@ def prepare_read_groups(args, sample):
             group_id_column_indices = [int(x) for x in values[3].split(',')]
             delim = values[4] if len(values) > 4 else '\t'
             logger.info("Splitting multi-column read group file %s (spec %d) for better memory consumption" %
-                       (table_filename, spec_index))
+                        (table_filename, spec_index))
         else:
             # Single column TSV
             group_id_column_index = int(values[3]) if len(values) > 3 else 1
             group_id_column_indices = [group_id_column_index]
             delim = values[4] if len(values) > 4 else '\t'
             logger.info("Splitting read group file %s (spec %d) for better memory consumption" %
-                       (table_filename, spec_index))
+                        (table_filename, spec_index))
 
         # Build output file names for each chromosome with spec_index to avoid overwrites
         split_reads_file_names = {chr_id: sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
-                                 for chr_id in chromosomes}
+                                  for chr_id in chromosomes}
 
         # Use improved parallel splitting with line-by-line streaming
         num_threads = args.threads if hasattr(args, 'threads') else 4
@@ -437,7 +442,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
 
             # Create shared table data once
             shared_data = SharedTableData(read_group_chr_filename, read_id_column_index,
-                                         group_id_column_indices, delim)
+                                          group_id_column_indices, delim)
 
             # Create a separate grouper for each column
             groupers = []
@@ -452,7 +457,7 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
 
             # Create shared data with single column for consistency
             shared_data = SharedTableData(read_group_chr_filename, read_id_column_index,
-                                         [group_id_column_index], delim)
+                                          [group_id_column_index], delim)
             return ReadTableGrouper(shared_data, 0)
     else:
         logger.critical("Unsupported read grouping option: %s" % values[0])

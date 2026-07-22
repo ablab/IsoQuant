@@ -179,10 +179,10 @@ def argmin(lst):
     return min_i
 
 
-def cmp(x,y):
-    if x<y:
+def cmp(x, y):
+    if x < y:
         return -1
-    elif x>y:
+    elif x > y:
         return 1
     return 0
 
@@ -244,7 +244,7 @@ def contains_well_inside(bigger_range, smaller_range, delta=1):
     return bigger_range[1] >= smaller_range[1]+delta and bigger_range[0] <= smaller_range[0]-delta
 
 
-def contains_approx(bigger_range, smaller_range, delta = 1):
+def contains_approx(bigger_range, smaller_range, delta=1):
     return bigger_range[1] + delta >= smaller_range[1] and bigger_range[0] - delta <= smaller_range[0]
 
 
@@ -719,6 +719,7 @@ def equal_profiles_in_range(isoforom_profile, read_profile, profile_range):
         if isoforom_profile[i] != read_profile[i]:
             return False
     return True
+
 
 def count_both_present_features(profile1, profile2):
     assert len(profile1) == len(profile2)

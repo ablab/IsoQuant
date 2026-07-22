@@ -156,7 +156,7 @@ def main():
 
     if duplicate_triplets > 0:
         logger.error("Found %d duplicate gene-barcode-UMI triplets in allinfo",
-                      duplicate_triplets)
+                     duplicate_triplets)
     else:
         logger.info("No duplicate gene-barcode-UMI triplets found")
 

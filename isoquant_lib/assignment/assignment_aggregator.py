@@ -161,10 +161,10 @@ class ReadAssignmentAggregator:
                                                        string_pools=self.string_pools,
                                                        group_index=group_idx)
                     transcript_counter = create_transcript_counter(transcript_out_file,
-                                                                  self.args.transcript_quantification,
-                                                                  complete_feature_list=self.transcript_set,
-                                                                  string_pools=self.string_pools,
-                                                                  group_index=group_idx)
+                                                                   self.args.transcript_quantification,
+                                                                   complete_feature_list=self.transcript_set,
+                                                                   string_pools=self.string_pools,
+                                                                   group_index=group_idx)
 
                     self.global_counter.add_counters([gene_counter, transcript_counter])
 

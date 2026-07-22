@@ -44,7 +44,7 @@ def test_clean_start():
                              "-t", "2",
                              "--prefix", sample_name,
                              "--count_exons", "--count_intron_retentions", "--sqanti_output",
-                             "--read_group","file:" + data_dir + "chr9.4M.ont.sim.read_groups.tsv" + ":0:1"])
+                             "--read_group", "file:" + data_dir + "chr9.4M.ont.sim.read_groups.tsv" + ":0:1"])
 
     assert result.returncode == 0
     sample_folder = os.path.join(out_dir, sample_name)
@@ -185,6 +185,7 @@ def test_with_illumina():
     for f in resulting_files:
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
+
 def test_with_yaml():
     source_dir = os.path.dirname(os.path.realpath(__file__))
     data_dir = os.path.join(source_dir, 'simple_data/')
@@ -211,7 +212,7 @@ def test_with_yaml():
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
 
-#def test_cage():
+# def test_cage():
 #    source_dir = os.path.dirname(os.path.realpath(__file__))
 #    data_dir = os.path.join(source_dir, 'toy_data/')
 #    out_dir = os.path.join(source_dir, "out_mapt/")

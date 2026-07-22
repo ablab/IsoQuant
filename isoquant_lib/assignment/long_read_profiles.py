@@ -49,8 +49,8 @@ class CombinedReadProfiles:
 class OverlappingFeaturesProfileConstructor:
     # ignore_terminal -- bool flag, indicates whether to ignore leading and trailing -1s in the profile
     def __init__(self, known_features, gene_region,
-                 comparator = partial(equal_ranges, delta=0),
-                 absence_condition = contains,
+                 comparator=partial(equal_ranges, delta=0),
+                 absence_condition=contains,
                  delta=0):
         self.known_features = known_features
         self.gene_region = gene_region

@@ -72,7 +72,7 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
         num_groups = len(groups)
         if num_groups > max_groups:
             logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
-                         "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
+                        "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
             return num_groups
 
     df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1, keep_default_na=False,
@@ -399,7 +399,7 @@ def main():
 
 
 if __name__ == "__main__":
-   # stuff only to run when not called via 'import' here
+    # stuff only to run when not called via 'import' here
     try:
         main()
     except SystemExit:

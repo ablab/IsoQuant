@@ -497,6 +497,7 @@ class AssignedFeatureCounter(AbstractCounter):
                 convert_to_mtx(self.output_file, self.output_tpm_prefix,
                                convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
 
+
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None, string_pools=None, group_index: int = 0):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
@@ -895,7 +896,7 @@ class ExonSpliceSiteCounter(AbstractCounter):
                 # disagreeing strand is skipped, not counted as ambiguous (per spec)
                 continue
             self._classify_region(region, blocks, introns, strand,
-                                   tss_anchored, polya_anchored, group_id, read_id)
+                                  tss_anchored, polya_anchored, group_id, read_id)
 
     def _get_anchoring(self, read_assignment, strand: str):
         # 3' polyA anchoring: read-level polyA tail flag

@@ -49,6 +49,7 @@ def _cnt(bucket):
 
 class _FakeGA:
     """Stand-in for gene_assignment_type: assigned, not ambiguous."""
+
     def is_unassigned(self):
         return False
 

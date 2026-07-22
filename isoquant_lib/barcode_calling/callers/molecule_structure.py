@@ -48,7 +48,7 @@ class ElementType(Enum):
 
 
 class MoleculeElement:
-    def __init__(self, element_name: str, element_type: ElementType, element_value_1 = None, element_value_2 = None):
+    def __init__(self, element_name: str, element_type: ElementType, element_value_1=None, element_value_2=None):
         self.element_name = element_name
         self.element_type = element_type
 

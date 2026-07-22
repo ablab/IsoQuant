@@ -137,10 +137,10 @@ class FusionValidator:
             right_gene = meta.get("right_gene")
             # Check if both genes belong to multicopy artifact families
             if (left_gene and right_gene and
-                self.is_multicopy_artifact_family(left_gene) and
-                self.is_multicopy_artifact_family(right_gene)) or (left_gene and right_gene and
-                self._is_ribosomal_or_histone_gene(left_gene) and
-                self._is_ribosomal_or_histone_gene(right_gene)):
+                    self.is_multicopy_artifact_family(left_gene) and
+                    self.is_multicopy_artifact_family(right_gene)) or (left_gene and right_gene and
+                                                                       self._is_ribosomal_or_histone_gene(left_gene) and
+                                                                       self._is_ribosomal_or_histone_gene(right_gene)):
                 meta["is_valid"] = False
                 if "reasons" not in meta:
                     meta["reasons"] = []

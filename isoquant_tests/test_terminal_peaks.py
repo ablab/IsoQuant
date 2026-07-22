@@ -63,7 +63,7 @@ def test_detect_peaks_parity_with_counter(stub_model, tmp_path, positions):  # n
     assert _detect_peaks(positions) == counter_peaks
     # And the union of supporting counts is conserved either way.
     assert sum(c for _, c in _detect_peaks(positions)) == \
-           sum(c for _, c in counter_peaks)
+        sum(c for _, c in counter_peaks)
 
 
 def test_detect_peaks_empty_returns_empty():

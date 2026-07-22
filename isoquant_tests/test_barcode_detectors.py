@@ -279,7 +279,6 @@ class TestSharedMemStereoBarcodeDetector:
         assert result.barcode == true_barcode
         assert result.UMI == true_umi
 
-
     @pytest.mark.parametrize("read_sequence",
                              [("GCAGACATCAGTAGTTTATTGTTTTAGTCCAAACACATTCAAAATGGAAACTCAAAAGAATACTTTCTACCTGAA"),
                               ])
@@ -301,6 +300,7 @@ class TestSharedMemStereoBarcodeDetector:
         assert not result.is_valid()
         assert result.barcode == '*'
         assert result.UMI == '*'
+
 
 class TestSharedMemStereoSplittingBarcodeDetector:
     """Test Stereo-seq splitting barcode detector."""
@@ -353,12 +353,10 @@ class TestSharedMemStereoSplittingBarcodeDetector:
             assert r.barcode == true_barcodes[i]
             assert r.UMI == true_umis[i]
 
-
     @pytest.mark.parametrize("read_sequence",
                              [("CTGCTGACGTACTGAGAGGCGGGATGAAGCAGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGCTGC"),
                               ("TTCCTAAGACCTTGCCGTCGTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTAGCATTGTGCACATTGGTTTATTTAGCACTTCTAACCA"),
                               ])
-
     def test_real_sequence_no_bc(self, read_sequence):
         # Test with real sequence data.
 
@@ -388,6 +386,7 @@ class TestSharedMemStereoSplittingBarcodeDetector:
 # =============================================================================
 # 10x Genomics Detector Tests
 # =============================================================================
+
 
 class TestTenXBarcodeDetector:
     """Test 10x Genomics v3 barcode detector."""
@@ -462,7 +461,6 @@ class TestTenXBarcodeDetector:
         assert result.barcode == true_barcode
         assert result.UMI == true_umi
 
-
     @pytest.mark.parametrize("read_sequence",
                              [("GGCCCCATTTTTTTTTTTTTTTGTTTTTTTTTTTTTTTTGCTTTTTG"),
                               ("TCAAATTTAATTGTCCCGCTCCAGCCAAAGAAGATCTGGGGGTGGAGGCTGCTTGAGAGGGAAGCCACAGCTGGCTCTGGGTGTGCAACTCTGGGGACAATGGCTATCCATTAACCCCTGTCAAGATTGTCTTTGGCTGGAGGCACACTTACAGCCTTCGCAGCTGCAGGAGCCACCTTAGTTCTACCAAGTGTAGCAGAGCGAGCGCAAGCTTCCCACCAGGAGCAGTCTCCGCGTGCAGAGGGTGCACCCAGCAGGGGGCGTTTCTTCTGCGCCCGCCACTGGGCGGCCCGCAGCCCATGTACTCTGCGTTGATACCACTGCTT"),
@@ -492,6 +490,7 @@ class TestTenXBarcodeDetector:
         assert not result.is_valid()
         assert result.barcode == '*'
         assert result.UMI == '*'
+
 
 class TestVisiumHDBarcodeDetector:
     """Test Visium HD spatial barcode detector."""
@@ -589,7 +588,6 @@ class TestCurioBarcodeDetector:
         assert isinstance(result, LinkerBarcodeDetectionResult)
         assert result.read_id == "test_read"
         assert not result.is_valid()
-
 
     @pytest.mark.parametrize("read_sequence, true_barcode, true_umi",
                              [("TACACGACGCTCTTCCGATCTTTTGACTTCTTCAGCGTTCCCGAGAGCAATTCCTTTTCTGTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",

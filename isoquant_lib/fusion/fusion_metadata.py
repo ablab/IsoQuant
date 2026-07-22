@@ -41,7 +41,7 @@ class FusionMetadata:
         meta.setdefault("reasons", [])
 
     def _initialize_or_get_metadata(self, fusion_key: str, reads: set,
-                                     clustered_support: int, consensus_bp: tuple) -> dict:
+                                    clustered_support: int, consensus_bp: tuple) -> dict:
         """Get existing metadata or create minimal metadata if missing."""
         detector = self.detector
         meta = detector.fusion_metadata.get(fusion_key)
@@ -76,9 +76,9 @@ class FusionMetadata:
         )
 
     def _update_fusion_key_mappings(self, original_key: str,
-                                     final_left_gene: Optional[str],
-                                     final_right_gene: Optional[str],
-                                     meta: dict) -> str:
+                                    final_left_gene: Optional[str],
+                                    final_right_gene: Optional[str],
+                                    meta: dict) -> str:
         """Update fusion_key mappings if gene names changed during re-assignment."""
         detector = self.detector
         new_left = final_left_gene or "intergenic"
