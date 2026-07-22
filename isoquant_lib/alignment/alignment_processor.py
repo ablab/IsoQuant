@@ -459,7 +459,7 @@ class AlignmentCollector:
             alignment_info.construct_profiles(profile_constructor)
             read_assignment = assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
 
-            if (not read_assignment.assignment_type in [ReadAssignmentType.unique,
+            if (read_assignment.assignment_type not in [ReadAssignmentType.unique,
                                                         ReadAssignmentType.unique_minor_difference,
                                                         ReadAssignmentType.ambiguous])\
                     and alignment.mapping_quality < self.params.inconsistent_mapq_cutoff:
