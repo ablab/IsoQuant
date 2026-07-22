@@ -678,9 +678,9 @@ def run_fusion_quality(args, config_dict, baselines=None):
     name = config_dict["name"]
     output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
 
-    fusion_files = glob.glob(os.path.join(output_folder, "fusion_*.tsv"))
+    fusion_files = glob.glob(os.path.join(output_folder, "**", "*.fusions.tsv"), recursive=True)
     if not fusion_files:
-        log.error("No fusion output files (fusion_*.tsv) found in %s" % output_folder)
+        log.error("No fusion output files (*.fusions.tsv) found in %s" % output_folder)
         return -40
 
     fusion_tsv = fusion_files[0]
