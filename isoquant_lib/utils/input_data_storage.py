@@ -405,7 +405,7 @@ class InputDataStorage:
         con = yaml.safe_load(yaml_file)
         current_index = 0
         t = con[0]
-        if not 'data format' in t.keys():
+        if 'data format' not in t.keys():
             logger.critical("Please specify whether you are using fastq or bam files in the first entry")
             sys.exit(IsoQuantExitCode.YAML_PARSING_ERROR)
         else:
@@ -421,7 +421,7 @@ class InputDataStorage:
                 logger.critical("The input data format can only be either fastq, fasta or bam.")
                 sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
         for sample in con[1:]:
-            if not 'name' in sample.keys():
+            if 'name' not in sample.keys():
                 current_sample_name = self.experiment_prefix + str(current_index)
             else:
                 current_sample_name = sample['name']
@@ -434,7 +434,7 @@ class InputDataStorage:
                                    (current_sample_name, new_sample_name))
                     current_sample_name = new_sample_name
             current_index += 1
-            if not 'long read files' in sample.keys():
+            if 'long read files' not in sample.keys():
                 logger.critical("Experiment %s does not contain any files" %current_sample_name)
                 sys.exit(IsoQuantExitCode.YAML_PARSING_ERROR)
             else:

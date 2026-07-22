@@ -33,7 +33,7 @@ class CorrectionStats:
         for alignment in long_reads.fetch():
             name = alignment.query_name
             name = name.split('_')[0]
-            if not name in names.keys():
+            if name not in names.keys():
                 for t in transcripts:
                     if name in t["transcript_id"][0]:
                         names[name] = t
@@ -112,8 +112,8 @@ class CorrectionStats:
                 classification.append(Stats.false_negative)
         #diff_before = list(sorted(introns - unchanged_introns))
         #diff_after = list(sorted(corrected_introns - unchanged_introns))
-        diff_before = [intron for intron in introns if not intron in unchanged_introns]
-        diff_after = [intron for intron in corrected_introns if not intron in unchanged_introns]
+        diff_before = [intron for intron in introns if intron not in unchanged_introns]
+        diff_after = [intron for intron in corrected_introns if intron not in unchanged_introns]
         if len(diff_before) == len(diff_after):
             for i in range(len(diff_before)):
                 classification.append(self.stats_single(diff_before[i], diff_after[i], reference_introns))

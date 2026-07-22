@@ -919,7 +919,7 @@ class StrandDetector:
         count_fwd = 0
         count_rev = 0
         for intron in introns:
-            if not intron in self.strand_dict:
+            if intron not in self.strand_dict:
                 strand = get_intron_strand(intron, self.chr_record)
                 self.strand_dict[intron] = strand
             else:
