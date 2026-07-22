@@ -665,7 +665,7 @@ def resolve_analyses(args):
 
 
 # Check user's params
-def check_input_params(args):
+def _validate_data_type_and_input(args):
     if not args.reference:
         logger.error("Reference genome was not provided")
         return False
@@ -677,7 +677,7 @@ def check_input_params(args):
         return False
     args.data_type = DATA_TYPE_ALIASES[args.data_type]
 
-    if not args.fastq and not args.bam and not args.unmapped_bam and not args.read_assignments and not args.yaml:
+    if not any([args.fastq, args.bam, args.unmapped_bam, args.read_assignments, args.yaml]):
         logger.error("No input data was provided")
         return False
 
@@ -686,6 +686,10 @@ def check_input_params(args):
         return False
 
     args.input_data = InputDataStorage(args)
+    return True
+
+
+def _validate_alignment_options(args):
     if args.aligner is not None and args.aligner not in SUPPORTED_ALIGNERS:
         logger.error(" Unsupported aligner " + args.aligner + ", choose one of: " + " ".join(SUPPORTED_ALIGNERS))
         return False
@@ -696,13 +700,10 @@ def check_input_params(args):
     if args.stranded not in SUPPORTED_STRANDEDNESS:
         logger.error("Unsupported strandness " + args.stranded + ", choose one of: " + " ".join(SUPPORTED_STRANDEDNESS))
         return False
+    return True
 
-    if not isinstance(args.mode, IsoQuantMode):
-        args.mode = IsoQuantMode[args.mode]
 
-    # translate --analysis (and the deprecated stage flags) into internal booleans
-    resolve_analyses(args)
-
+def _apply_stage_warnings(args):
     if not args.genedb and args.sqanti_output:
         args.sqanti_output = False
         logger.warning("--sqanti_output option has no effect without gene annotation")
@@ -718,6 +719,8 @@ def check_input_params(args):
         args.discard_chr = []
         logger.warning("--discard_chr has not effect when --process_only_chr is set and will be ignored")
 
+
+def _dedup_read_group_specs(args):
     if "read_group" in args.__dict__ and args.__dict__["read_group"]:
         updated_specs = []
         spec_set = set()
@@ -729,24 +732,44 @@ def check_input_params(args):
             spec_set.add(spec)
         args.read_group = updated_specs
 
+
+def _validate_barcode_calling(args):
     args.umi_length = 0
-    if args.mode.needs_barcode_calling():
-        barcode_sources = sum([bool(args.barcode_whitelist), bool(args.barcoded_reads), bool(args.barcoded_bam)])
-        if barcode_sources > 1:
-            logger.critical("Options --barcode_whitelist, --barcoded_reads, and --barcoded_bam are mutually exclusive")
-            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-        if args.mode == IsoQuantMode.custom_sc:
-            if not args.molecule and not args.barcoded_reads and not args.barcoded_bam:
-                logger.critical("custom_sc mode requires --molecule, --barcoded_reads, or --barcoded_bam")
-                sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
-        elif not args.barcode_whitelist and not args.barcoded_reads and not args.barcoded_bam:
-            logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist, "
-                            "file with barcoded reads, or --barcoded_bam" % args.mode.name)
+    if not args.mode.needs_barcode_calling():
+        return
+    barcode_sources = sum([bool(args.barcode_whitelist), bool(args.barcoded_reads), bool(args.barcoded_bam)])
+    if barcode_sources > 1:
+        logger.critical("Options --barcode_whitelist, --barcoded_reads, and --barcoded_bam are mutually exclusive")
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+    if args.mode == IsoQuantMode.custom_sc:
+        if not any([args.molecule, args.barcoded_reads, args.barcoded_bam]):
+            logger.critical("custom_sc mode requires --molecule, --barcoded_reads, or --barcoded_bam")
             sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
-        if args.barcoded_bam:
-            args.umi_length = _detect_umi_length_from_bam(args.input_data.samples[0].file_list[0][0], args.umi_tag)
-        else:
-            args.umi_length = get_umi_length(args.mode)
+    elif not any([args.barcode_whitelist, args.barcoded_reads, args.barcoded_bam]):
+        logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist, "
+                        "file with barcoded reads, or --barcoded_bam" % args.mode.name)
+        sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
+    if args.barcoded_bam:
+        args.umi_length = _detect_umi_length_from_bam(args.input_data.samples[0].file_list[0][0], args.umi_tag)
+    else:
+        args.umi_length = get_umi_length(args.mode)
+
+
+def check_input_params(args):
+    if not _validate_data_type_and_input(args):
+        return False
+    if not _validate_alignment_options(args):
+        return False
+
+    if not isinstance(args.mode, IsoQuantMode):
+        args.mode = IsoQuantMode[args.mode]
+
+    # translate --analysis (and the deprecated stage flags) into internal booleans
+    resolve_analyses(args)
+
+    _apply_stage_warnings(args)
+    _dedup_read_group_specs(args)
+    _validate_barcode_calling(args)
 
     check_input_files(args)
     return True
@@ -792,7 +815,21 @@ def extract_read_group_file_path(spec: str):
     return None
 
 
-def check_input_files(args):
+def _check_input_read_file(args, in_file):
+    """Validate a single input read file (save prefix / BAM / FASTQ)."""
+    if args.input_data.input_type == InputDataType.save:
+        saves = glob.glob(in_file + "*")
+        if not saves:
+            logger.critical("Input files " + in_file + "* do not exist")
+        return
+    if not os.path.isfile(in_file):
+        logger.critical("Input file " + in_file + " does not exist")
+        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+    if args.input_data.input_type == InputDataType.bam:
+        check_bam_file(in_file, check_index=True)
+
+
+def _check_reference_and_reads(args):
     # Check reference genome
     if args.reference and not os.path.isfile(args.reference):
         logger.critical("Reference genome " + args.reference + " does not exist")
@@ -802,22 +839,15 @@ def check_input_files(args):
     for sample in args.input_data.samples:
         for lib in sample.file_list:
             for in_file in lib:
-                if args.input_data.input_type == InputDataType.save:
-                    saves = glob.glob(in_file + "*")
-                    if not saves:
-                        logger.critical("Input files " + in_file + "* do not exist")
-                    continue
-                if not os.path.isfile(in_file):
-                    logger.critical("Input file " + in_file + " does not exist")
-                    sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
-                if args.input_data.input_type == InputDataType.bam:
-                    check_bam_file(in_file, check_index=True)
+                _check_input_read_file(args, in_file)
 
         # Check Illumina BAM files
         if sample.illumina_bam is not None:
             for illumina in sample.illumina_bam:
                 check_bam_file(illumina, check_index=True)
 
+
+def _check_barcode_input_files(args):
     # Check barcoded reads files (from args, not sample - sample.barcoded_reads is set later)
     if hasattr(args, 'barcoded_reads') and args.barcoded_reads:
         if isinstance(args.barcoded_reads, list):
@@ -835,18 +865,22 @@ def check_input_files(args):
         for wl_file in args.barcode_whitelist:
             check_file_exists(wl_file, "Barcode whitelist file")
 
+
+def _check_barcode_mapping_files(args):
+    from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
+
     # Check barcode2spot file (parse spec to extract filename)
     if hasattr(args, 'barcode2spot') and args.barcode2spot:
-        from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
         bc2spot_file, _, _ = parse_barcode2spot_spec(args.barcode2spot)
         check_file_exists(bc2spot_file, "Barcode to spot mapping file")
 
     # Check barcode2barcode file (parse spec to extract filename)
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
-        from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
         bc2bc_file, _, _ = parse_barcode2spot_spec(args.barcode2barcode)
         check_file_exists(bc2bc_file, "Barcode to barcode mapping file")
 
+
+def _check_read_group_files(args):
     # Check read_group file specs
     if hasattr(args, 'read_group') and args.read_group:
         for spec in args.read_group:
@@ -854,6 +888,8 @@ def check_input_files(args):
             if file_path:
                 check_file_exists(file_path, "Read group file")
 
+
+def _check_annotation_files(args):
     # Check junction BED file
     if hasattr(args, 'junc_bed_file') and args.junc_bed_file:
         check_file_exists(args.junc_bed_file, "Junction BED file")
@@ -880,6 +916,14 @@ def check_input_files(args):
             if not glob.glob(r + "*"):
                 logger.critical("No files found with prefix " + str(r))
                 sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
+
+def check_input_files(args):
+    _check_reference_and_reads(args)
+    _check_barcode_input_files(args)
+    _check_barcode_mapping_files(args)
+    _check_read_group_files(args)
+    _check_annotation_files(args)
 
 
 def create_output_dirs(args):
