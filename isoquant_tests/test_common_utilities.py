@@ -28,7 +28,7 @@ class TestAdditionalCommon(unittest.TestCase):
 
     def test_get_path_to_program(self):
         # Test existing program (assuming 'python' exists)
-        path = get_path_to_program("python")
+        path = get_path_to_program("python3")
         self.assertTrue(os.path.exists(path))
 
     def test_interval_bin_search(self):
